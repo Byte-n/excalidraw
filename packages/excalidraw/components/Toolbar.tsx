@@ -10,6 +10,7 @@ import { useEditorInterface, useStylesPanelMode } from "./App";
 import { HintViewer } from "./HintViewer";
 import { Island } from "./Island";
 import { LockButton } from "./LockButton";
+import { MobileToolbar } from "./MobileToolbar";
 import { PenModeButton } from "./PenModeButton";
 import Stack from "./Stack";
 import DropdownMenu from "./dropdownMenu/DropdownMenu";
@@ -48,8 +49,11 @@ import type {
   AppClassProperties,
   AppProps,
   AppState,
+  TopCenterToolbarProps,
   UIAppState,
 } from "../types";
+
+export type ToolbarProps = Omit<TopCenterToolbarProps, "isMobile">;
 
 const ExtraToolsDropdown = ({
   app,
@@ -228,15 +232,7 @@ export const Toolbar = ({
   onPenModeToggle,
   onLockToggle,
   heading,
-}: {
-  app: AppClassProperties;
-  appState: UIAppState;
-  setAppState: React.Component<any, AppState>["setState"];
-  UIOptions: AppProps["UIOptions"];
-  onPenModeToggle: AppClassProperties["togglePenMode"];
-  onLockToggle: () => void;
-  heading: React.ReactNode;
-}) => {
+}: ToolbarProps) => {
   const editorInterface = useEditorInterface();
   const isCompactStylesPanel = useStylesPanelMode() === "compact";
 
@@ -322,5 +318,33 @@ export const Toolbar = ({
         />
       </Stack.Row>
     </Island>
+  );
+};
+
+/** 渲染包含全部原生工具的顶部工具栏，宿主可直接传给同名 render prop。 */
+export const renderTopCenterToolbar = ({
+  isMobile,
+  app,
+  appState,
+  setAppState,
+  UIOptions,
+  onPenModeToggle,
+  onLockToggle,
+  heading,
+}: TopCenterToolbarProps) => {
+  if (isMobile) {
+    return <MobileToolbar app={app} setAppState={setAppState} />;
+  }
+
+  return (
+    <Toolbar
+      app={app}
+      appState={appState}
+      setAppState={setAppState}
+      UIOptions={UIOptions}
+      onPenModeToggle={onPenModeToggle}
+      onLockToggle={onLockToggle}
+      heading={heading}
+    />
   );
 };

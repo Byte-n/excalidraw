@@ -60,7 +60,7 @@ import { Island } from "./Island";
 import { JSONExportDialog } from "./JSONExportDialog";
 import { LaserPointerButton } from "./LaserPointerButton";
 import { Toast } from "./Toast";
-import { Toolbar } from "./Toolbar";
+import { renderTopCenterToolbar as renderNativeTopCenterToolbar } from "./Toolbar";
 import {
   ViewportStatusBadge,
   ViewportStatusBorder,
@@ -94,6 +94,7 @@ interface LayerUIProps {
   langCode: Language["code"];
   renderTopLeftUI?: ExcalidrawProps["renderTopLeftUI"];
   renderTopRightUI?: ExcalidrawProps["renderTopRightUI"];
+  renderTopCenterToolbar?: ExcalidrawProps["renderTopCenterToolbar"];
   renderCustomStats?: ExcalidrawProps["renderCustomStats"];
   UIOptions: AppProps["UIOptions"];
   onExportImage: AppClassProperties["onExportImage"];
@@ -156,6 +157,7 @@ const LayerUI = ({
   showExitZenModeBtn,
   renderTopLeftUI,
   renderTopRightUI,
+  renderTopCenterToolbar,
   renderCustomStats,
   UIOptions,
   onExportImage,
@@ -246,6 +248,23 @@ const LayerUI = ({
     </div>
   );
 
+  const renderCenterToolbar = (heading: React.ReactNode) => {
+    const toolbarProps = {
+      isMobile: false,
+      app,
+      appState,
+      setAppState,
+      UIOptions,
+      onPenModeToggle,
+      onLockToggle,
+      heading,
+    };
+
+    return renderTopCenterToolbar
+      ? renderTopCenterToolbar(toolbarProps)
+      : renderNativeTopCenterToolbar(toolbarProps);
+  };
+
   const renderSelectedShapeActions = () => {
     return (
       <Section
@@ -309,6 +328,11 @@ const LayerUI = ({
       !appState.viewModeEnabled &&
       appState.openDialog?.name !== "elementLinkSelector";
 
+    const shouldRenderTopCenterToolbar =
+      !appState.viewModeEnabled &&
+      appState.openDialog?.name !== "elementLinkSelector" &&
+      (defaultUIEnabled || renderTopCenterToolbar != null);
+
     return (
       <FixedSideContainer side="top">
         <div className="App-menu App-menu_top">
@@ -346,57 +370,47 @@ const LayerUI = ({
                 />
               )}
           </Stack.Col>
-          {defaultUIEnabled &&
-            !appState.viewModeEnabled &&
-            appState.openDialog?.name !== "elementLinkSelector" && (
-              <Section heading="shapes" className="shapes-section">
-                {(heading: React.ReactNode) => (
-                  <div style={{ position: "relative" }}>
-                    {renderWelcomeScreen && (
-                      <tunnels.WelcomeScreenToolbarHintTunnel.Out />
-                    )}
-                    <Stack.Col gap={spacing.toolbarColGap} align="start">
-                      <Stack.Row
-                        gap={spacing.toolbarRowGap}
-                        className={clsx("App-toolbar-container", {
-                          "zen-mode": appState.zenModeEnabled,
-                        })}
-                      >
-                        <Toolbar
-                          app={app}
-                          appState={appState}
-                          setAppState={setAppState}
-                          UIOptions={UIOptions}
-                          onPenModeToggle={onPenModeToggle}
-                          onLockToggle={onLockToggle}
-                          heading={heading}
-                        />
-                        {isCollaborating && (
-                          <Island
-                            style={{
-                              marginLeft: spacing.collabMarginLeft,
-                              alignSelf: "center",
-                              height: "fit-content",
-                            }}
-                          >
-                            <LaserPointerButton
-                              title={t("toolBar.laser")}
-                              checked={
-                                appState.activeTool.type === TOOL_TYPE.laser
-                              }
-                              onChange={() =>
-                                app.setActiveTool({ type: TOOL_TYPE.laser })
-                              }
-                              isMobile
-                            />
-                          </Island>
-                        )}
-                      </Stack.Row>
-                    </Stack.Col>
-                  </div>
-                )}
-              </Section>
-            )}
+          {shouldRenderTopCenterToolbar && (
+            <Section heading="shapes" className="shapes-section">
+              {(heading: React.ReactNode) => (
+                <div style={{ position: "relative" }}>
+                  {renderWelcomeScreen && (
+                    <tunnels.WelcomeScreenToolbarHintTunnel.Out />
+                  )}
+                  <Stack.Col gap={spacing.toolbarColGap} align="start">
+                    <Stack.Row
+                      gap={spacing.toolbarRowGap}
+                      className={clsx("App-toolbar-container", {
+                        "zen-mode": appState.zenModeEnabled,
+                      })}
+                    >
+                      {renderCenterToolbar(heading)}
+                      {isCollaborating && (
+                        <Island
+                          style={{
+                            marginLeft: spacing.collabMarginLeft,
+                            alignSelf: "center",
+                            height: "fit-content",
+                          }}
+                        >
+                          <LaserPointerButton
+                            title={t("toolBar.laser")}
+                            checked={
+                              appState.activeTool.type === TOOL_TYPE.laser
+                            }
+                            onChange={() =>
+                              app.setActiveTool({ type: TOOL_TYPE.laser })
+                            }
+                            isMobile
+                          />
+                        </Island>
+                      )}
+                    </Stack.Row>
+                  </Stack.Col>
+                </div>
+              )}
+            </Section>
+          )}
           <div
             className={clsx(
               "layer-ui__wrapper__top-right zen-mode-transition",
@@ -621,6 +635,8 @@ const LayerUI = ({
           onPenModeToggle={onPenModeToggle}
           renderTopLeftUI={renderTopLeftUI}
           renderTopRightUI={renderTopRightUI}
+          renderTopCenterToolbar={renderTopCenterToolbar}
+          onLockToggle={onLockToggle}
           renderSidebars={renderSidebars}
           renderWelcomeScreen={renderWelcomeScreen}
           defaultUIEnabled={defaultUIEnabled}

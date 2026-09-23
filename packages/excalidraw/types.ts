@@ -913,6 +913,11 @@ export interface ExcalidrawProps {
     isMobile: boolean,
     appState: UIAppState,
   ) => JSX.Element | null;
+  /**
+   * 提供顶部中间工具栏的渲染实现；回调接收原生工具栏使用的完整上下文。
+   * 可直接传入导出的 `renderTopCenterToolbar` 以保留全部原生工具。
+   */
+  renderTopCenterToolbar?: (props: TopCenterToolbarProps) => JSX.Element | null;
   langCode?: Language["code"];
   viewModeEnabled?: boolean;
   /**
@@ -1229,6 +1234,17 @@ export type AppClassProperties = {
 
   isInteractionEnabled: App["isInteractionEnabled"];
   isNavigationEnabled: App["isNavigationEnabled"];
+};
+
+export type TopCenterToolbarProps = {
+  isMobile: boolean;
+  app: AppClassProperties;
+  appState: UIAppState;
+  setAppState: React.Component<any, AppState>["setState"];
+  UIOptions: AppProps["UIOptions"];
+  onPenModeToggle: AppClassProperties["togglePenMode"];
+  onLockToggle: () => void;
+  heading: React.ReactNode;
 };
 
 export type PointerDownState = Readonly<{

@@ -7,7 +7,13 @@ import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { actionZoomIn } from "../actions/actionCanvas";
 import { createPasteEvent, serializeAsClipboardJSON } from "../clipboard";
-import { DefaultSidebar, Excalidraw, Footer, MainMenu } from "../index";
+import {
+  DefaultSidebar,
+  Excalidraw,
+  Footer,
+  MainMenu,
+  renderTopCenterToolbar as renderNativeTopCenterToolbar,
+} from "../index";
 
 import { API } from "./helpers/api";
 import { Keyboard, Pointer, UI } from "./helpers/ui";
@@ -771,6 +777,27 @@ describe("ui={{ enabled: ... }}", () => {
 });
 
 describe("ui={false} with host UI", () => {
+  it("supports replacing the top-center toolbar while keeping native tools", async () => {
+    mockBoundingClientRect();
+    await render(
+      <Excalidraw
+        ui={false}
+        renderTopCenterToolbar={(props) => (
+          <div data-testid="host-top-center">
+            {renderNativeTopCenterToolbar(props)}
+          </div>
+        )}
+      />,
+    );
+
+    expect(queryContainer("[data-testid='host-top-center']")).not.toBe(null);
+    expect(queryContainer(".App-toolbar")).not.toBe(null);
+    expect(queryContainer("[data-testid='toolbar-selection']")).not.toBe(null);
+    expect(queryContainer("[data-testid='toolbar-rectangle']")).not.toBe(null);
+    expect(queryContainer("[data-testid='toolbar-text']")).not.toBe(null);
+    expect(queryContainer("[data-testid='toolbar-eraser']")).not.toBe(null);
+  });
+
   it("renders host outlets and dialogs invoked by host UI", async () => {
     const { container } = await render(
       <Excalidraw

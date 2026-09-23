@@ -341,13 +341,22 @@ body.excalidraw-cursor-resize * {
   }
 
   .excalidraw-ui-top-left,
+  .excalidraw-ui-top-center,
   .excalidraw-ui-top-right {
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
 
+  .excalidraw-ui-top-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100% - 8rem);
+  }
+
   .App-toolbar-content {
+    position: relative;
     display: flex;
     flex-direction: column;
 

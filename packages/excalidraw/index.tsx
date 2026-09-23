@@ -82,6 +82,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     onPointerUpdate,
     renderTopLeftUI,
     renderTopRightUI,
+    renderTopCenterToolbar,
     langCode = defaultLang.code,
     viewModeEnabled,
     interaction,
@@ -224,6 +225,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           onPointerUpdate={onPointerUpdate}
           renderTopLeftUI={renderTopLeftUI}
           renderTopRightUI={renderTopRightUI}
+          renderTopCenterToolbar={renderTopCenterToolbar}
           langCode={langCode}
           viewModeEnabled={viewModeEnabled}
           interaction={interaction}
@@ -479,6 +481,7 @@ export { Stats } from "./components/Stats";
 
 export { DefaultSidebar } from "./components/DefaultSidebar";
 export { TTDDialog } from "./components/TTDDialog/TTDDialog";
+export { renderTopCenterToolbar } from "./components/Toolbar";
 export { TTDDialogTrigger } from "./components/TTDDialog/TTDDialogTrigger";
 export {
   TTDStreamFetch,
@@ -495,6 +498,7 @@ export type {
   ViewportStatusFrame,
   ElementRenderOverride,
   ElementRenderOverrides,
+  TopCenterToolbarProps,
 } from "./types";
 
 export { zoomToFitBounds, DEFAULT_OVERSCROLL } from "./viewport";

@@ -17,7 +17,12 @@ import { PenModeButton } from "./PenModeButton";
 import { ViewportStatusBadge } from "./ViewportStatusFrame/ViewportStatusFrame";
 
 import type { ActionManager } from "../actions/manager";
-import type { AppClassProperties, AppState, UIAppState } from "../types";
+import type {
+  AppClassProperties,
+  AppState,
+  TopCenterToolbarProps,
+  UIAppState,
+} from "../types";
 import type { JSX } from "react";
 
 type MobileMenuProps = {
@@ -37,6 +42,8 @@ type MobileMenuProps = {
     isMobile: boolean,
     appState: UIAppState,
   ) => JSX.Element | null;
+  renderTopCenterToolbar?: (props: TopCenterToolbarProps) => JSX.Element | null;
+  onLockToggle: () => void;
   renderSidebars: () => JSX.Element | null;
   renderWelcomeScreen: boolean;
   defaultUIEnabled: boolean;
@@ -51,6 +58,8 @@ export const MobileMenu = ({
   setAppState,
   renderTopLeftUI,
   renderTopRightUI,
+  renderTopCenterToolbar,
+  onLockToggle,
   renderSidebars,
   renderWelcomeScreen,
   defaultUIEnabled,
@@ -100,6 +109,22 @@ export const MobileMenu = ({
       </div>
     );
 
+    const topCenterUI =
+      renderTopCenterToolbar && !appState.viewModeEnabled ? (
+        <div className="excalidraw-ui-top-center">
+          {renderTopCenterToolbar({
+            isMobile: true,
+            app,
+            appState,
+            setAppState,
+            UIOptions: app.props.UIOptions,
+            onPenModeToggle,
+            onLockToggle,
+            heading: null,
+          })}
+        </div>
+      ) : null;
+
     return (
       <div
         className="App-toolbar-content"
@@ -110,6 +135,7 @@ export const MobileMenu = ({
         }}
       >
         {topLeftUI}
+        {topCenterUI}
         {topRightUI}
       </div>
     );
@@ -121,8 +147,7 @@ export const MobileMenu = ({
 
   const shouldRenderScrollBackToContent =
     scrollBackToContentUIEnabled && appState.scrolledOutside;
-  const shouldRenderDefaultBottomBar =
-    defaultUIEnabled && !appState.viewModeEnabled;
+  const shouldRenderBottomBar = defaultUIEnabled && !appState.viewModeEnabled;
   const scrollBackToContentButton =
     shouldRenderScrollBackToContent &&
     !appState.openMenu &&
@@ -157,7 +182,7 @@ export const MobileMenu = ({
         {renderWelcomeScreen && <WelcomeScreenCenterTunnel.Out />}
       </div>
 
-      {shouldRenderDefaultBottomBar && (
+      {shouldRenderBottomBar && (
         <div
           className="App-bottom-bar"
           style={{
@@ -179,14 +204,16 @@ export const MobileMenu = ({
             setAppState={setAppState}
           />
 
-          <Island className="App-toolbar">
-            {appState.openDialog?.name !== "elementLinkSelector" &&
-              renderToolbar()}
-          </Island>
+          {!renderTopCenterToolbar && (
+            <Island className="App-toolbar">
+              {appState.openDialog?.name !== "elementLinkSelector" &&
+                renderToolbar()}
+            </Island>
+          )}
         </div>
       )}
 
-      {!shouldRenderDefaultBottomBar && scrollBackToContentButton && (
+      {!shouldRenderBottomBar && scrollBackToContentButton && (
         <div className="floating-status-stack">{scrollBackToContentButton}</div>
       )}
 
