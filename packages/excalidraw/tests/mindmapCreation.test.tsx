@@ -18,6 +18,15 @@ describe("mindmap creation tool", () => {
     h.app.scene.getNonDeletedElements().filter(isMindmapNodeElement);
   const getEdges = () =>
     h.app.scene.getNonDeletedElements().filter(isMindmapEdgeElement);
+  // 比较完整场景，排除撤销重做本身会更新的版本和时间戳。
+  const getSceneSnapshot = () =>
+    JSON.parse(
+      JSON.stringify(h.app.scene.getNonDeletedElements(), (key, value) =>
+        ["version", "versionNonce", "updated"].includes(key)
+          ? undefined
+          : value,
+      ),
+    );
   const blurEditor = async (editor: HTMLTextAreaElement) => {
     await waitFor(() => {
       expect(editor.onblur).toEqual(expect.any(Function));
@@ -68,10 +77,211 @@ describe("mindmap creation tool", () => {
     expect(
       h.app.scene.getNonDeletedElements().filter(isMindmapNodeElement),
     ).toHaveLength(1);
+    expect(getEdges()).toHaveLength(0);
     Keyboard.redo();
     expect(
       h.app.scene.getNonDeletedElements().filter(isMindmapNodeElement),
     ).toHaveLength(2);
+    expect(getEdges()).toEqual(
+      edges.map(({ id, parentId, childId }) =>
+        expect.objectContaining({ id, parentId, childId }),
+      ),
+    );
+  });
+
+  describe("布局与创建历史", () => {
+    beforeEach(async () => {
+      UI.clickExtraTool("mindmap");
+      new Pointer("mouse").clickAt(300, 240);
+      let editor = await getTextEditor();
+      updateTextEditor(editor, "根节点");
+      Keyboard.exitTextEditor(editor);
+      Keyboard.keyPress("Tab");
+      editor = await getTextEditor();
+      updateTextEditor(editor, "原有节点");
+      Keyboard.exitTextEditor(editor);
+    });
+
+    describe.each(["Tab", "Enter", "button"] as const)(
+      "%s 继续创建节点",
+      (createWith) => {
+        describe.each(["blur", "Escape"] as const)("%s 提交", (submitWith) => {
+          it.each(["", "新增节点\n第二行\n第三行"])(
+            "文字为 %j 时，单步撤销重做恢复节点、连线和原有布局",
+            async (value) => {
+              const [root, child] = getNodes();
+              const before = getSceneSnapshot();
+              const historyLength = API.getUndoStack().length;
+              if (createWith === "button") {
+                const pointer = new Pointer("mouse");
+                UI.clickExtraTool("mindmap");
+                pointer.moveTo(
+                  root.x + root.width / 2,
+                  root.y + root.height / 2,
+                );
+                fireEvent.click(
+                  screen.getByRole("button", { name: "Add child node" }),
+                );
+              } else {
+                // 在非根节点上按 Enter，确保覆盖真正的兄弟节点创建。
+                API.setSelectedElements([child]);
+                Keyboard.keyPress(createWith);
+              }
+              const editor = await getTextEditor();
+              const nodeId = h.state.editingTextElement!.containerId!;
+              updateTextEditor(editor, value);
+              if (submitWith === "blur") {
+                await blurEditor(editor);
+              } else {
+                Keyboard.exitTextEditor(editor);
+              }
+
+              expect(getNodes()).toHaveLength(3);
+              expect(getEdges()).toHaveLength(2);
+              expect(
+                getNodes().find((node) => node.id === nodeId)?.parentId,
+              ).toBe(createWith === "Tab" ? child.id : root.id);
+              expect(API.getUndoStack()).toHaveLength(historyLength + 1);
+              const after = getSceneSnapshot();
+              for (let i = 0; i < 3; i++) {
+                Keyboard.undo();
+                expect(getSceneSnapshot()).toEqual(before);
+                expect(API.getUndoStack()).toHaveLength(historyLength);
+                Keyboard.redo();
+                expect(getSceneSnapshot()).toEqual(after);
+                expect(API.getUndoStack()).toHaveLength(historyLength + 1);
+              }
+            },
+          );
+        });
+      },
+    );
+
+    it("布局移动已有节点、文字和连线时递增版本，不改变未移动元素", async () => {
+      const [root, child] = getNodes();
+      const text = getBoundTextElement(
+        child,
+        h.app.scene.getNonDeletedElementsMap(),
+      )!;
+      const edge = getEdges()[0];
+      const moved = [child, text, edge].map(({ id, version, y }) => ({
+        id,
+        version,
+        y,
+      }));
+      const rootVersion = root.version;
+      Keyboard.keyPress("Enter");
+      const editor = await getTextEditor();
+      updateTextEditor(editor, "兄弟节点");
+      Keyboard.exitTextEditor(editor);
+
+      for (const previous of moved) {
+        const next = h.app.scene.getNonDeletedElement(previous.id)!;
+        expect(next.y).not.toBe(previous.y);
+        expect(next.version).toBeGreaterThan(previous.version);
+      }
+      expect(h.app.scene.getNonDeletedElement(root.id)?.version).toBe(
+        rootVersion,
+      );
+    });
+
+    it("修改节点文字引发重排时，撤销重做恢复整张脑图的几何信息", async () => {
+      Keyboard.keyPress("Enter");
+      let editor = await getTextEditor();
+      updateTextEditor(editor, "兄弟节点");
+      Keyboard.exitTextEditor(editor);
+      const before = getSceneSnapshot();
+      const historyLength = API.getUndoStack().length;
+      const child = getNodes()[1];
+      const previousHeight = child.height;
+      const sibling = getNodes()[2];
+      const previousSiblingY = sibling.y;
+      UI.clickExtraTool("mindmap");
+      new Pointer("mouse").doubleClickAt(
+        child.x + child.width / 2,
+        child.y + child.height / 2,
+      );
+      editor = await getTextEditor();
+      updateTextEditor(editor, "第一行\n第二行\n第三行\n第四行");
+      await blurEditor(editor);
+
+      expect(
+        h.app.scene.getNonDeletedElement(child.id)!.height,
+      ).toBeGreaterThan(previousHeight);
+      expect(h.app.scene.getNonDeletedElement(sibling.id)!.y).not.toBe(
+        previousSiblingY,
+      );
+      expect(API.getUndoStack()).toHaveLength(historyLength + 1);
+      const after = getSceneSnapshot();
+      Keyboard.undo();
+      expect(getSceneSnapshot()).toEqual(before);
+      Keyboard.redo();
+      expect(getSceneSnapshot()).toEqual(after);
+    });
+
+    it("重复提交相同布局不改变已有连线和其他节点的版本或引用", async () => {
+      const [root, child] = getNodes();
+      const text = getBoundTextElement(
+        child,
+        h.app.scene.getNonDeletedElementsMap(),
+      )!;
+      const unchanged = [child, text, ...getEdges()].map((element) => ({
+        element,
+        version: element.version,
+      }));
+      const before = getSceneSnapshot();
+      UI.clickExtraTool("mindmap");
+      new Pointer("mouse").doubleClickAt(
+        root.x + root.width / 2,
+        root.y + root.height / 2,
+      );
+      const editor = await getTextEditor();
+      Keyboard.exitTextEditor(editor);
+
+      expect(getSceneSnapshot()).toEqual(before);
+      for (const { element, version } of unchanged) {
+        const next = h.app.scene.getNonDeletedElement(element.id)!;
+        expect(next.version).toBe(version);
+        expect(next).toBe(element);
+      }
+    });
+
+    it("撤销后分叉创建不会恢复旧连线，连续撤销重做保持布局", async () => {
+      const before = getSceneSnapshot();
+      const historyLength = API.getUndoStack().length;
+      Keyboard.keyPress("Enter");
+      let editor = await getTextEditor();
+      updateTextEditor(editor, "被撤销的节点");
+      Keyboard.exitTextEditor(editor);
+      const removedNodeId = getNodes()[2].id;
+      const removedEdgeId = getEdges().find(
+        (edge) => edge.childId === removedNodeId,
+      )!.id;
+      Keyboard.undo();
+      expect(getSceneSnapshot()).toEqual(before);
+
+      API.setSelectedElements([getNodes()[1]]);
+      Keyboard.keyPress("Enter");
+      editor = await getTextEditor();
+      updateTextEditor(editor, "新分支");
+      Keyboard.exitTextEditor(editor);
+      expect(getEdges().some((edge) => edge.id === removedEdgeId)).toBe(false);
+      expect(getNodes().some((node) => node.id === removedNodeId)).toBe(false);
+      const branch = getSceneSnapshot();
+      Keyboard.redo();
+      expect(getSceneSnapshot()).toEqual(branch);
+      expect(API.getUndoStack()).toHaveLength(historyLength + 1);
+
+      Keyboard.undo();
+      expect(getSceneSnapshot()).toEqual(before);
+      Keyboard.undo();
+      expect(getNodes()).toHaveLength(1);
+      expect(getEdges()).toHaveLength(0);
+      Keyboard.redo();
+      expect(getSceneSnapshot()).toEqual(before);
+      Keyboard.redo();
+      expect(getSceneSnapshot()).toEqual(branch);
+    });
   });
 
   describe.each(["root", "Tab", "Enter", "button"] as const)(

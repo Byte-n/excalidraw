@@ -10,6 +10,7 @@ import {
   isMindmapEdgeElement,
   isMindmapNodeElement,
   layoutMindmap,
+  newElementWith,
   newMindmapNodeElement,
   repairMindmapElements,
 } from "@excalidraw/element";
@@ -20,7 +21,6 @@ import type {
   FractionalIndex,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
-import type { CaptureUpdateActionType } from "@excalidraw/element";
 
 import { t } from "../i18n";
 
@@ -265,7 +265,7 @@ export class AppMindmap {
 
     const isNewNode = this.pendingTextNodeIds.delete(container.id);
     handleBindTextResize(container, this.app.scene, "se", false, false);
-    this.layoutGraph(container.graphId, CaptureUpdateAction.EVENTUALLY);
+    this.layoutGraph(container.graphId);
     return isNewNode;
   };
 
@@ -288,7 +288,7 @@ export class AppMindmap {
     const graphId = `mindmap:${root.id}`;
     const graphRoot = { ...root, graphId };
     this.app.insertNewElement(graphRoot);
-    this.layoutGraph(graphId, CaptureUpdateAction.EVENTUALLY);
+    this.layoutGraph(graphId);
     this.pendingTextNodeIds.add(graphRoot.id);
     this.startNodeEditing(graphRoot);
   }
@@ -325,7 +325,7 @@ export class AppMindmap {
       order: order as FractionalIndex,
     });
     this.app.insertNewElement(node);
-    this.layoutGraph(parent.graphId, CaptureUpdateAction.EVENTUALLY);
+    this.layoutGraph(parent.graphId);
     this.pendingTextNodeIds.add(node.id);
     this.startNodeEditing(node);
   }
@@ -345,7 +345,8 @@ export class AppMindmap {
     });
   }
 
-  private layoutGraph(graphId: string, captureUpdate: CaptureUpdateActionType) {
+  private layoutGraph(graphId: string) {
+    const previous = this.app.scene.getElementsMapIncludingDeleted();
     const repaired = repairMindmapElements(
       this.app.scene.getElementsIncludingDeleted(),
     );
@@ -372,8 +373,25 @@ export class AppMindmap {
     }
     // 布局和派生连接线随文字提交一并进入历史，不能作为 NEVER 更新排除。
     this.app.updateScene({
-      elements: repaired.map((element) => updated.get(element.id) ?? element),
-      captureUpdate,
+      elements: repaired.map((element) => {
+        const next = updated.get(element.id) ?? element;
+        const prev = previous.get(element.id);
+        if (!prev || prev === next) {
+          return next;
+        }
+        // 纯修复和布局不改版本，在写回边界只提交真实差异，供历史与协作识别。
+        const updates = Object.fromEntries(
+          Object.entries(next).filter(
+            ([key, value]) =>
+              key !== "version" &&
+              key !== "versionNonce" &&
+              key !== "updated" &&
+              prev[key as keyof typeof prev] !== value,
+          ),
+        );
+        return newElementWith(prev, updates);
+      }),
+      captureUpdate: CaptureUpdateAction.EVENTUALLY,
     });
   }
 
