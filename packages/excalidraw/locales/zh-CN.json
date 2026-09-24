@@ -331,7 +331,7 @@
     "asyncPasteFailedOnRead": "无法粘贴（无法读取系统剪贴板）。",
     "asyncPasteFailedOnParse": "无法粘贴。",
     "copyToSystemClipboardFailed": "无法复制到剪贴板。",
-    "mindmapUnsupported": "思维导图暂不支持此操作。"
+    "mindmapUnsupported": "思维导图暂不支持此操作"
   },
   "toolBar": {
     "selection": "选择",

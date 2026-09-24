@@ -338,7 +338,7 @@ type MindmapDragSession = {
 ## 12. 复制、粘贴和导入导出
 
 - 复制整棵 mindmap 时生成新的 `graphId` 和新的节点 ID。
-- 复制子树时可以作为当前节点的子节点粘贴，也可以作为新的 mindmap 粘贴。
+- 复制子树时作为新的 mindmap 粘贴；不提供粘贴到已有 mindmap 节点下的入口。
 - 普通 Excalidraw 复制流程需要识别并完整复制 mindmap 节点、文本和 edge。
 - JSON 场景保存所有 mindmap 类型和字段。
 - PNG、SVG 导出包含当前布局和当前可见状态。

@@ -4,12 +4,16 @@ import { Popover } from "radix-ui";
 
 import { CLASSES } from "@excalidraw/common";
 
-import { isArrowElement } from "@excalidraw/element";
+import { isArrowElement, isMindmapEdgeElement } from "@excalidraw/element";
 
 import type {
   ExcalidrawElement,
   NonDeletedElementsMap,
   NonDeletedSceneElementsMap,
+  MindmapNodeShape,
+  MindmapLayoutDirection,
+  MindmapEdgeRouting,
+  StrokeStyle,
 } from "@excalidraw/element/types";
 
 import { actionToggleZenMode } from "../actions";
@@ -26,6 +30,7 @@ import { actionToggleViewMode } from "../actions/actionToggleViewMode";
 import "./Actions.scss";
 
 import { useExcalidrawContainer } from "./App";
+import { IconButton } from "./IconButton";
 import Stack from "./Stack";
 import { Tooltip } from "./Tooltip";
 import { PropertiesPopover } from "./PropertiesPopover";
@@ -37,6 +42,13 @@ import {
   adjustmentsIcon,
   DotsHorizontalIcon,
   pencilIcon,
+  RectangleIcon,
+  EllipseIcon,
+  DiamondIcon,
+  ArrowRightIcon,
+  StrokeWidthBaseIcon,
+  StrokeStyleDashedIcon,
+  StrokeStyleDottedIcon,
 } from "./icons";
 
 import { Island } from "./Island";
@@ -58,6 +70,208 @@ const PROPERTIES_CLASSES = clsx([
   CLASSES.SHAPE_ACTIONS_THEME_SCOPE,
   "properties-content",
 ]);
+
+const MINDMAP_SHAPES: readonly [MindmapNodeShape, React.ReactNode][] = [
+  ["rectangle", RectangleIcon],
+  ["ellipse", EllipseIcon],
+  ["diamond", DiamondIcon],
+  ["pill", RectangleIcon],
+];
+
+const MINDMAP_DIRECTIONS: readonly [MindmapLayoutDirection, string][] = [
+  ["left-to-right", "Left to right"],
+  ["right-to-left", "Right to left"],
+  ["top-to-bottom", "Top to bottom"],
+  ["bottom-to-top", "Bottom to top"],
+];
+
+type MindmapEdgeStyle = {
+  strokeColor: string;
+  strokeWidth: number;
+  strokeStyle: StrokeStyle;
+  routing: MindmapEdgeRouting;
+};
+
+const MindmapEdgeStyleControls = ({
+  title,
+  style,
+  disabled,
+  onChange,
+}: {
+  title: string;
+  style: MindmapEdgeStyle;
+  disabled: boolean;
+  onChange: (update: Partial<MindmapEdgeStyle>) => void;
+}) => (
+  <section className="mindmap-style-panel__edge" aria-label={title}>
+    <h3>{title}</h3>
+    <fieldset>
+      <legend>Color</legend>
+      <input
+        type="color"
+        className="mindmap-style-panel__color"
+        aria-label={`${title} color`}
+        disabled={disabled}
+        value={
+          style.strokeColor.startsWith("#") ? style.strokeColor : "#1b1b1f"
+        }
+        onChange={(event) =>
+          onChange({ strokeColor: event.currentTarget.value })
+        }
+      />
+    </fieldset>
+    <fieldset>
+      <legend>Width</legend>
+      <input
+        type="number"
+        className="mindmap-style-panel__width"
+        aria-label={`${title} width`}
+        disabled={disabled}
+        min={0}
+        step={1}
+        value={style.strokeWidth}
+        onChange={(event) => {
+          const value = Number(event.currentTarget.value);
+          if (Number.isFinite(value) && value >= 0) {
+            onChange({ strokeWidth: value });
+          }
+        }}
+      />
+    </fieldset>
+    <fieldset className="mindmap-style-panel__line">
+      <legend>Line</legend>
+      <div className="buttonList">
+        {(
+          [
+            ["solid", "Solid", StrokeWidthBaseIcon],
+            ["dashed", "Dashed", StrokeStyleDashedIcon],
+            ["dotted", "Dotted", StrokeStyleDottedIcon],
+          ] as const
+        ).map(([strokeStyle, label, icon]) => (
+          <IconButton
+            key={strokeStyle}
+            type="toggle"
+            icon={icon}
+            checked={style.strokeStyle === strokeStyle}
+            disabled={disabled}
+            title={label}
+            aria-label={label}
+            onSelect={() => onChange({ strokeStyle })}
+          />
+        ))}
+      </div>
+    </fieldset>
+    <fieldset className="mindmap-style-panel__route">
+      <legend>Route</legend>
+      <div className="buttonList">
+        {(
+          [
+            ["orthogonal", "Orthogonal", elbowArrowIcon],
+            ["curved", "Curved", roundArrowIcon],
+          ] as const
+        ).map(([routing, label, icon]) => (
+          <IconButton
+            key={routing}
+            type="toggle"
+            icon={icon}
+            checked={style.routing === routing}
+            disabled={disabled}
+            title={label}
+            aria-label={label}
+            onSelect={() => onChange({ routing })}
+          />
+        ))}
+      </div>
+    </fieldset>
+  </section>
+);
+
+const MindmapNodeStylePanel = ({ app }: { app: AppClassProperties }) => {
+  const node = app.mindmap.getSelectedNode();
+  if (!node) {
+    return null;
+  }
+  const incomingEdge = app.scene
+    .getNonDeletedElements()
+    .find(
+      (element) => isMindmapEdgeElement(element) && element.childId === node.id,
+    );
+  return (
+    <div className="mindmap-style-panel">
+      <fieldset>
+        <legend>Mindmap node</legend>
+        <div className="buttonList">
+          {MINDMAP_SHAPES.map(([shape, icon]) => (
+            <IconButton
+              key={shape}
+              type="toggle"
+              icon={icon}
+              checked={node.shape === shape}
+              title={shape}
+              aria-label={shape}
+              data-testid={`mindmap-shape-${shape}`}
+              onSelect={() => app.mindmap.setNodeShape(shape)}
+            />
+          ))}
+        </div>
+      </fieldset>
+      {incomingEdge && isMindmapEdgeElement(incomingEdge) && (
+        <MindmapEdgeStyleControls
+          title="Incoming edge"
+          style={incomingEdge}
+          disabled={!app.mindmap.canEditNode(node.id)}
+          onChange={app.mindmap.setIncomingEdgeStyle}
+        />
+      )}
+    </div>
+  );
+};
+
+const MindmapGraphStylePanel = ({ app }: { app: AppClassProperties }) => {
+  const root = app.mindmap.getSelectedGraphRoot();
+  if (!root) {
+    return null;
+  }
+  const disabled = !app.mindmap.canEditNode(root.id);
+  return (
+    <div className="mindmap-style-panel">
+      <fieldset>
+        <legend>Direction</legend>
+        <div className="buttonList">
+          {MINDMAP_DIRECTIONS.map(([direction, label]) => (
+            <IconButton
+              key={direction}
+              type="toggle"
+              icon={
+                <span
+                  className={`mindmap-direction-icon mindmap-direction-icon--${direction}`}
+                >
+                  {ArrowRightIcon}
+                </span>
+              }
+              checked={(root.layoutDirection ?? "left-to-right") === direction}
+              disabled={disabled}
+              title={label}
+              aria-label={label}
+              onSelect={() => app.mindmap.setLayoutConfig({ direction })}
+            />
+          ))}
+        </div>
+      </fieldset>
+      <MindmapEdgeStyleControls
+        title="Mindmap edge"
+        style={{
+          strokeColor: root.defaultEdgeStrokeColor ?? "#1b1b1f",
+          strokeWidth: root.defaultEdgeStrokeWidth ?? 2,
+          strokeStyle: root.defaultEdgeStrokeStyle ?? "solid",
+          routing: root.defaultEdgeRouting ?? "orthogonal",
+        }}
+        disabled={disabled}
+        onChange={app.mindmap.setGraphEdgeStyle}
+      />
+    </div>
+  );
+};
 
 /**
  * The "arrange" (z-order) fieldset, identical across every styles-panel layout.
@@ -166,6 +380,11 @@ export const SelectedShapeActions = ({
 
   return (
     <div className="selected-shape-actions">
+      {app.mindmap.getSelectedGraphRoot() ? (
+        <MindmapGraphStylePanel app={app} />
+      ) : (
+        app.mindmap.getSelectedNode() && <MindmapNodeStylePanel app={app} />
+      )}
       <div>{predicates.strokeColor && renderAction("changeStrokeColor")}</div>
       {predicates.backgroundColor && (
         <div>{renderAction("changeBackgroundColor")}</div>
@@ -633,6 +852,11 @@ export const CompactShapeActions = ({
 
   return (
     <div className="compact-shape-actions">
+      {app.mindmap.getSelectedGraphRoot() ? (
+        <MindmapGraphStylePanel app={app} />
+      ) : (
+        app.mindmap.getSelectedNode() && <MindmapNodeStylePanel app={app} />
+      )}
       {/* Stroke Color */}
       {predicates.strokeColor && (
         <div className={clsx("compact-action-item")}>

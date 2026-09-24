@@ -501,6 +501,24 @@ export const duplicateElements = (
       role: isCopiedRoot ? "root" : "node",
       order: isCopiedRoot ? null : original.order,
     });
+    if (isCopiedRoot && original.role !== "root") {
+      const sourceRoot = [...origElementsMap.values()].find(
+        (candidate) =>
+          isMindmapNodeElement(candidate) &&
+          candidate.graphId === original.graphId &&
+          candidate.role === "root",
+      );
+      if (sourceRoot && isMindmapNodeElement(sourceRoot)) {
+        Object.assign(duplicate, {
+          layoutDirection: sourceRoot.layoutDirection,
+          defaultNodeShape: sourceRoot.defaultNodeShape,
+          defaultEdgeRouting: sourceRoot.defaultEdgeRouting,
+          defaultEdgeStrokeColor: sourceRoot.defaultEdgeStrokeColor,
+          defaultEdgeStrokeWidth: sourceRoot.defaultEdgeStrokeWidth,
+          defaultEdgeStrokeStyle: sourceRoot.defaultEdgeStrokeStyle,
+        });
+      }
+    }
   }
   for (const duplicate of duplicatedElements) {
     const original = origElementsMap.get(

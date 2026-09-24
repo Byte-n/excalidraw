@@ -19,7 +19,7 @@ import { restoreElements } from "../data/restore";
 
 import { API } from "./helpers/api";
 import { Keyboard, Pointer } from "./helpers/ui";
-import { act, fireEvent, render } from "./test-utils";
+import { act, fireEvent, render, screen } from "./test-utils";
 
 import type { ElementRenderOverrides } from "../types";
 
@@ -136,6 +136,152 @@ describe("Mindmap P03 drag preview", () => {
         initialData={{ elements: fixture() }}
       />,
     );
+  });
+
+  it("edits graph design only while the whole mindmap is selected", () => {
+    const mouse = new Pointer("mouse");
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
+
+    expect(h.app.mindmap.getSelectedGraphRoot()?.id).toBe("root");
+    expect(
+      screen.getByRole("button", { name: "Right to left" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("mindmap-shape-rectangle"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Right to left" }));
+    expect(node("root").layoutDirection).toBe("right-to-left");
+
+    fireEvent.change(screen.getByLabelText("Mindmap edge color"), {
+      target: { value: "#ff0000" },
+    });
+    fireEvent.change(screen.getByLabelText("Mindmap edge width"), {
+      target: { value: "5" },
+    });
+    fireEvent.click(
+      screen
+        .getByRole("region", { name: "Mindmap edge" })
+        .querySelector('button[aria-label="Dashed"]')!,
+    );
+    fireEvent.click(
+      screen
+        .getByRole("region", { name: "Mindmap edge" })
+        .querySelector('button[aria-label="Curved"]')!,
+    );
+
+    expect(node("root")).toMatchObject({
+      defaultEdgeStrokeColor: "#ff0000",
+      defaultEdgeStrokeWidth: 5,
+      defaultEdgeStrokeStyle: "dashed",
+      defaultEdgeRouting: "curved",
+    });
+    const edges = h.app.scene
+      .getNonDeletedElements()
+      .filter(isMindmapEdgeElement);
+    expect(edges.length).toBeGreaterThan(0);
+    edges.forEach((edge) => {
+      expect(edge).toMatchObject({
+        strokeColor: "#ff0000",
+        strokeWidth: 5,
+        strokeStyle: "dashed",
+        routing: "curved",
+      });
+    });
+    expect(h.state.toast).toBeNull();
+
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
+    expect(h.state.selectedElementIds).toEqual({ root: true });
+    expect(h.app.mindmap.getSelectedGraphRoot()).toBeNull();
+    expect(
+      screen.queryByLabelText("Mindmap edge color"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Right to left" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("mindmap-shape-rectangle")).toBeInTheDocument();
+  });
+
+  it("edits only the selected node's incoming edge", () => {
+    API.setSelectedElements([node("a")]);
+    const otherEdges = h.app.scene
+      .getNonDeletedElements()
+      .filter(isMindmapEdgeElement)
+      .filter((edge) => edge.childId !== "a");
+    const rootDefaults = {
+      defaultEdgeStrokeColor: node("root").defaultEdgeStrokeColor,
+      defaultEdgeStrokeWidth: node("root").defaultEdgeStrokeWidth,
+      defaultEdgeStrokeStyle: node("root").defaultEdgeStrokeStyle,
+      defaultEdgeRouting: node("root").defaultEdgeRouting,
+    };
+
+    expect(
+      screen.getByRole("region", { name: "Incoming edge" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Right to left" }),
+    ).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Incoming edge color"), {
+      target: { value: "#00aa00" },
+    });
+    fireEvent.change(screen.getByLabelText("Incoming edge width"), {
+      target: { value: "4" },
+    });
+    fireEvent.click(
+      screen
+        .getByRole("region", { name: "Incoming edge" })
+        .querySelector('button[aria-label="Dotted"]')!,
+    );
+    fireEvent.click(
+      screen
+        .getByRole("region", { name: "Incoming edge" })
+        .querySelector('button[aria-label="Curved"]')!,
+    );
+
+    const incomingEdge = h.app.scene
+      .getNonDeletedElements()
+      .filter(isMindmapEdgeElement)
+      .find((edge) => edge.childId === "a");
+    expect(incomingEdge).toMatchObject({
+      strokeColor: "#00aa00",
+      strokeWidth: 4,
+      strokeStyle: "dotted",
+      routing: "curved",
+    });
+    otherEdges.forEach((edge) => {
+      expect(h.app.scene.getNonDeletedElement(edge.id)).toMatchObject({
+        strokeColor: edge.strokeColor,
+        strokeWidth: edge.strokeWidth,
+        strokeStyle: edge.strokeStyle,
+        routing: edge.routing,
+      });
+    });
+    expect(node("root")).toMatchObject(rootDefaults);
+    expect(h.state.toast).toBeNull();
+  });
+
+  it("toggles graph design on repeated clicks of a lone root", () => {
+    API.setElements(
+      h.app.scene
+        .getNonDeletedElements()
+        .filter(
+          (element) => element.id === "root" || element.id === "root-text",
+        ),
+    );
+    const mouse = new Pointer("mouse");
+
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
+    expect(h.app.mindmap.getSelectedGraphRoot()?.id).toBe("root");
+    expect(
+      screen.getByRole("button", { name: "Right to left" }),
+    ).toBeInTheDocument();
+
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
+    expect(h.app.mindmap.getSelectedGraphRoot()).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Right to left" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("mindmap-shape-rectangle")).toBeInTheDocument();
   });
 
   it("moves only the node preview with the pointer and connects it to the candidate parent", () => {

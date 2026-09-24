@@ -106,6 +106,40 @@ describe("mindmap 场景恢复与渲染基础", () => {
     expect(cleaned).toEqual(result);
   });
 
+  it("P05 JSON 往返保留布局方向、默认样式和节点形状", () => {
+    const input = fixture();
+    const configured = input.map((element) =>
+      element.id === input[0].id
+        ? {
+            ...element,
+            layoutDirection: "bottom-to-top" as const,
+            defaultNodeShape: "pill" as const,
+            defaultEdgeRouting: "curved" as const,
+            defaultEdgeStrokeColor: "#6741d9",
+            defaultEdgeStrokeWidth: 3,
+            defaultEdgeStrokeStyle: "dashed" as const,
+          }
+        : element.id === input[1].id
+        ? { ...element, shape: "diamond" as const }
+        : element,
+    );
+    const restored = restore(configured);
+    const json = serializeAsJSON(restored, getDefaultAppState(), {}, "local");
+    const reopened = restore(JSON.parse(json).elements as ExcalidrawElement[]);
+    const root = reopened.find((element) => element.id === input[0].id);
+    const child = reopened.find((element) => element.id === input[1].id);
+
+    expect(root).toMatchObject({
+      layoutDirection: "bottom-to-top",
+      defaultNodeShape: "pill",
+      defaultEdgeRouting: "curved",
+      defaultEdgeStrokeColor: "#6741d9",
+      defaultEdgeStrokeWidth: 3,
+      defaultEdgeStrokeStyle: "dashed",
+    });
+    expect(child).toMatchObject({ shape: "diamond" });
+  });
+
   it("字段级恢复补全缺省值，独立恢复不擅自提升子节点为根", () => {
     const input = fixture();
     const child = input[1];

@@ -89,6 +89,18 @@ export class ActionManager {
   private isActionBlockedByViewportTransition = (action: Action) =>
     action.navigation === true && this.app.viewport.isLockedTransitionPending;
 
+  private prepareActionResult = (
+    action: Action,
+    result: ActionResult | Promise<ActionResult>,
+  ): ActionResult | Promise<ActionResult> => {
+    if (isPromiseLike(result)) {
+      return result.then((resolved) =>
+        this.app.mindmap.relayoutActionResult(action.name, resolved),
+      );
+    }
+    return this.app.mindmap.relayoutActionResult(action.name, result);
+  };
+
   handleKeyDown(event: React.KeyboardEvent | KeyboardEvent) {
     if (!this.app.isInteractionEnabled() && !this.app.isNavigationEnabled()) {
       return false;
@@ -151,7 +163,12 @@ export class ActionManager {
 
     event.preventDefault();
     event.stopPropagation();
-    this.updater(data[0].perform(elements, appState, value, this.app));
+    this.updater(
+      this.prepareActionResult(
+        data[0],
+        data[0].perform(elements, appState, value, this.app),
+      ),
+    );
     return true;
   }
 
@@ -185,7 +202,12 @@ export class ActionManager {
 
     trackAction(action, source, appState, elements, this.app, value);
 
-    this.updater(action.perform(elements, appState, value, this.app));
+    this.updater(
+      this.prepareActionResult(
+        action,
+        action.perform(elements, appState, value, this.app),
+      ),
+    );
   }
 
   /**
@@ -226,11 +248,14 @@ export class ActionManager {
         );
 
         this.updater(
-          action.perform(
-            this.getElementsIncludingDeleted(),
-            this.getAppState(),
-            formState,
-            this.app,
+          this.prepareActionResult(
+            action,
+            action.perform(
+              this.getElementsIncludingDeleted(),
+              this.getAppState(),
+              formState,
+              this.app,
+            ),
           ),
         );
       };

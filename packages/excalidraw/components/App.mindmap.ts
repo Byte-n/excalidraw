@@ -11,20 +11,27 @@ import {
   buildMindmapGraphIndex,
   CaptureUpdateAction,
   computeBoundTextPosition,
+  computeContainerDimensionForBoundText,
+  getBoundTextMaxHeight,
+  getBoundTextMaxWidth,
   getBoundTextElement,
   handleBindTextResize,
   isMindmapElementHidden,
   isMindmapEdgeElement,
   isMindmapNodeElement,
   getMindmapSubtreeIds,
+  getMindmapEdgeGeometry,
+  getMindmapLayoutConfig,
   layoutMindmap,
   navigateMindmap,
   newElement,
   newElementWith,
   newLinearElement,
   newMindmapNodeElement,
+  measureText,
   reparentMindmapNodes,
   repairMindmapElements,
+  wrapText,
 } from "@excalidraw/element";
 
 import type { LocalPoint } from "@excalidraw/math";
@@ -35,6 +42,9 @@ import type {
   ExcalidrawTextContainer,
   FractionalIndex,
   NonDeletedExcalidrawElement,
+  MindmapLayoutDirection,
+  MindmapEdgeRouting,
+  StrokeStyle,
 } from "@excalidraw/element/types";
 
 import type { MindmapTreeCommand } from "@excalidraw/element";
@@ -89,25 +99,11 @@ const unsupportedSelectionActions = new Set<ActionName>([
   "bindText",
   "bringForward",
   "bringToFront",
-  "changeBackgroundColor",
-  "changeFillStyle",
-  "changeFontFamily",
-  "changeFontSize",
-  "changeOpacity",
-  "changeRoundness",
-  "changeSloppiness",
-  "changeStrokeColor",
-  "changeStrokeStyle",
-  "changeStrokeWidth",
-  "changeTextAlign",
-  "changeVerticalAlign",
-  "decreaseFontSize",
   "distributeHorizontally",
   "distributeVertically",
   "flipHorizontal",
   "flipVertical",
   "group",
-  "increaseFontSize",
   "pasteStyles",
   "removeAllElementsFromFrame",
   "sendBackward",
@@ -126,6 +122,22 @@ const lockedMindmapMutationActions = new Set<ActionName>([
   "toggleShapeSwitch",
 ]);
 
+const relayoutAfterStyleActions = new Set<ActionName>([
+  "changeBackgroundColor",
+  "changeFillStyle",
+  "changeFontFamily",
+  "changeFontSize",
+  "changeOpacity",
+  "changeRoundness",
+  "changeStrokeColor",
+  "changeStrokeStyle",
+  "changeStrokeWidth",
+  "changeTextAlign",
+  "changeVerticalAlign",
+  "decreaseFontSize",
+  "increaseFontSize",
+]);
+
 /**
  * Owns the first phase of mindmap interaction. Structural writes go through
  * the existing Scene/Store path; the controller only keeps transient typing
@@ -140,6 +152,7 @@ export class AppMindmap {
   private dimmedDragElementIds = new Set<string>();
   private cancelledPointerDown: PointerDownState | null = null;
   private renderOverlay: (() => void) | null = null;
+  private selectedSingleVisibleNodeGraphId: string | null = null;
 
   constructor(private readonly app: App) {}
 
@@ -148,6 +161,7 @@ export class AppMindmap {
     this.consumedSpace = false;
     this.cancelDrag();
     this.clearHover();
+    this.selectedSingleVisibleNodeGraphId = null;
   };
 
   clearHover = () => {
@@ -628,6 +642,36 @@ export class AppMindmap {
   };
 
   preparePointerDown = (pointerDownState: PointerDownState) => {
+    const pointerHit = pointerDownState.hit.element;
+    const hit =
+      pointerHit?.type === "text" && pointerHit.containerId
+        ? this.app.scene.getNonDeletedElement(pointerHit.containerId)
+        : pointerHit;
+    if (
+      this.app.state.activeTool.type === "selection" &&
+      hit &&
+      isMindmapNodeElement(hit) &&
+      hit.role === "root" &&
+      !this.app.scene
+        .getNonDeletedElements()
+        .some(
+          (element) =>
+            isMindmapNodeElement(element) &&
+            element.graphId === hit.graphId &&
+            element.id !== hit.id &&
+            !isMindmapElementHidden(
+              element,
+              this.app.scene.getNonDeletedElementsMap(),
+            ),
+        )
+    ) {
+      this.selectedSingleVisibleNodeGraphId =
+        this.selectedSingleVisibleNodeGraphId === hit.graphId
+          ? null
+          : hit.graphId;
+    } else {
+      this.selectedSingleVisibleNodeGraphId = null;
+    }
     if (pointerDownState.hit.element) {
       this.app.setState((prevState) => {
         const candidate = this.getDragCandidate(
@@ -783,6 +827,198 @@ export class AppMindmap {
       )
       ? selected[0]
       : null;
+  };
+
+  getSelectedGraphRoot = () => {
+    const selected = this.app.scene.getSelectedElements(this.app.state);
+    const roots = selected
+      .filter(isMindmapNodeElement)
+      .filter((node) => node.role === "root");
+    if (roots.length !== 1) {
+      return null;
+    }
+    const root = roots[0];
+    const elementsMap = this.app.scene.getNonDeletedElementsMap();
+    if (
+      selected.some((element) => {
+        if (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) {
+          return element.graphId !== root.graphId;
+        }
+        const container =
+          element.type === "text" && element.containerId
+            ? elementsMap.get(element.containerId)
+            : null;
+        return (
+          !container ||
+          !isMindmapNodeElement(container) ||
+          container.graphId !== root.graphId
+        );
+      })
+    ) {
+      return null;
+    }
+    const graphNodes = this.app.scene
+      .getNonDeletedElements()
+      .filter(isMindmapNodeElement)
+      .filter((node) => node.graphId === root.graphId);
+    const visibleNodes = graphNodes.filter(
+      (node) => !isMindmapElementHidden(node, elementsMap),
+    );
+    if (
+      (visibleNodes.length === 1 &&
+        this.selectedSingleVisibleNodeGraphId !== root.graphId) ||
+      visibleNodes.some((node) => !this.app.state.selectedElementIds[node.id])
+    ) {
+      return null;
+    }
+    return root;
+  };
+
+  getLayoutDirection = (graphId: string): MindmapLayoutDirection => {
+    const index = buildMindmapGraphIndex(
+      this.app.scene.getNonDeletedElements(),
+      graphId,
+    );
+    return getMindmapLayoutConfig(index.nodes.get(index.rootId)).direction;
+  };
+
+  private commitGraphUpdate = (
+    graphId: string,
+    update: (element: ExcalidrawElement) => ExcalidrawElement,
+  ) => {
+    const current = this.app.scene.getElementsIncludingDeleted();
+    const next = current.map((element) =>
+      isMindmapNodeElement(element) || isMindmapEdgeElement(element)
+        ? element.graphId === graphId
+          ? update(element)
+          : element
+        : element,
+    );
+    this.app.syncActionResult({
+      elements: this.getLaidOutElements(next, [graphId]),
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+  };
+
+  setNodeShape = (shape: ExcalidrawMindmapNodeElement["shape"]) => {
+    const node = this.getSelectedNode();
+    if (!node || !this.canEditNode(node.id)) {
+      this.notifyUnsupportedOperation();
+      return;
+    }
+    this.commitGraphUpdate(node.graphId, (element) =>
+      isMindmapNodeElement(element) && element.id === node.id
+        ? newElementWith(element, { shape })
+        : element,
+    );
+  };
+
+  setIncomingEdgeStyle = (style: {
+    strokeColor?: string;
+    strokeWidth?: number;
+    strokeStyle?: StrokeStyle;
+    routing?: MindmapEdgeRouting;
+  }) => {
+    const node = this.getSelectedNode();
+    if (!node || node.role === "root" || !this.canEditNode(node.id)) {
+      this.notifyUnsupportedOperation();
+      return;
+    }
+    this.commitGraphUpdate(node.graphId, (element) =>
+      isMindmapEdgeElement(element) && element.childId === node.id
+        ? newElementWith(element, style)
+        : element,
+    );
+  };
+
+  setGraphEdgeStyle = (style: {
+    strokeColor?: string;
+    strokeWidth?: number;
+    strokeStyle?: StrokeStyle;
+    routing?: MindmapEdgeRouting;
+  }) => {
+    const root = this.getSelectedGraphRoot();
+    if (!root || !this.canEditNode(root.id)) {
+      this.notifyUnsupportedOperation();
+      return;
+    }
+    this.commitGraphUpdate(root.graphId, (element) =>
+      isMindmapNodeElement(element) && element.id === root.id
+        ? newElementWith(element, {
+            ...(style.strokeColor !== undefined && {
+              defaultEdgeStrokeColor: style.strokeColor,
+            }),
+            ...(style.strokeWidth !== undefined && {
+              defaultEdgeStrokeWidth: style.strokeWidth,
+            }),
+            ...(style.strokeStyle !== undefined && {
+              defaultEdgeStrokeStyle: style.strokeStyle,
+            }),
+            ...(style.routing !== undefined && {
+              defaultEdgeRouting: style.routing,
+            }),
+          })
+        : isMindmapEdgeElement(element)
+        ? newElementWith(element, style)
+        : element,
+    );
+  };
+
+  setLayoutConfig = (config: { direction?: MindmapLayoutDirection }) => {
+    const root = this.getSelectedGraphRoot();
+    if (!root || !this.canEditNode(root.id)) {
+      this.notifyUnsupportedOperation();
+      return;
+    }
+    const nextRoot = newElementWith(root, {
+      ...(config.direction !== undefined && {
+        layoutDirection: config.direction,
+      }),
+    });
+    this.commitGraphUpdate(root.graphId, (element) =>
+      isMindmapNodeElement(element) && element.id === root.id
+        ? nextRoot
+        : element,
+    );
+  };
+
+  relayoutActionResult = (
+    actionName: ActionName,
+    result: ActionResult,
+  ): ActionResult => {
+    if (
+      result === false ||
+      !relayoutAfterStyleActions.has(actionName) ||
+      !result.elements
+    ) {
+      return result;
+    }
+    const previous = this.app.scene.getElementsMapIncludingDeleted();
+    const graphIds = new Set<string>();
+    result.elements.forEach((element) => {
+      if (
+        (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+        previous.get(element.id) !== element
+      ) {
+        graphIds.add(element.graphId);
+      } else if (
+        element.type === "text" &&
+        !element.isDeleted &&
+        element.containerId &&
+        previous.get(element.id) !== element
+      ) {
+        const container = previous.get(element.containerId);
+        if (isMindmapNodeElement(container)) {
+          graphIds.add(container.graphId);
+        }
+      }
+    });
+    return graphIds.size
+      ? {
+          ...result,
+          elements: this.getLaidOutElements(result.elements, [...graphIds]),
+        }
+      : result;
   };
 
   /** Returns all nodes and bound labels for the graphs represented by a selection. */
@@ -1156,6 +1392,12 @@ export class AppMindmap {
       nodeIds.flatMap((id) => this.getSubtreeIds(index, id)),
     );
     const tolerance = 40 / this.app.state.zoom.value;
+    const root = index.nodes.get(index.rootId)!;
+    const { direction } = getMindmapLayoutConfig(root);
+    const isVertical =
+      direction === "top-to-bottom" || direction === "bottom-to-top";
+    const mainSign =
+      direction === "right-to-left" || direction === "bottom-to-top" ? -1 : 1;
     let closest: { target: MindmapDropTarget; distance: number } | null = null;
     for (const node of index.nodes.values()) {
       if (
@@ -1165,17 +1407,35 @@ export class AppMindmap {
       ) {
         continue;
       }
-      const centerY = node.y + node.height / 2;
-      const right = node.x + node.width;
-      const verticalDistance = Math.abs(scenePoint.y - centerY);
-      const childDistance = Math.max(0, scenePoint.x - right);
+      const main = isVertical ? scenePoint.y : scenePoint.x;
+      const cross = isVertical ? scenePoint.x : scenePoint.y;
+      const nodeMain = isVertical ? node.y : node.x;
+      const nodeMainSize = isVertical ? node.height : node.width;
+      const nodeCross = isVertical ? node.x : node.y;
+      const nodeCrossSize = isVertical ? node.width : node.height;
+      const centerCross = nodeCross + nodeCrossSize / 2;
+      const crossDistance = Math.abs(cross - centerCross);
+      const childDistance =
+        mainSign > 0
+          ? Math.max(0, main - (nodeMain + nodeMainSize))
+          : Math.max(0, nodeMain - main);
+      const childBoundary = mainSign > 0 ? nodeMain + nodeMainSize : nodeMain;
+      const childNear =
+        mainSign > 0
+          ? nodeMain + nodeMainSize * 0.6
+          : nodeMain + nodeMainSize * 0.4;
+      const childFar =
+        mainSign > 0
+          ? childBoundary + tolerance * 2.5
+          : childBoundary - tolerance * 2.5;
       if (
         !node.collapsed &&
-        scenePoint.x >= node.x + node.width * 0.6 &&
-        scenePoint.x <= right + tolerance * 2.5 &&
-        verticalDistance <= node.height / 2 + tolerance
+        (mainSign > 0
+          ? main >= childNear && main <= childFar
+          : main <= childNear && main >= childFar) &&
+        crossDistance <= nodeCrossSize / 2 + tolerance
       ) {
-        const distance = childDistance + verticalDistance;
+        const distance = childDistance + crossDistance;
         if (!closest || distance < closest.distance) {
           closest = {
             target: { parentId: node.id, beforeId: null },
@@ -1183,16 +1443,18 @@ export class AppMindmap {
           };
         }
       }
+      if (!node.parentId) {
+        continue;
+      }
       if (
-        !node.parentId ||
-        scenePoint.x < node.x - tolerance ||
-        scenePoint.x > right + tolerance / 2
+        main < nodeMain - tolerance ||
+        main > nodeMain + nodeMainSize + tolerance / 2
       ) {
         continue;
       }
-      const above = scenePoint.y < centerY;
-      const edgeY = above ? node.y : node.y + node.height;
-      if (Math.abs(scenePoint.y - edgeY) > tolerance) {
+      const above = cross < centerCross;
+      const edgeCross = above ? nodeCross : nodeCross + nodeCrossSize;
+      if (Math.abs(cross - edgeCross) > tolerance) {
         continue;
       }
       const siblings = (index.childrenById.get(node.parentId) ?? []).filter(
@@ -1203,8 +1465,8 @@ export class AppMindmap {
         continue;
       }
       const distance =
-        Math.abs(scenePoint.y - edgeY) +
-        Math.max(0, node.x - scenePoint.x, scenePoint.x - right);
+        Math.abs(cross - edgeCross) +
+        Math.max(0, nodeMain - main, main - (nodeMain + nodeMainSize));
       if (!closest || distance < closest.distance) {
         closest = {
           target: {
@@ -1225,6 +1487,13 @@ export class AppMindmap {
     if (!source || !isMindmapNodeElement(source)) {
       return [];
     }
+    const sourceIndex = buildMindmapGraphIndex(
+      this.app.scene.getNonDeletedElements(),
+      source.graphId,
+    );
+    const { direction } = getMindmapLayoutConfig(
+      sourceIndex.nodes.get(sourceIndex.rootId),
+    );
     const previewNode = {
       ...source,
       x: source.x + session.offset.x,
@@ -1260,24 +1529,16 @@ export class AppMindmap {
         edge &&
         isMindmapEdgeElement(edge)
       ) {
-        const x = parent.x + parent.width;
-        const startY = parent.y + parent.height / 2;
-        const endY = previewNode.y + previewNode.height / 2;
-        const y = Math.min(startY, endY);
-        const width = previewNode.x - x;
+        const geometry = getMindmapEdgeGeometry(
+          parent,
+          previewNode,
+          edge.routing,
+          direction,
+        );
         preview.unshift({
           ...edge,
           parentId: parent.id,
-          x,
-          y,
-          width,
-          height: Math.abs(endY - startY),
-          points: [
-            pointFrom<LocalPoint>(0, startY - y),
-            pointFrom<LocalPoint>(width / 2, startY - y),
-            pointFrom<LocalPoint>(width / 2, endY - y),
-            pointFrom<LocalPoint>(width, endY - y),
-          ],
+          ...geometry,
         });
       }
     }
@@ -1534,6 +1795,7 @@ export class AppMindmap {
       role: "node",
       parentId,
       order: order as FractionalIndex,
+      shape: index.nodes.get(index.rootId)?.defaultNodeShape ?? "rectangle",
     });
     this.app.insertNewElement(node);
     this.layoutGraph(parent.graphId);
@@ -1764,7 +2026,7 @@ export class AppMindmap {
     });
   }
 
-  private getLaidOutElements(
+  getLaidOutElements(
     elements: readonly ExcalidrawElement[],
     graphIds: readonly string[],
   ) {
@@ -1781,17 +2043,70 @@ export class AppMindmap {
       if (!graph.some(isMindmapNodeElement)) {
         continue;
       }
-      const layout = layoutMindmap(buildMindmapGraphIndex(graph, graphId));
-      for (const element of [...layout.elements, ...layout.edges]) {
-        updated.set(element.id, element);
-      }
-      for (const node of layout.elements) {
-        const text = getBoundTextElement(node, updated);
-        if (text) {
-          updated.set(text.id, {
-            ...text,
-            ...computeBoundTextPosition(node, text, updated),
+      // Text style changes can enlarge a node. Re-run the layout after that
+      // resize so sibling spacing and edge endpoints use the final bounds.
+      for (let pass = 0; pass < 2; pass++) {
+        const currentGraph = [...updated.values()].filter(
+          (element) =>
+            !element.isDeleted &&
+            (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+            element.graphId === graphId,
+        );
+        const layout = layoutMindmap(
+          buildMindmapGraphIndex(currentGraph, graphId),
+        );
+        for (const element of [...layout.elements, ...layout.edges]) {
+          updated.set(element.id, element);
+        }
+        let resized = false;
+        for (const node of layout.elements) {
+          const text = getBoundTextElement(node, updated);
+          if (!text) {
+            continue;
+          }
+          const maxWidth = getBoundTextMaxWidth(node, text);
+          const wrappedText = wrapText(
+            text.originalText,
+            getFontString(text),
+            maxWidth,
+          );
+          const metrics = measureText(
+            wrappedText,
+            getFontString(text),
+            text.lineHeight,
+          );
+          const shape = node.shape === "pill" ? "ellipse" : node.shape;
+          const maxHeight = getBoundTextMaxHeight(node, text);
+          const nextNode = newElementWith(node, {
+            ...(metrics.width > maxWidth && {
+              width: computeContainerDimensionForBoundText(
+                metrics.width,
+                shape,
+              ),
+            }),
+            ...(metrics.height > maxHeight && {
+              height: computeContainerDimensionForBoundText(
+                metrics.height,
+                shape,
+              ),
+            }),
           });
+          resized ||=
+            nextNode.width !== node.width || nextNode.height !== node.height;
+          updated.set(node.id, nextNode);
+          const nextText = {
+            ...text,
+            text: wrappedText,
+            width: metrics.width,
+            height: metrics.height,
+          };
+          updated.set(text.id, {
+            ...nextText,
+            ...computeBoundTextPosition(nextNode, nextText, updated),
+          });
+        }
+        if (!resized) {
+          break;
         }
       }
     }

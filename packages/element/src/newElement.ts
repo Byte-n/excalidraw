@@ -61,6 +61,8 @@ import type {
   ExcalidrawMindmapEdgeElement,
   MindmapNodeRelation,
   MindmapNodeShape,
+  MindmapLayoutDirection,
+  MindmapEdgeRouting,
 } from "./types";
 
 export type ElementConstructorOpts = MarkOptional<
@@ -253,6 +255,12 @@ export const newMindmapNodeElement = (
       graphId: string;
       shape?: MindmapNodeShape;
       collapsed?: boolean;
+      layoutDirection?: MindmapLayoutDirection;
+      defaultNodeShape?: MindmapNodeShape;
+      defaultEdgeRouting?: MindmapEdgeRouting;
+      defaultEdgeStrokeColor?: string;
+      defaultEdgeStrokeWidth?: number;
+      defaultEdgeStrokeStyle?: ExcalidrawMindmapEdgeElement["strokeStyle"];
     },
 ): NonDeleted<ExcalidrawMindmapNodeElement> => ({
   ..._newElementBase<ExcalidrawMindmapNodeElement>("mindmap-node", {
@@ -268,6 +276,17 @@ export const newMindmapNodeElement = (
   graphId: opts.graphId,
   collapsed: opts.collapsed ?? false,
   shape: opts.shape ?? "rectangle",
+  ...(opts.role === "root"
+    ? {
+        layoutDirection: opts.layoutDirection ?? "left-to-right",
+        defaultNodeShape: opts.defaultNodeShape ?? "rectangle",
+        defaultEdgeRouting: opts.defaultEdgeRouting ?? "orthogonal",
+        defaultEdgeStrokeColor:
+          opts.defaultEdgeStrokeColor ?? opts.strokeColor ?? "#1b1b1f",
+        defaultEdgeStrokeWidth: opts.defaultEdgeStrokeWidth ?? 2,
+        defaultEdgeStrokeStyle: opts.defaultEdgeStrokeStyle ?? "solid",
+      }
+    : {}),
   ...(opts.role === "root"
     ? { role: "root", parentId: null, order: null }
     : { role: "node", parentId: opts.parentId, order: opts.order }),

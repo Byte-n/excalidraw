@@ -2594,6 +2594,9 @@ class App extends React.Component<AppProps, AppState> {
                               <ElementCanvasButtons
                                 element={mindmapNodeForControls}
                                 elementsMap={renderableElementsMap}
+                                layoutDirection={this.mindmap.getLayoutDirection(
+                                  mindmapNodeForControls.graphId,
+                                )}
                               >
                                 <ElementCanvasButton
                                   title={t("labels.addMindmapChild")}

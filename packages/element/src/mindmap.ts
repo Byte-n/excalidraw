@@ -19,7 +19,112 @@ import type {
   ExcalidrawDiamondElement,
   ExcalidrawEllipseElement,
   ElementsMap,
+  MindmapLayoutDirection,
+  MindmapEdgeRouting,
+  StrokeStyle,
 } from "./types";
+
+export const DEFAULT_MINDMAP_LAYOUT_DIRECTION: MindmapLayoutDirection =
+  "left-to-right";
+const MINDMAP_LEVEL_DISTANCE = 80;
+const MINDMAP_SIBLING_DISTANCE = 24;
+export const DEFAULT_MINDMAP_EDGE_ROUTING: MindmapEdgeRouting = "orthogonal";
+export const DEFAULT_MINDMAP_EDGE_STROKE_WIDTH = 2;
+export const DEFAULT_MINDMAP_EDGE_STROKE_STYLE: StrokeStyle = "solid";
+
+export type MindmapLayoutConfig = {
+  direction?: MindmapLayoutDirection;
+  /** Alias accepted by callers that use the persisted field name. */
+  layoutDirection?: MindmapLayoutDirection;
+};
+
+export type MindmapGraphStyleConfig = {
+  defaultNodeShape?: ExcalidrawMindmapNodeElement["shape"];
+  defaultEdgeRouting?: MindmapEdgeRouting;
+  defaultEdgeStrokeColor?: string;
+  defaultEdgeStrokeWidth?: number;
+  defaultEdgeStrokeStyle?: StrokeStyle;
+};
+
+const isMindmapLayoutDirection = (
+  value: unknown,
+): value is MindmapLayoutDirection =>
+  value === "left-to-right" ||
+  value === "right-to-left" ||
+  value === "top-to-bottom" ||
+  value === "bottom-to-top";
+
+const isMindmapNodeShape = (
+  value: unknown,
+): value is ExcalidrawMindmapNodeElement["shape"] =>
+  value === "rectangle" ||
+  value === "ellipse" ||
+  value === "diamond" ||
+  value === "pill";
+
+const isMindmapEdgeRouting = (value: unknown): value is MindmapEdgeRouting =>
+  value === "orthogonal" || value === "curved";
+
+const isStrokeStyle = (value: unknown): value is StrokeStyle =>
+  value === "solid" || value === "dashed" || value === "dotted";
+
+export const getMindmapLayoutConfig = (
+  root?: Pick<ExcalidrawMindmapNodeElement, "layoutDirection"> | null,
+  config: MindmapLayoutConfig = {},
+): { direction: MindmapLayoutDirection } => {
+  const requestedDirection = config.direction ?? config.layoutDirection;
+  const direction = isMindmapLayoutDirection(requestedDirection)
+    ? requestedDirection
+    : isMindmapLayoutDirection(root?.layoutDirection)
+    ? root.layoutDirection
+    : DEFAULT_MINDMAP_LAYOUT_DIRECTION;
+  return { direction };
+};
+
+export const normalizeMindmapGraphConfig = (
+  root: ExcalidrawMindmapNodeElement,
+): ExcalidrawMindmapNodeElement => {
+  const config = {
+    direction: isMindmapLayoutDirection(root.layoutDirection)
+      ? root.layoutDirection
+      : DEFAULT_MINDMAP_LAYOUT_DIRECTION,
+  };
+  const updates: Partial<ExcalidrawMindmapNodeElement> = {
+    layoutDirection: config.direction,
+    defaultNodeShape: isMindmapNodeShape(root.defaultNodeShape)
+      ? root.defaultNodeShape
+      : "rectangle",
+    defaultEdgeRouting: isMindmapEdgeRouting(root.defaultEdgeRouting)
+      ? root.defaultEdgeRouting
+      : DEFAULT_MINDMAP_EDGE_ROUTING,
+    defaultEdgeStrokeColor:
+      typeof root.defaultEdgeStrokeColor === "string"
+        ? root.defaultEdgeStrokeColor
+        : root.strokeColor,
+    defaultEdgeStrokeWidth:
+      Number.isFinite(root.defaultEdgeStrokeWidth) &&
+      root.defaultEdgeStrokeWidth! >= 0
+        ? root.defaultEdgeStrokeWidth
+        : DEFAULT_MINDMAP_EDGE_STROKE_WIDTH,
+    defaultEdgeStrokeStyle: isStrokeStyle(root.defaultEdgeStrokeStyle)
+      ? root.defaultEdgeStrokeStyle
+      : DEFAULT_MINDMAP_EDGE_STROKE_STYLE,
+  };
+  return withUpdates(root, updates);
+};
+
+export const copyMindmapGraphConfig = (
+  source: ExcalidrawMindmapNodeElement,
+  target: ExcalidrawMindmapNodeElement,
+): ExcalidrawMindmapNodeElement =>
+  withUpdates(target, {
+    layoutDirection: source.layoutDirection,
+    defaultNodeShape: source.defaultNodeShape,
+    defaultEdgeRouting: source.defaultEdgeRouting,
+    defaultEdgeStrokeColor: source.defaultEdgeStrokeColor,
+    defaultEdgeStrokeWidth: source.defaultEdgeStrokeWidth,
+    defaultEdgeStrokeStyle: source.defaultEdgeStrokeStyle,
+  });
 
 /** 仅供几何计算复用，不允许把此临时形状写入 Scene。 */
 export const getMindmapNodeGeometry = (
@@ -356,24 +461,29 @@ const createDerivedEdge = (
   parent: ExcalidrawMindmapNodeElement,
   child: ExcalidrawMindmapNodeElement,
   id: string,
+  root?: ExcalidrawMindmapNodeElement,
 ): ExcalidrawMindmapEdgeElement => ({
   id,
   type: "mindmap-edge",
   graphId: child.graphId,
   parentId: parent.id,
   childId: child.id,
-  routing: "orthogonal",
+  routing: root?.defaultEdgeRouting ?? DEFAULT_MINDMAP_EDGE_ROUTING,
   points: [],
   x: 0,
   y: 0,
   width: 0,
   height: 0,
   angle: 0 as Radians,
-  strokeColor: child.strokeColor,
+  strokeColor: root?.defaultEdgeStrokeColor ?? child.strokeColor,
   backgroundColor: "transparent",
   fillStyle: "solid",
-  strokeWidth: child.strokeWidth,
-  strokeStyle: "solid",
+  strokeWidth:
+    root?.defaultEdgeStrokeWidth ??
+    child.strokeWidth ??
+    DEFAULT_MINDMAP_EDGE_STROKE_WIDTH,
+  strokeStyle:
+    root?.defaultEdgeStrokeStyle ?? DEFAULT_MINDMAP_EDGE_STROKE_STYLE,
   roughness: 0,
   opacity: child.opacity,
   roundness: null,
@@ -450,6 +560,7 @@ export const repairMindmapElements = (
         ),
       );
     }
+    nodes.set(root.id, normalizeMindmapGraphConfig(nodes.get(root.id)!));
     // 每个节点最多遍历一次，深树不依赖递归栈。
     const complete = new Set([root.id]);
     for (const node of nodes.values()) {
@@ -517,7 +628,14 @@ export const repairMindmapElements = (
           id = `${baseId}:${++suffix}`;
         }
         usedIds.add(id);
-        addedEdges.push(createDerivedEdge(nodes.get(node.parentId)!, node, id));
+        addedEdges.push(
+          createDerivedEdge(
+            nodes.get(node.parentId)!,
+            node,
+            id,
+            nodes.get(root.id),
+          ),
+        );
       }
     }
   }
@@ -535,22 +653,103 @@ export const repairMindmapElements = (
   return changed ? [...result, ...addedEdges] : elements;
 };
 
-/** 左到右纯布局：保持根节点位置，兄弟子树互不重叠，隐藏节点不参与计算。 */
+const getBoundaryPoint = (
+  node: ExcalidrawMindmapNodeElement,
+  target: { x: number; y: number },
+  axis?: "horizontal" | "vertical",
+): [number, number] => {
+  const centerX = node.x + node.width / 2;
+  const centerY = node.y + node.height / 2;
+  const dx = target.x - centerX;
+  const dy = target.y - centerY;
+  if (dx === 0 && dy === 0) {
+    return [centerX, centerY];
+  }
+  const halfWidth = node.width / 2;
+  const halfHeight = node.height / 2;
+  // Mindmap routes leave through the side of the node on the main axis. This
+  // keeps the endpoint stable when sibling subtrees are vertically offset and
+  // also matches the exact boundary for ellipse, diamond and pill shapes.
+  if (
+    axis === "horizontal" ||
+    (axis === undefined && Math.abs(dx) >= Math.abs(dy))
+  ) {
+    return [centerX + Math.sign(dx) * halfWidth, centerY];
+  }
+  if (axis === "vertical" || Math.abs(dy) > Math.abs(dx)) {
+    return [centerX, centerY + Math.sign(dy) * halfHeight];
+  }
+  return [centerX, centerY];
+};
+
+/** Computes a persisted edge's local geometry without changing its style. */
+export const getMindmapEdgeGeometry = (
+  parent: ExcalidrawMindmapNodeElement,
+  child: ExcalidrawMindmapNodeElement,
+  routing: MindmapEdgeRouting = DEFAULT_MINDMAP_EDGE_ROUTING,
+  layoutDirection?: MindmapLayoutDirection,
+) => {
+  const parentCenter = {
+    x: parent.x + parent.width / 2,
+    y: parent.y + parent.height / 2,
+  };
+  const childCenter = {
+    x: child.x + child.width / 2,
+    y: child.y + child.height / 2,
+  };
+  const axis =
+    layoutDirection === "top-to-bottom" || layoutDirection === "bottom-to-top"
+      ? "vertical"
+      : layoutDirection === "left-to-right" ||
+        layoutDirection === "right-to-left"
+      ? "horizontal"
+      : undefined;
+  const start = getBoundaryPoint(parent, childCenter, axis);
+  const end = getBoundaryPoint(child, parentCenter, axis);
+  // The route follows the graph's main axis. Choosing the axis from the
+  // endpoint delta makes a horizontally laid out graph switch to a vertical
+  // route whenever a subtree is vertically offset more than the level gap.
+  const routeDirection =
+    axis ??
+    (Math.abs(end[0] - start[0]) >= Math.abs(end[1] - start[1])
+      ? "horizontal"
+      : "vertical");
+  const midpoint =
+    routeDirection === "horizontal"
+      ? (start[0] + end[0]) / 2
+      : (start[1] + end[1]) / 2;
+  const points: [number, number][] =
+    routing === "curved"
+      ? routeDirection === "horizontal"
+        ? [start, [midpoint, start[1]], [midpoint, end[1]], end]
+        : [start, [start[0], midpoint], [end[0], midpoint], end]
+      : routeDirection === "horizontal"
+      ? [start, [midpoint, start[1]], [midpoint, end[1]], end]
+      : [start, [start[0], midpoint], [end[0], midpoint], end];
+  const x = Math.min(...points.map((point) => point[0]));
+  const y = Math.min(...points.map((point) => point[1]));
+  return {
+    x,
+    y,
+    width: Math.max(...points.map((point) => point[0])) - x,
+    height: Math.max(...points.map((point) => point[1])) - y,
+    points: points.map(([pointX, pointY]) =>
+      pointFrom<LocalPoint>(pointX - x, pointY - y),
+    ),
+  };
+};
+
+/** Deterministic tree layout in all four visual directions. */
 export const layoutMindmap = (
   index: MindmapGraphIndex,
-  config: { levelGap?: number; siblingGap?: number } = {},
+  config: MindmapLayoutConfig = {},
 ): MindmapLayoutResult => {
-  const levelGap = config.levelGap ?? 80;
-  const siblingGap = config.siblingGap ?? 24;
-  if (
-    !Number.isFinite(levelGap) ||
-    !Number.isFinite(siblingGap) ||
-    levelGap < 0 ||
-    siblingGap < 0
-  ) {
-    throw new Error("Mindmap 布局间距必须是非负有限数");
-  }
   const root = index.nodes.get(index.rootId)!;
+  const { direction } = getMindmapLayoutConfig(root, config);
+  const isVertical =
+    direction === "top-to-bottom" || direction === "bottom-to-top";
+  const mainSign =
+    direction === "right-to-left" || direction === "bottom-to-top" ? -1 : 1;
   const visible = [root.id];
   const childrenById = new Map<string, readonly string[]>();
   for (let i = 0; i < visible.length; i++) {
@@ -568,14 +767,24 @@ export const layoutMindmap = (
     childrenById.set(node.id, children);
     visible.push(...children);
   }
-  const heights = new Map<string, number>();
+  const crossSizes = new Map<string, number>();
+  const mainSizes = new Map<string, number>();
+  const subtreeCrossSizes = new Map<string, number>();
+  for (const id of visible) {
+    const node = index.nodes.get(id)!;
+    crossSizes.set(id, isVertical ? node.width : node.height);
+    mainSizes.set(id, isVertical ? node.height : node.width);
+  }
   for (let i = visible.length - 1; i >= 0; i--) {
     const id = visible[i];
     const children = childrenById.get(id)!;
     const total =
-      children.reduce((height, child) => height + heights.get(child)!, 0) +
-      Math.max(0, children.length - 1) * siblingGap;
-    heights.set(id, Math.max(index.nodes.get(id)!.height, total));
+      children.reduce(
+        (size, child) => size + subtreeCrossSizes.get(child)!,
+        0,
+      ) +
+      Math.max(0, children.length - 1) * MINDMAP_SIBLING_DISTANCE;
+    subtreeCrossSizes.set(id, Math.max(crossSizes.get(id)!, total));
   }
   const positions = new Map<string, ExcalidrawMindmapNodeElement>([
     [root.id, root],
@@ -590,15 +799,31 @@ export const layoutMindmap = (
     const parent = positions.get(id)!;
     const children = childrenById.get(id)!;
     const total =
-      children.reduce((height, child) => height + heights.get(child)!, 0) +
-      Math.max(0, children.length - 1) * siblingGap;
-    let top = parent.y + parent.height / 2 - total / 2;
+      children.reduce(
+        (size, child) => size + subtreeCrossSizes.get(child)!,
+        0,
+      ) +
+      Math.max(0, children.length - 1) * MINDMAP_SIBLING_DISTANCE;
+    let crossStart =
+      (isVertical
+        ? parent.x + parent.width / 2
+        : parent.y + parent.height / 2) -
+      total / 2;
     for (const childId of children) {
       const child = index.nodes.get(childId)!;
-      const height = heights.get(childId)!;
+      const subtreeCross = subtreeCrossSizes.get(childId)!;
+      const childCross =
+        crossStart + (subtreeCross - crossSizes.get(childId)!) / 2;
+      const parentMain = isVertical ? parent.y : parent.x;
+      const parentMainSize = mainSizes.get(id)!;
+      const childMain =
+        parentMain +
+        (mainSign > 0
+          ? parentMainSize + MINDMAP_LEVEL_DISTANCE
+          : -MINDMAP_LEVEL_DISTANCE - mainSizes.get(childId)!);
       const next = withUpdates(child, {
-        x: parent.x + parent.width + levelGap,
-        y: top + (height - child.height) / 2,
+        x: isVertical ? childCross : childMain,
+        y: isVertical ? childMain : childCross,
         angle: 0 as Radians,
       });
       positions.set(childId, next);
@@ -606,7 +831,7 @@ export const layoutMindmap = (
       bounds[1] = Math.min(bounds[1], next.y);
       bounds[2] = Math.max(bounds[2], next.x + next.width);
       bounds[3] = Math.max(bounds[3], next.y + next.height);
-      top += height + siblingGap;
+      crossStart += subtreeCross + MINDMAP_SIBLING_DISTANCE;
     }
   }
   const edges: ExcalidrawMindmapEdgeElement[] = [];
@@ -615,37 +840,37 @@ export const layoutMindmap = (
       continue;
     }
     const parent = positions.get(child.parentId)!;
-    const x = parent.x + parent.width;
-    const startY = parent.y + parent.height / 2;
-    const endY = child.y + child.height / 2;
-    const y = Math.min(startY, endY);
-    const width = child.x - x;
-    const points = [
-      pointFrom<LocalPoint>(0, startY - y),
-      pointFrom<LocalPoint>(width / 2, startY - y),
-      pointFrom<LocalPoint>(width / 2, endY - y),
-      pointFrom<LocalPoint>(width, endY - y),
-    ];
     const edge =
       index.edgeByChildId.get(child.id) ??
       createDerivedEdge(
         parent,
         child,
         `mindmap-edge:${JSON.stringify([index.graphId, child.id])}`,
+        index.nodes.get(index.rootId),
       );
+    const geometry = getMindmapEdgeGeometry(
+      parent,
+      child,
+      edge.routing,
+      direction,
+    );
     const samePoints =
-      edge.points.length === points.length &&
+      edge.x === geometry.x &&
+      edge.y === geometry.y &&
+      edge.points.length === geometry.points.length &&
       edge.points.every(
-        (point, i) => point[0] === points[i][0] && point[1] === points[i][1],
+        (point, i) =>
+          point[0] === geometry.points[i][0] &&
+          point[1] === geometry.points[i][1],
       );
     edges.push(
       withUpdates(edge, {
-        x,
-        y,
-        width,
-        height: Math.abs(endY - startY),
+        x: geometry.x,
+        y: geometry.y,
+        width: geometry.width,
+        height: geometry.height,
         angle: 0 as Radians,
-        points: samePoints ? edge.points : points,
+        points: samePoints ? edge.points : geometry.points,
       }),
     );
   }
@@ -755,15 +980,19 @@ export const applyMindmapTreeCommand = (
       for (const id of subtree) {
         update(id, { graphId: command.newGraphId });
       }
-      replacements.set(node.id, {
-        ...node,
-        graphId: command.newGraphId,
-        role: "root",
-        parentId: null,
-        order: null,
-        x: parent.x,
-        y: layoutMindmap(index).bounds[3] + 80,
-      });
+      const promotedRoot = copyMindmapGraphConfig(
+        index.nodes.get(index.rootId)!,
+        {
+          ...node,
+          graphId: command.newGraphId,
+          role: "root",
+          parentId: null,
+          order: null,
+          x: parent.x,
+          y: layoutMindmap(index).bounds[3] + 80,
+        },
+      );
+      replacements.set(node.id, promotedRoot);
       for (const edge of index.edgeByChildId.values()) {
         if (edge.childId === node.id) {
           replacements.set(edge.id, withUpdates(edge, { isDeleted: true }));
@@ -816,13 +1045,24 @@ export const applyMindmapTreeCommand = (
           null,
         );
         // 只接替被删节点的树位置，普通节点仍属于原父节点和原图。
-        update(replacement.id, {
+        const replacementUpdates = {
           ...(node.role === "root"
             ? { role: "root", parentId: null, order: null }
             : { role: "node", parentId: node.parentId, order: node.order }),
           x: node.x,
           y: node.y,
-        });
+        } as Partial<ExcalidrawMindmapNodeElement>;
+        if (node.role === "root") {
+          replacements.set(
+            replacement.id,
+            copyMindmapGraphConfig(
+              node,
+              withUpdates(replacement, replacementUpdates),
+            ),
+          );
+        } else {
+          update(replacement.id, replacementUpdates);
+        }
         selectedNodeId = replacement.id;
       } else if (node.role === "root") {
         if (children.length) {

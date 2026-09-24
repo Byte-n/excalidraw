@@ -633,9 +633,114 @@ describe("mindmap 纯布局与影子树", () => {
     );
   });
 
-  it("拒绝非法间距", () => {
-    expect(() => layoutMindmap(indexOf(graph()), { levelGap: NaN })).toThrow();
-    expect(() => layoutMindmap(indexOf(graph()), { siblingGap: -1 })).toThrow();
+  it.each([
+    ["left-to-right", "x", 1],
+    ["right-to-left", "x", -1],
+    ["top-to-bottom", "y", 1],
+    ["bottom-to-top", "y", -1],
+  ] as const)(
+    "四方向布局保持根锚点和逻辑顺序 (%s)",
+    (direction, axis, sign) => {
+      const elements = repairMindmapElements(graph());
+      const root = elements.find((element) => element.id === "root")!;
+      const layout = layoutMindmap(indexOf(elements), { direction });
+      const map = arrayToMap(layout.elements);
+      const first = map.get("a")!;
+      const second = map.get("b")!;
+      expect(map.get("root")).toMatchObject({ x: root.x, y: root.y });
+      const firstMain = axis === "x" ? first.x : first.y;
+      const secondMain = axis === "x" ? second.x : second.y;
+      const rootMain = axis === "x" ? root.x : root.y;
+      expect((firstMain - rootMain) * sign).toBeGreaterThan(0);
+      expect((secondMain - rootMain) * sign).toBeGreaterThan(0);
+      const firstCross = axis === "x" ? first.y : first.x;
+      const secondCross = axis === "x" ? second.y : second.x;
+      expect(firstCross).toBeLessThanOrEqual(secondCross);
+      for (const edge of layout.edges) {
+        expect(edge.points).toHaveLength(4);
+        expect(edge.routing).toBe("orthogonal");
+      }
+    },
+  );
+
+  it.each([
+    ["left-to-right", "x", 1],
+    ["right-to-left", "x", -1],
+    ["top-to-bottom", "y", 1],
+    ["bottom-to-top", "y", -1],
+  ] as const)(
+    "四方向每一层的节点边界间距一致 (%s)",
+    (direction, axis, sign) => {
+      const elements = graph().map((element) => {
+        switch (element.id) {
+          case "root":
+            return { ...element, width: 140, height: 60 };
+          case "a":
+            return { ...element, width: 110, height: 90 };
+          case "b":
+            return { ...element, width: 175, height: 50 };
+          default:
+            return { ...element, width: 75, height: 45 };
+        }
+      });
+      const layout = layoutMindmap(indexOf(elements), { direction });
+      const map = arrayToMap(layout.elements);
+      for (const child of layout.elements.filter(
+        (element) => element.parentId,
+      )) {
+        const parent = map.get(child.parentId!)!;
+        const parentStart = axis === "x" ? parent.x : parent.y;
+        const parentSize = axis === "x" ? parent.width : parent.height;
+        const childStart = axis === "x" ? child.x : child.y;
+        const childSize = axis === "x" ? child.width : child.height;
+        const gap =
+          sign > 0
+            ? childStart - (parentStart + parentSize)
+            : parentStart - (childStart + childSize);
+        expect(gap).toBe(80);
+      }
+    },
+  );
+
+  it("根配置保留 edge 样式", () => {
+    const repaired = repairMindmapElements(graph());
+    expect(repairMindmapElements(repaired)).toBe(repaired);
+    const styled = repaired.map((element) =>
+      isMindmapEdgeElement(element)
+        ? { ...element, strokeColor: "#ff0000", routing: "curved" as const }
+        : element,
+    );
+    const relaid = layoutMindmap(indexOf(styled));
+    expect(relaid.edges[0]).toMatchObject({
+      strokeColor: "#ff0000",
+      routing: "curved",
+    });
+  });
+
+  it("边路由始终沿布局主轴", () => {
+    const elements = graph().map((element) =>
+      element.id === "a"
+        ? { ...element, y: -500 }
+        : element.id === "b"
+        ? { ...element, y: 500 }
+        : element,
+    );
+    const index = indexOf(repairMindmapElements(elements));
+    const horizontal = layoutMindmap(index, { direction: "left-to-right" });
+    const horizontalEdge = horizontal.edges.find(
+      (edge) => edge.childId === "a",
+    )!;
+    expect(horizontalEdge.points[1][0]).toBeGreaterThan(
+      horizontalEdge.points[0][0],
+    );
+    expect(horizontalEdge.points[2][0]).toBe(horizontalEdge.points[1][0]);
+
+    const vertical = layoutMindmap(index, { direction: "top-to-bottom" });
+    const verticalEdge = vertical.edges.find((edge) => edge.childId === "a")!;
+    expect(verticalEdge.points[1][1]).toBeGreaterThan(
+      verticalEdge.points[0][1],
+    );
+    expect(verticalEdge.points[2][1]).toBe(verticalEdge.points[1][1]);
   });
 
   it("挂接改变 parentId 和逻辑顺序，预览不修改输入与版本", () => {
