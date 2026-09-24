@@ -1,5 +1,6 @@
 import { Tooltip } from "@excalidraw/excalidraw/components/Tooltip";
 import { warning } from "@excalidraw/excalidraw/components/icons";
+import { t } from "@excalidraw/excalidraw/i18n";
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 
@@ -9,12 +10,14 @@ import "./CollabError.scss";
 
 type ErrorIndicator = {
   message: string | null;
+  onClick?: (() => void) | null;
   /** used to rerun the useEffect responsible for animation */
   nonce: number;
 };
 
 export const collabErrorIndicatorAtom = atom<ErrorIndicator>({
   message: null,
+  onClick: null,
   nonce: 0,
 });
 
@@ -37,15 +40,26 @@ const CollabError = ({ collabError }: { collabError: ErrorIndicator }) => {
     return null;
   }
 
+  const indicator = (
+    <button
+      type="button"
+      className={clsx("collab-errors-button", {
+        "collab-errors-button-shake": isAnimating,
+      })}
+      aria-label={
+        collabError.onClick
+          ? t("errors.mindmapConflictLocate")
+          : t("errors.collaborationError")
+      }
+      onClick={collabError.onClick ?? undefined}
+    >
+      {warning}
+    </button>
+  );
+
   return (
     <Tooltip label={collabError.message} long={true}>
-      <div
-        className={clsx("collab-errors-button", {
-          "collab-errors-button-shake": isAnimating,
-        })}
-      >
-        {warning}
-      </div>
+      {indicator}
     </Tooltip>
   );
 };

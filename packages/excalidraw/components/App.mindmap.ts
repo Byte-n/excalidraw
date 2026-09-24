@@ -407,7 +407,7 @@ export class AppMindmap {
     ) {
       if (session.offset.x !== 0 || session.offset.y !== 0) {
         this.app.syncActionResult({
-          elements: this.app.scene.getElementsIncludingDeleted(),
+          elements: this.getMovedElements(session),
           appState: { hoveredElementIds: {} },
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
@@ -446,6 +446,9 @@ export class AppMindmap {
     if (restoreMove && session?.mode === "move") {
       this.restoreMoveElements(session);
     }
+    if (session?.mode === "move" && this.app.props.isCollaborating) {
+      this.app.setElementRenderOverrides(null);
+    }
     this.dragSession = null;
     if (this.dragOpacityApplied) {
       this.app.setMindmapDragOpacity(null);
@@ -457,6 +460,31 @@ export class AppMindmap {
       hoveredElementIds: {},
     });
     this.renderOverlay?.();
+  };
+
+  /** Cancels a local drag when a remote update invalidates its source or target. */
+  handleRemoteSceneUpdate = (elements: readonly ExcalidrawElement[]) => {
+    const session = this.dragSession;
+    if (!session || !this.app.props.isCollaborating) {
+      return;
+    }
+    const elementsById = new Map(
+      elements.map((element) => [element.id, element]),
+    );
+    const invalidated = [...session.initialElements].some(([id, initial]) => {
+      const current = elementsById.get(id);
+      return (
+        !current || current.isDeleted || current.version !== initial.version
+      );
+    });
+    const targetInvalidated =
+      session.target &&
+      (!elementsById.has(session.target.parentId) ||
+        elementsById.get(session.target.parentId)?.isDeleted);
+    if (invalidated || targetInvalidated) {
+      this.cancelDrag();
+      this.notifyUnsupportedOperation();
+    }
   };
 
   setOverlayRenderer = (render: (() => void) | null) => {
@@ -1096,7 +1124,6 @@ export class AppMindmap {
       !this.hasLockedMindmapGraph([node]) &&
       !this.app.state.viewModeEnabled &&
       this.app.isInteractionEnabled() &&
-      !this.app.props.isCollaborating &&
       !this.app.state.editingTextElement &&
       !isMindmapElementHidden(node, this.app.scene.getNonDeletedElementsMap())
     );
@@ -1117,7 +1144,6 @@ export class AppMindmap {
     if (
       !this.app.isInteractionEnabled() ||
       this.app.state.viewModeEnabled ||
-      this.app.props.isCollaborating ||
       this.app.state.editingTextElement
     ) {
       return null;
@@ -1545,9 +1571,36 @@ export class AppMindmap {
     return preview;
   };
 
+  private getMovedElements = (session: MindmapDragSession) => {
+    if (!this.app.props.isCollaborating) {
+      return this.app.scene.getElementsIncludingDeleted();
+    }
+    return this.app.scene.getElementsIncludingDeleted().map((element) => {
+      const initial = session.initialElements.get(element.id);
+      return initial
+        ? newElementWith(initial, {
+            x: initial.x + session.offset.x,
+            y: initial.y + session.offset.y,
+          })
+        : element;
+    });
+  };
+
   private updateMoveElements = (session: MindmapDragSession) => {
-    // Keep full-graph movement in Scene so the local canvas follows the pointer
-    // without drawing a second, translucent copy over the original elements.
+    if (this.app.props.isCollaborating) {
+      this.app.setElementRenderOverrides(
+        new Map(
+          [...session.initialElements.keys()].map((id) => [
+            id,
+            { offset: session.offset },
+          ]),
+        ),
+      );
+      return;
+    }
+
+    // Keep full-graph movement in Scene for the standalone editor so the local
+    // canvas follows the pointer without drawing a second copy over the graph.
     this.app.scene.mapElements((element) => {
       const initial = session.initialElements.get(element.id);
       if (!initial) {
@@ -1617,6 +1670,10 @@ export class AppMindmap {
   };
 
   private restoreMoveElements = (session: MindmapDragSession) => {
+    if (this.app.props.isCollaborating) {
+      this.app.setElementRenderOverrides(null);
+      return;
+    }
     this.app.scene.mapElements(
       (element) => session.initialElements.get(element.id) ?? element,
     );
@@ -1738,7 +1795,7 @@ export class AppMindmap {
   };
 
   private createRoot(x: number, y: number) {
-    if (this.app.props.isCollaborating || this.app.state.viewModeEnabled) {
+    if (this.app.state.viewModeEnabled) {
       this.notifyUnsupportedOperation();
       return;
     }

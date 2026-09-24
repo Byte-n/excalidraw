@@ -13,7 +13,7 @@ import type {
   FractionalIndex,
 } from "@excalidraw/element/types";
 
-import { Excalidraw } from "../index";
+import { CaptureUpdateAction, Excalidraw } from "../index";
 import { actionDuplicateSelection, actionToggleElementLock } from "../actions";
 import { restoreElements } from "../data/restore";
 
@@ -533,6 +533,67 @@ describe("Mindmap P03 drag preview", () => {
     expect(after.parentById).toEqual(before.parentById);
     expect(after.childrenById).toEqual(before.childrenById);
     expect(h.app.scene.getNonDeletedElement("rectangle")?.x).toBe(850);
+  });
+
+  it("keeps collaborative move previews out of the synchronized scene", async () => {
+    await render(
+      <Excalidraw
+        handleKeyboardGlobally
+        isCollaborating
+        initialData={{ elements: fixture() }}
+      />,
+    );
+    API.setSelectedElements([node("root")]);
+    const rootBefore = node("root").x;
+    const mouse = new Pointer("mouse");
+
+    mouse.downAt(node("root").x + 20, node("root").y + 20);
+    mouse.moveTo(node("root").x + 100, node("root").y + 80);
+
+    expect(node("root").x).toBe(rootBefore);
+    expect(
+      (
+        Reflect.get(h.app, "elementRenderOverrides") as ElementRenderOverrides
+      ).get("root")?.offset,
+    ).toEqual({ x: 80, y: 60 });
+
+    mouse.upAt();
+    expect(node("root").x).toBe(rootBefore + 80);
+    expect(
+      (
+        Reflect.get(h.app, "elementRenderOverrides") as ElementRenderOverrides
+      ).get("root"),
+    ).toBeUndefined();
+  });
+
+  it("cancels a collaborative drag when the remote scene deletes its source", async () => {
+    await render(
+      <Excalidraw
+        handleKeyboardGlobally
+        isCollaborating
+        initialData={{ elements: fixture() }}
+      />,
+    );
+    API.setSelectedElements([node("root")]);
+    const mouse = new Pointer("mouse");
+    mouse.downAt(node("root").x + 20, node("root").y + 20);
+    mouse.moveTo(node("root").x + 100, node("root").y + 80);
+    expect(h.app.mindmap.getDragPreview()).not.toBeNull();
+
+    const remoteElements = h.app.scene
+      .getElementsIncludingDeleted()
+      .map((element) =>
+        element.id === "root" ? { ...element, isDeleted: true } : element,
+      );
+    act(() => {
+      h.app.updateScene({
+        elements: remoteElements,
+        captureUpdate: CaptureUpdateAction.NEVER,
+      });
+    });
+
+    expect(h.app.mindmap.getDragPreview()).toBeNull();
+    mouse.upAt();
   });
 
   it("restores a directly moved graph when the drag is cancelled", () => {

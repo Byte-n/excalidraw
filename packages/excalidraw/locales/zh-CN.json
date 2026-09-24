@@ -316,6 +316,9 @@
     "saveLibraryError": "无法将库保存至存储。请将库保存为本地文件，以确保您的更改不被丢失。",
     "collabSaveFailed": "无法保存到后端数据库。如果问题持续存在，您应该保存文件到本地，以确保您的工作不会丢失。",
     "collabSaveFailed_sizeExceeded": "无法保存到后端数据库，画布似乎过大。您应该保存文件到本地，以确保您的工作不会丢失。",
+    "mindmapConflict": "已在节点 {{nodes}} 附近解决导图冲突。",
+    "mindmapConflictLocate": "定位协作冲突",
+    "collaborationError": "协作错误",
     "imageToolNotSupported": "图片已被禁用。",
     "brave_measure_text_error": {
       "line1": "您似乎正在使用 Brave 浏览器并启用了<bold>积极阻止指纹识别</bold>的设置。",

@@ -4,9 +4,13 @@
   .collab-errors-button {
     width: 26px;
     height: 26px;
+    padding: 0;
+    border: 0;
+    background: transparent;
     margin-inline-end: 1rem;
 
     color: var(--color-danger);
+    cursor: pointer;
 
     flex-shrink: 0;
   }

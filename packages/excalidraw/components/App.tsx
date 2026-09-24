@@ -5448,6 +5448,9 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (elements) {
+        if (captureUpdate === CaptureUpdateAction.NEVER) {
+          this.mindmap.handleRemoteSceneUpdate(elements);
+        }
         this.scene.replaceAllElements(elements);
       }
 
