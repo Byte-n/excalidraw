@@ -346,6 +346,8 @@
     "tooComplex": ""
   },
   "element": {
+    "mindmap-node": "思维导图节点",
+    "mindmap-edge": "思维导图连接线",
     "rectangle": "矩形",
     "diamond": "菱形",
     "ellipse": "椭圆",

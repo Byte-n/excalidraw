@@ -525,6 +525,9 @@ export const isPathALoop = (
 };
 
 export const getCornerRadius = (x: number, element: ExcalidrawElement) => {
+  if (element.type === "mindmap-node" && element.shape === "pill") {
+    return Math.min(element.width, element.height) / 2;
+  }
   if (
     element.roundness?.type === ROUNDNESS.PROPORTIONAL_RADIUS ||
     element.roundness?.type === ROUNDNESS.LEGACY

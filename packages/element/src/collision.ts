@@ -30,6 +30,7 @@ import type {
 import type { FrameNameBounds } from "@excalidraw/excalidraw/types";
 
 import { isPathALoop } from "./utils";
+import { getMindmapNodeGeometry, isMindmapElementHidden } from "./mindmap";
 import {
   doBoundsIntersect,
   elementCenterPoint,
@@ -84,7 +85,7 @@ import type {
 } from "./types";
 
 export const shouldTestInside = (element: ExcalidrawElement) => {
-  if (element.type === "arrow") {
+  if (element.type === "arrow" || element.type === "mindmap-edge") {
     return false;
   }
 
@@ -141,6 +142,12 @@ export const hitElementItself = ({
   frameNameBound = null,
   overrideShouldTestInside = false,
 }: HitTestArgs) => {
+  if (
+    element.type === "mindmap-edge" ||
+    isMindmapElementHidden(element, elementsMap)
+  ) {
+    return false;
+  }
   // Return cached result if the same point and element version is tested again.
   // A cached hit stays valid for any larger threshold, while a cached miss
   // stays valid only for a threshold no larger than the cached one (a larger
@@ -473,6 +480,25 @@ export const intersectElementWithLineSegment = (
 
   // Do the actual intersection test against the element's shape
   switch (element.type) {
+    case "mindmap-node":
+      if (element.shape === "pill") {
+        return intersectRectanguloidWithLineSegment(
+          element,
+          elementsMap,
+          line,
+          offset,
+          onlyFirst,
+        );
+      }
+      return intersectElementWithLineSegment(
+        getMindmapNodeGeometry(element),
+        elementsMap,
+        line,
+        offset,
+        onlyFirst,
+      );
+    case "mindmap-edge":
+      return [];
     case "rectangle":
     case "stickynote":
     case "image":
@@ -783,7 +809,20 @@ export const isPointInElement = (
   point: GlobalPoint,
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
-) => {
+): boolean => {
+  if (
+    element.type === "mindmap-edge" ||
+    isMindmapElementHidden(element, elementsMap)
+  ) {
+    return false;
+  }
+  if (element.type === "mindmap-node" && element.shape !== "pill") {
+    return isPointInElement(
+      point,
+      getMindmapNodeGeometry(element),
+      elementsMap,
+    );
+  }
   if (
     (isLinearElement(element) || isFreeDrawElement(element)) &&
     !isPathALoop(element.points)

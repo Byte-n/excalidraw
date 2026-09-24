@@ -22,6 +22,8 @@ import {
   newImageElement,
   newLinearElement,
   newMagicFrameElement,
+  newMindmapNodeElement,
+  newMindmapEdgeElement,
   newStickyNoteElement,
   newTextElement,
 } from "@excalidraw/element";
@@ -45,6 +47,8 @@ import type {
   ExcalidrawElbowArrowElement,
   ExcalidrawArrowElement,
   ExcalidrawStickyNoteElement,
+  ExcalidrawMindmapNodeElement,
+  ExcalidrawMindmapEdgeElement,
   FixedSegment,
   NonDeleted,
   NonDeletedExcalidrawElement,
@@ -210,10 +214,15 @@ export class API {
     baseHeight?: T extends "stickynote"
       ? ExcalidrawStickyNoteElement["baseHeight"]
       : never;
+    mindmap?: T extends "mindmap-node"
+      ? Pick<ExcalidrawMindmapNodeElement, "graphId" | "parentId" | "order" | "shape" | "collapsed">
+      : T extends "mindmap-edge"
+      ? Pick<ExcalidrawMindmapEdgeElement, "graphId" | "parentId" | "childId" | "routing">
+      : never;
     containerId?: T extends "text"
       ? ExcalidrawTextElement["containerId"]
       : never;
-    points?: T extends "arrow" | "line" | "freedraw" ? readonly LocalPoint[] : never;
+    points?: T extends "arrow" | "line" | "freedraw" | "mindmap-edge" ? readonly LocalPoint[] : never;
     polygon?: T extends "line" ? boolean : never;
     strokeOptions?: T extends "freedraw"
       ? ExcalidrawFreeDrawElement["strokeOptions"]
@@ -251,6 +260,10 @@ export class API {
       ? ExcalidrawMagicFrameElement
       : T extends "stickynote"
       ? ExcalidrawStickyNoteElement
+      : T extends "mindmap-node"
+      ? ExcalidrawMindmapNodeElement
+      : T extends "mindmap-edge"
+      ? ExcalidrawMindmapEdgeElement
       : ExcalidrawGenericElement
   > => {
     let element: Mutable<ExcalidrawElement> = null!;
@@ -309,6 +322,31 @@ export class API {
       created: rest.created === undefined ? getUpdatedTimestamp() : rest.created,
     };
     switch (type) {
+      case "mindmap-node": {
+        const props = rest.mindmap as Partial<ExcalidrawMindmapNodeElement> | undefined;
+        element = newMindmapNodeElement({
+          ...base,
+          graphId: props?.graphId ?? id ?? "mindmap",
+          shape: props?.shape,
+          collapsed: props?.collapsed,
+          ...(props?.parentId
+            ? { role: "node", parentId: props.parentId, order: props.order ?? null }
+            : { role: "root", parentId: null, order: null }),
+        });
+        break;
+      }
+      case "mindmap-edge": {
+        const props = rest.mindmap as Partial<ExcalidrawMindmapEdgeElement> | undefined;
+        element = newMindmapEdgeElement({
+          ...base,
+          graphId: props?.graphId ?? "mindmap",
+          parentId: props?.parentId ?? "root",
+          childId: props?.childId ?? "child",
+          routing: props?.routing,
+          points: rest.points,
+        });
+        break;
+      }
       case "rectangle":
       case "diamond":
       case "ellipse":

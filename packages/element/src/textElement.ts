@@ -48,6 +48,13 @@ import type {
   NonDeleted,
 } from "./types";
 
+const getTextContainerShape = (container: ExcalidrawElement) =>
+  container.type === "mindmap-node"
+    ? container.shape === "pill"
+      ? "ellipse"
+      : container.shape
+    : container.type;
+
 export const redrawTextBoundingBox = (
   textElement: ExcalidrawTextElement,
   container: ExcalidrawElement | null,
@@ -120,7 +127,7 @@ export const redrawTextBoundingBox = (
     if (!isArrowElement(container) && metrics.height > maxContainerHeight) {
       const nextHeight = computeContainerDimensionForBoundText(
         metrics.height,
-        container.type,
+        getTextContainerShape(container),
       );
       scene.mutateElement(container, { height: nextHeight });
       updateOriginalContainerCache(container.id, nextHeight);
@@ -129,7 +136,7 @@ export const redrawTextBoundingBox = (
     if (metrics.width > maxContainerWidth) {
       const nextWidth = computeContainerDimensionForBoundText(
         metrics.width,
-        container.type,
+        getTextContainerShape(container),
       );
       scene.mutateElement(container, { width: nextWidth });
     }
@@ -207,7 +214,7 @@ export const handleBindTextResize = (
     if (nextHeight > maxHeight) {
       containerHeight = computeContainerDimensionForBoundText(
         nextHeight,
-        container.type,
+        getTextContainerShape(container),
       );
 
       // Crossing the opposite edge swaps the anchor for text-driven growth.
@@ -400,13 +407,13 @@ export const getContainerCoords = (container: ExcalidrawElement) => {
   let offsetX = padding;
   let offsetY = padding;
 
-  if (container.type === "ellipse") {
+  if (getTextContainerShape(container) === "ellipse") {
     // The derivation of coordinates is explained in https://github.com/excalidraw/excalidraw/pull/6172
     offsetX += (container.width / 2) * (1 - Math.sqrt(2) / 2);
     offsetY += (container.height / 2) * (1 - Math.sqrt(2) / 2);
   }
   // The derivation of coordinates is explained in https://github.com/excalidraw/excalidraw/pull/6265
-  if (container.type === "diamond") {
+  if (getTextContainerShape(container) === "diamond") {
     offsetX += container.width / 4;
     offsetY += container.height / 4;
   }
@@ -477,6 +484,7 @@ export const suppportsHorizontalAlign = (
 };
 
 const VALID_CONTAINER_TYPES = new Set([
+  "mindmap-node",
   "rectangle",
   "stickynote",
   "ellipse",
@@ -519,13 +527,13 @@ export const getBoundTextMaxWidth = (
       ARROW_LABEL_FONT_SIZE_TO_MIN_WIDTH_RATIO;
     return Math.max(ARROW_LABEL_WIDTH_FRACTION * width, minWidth);
   }
-  if (container.type === "ellipse") {
+  if (getTextContainerShape(container) === "ellipse") {
     // The width of the largest rectangle inscribed inside an ellipse is
     // Math.round((ellipse.width / 2) * Math.sqrt(2)) which is derived from
     // equation of an ellipse -https://github.com/excalidraw/excalidraw/pull/6172
     return Math.round((width / 2) * Math.sqrt(2)) - BOUND_TEXT_PADDING * 2;
   }
-  if (container.type === "diamond") {
+  if (getTextContainerShape(container) === "diamond") {
     // The width of the largest rectangle inscribed inside a rhombus is
     // Math.round(width / 2) - https://github.com/excalidraw/excalidraw/pull/6265
     return Math.round(width / 2) - BOUND_TEXT_PADDING * 2;
@@ -555,13 +563,13 @@ export const getBoundTextMaxHeight = (
     }
     return height;
   }
-  if (container.type === "ellipse") {
+  if (getTextContainerShape(container) === "ellipse") {
     // The height of the largest rectangle inscribed inside an ellipse is
     // Math.round((ellipse.height / 2) * Math.sqrt(2)) which is derived from
     // equation of an ellipse - https://github.com/excalidraw/excalidraw/pull/6172
     return Math.round((height / 2) * Math.sqrt(2)) - BOUND_TEXT_PADDING * 2;
   }
-  if (container.type === "diamond") {
+  if (getTextContainerShape(container) === "diamond") {
     // The height of the largest rectangle inscribed inside a rhombus is
     // Math.round(height / 2) - https://github.com/excalidraw/excalidraw/pull/6265
     return Math.round(height / 2) - BOUND_TEXT_PADDING * 2;

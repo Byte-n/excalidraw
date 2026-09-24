@@ -104,6 +104,36 @@ export type ExcalidrawStickyNoteElement = _ExcalidrawElementBase &
     baseHeight: number;
   }>;
 
+export type MindmapNodeRole = "root" | "node";
+export type MindmapNodeShape = "rectangle" | "ellipse" | "diamond" | "pill";
+
+export type MindmapNodeRelation =
+  | Readonly<{ role: "root"; parentId: null; order: null }>
+  | Readonly<{
+      role: "node";
+      parentId: string;
+      order: FractionalIndex | null;
+    }>;
+
+export type ExcalidrawMindmapNodeElement = _ExcalidrawElementBase &
+  Readonly<{
+    type: "mindmap-node";
+    graphId: string;
+    collapsed: boolean;
+    shape: MindmapNodeShape;
+  }> &
+  MindmapNodeRelation;
+
+export type ExcalidrawMindmapEdgeElement = _ExcalidrawElementBase &
+  Readonly<{
+    type: "mindmap-edge";
+    graphId: string;
+    parentId: string;
+    childId: string;
+    points: readonly LocalPoint[];
+    routing: "orthogonal" | "curved";
+  }>;
+
 export type ExcalidrawDiamondElement = _ExcalidrawElementBase & {
   type: "diamond";
 };
@@ -205,6 +235,8 @@ export type ExcalidrawFlowchartNodeElement =
   | ExcalidrawEllipseElement;
 
 export type ExcalidrawRectanguloidElement =
+  | ExcalidrawMindmapNodeElement
+  | ExcalidrawMindmapEdgeElement
   | ExcalidrawRectangleElement
   | ExcalidrawStickyNoteElement
   | ExcalidrawImageElement
@@ -221,6 +253,8 @@ export type ExcalidrawRectanguloidElement =
  * between peers and contain no state local to the peer.
  */
 export type ExcalidrawElement =
+  | ExcalidrawMindmapNodeElement
+  | ExcalidrawMindmapEdgeElement
   | ExcalidrawGenericElement
   | ExcalidrawStickyNoteElement
   | ExcalidrawTextElement
@@ -291,6 +325,7 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
   }>;
 
 export type ExcalidrawBindableElement =
+  | ExcalidrawMindmapNodeElement
   | ExcalidrawRectangleElement
   | ExcalidrawStickyNoteElement
   | ExcalidrawDiamondElement
@@ -303,6 +338,7 @@ export type ExcalidrawBindableElement =
   | ExcalidrawMagicFrameElement;
 
 export type ExcalidrawTextContainer =
+  | ExcalidrawMindmapNodeElement
   | ExcalidrawRectangleElement
   | ExcalidrawStickyNoteElement
   | ExcalidrawDiamondElement

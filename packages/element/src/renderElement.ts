@@ -470,6 +470,8 @@ const drawElementOnCanvas = (
       context.restore();
       break;
     }
+    case "mindmap-node":
+    case "mindmap-edge":
     case "rectangle":
     case "iframe":
     case "embeddable":
@@ -1102,6 +1104,8 @@ const drawElement = (
 
       break;
     }
+    case "mindmap-node":
+    case "mindmap-edge":
     case "rectangle":
     case "stickynote":
     case "diamond":

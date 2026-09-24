@@ -40,6 +40,13 @@ import {
   isValidPolygon,
   projectFixedPointOntoDiagonal,
   isNonDeletedElement,
+  isMindmapNodeElement,
+  isMindmapEdgeElement,
+  isValidMindmapOrder,
+  repairMindmapElements,
+  buildMindmapGraphIndex,
+  layoutMindmap,
+  computeBoundTextPosition,
 } from "@excalidraw/element";
 import { normalizeFixedPoint } from "@excalidraw/element";
 import {
@@ -93,6 +100,7 @@ import type {
   ExcalidrawLinearElement,
   ExcalidrawSelectionElement,
   ExcalidrawTextElement,
+  ExcalidrawTextElementWithContainer,
   FixedPointBinding,
   FontFamilyValues,
   NonDeleted,
@@ -724,6 +732,58 @@ export const restoreElement = (
       return handleOversizedLinearElements(normalizedRestoredElement);
     }
 
+    case "mindmap-node": {
+      const relation =
+        element.role === "root"
+          ? { role: "root" as const, parentId: null, order: null }
+          : {
+              role: "node" as const,
+              parentId:
+                typeof element.parentId === "string" ? element.parentId : "",
+              order: isValidMindmapOrder(element.order) ? element.order : null,
+            };
+      const restored = restoreElementWithProperties(element, {
+        graphId:
+          typeof element.graphId === "string" && element.graphId
+            ? element.graphId
+            : `mindmap:${element.id}`,
+        ...relation,
+        collapsed: element.collapsed === true,
+        shape: ["rectangle", "ellipse", "diamond", "pill"].includes(
+          element.shape,
+        )
+          ? element.shape
+          : "rectangle",
+      });
+      return {
+        ...restored,
+        x: isFiniteNumber(restored.x) ? restored.x : 0,
+        y: isFiniteNumber(restored.y) ? restored.y : 0,
+        width:
+          isFiniteNumber(restored.width) && restored.width > 0
+            ? restored.width
+            : 160,
+        height:
+          isFiniteNumber(restored.height) && restored.height > 0
+            ? restored.height
+            : 56,
+        angle: 0 as Radians,
+      };
+    }
+    case "mindmap-edge": {
+      const points = Array.isArray(element.points)
+        ? element.points.filter(isValidPoint)
+        : [];
+      const restored = restoreElementWithProperties(element, {
+        graphId: typeof element.graphId === "string" ? element.graphId : "",
+        parentId: typeof element.parentId === "string" ? element.parentId : "",
+        childId: typeof element.childId === "string" ? element.childId : "",
+        routing: element.routing === "curved" ? "curved" : "orthogonal",
+        points,
+      });
+      return { ...restored, angle: 0 as Radians, locked: true };
+    }
+
     // generic elements
     case "ellipse":
     case "rectangle":
@@ -945,6 +1005,49 @@ const restoreStickyNotes = (
   }
 };
 
+/** 仅在完整场景恢复时修复树；增量协作的单元素恢复不改变结构。 */
+const restoreMindmaps = (elements: readonly ExcalidrawElement[]) => {
+  const repaired = repairMindmapElements(elements);
+  const graphs = new Map<string, ExcalidrawElement[]>();
+  for (const element of repaired) {
+    if (
+      !element.isDeleted &&
+      (isMindmapNodeElement(element) || isMindmapEdgeElement(element))
+    ) {
+      const graph = graphs.get(element.graphId) ?? [];
+      graph.push(element);
+      graphs.set(element.graphId, graph);
+    }
+  }
+  if (!graphs.size) {
+    return repaired;
+  }
+  const updated = arrayToMap(repaired);
+  for (const [graphId, graph] of graphs) {
+    const layout = layoutMindmap(buildMindmapGraphIndex(graph, graphId));
+    for (const element of [...layout.elements, ...layout.edges]) {
+      updated.set(element.id, element);
+    }
+  }
+  return repaired.map((element) => {
+    if (isTextElement(element) && element.containerId && !element.isDeleted) {
+      const container = updated.get(element.containerId);
+      if (isMindmapNodeElement(container) && !container.isDeleted) {
+        return {
+          ...element,
+          ...computeBoundTextPosition(
+            container,
+            element as ExcalidrawTextElementWithContainer,
+            updated,
+          ),
+          angle: 0 as Radians,
+        };
+      }
+    }
+    return updated.get(element.id)!;
+  });
+};
+
 export const restoreElements = <T extends ExcalidrawElement>(
   targetElements: readonly T[] | undefined | null,
   /** used for additional context (e.g. repairing arrow bindings) */
@@ -1069,7 +1172,9 @@ export const restoreElements = <T extends ExcalidrawElement>(
     refreshDimensions: !!opts.refreshDimensions,
   });
 
-  const repairedElements = repairBoundTextElementOrder(restoredElements);
+  const repairedElements = repairBoundTextElementOrder(
+    syncInvalidIndices(restoreMindmaps(restoredElements)),
+  );
 
   // NOTE (mtolmacs): Temporary fix for invalid/self-bound elbow arrows
   // Need to iterate again so we have attached text nodes in elementsMap

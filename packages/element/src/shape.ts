@@ -46,6 +46,7 @@ import type {
 } from "@excalidraw/excalidraw/scene/types";
 
 import { elementWithCanvasCache } from "./renderElement";
+import { getMindmapEdgePath, getMindmapNodeGeometry } from "./mindmap";
 
 import {
   canBecomePolygon,
@@ -227,6 +228,7 @@ export const generateRoughOptions = (
 
   switch (element.type) {
     case "rectangle":
+    case "mindmap-node":
     case "iframe":
     case "embeddable":
     case "diamond":
@@ -252,6 +254,7 @@ export const generateRoughOptions = (
       return options;
     }
     case "arrow":
+    case "mindmap-edge":
       return options;
     default: {
       throw new Error(`Unimplemented type ${element.type}`);
@@ -784,6 +787,29 @@ const _generateElementShape = (
 ): ElementShape => {
   const isDarkMode = theme === THEME.DARK;
   switch (element.type) {
+    case "mindmap-node": {
+      if (element.shape === "pill") {
+        const { width: w, height: h } = element;
+        const r = Math.min(w, h) / 2;
+        return generator.path(
+          `M ${r} 0 L ${w - r} 0 Q ${w} 0, ${w} ${r} L ${w} ${h - r}
+           Q ${w} ${h}, ${w - r} ${h} L ${r} ${h} Q 0 ${h}, 0 ${h - r}
+           L 0 ${r} Q 0 0, ${r} 0`,
+          generateRoughOptions(element, true, isDarkMode),
+        );
+      }
+      return _generateElementShape(getMindmapNodeGeometry(element), generator, {
+        isExporting,
+        canvasBackgroundColor,
+        embedsValidationStatus,
+        theme,
+      });
+    }
+    case "mindmap-edge":
+      return generator.path(
+        getMindmapEdgePath(element),
+        generateRoughOptions(element, true, isDarkMode),
+      );
     case "rectangle":
     case "iframe":
     case "embeddable": {
@@ -1089,6 +1115,18 @@ export const getElementShape = <Point extends GlobalPoint | LocalPoint>(
   elementsMap: ElementsMap,
 ): GeometricShape<Point> => {
   switch (element.type) {
+    case "mindmap-node":
+      return getElementShape(getMindmapNodeGeometry(element), elementsMap);
+    case "mindmap-edge":
+      return getCurveShape<Point>(
+        ShapeCache.generateElementShape(element, null),
+        pointFrom<Point>(element.x, element.y),
+        element.angle,
+        pointFrom<Point>(
+          element.x + element.width / 2,
+          element.y + element.height / 2,
+        ),
+      );
     case "rectangle":
     case "stickynote":
     case "diamond":

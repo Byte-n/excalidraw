@@ -351,6 +351,8 @@
     "tooComplex": "This region is too complex to fill."
   },
   "element": {
+    "mindmap-node": "Mindmap node",
+    "mindmap-edge": "Mindmap edge",
     "rectangle": "Rectangle",
     "diamond": "Diamond",
     "ellipse": "Ellipse",

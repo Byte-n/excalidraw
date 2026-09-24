@@ -268,6 +268,8 @@ const renderElementToSvg = (
       addToRoot(g || group, element);
       break;
     }
+    case "mindmap-node":
+    case "mindmap-edge":
     case "rectangle":
     case "diamond":
     case "ellipse": {

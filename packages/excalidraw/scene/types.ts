@@ -163,6 +163,8 @@ export type ElementShape =
   | null;
 
 export type ElementShapes = {
+  "mindmap-node": Drawable;
+  "mindmap-edge": Drawable;
   rectangle: Drawable;
   ellipse: Drawable;
   diamond: Drawable;

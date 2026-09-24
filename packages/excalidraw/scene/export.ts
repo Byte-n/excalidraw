@@ -15,7 +15,11 @@ import {
   applyDarkModeFilter,
 } from "@excalidraw/common";
 
-import { getCommonBounds, getElementAbsoluteCoords } from "@excalidraw/element";
+import {
+  getCommonBounds,
+  getElementAbsoluteCoords,
+  getMindmapHiddenElementIds,
+} from "@excalidraw/element";
 
 import {
   getInitializedImageElements,
@@ -159,6 +163,8 @@ const prepareElementsForRender = ({
   exportWithDarkMode: AppState["exportWithDarkMode"];
 }) => {
   let nextElements: readonly NonDeletedExcalidrawElement[];
+  const hidden = getMindmapHiddenElementIds(elements);
+  elements = elements.filter((element) => !hidden.has(element.id));
 
   if (exportingFrame) {
     nextElements = getElementsOverlappingFrame(
