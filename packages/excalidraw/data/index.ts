@@ -9,7 +9,10 @@ import {
   arrayToMap,
 } from "@excalidraw/common";
 
-import { getNonDeletedElements } from "@excalidraw/element";
+import {
+  getMindmapHiddenElementIds,
+  getNonDeletedElements,
+} from "@excalidraw/element";
 
 import { isFrameLikeElement } from "@excalidraw/element";
 
@@ -50,7 +53,10 @@ export const prepareElementsForExport = (
   { selectedElementIds }: Pick<AppState, "selectedElementIds">,
   exportSelectionOnly: boolean,
 ) => {
-  const elements = getNonDeletedElements(allElements);
+  const hiddenMindmapIds = getMindmapHiddenElementIds(allElements);
+  const elements = getNonDeletedElements(allElements).filter(
+    (element) => !hiddenMindmapIds.has(element.id),
+  );
   const elementsMap = arrayToMap(elements);
 
   const isExportingSelection =
@@ -91,7 +97,9 @@ export const prepareElementsForExport = (
 
   return {
     exportingFrame,
-    exportedElements: cloneJSON(exportedElements) as ExportedElements,
+    exportedElements: cloneJSON(
+      exportedElements,
+    ) as unknown as ExportedElements,
   };
 };
 

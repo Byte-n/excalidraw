@@ -15,6 +15,7 @@ import {
   layoutMindmap,
   repairMindmapElements,
   reparentMindmapNode,
+  reparentMindmapNodes,
 } from "../src/mindmap";
 import {
   newElement,
@@ -628,6 +629,44 @@ describe("mindmap 纯布局与影子树", () => {
     expect(() => reparentMindmapNode(index, "a", "c")).toThrow();
     expect(() => reparentMindmapNode(index, "a", "foreign")).toThrow();
     expect(() => reparentMindmapNode(index, "b", "root", "missing")).toThrow();
+  });
+
+  it("多选分支按原树顺序挂接，父子同时选中只移动父分支", () => {
+    const elements = graph();
+    const before = JSON.stringify(elements);
+    const moved = reparentMindmapNodes(
+      indexOf(elements),
+      ["b", "a", "c"],
+      "root",
+    );
+    const index = indexOf(moved);
+    expect(index.childrenById.get("root")).toEqual(["a", "b"]);
+    expect(index.childrenById.get("a")).toEqual(["c"]);
+    expect(moved.find((element) => element.id === "c")).toBe(elements[3]);
+    expect(JSON.stringify(elements)).toBe(before);
+
+    const withTarget = [
+      ...elements,
+      node("d", "root", { order: "a2" as FractionalIndex }),
+    ];
+    const reordered = reparentMindmapNodes(
+      indexOf(withTarget),
+      ["b", "a", "c"],
+      "d",
+    );
+    expect(indexOf(reordered).childrenById.get("d")).toEqual(["a", "b"]);
+    expect(indexOf(reordered).childrenById.get("a")).toEqual(["c"]);
+  });
+
+  it("同位置挂接不修改节点，非法多选目标被拒绝", () => {
+    const elements = graph();
+    const index = indexOf(elements);
+    const same = reparentMindmapNodes(index, ["a", "c"], "root", "b");
+    expect(
+      same.every((element) => element === index.nodes.get(element.id)),
+    ).toBe(true);
+    expect(() => reparentMindmapNodes(index, ["a", "b"], "c")).toThrow();
+    expect(() => reparentMindmapNodes(index, ["root"], "a")).toThrow();
   });
 
   it("orthogonal 与 curved 渲染采用不同路径且 edge 不可独立命中", () => {

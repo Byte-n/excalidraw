@@ -1,5 +1,6 @@
-import { KEYS } from "@excalidraw/common";
+import { DRAGGING_THRESHOLD, getFontString, KEYS } from "@excalidraw/common";
 import { generateKeyBetween } from "@excalidraw/fractional-indexing";
+import { pointFrom } from "@excalidraw/math";
 
 import {
   applyMindmapTreeCommand,
@@ -11,12 +12,16 @@ import {
   isMindmapElementHidden,
   isMindmapEdgeElement,
   isMindmapNodeElement,
+  getMindmapSubtreeIds,
   layoutMindmap,
   navigateMindmap,
   newElementWith,
   newMindmapNodeElement,
+  reparentMindmapNodes,
   repairMindmapElements,
 } from "@excalidraw/element";
+
+import type { LocalPoint } from "@excalidraw/math";
 
 import type {
   ExcalidrawElement,
@@ -35,6 +40,32 @@ import type { PointerDownState } from "../types";
 import type { ActionName, ActionResult } from "../actions/types";
 
 type NewNodeKind = "child" | "sibling";
+
+type MindmapDropTarget = {
+  parentId: string;
+  beforeId: string | null;
+};
+
+type MindmapDragSession = {
+  mode: "reparent" | "move";
+  nodeIds: readonly string[];
+  graphIds: readonly string[];
+  elementIds: ReadonlySet<string>;
+  initialElements: ReadonlyMap<string, ExcalidrawElement>;
+  origin: { x: number; y: number };
+  offset: { x: number; y: number };
+  target: MindmapDropTarget | null;
+  paused: boolean;
+  invalid: boolean;
+  previewElements: readonly ExcalidrawElement[];
+};
+
+type MindmapDragCandidate = {
+  mode: "reparent" | "move";
+  nodeIds: readonly string[];
+  graphIds: readonly string[];
+  elementIds: ReadonlySet<string>;
+};
 
 const unsupportedSelectionActions = new Set<ActionName>([
   "addToLibrary",
@@ -66,14 +97,11 @@ const unsupportedSelectionActions = new Set<ActionName>([
   "flipHorizontal",
   "flipVertical",
   "group",
-  "hyperlink",
   "increaseFontSize",
-  "linkToElement",
   "pasteStyles",
   "removeAllElementsFromFrame",
   "sendBackward",
   "sendToBack",
-  "toggleElementLock",
   "unbindText",
   "ungroup",
   "wrapSelectionInFrame",
@@ -89,12 +117,18 @@ export class AppMindmap {
   private readonly pendingTextNodeIds = new Set<string>();
   private hoveredNodeId: string | null = null;
   private consumedSpace = false;
+  private dragSession: MindmapDragSession | null = null;
+  private dragOpacityApplied = false;
+  private dimmedDragElementIds = new Set<string>();
+  private cancelledPointerDown: PointerDownState | null = null;
+  private renderOverlay: (() => void) | null = null;
 
   constructor(private readonly app: App) {}
 
   clear = () => {
     this.pendingTextNodeIds.clear();
     this.consumedSpace = false;
+    this.cancelDrag();
     this.clearHover();
   };
 
@@ -164,6 +198,344 @@ export class AppMindmap {
     this.createRoot(pointerDownState.origin.x, pointerDownState.origin.y);
   };
 
+  /**
+   * Handles the mindmap-specific part of an existing canvas pointer session.
+   * Returning true keeps the generic Excalidraw drag path from moving a node
+   * as a free-standing rectangle.
+   */
+  handlePointerMoveFromPointerDown = (
+    pointerDownState: PointerDownState,
+    event: PointerEvent,
+    scenePoint: { x: number; y: number },
+  ): boolean => {
+    if (this.cancelledPointerDown === pointerDownState) {
+      return true;
+    }
+    if (
+      this.app.state.activeTool.type !== "selection" &&
+      this.app.state.activeTool.type !== "mindmap"
+    ) {
+      return false;
+    }
+    const candidate = this.dragSession
+      ? null
+      : this.getDragCandidate(pointerDownState);
+    if (!candidate && !this.dragSession) {
+      return false;
+    }
+    if (!this.dragSession) {
+      const distance = Math.hypot(
+        scenePoint.x - pointerDownState.origin.x,
+        scenePoint.y - pointerDownState.origin.y,
+      );
+      // A click remains a selection. We still consume movement for a pending
+      // mindmap drag so the native transform code cannot move it prematurely.
+      if (distance * this.app.state.zoom.value < DRAGGING_THRESHOLD) {
+        return true;
+      }
+      this.dragSession = this.createDragSession(pointerDownState, candidate!);
+      if (this.dragSession.mode === "reparent") {
+        this.updateDragOpacity(this.dragSession.elementIds);
+      }
+      pointerDownState.drag.hasOccurred = true;
+      this.app.setState({ selectedElementsAreBeingDragged: true });
+    }
+
+    const session = this.dragSession;
+    const rawOffset = {
+      x: scenePoint.x - session.origin.x,
+      y: scenePoint.y - session.origin.y,
+    };
+    if (event.shiftKey) {
+      const lockX = Math.abs(rawOffset.x) < Math.abs(rawOffset.y);
+      session.offset = lockX
+        ? { x: 0, y: rawOffset.y }
+        : { x: rawOffset.x, y: 0 };
+      session.paused = session.mode === "reparent";
+    } else {
+      session.offset = rawOffset;
+      session.paused = false;
+    }
+    if (event.altKey) {
+      if (session.mode === "move") {
+        this.restoreMoveElements(session);
+      }
+      session.target = null;
+      session.paused = true;
+      session.invalid = true;
+      session.previewElements = [];
+      if (session.mode === "reparent") {
+        this.updateDragOpacity(session.elementIds);
+      }
+    } else if (session.mode === "reparent") {
+      const target = session.paused
+        ? null
+        : this.getDropTarget(scenePoint, session.nodeIds);
+      session.target = target;
+      session.invalid = !session.target;
+      session.previewElements = this.getReparentPreview(session);
+    } else {
+      this.updateMoveElements(session);
+      session.target = null;
+      session.invalid = false;
+      session.previewElements = [];
+    }
+    this.renderOverlay?.();
+    return true;
+  };
+
+  /** Commits a valid drag or cancels it without creating a history entry. */
+  handlePointerUp = (
+    pointerDownState: PointerDownState,
+    event: PointerEvent,
+    scenePoint: { x: number; y: number },
+  ): boolean => {
+    if (this.cancelledPointerDown === pointerDownState) {
+      this.cancelledPointerDown = null;
+      return true;
+    }
+    const session = this.dragSession;
+    if (!session) {
+      return false;
+    }
+    if (session.mode === "reparent") {
+      session.paused = event.shiftKey || event.altKey;
+      session.target = !session.paused
+        ? this.getDropTarget(scenePoint, session.nodeIds)
+        : null;
+      session.invalid = !session.target;
+    }
+    if (
+      event.type === "pointerup" &&
+      session.mode === "reparent" &&
+      session.target &&
+      !session.paused &&
+      !session.invalid
+    ) {
+      const index = buildMindmapGraphIndex(
+        this.app.scene.getNonDeletedElements(),
+        session.graphIds[0],
+      );
+      const shadowNodes = reparentMindmapNodes(
+        index,
+        session.nodeIds,
+        session.target.parentId,
+        session.target.beforeId,
+      );
+      if (shadowNodes.some((node) => node !== index.nodes.get(node.id))) {
+        const shadowMap = new Map(shadowNodes.map((node) => [node.id, node]));
+        const nextElements = this.app.scene
+          .getElementsIncludingDeleted()
+          .map((element) => shadowMap.get(element.id) ?? element);
+        this.app.syncActionResult({
+          elements: this.getLaidOutElements(nextElements, session.graphIds),
+          appState: { hoveredElementIds: {} },
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        });
+      }
+    } else if (
+      event.type === "pointerup" &&
+      session.mode === "move" &&
+      !event.altKey
+    ) {
+      if (session.offset.x !== 0 || session.offset.y !== 0) {
+        this.app.syncActionResult({
+          elements: this.app.scene.getElementsIncludingDeleted(),
+          appState: { hoveredElementIds: {} },
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        });
+      }
+    }
+    const committedMove =
+      event.type === "pointerup" && session.mode === "move" && !event.altKey;
+    this.cancelDrag(!committedMove);
+    // Mark the pointer as handled even when it was cancelled, preventing the
+    // regular selection path from scheduling an empty history capture.
+    pointerDownState.drag.hasOccurred = true;
+    return true;
+  };
+
+  handlePointerKeyDown = (
+    pointerDownState: PointerDownState,
+    event: KeyboardEvent,
+  ): boolean => {
+    if (!this.dragSession || event.key !== KEYS.ESCAPE) {
+      return false;
+    }
+    this.cancelledPointerDown = pointerDownState;
+    this.cancelDrag();
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  };
+
+  cancelDrag = (restoreMove = true) => {
+    if (!this.dragSession && !this.dragOpacityApplied) {
+      return;
+    }
+    const session = this.dragSession;
+    if (restoreMove && session?.mode === "move") {
+      this.restoreMoveElements(session);
+    }
+    this.dragSession = null;
+    if (this.dragOpacityApplied) {
+      this.app.setMindmapDragOpacity(null);
+      this.dragOpacityApplied = false;
+      this.dimmedDragElementIds.clear();
+    }
+    this.app.setState({
+      selectedElementsAreBeingDragged: false,
+      hoveredElementIds: {},
+    });
+    this.renderOverlay?.();
+  };
+
+  setOverlayRenderer = (render: (() => void) | null) => {
+    this.renderOverlay = render;
+  };
+
+  private updateDragOpacity = (ids: Iterable<string>) => {
+    const next = new Set(ids);
+    if (
+      next.size === this.dimmedDragElementIds.size &&
+      [...next].every((id) => this.dimmedDragElementIds.has(id))
+    ) {
+      return;
+    }
+    this.dimmedDragElementIds = next;
+    this.app.setMindmapDragOpacity([...next]);
+    this.dragOpacityApplied = true;
+  };
+
+  getDragPreview = () => this.dragSession;
+  isReparenting = () => this.dragSession?.mode === "reparent";
+
+  /** Drawn by the interactive canvas; never inserted into Scene. */
+  renderPreview = (
+    context: CanvasRenderingContext2D,
+    scrollX: number,
+    scrollY: number,
+  ) => {
+    const session = this.dragSession;
+    if (!session || !session.previewElements.length) {
+      return;
+    }
+    context.save();
+    context.translate(scrollX, scrollY);
+    context.globalAlpha = 0.9;
+    const preview = session.previewElements;
+    preview.filter(isMindmapEdgeElement).forEach((element) => {
+      context.strokeStyle = "#4f83e7";
+      context.lineWidth = element.strokeWidth;
+      const [start, ...points] = element.points;
+      if (!start) {
+        return;
+      }
+      context.beginPath();
+      context.moveTo(element.x + start[0], element.y + start[1]);
+      if (element.routing === "curved" && points.length === 3) {
+        context.bezierCurveTo(
+          element.x + points[0][0],
+          element.y + points[0][1],
+          element.x + points[1][0],
+          element.y + points[1][1],
+          element.x + points[2][0],
+          element.y + points[2][1],
+        );
+      } else {
+        points.forEach((point) =>
+          context.lineTo(element.x + point[0], element.y + point[1]),
+        );
+      }
+      context.stroke();
+    });
+    preview
+      .filter(
+        (element) =>
+          isMindmapNodeElement(element) ||
+          element.type === "rectangle" ||
+          element.type === "ellipse" ||
+          element.type === "diamond",
+      )
+      .forEach((element) => {
+        context.fillStyle = element.backgroundColor;
+        context.strokeStyle = element.strokeColor;
+        context.lineWidth = element.strokeWidth;
+        context.beginPath();
+        const shape = isMindmapNodeElement(element)
+          ? element.shape
+          : element.type;
+        if (shape === "ellipse") {
+          context.ellipse(
+            element.x + element.width / 2,
+            element.y + element.height / 2,
+            element.width / 2,
+            element.height / 2,
+            0,
+            0,
+            2 * Math.PI,
+          );
+        } else if (shape === "diamond") {
+          context.moveTo(element.x + element.width / 2, element.y);
+          context.lineTo(
+            element.x + element.width,
+            element.y + element.height / 2,
+          );
+          context.lineTo(
+            element.x + element.width / 2,
+            element.y + element.height,
+          );
+          context.lineTo(element.x, element.y + element.height / 2);
+          context.closePath();
+        } else if (shape === "pill") {
+          if (context.roundRect) {
+            context.roundRect(
+              element.x,
+              element.y,
+              element.width,
+              element.height,
+              element.height / 2,
+            );
+          } else {
+            context.rect(element.x, element.y, element.width, element.height);
+          }
+        } else {
+          context.rect(element.x, element.y, element.width, element.height);
+        }
+        context.fill();
+        context.stroke();
+      });
+    preview.forEach((element) => {
+      if (element.type !== "text") {
+        return;
+      }
+      context.fillStyle = element.strokeColor;
+      context.font = getFontString({
+        fontSize: element.fontSize,
+        fontFamily: element.fontFamily,
+      });
+      context.textBaseline = "top";
+      context.textAlign =
+        element.textAlign === "center" || element.textAlign === "right"
+          ? element.textAlign
+          : "left";
+      const x =
+        element.textAlign === "center"
+          ? element.x + element.width / 2
+          : element.textAlign === "right"
+          ? element.x + element.width
+          : element.x;
+      element.text.split("\n").forEach((line, i) => {
+        context.fillText(
+          line,
+          x,
+          element.y + i * element.fontSize * element.lineHeight,
+        );
+      });
+    });
+    context.restore();
+  };
+
   handleDoubleClick = (sceneX: number, sceneY: number) => {
     if (this.app.state.activeTool.type !== "mindmap") {
       return false;
@@ -187,14 +559,43 @@ export class AppMindmap {
     if (this.app.state.activeTool.type === "mindmap") {
       return false;
     }
+    // Box selection normalizes Mindmap graphs to either the complete graph or
+    // no graph. A complete graph is safe to move through the regular
+    // selection path, including when the pointer starts on an ordinary shape.
+    if (this.isCompleteMindmapSelection()) {
+      return false;
+    }
     return Boolean(
-      (pointerDownState.hit.element &&
-        this.isMindmapRelatedElement(pointerDownState.hit.element)) ||
-        this.hasSelectedMindmapElement(),
+      pointerDownState.hit.element &&
+        (this.isMindmapRelatedElement(pointerDownState.hit.element) ||
+          this.hasSelectedMindmapElement()),
     );
   };
 
   preparePointerDown = (pointerDownState: PointerDownState) => {
+    const candidate = this.getDragCandidate(pointerDownState);
+    if (candidate?.mode === "move") {
+      const expanded = new Set(Object.keys(this.app.state.selectedElementIds));
+      for (const graphId of candidate.graphIds) {
+        this.app.scene.getNonDeletedElements().forEach((element) => {
+          if (
+            isMindmapNodeElement(element) &&
+            element.graphId === graphId &&
+            !isMindmapElementHidden(
+              element,
+              this.app.scene.getNonDeletedElementsMap(),
+            )
+          ) {
+            expanded.add(element.id);
+          }
+        });
+      }
+      this.app.setState({
+        selectedElementIds: Object.fromEntries(
+          [...expanded].map((id) => [id, true]),
+        ),
+      });
+    }
     if (!this.shouldBlockNativePointer(pointerDownState)) {
       return;
     }
@@ -247,6 +648,12 @@ export class AppMindmap {
     if (!this.hasSelectedMindmapElement()) {
       return false;
     }
+    // Let the browser copy/cut event and the action manager handle these
+    // commands. Consuming them here would show the structural-operation toast
+    // before the native clipboard action gets a chance to run.
+    if (isCopy) {
+      return false;
+    }
     event.preventDefault();
     event.stopPropagation();
     if (event.key === KEYS.SPACE) {
@@ -255,7 +662,6 @@ export class AppMindmap {
     const node = this.getSelectedNode();
     if (
       !node ||
-      isCopy ||
       event.altKey ||
       event[KEYS.CTRL_OR_CMD] ||
       (event.shiftKey && !isDelete && event.key !== KEYS.TAB)
@@ -333,6 +739,410 @@ export class AppMindmap {
         (element) =>
           isMindmapNodeElement(element) && element.parentId === nodeId,
       );
+
+  private getDragCandidate = (
+    pointerDownState: PointerDownState,
+  ): MindmapDragCandidate | null => {
+    if (
+      !this.app.isInteractionEnabled() ||
+      this.app.state.viewModeEnabled ||
+      this.app.props.isCollaborating ||
+      this.app.state.editingTextElement
+    ) {
+      return null;
+    }
+    // Complete graphs are ordinary move selections. Structural Mindmap drag
+    // is only used for direct, partial-node interactions.
+    if (this.isCompleteMindmapSelection()) {
+      return null;
+    }
+    const selected = this.app.scene.getSelectedElements(this.app.state);
+    const nodes = selected.filter(isMindmapNodeElement);
+    const hit = pointerDownState.hit.element;
+    // A drag must be anchored by this pointer-down hit. Using only the
+    // current selection would let a blank-space box selection inherit a stale
+    // mindmap selection when the pointer later crosses a node.
+    const hitNode =
+      hit?.type === "text" && hit.containerId
+        ? this.app.scene.getNonDeletedElement(hit.containerId)
+        : hit;
+    if (!hitNode || !isMindmapNodeElement(hitNode)) {
+      return null;
+    }
+    const hitIsSelected = nodes.some((node) => node.id === hitNode.id);
+    const selectedNodes = hitIsSelected ? nodes : [hitNode];
+    const graphIds = [...new Set(selectedNodes.map((node) => node.graphId))];
+    if (selectedNodes.some((node) => !this.canEditNode(node.id))) {
+      return null;
+    }
+    const hasOrdinarySelection = selected.some(
+      (element) =>
+        !isMindmapNodeElement(element) && !isMindmapEdgeElement(element),
+    );
+    const canReparent =
+      graphIds.length === 1 &&
+      !hasOrdinarySelection &&
+      selectedNodes.every((node) => node.role !== "root");
+    const elementIds = new Set<string>();
+    let nodeIds = selectedNodes.map((node) => node.id);
+    if (canReparent) {
+      const index = buildMindmapGraphIndex(
+        this.app.scene.getNonDeletedElements(),
+        graphIds[0],
+      );
+      const selectedIds = new Set(nodeIds);
+      nodeIds = [];
+      const collectBranchRoots = (id: string) => {
+        if (selectedIds.has(id)) {
+          nodeIds.push(id);
+          return;
+        }
+        index.childrenById.get(id)?.forEach(collectBranchRoots);
+      };
+      collectBranchRoots(index.rootId);
+      nodeIds.forEach((nodeId) => {
+        getMindmapSubtreeIds(index, nodeId).forEach((id) => {
+          elementIds.add(id);
+          const edge = index.edgeByChildId.get(id);
+          if (edge) {
+            elementIds.add(edge.id);
+          }
+        });
+      });
+    } else {
+      this.app.scene.getNonDeletedElements().forEach((element) => {
+        if (
+          (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+          graphIds.includes(element.graphId)
+        ) {
+          elementIds.add(element.id);
+        }
+      });
+      selected.forEach((element) => elementIds.add(element.id));
+    }
+    // Bound labels move with their container even when they are hidden by a
+    // collapsed branch or omitted from the selected-elements list.
+    this.app.scene.getNonDeletedElements().forEach((element) => {
+      if (
+        element.type === "text" &&
+        element.containerId &&
+        elementIds.has(element.containerId)
+      ) {
+        elementIds.add(element.id);
+      }
+    });
+    return {
+      mode: canReparent ? "reparent" : "move",
+      nodeIds,
+      graphIds,
+      elementIds,
+    };
+  };
+
+  /**
+   * Normalizes a box-selection result per Mindmap graph. A collapsed selected
+   * parent implicitly selects its hidden descendants. Each graph is either
+   * fully selected (including edges and bound labels) or removed entirely.
+   */
+  normalizeBoxSelection = (
+    selectedElementIds: Readonly<Record<string, true>>,
+  ): Record<string, true> => {
+    const elements = this.app.scene.getNonDeletedElements();
+    const nextSelectedElementIds: Record<string, true> = {
+      ...selectedElementIds,
+    };
+    const elementsMap = this.app.scene.getNonDeletedElementsMap();
+    const graphIds = new Set<string>();
+    elements.forEach((element) => {
+      if (!selectedElementIds[element.id]) {
+        return;
+      }
+      if (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) {
+        graphIds.add(element.graphId);
+      } else if (element.type === "text" && element.containerId) {
+        const container = elementsMap.get(element.containerId);
+        if (container && isMindmapNodeElement(container)) {
+          graphIds.add(container.graphId);
+        }
+      }
+    });
+
+    for (const graphId of graphIds) {
+      const graphNodes = elements
+        .filter(isMindmapNodeElement)
+        .filter((element) => element.graphId === graphId);
+      const index = buildMindmapGraphIndex(elements, graphId);
+      const effectivelySelectedNodeIds = new Set(
+        graphNodes
+          .filter((node) => selectedElementIds[node.id])
+          .map((node) => node.id),
+      );
+      graphNodes.forEach((node) => {
+        if (selectedElementIds[node.id] && node.collapsed) {
+          getMindmapSubtreeIds(index, node.id).forEach((id) =>
+            effectivelySelectedNodeIds.add(id),
+          );
+        }
+      });
+      const graphNodeIds = new Set(graphNodes.map((node) => node.id));
+      const relatedElements = elements.filter(
+        (element) =>
+          ((isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+            element.graphId === graphId) ||
+          (element.type === "text" &&
+            !!element.containerId &&
+            graphNodeIds.has(element.containerId)),
+      );
+
+      relatedElements.forEach((element) => {
+        if (
+          graphNodes.every((node) => effectivelySelectedNodeIds.has(node.id))
+        ) {
+          nextSelectedElementIds[element.id] = true;
+        } else {
+          delete nextSelectedElementIds[element.id];
+        }
+      });
+    }
+
+    return nextSelectedElementIds;
+  };
+
+  /** Whether every selected Mindmap graph is complete, including edges/text. */
+  isCompleteMindmapSelection = () => {
+    const elements = this.app.scene.getNonDeletedElements();
+    const selected = new Set(Object.keys(this.app.state.selectedElementIds));
+    const graphIds = new Set<string>();
+    elements.forEach((element) => {
+      if (
+        selected.has(element.id) &&
+        (isMindmapNodeElement(element) || isMindmapEdgeElement(element))
+      ) {
+        graphIds.add(element.graphId);
+      }
+    });
+    if (!graphIds.size) {
+      return false;
+    }
+    return [...graphIds].every((graphId) => {
+      const nodeIds = new Set(
+        elements
+          .filter(isMindmapNodeElement)
+          .filter((element) => element.graphId === graphId)
+          .map((element) => element.id),
+      );
+      return elements
+        .filter(
+          (element) =>
+            ((isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+              element.graphId === graphId) ||
+            (element.type === "text" &&
+              !!element.containerId &&
+              nodeIds.has(element.containerId)),
+        )
+        .every((element) => selected.has(element.id));
+    });
+  };
+
+  private getSubtreeIds = (
+    index: ReturnType<typeof buildMindmapGraphIndex>,
+    nodeId: string,
+  ): readonly string[] => {
+    const ids = [nodeId];
+    for (let i = 0; i < ids.length; i++) {
+      ids.push(...(index.childrenById.get(ids[i]) ?? []));
+    }
+    return ids;
+  };
+
+  private createDragSession = (
+    pointerDownState: PointerDownState,
+    candidate: MindmapDragCandidate,
+  ): MindmapDragSession => {
+    const session: MindmapDragSession = {
+      ...candidate,
+      initialElements: new Map(
+        this.app.scene
+          .getElementsIncludingDeleted()
+          .filter((element) => candidate.elementIds.has(element.id))
+          .map((element) => [element.id, element]),
+      ),
+      origin: { ...pointerDownState.origin },
+      offset: { x: 0, y: 0 },
+      target: null,
+      paused: false,
+      invalid: false,
+      previewElements: [],
+    };
+    session.previewElements =
+      session.mode === "move" ? [] : this.getReparentPreview(session);
+    return session;
+  };
+
+  private getDropTarget = (
+    scenePoint: { x: number; y: number },
+    nodeIds: readonly string[],
+  ): MindmapDropTarget | null => {
+    const source = this.app.scene.getNonDeletedElement(nodeIds[0]);
+    if (!source || !isMindmapNodeElement(source)) {
+      return null;
+    }
+    const index = buildMindmapGraphIndex(
+      this.app.scene.getNonDeletedElements(),
+      source.graphId,
+    );
+    const selected = new Set(nodeIds);
+    const excluded = new Set(
+      nodeIds.flatMap((id) => this.getSubtreeIds(index, id)),
+    );
+    const tolerance = 40 / this.app.state.zoom.value;
+    let closest: { target: MindmapDropTarget; distance: number } | null = null;
+    for (const node of index.nodes.values()) {
+      if (
+        excluded.has(node.id) ||
+        isMindmapElementHidden(node, this.app.scene.getNonDeletedElementsMap())
+      ) {
+        continue;
+      }
+      const centerY = node.y + node.height / 2;
+      const right = node.x + node.width;
+      const verticalDistance = Math.abs(scenePoint.y - centerY);
+      const childDistance = Math.max(0, scenePoint.x - right);
+      if (
+        !node.collapsed &&
+        scenePoint.x >= node.x + node.width * 0.6 &&
+        scenePoint.x <= right + tolerance * 2.5 &&
+        verticalDistance <= node.height / 2 + tolerance
+      ) {
+        const distance = childDistance + verticalDistance;
+        if (!closest || distance < closest.distance) {
+          closest = {
+            target: { parentId: node.id, beforeId: null },
+            distance,
+          };
+        }
+      }
+      if (
+        !node.parentId ||
+        scenePoint.x < node.x - tolerance ||
+        scenePoint.x > right + tolerance / 2
+      ) {
+        continue;
+      }
+      const above = scenePoint.y < centerY;
+      const edgeY = above ? node.y : node.y + node.height;
+      if (Math.abs(scenePoint.y - edgeY) > tolerance) {
+        continue;
+      }
+      const siblings = (index.childrenById.get(node.parentId) ?? []).filter(
+        (id) => !selected.has(id),
+      );
+      const position = siblings.indexOf(node.id);
+      if (position < 0) {
+        continue;
+      }
+      const distance =
+        Math.abs(scenePoint.y - edgeY) +
+        Math.max(0, node.x - scenePoint.x, scenePoint.x - right);
+      if (!closest || distance < closest.distance) {
+        closest = {
+          target: {
+            parentId: node.parentId,
+            beforeId: above ? node.id : siblings[position + 1] ?? null,
+          },
+          distance,
+        };
+      }
+    }
+    return closest?.target ?? null;
+  };
+
+  private getReparentPreview = (
+    session: MindmapDragSession,
+  ): readonly ExcalidrawElement[] => {
+    const source = this.app.scene.getNonDeletedElement(session.nodeIds[0]);
+    if (!source || !isMindmapNodeElement(source)) {
+      return [];
+    }
+    const previewNode = {
+      ...source,
+      x: source.x + session.offset.x,
+      y: source.y + session.offset.y,
+    };
+    const label = this.app.scene
+      .getNonDeletedElements()
+      .find(
+        (element) =>
+          element.type === "text" && element.containerId === source.id,
+      );
+    const preview: ExcalidrawElement[] = [previewNode];
+    if (label) {
+      preview.push({
+        ...label,
+        x: label.x + session.offset.x,
+        y: label.y + session.offset.y,
+      });
+    }
+    if (session.target) {
+      const parent = this.app.scene.getNonDeletedElement(
+        session.target.parentId,
+      );
+      const edge = this.app.scene
+        .getNonDeletedElements()
+        .find(
+          (element) =>
+            isMindmapEdgeElement(element) && element.childId === source.id,
+        );
+      if (
+        parent &&
+        isMindmapNodeElement(parent) &&
+        edge &&
+        isMindmapEdgeElement(edge)
+      ) {
+        const x = parent.x + parent.width;
+        const startY = parent.y + parent.height / 2;
+        const endY = previewNode.y + previewNode.height / 2;
+        const y = Math.min(startY, endY);
+        const width = previewNode.x - x;
+        preview.unshift({
+          ...edge,
+          parentId: parent.id,
+          x,
+          y,
+          width,
+          height: Math.abs(endY - startY),
+          points: [
+            pointFrom<LocalPoint>(0, startY - y),
+            pointFrom<LocalPoint>(width / 2, startY - y),
+            pointFrom<LocalPoint>(width / 2, endY - y),
+            pointFrom<LocalPoint>(width, endY - y),
+          ],
+        });
+      }
+    }
+    return preview;
+  };
+
+  private updateMoveElements = (session: MindmapDragSession) => {
+    // Keep full-graph movement in Scene so the local canvas follows the pointer
+    // without drawing a second, translucent copy over the original elements.
+    this.app.scene.mapElements((element) => {
+      const initial = session.initialElements.get(element.id);
+      if (!initial) {
+        return element;
+      }
+      return newElementWith(initial, {
+        x: initial.x + session.offset.x,
+        y: initial.y + session.offset.y,
+      });
+    });
+  };
+
+  private restoreMoveElements = (session: MindmapDragSession) => {
+    this.app.scene.mapElements(
+      (element) => session.initialElements.get(element.id) ?? element,
+    );
+  };
 
   getTreeActionResult = (
     command: MindmapTreeCommand,

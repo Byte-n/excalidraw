@@ -499,6 +499,7 @@ import type {
   AppClassProperties,
   AppProps,
   AppState,
+  ElementRenderOverride,
   ElementRenderOffsets,
   ElementRenderOverrides,
   BinaryFileData,
@@ -807,6 +808,11 @@ class App extends React.Component<AppProps, AppState> {
 
   api: ExcalidrawImperativeAPI;
   private elementRenderOverrides: ElementRenderOverrides = new Map();
+  private mindmapDragOpacityIds = new Set<string>();
+  private mindmapDragOpacityPrevious = new Map<
+    string,
+    ElementRenderOverride | undefined
+  >();
   /** offsets of `elementRenderOverrides`; keeps its identity while they don't change */
   private elementRenderOffsets: ElementRenderOffsets = new Map();
   private renderOverridesUpdatePending = false;
@@ -2811,7 +2817,12 @@ class App extends React.Component<AppProps, AppState> {
                             onClick={this.handleCanvasClick}
                             onPointerMove={this.handleCanvasPointerMove}
                             onPointerUp={this.handleCanvasPointerUp}
-                            onPointerCancel={this.removePointer}
+                            onPointerCancel={(event) => {
+                              this.removePointer(event);
+                              this.maybeCleanupAfterMissingPointerUp(
+                                event.nativeEvent,
+                              );
+                            }}
                             onTouchMove={this.handleTouchMove}
                             onPointerDown={this.handleCanvasPointerDown}
                             onDoubleClick={this.handleCanvasDoubleClick}
@@ -5467,6 +5478,27 @@ class App extends React.Component<AppProps, AppState> {
     this.forceUpdate();
   };
 
+  /** Applies transient opacity to the source branch during a mindmap drag. */
+  public setMindmapDragOpacity = (ids: readonly string[] | null) => {
+    const next = new Map(this.elementRenderOverrides);
+    this.mindmapDragOpacityIds.forEach((id) => {
+      const previous = this.mindmapDragOpacityPrevious.get(id);
+      if (previous) {
+        next.set(id, previous);
+      } else {
+        next.delete(id);
+      }
+    });
+    this.mindmapDragOpacityIds = new Set(ids ?? []);
+    this.mindmapDragOpacityPrevious.clear();
+    this.mindmapDragOpacityIds.forEach((id) => {
+      const previous = next.get(id);
+      this.mindmapDragOpacityPrevious.set(id, previous);
+      next.set(id, { ...(previous ?? {}), opacity: 24 });
+    });
+    this.setElementRenderOverrides(next.size ? next : null);
+  };
+
   public applyDeltas = (
     deltas: StoreDelta[],
     options?: ApplyToOptions,
@@ -6249,6 +6281,9 @@ class App extends React.Component<AppProps, AppState> {
             lastActiveTool: this.state.activeTool,
           })
         : updateActiveTool(this.state, tool);
+    if (nextActiveTool.type !== this.state.activeTool.type) {
+      this.mindmap.cancelDrag();
+    }
     if (nextActiveTool.type !== "mindmap") {
       this.mindmap.clearHover();
     }
@@ -10682,6 +10717,9 @@ class App extends React.Component<AppProps, AppState> {
     pointerDownState: PointerDownState,
   ): (event: KeyboardEvent) => void {
     return withBatchedUpdates((event: KeyboardEvent) => {
+      if (this.mindmap.handlePointerKeyDown(pointerDownState, event)) {
+        return;
+      }
       if (this.maybeHandleResize(pointerDownState, event)) {
         return;
       }
@@ -10710,6 +10748,16 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
       const pointerCoords = viewportCoordsToSceneCoords(event, this.state);
+
+      if (
+        this.mindmap.handlePointerMoveFromPointerDown(
+          pointerDownState,
+          event,
+          pointerCoords,
+        )
+      ) {
+        return;
+      }
 
       if (this.mindmap.shouldBlockNativePointer(pointerDownState)) {
         return;
@@ -11433,6 +11481,9 @@ class App extends React.Component<AppProps, AppState> {
               }
             }
 
+            const normalizedSelectedElementIds =
+              this.mindmap.normalizeBoxSelection(nextSelectedElementIds);
+
             prevState = !shouldReuseSelection
               ? { ...prevState, selectedGroupIds: {}, editingGroupId: null }
               : prevState;
@@ -11441,7 +11492,7 @@ class App extends React.Component<AppProps, AppState> {
               ...selectGroupsForSelectedElements(
                 {
                   editingGroupId: prevState.editingGroupId,
-                  selectedElementIds: nextSelectedElementIds,
+                  selectedElementIds: normalizedSelectedElementIds,
                 },
                 this.scene.getNonDeletedElements(),
                 prevState,
@@ -11570,6 +11621,11 @@ class App extends React.Component<AppProps, AppState> {
       const sceneCoords = viewportCoordsToSceneCoords(
         { clientX: childEvent.clientX, clientY: childEvent.clientY },
         this.state,
+      );
+      const mindmapHandled = this.mindmap.handlePointerUp(
+        pointerDownState,
+        childEvent,
+        sceneCoords,
       );
 
       if (
@@ -11763,6 +11819,10 @@ class App extends React.Component<AppProps, AppState> {
         pointerDownState,
         childEvent,
       );
+
+      if (mindmapHandled) {
+        return;
+      }
 
       if (newElement?.type === "freedraw") {
         const pointerCoords = viewportCoordsToSceneCoords(

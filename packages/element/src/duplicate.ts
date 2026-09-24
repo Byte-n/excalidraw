@@ -33,6 +33,8 @@ import {
   isArrowElement,
   isBoundToContainer,
   isFrameLikeElement,
+  isMindmapEdgeElement,
+  isMindmapNodeElement,
 } from "./typeChecks";
 
 import { getBoundTextElement, getContainerElement } from "./textElement";
@@ -468,6 +470,60 @@ export const duplicateElements = (
     }
   }
 
+  // Mindmap relationships are stored as explicit ids rather than generic
+  // bindings. Rebuild those references for every duplication path, including
+  // paste and Alt-drag, and isolate the copied graph from its source graph.
+  const graphIds = new Map<string, string>();
+  const nodeIds = new Map<string, string>();
+  const originalNodeIds = new Set(
+    duplicatedElements
+      .map((duplicate) =>
+        origElementsMap.get(duplicateIdToOrigId.get(duplicate.id)!),
+      )
+      .filter(isMindmapNodeElement)
+      .map((node) => node.id),
+  );
+  for (const duplicate of duplicatedElements) {
+    const original = origElementsMap.get(
+      duplicateIdToOrigId.get(duplicate.id)!,
+    );
+    if (!original || !isMindmapNodeElement(original)) {
+      continue;
+    }
+    const graphId = graphIds.get(original.graphId) ?? randomId();
+    graphIds.set(original.graphId, graphId);
+    nodeIds.set(original.id, duplicate.id);
+    const isCopiedRoot =
+      original.role === "root" || !originalNodeIds.has(original.parentId ?? "");
+    Object.assign(duplicate, {
+      graphId,
+      parentId: isCopiedRoot ? null : original.parentId,
+      role: isCopiedRoot ? "root" : "node",
+      order: isCopiedRoot ? null : original.order,
+    });
+  }
+  for (const duplicate of duplicatedElements) {
+    const original = origElementsMap.get(
+      duplicateIdToOrigId.get(duplicate.id)!,
+    );
+    if (!original || !isMindmapNodeElement(original)) {
+      if (original && isMindmapEdgeElement(original)) {
+        const graphId = graphIds.get(original.graphId);
+        const parentId = nodeIds.get(original.parentId);
+        const childId = nodeIds.get(original.childId);
+        if (graphId && parentId && childId) {
+          Object.assign(duplicate, { graphId, parentId, childId });
+        }
+      }
+      continue;
+    }
+    if (original.role === "node" && originalNodeIds.has(original.id)) {
+      Object.assign(duplicate, {
+        parentId: nodeIds.get(original.parentId) ?? original.parentId,
+      });
+    }
+  }
+
   return {
     duplicatedElements,
     duplicateElementsMap,
@@ -641,7 +697,10 @@ const _deepCopyElement = (val: any, depth: number = 0) => {
       if (val.hasOwnProperty(key)) {
         // don't copy non-serializable objects like these caches. They'll be
         // populated when the element is rendered.
-        if (depth === 0 && (key === "shape" || key === "canvas")) {
+        if (
+          depth === 0 &&
+          (key === "canvas" || (key === "shape" && !isMindmapNodeElement(val)))
+        ) {
           continue;
         }
         tmp[key] = _deepCopyElement(val[key], depth + 1);

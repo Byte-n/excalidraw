@@ -1,4 +1,6 @@
 import {
+  buildMindmapGraphIndex,
+  getMindmapSubtreeIds,
   getTextFromElements,
   isMindmapEdgeElement,
   isMindmapNodeElement,
@@ -30,26 +32,59 @@ export const actionCopy = register<ClipboardEvent | null>({
   icon: DuplicateIcon,
   trackEvent: { category: "element" },
   perform: async (elements, appState, event, app) => {
-    if (
-      app.scene
-        .getSelectedElements({
-          selectedElementIds: appState.selectedElementIds,
-          includeBoundTextElement: true,
-          includeElementsInFrames: true,
-        })
-        .some(
-          (element) =>
-            isMindmapNodeElement(element) || isMindmapEdgeElement(element),
-        )
-    ) {
-      app.mindmap.notifyUnsupportedOperation();
-      return { captureUpdate: CaptureUpdateAction.NEVER };
-    }
-    const elementsToCopy = app.scene.getSelectedElements({
+    let elementsToCopy = app.scene.getSelectedElements({
       selectedElementIds: appState.selectedElementIds,
       includeBoundTextElement: true,
       includeElementsInFrames: true,
     });
+    const initiallySelectedIds = new Set(
+      elementsToCopy.map((element) => element.id),
+    );
+    const selectedNodes = elementsToCopy.flatMap((element) => {
+      if (isMindmapNodeElement(element)) {
+        return [element];
+      }
+      if (isTextElement(element) && element.containerId) {
+        const container = app.scene.getNonDeletedElement(element.containerId);
+        return container && isMindmapNodeElement(container) ? [container] : [];
+      }
+      return [];
+    });
+    const selectedNode = app.mindmap.getSelectedNode();
+    if (
+      selectedNode &&
+      !selectedNodes.some((node) => node.id === selectedNode.id)
+    ) {
+      selectedNodes.push(selectedNode);
+    }
+    if (selectedNodes.length) {
+      const selectedIds = new Set<string>();
+      for (const node of selectedNodes) {
+        try {
+          const index = buildMindmapGraphIndex(
+            app.scene.getNonDeletedElements(),
+            node.graphId,
+          );
+          getMindmapSubtreeIds(index, node.id).forEach((id) =>
+            selectedIds.add(id),
+          );
+        } catch {
+          selectedIds.add(node.id);
+        }
+      }
+      elementsToCopy = app.scene
+        .getNonDeletedElements()
+        .filter(
+          (element) =>
+            initiallySelectedIds.has(element.id) ||
+            selectedIds.has(element.id) ||
+            (isMindmapEdgeElement(element) &&
+              selectedIds.has(element.childId)) ||
+            (isTextElement(element) &&
+              !!element.containerId &&
+              selectedIds.has(element.containerId)),
+        );
+    }
 
     try {
       await copyToClipboard(elementsToCopy, app.files, event);
@@ -133,23 +168,14 @@ export const actionCut = register<ClipboardEvent | null>({
   label: "labels.cut",
   icon: cutIcon,
   trackEvent: { category: "element" },
-  perform: (elements, appState, event, app) => {
+  perform: async (elements, appState, event, app) => {
+    const copied = await actionCopy.perform(elements, appState, event, app);
     if (
-      app.scene
-        .getSelectedElements({
-          selectedElementIds: appState.selectedElementIds,
-          includeBoundTextElement: true,
-          includeElementsInFrames: true,
-        })
-        .some(
-          (element) =>
-            isMindmapNodeElement(element) || isMindmapEdgeElement(element),
-        )
+      copied === false ||
+      copied?.captureUpdate === CaptureUpdateAction.NEVER
     ) {
-      app.mindmap.notifyUnsupportedOperation();
-      return { captureUpdate: CaptureUpdateAction.NEVER };
+      return copied;
     }
-    actionCopy.perform(elements, appState, event, app);
     return actionDeleteSelected.perform(elements, appState, null, app);
   },
   keyTest: (event) => event[KEYS.CTRL_OR_CMD] && event.key === KEYS.X,

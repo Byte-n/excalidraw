@@ -1207,6 +1207,7 @@ export type AppClassProperties = {
   dismissLinearEditor: App["dismissLinearEditor"];
   flowchart: App["flowchart"];
   mindmap: App["mindmap"];
+  setMindmapDragOpacity: App["setMindmapDragOpacity"];
   drawShape: App["drawShape"];
   arrowText: App["arrowText"];
   cursor: App["cursor"];

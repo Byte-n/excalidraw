@@ -1,5 +1,4 @@
 import {
-  generateKeyBetween,
   generateNKeysBetween,
   validateOrderKey,
 } from "@excalidraw/fractional-indexing";
@@ -30,7 +29,9 @@ export const getMindmapNodeGeometry = (
   | ExcalidrawDiamondElement
   | ExcalidrawEllipseElement => ({
   ...node,
-  type: node.shape === "pill" ? "rectangle" : node.shape,
+  // Clipboard data from older Mindmap versions may not contain `shape`.
+  // Keep rendering total and use the default rectangle in that case.
+  type: node.shape === "pill" ? "rectangle" : node.shape ?? "rectangle",
 });
 
 export const getMindmapEdgePath = (
@@ -818,24 +819,75 @@ export const reparentMindmapNode = (
   nodeId: string,
   parentId: string,
   beforeId: string | null = null,
+): readonly ExcalidrawMindmapNodeElement[] =>
+  reparentMindmapNodes(index, [nodeId], parentId, beforeId);
+
+/**
+ * Creates a shadow tree for a multi-branch drag without mutating the input.
+ * Selected descendants of a selected parent are ignored and the remaining
+ * branches retain their existing depth-first order.
+ */
+export const reparentMindmapNodes = (
+  index: MindmapGraphIndex,
+  nodeIds: readonly string[],
+  parentId: string,
+  beforeId: string | null = null,
 ): readonly ExcalidrawMindmapNodeElement[] => {
-  const node = index.nodes.get(nodeId);
   const parent = index.nodes.get(parentId);
+  const requested = [...new Set(nodeIds)];
+  if (!parent || requested.length === 0) {
+    throw new Error("Mindmap 挂接目标无效");
+  }
   if (
-    !node ||
-    node.role === "root" ||
-    !parent ||
-    getMindmapSubtreeIds(index, nodeId).includes(parentId)
+    requested.some((id) => {
+      const node = index.nodes.get(id);
+      return (
+        !node ||
+        node.role === "root" ||
+        node.graphId !== index.graphId ||
+        getMindmapSubtreeIds(index, id).includes(parentId)
+      );
+    })
   ) {
     throw new Error("Mindmap 挂接目标无效");
   }
+
+  const selected = new Set(requested);
+  const branchRoots = requested.filter(
+    (id) =>
+      !requested.some(
+        (candidate) =>
+          candidate !== id &&
+          getMindmapSubtreeIds(index, candidate).includes(id),
+      ),
+  );
+  if (!branchRoots.length) {
+    throw new Error("Mindmap 挂接目标无效");
+  }
+  const traversal: string[] = [];
+  const visit = (id: string) => {
+    traversal.push(id);
+    (index.childrenById.get(id) ?? []).forEach(visit);
+  };
+  visit(index.rootId);
+  const orderOf = new Map(traversal.map((id, position) => [id, position]));
+  branchRoots.sort((a, b) => (orderOf.get(a) ?? 0) - (orderOf.get(b) ?? 0));
+
   const siblings = (index.childrenById.get(parentId) ?? []).filter(
-    (id) => id !== nodeId,
+    (id) => !selected.has(id),
   );
   const position =
     beforeId === null ? siblings.length : siblings.indexOf(beforeId);
   if (position < 0) {
     throw new Error("Mindmap 插入位置无效");
+  }
+  const currentSiblings = index.childrenById.get(parentId) ?? [];
+  if (branchRoots.every((id) => index.nodes.get(id)?.parentId === parentId)) {
+    const reordered = [...siblings];
+    reordered.splice(position, 0, ...branchRoots);
+    if (reordered.every((id, i) => id === currentSiblings[i])) {
+      return [...index.nodes.values()];
+    }
   }
   const previous =
     position > 0 ? index.nodes.get(siblings[position - 1])!.order : null;
@@ -843,10 +895,19 @@ export const reparentMindmapNode = (
     position < siblings.length
       ? index.nodes.get(siblings[position])!.order
       : null;
-  const order = generateKeyBetween(previous, next) as FractionalIndex;
-  return [...index.nodes.values()].map((element) =>
-    element.id === nodeId
-      ? withUpdates(element, { role: "node", parentId, order })
-      : element,
+  const orders = generateNKeysBetween(previous, next, branchRoots.length);
+  const updates = new Map(
+    branchRoots.map((id, i) => [
+      id,
+      {
+        role: "node" as const,
+        parentId,
+        order: orders[i] as FractionalIndex,
+      },
+    ]),
   );
+  return [...index.nodes.values()].map((element) => {
+    const update = updates.get(element.id);
+    return update ? withUpdates(element, update) : element;
+  });
 };

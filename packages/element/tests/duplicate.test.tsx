@@ -30,6 +30,7 @@ import {
   duplicateElement,
   duplicateElements,
 } from "../src/duplicate";
+import { newMindmapNodeElement } from "../src/newElement";
 
 import type { ExcalidrawLinearElement } from "../src/types";
 
@@ -48,6 +49,21 @@ const assertCloneObjects = (source: any, clone: any) => {
 };
 
 describe("duplicating single elements", () => {
+  it("preserves a mindmap node's persisted shape when cloning", () => {
+    const element = newMindmapNodeElement({
+      x: 0,
+      y: 0,
+      graphId: "graph",
+      role: "root",
+      parentId: null,
+      order: null,
+      shape: "pill",
+    });
+
+    expect(deepCopyElement(element).shape).toBe("pill");
+    expect(duplicateElement(null, new Map(), element).shape).toBe("pill");
+  });
+
   it.each([123, 0, null])(
     "preserves created=%s on a deep copy and resets it for a new instance",
     (created) => {
