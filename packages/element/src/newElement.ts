@@ -8,6 +8,7 @@ import {
   DEFAULT_VERTICAL_ALIGN,
   DEFAULT_STROKE_STREAMLINE,
   VERTICAL_ALIGN,
+  ROUNDNESS,
   randomInteger,
   randomId,
   getFontString,
@@ -56,6 +57,12 @@ import type {
   ExcalidrawElbowArrowElement,
   ExcalidrawLineElement,
   ExcalidrawStickyNoteElement,
+  ExcalidrawMindmapNodeElement,
+  ExcalidrawMindmapEdgeElement,
+  MindmapNodeRelation,
+  MindmapNodeShape,
+  MindmapLayoutDirection,
+  MindmapEdgeRouting,
 } from "./types";
 
 export type ElementConstructorOpts = MarkOptional<
@@ -241,6 +248,68 @@ export const newStickyNoteElement = (
     baseHeight: opts.baseHeight ?? base.height,
   });
 };
+
+export const newMindmapNodeElement = (
+  opts: ElementConstructorOpts &
+    MindmapNodeRelation & {
+      graphId: string;
+      shape?: MindmapNodeShape;
+      collapsed?: boolean;
+      layoutDirection?: MindmapLayoutDirection;
+      defaultNodeShape?: MindmapNodeShape;
+      defaultEdgeRouting?: MindmapEdgeRouting;
+      defaultEdgeStrokeColor?: string;
+      defaultEdgeStrokeWidth?: number;
+      defaultEdgeStrokeStyle?: ExcalidrawMindmapEdgeElement["strokeStyle"];
+    },
+): NonDeleted<ExcalidrawMindmapNodeElement> => ({
+  ..._newElementBase<ExcalidrawMindmapNodeElement>("mindmap-node", {
+    width: 160,
+    height: 56,
+    backgroundColor: opts.role === "root" ? "#d0bfff" : "#e5dbff",
+    fillStyle: "solid",
+    roughness: 0,
+    roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+    ...opts,
+    angle: 0 as Radians,
+  }),
+  graphId: opts.graphId,
+  collapsed: opts.collapsed ?? false,
+  shape: opts.shape ?? "rectangle",
+  ...(opts.role === "root"
+    ? {
+        layoutDirection: opts.layoutDirection ?? "left-to-right",
+        defaultNodeShape: opts.defaultNodeShape ?? "rectangle",
+        defaultEdgeRouting: opts.defaultEdgeRouting ?? "orthogonal",
+        defaultEdgeStrokeColor:
+          opts.defaultEdgeStrokeColor ?? opts.strokeColor ?? "#1b1b1f",
+        defaultEdgeStrokeWidth: opts.defaultEdgeStrokeWidth ?? 2,
+        defaultEdgeStrokeStyle: opts.defaultEdgeStrokeStyle ?? "solid",
+      }
+    : {}),
+  ...(opts.role === "root"
+    ? { role: "root", parentId: null, order: null }
+    : { role: "node", parentId: opts.parentId, order: opts.order }),
+});
+
+export const newMindmapEdgeElement = (
+  opts: ElementConstructorOpts &
+    Pick<ExcalidrawMindmapEdgeElement, "graphId" | "parentId" | "childId"> & {
+      points?: ExcalidrawMindmapEdgeElement["points"];
+      routing?: ExcalidrawMindmapEdgeElement["routing"];
+    },
+): NonDeleted<ExcalidrawMindmapEdgeElement> => ({
+  ..._newElementBase<ExcalidrawMindmapEdgeElement>("mindmap-edge", {
+    roughness: 0,
+    ...opts,
+    angle: 0 as Radians,
+  }),
+  graphId: opts.graphId,
+  parentId: opts.parentId,
+  childId: opts.childId,
+  points: opts.points ?? [],
+  routing: opts.routing ?? "orthogonal",
+});
 
 export const newEmbeddableElement = (
   opts: {

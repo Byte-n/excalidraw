@@ -167,6 +167,12 @@ const InteractiveCanvas = (props: InteractiveCanvasProps) => {
       deltaTime: 0,
     };
 
+    props.app.mindmap.setOverlayRenderer(() => {
+      if (rendererParams.current) {
+        renderInteractiveScene(rendererParams.current);
+      }
+    });
+
     if (!AnimationController.running(INTERACTIVE_SCENE_ANIMATION_KEY)) {
       AnimationController.start<InteractiveSceneRenderAnimationState>(
         INTERACTIVE_SCENE_ANIMATION_KEY,
@@ -194,6 +200,11 @@ const InteractiveCanvas = (props: InteractiveCanvasProps) => {
       );
     }
   });
+
+  useEffect(
+    () => () => props.app.mindmap.setOverlayRenderer(null),
+    [props.app],
+  );
 
   return (
     <canvas

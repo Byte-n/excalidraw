@@ -30,6 +30,7 @@ import {
   frameToolIcon,
   EmbedIcon,
   stickyNoteToolIcon,
+  mindmapIcon,
 } from "./icons";
 
 import type {
@@ -152,6 +153,10 @@ export const TOOLS = defineTools({
   bucketfill: {
     icon: bucketFillIcon,
     letterKey: KEYS.B,
+  },
+  mindmap: {
+    icon: mindmapIcon,
+    letterKey: "m",
   },
   lasso: {
     icon: LassoIcon,

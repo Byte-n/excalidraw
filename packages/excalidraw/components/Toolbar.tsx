@@ -25,6 +25,7 @@ import {
   MagicIcon,
   mermaidLogoIcon,
   DotsIcon,
+  mindmapIcon,
 } from "./icons";
 import {
   ArrowToolButton,
@@ -185,6 +186,18 @@ const ExtraToolsDropdown = ({
         >
           {t("toolBar.bucketfill")}
         </DropdownMenu.Item>
+        {UIOptions.tools?.mindmap !== false && (
+          <DropdownMenu.Item
+            onSelect={() => app.setActiveTool({ type: "mindmap" })}
+            icon={mindmapIcon}
+            shortcut={getToolShortcut("mindmap")}
+            data-testid="toolbar-mindmap"
+            selected={activeTool.type === "mindmap"}
+            disabled={isToolButtonDisabled(app, "mindmap")}
+          >
+            {t("toolBar.mindmap")}
+          </DropdownMenu.Item>
+        )}
         {isFullStylesPanel && (
           <DropdownMenu.Item
             onSelect={() => app.setActiveTool({ type: "lasso" })}

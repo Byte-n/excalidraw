@@ -40,6 +40,8 @@ import type {
   SameType,
 } from "@excalidraw/common/utility-types";
 
+import { getMindmapHiddenElementIds } from "./mindmap";
+
 import type { AppState } from "../../excalidraw/types";
 
 type SceneStateCallback = () => void;
@@ -139,6 +141,7 @@ export class Scene {
    * cache-invalidation nonce at the moment.
    */
   private sceneNonce: number | undefined;
+  private hiddenMindmapElementIds: ReadonlySet<string> | null = null;
 
   getSceneNonce() {
     return this.sceneNonce;
@@ -158,6 +161,15 @@ export class Scene {
 
   getNonDeletedElements() {
     return this.nonDeletedElements;
+  }
+
+  getMindmapHiddenElementIds() {
+    if (!this.hiddenMindmapElementIds) {
+      this.hiddenMindmapElementIds = getMindmapHiddenElementIds(
+        this.nonDeletedElements,
+      );
+    }
+    return this.hiddenMindmapElementIds;
   }
 
   getFramesIncludingDeleted() {
@@ -302,6 +314,7 @@ export class Scene {
 
   triggerUpdate() {
     this.sceneNonce = randomInteger();
+    this.hiddenMindmapElementIds = null;
 
     for (const callback of Array.from(this.callbacks)) {
       callback();
@@ -332,6 +345,7 @@ export class Scene {
     this.selectedElementsCache.selectedElementIds = null;
     this.selectedElementsCache.elements = null;
     this.selectedElementsCache.cache.clear();
+    this.hiddenMindmapElementIds = null;
 
     // done not for memory leaks, but to guard against possible late fires
     // (I guess?)

@@ -116,10 +116,13 @@ export class LassoTrail extends AnimatedTrail {
         }
       }
 
+      const normalizedSelectedElementIds =
+        this.app.mindmap.normalizeMindmapSelection(nextSelectedElementIds);
+
       const nextSelection = selectGroupsForSelectedElements(
         {
           editingGroupId: prevState.editingGroupId,
-          selectedElementIds: nextSelectedElementIds,
+          selectedElementIds: normalizedSelectedElementIds,
         },
         this.app.scene.getNonDeletedElements(),
         prevState,

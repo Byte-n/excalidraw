@@ -4,6 +4,7 @@ import {
   CANVAS_SEARCH_TAB,
   DEFAULT_SIDEBAR,
   LIBRARY_SIDEBAR_TAB,
+  MINDMAP_OUTLINE_TAB,
   composeEventHandlers,
 } from "@excalidraw/common";
 
@@ -11,15 +12,17 @@ import type { MarkOptional, Merge } from "@excalidraw/common/utility-types";
 
 import { useTunnels } from "../context/tunnels";
 import { useUIAppState } from "../context/ui-appState";
+import { t } from "../i18n";
 
 import "../components/dropdownMenu/DropdownMenu.scss";
 
 import { useExcalidrawSetAppState } from "./App";
 import { LibraryMenu } from "./LibraryMenu";
+import { MindmapOutline } from "./MindmapOutline";
 import { SearchMenu } from "./SearchMenu";
 import { Sidebar } from "./Sidebar/Sidebar";
 import { withInternalFallback } from "./hoc/withInternalFallback";
-import { LibraryIcon, searchIcon } from "./icons";
+import { LibraryIcon, mindmapIcon, searchIcon } from "./icons";
 
 import type { SidebarProps, SidebarTriggerProps } from "./Sidebar/common";
 
@@ -74,7 +77,9 @@ export const DefaultSidebar = Object.assign(
 
       const { DefaultSidebarTabTriggersTunnel } = useTunnels();
 
-      const isForceDocked = appState.openSidebar?.tab === CANVAS_SEARCH_TAB;
+      const isForceDocked =
+        appState.openSidebar?.tab === CANVAS_SEARCH_TAB ||
+        appState.openSidebar?.tab === MINDMAP_OUTLINE_TAB;
 
       return (
         <Sidebar
@@ -99,10 +104,25 @@ export const DefaultSidebar = Object.assign(
           <Sidebar.Tabs>
             <Sidebar.Header>
               <Sidebar.TabTriggers>
-                <Sidebar.TabTrigger tab={CANVAS_SEARCH_TAB}>
+                <Sidebar.TabTrigger
+                  tab={CANVAS_SEARCH_TAB}
+                  title={t("search.title")}
+                  aria-label={t("search.title")}
+                >
                   {searchIcon}
                 </Sidebar.TabTrigger>
-                <Sidebar.TabTrigger tab={LIBRARY_SIDEBAR_TAB}>
+                <Sidebar.TabTrigger
+                  tab={MINDMAP_OUTLINE_TAB}
+                  title={t("outline.title")}
+                  aria-label={t("outline.title")}
+                >
+                  {mindmapIcon}
+                </Sidebar.TabTrigger>
+                <Sidebar.TabTrigger
+                  tab={LIBRARY_SIDEBAR_TAB}
+                  title={t("library.search.heading")}
+                  aria-label={t("library.search.heading")}
+                >
                   {LibraryIcon}
                 </Sidebar.TabTrigger>
                 <DefaultSidebarTabTriggersTunnel.Out />
@@ -113,6 +133,9 @@ export const DefaultSidebar = Object.assign(
             </Sidebar.Tab>
             <Sidebar.Tab tab={CANVAS_SEARCH_TAB}>
               <SearchMenu />
+            </Sidebar.Tab>
+            <Sidebar.Tab tab={MINDMAP_OUTLINE_TAB}>
+              <MindmapOutline />
             </Sidebar.Tab>
             {children}
           </Sidebar.Tabs>

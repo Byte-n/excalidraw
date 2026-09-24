@@ -295,6 +295,9 @@ export const IMAGE_MIME_TYPES = {
 
 export const STRING_MIME_TYPES = {
   text: "text/plain",
+  txt: "text/plain",
+  md: "text/markdown",
+  opml: "application/xml",
   html: "text/html",
   json: "application/json",
   // excalidraw data
@@ -516,6 +519,7 @@ export const DEFAULT_ELEMENT_PROPS: {
 
 export const LIBRARY_SIDEBAR_TAB = "library";
 export const CANVAS_SEARCH_TAB = "search";
+export const MINDMAP_OUTLINE_TAB = "mindmap-outline";
 
 export const DEFAULT_SIDEBAR = {
   name: "default",
@@ -549,6 +553,7 @@ export const TOOL_TYPE = {
   laser: "laser",
   autoshape: "autoshape",
   bucketfill: "bucketfill",
+  mindmap: "mindmap",
 } as const;
 
 export const EDITOR_LS_KEYS = {

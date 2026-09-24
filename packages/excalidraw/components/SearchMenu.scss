@@ -100,7 +100,8 @@
 
   .layer-ui__result-item {
     display: flex;
-    align-items: center;
+    align-items: stretch;
+    flex-direction: column;
     min-height: 1.875rem;
     flex: 0 0 auto;
     padding: 0.25rem 0.75rem;
@@ -124,6 +125,21 @@
       overflow: hidden;
       text-overflow: ellipsis;
       word-break: break-all;
+    }
+
+    .mindmap-search-path {
+      overflow: hidden;
+      color: var(--color-gray-60);
+      font-size: 0.75rem;
+      line-height: 1.25rem;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      span {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
     }
 
     &:hover {

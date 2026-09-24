@@ -19,8 +19,12 @@ import {
   throttleRAF,
 } from "@excalidraw/common";
 import { decryptData } from "@excalidraw/excalidraw/data/encryption";
-import { getVisibleSceneBounds } from "@excalidraw/element";
-import { newElementWith } from "@excalidraw/element";
+import {
+  getVisibleSceneBounds,
+  isMindmapEdgeElement,
+  isMindmapNodeElement,
+  newElementWith,
+} from "@excalidraw/element";
 import { isImageElement, isInitializedImageElement } from "@excalidraw/element";
 import { AbortError } from "@excalidraw/excalidraw/errors";
 import { t } from "@excalidraw/excalidraw/i18n";
@@ -30,8 +34,10 @@ import throttle from "lodash.throttle";
 import { PureComponent } from "react";
 
 import { bumpElementVersions } from "@excalidraw/excalidraw/data/restore";
+import { reconcileMindmapElements } from "@excalidraw/excalidraw/data/reconcile";
 
 import type {
+  MindmapReconciliationConflict,
   ReconciledExcalidrawElement,
   RemoteExcalidrawElement,
 } from "@excalidraw/excalidraw/data/reconcile";
@@ -142,6 +148,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
   private socketInitializationTimer?: number;
   private lastBroadcastedOrReceivedSceneVersion: number = -1;
   private collaborators = new Map<SocketId, Collaborator>();
+  private reportedMindmapConflicts = new Set<string>();
   /** the socket ids of the users following the current user */
   private followedBy = new Set<SocketId>();
 
@@ -412,6 +419,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
 
   private destroySocketClient = (opts?: { isUnload: boolean }) => {
     this.lastBroadcastedOrReceivedSceneVersion = -1;
+    this.reportedMindmapConflicts.clear();
     this.portal.close();
     this.fileManager.reset();
     this.followedBy = new Set();
@@ -781,6 +789,23 @@ class Collab extends PureComponent<CollabProps, CollabState> {
       existingElements,
     );
 
+    const remoteMindmapGraphIds = new Set(
+      remoteElements
+        .filter(
+          (element) =>
+            isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+        )
+        .map((element) => element.graphId),
+    );
+    if (remoteMindmapGraphIds.size) {
+      const mindmapResult = reconcileMindmapElements(
+        reconciledElements,
+        remoteMindmapGraphIds,
+      );
+      reconciledElements = mindmapResult.elements;
+      this.reportMindmapConflicts(mindmapResult.conflicts);
+    }
+
     // Avoid broadcasting to the rest of the collaborators the scene
     // we just received!
     // Note: this needs to be set before updating the scene as it
@@ -790,6 +815,47 @@ class Collab extends PureComponent<CollabProps, CollabState> {
     );
 
     return reconciledElements;
+  };
+
+  private reportMindmapConflicts = (
+    conflicts: readonly MindmapReconciliationConflict[],
+  ) => {
+    for (const conflict of conflicts) {
+      const key = `${conflict.graphId}:${conflict.nodeIds.join(",")}`;
+      if (this.reportedMindmapConflicts.has(key)) {
+        continue;
+      }
+      this.reportedMindmapConflicts.add(key);
+      const nodeIds = [...conflict.nodeIds];
+      this.setErrorIndicator(
+        t("errors.mindmapConflict", {
+          nodes: nodeIds.slice(0, 3).join(", "),
+        }),
+        () => this.focusMindmapConflict(nodeIds),
+      );
+    }
+  };
+
+  private focusMindmapConflict = (nodeIds: readonly string[]) => {
+    const elements = this.getSceneElementsIncludingDeleted().filter(
+      (element) => !element.isDeleted && nodeIds.includes(element.id),
+    );
+    if (!elements.length) {
+      return;
+    }
+    this.excalidrawAPI.updateScene({
+      appState: {
+        selectedElementIds: Object.fromEntries(
+          elements.map((element) => [element.id, true]),
+        ),
+        selectedLinearElement: null,
+      },
+    });
+    this.excalidrawAPI.setViewport({
+      target: elements,
+      fit: "contain",
+      animation: true,
+    });
   };
 
   private loadImageFiles = throttle(async () => {
@@ -1043,15 +1109,23 @@ class Collab extends PureComponent<CollabProps, CollabState> {
 
   getActiveRoomLink = () => this.state.activeRoomLink;
 
-  setErrorIndicator = (errorMessage: string | null) => {
+  setErrorIndicator = (
+    errorMessage: string | null,
+    onClick: (() => void) | null = null,
+  ) => {
     appJotaiStore.set(collabErrorIndicatorAtom, {
       message: errorMessage,
+      onClick,
       nonce: Date.now(),
     });
   };
 
   resetErrorIndicator = (resetDialogNotifiedErrors = false) => {
-    appJotaiStore.set(collabErrorIndicatorAtom, { message: null, nonce: 0 });
+    appJotaiStore.set(collabErrorIndicatorAtom, {
+      message: null,
+      onClick: null,
+      nonce: 0,
+    });
     if (resetDialogNotifiedErrors) {
       this.setState({
         dialogNotifiedErrors: {},

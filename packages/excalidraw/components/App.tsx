@@ -150,6 +150,8 @@ import {
   isIframeElement,
   isIframeLikeElement,
   isMagicFrameElement,
+  isMindmapEdgeElement,
+  isMindmapNodeElement,
   isTextBindableContainer,
   isElbowArrow,
   isBindableElement,
@@ -331,6 +333,11 @@ import {
   actionToggleArrowBinding,
   actionToggleMidpointSnapping,
   actionToggleCropEditor,
+  actionMindmapCreateChild,
+  actionMindmapCreateSibling,
+  actionMindmapToggleCollapse,
+  actionMindmapDeletePreservingChildren,
+  actionMindmapPromote,
 } from "../actions";
 import { actionWrapTextInContainer } from "../actions/actionBoundText";
 import { actionPaste } from "../actions/actionClipboard";
@@ -344,6 +351,7 @@ import {
 import { createRedoAction, createUndoAction } from "../actions/actionHistory";
 import { actionTextAutoResize } from "../actions/actionTextAutoResize";
 import { actionToggleViewMode } from "../actions/actionToggleViewMode";
+import { actionToggleShapeSwitch } from "../actions/actionToggleShapeSwitch";
 import { ActionManager } from "../actions/manager";
 import { actions } from "../actions/register";
 import { getShortcutFromShortcutName } from "../actions/shortcuts";
@@ -452,6 +460,7 @@ import { AppCursor } from "./App.cursor";
 import { AppDrawShape } from "./App.drawshape";
 import { AppDuplicate } from "./App.duplicate";
 import { AppFlowchart } from "./App.flowchart";
+import { AppMindmap } from "./App.mindmap";
 import { AppPan } from "./App.pan";
 import { AppViewport, RIGHT_SIDEBAR_WIDTH } from "./App.viewport";
 import { AppWheel } from "./App.wheel";
@@ -469,7 +478,7 @@ import { StaticCanvas, InteractiveCanvas } from "./canvases";
 import NewElementCanvas from "./canvases/NewElementCanvas";
 import { isPointHittingLink } from "./hyperlink/helpers";
 import { CursorHint, CursorHints } from "./CursorHint";
-import { MagicIcon, copyIcon, fullscreenIcon } from "./icons";
+import { MagicIcon, PlusIcon, copyIcon, fullscreenIcon } from "./icons";
 import { AppStateObserver, type OnStateChange } from "./AppStateObserver";
 
 import { findShapeByKey, TOGGLE_TOOLS } from "./Tools";
@@ -491,6 +500,7 @@ import type {
   AppClassProperties,
   AppProps,
   AppState,
+  ElementRenderOverride,
   ElementRenderOffsets,
   ElementRenderOverrides,
   BinaryFileData,
@@ -718,6 +728,7 @@ class App extends React.Component<AppProps, AppState> {
   public duplicate: AppDuplicate = new AppDuplicate(this);
   public toolDrag: AppToolDrag = new AppToolDrag(this);
   public flowchart: AppFlowchart = new AppFlowchart(this);
+  public mindmap: AppMindmap = new AppMindmap(this);
   public cursor: AppCursor = new AppCursor(this);
   public arrowText: AppArrowText = new AppArrowText(this);
   public pan: AppPan = new AppPan(this, {
@@ -736,6 +747,7 @@ class App extends React.Component<AppProps, AppState> {
 
   hitLinkElement?: NonDeletedExcalidrawElement;
   lastPointerDownEvent: React.PointerEvent<HTMLElement> | null = null;
+  private touchMindmapContextMenuAllowed: boolean | null = null;
   /**
    * the handle of the resize in progress while `state.isResizing` — for UI
    * that words itself by handle (a sticky note's corners resize
@@ -798,6 +810,11 @@ class App extends React.Component<AppProps, AppState> {
 
   api: ExcalidrawImperativeAPI;
   private elementRenderOverrides: ElementRenderOverrides = new Map();
+  private mindmapDragOpacityIds = new Set<string>();
+  private mindmapDragOpacityPrevious = new Map<
+    string,
+    ElementRenderOverride | undefined
+  >();
   /** offsets of `elementRenderOverrides`; keeps its identity while they don't change */
   private elementRenderOffsets: ElementRenderOffsets = new Map();
   private renderOverridesUpdatePending = false;
@@ -2409,6 +2426,15 @@ class App extends React.Component<AppProps, AppState> {
             this.state.cursorButton === "down");
 
     const firstSelectedElement = selectedElements[0];
+    const hoveredMindmapNode = Object.keys(this.state.hoveredElementIds)
+      .map((id) => this.scene.getNonDeletedElement(id))
+      .find(isMindmapNodeElement);
+    const mindmapNodeForControls = hoveredMindmapNode
+      ? hoveredMindmapNode
+      : selectedElements.length === 1 &&
+        isMindmapNodeElement(firstSelectedElement)
+      ? firstSelectedElement
+      : null;
 
     const showShapeSwitchPanel =
       editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
@@ -2559,6 +2585,64 @@ class App extends React.Component<AppProps, AppState> {
                                   this.updateEmbedValidationStatus
                                 }
                               />
+                            )}
+                          {this.isDefaultUIEnabled() &&
+                            mindmapNodeForControls &&
+                            this.mindmap.canEditNode(
+                              mindmapNodeForControls.id,
+                            ) &&
+                            !this.state.openDialog && (
+                              <ElementCanvasButtons
+                                element={mindmapNodeForControls}
+                                elementsMap={renderableElementsMap}
+                                layoutDirection={this.mindmap.getLayoutDirection(
+                                  mindmapNodeForControls.graphId,
+                                )}
+                              >
+                                <ElementCanvasButton
+                                  isMobile={
+                                    this.editorInterface.formFactor !==
+                                    "desktop"
+                                  }
+                                  title={t("labels.addMindmapChild")}
+                                  icon={PlusIcon}
+                                  checked={false}
+                                  onChange={() =>
+                                    this.mindmap.createChild(
+                                      mindmapNodeForControls.id,
+                                    )
+                                  }
+                                />
+                                {this.mindmap.hasChildren(
+                                  mindmapNodeForControls.id,
+                                ) && (
+                                  <ElementCanvasButton
+                                    isMobile={
+                                      this.editorInterface.formFactor !==
+                                      "desktop"
+                                    }
+                                    title={t(
+                                      mindmapNodeForControls.collapsed
+                                        ? "labels.expandMindmap"
+                                        : "labels.collapseMindmap",
+                                    )}
+                                    icon={
+                                      <span aria-hidden="true">
+                                        {mindmapNodeForControls.collapsed
+                                          ? "▸"
+                                          : "▾"}
+                                      </span>
+                                    }
+                                    checked={mindmapNodeForControls.collapsed}
+                                    onChange={() =>
+                                      this.mindmap.executeTreeCommand(
+                                        { type: "toggleCollapse" },
+                                        mindmapNodeForControls.id,
+                                      )
+                                    }
+                                  />
+                                )}
+                              </ElementCanvasButtons>
                             )}
                           {this.isDefaultUIEnabled() &&
                             this.props.aiEnabled !== false &&
@@ -2746,7 +2830,12 @@ class App extends React.Component<AppProps, AppState> {
                             onClick={this.handleCanvasClick}
                             onPointerMove={this.handleCanvasPointerMove}
                             onPointerUp={this.handleCanvasPointerUp}
-                            onPointerCancel={this.removePointer}
+                            onPointerCancel={(event) => {
+                              this.removePointer(event);
+                              this.maybeCleanupAfterMissingPointerUp(
+                                event.nativeEvent,
+                              );
+                            }}
                             onTouchMove={this.handleTouchMove}
                             onPointerDown={this.handleCanvasPointerDown}
                             onDoubleClick={this.handleCanvasDoubleClick}
@@ -3347,6 +3436,7 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     this.flowchart.clear();
+    this.mindmap.clear();
 
     // These components install their own DOM listeners rather than going
     // through App's input handlers, so they must be explicitly unmounted.
@@ -4515,6 +4605,9 @@ class App extends React.Component<AppProps, AppState> {
     if (!this.isInteractionEnabled()) {
       return;
     }
+    if (event.touches.length > 1) {
+      this.mindmap.cancelTouchDrag();
+    }
 
     // fix for Apple Pencil Scribble (do not prevent for other devices)
     if (isIOS) {
@@ -5116,6 +5209,7 @@ class App extends React.Component<AppProps, AppState> {
       // the browser took the pointer over (scroll, palm rejection) — no
       // pointerup will follow, so the armed bucket fill must not commit
       this.bucketFill.cancel();
+      this.mindmap.cancelTouchDrag();
     }
 
     const wasMultiTouchGesture = gesture.pointers.size >= 2;
@@ -5367,6 +5461,9 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (elements) {
+        if (captureUpdate === CaptureUpdateAction.NEVER) {
+          this.mindmap.handleRemoteSceneUpdate(elements);
+        }
         this.scene.replaceAllElements(elements);
       }
 
@@ -5399,6 +5496,27 @@ class App extends React.Component<AppProps, AppState> {
     this.renderOverridesUpdatePending = true;
     // Preserve AppState identity and explicitly request a visual-only commit.
     this.forceUpdate();
+  };
+
+  /** Applies transient opacity to the source branch during a mindmap drag. */
+  public setMindmapDragOpacity = (ids: readonly string[] | null) => {
+    const next = new Map(this.elementRenderOverrides);
+    this.mindmapDragOpacityIds.forEach((id) => {
+      const previous = this.mindmapDragOpacityPrevious.get(id);
+      if (previous) {
+        next.set(id, previous);
+      } else {
+        next.delete(id);
+      }
+    });
+    this.mindmapDragOpacityIds = new Set(ids ?? []);
+    this.mindmapDragOpacityPrevious.clear();
+    this.mindmapDragOpacityIds.forEach((id) => {
+      const previous = next.get(id);
+      this.mindmapDragOpacityPrevious.set(id, previous);
+      next.set(id, { ...(previous ?? {}), opacity: 24 });
+    });
+    this.setElementRenderOverrides(next.size ? next : null);
   };
 
   public applyDeltas = (
@@ -5650,6 +5768,10 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (this.state.openDialog?.name === "elementLinkSelector") {
+        return;
+      }
+
+      if (this.mindmap.handleKeyEvent(event)) {
         return;
       }
 
@@ -5979,6 +6101,9 @@ class App extends React.Component<AppProps, AppState> {
   );
 
   private onKeyUp = withBatchedUpdates((event: KeyboardEvent) => {
+    if (this.mindmap.handleKeyUp(event)) {
+      return;
+    }
     if (!this.isInteractionEnabled()) {
       return;
     }
@@ -6176,6 +6301,12 @@ class App extends React.Component<AppProps, AppState> {
             lastActiveTool: this.state.activeTool,
           })
         : updateActiveTool(this.state, tool);
+    if (nextActiveTool.type !== this.state.activeTool.type) {
+      this.mindmap.cancelDrag();
+    }
+    if (nextActiveTool.type !== "mindmap") {
+      this.mindmap.clearHover();
+    }
     if (nextActiveTool.type === "hand") {
       this.cursor.set(CURSOR_TYPE.GRAB);
     } else if (!this.pan.isSpaceHeld()) {
@@ -6203,6 +6334,10 @@ class App extends React.Component<AppProps, AppState> {
         // only the text tool offers arrow-endpoint binding, and the highlight
         // is refreshed on pointermove — don't leave a stale one behind
         hoveredArrowTextAnchor: null,
+        ...(nextActiveTool.type !== "mindmap" &&
+        Object.keys(prevState.hoveredElementIds).length
+          ? { hoveredElementIds: {} }
+          : {}),
       } as const;
 
       if (nextActiveTool.type === "freedraw") {
@@ -6445,6 +6580,7 @@ class App extends React.Component<AppProps, AppState> {
 
         const isDeleted = !nextOriginalText.trim();
         updateElement(nextOriginalText, isDeleted);
+        const didCreateMindmapNode = this.mindmap.handleTextSubmit(element);
 
         // keyboard-submit keeps focus on the edited object. For bound text, keep
         // the container selected even if the text becomes empty and is deleted.
@@ -6481,7 +6617,8 @@ class App extends React.Component<AppProps, AppState> {
           ]);
         }
 
-        if (!isDeleted || isExistingElement) {
+        // 新建脑图节点即使没有文字，也需要记录创建历史。
+        if (!isDeleted || isExistingElement || didCreateMindmapNode) {
           this.store.scheduleCapture();
         }
 
@@ -6726,6 +6863,7 @@ class App extends React.Component<AppProps, AppState> {
     const iframeLikes: Ordered<NonDeleted<ExcalidrawIframeLikeElement>>[] = [];
 
     const elementsMap = this.scene.getNonDeletedElementsMap();
+    const hiddenMindmapElementIds = this.scene.getMindmapHiddenElementIds();
 
     const elements = (
       opts?.includeBoundTextElement && opts?.includeLockedElements
@@ -6739,7 +6877,10 @@ class App extends React.Component<AppProps, AppState> {
                   !(isTextElement(element) && element.containerId)),
             )
     )
-      .filter((el) => this.hitElement(x, y, el))
+      .filter(
+        (el) =>
+          !hiddenMindmapElementIds.has(el.id) && this.hitElement(x, y, el),
+      )
       .filter((element) => {
         // hitting a frame's element from outside the frame is not considered a hit
         const containingFrame = getContainingFrame(element, elementsMap);
@@ -7198,6 +7339,13 @@ class App extends React.Component<AppProps, AppState> {
     ) {
       return;
     }
+    const mindmapScenePoint = viewportCoordsToSceneCoords(event, this.state);
+    if (
+      this.mindmap.handleDoubleClick(mindmapScenePoint.x, mindmapScenePoint.y)
+    ) {
+      return;
+    }
+
     // case: double-clicking with arrow/line tool selected would both create
     // text and enter multiElement mode
     if (this.state.multiElement) {
@@ -7829,6 +7977,8 @@ class App extends React.Component<AppProps, AppState> {
       y: scenePointerY,
     };
 
+    this.mindmap.handlePointerMove(scenePointerX, scenePointerY);
+
     this.updateMultiTouchGesture(event);
 
     if (
@@ -8210,14 +8360,28 @@ class App extends React.Component<AppProps, AppState> {
       this.state.openDialog?.name !== "elementLinkSelector"
     ) {
       const transformHandleType = getTransformHandleTypeFromCoords(
-        getCommonBounds(selectedElements),
+        getCommonBounds(
+          selectedElements.filter(
+            (element) =>
+              !this.scene.getMindmapHiddenElementIds().has(element.id),
+          ),
+        ),
         scenePointerX,
         scenePointerY,
         this.state.zoom,
         event.pointerType,
         this.editorInterface,
       );
-      if (transformHandleType) {
+      if (
+        transformHandleType &&
+        !(
+          transformHandleType === "rotation" &&
+          selectedElements.some(
+            (element) =>
+              isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+          )
+        )
+      ) {
         this.cursor.set(
           getCursorForResizingElement({
             transformHandleType,
@@ -8283,6 +8447,12 @@ class App extends React.Component<AppProps, AppState> {
             ? CURSOR_TYPE.TEXT
             : CURSOR_TYPE.CROSSHAIR,
         );
+      } else if (
+        hitElement &&
+        isMindmapEdgeElement(hitElement) &&
+        !this.mindmap.isCompleteMindmapSelection()
+      ) {
+        this.cursor.set(CURSOR_TYPE.POINTER);
       } else if (
         !event[KEYS.CTRL_OR_CMD] &&
         this.isHittingCommonBoundingBoxOfSelectedElements(
@@ -8546,6 +8716,7 @@ class App extends React.Component<AppProps, AppState> {
     // everything except the tool-usage path (laser & custom tools)
 
     const selectedElements = this.scene.getSelectedElements(this.state);
+    const selectedElementIdsBeforePointerDown = this.state.selectedElementIds;
 
     // If Ctrl is not held, ensure isBindingEnabled reflects the user preference.
     if (!event.ctrlKey) {
@@ -8661,7 +8832,10 @@ class App extends React.Component<AppProps, AppState> {
     if (selection?.anchorNode) {
       selection.removeAllRanges();
     }
-    this.maybeOpenContextMenuAfterPointerDownOnTouchDevices(event);
+    this.maybeOpenContextMenuAfterPointerDownOnTouchDevices(
+      event,
+      selectedElementIdsBeforePointerDown,
+    );
 
     //fires only once, if pen is detected, penMode is enabled
     //the user can disable this by toggling the penMode button
@@ -8797,6 +8971,12 @@ class App extends React.Component<AppProps, AppState> {
     if (this.handleSelectionOnPointerDown(event, pointerDownState)) {
       return;
     }
+
+    this.mindmap.preparePointerDown(pointerDownState, {
+      shiftKey: event.shiftKey,
+      pointerType: event.pointerType,
+      selectedElementIdsBeforePointerDown,
+    });
 
     const allowOnPointerDown =
       !this.state.penMode ||
@@ -8975,6 +9155,8 @@ class App extends React.Component<AppProps, AppState> {
       // mode this branch is unreachable:
       // `pan.start` swallows the pointer-down.
       this.bucketFill.handlePointerDown(scenePointer);
+    } else if (this.state.activeTool.type === TOOL_TYPE.mindmap) {
+      this.mindmap.handlePointerDown(pointerDownState);
     } else if (
       this.state.activeTool.type !== "eraser" &&
       this.state.activeTool.type !== "hand" &&
@@ -9079,6 +9261,7 @@ class App extends React.Component<AppProps, AppState> {
 
   private maybeOpenContextMenuAfterPointerDownOnTouchDevices = (
     event: React.PointerEvent<HTMLElement>,
+    selectedElementIdsBeforePointerDown: AppState["selectedElementIds"],
   ): void => {
     // deal with opening context menu on touch devices
     if (event.pointerType === "touch") {
@@ -9090,11 +9273,27 @@ class App extends React.Component<AppProps, AppState> {
         // context menu.
         invalidateContextMenu = true;
       } else {
+        const scenePoint = viewportCoordsToSceneCoords(event, this.state);
+        const hit = this.getElementAtPosition(scenePoint.x, scenePoint.y, {
+          includeBoundTextElement: true,
+        });
+        const node =
+          hit?.type === "text" && hit.containerId
+            ? this.scene.getNonDeletedElement(hit.containerId)
+            : hit;
+        const canOpenMindmapMenu =
+          this.editorInterface.formFactor === "desktop" ||
+          !isMindmapNodeElement(node) ||
+          (this.state.activeTool.type === "selection" &&
+            !!selectedElementIdsBeforePointerDown[node.id]);
+        this.touchMindmapContextMenuAllowed = isMindmapNodeElement(node)
+          ? canOpenMindmapMenu
+          : null;
         // open the context menu with the first touch's clientX and clientY
         // if the touch is not moving
         touchTimeout = this.ownerWindow.setTimeout(() => {
           touchTimeout = 0;
-          if (!invalidateContextMenu) {
+          if (!invalidateContextMenu && canOpenMindmapMenu) {
             this.handleCanvasContextMenu(event);
           }
         }, TOUCH_CTX_MENU_TIMEOUT);
@@ -9256,6 +9455,7 @@ class App extends React.Component<AppProps, AppState> {
         element: null,
         allHitElements: [],
         wasAddedToSelection: false,
+        replacedSelection: false,
         hasBeenDuplicated: false,
         arrowLabel: false,
         hasHitCommonBoundingBoxOfSelectedElements:
@@ -9393,13 +9593,27 @@ class App extends React.Component<AppProps, AppState> {
         }
       } else if (selectedElements.length > 1) {
         pointerDownState.resize.handleType = getTransformHandleTypeFromCoords(
-          getCommonBounds(selectedElements),
+          getCommonBounds(
+            selectedElements.filter(
+              (element) =>
+                !this.scene.getMindmapHiddenElementIds().has(element.id),
+            ),
+          ),
           pointerDownState.origin.x,
           pointerDownState.origin.y,
           this.state.zoom,
           event.pointerType,
           this.editorInterface,
         );
+        if (
+          pointerDownState.resize.handleType === "rotation" &&
+          selectedElements.some(
+            (element) =>
+              isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+          )
+        ) {
+          pointerDownState.resize.handleType = false;
+        }
       }
       if (pointerDownState.resize.handleType) {
         pointerDownState.resize.isResizing = true;
@@ -9583,6 +9797,7 @@ class App extends React.Component<AppProps, AppState> {
             (hitElement &&
               hitElement?.id !== this.state.selectedLinearElement?.elementId))
         ) {
+          pointerDownState.hit.replacedSelection = true;
           this.clearSelection(hitElement);
         }
 
@@ -9790,7 +10005,10 @@ class App extends React.Component<AppProps, AppState> {
     point: Readonly<{ x: number; y: number }>,
     selectedElements: readonly ExcalidrawElement[],
   ): boolean {
-    if (selectedElements.length < 2) {
+    const visibleSelectedElements = selectedElements.filter(
+      (element) => !this.scene.getMindmapHiddenElementIds().has(element.id),
+    );
+    if (visibleSelectedElements.length < 2) {
       return false;
     }
 
@@ -9801,7 +10019,7 @@ class App extends React.Component<AppProps, AppState> {
     );
     const boundsPadding =
       (DEFAULT_TRANSFORM_HANDLE_SPACING * 2) / this.state.zoom.value;
-    const [x1, y1, x2, y2] = getCommonBounds(selectedElements);
+    const [x1, y1, x2, y2] = getCommonBounds(visibleSelectedElements);
     return (
       point.x > x1 - boundsPadding - threshold &&
       point.x < x2 + boundsPadding + threshold &&
@@ -10587,6 +10805,9 @@ class App extends React.Component<AppProps, AppState> {
     pointerDownState: PointerDownState,
   ): (event: KeyboardEvent) => void {
     return withBatchedUpdates((event: KeyboardEvent) => {
+      if (this.mindmap.handlePointerKeyDown(pointerDownState, event)) {
+        return;
+      }
       if (this.maybeHandleResize(pointerDownState, event)) {
         return;
       }
@@ -10615,6 +10836,20 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
       const pointerCoords = viewportCoordsToSceneCoords(event, this.state);
+
+      if (
+        this.mindmap.handlePointerMoveFromPointerDown(
+          pointerDownState,
+          event,
+          pointerCoords,
+        )
+      ) {
+        return;
+      }
+
+      if (this.mindmap.shouldBlockNativePointer(pointerDownState)) {
+        return;
+      }
 
       if (this.state.activeLockedId) {
         this.setState({
@@ -11334,6 +11569,9 @@ class App extends React.Component<AppProps, AppState> {
               }
             }
 
+            const normalizedSelectedElementIds =
+              this.mindmap.normalizeMindmapSelection(nextSelectedElementIds);
+
             prevState = !shouldReuseSelection
               ? { ...prevState, selectedGroupIds: {}, editingGroupId: null }
               : prevState;
@@ -11342,7 +11580,7 @@ class App extends React.Component<AppProps, AppState> {
               ...selectGroupsForSelectedElements(
                 {
                   editingGroupId: prevState.editingGroupId,
-                  selectedElementIds: nextSelectedElementIds,
+                  selectedElementIds: normalizedSelectedElementIds,
                 },
                 this.scene.getNonDeletedElements(),
                 prevState,
@@ -11471,6 +11709,11 @@ class App extends React.Component<AppProps, AppState> {
       const sceneCoords = viewportCoordsToSceneCoords(
         { clientX: childEvent.clientX, clientY: childEvent.clientY },
         this.state,
+      );
+      const mindmapHandled = this.mindmap.handlePointerUp(
+        pointerDownState,
+        childEvent,
+        sceneCoords,
       );
 
       if (
@@ -11664,6 +11907,10 @@ class App extends React.Component<AppProps, AppState> {
         pointerDownState,
         childEvent,
       );
+
+      if (mindmapHandled) {
+        return;
+      }
 
       if (newElement?.type === "freedraw") {
         const pointerCoords = viewportCoordsToSceneCoords(
@@ -12531,6 +12778,28 @@ class App extends React.Component<AppProps, AppState> {
   private eraseElements = () => {
     let didChange = false;
 
+    const protectedIds = new Set<string>();
+    for (const id of this.elementsPendingErasure) {
+      const element = this.scene.getElement(id);
+      const container =
+        element?.type === "text" && element.containerId
+          ? this.scene.getElement(element.containerId)
+          : null;
+      if (
+        isMindmapNodeElement(element) ||
+        isMindmapEdgeElement(element) ||
+        isMindmapNodeElement(container)
+      ) {
+        protectedIds.add(id);
+      }
+    }
+    if (protectedIds.size) {
+      this.mindmap.notifyUnsupportedOperation();
+      this.elementsPendingErasure = new Set(
+        [...this.elementsPendingErasure].filter((id) => !protectedIds.has(id)),
+      );
+    }
+
     // Binding is double accounted on both elements and if one of them is
     // deleted, the binding should be removed
     this.elementsPendingErasure.forEach((id) => {
@@ -13256,6 +13525,16 @@ class App extends React.Component<AppProps, AppState> {
       return;
     }
 
+    if (
+      this.touchMindmapContextMenuAllowed === false &&
+      (pointer.pointerType === "touch" ||
+        (pointer.pointerType === undefined &&
+          this.lastPointerDownEvent?.pointerType === "touch" &&
+          gesture.pointers.size > 0))
+    ) {
+      return;
+    }
+
     // a context menu during a press (touch long-press) means the user is
     // not committing a bucket click
     this.bucketFill.cancel();
@@ -13740,6 +14019,20 @@ class App extends React.Component<AppProps, AppState> {
 
     if (this.state.viewModeEnabled) {
       return [actionCopy, ...options];
+    }
+
+    if (this.mindmap.getSelectedNode()) {
+      return [
+        actionMindmapCreateChild,
+        actionMindmapCreateSibling,
+        actionMindmapToggleCollapse,
+        actionMindmapPromote,
+        actionToggleShapeSwitch,
+        actionToggleElementLock,
+        CONTEXT_MENU_SEPARATOR,
+        { ...actionDeleteSelected, label: "labels.deleteMindmapSubtree" },
+        actionMindmapDeletePreservingChildren,
+      ];
     }
 
     const zIndexActions: ContextMenuItems =

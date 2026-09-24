@@ -40,6 +40,8 @@ import {
   isImageElement,
   isLinearElement,
   isLineElement,
+  isMindmapEdgeElement,
+  isMindmapNodeElement,
   maxBindingDistance_simple,
   isTextElement,
   LinearElementEditor,
@@ -73,6 +75,7 @@ import type {
   ExcalidrawFrameLikeElement,
   ExcalidrawImageElement,
   ExcalidrawLinearElement,
+  ExcalidrawMindmapEdgeElement,
   ExcalidrawTextElement,
   GroupId,
   NonDeleted,
@@ -1064,6 +1067,42 @@ const renderSelectionBorder = (
   context.restore();
 };
 
+const renderMindmapEdgeSelection = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  edge: ExcalidrawMindmapEdgeElement,
+  color: string,
+) => {
+  const [start, ...rest] = edge.points;
+  if (!start) {
+    return;
+  }
+
+  context.save();
+  context.translate(appState.scrollX + edge.x, appState.scrollY + edge.y);
+  context.strokeStyle = color;
+  context.lineWidth = edge.strokeWidth + 2 / appState.zoom.value;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.setLineDash([]);
+  context.beginPath();
+  context.moveTo(start[0], start[1]);
+  if (edge.routing === "curved" && edge.points.length === 4) {
+    context.bezierCurveTo(
+      rest[0][0],
+      rest[0][1],
+      rest[1][0],
+      rest[1][1],
+      rest[2][0],
+      rest[2][1],
+    );
+  } else {
+    rest.forEach((point) => context.lineTo(point[0], point[1]));
+  }
+  context.stroke();
+  context.restore();
+};
+
 const renderFrameHighlight = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
@@ -1666,6 +1705,10 @@ const _renderInteractiveScene = ({
   context.save();
   context.scale(appState.zoom.value, appState.zoom.value);
 
+  // Mindmap drag previews are transient controller state. They are rendered
+  // on this overlay canvas and never enter the Scene or collaboration delta.
+  app.mindmap.renderPreview(context, appState.scrollX, appState.scrollY);
+
   let editingLinearElement: NonDeleted<ExcalidrawLinearElement> | undefined =
     undefined;
 
@@ -1849,26 +1892,33 @@ const _renderInteractiveScene = ({
   if (
     !appState.multiElement &&
     !appState.newElement &&
-    !appState.selectedLinearElement?.isEditing
+    !appState.selectedLinearElement?.isEditing &&
+    !app.mindmap.isReparenting()
   ) {
+    const hiddenMindmapIds = app.scene.getMindmapHiddenElementIds();
+    const visibleSelectedElements = selectedElements.filter(
+      (element) => !hiddenMindmapIds.has(element.id),
+    );
     const showBoundingBox = hasBoundingBox(
-      selectedElements,
+      visibleSelectedElements,
       appState,
       editorInterface,
     );
 
     const isSingleLinearElementSelected =
-      selectedElements.length === 1 && isLinearElement(selectedElements[0]);
+      visibleSelectedElements.length === 1 &&
+      isLinearElement(visibleSelectedElements[0]);
     // render selected linear element points
     if (
       isSingleLinearElementSelected &&
-      appState.selectedLinearElement?.elementId === selectedElements[0].id &&
-      !selectedElements[0].locked
+      appState.selectedLinearElement?.elementId ===
+        visibleSelectedElements[0].id &&
+      !visibleSelectedElements[0].locked
     ) {
       renderLinearPointHandles(
         context,
         appState,
-        selectedElements[0] as NonDeleted<ExcalidrawLinearElement>,
+        visibleSelectedElements[0] as NonDeleted<ExcalidrawLinearElement>,
         elementsMap,
       );
     }
@@ -1879,11 +1929,20 @@ const _renderInteractiveScene = ({
 
     if (showBoundingBox) {
       // Optimisation for finding quickly relevant element ids
-      const locallySelectedIds = arrayToMap(selectedElements);
+      const locallySelectedIds = arrayToMap(visibleSelectedElements);
+      const selectedMindmapRootGraphIds = new Set(
+        visibleSelectedElements
+          .filter(isMindmapNodeElement)
+          .filter((node) => node.role === "root")
+          .map((node) => node.graphId),
+      );
 
       const selections: ElementSelectionBorder[] = [];
 
       for (const element of elementsMap.values()) {
+        if (hiddenMindmapIds.has(element.id)) {
+          continue;
+        }
         const selectionColors = [];
         const remoteClients = renderConfig.remoteSelectedElementIds.get(
           element.id,
@@ -1900,7 +1959,9 @@ const _renderInteractiveScene = ({
         ) {
           // local user
           if (
-            locallySelectedIds.has(element.id) &&
+            (locallySelectedIds.has(element.id) ||
+              (isMindmapEdgeElement(element) &&
+                selectedMindmapRootGraphIds.has(element.graphId))) &&
             !isSelectedViaGroup(appState, element)
           ) {
             selectionColors.push(selectionColor);
@@ -1920,6 +1981,15 @@ const _renderInteractiveScene = ({
         }
 
         if (selectionColors.length) {
+          if (isMindmapEdgeElement(element)) {
+            renderMindmapEdgeSelection(
+              context,
+              appState,
+              element,
+              selectionColors[0],
+            );
+            continue;
+          }
           const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(
             element,
             elementsMap,
@@ -1985,10 +2055,10 @@ const _renderInteractiveScene = ({
     context.save();
     context.translate(appState.scrollX, appState.scrollY);
 
-    if (selectedElements.length === 1) {
+    if (visibleSelectedElements.length === 1) {
       context.fillStyle = getThemedColor("#fff", appState.theme);
       const transformHandles = getTransformHandles(
-        selectedElements[0],
+        visibleSelectedElements[0],
         appState.zoom,
         elementsMap,
         "mouse", // when we render we don't know which pointer type so use mouse,
@@ -2007,7 +2077,7 @@ const _renderInteractiveScene = ({
           renderConfig,
           appState,
           transformHandles,
-          selectedElements[0].angle,
+          visibleSelectedElements[0].angle,
         );
       }
 
@@ -2025,14 +2095,17 @@ const _renderInteractiveScene = ({
         }
       }
     } else if (
-      selectedElements.length > 1 &&
+      visibleSelectedElements.length > 1 &&
       !appState.isRotating &&
-      !selectedElements.some((el) => el.locked)
+      !visibleSelectedElements.some((el) => el.locked)
     ) {
       const dashedLinePadding =
         (DEFAULT_TRANSFORM_HANDLE_SPACING * 2) / appState.zoom.value;
       context.fillStyle = getThemedColor("#fff", appState.theme);
-      const [x1, y1, x2, y2] = getCommonBounds(selectedElements, elementsMap);
+      const [x1, y1, x2, y2] = getCommonBounds(
+        visibleSelectedElements,
+        elementsMap,
+      );
       const initialLineDash = context.getLineDash();
       context.setLineDash([2 / appState.zoom.value]);
       const lineWidth = context.lineWidth;
@@ -2055,14 +2128,18 @@ const _renderInteractiveScene = ({
         0 as Radians,
         appState.zoom,
         "mouse",
-        isFrameSelected
+        isFrameSelected ||
+          visibleSelectedElements.some(
+            (element) =>
+              isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+          )
           ? {
               ...getOmitSidesForEditorInterface(editorInterface),
               rotation: true,
             }
           : getOmitSidesForEditorInterface(editorInterface),
       );
-      if (selectedElements.some((element) => !element.locked)) {
+      if (visibleSelectedElements.some((element) => !element.locked)) {
         renderTransformHandles(
           context,
           renderConfig,

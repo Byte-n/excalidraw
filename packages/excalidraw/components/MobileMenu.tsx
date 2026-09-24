@@ -9,6 +9,7 @@ import { SCROLLBAR_WIDTH, SCROLLBAR_MARGIN } from "../scene/scrollbars";
 
 import { ExitViewModeButton, MobileShapeActions } from "./Actions";
 import { MobileToolbar } from "./MobileToolbar";
+import { MobileMindmapActions } from "./MobileMindmapActions";
 import { FixedSideContainer } from "./FixedSideContainer";
 
 import { Island } from "./Island";
@@ -195,6 +196,8 @@ export const MobileMenu = ({
               {scrollBackToContentButton}
             </div>
           )}
+
+          <MobileMindmapActions app={app} />
 
           <MobileShapeActions
             appState={appState}

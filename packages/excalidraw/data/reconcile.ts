@@ -4,11 +4,21 @@ import { arrayToMap, isDevEnv, isTestEnv } from "@excalidraw/common";
 
 import {
   orderByFractionalIndex,
+  buildMindmapGraphIndex,
+  computeBoundTextPosition,
+  isMindmapEdgeElement,
+  isMindmapNodeElement,
+  layoutMindmap,
+  repairMindmapElements,
   syncInvalidIndices,
   validateFractionalIndices,
 } from "@excalidraw/element";
 
-import type { OrderedExcalidrawElement } from "@excalidraw/element/types";
+import type {
+  ExcalidrawElement,
+  ExcalidrawTextElementWithContainer,
+  OrderedExcalidrawElement,
+} from "@excalidraw/element/types";
 
 import type { MakeBrand } from "@excalidraw/common/utility-types";
 
@@ -19,6 +29,16 @@ export type ReconciledExcalidrawElement = OrderedExcalidrawElement &
 
 export type RemoteExcalidrawElement = OrderedExcalidrawElement &
   MakeBrand<"RemoteExcalidrawElement">;
+
+export type MindmapReconciliationConflict = {
+  graphId: string;
+  nodeIds: readonly string[];
+};
+
+export type MindmapReconciliationResult = {
+  elements: ReconciledExcalidrawElement[];
+  conflicts: readonly MindmapReconciliationConflict[];
+};
 
 export const shouldDiscardRemoteElement = (
   localAppState: AppState,
@@ -115,4 +135,132 @@ export const reconcileElements = (
   syncInvalidIndices(orderedElements);
 
   return orderedElements as ReconciledExcalidrawElement[];
+};
+
+const hasMindmapStructureChanged = (
+  before: ExcalidrawElement | undefined,
+  after: ExcalidrawElement | undefined,
+) => {
+  if (!before || !after) {
+    return false;
+  }
+  if (isMindmapNodeElement(before) && isMindmapNodeElement(after)) {
+    return (
+      before.graphId !== after.graphId ||
+      before.role !== after.role ||
+      before.parentId !== after.parentId ||
+      before.order !== after.order ||
+      before.isDeleted !== after.isDeleted
+    );
+  }
+  if (isMindmapEdgeElement(before) && isMindmapEdgeElement(after)) {
+    return (
+      before.graphId !== after.graphId ||
+      before.parentId !== after.parentId ||
+      before.childId !== after.childId ||
+      before.isDeleted !== after.isDeleted
+    );
+  }
+  return false;
+};
+
+/**
+ * Reconciles the complete Mindmap graphs touched by a remote update. Element
+ * versions decide which fields win first; this pass then repairs the merged
+ * graph and derives all edges, positions, and bound labels from that result.
+ * It never mutates the scene or records history.
+ */
+export const reconcileMindmapElements = (
+  elements: readonly OrderedExcalidrawElement[],
+  graphIds: readonly string[] | ReadonlySet<string>,
+): MindmapReconciliationResult => {
+  const affectedGraphIds = new Set(graphIds);
+  if (!affectedGraphIds.size) {
+    return {
+      elements: elements as ReconciledExcalidrawElement[],
+      conflicts: [],
+    };
+  }
+
+  const before = new Map(elements.map((element) => [element.id, element]));
+  const repaired = repairMindmapElements(elements);
+  const updated = new Map(repaired.map((element) => [element.id, element]));
+  const conflicts: MindmapReconciliationConflict[] = [];
+
+  for (const graphId of [...affectedGraphIds].sort()) {
+    const graph = repaired.filter(
+      (element) =>
+        !element.isDeleted &&
+        (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+        element.graphId === graphId,
+    );
+    const nodes = graph.filter(isMindmapNodeElement);
+    if (!nodes.length) {
+      continue;
+    }
+
+    const changedNodeIds = new Set<string>();
+    for (const element of repaired) {
+      if (
+        (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+        element.graphId === graphId &&
+        hasMindmapStructureChanged(before.get(element.id), element)
+      ) {
+        changedNodeIds.add(
+          isMindmapNodeElement(element) ? element.id : element.childId,
+        );
+      }
+    }
+
+    try {
+      const index = buildMindmapGraphIndex(graph, graphId);
+      const layout = layoutMindmap(index);
+      for (const element of [...layout.elements, ...layout.edges]) {
+        updated.set(element.id, element);
+      }
+
+      for (const element of repaired) {
+        if (
+          !element.isDeleted &&
+          element.type === "text" &&
+          element.containerId
+        ) {
+          const container = updated.get(element.containerId);
+          if (
+            container &&
+            isMindmapNodeElement(container) &&
+            container.graphId === graphId
+          ) {
+            updated.set(element.id, {
+              ...element,
+              ...computeBoundTextPosition(
+                container,
+                element as ExcalidrawTextElementWithContainer,
+                updated,
+              ),
+            });
+          }
+        }
+      }
+    } catch {
+      // A malformed remote graph must not prevent unrelated remote changes
+      // from being applied. The repaired elements remain the best available
+      // deterministic state and are surfaced as a conflict below.
+      nodes.forEach((node) => changedNodeIds.add(node.id));
+    }
+
+    if (changedNodeIds.size) {
+      conflicts.push({
+        graphId,
+        nodeIds: [...changedNodeIds].sort(),
+      });
+    }
+  }
+
+  return {
+    elements: repaired.map(
+      (element) => updated.get(element.id) ?? element,
+    ) as ReconciledExcalidrawElement[],
+    conflicts,
+  };
 };
