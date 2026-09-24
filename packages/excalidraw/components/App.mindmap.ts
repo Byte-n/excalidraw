@@ -1,9 +1,13 @@
 import { DRAGGING_THRESHOLD, getFontString, KEYS } from "@excalidraw/common";
-import { generateKeyBetween } from "@excalidraw/fractional-indexing";
+import {
+  generateKeyBetween,
+  generateNKeysBetween,
+} from "@excalidraw/fractional-indexing";
 import { pointFrom } from "@excalidraw/math";
 
 import {
   applyMindmapTreeCommand,
+  bumpVersion,
   buildMindmapGraphIndex,
   CaptureUpdateAction,
   computeBoundTextPosition,
@@ -15,7 +19,9 @@ import {
   getMindmapSubtreeIds,
   layoutMindmap,
   navigateMindmap,
+  newElement,
   newElementWith,
+  newLinearElement,
   newMindmapNodeElement,
   reparentMindmapNodes,
   repairMindmapElements,
@@ -51,13 +57,16 @@ type MindmapDragSession = {
   nodeIds: readonly string[];
   graphIds: readonly string[];
   elementIds: ReadonlySet<string>;
-  initialElements: ReadonlyMap<string, ExcalidrawElement>;
+  initialElements: ReadonlyMap<string, NonDeletedExcalidrawElement>;
   origin: { x: number; y: number };
   offset: { x: number; y: number };
   target: MindmapDropTarget | null;
   paused: boolean;
   invalid: boolean;
   previewElements: readonly ExcalidrawElement[];
+  copyMode: "graph" | "subtree" | null;
+  duplicated: boolean;
+  unsupportedAltNotified: boolean;
 };
 
 type MindmapDragCandidate = {
@@ -65,6 +74,7 @@ type MindmapDragCandidate = {
   nodeIds: readonly string[];
   graphIds: readonly string[];
   elementIds: ReadonlySet<string>;
+  copyMode: "graph" | "subtree" | null;
 };
 
 const unsupportedSelectionActions = new Set<ActionName>([
@@ -106,6 +116,14 @@ const unsupportedSelectionActions = new Set<ActionName>([
   "ungroup",
   "wrapSelectionInFrame",
   "wrapTextInContainer",
+]);
+
+const lockedMindmapMutationActions = new Set<ActionName>([
+  "cut",
+  "deleteSelectedElements",
+  "duplicateSelection",
+  "hyperlink",
+  "toggleShapeSwitch",
 ]);
 
 /**
@@ -256,17 +274,52 @@ export class AppMindmap {
       session.offset = rawOffset;
       session.paused = false;
     }
-    if (event.altKey) {
-      if (session.mode === "move") {
-        this.restoreMoveElements(session);
+    if (event.altKey && !session.duplicated) {
+      if (session.copyMode) {
+        if (session.mode === "move") {
+          this.restoreMoveElements(session);
+        }
+        if (
+          this.duplicateDragSession(
+            session,
+            pointerDownState,
+            event,
+            scenePoint,
+          )
+        ) {
+          session.offset = { x: 0, y: 0 };
+          session.target = null;
+          session.paused = false;
+          session.invalid = false;
+          session.previewElements = [];
+        } else {
+          session.target = null;
+          session.paused = true;
+          session.invalid = true;
+          session.previewElements = [];
+        }
+      } else {
+        if (session.mode === "move") {
+          this.restoreMoveElements(session);
+        }
+        if (!session.unsupportedAltNotified) {
+          this.notifyUnsupportedOperation();
+          session.unsupportedAltNotified = true;
+        }
+        session.target = null;
+        session.paused = true;
+        session.invalid = true;
+        session.previewElements = [];
+        if (session.mode === "reparent") {
+          this.updateDragOpacity(session.elementIds);
+        }
       }
+    } else if (session.duplicated) {
+      this.updateMoveElements(session);
       session.target = null;
-      session.paused = true;
-      session.invalid = true;
+      session.paused = false;
+      session.invalid = false;
       session.previewElements = [];
-      if (session.mode === "reparent") {
-        this.updateDragOpacity(session.elementIds);
-      }
     } else if (session.mode === "reparent") {
       const target = session.paused
         ? null
@@ -336,7 +389,7 @@ export class AppMindmap {
     } else if (
       event.type === "pointerup" &&
       session.mode === "move" &&
-      !event.altKey
+      (session.duplicated || !event.altKey)
     ) {
       if (session.offset.x !== 0 || session.offset.y !== 0) {
         this.app.syncActionResult({
@@ -347,7 +400,9 @@ export class AppMindmap {
       }
     }
     const committedMove =
-      event.type === "pointerup" && session.mode === "move" && !event.altKey;
+      event.type === "pointerup" &&
+      session.mode === "move" &&
+      (session.duplicated || !event.altKey);
     this.cancelDrag(!committedMove);
     // Mark the pointer as handled even when it was cancelled, preventing the
     // regular selection path from scheduling an empty history capture.
@@ -559,11 +614,11 @@ export class AppMindmap {
     if (this.app.state.activeTool.type === "mindmap") {
       return false;
     }
-    // Box selection normalizes Mindmap graphs to either the complete graph or
+    // Area selection normalizes Mindmap graphs to either the complete graph or
     // no graph. A complete graph is safe to move through the regular
     // selection path, including when the pointer starts on an ordinary shape.
     if (this.isCompleteMindmapSelection()) {
-      return false;
+      return this.hasLockedMindmapGraph();
     }
     return Boolean(
       pointerDownState.hit.element &&
@@ -573,30 +628,42 @@ export class AppMindmap {
   };
 
   preparePointerDown = (pointerDownState: PointerDownState) => {
-    const candidate = this.getDragCandidate(pointerDownState);
-    if (candidate?.mode === "move") {
-      const expanded = new Set(Object.keys(this.app.state.selectedElementIds));
-      for (const graphId of candidate.graphIds) {
-        this.app.scene.getNonDeletedElements().forEach((element) => {
-          if (
-            isMindmapNodeElement(element) &&
-            element.graphId === graphId &&
-            !isMindmapElementHidden(
-              element,
-              this.app.scene.getNonDeletedElementsMap(),
-            )
-          ) {
-            expanded.add(element.id);
-          }
-        });
-      }
-      this.app.setState({
-        selectedElementIds: Object.fromEntries(
-          [...expanded].map((id) => [id, true]),
-        ),
+    if (pointerDownState.hit.element) {
+      this.app.setState((prevState) => {
+        const candidate = this.getDragCandidate(
+          pointerDownState,
+          prevState.selectedElementIds,
+        );
+        if (candidate?.mode !== "move") {
+          return null;
+        }
+        const expanded = new Set(Object.keys(prevState.selectedElementIds));
+        const elements = this.app.scene.getNonDeletedElements();
+        const elementsMap = this.app.scene.getNonDeletedElementsMap();
+        for (const graphId of candidate.graphIds) {
+          elements.forEach((element) => {
+            if (
+              isMindmapNodeElement(element) &&
+              element.graphId === graphId &&
+              !isMindmapElementHidden(element, elementsMap)
+            ) {
+              expanded.add(element.id);
+            }
+          });
+        }
+        return {
+          selectedElementIds: Object.fromEntries(
+            [...expanded].map((id) => [id, true]),
+          ),
+        };
       });
     }
-    if (!this.shouldBlockNativePointer(pointerDownState)) {
+    if (
+      (pointerDownState.hit.replacedSelection &&
+        (!pointerDownState.hit.element ||
+          !this.isMindmapRelatedElement(pointerDownState.hit.element))) ||
+      !this.shouldBlockNativePointer(pointerDownState)
+    ) {
       return;
     }
     pointerDownState.drag.blockDragging = true;
@@ -718,12 +785,79 @@ export class AppMindmap {
       : null;
   };
 
+  /** Returns all nodes and bound labels for the graphs represented by a selection. */
+  getLockableMindmapElements = (
+    selectedElements = this.app.scene.getSelectedElements({
+      selectedElementIds: this.app.state.selectedElementIds,
+      includeBoundTextElement: true,
+      includeElementsInFrames: true,
+    }),
+  ): readonly NonDeletedExcalidrawElement[] => {
+    const graphIds = new Set(
+      selectedElements.flatMap((element) => {
+        if (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) {
+          return [element.graphId];
+        }
+        if (element.type === "text" && element.containerId) {
+          const container = this.app.scene.getNonDeletedElement(
+            element.containerId,
+          );
+          return container && isMindmapNodeElement(container)
+            ? [container.graphId]
+            : [];
+        }
+        return [];
+      }),
+    );
+    if (!graphIds.size) {
+      return [];
+    }
+    return this.app.scene
+      .getNonDeletedElements()
+      .filter(
+        (element) =>
+          (isMindmapNodeElement(element) && graphIds.has(element.graphId)) ||
+          (element.type === "text" &&
+            !!element.containerId &&
+            isMindmapNodeElement(
+              this.app.scene.getNonDeletedElement(element.containerId),
+            ) &&
+            graphIds.has(
+              (
+                this.app.scene.getNonDeletedElement(element.containerId) as
+                  | ExcalidrawMindmapNodeElement
+                  | undefined
+              )?.graphId ?? "",
+            )),
+      );
+  };
+
+  hasLockedMindmapGraph = (
+    selectedElements = this.app.scene.getSelectedElements({
+      selectedElementIds: this.app.state.selectedElementIds,
+      includeBoundTextElement: true,
+      includeElementsInFrames: true,
+    }),
+  ) => {
+    const lockable = this.getLockableMindmapElements(selectedElements);
+    const graphIds = new Set(
+      lockable.filter(isMindmapNodeElement).map((node) => node.graphId),
+    );
+    return lockable.some(
+      (element) =>
+        isMindmapNodeElement(element) &&
+        graphIds.has(element.graphId) &&
+        element.locked,
+    );
+  };
+
   canEditNode = (nodeId: string) => {
     const node = this.app.scene.getNonDeletedElement(nodeId);
     return (
       !!node &&
       isMindmapNodeElement(node) &&
       !node.locked &&
+      !this.hasLockedMindmapGraph([node]) &&
       !this.app.state.viewModeEnabled &&
       this.app.isInteractionEnabled() &&
       !this.app.props.isCollaborating &&
@@ -742,6 +876,7 @@ export class AppMindmap {
 
   private getDragCandidate = (
     pointerDownState: PointerDownState,
+    selectedElementIds = this.app.state.selectedElementIds,
   ): MindmapDragCandidate | null => {
     if (
       !this.app.isInteractionEnabled() ||
@@ -753,10 +888,10 @@ export class AppMindmap {
     }
     // Complete graphs are ordinary move selections. Structural Mindmap drag
     // is only used for direct, partial-node interactions.
-    if (this.isCompleteMindmapSelection()) {
+    if (this.isCompleteMindmapSelection(selectedElementIds)) {
       return null;
     }
-    const selected = this.app.scene.getSelectedElements(this.app.state);
+    const selected = this.app.scene.getSelectedElements({ selectedElementIds });
     const nodes = selected.filter(isMindmapNodeElement);
     const hit = pointerDownState.hit.element;
     // A drag must be anchored by this pointer-down hit. Using only the
@@ -772,7 +907,10 @@ export class AppMindmap {
     const hitIsSelected = nodes.some((node) => node.id === hitNode.id);
     const selectedNodes = hitIsSelected ? nodes : [hitNode];
     const graphIds = [...new Set(selectedNodes.map((node) => node.graphId))];
-    if (selectedNodes.some((node) => !this.canEditNode(node.id))) {
+    if (
+      selectedNodes.some((node) => !this.canEditNode(node.id)) ||
+      this.hasLockedMindmapGraph(selectedNodes)
+    ) {
       return null;
     }
     const hasOrdinarySelection = selected.some(
@@ -831,20 +969,32 @@ export class AppMindmap {
         elementIds.add(element.id);
       }
     });
+    const copyMode =
+      !hasOrdinarySelection &&
+      graphIds.length === 1 &&
+      hitIsSelected &&
+      (hitNode.role === "root"
+        ? selectedNodes.every((node) => node.graphId === hitNode.graphId)
+        : selectedNodes.length === 1)
+        ? hitNode.role === "root"
+          ? "graph"
+          : "subtree"
+        : null;
     return {
       mode: canReparent ? "reparent" : "move",
       nodeIds,
       graphIds,
       elementIds,
+      copyMode,
     };
   };
 
   /**
-   * Normalizes a box-selection result per Mindmap graph. A collapsed selected
+   * Normalizes an area-selection result per Mindmap graph. A collapsed selected
    * parent implicitly selects its hidden descendants. Each graph is either
    * fully selected (including edges and bound labels) or removed entirely.
    */
-  normalizeBoxSelection = (
+  normalizeMindmapSelection = (
     selectedElementIds: Readonly<Record<string, true>>,
   ): Record<string, true> => {
     const elements = this.app.scene.getNonDeletedElements();
@@ -909,9 +1059,11 @@ export class AppMindmap {
   };
 
   /** Whether every selected Mindmap graph is complete, including edges/text. */
-  isCompleteMindmapSelection = () => {
+  isCompleteMindmapSelection = (
+    selectedElementIds = this.app.state.selectedElementIds,
+  ) => {
     const elements = this.app.scene.getNonDeletedElements();
-    const selected = new Set(Object.keys(this.app.state.selectedElementIds));
+    const selected = new Set(Object.keys(selectedElementIds));
     const graphIds = new Set<string>();
     elements.forEach((element) => {
       if (
@@ -940,7 +1092,13 @@ export class AppMindmap {
               !!element.containerId &&
               nodeIds.has(element.containerId)),
         )
-        .every((element) => selected.has(element.id));
+        .every(
+          (element) =>
+            selected.has(element.id) ||
+            (element.type === "text" &&
+              !!element.containerId &&
+              selected.has(element.containerId)),
+        );
     });
   };
 
@@ -963,7 +1121,7 @@ export class AppMindmap {
       ...candidate,
       initialElements: new Map(
         this.app.scene
-          .getElementsIncludingDeleted()
+          .getNonDeletedElements()
           .filter((element) => candidate.elementIds.has(element.id))
           .map((element) => [element.id, element]),
       ),
@@ -973,6 +1131,8 @@ export class AppMindmap {
       paused: false,
       invalid: false,
       previewElements: [],
+      duplicated: false,
+      unsupportedAltNotified: false,
     };
     session.previewElements =
       session.mode === "move" ? [] : this.getReparentPreview(session);
@@ -1000,6 +1160,7 @@ export class AppMindmap {
     for (const node of index.nodes.values()) {
       if (
         excluded.has(node.id) ||
+        node.locked ||
         isMindmapElementHidden(node, this.app.scene.getNonDeletedElementsMap())
       ) {
         continue;
@@ -1136,6 +1297,62 @@ export class AppMindmap {
         y: initial.y + session.offset.y,
       });
     });
+  };
+
+  private duplicateDragSession = (
+    session: MindmapDragSession,
+    pointerDownState: PointerDownState,
+    event: PointerEvent,
+    scenePoint: { x: number; y: number },
+  ) => {
+    const elementsToDuplicate = [...session.initialElements.values()].filter(
+      (element) =>
+        !(
+          session.copyMode === "subtree" &&
+          isMindmapEdgeElement(element) &&
+          session.nodeIds.includes(element.childId) &&
+          !session.nodeIds.includes(element.parentId)
+        ),
+    );
+    const duplicatedElements = this.app.duplicate.duplicateDraggedSelection(
+      pointerDownState,
+      event,
+      elementsToDuplicate,
+    );
+    if (!duplicatedElements?.length) {
+      return false;
+    }
+
+    session.initialElements = new Map(
+      duplicatedElements.map((element) => [element.id, element]),
+    );
+    session.elementIds = new Set(
+      duplicatedElements.map((element) => element.id),
+    );
+    session.nodeIds = [];
+    session.graphIds = [
+      ...new Set(
+        duplicatedElements
+          .filter(isMindmapNodeElement)
+          .map((element) => element.graphId),
+      ),
+    ];
+    session.mode = "move";
+    session.duplicated = true;
+    session.origin = { ...scenePoint };
+    session.offset = { x: 0, y: 0 };
+    session.target = null;
+    session.paused = false;
+    session.invalid = false;
+    session.previewElements = [];
+    session.unsupportedAltNotified = false;
+
+    if (this.dragOpacityApplied) {
+      this.app.setMindmapDragOpacity(null);
+      this.dragOpacityApplied = false;
+      this.dimmedDragElementIds.clear();
+    }
+    return true;
   };
 
   private restoreMoveElements = (session: MindmapDragSession) => {
@@ -1324,6 +1541,199 @@ export class AppMindmap {
     this.startNodeEditing(node);
   }
 
+  /** Converts a node or a complete graph into ordinary Excalidraw elements. */
+  convertToShape = (nextType: "rectangle" | "diamond" | "ellipse"): boolean => {
+    const selectedElements = this.app.scene.getSelectedElements({
+      selectedElementIds: this.app.state.selectedElementIds,
+      includeBoundTextElement: true,
+      includeElementsInFrames: true,
+    });
+    if (this.hasLockedMindmapGraph(selectedElements)) {
+      this.notifyUnsupportedOperation();
+      return false;
+    }
+    const selectedIds = new Set(selectedElements.map((element) => element.id));
+    const selectedNodes = selectedElements.flatMap((element) => {
+      if (isMindmapNodeElement(element)) {
+        return [element];
+      }
+      if (element.type === "text" && element.containerId) {
+        const container = this.app.scene.getNonDeletedElement(
+          element.containerId,
+        );
+        return container && isMindmapNodeElement(container) ? [container] : [];
+      }
+      return [];
+    });
+    if (!selectedNodes.length) {
+      return false;
+    }
+
+    const elements = this.app.scene.getElementsIncludingDeleted();
+    const graphIds = [...new Set(selectedNodes.map((node) => node.graphId))];
+    const wholeGraphIds = new Set<string>();
+    const partialNodes: ExcalidrawMindmapNodeElement[] = [];
+    for (const graphId of graphIds) {
+      const index = buildMindmapGraphIndex(
+        this.app.scene.getNonDeletedElements(),
+        graphId,
+      );
+      const graphSelected = selectedNodes.filter(
+        (node) => node.graphId === graphId,
+      );
+      if (
+        graphSelected.some((node) => node.role === "root") ||
+        [...index.nodes.keys()].every((id) => selectedIds.has(id))
+      ) {
+        wholeGraphIds.add(graphId);
+      } else {
+        partialNodes.push(
+          ...graphSelected.filter((node) => node.role !== "root"),
+        );
+      }
+    }
+
+    const branchRoots = partialNodes.filter(
+      (node) =>
+        !partialNodes.some(
+          (candidate) =>
+            candidate.id !== node.id &&
+            getMindmapSubtreeIds(
+              buildMindmapGraphIndex(
+                this.app.scene.getNonDeletedElements(),
+                node.graphId,
+              ),
+              candidate.id,
+            ).includes(node.id),
+        ),
+    );
+    if (branchRoots.length > 1) {
+      this.notifyUnsupportedOperation();
+      return false;
+    }
+
+    const convertNode = (node: ExcalidrawMindmapNodeElement) => {
+      const { graphId, role, parentId, order, collapsed, shape, ...rest } =
+        node;
+      return bumpVersion(
+        newElement({
+          ...rest,
+          type: nextType,
+          roundness: node.roundness,
+        }),
+      ) as NonDeletedExcalidrawElement;
+    };
+    const convertEdge = (edge: ExcalidrawElement) => {
+      if (!isMindmapEdgeElement(edge)) {
+        return edge;
+      }
+      const { graphId, parentId, childId, routing, points, ...rest } = edge;
+      return bumpVersion(
+        newLinearElement({
+          ...rest,
+          type: "line",
+          points:
+            points.length > 1
+              ? points
+              : [
+                  pointFrom<LocalPoint>(0, 0),
+                  pointFrom<LocalPoint>(Math.max(edge.width, 1), edge.height),
+                ],
+        }),
+      ) as NonDeletedExcalidrawElement;
+    };
+
+    const convertedNodeIds = new Set<string>();
+    wholeGraphIds.forEach((graphId) => {
+      this.app.scene
+        .getNonDeletedElements()
+        .filter(
+          (element) =>
+            isMindmapNodeElement(element) && element.graphId === graphId,
+        )
+        .forEach((node) => convertedNodeIds.add(node.id));
+    });
+    branchRoots.forEach((node) => convertedNodeIds.add(node.id));
+
+    const reparentedChildren = new Map<
+      string,
+      { parentId: string; order: FractionalIndex }
+    >();
+    for (const node of branchRoots) {
+      const index = buildMindmapGraphIndex(
+        this.app.scene.getNonDeletedElements(),
+        node.graphId,
+      );
+      const parentId = node.parentId!;
+      const siblings = (index.childrenById.get(parentId) ?? []).filter(
+        (id) => id !== node.id,
+      );
+      const position = index.childrenById.get(parentId)!.indexOf(node.id);
+      const previous =
+        position > 0 ? index.nodes.get(siblings[position - 1]) : null;
+      const next =
+        position < siblings.length ? index.nodes.get(siblings[position]) : null;
+      const children = index.childrenById.get(node.id) ?? [];
+      const orders = generateNKeysBetween(
+        previous?.order ?? null,
+        next?.order ?? null,
+        children.length,
+      );
+      children.forEach((childId, index) => {
+        reparentedChildren.set(childId, {
+          parentId,
+          order: orders[index] as FractionalIndex,
+        });
+      });
+    }
+
+    const nextElements = elements.map((element) => {
+      if (isMindmapNodeElement(element)) {
+        if (convertedNodeIds.has(element.id)) {
+          return convertNode(element);
+        }
+        const update = reparentedChildren.get(element.id);
+        return update
+          ? newElementWith(element, {
+              parentId: update.parentId,
+              order: update.order,
+            })
+          : element;
+      }
+      if (isMindmapEdgeElement(element)) {
+        if (wholeGraphIds.has(element.graphId)) {
+          return convertEdge(element);
+        }
+        if (convertedNodeIds.has(element.childId)) {
+          return newElementWith(element, { isDeleted: true });
+        }
+        const childUpdate = reparentedChildren.get(element.childId);
+        if (childUpdate) {
+          return newElementWith(element, {
+            parentId: childUpdate.parentId,
+          });
+        }
+      }
+      return element;
+    });
+
+    const laidOut = this.getLaidOutElements(nextElements, graphIds);
+    const nextSelectedElementIds = Object.fromEntries(
+      laidOut
+        .filter((element) => !element.isDeleted && selectedIds.has(element.id))
+        .map((element) => [element.id, true]),
+    ) as Record<string, true>;
+    this.app.syncActionResult({
+      elements: laidOut,
+      appState: {
+        selectedElementIds: nextSelectedElementIds,
+        selectedLinearElement: null,
+      },
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    return true;
+  };
+
   private startNodeEditing(node: ExcalidrawMindmapNodeElement) {
     if (!this.canEditNode(node.id)) {
       this.notifyUnsupportedOperation();
@@ -1446,8 +1856,14 @@ export class AppMindmap {
         .getNonDeletedElements()
         .some(this.isMindmapRelatedElement);
     }
+    if (!this.hasSelectedMindmapElement()) {
+      return false;
+    }
+    if (unsupportedSelectionActions.has(name)) {
+      return true;
+    }
     return (
-      unsupportedSelectionActions.has(name) && this.hasSelectedMindmapElement()
+      lockedMindmapMutationActions.has(name) && this.hasLockedMindmapGraph()
     );
   };
 

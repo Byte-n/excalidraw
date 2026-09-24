@@ -1,9 +1,6 @@
 import {
-  buildMindmapGraphIndex,
-  getMindmapSubtreeIds,
+  getMindmapElementsForSelection,
   getTextFromElements,
-  isMindmapEdgeElement,
-  isMindmapNodeElement,
   isTextElement,
 } from "@excalidraw/element";
 
@@ -37,60 +34,23 @@ export const actionCopy = register<ClipboardEvent | null>({
       includeBoundTextElement: true,
       includeElementsInFrames: true,
     });
-    const initiallySelectedIds = new Set(
-      elementsToCopy.map((element) => element.id),
-    );
-    const selectedNodes = elementsToCopy.flatMap((element) => {
-      if (isMindmapNodeElement(element)) {
-        return [element];
-      }
-      if (isTextElement(element) && element.containerId) {
-        const container = app.scene.getNonDeletedElement(element.containerId);
-        return container && isMindmapNodeElement(container) ? [container] : [];
-      }
-      return [];
-    });
     const selectedNode = app.mindmap.getSelectedNode();
     if (
       selectedNode &&
-      !selectedNodes.some((node) => node.id === selectedNode.id)
+      !elementsToCopy.some(({ id }) => id === selectedNode.id)
     ) {
-      selectedNodes.push(selectedNode);
+      elementsToCopy = [...elementsToCopy, selectedNode];
     }
-    if (selectedNodes.length) {
-      const selectedIds = new Set<string>();
-      for (const node of selectedNodes) {
-        try {
-          const index = buildMindmapGraphIndex(
-            app.scene.getNonDeletedElements(),
-            node.graphId,
-          );
-          getMindmapSubtreeIds(index, node.id).forEach((id) =>
-            selectedIds.add(id),
-          );
-        } catch {
-          selectedIds.add(node.id);
-        }
-      }
-      elementsToCopy = app.scene
-        .getNonDeletedElements()
-        .filter(
-          (element) =>
-            initiallySelectedIds.has(element.id) ||
-            selectedIds.has(element.id) ||
-            (isMindmapEdgeElement(element) &&
-              selectedIds.has(element.childId)) ||
-            (isTextElement(element) &&
-              !!element.containerId &&
-              selectedIds.has(element.containerId)),
-        );
-    }
+    elementsToCopy = getMindmapElementsForSelection(
+      app.scene.getNonDeletedElements(),
+      elementsToCopy,
+    ) as typeof elementsToCopy;
 
     try {
       await copyToClipboard(elementsToCopy, app.files, event);
     } catch (error: any) {
       return {
-        captureUpdate: CaptureUpdateAction.EVENTUALLY,
+        captureUpdate: CaptureUpdateAction.NEVER,
         appState: {
           ...appState,
           errorMessage: error.message,

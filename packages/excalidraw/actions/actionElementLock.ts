@@ -17,18 +17,36 @@ import { getSelectedElements } from "../scene";
 
 import { register } from "./register";
 
-import type { AppState } from "../types";
+import type { AppClassProperties, AppState } from "../types";
 
 const shouldLock = (elements: readonly ExcalidrawElement[]) =>
   elements.every((el) => !el.locked);
 
+const getElementsToLock = (
+  app: AppClassProperties,
+  appState: Pick<AppState, "selectedElementIds">,
+) => {
+  const selectedElements = app.scene.getSelectedElements({
+    selectedElementIds: appState.selectedElementIds,
+    includeBoundTextElement: true,
+    includeElementsInFrames: true,
+  });
+  const mindmapElements =
+    app.mindmap.getLockableMindmapElements(selectedElements);
+  if (!mindmapElements.length) {
+    return selectedElements;
+  }
+  const mindmapIds = new Set(mindmapElements.map((element) => element.id));
+  return [
+    ...selectedElements.filter((element) => !mindmapIds.has(element.id)),
+    ...mindmapElements,
+  ];
+};
+
 export const actionToggleElementLock = register({
   name: "toggleElementLock",
   label: (elements, appState, app) => {
-    const selected = app.scene.getSelectedElements({
-      selectedElementIds: appState.selectedElementIds,
-      includeBoundTextElement: false,
-    });
+    const selected = getElementsToLock(app, appState);
 
     return shouldLock(selected)
       ? "labels.elementLock.lock"
@@ -40,18 +58,14 @@ export const actionToggleElementLock = register({
   },
   trackEvent: { category: "element" },
   predicate: (elements, appState, _, app) => {
-    const selectedElements = app.scene.getSelectedElements(appState);
+    const selectedElements = getElementsToLock(app, appState);
     return (
       selectedElements.length > 0 &&
       !selectedElements.some((element) => element.locked && element.frameId)
     );
   },
   perform: (elements, appState, _, app) => {
-    const selectedElements = app.scene.getSelectedElements({
-      selectedElementIds: appState.selectedElementIds,
-      includeBoundTextElement: true,
-      includeElementsInFrames: true,
-    });
+    const selectedElements = getElementsToLock(app, appState);
 
     if (!selectedElements.length) {
       return false;
@@ -60,9 +74,14 @@ export const actionToggleElementLock = register({
     const nextLockState = shouldLock(selectedElements);
     const selectedElementsMap = arrayToMap(selectedElements);
 
+    const isMindmapSelection =
+      app.mindmap.getLockableMindmapElements(selectedElements).length > 0;
     const isAGroup =
-      selectedElements.length > 1 && elementsAreInSameGroup(selectedElements);
-    const isASingleUnit = selectedElements.length === 1 || isAGroup;
+      !isMindmapSelection &&
+      selectedElements.length > 1 &&
+      elementsAreInSameGroup(selectedElements);
+    const isASingleUnit =
+      isMindmapSelection || selectedElements.length === 1 || isAGroup;
     const newGroupId = isASingleUnit ? null : randomId();
 
     let nextLockedMultiSelections = { ...appState.lockedMultiSelections };

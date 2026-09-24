@@ -22,7 +22,10 @@ import {
   updateBoundElements,
 } from "@excalidraw/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type {
+  ExcalidrawElement,
+  NonDeletedExcalidrawElement,
+} from "@excalidraw/element/types";
 
 import type { PointerDownState } from "../types";
 
@@ -163,7 +166,8 @@ export class AppDuplicate {
   duplicateDraggedSelection = (
     pointerDownState: PointerDownState,
     event: PointerEvent,
-  ) => {
+    elementsToDuplicate?: readonly NonDeletedExcalidrawElement[],
+  ): readonly NonDeletedExcalidrawElement[] | null => {
     // Move the currently selected elements to the top of the z index stack, and
     // put the duplicates where the selected elements used to be.
     // (the origin point where the dragging started)
@@ -172,20 +176,24 @@ export class AppDuplicate {
 
     const elements = this.app.scene.getElementsIncludingDeleted();
     const hitElement = pointerDownState.hit.element;
-    const selectedElements = this.app.scene.getSelectedElements({
-      selectedElementIds: this.app.state.selectedElementIds,
-      includeBoundTextElement: true,
-      includeElementsInFrames: true,
-    });
-    if (
-      hitElement &&
-      // hit element may not end up being selected
-      // if we're alt-dragging a common bounding box
-      // over the hit element
-      pointerDownState.hit.wasAddedToSelection &&
-      !selectedElements.find((el) => el.id === hitElement.id)
-    ) {
-      selectedElements.push(hitElement);
+    const selectedElements = elementsToDuplicate
+      ? [...elementsToDuplicate]
+      : this.app.scene.getSelectedElements({
+          selectedElementIds: this.app.state.selectedElementIds,
+          includeBoundTextElement: true,
+          includeElementsInFrames: true,
+        });
+    if (!elementsToDuplicate) {
+      if (
+        hitElement &&
+        // hit element may not end up being selected
+        // if we're alt-dragging a common bounding box
+        // over the hit element
+        pointerDownState.hit.wasAddedToSelection &&
+        !selectedElements.find((el) => el.id === hitElement.id)
+      ) {
+        selectedElements.push(hitElement);
+      }
     }
 
     const idsOfElementsToDuplicate = new Map(
@@ -243,7 +251,7 @@ export class AppDuplicate {
 
     // host vetoed the duplication, so we keep dragging the originals
     if (!duplicatedElements.length) {
-      return;
+      return null;
     }
 
     // (originals whose duplicates were vetoed are left behind)
@@ -316,5 +324,7 @@ export class AppDuplicate {
       this.app.maybeCacheVisibleGaps(event, selectedElements, true);
       this.app.maybeCacheReferenceSnapPoints(event, selectedElements, true);
     });
+
+    return duplicatedElements;
   };
 }

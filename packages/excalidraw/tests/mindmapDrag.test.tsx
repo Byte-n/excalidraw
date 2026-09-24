@@ -1,6 +1,7 @@
 import {
   buildMindmapGraphIndex,
   isMindmapEdgeElement,
+  isMindmapNodeElement,
   newElement,
   newMindmapNodeElement,
   newTextElement,
@@ -13,6 +14,7 @@ import type {
 } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
+import { actionDuplicateSelection, actionToggleElementLock } from "../actions";
 import { restoreElements } from "../data/restore";
 
 import { API } from "./helpers/api";
@@ -81,6 +83,40 @@ const node = (id: string) =>
   h.app.scene.getNonDeletedElement(id) as ExcalidrawMindmapNodeElement & {
     isDeleted: false;
   };
+
+const addSecondGraph = () => {
+  const root = {
+    ...newMindmapNodeElement({
+      x: 720,
+      y: 600,
+      graphId: "graph-2",
+      role: "root",
+      parentId: null,
+      order: null,
+    }),
+    id: "root-2",
+  };
+  const child = {
+    ...newMindmapNodeElement({
+      x: 900,
+      y: 600,
+      graphId: "graph-2",
+      role: "node",
+      parentId: root.id,
+      order: "a0" as FractionalIndex,
+    }),
+    id: "child-2",
+  };
+  API.setElements(
+    restoreElements(
+      [...h.app.scene.getNonDeletedElements(), root, child],
+      null,
+      {
+        repairBindings: true,
+      },
+    ),
+  );
+};
 
 const snapshot = () =>
   JSON.stringify(h.app.scene.getElementsIncludingDeleted(), (key, value) =>
@@ -392,6 +428,129 @@ describe("Mindmap P03 drag preview", () => {
     });
   });
 
+  it("replaces the first graph when clicking the root of a second graph", () => {
+    addSecondGraph();
+    const mouse = new Pointer("mouse");
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
+    expect(h.state.selectedElementIds.a).toBe(true);
+
+    mouse.clickAt(node("root-2").x + 20, node("root-2").y + 20);
+    expect(h.state.selectedElementIds["root-2"]).toBe(true);
+    expect(h.state.selectedElementIds["child-2"]).toBe(true);
+    expect(h.state.selectedElementIds.root).toBeUndefined();
+    expect(h.state.selectedElementIds.a).toBeUndefined();
+  });
+
+  it("replaces an ordinary selection when clicking a root or child", () => {
+    const rectangle = h.app.scene.getNonDeletedElement("rectangle")!;
+    API.updateElement(rectangle, { x: 40, y: 40 });
+    const mouse = new Pointer("mouse");
+    mouse.clickAt(90, 41);
+    expect(h.state.selectedElementIds.rectangle).toBe(true);
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
+    expect(h.state.selectedElementIds.rectangle).toBeUndefined();
+    expect(h.state.selectedElementIds.root).toBe(true);
+    expect(h.state.selectedElementIds.a).toBe(true);
+
+    mouse.clickAt(90, 41);
+    expect(h.state.selectedElementIds.rectangle).toBe(true);
+    expect(h.state.selectedElementIds.root).toBeUndefined();
+    mouse.clickAt(node("a").x + 20, node("a").y + 20);
+    expect(h.state.selectedElementIds.rectangle).toBeUndefined();
+    expect(h.state.selectedElementIds.a).toBe(true);
+    expect(h.state.selectedElementIds.root).toBeUndefined();
+  });
+
+  it("keeps the previous selection when shift-clicking another root", () => {
+    addSecondGraph();
+    const mouse = new Pointer("mouse");
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
+    Keyboard.withModifierKeys({ shift: true }, () => {
+      mouse.clickAt(node("root-2").x + 20, node("root-2").y + 20);
+    });
+    expect(h.state.selectedElementIds.root).toBe(true);
+    expect(h.state.selectedElementIds.a).toBe(true);
+    expect(h.state.selectedElementIds["root-2"]).toBe(true);
+    expect(h.state.selectedElementIds["child-2"]).toBe(true);
+  });
+
+  it("replaces a complete boxed graph with the clicked root's graph", () => {
+    addSecondGraph();
+    API.setSelectedElements(
+      h.app.scene
+        .getNonDeletedElements()
+        .filter(
+          (element) =>
+            element.id !== "rectangle" &&
+            (!("graphId" in element) || element.graphId === "graph"),
+        ),
+    );
+    expect(h.app.mindmap.isCompleteMindmapSelection()).toBe(true);
+
+    const mouse = new Pointer("mouse");
+    mouse.clickAt(node("root-2").x + 20, node("root-2").y + 20);
+    expect(h.state.selectedElementIds["root-2"]).toBe(true);
+    expect(h.state.selectedElementIds["child-2"]).toBe(true);
+    expect(h.state.selectedElementIds.root).toBeUndefined();
+  });
+
+  it("replaces selected standalone text and arrow with the clicked graph", () => {
+    const text = API.createElement({
+      type: "text",
+      id: "note",
+      x: 50,
+      y: 50,
+      text: "Note",
+    });
+    const arrow = API.createElement({
+      type: "arrow",
+      id: "arrow",
+      x: 50,
+      y: 100,
+    });
+    API.setElements([...h.app.scene.getNonDeletedElements(), text, arrow]);
+    const mouse = new Pointer("mouse");
+
+    for (const element of [text, arrow]) {
+      API.setSelectedElements([element]);
+      mouse.clickAt(node("root").x + 20, node("root").y + 20);
+      expect(h.state.selectedElementIds[element.id]).toBeUndefined();
+      expect(h.state.selectedElementIds.root).toBe(true);
+      expect(h.state.selectedElementIds.a).toBe(true);
+    }
+  });
+
+  it("drags an ordinary shape after replacing a root selection", () => {
+    const rectangle = h.app.scene.getNonDeletedElement("rectangle")!;
+    API.updateElement(rectangle, { x: 40, y: 40 });
+    const originalRootX = node("root").x;
+    const mouse = new Pointer("mouse");
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
+    mouse.downAt(90, 41);
+    mouse.moveTo(110, 61);
+    mouse.upAt();
+
+    expect(h.app.scene.getNonDeletedElement("rectangle")?.x).toBe(60);
+    expect(node("root").x).toBe(originalRootX);
+    expect(h.state.selectedElementIds.root).toBeUndefined();
+  });
+
+  it("expands a graph when shift-clicking its root from an ordinary selection", () => {
+    const rectangle = h.app.scene.getNonDeletedElement("rectangle")!;
+    API.updateElement(rectangle, { x: 40, y: 40 });
+    const mouse = new Pointer("mouse");
+    mouse.clickAt(90, 41);
+    expect(h.state.selectedElementIds.rectangle).toBe(true);
+    Keyboard.withModifierKeys({ shift: true }, () => {
+      mouse.downAt(node("root").x + 20, node("root").y + 20);
+      expect(h.state.selectedElementIds.rectangle).toBe(true);
+      mouse.upAt();
+    });
+    expect(h.state.selectedElementIds.rectangle).toBe(true);
+    expect(h.state.selectedElementIds.root).toBe(true);
+    expect(h.state.selectedElementIds.a).toBe(true);
+  });
+
   it("excludes an incomplete Mindmap from a box selection", () => {
     const rectangle = h.app.scene.getNonDeletedElement("rectangle")!;
     const mouse = new Pointer("mouse");
@@ -415,7 +574,272 @@ describe("Mindmap P03 drag preview", () => {
   });
 
   it("removes a bound label when its graph is not fully boxed", () => {
-    expect(h.app.mindmap.normalizeBoxSelection({ "a-text": true })).toEqual({});
+    expect(h.app.mindmap.normalizeMindmapSelection({ "a-text": true })).toEqual(
+      {},
+    );
+  });
+
+  it("normalizes freehand selections to complete Mindmap graphs", () => {
+    act(() => h.app.lassoTrail.startPath(0, 0));
+    act(() => h.app.lassoTrail.selectElementsFromIds(["a"]));
+    expect(h.state.selectedElementIds.a).toBeUndefined();
+
+    const graphElements = h.app.scene
+      .getNonDeletedElements()
+      .filter(
+        (element) =>
+          isMindmapNodeElement(element) ||
+          isMindmapEdgeElement(element) ||
+          (element.type === "text" && element.containerId !== null),
+      );
+    act(() =>
+      h.app.lassoTrail.selectElementsFromIds(graphElements.map(({ id }) => id)),
+    );
+    graphElements.forEach((element) => {
+      expect(h.state.selectedElementIds[element.id]).toBe(true);
+    });
+  });
+
+  it("copies a non-root node subtree as a new Mindmap with Alt-drag", () => {
+    API.setSelectedElements([node("a")]);
+    const original = {
+      a: { x: node("a").x, y: node("a").y },
+      a1: { x: node("a1").x, y: node("a1").y },
+    };
+    const originalGraphIds = new Set(
+      h.app.scene
+        .getNonDeletedElements()
+        .filter(isMindmapNodeElement)
+        .map((element) => element.graphId),
+    );
+    const mouse = new Pointer("mouse");
+
+    Keyboard.withModifierKeys({ alt: true }, () => {
+      mouse.downAt(node("a").x + 20, node("a").y + 20);
+      mouse.moveTo(node("a").x + 100, node("a").y + 80);
+      mouse.moveTo(node("a").x + 140, node("a").y + 100);
+      mouse.upAt();
+    });
+
+    expect(node("a")).toMatchObject(original.a);
+    expect(node("a1")).toMatchObject(original.a1);
+    const copiedNodes = h.app.scene
+      .getNonDeletedElements()
+      .filter(
+        (element) =>
+          element.type === "mindmap-node" &&
+          !originalGraphIds.has(
+            (element as ExcalidrawMindmapNodeElement).graphId,
+          ),
+      );
+    expect(copiedNodes).toHaveLength(2);
+    const copiedRoot = copiedNodes.find(
+      (element) => (element as ExcalidrawMindmapNodeElement).role === "root",
+    ) as ExcalidrawMindmapNodeElement | undefined;
+    const copiedChild = copiedNodes.find(
+      (element) => (element as ExcalidrawMindmapNodeElement).role === "node",
+    ) as ExcalidrawMindmapNodeElement | undefined;
+    expect(copiedRoot).toBeDefined();
+    expect(copiedChild).toMatchObject({ parentId: copiedRoot!.id });
+    expect(
+      h.app.scene
+        .getNonDeletedElements()
+        .filter(
+          (element) =>
+            element.type === "mindmap-edge" &&
+            element.graphId === copiedRoot!.graphId,
+        ),
+    ).toHaveLength(1);
+    expect(copiedRoot!.x).toBe(original.a.x + 40);
+    expect(copiedRoot!.y).toBe(original.a.y + 20);
+  });
+
+  it("duplicates a selected Mindmap subtree with Ctrl/Cmd+D", () => {
+    API.setSelectedElements([node("a")]);
+    act(() => {
+      h.app.actionManager.executeAction(actionDuplicateSelection);
+    });
+
+    const copiedNodes = h.app.scene
+      .getNonDeletedElements()
+      .filter(
+        (element) =>
+          isMindmapNodeElement(element) &&
+          element.graphId !== node("root").graphId,
+      );
+    expect(copiedNodes).toHaveLength(2);
+    const copiedRoot = copiedNodes.find(
+      (element) => isMindmapNodeElement(element) && element.role === "root",
+    ) as ExcalidrawMindmapNodeElement | undefined;
+    expect(copiedRoot).toBeDefined();
+    expect(
+      h.app.scene
+        .getNonDeletedElements()
+        .filter(
+          (element) =>
+            isMindmapEdgeElement(element) &&
+            element.graphId === copiedRoot!.graphId,
+        ),
+    ).toHaveLength(1);
+  });
+
+  it("duplicates collapsed descendants and mixed Mindmap graphs", () => {
+    addSecondGraph();
+    API.updateElement(node("a"), { collapsed: true });
+    const secondChild = h.app.scene.getNonDeletedElement("child-2")!;
+    API.setSelectedElements([node("a"), secondChild]);
+
+    act(() => {
+      h.app.actionManager.executeAction(actionDuplicateSelection);
+    });
+
+    const originalGraphIds = new Set(["graph", "graph-2"]);
+    const copiedNodes = h.app.scene
+      .getNonDeletedElements()
+      .filter(isMindmapNodeElement)
+      .filter((element) => !originalGraphIds.has(element.graphId));
+    expect(copiedNodes).toHaveLength(3);
+    expect(new Set(copiedNodes.map((element) => element.graphId))).toHaveLength(
+      2,
+    );
+    expect(copiedNodes.filter((element) => element.collapsed)).toHaveLength(1);
+    expect(
+      h.app.scene
+        .getNonDeletedElements()
+        .filter(
+          (element) =>
+            isMindmapEdgeElement(element) &&
+            copiedNodes.some((node) => node.id === element.childId) &&
+            !copiedNodes.some((node) => node.id === element.parentId),
+        ),
+    ).toHaveLength(0);
+  });
+
+  it("locks a selected Mindmap as one unit and blocks indirect edits", () => {
+    API.setSelectedElements([node("root")]);
+    act(() => {
+      h.app.actionManager.executeAction(actionToggleElementLock);
+    });
+
+    expect(
+      h.app.scene
+        .getNonDeletedElements()
+        .filter(isMindmapNodeElement)
+        .every((element) => element.locked),
+    ).toBe(true);
+
+    const before = snapshot();
+    API.setSelectedElements([node("a")]);
+    act(() => h.app.mindmap.createSibling("a"));
+    expect(snapshot()).toBe(before);
+
+    act(() => {
+      h.app.actionManager.executeAction(actionToggleElementLock);
+    });
+    expect(
+      h.app.scene
+        .getNonDeletedElements()
+        .filter(isMindmapNodeElement)
+        .every((element) => !element.locked),
+    ).toBe(true);
+  });
+
+  it("copies a root node as a complete new Mindmap with Alt-drag", () => {
+    API.setSelectedElements([node("root")]);
+    const originalGraphIds = new Set(
+      h.app.scene
+        .getNonDeletedElements()
+        .filter(isMindmapNodeElement)
+        .map((element) => element.graphId),
+    );
+    const mouse = new Pointer("mouse");
+
+    Keyboard.withModifierKeys({ alt: true }, () => {
+      mouse.downAt(node("root").x + 20, node("root").y + 20);
+      mouse.moveTo(node("root").x + 100, node("root").y + 80);
+      mouse.moveTo(node("root").x + 140, node("root").y + 100);
+      mouse.upAt();
+    });
+
+    const copiedNodes = h.app.scene
+      .getNonDeletedElements()
+      .filter(
+        (element) =>
+          element.type === "mindmap-node" &&
+          !originalGraphIds.has(
+            (element as ExcalidrawMindmapNodeElement).graphId,
+          ),
+      );
+    expect(copiedNodes).toHaveLength(5);
+    const copiedRoot = copiedNodes.find(
+      (element) => (element as ExcalidrawMindmapNodeElement).role === "root",
+    ) as ExcalidrawMindmapNodeElement | undefined;
+    expect(copiedRoot).toBeDefined();
+    const copiedIndex = buildMindmapGraphIndex(
+      h.app.scene.getNonDeletedElements(),
+      copiedRoot!.graphId,
+    );
+    expect(copiedIndex.nodes.size).toBe(5);
+    expect(copiedIndex.edgeByChildId.size).toBe(4);
+  });
+
+  it("does not copy multiple selected non-root branches with Alt-drag", () => {
+    API.setSelectedElements([node("a"), node("b")]);
+    const before = snapshot();
+    const mouse = new Pointer("mouse");
+
+    Keyboard.withModifierKeys({ alt: true }, () => {
+      mouse.downAt(node("a").x + 20, node("a").y + 20);
+      mouse.moveTo(node("a").x + 100, node("a").y + 80);
+      mouse.upAt();
+    });
+
+    expect(snapshot()).toBe(before);
+  });
+
+  it("uses the generic Alt-drag path for a complete selected Mindmap", () => {
+    const graphElements = h.app.scene
+      .getNonDeletedElements()
+      .filter(
+        (element) =>
+          isMindmapNodeElement(element) ||
+          isMindmapEdgeElement(element) ||
+          (element.type === "text" && element.containerId !== null),
+      );
+    API.setSelectedElements(graphElements);
+    expect(h.app.mindmap.isCompleteMindmapSelection()).toBe(true);
+    const originalGraphIds = new Set(
+      graphElements
+        .filter(isMindmapNodeElement)
+        .map((element) => element.graphId),
+    );
+    const mouse = new Pointer("mouse");
+
+    Keyboard.withModifierKeys({ alt: true }, () => {
+      mouse.downAt(node("root").x + 20, node("root").y + 20);
+      mouse.moveTo(node("root").x + 100, node("root").y + 80);
+      expect(
+        h.app.scene
+          .getNonDeletedElements()
+          .filter(
+            (element) =>
+              isMindmapNodeElement(element) &&
+              !originalGraphIds.has(element.graphId),
+          ),
+      ).toHaveLength(5);
+      expect(h.app.mindmap.isCompleteMindmapSelection()).toBe(true);
+      mouse.moveTo(node("root").x + 140, node("root").y + 100);
+      mouse.upAt();
+    });
+
+    const copiedNodes = h.app.scene
+      .getNonDeletedElements()
+      .filter(
+        (element) =>
+          isMindmapNodeElement(element) &&
+          !originalGraphIds.has(element.graphId),
+      );
+    expect(copiedNodes).toHaveLength(5);
   });
 
   it("selects every node, edge and bound label when boxing the full graph", () => {

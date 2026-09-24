@@ -9,6 +9,7 @@ import {
   buildMindmapGraphIndex,
   compareMindmapNodes,
   getMindmapEdgePath,
+  getMindmapElementsForSelection,
   getMindmapHiddenElementIds,
   getMindmapSubtreeIds,
   isMindmapElementHidden,
@@ -155,6 +156,29 @@ describe("mindmap 正式元素模型", () => {
 });
 
 describe("mindmap 索引与结构修复", () => {
+  it("复制子树时排除原父节点的入边并保留内部边", () => {
+    const repaired = repairMindmapElements(graph());
+    const selected = repaired.filter((element) => element.id === "a");
+    const copied = getMindmapElementsForSelection(repaired, selected);
+
+    expect(copied.map((element) => element.id)).toEqual(
+      expect.arrayContaining(["a", "c"]),
+    );
+    expect(
+      copied.filter(
+        (element) => isMindmapEdgeElement(element) && element.childId === "a",
+      ),
+    ).toHaveLength(0);
+    expect(
+      copied.filter(
+        (element) =>
+          isMindmapEdgeElement(element) &&
+          element.parentId === "a" &&
+          element.childId === "c",
+      ),
+    ).toHaveLength(1);
+  });
+
   it("按逻辑 order 排列，忽略场景顺序和 x/y", () => {
     const elements = graph().reverse();
     const index = indexOf(elements);

@@ -222,6 +222,66 @@ export const getMindmapSubtreeIds = (
   return ids;
 };
 
+/**
+ * Expands a selection containing Mindmap nodes to complete subtrees while
+ * keeping ordinary elements selected. Only edges whose two endpoints are in
+ * the copied node set belong to a subtree; this deliberately excludes the
+ * edge entering a copied subtree from its original parent.
+ */
+export const getMindmapElementsForSelection = (
+  elements: readonly ExcalidrawElement[],
+  selectedElements: readonly ExcalidrawElement[],
+): readonly ExcalidrawElement[] => {
+  const selectedIds = new Set(selectedElements.map((element) => element.id));
+  const selectedNodes = selectedElements.flatMap((element) => {
+    if (isMindmapNodeElement(element)) {
+      return [element];
+    }
+    if (element.type === "text" && element.containerId) {
+      const container = elements.find(
+        (candidate) => candidate.id === element.containerId,
+      );
+      return container && isMindmapNodeElement(container) ? [container] : [];
+    }
+    return [];
+  });
+
+  if (!selectedNodes.length) {
+    return selectedElements;
+  }
+
+  const subtreeNodeIds = new Set<string>();
+  for (const node of selectedNodes) {
+    try {
+      const index = buildMindmapGraphIndex(elements, node.graphId);
+      getMindmapSubtreeIds(index, node.id).forEach((id) =>
+        subtreeNodeIds.add(id),
+      );
+    } catch {
+      subtreeNodeIds.add(node.id);
+    }
+  }
+
+  return elements.filter((element) => {
+    if (element.isDeleted) {
+      return false;
+    }
+    if (isMindmapNodeElement(element)) {
+      return subtreeNodeIds.has(element.id);
+    }
+    if (isMindmapEdgeElement(element)) {
+      return (
+        subtreeNodeIds.has(element.parentId) &&
+        subtreeNodeIds.has(element.childId)
+      );
+    }
+    if (element.type === "text" && element.containerId) {
+      return subtreeNodeIds.has(element.containerId);
+    }
+    return selectedIds.has(element.id);
+  });
+};
+
 /** 折叠是派生的可见性，不修改 isDeleted、透明度或文本绑定。 */
 export const getMindmapHiddenElementIds = (
   elements: readonly ExcalidrawElement[],

@@ -1,13 +1,15 @@
 import React from "react";
 import { vi } from "vitest";
 
-import { getLineHeightInPx } from "@excalidraw/element";
+import { CaptureUpdateAction, getLineHeightInPx } from "@excalidraw/element";
 
 import { KEYS, arrayToMap, getLineHeight } from "@excalidraw/common";
 
 import { getElementBounds } from "@excalidraw/element";
 
 import { createPasteEvent, serializeAsClipboardJSON } from "../clipboard";
+import * as clipboard from "../clipboard";
+import { actionCut } from "../actions";
 
 import { Excalidraw } from "../index";
 
@@ -121,6 +123,30 @@ describe("general paste behavior", () => {
       expect(h.elements.length).toBe(1);
       expect(h.elements[0].seed).toBe(rectangle.seed);
     });
+  });
+});
+
+describe("cut failure handling", () => {
+  it("keeps the selected elements when clipboard writing fails", async () => {
+    const rectangle = API.createElement({ type: "rectangle" });
+    API.setElements([rectangle]);
+    API.setSelectedElements([rectangle]);
+    const copySpy = vi
+      .spyOn(clipboard, "copyToClipboard")
+      .mockRejectedValue(new Error("clipboard denied"));
+
+    const result = await actionCut.perform(
+      h.app.scene.getElementsIncludingDeleted(),
+      h.state,
+      null,
+      h.app,
+    );
+
+    expect(result).toMatchObject({
+      captureUpdate: CaptureUpdateAction.NEVER,
+    });
+    expect(h.app.scene.getNonDeletedElement(rectangle.id)).toBeDefined();
+    copySpy.mockRestore();
   });
 });
 

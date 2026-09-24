@@ -15,6 +15,8 @@ import {
   isArrowElement,
   isElbowArrow,
   isLinearElement,
+  isMindmapEdgeElement,
+  isMindmapNodeElement,
   isUsingAdaptiveRadius,
 } from "@excalidraw/element";
 
@@ -433,6 +435,16 @@ export const convertElementTypes = (
 
   const selectedElements = app.scene.getSelectedElements(app.state);
 
+  if (
+    conversionType === "generic" &&
+    selectedElements.some(isMindmapNodeElement)
+  ) {
+    const targetType = isConvertibleGenericType(nextType ?? "")
+      ? (nextType as ConvertibleGenericTypes)
+      : "rectangle";
+    return app.mindmap.convertToShape(targetType);
+  }
+
   const selectedElementIds = selectedElements.reduce(
     (acc, element) => ({ ...acc, [element.id]: true }),
     {},
@@ -645,6 +657,24 @@ export const getConversionTypeFromElements = (
     return null;
   }
 
+  if (
+    elements.some(isMindmapNodeElement) &&
+    elements.every(
+      (element) =>
+        isMindmapNodeElement(element) ||
+        isMindmapEdgeElement(element) ||
+        (element.type === "text" &&
+          !!element.containerId &&
+          elements.some(
+            (candidate) =>
+              candidate.id === element.containerId &&
+              isMindmapNodeElement(candidate),
+          )),
+    )
+  ) {
+    return "generic";
+  }
+
   let canBeLinear = false;
   for (const element of elements) {
     if (isConvertibleGenericType(element.type)) {
@@ -681,7 +711,10 @@ const toCacheKey = (
 const filterGenericConvetibleElements = <T extends ExcalidrawElement>(
   elements: readonly T[],
 ) =>
-  elements.filter((element) => isConvertibleGenericType(element.type)) as Array<
+  elements.filter(
+    (element) =>
+      isConvertibleGenericType(element.type) || isMindmapNodeElement(element),
+  ) as unknown as Array<
     T extends NonDeletedExcalidrawElement
       ? NonDeleted<
           | ExcalidrawRectangleElement

@@ -351,6 +351,7 @@ import {
 import { createRedoAction, createUndoAction } from "../actions/actionHistory";
 import { actionTextAutoResize } from "../actions/actionTextAutoResize";
 import { actionToggleViewMode } from "../actions/actionToggleViewMode";
+import { actionToggleShapeSwitch } from "../actions/actionToggleShapeSwitch";
 import { ActionManager } from "../actions/manager";
 import { actions } from "../actions/register";
 import { getShortcutFromShortcutName } from "../actions/shortcuts";
@@ -9386,6 +9387,7 @@ class App extends React.Component<AppProps, AppState> {
         element: null,
         allHitElements: [],
         wasAddedToSelection: false,
+        replacedSelection: false,
         hasBeenDuplicated: false,
         arrowLabel: false,
         hasHitCommonBoundingBoxOfSelectedElements:
@@ -9713,6 +9715,7 @@ class App extends React.Component<AppProps, AppState> {
             (hitElement &&
               hitElement?.id !== this.state.selectedLinearElement?.elementId))
         ) {
+          pointerDownState.hit.replacedSelection = true;
           this.clearSelection(hitElement);
         }
 
@@ -11482,7 +11485,7 @@ class App extends React.Component<AppProps, AppState> {
             }
 
             const normalizedSelectedElementIds =
-              this.mindmap.normalizeBoxSelection(nextSelectedElementIds);
+              this.mindmap.normalizeMindmapSelection(nextSelectedElementIds);
 
             prevState = !shouldReuseSelection
               ? { ...prevState, selectedGroupIds: {}, editingGroupId: null }
@@ -13929,6 +13932,8 @@ class App extends React.Component<AppProps, AppState> {
         actionMindmapCreateSibling,
         actionMindmapToggleCollapse,
         actionMindmapPromote,
+        actionToggleShapeSwitch,
+        actionToggleElementLock,
         CONTEXT_MENU_SEPARATOR,
         { ...actionDeleteSelected, label: "labels.deleteMindmapSubtree" },
         actionMindmapDeletePreservingChildren,
