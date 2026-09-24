@@ -1,5 +1,8 @@
-import { isTextElement } from "@excalidraw/element";
-import { getTextFromElements } from "@excalidraw/element";
+import {
+  getMindmapElementsForSelection,
+  getTextFromElements,
+  isTextElement,
+} from "@excalidraw/element";
 
 import { CODES, KEYS, isFirefox } from "@excalidraw/common";
 
@@ -26,17 +29,28 @@ export const actionCopy = register<ClipboardEvent | null>({
   icon: DuplicateIcon,
   trackEvent: { category: "element" },
   perform: async (elements, appState, event, app) => {
-    const elementsToCopy = app.scene.getSelectedElements({
+    let elementsToCopy = app.scene.getSelectedElements({
       selectedElementIds: appState.selectedElementIds,
       includeBoundTextElement: true,
       includeElementsInFrames: true,
     });
+    const selectedNode = app.mindmap.getSelectedNode();
+    if (
+      selectedNode &&
+      !elementsToCopy.some(({ id }) => id === selectedNode.id)
+    ) {
+      elementsToCopy = [...elementsToCopy, selectedNode];
+    }
+    elementsToCopy = getMindmapElementsForSelection(
+      app.scene.getNonDeletedElements(),
+      elementsToCopy,
+    ) as typeof elementsToCopy;
 
     try {
       await copyToClipboard(elementsToCopy, app.files, event);
     } catch (error: any) {
       return {
-        captureUpdate: CaptureUpdateAction.EVENTUALLY,
+        captureUpdate: CaptureUpdateAction.NEVER,
         appState: {
           ...appState,
           errorMessage: error.message,
@@ -114,8 +128,14 @@ export const actionCut = register<ClipboardEvent | null>({
   label: "labels.cut",
   icon: cutIcon,
   trackEvent: { category: "element" },
-  perform: (elements, appState, event, app) => {
-    actionCopy.perform(elements, appState, event, app);
+  perform: async (elements, appState, event, app) => {
+    const copied = await actionCopy.perform(elements, appState, event, app);
+    if (
+      copied === false ||
+      copied?.captureUpdate === CaptureUpdateAction.NEVER
+    ) {
+      return copied;
+    }
     return actionDeleteSelected.perform(elements, appState, null, app);
   },
   keyTest: (event) => event[KEYS.CTRL_OR_CMD] && event.key === KEYS.X,

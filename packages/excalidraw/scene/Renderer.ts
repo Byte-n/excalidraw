@@ -250,9 +250,13 @@ export class Renderer {
   }) {
     const elementsMap = toBrandedType<RenderableElementsMap>(new Map());
     const newElementCanvasElement = newElement?.frameId ? null : newElement;
+    const hidden = this.scene.getMindmapHiddenElementIds();
 
     for (const element of elements) {
-      if (newElementCanvasElement?.id === element.id) {
+      if (
+        newElementCanvasElement?.id === element.id ||
+        hidden.has(element.id)
+      ) {
         continue;
       }
 

@@ -30,6 +30,8 @@ import type {
   ExcalidrawFlowchartNodeElement,
   ExcalidrawLinearElementSubType,
   ExcalidrawStickyNoteElement,
+  ExcalidrawMindmapNodeElement,
+  ExcalidrawMindmapEdgeElement,
 } from "./types";
 
 export const isInitializedImageElement = <T extends ExcalidrawElement>(
@@ -75,6 +77,16 @@ export const isStickyNoteElement = <T extends ExcalidrawElement>(
 ): element is T & ExcalidrawStickyNoteElement => {
   return element != null && element.type === "stickynote";
 };
+
+export const isMindmapNodeElement = <T extends ExcalidrawElement>(
+  element: T | null | undefined,
+): element is T & ExcalidrawMindmapNodeElement =>
+  element?.type === "mindmap-node";
+
+export const isMindmapEdgeElement = <T extends ExcalidrawElement>(
+  element: T | null | undefined,
+): element is T & ExcalidrawMindmapEdgeElement =>
+  element?.type === "mindmap-edge";
 
 export const isFrameElement = <T extends ExcalidrawElement>(
   element: T | null,
@@ -190,6 +202,7 @@ export const isBindableElement = <T extends ExcalidrawElement>(
     (!element.locked || includeLocked === true) &&
     (element.type === "rectangle" ||
       element.type === "stickynote" ||
+      element.type === "mindmap-node" ||
       element.type === "diamond" ||
       element.type === "ellipse" ||
       element.type === "image" ||
@@ -246,6 +259,7 @@ export const isTextBindableContainer = <T extends ExcalidrawElement>(
     (!element.locked || includeLocked === true) &&
     (element.type === "rectangle" ||
       element.type === "stickynote" ||
+      element.type === "mindmap-node" ||
       element.type === "diamond" ||
       element.type === "ellipse" ||
       isArrowElement(element))
@@ -264,6 +278,8 @@ export const isExcalidrawElement = (
     case "diamond":
     case "rectangle":
     case "stickynote":
+    case "mindmap-node":
+    case "mindmap-edge":
     case "iframe":
     case "embeddable":
     case "ellipse":

@@ -1,6 +1,9 @@
 import {
+  curve,
   curvePointDistance,
   distanceToLineSegment,
+  lineSegment,
+  pointFrom,
   pointRotateRads,
   polygonIncludesPointNonZero,
 } from "@excalidraw/math";
@@ -16,6 +19,7 @@ import {
 } from "./utils";
 
 import { elementCenterPoint } from "./bounds";
+import { getMindmapNodeGeometry, isMindmapElementHidden } from "./mindmap";
 
 import type {
   ElementsMap,
@@ -32,7 +36,34 @@ export const distanceToElement = (
   elementsMap: ElementsMap,
   p: GlobalPoint,
 ): number => {
+  if (isMindmapElementHidden(element, elementsMap)) {
+    return Infinity;
+  }
   switch (element.type) {
+    case "mindmap-node":
+      return element.shape === "pill"
+        ? distanceToRectanguloidElement(element, elementsMap, p)
+        : distanceToElement(getMindmapNodeGeometry(element), elementsMap, p);
+    case "mindmap-edge":
+      if (element.points.length < 2) {
+        return Infinity;
+      }
+      const points = element.points.map(([x, y]) =>
+        pointFrom<GlobalPoint>(element.x + x, element.y + y),
+      );
+      if (element.routing === "curved" && points.length === 4) {
+        return curvePointDistance(
+          curve(points[0], points[1], points[2], points[3]),
+          p,
+        );
+      }
+      return Math.min(
+        ...points
+          .slice(1)
+          .map((point, index) =>
+            distanceToLineSegment(p, lineSegment(points[index], point)),
+          ),
+      );
     case "selection":
     case "rectangle":
     case "stickynote":

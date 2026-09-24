@@ -1,6 +1,7 @@
 import { toIterable } from "@excalidraw/common";
 
 import { isInvisiblySmallElement } from "./sizeHelpers";
+import { getMindmapHiddenElementIds } from "./mindmap";
 
 import type {
   ExcalidrawElement,
@@ -46,11 +47,15 @@ export const isNonDeletedElement = <T extends ExcalidrawElement>(
 
 export const getVisibleElements = (
   elements: readonly ExcalidrawElement[],
-): readonly NonDeletedExcalidrawElement[] =>
-  elements.filter(
+): readonly NonDeletedExcalidrawElement[] => {
+  const hidden = getMindmapHiddenElementIds(elements);
+  return elements.filter(
     (el): el is NonDeletedExcalidrawElement =>
-      isNonDeletedElement(el) && !isInvisiblySmallElement(el),
+      isNonDeletedElement(el) &&
+      !isInvisiblySmallElement(el) &&
+      !hidden.has(el.id),
   );
+};
 
 export const getNonDeletedElements = <T extends ExcalidrawElement>(
   elements: readonly T[],
@@ -81,6 +86,7 @@ export * from "./groups";
 export * from "./heading";
 export * from "./image";
 export * from "./linearElementEditor";
+export * from "./mindmap";
 export * from "./mutateElement";
 export * from "./newElement";
 export * from "./positionElementsOnGrid";

@@ -61,6 +61,10 @@ export const INVISIBLY_SMALL_ELEMENT_SIZE = 0.1;
 export const isInvisiblySmallElement = (
   element: ExcalidrawElement,
 ): boolean => {
+  // 结构元素不能按临时几何尺寸删除；折叠子树的 edge 可能尚未布局。
+  if (element.type === "mindmap-node" || element.type === "mindmap-edge") {
+    return false;
+  }
   if (isLinearElement(element) || isFreeDrawElement(element)) {
     return (
       element.points.length < 2 ||

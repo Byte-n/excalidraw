@@ -8,6 +8,7 @@ import type {
 
 import { elementsOverlappingBBox, getElementAbsoluteCoords } from "./bounds";
 import { isElementInViewport } from "./sizeHelpers";
+import { getMindmapHiddenElementIds } from "./mindmap";
 import {
   isBoundToContainer,
   isFrameLikeElement,
@@ -88,8 +89,9 @@ export const getElementsWithinSelection = <T extends ExcalidrawElement>(
     selectionY2,
   ] as Bounds;
 
+  const hidden = getMindmapHiddenElementIds([...elementsMap.values()]);
   return elementsOverlappingBBox({
-    elements,
+    elements: elements.filter((element) => !hidden.has(element.id)),
     bounds: selectionBounds,
     elementsMap,
     type: boxSelectionMode,

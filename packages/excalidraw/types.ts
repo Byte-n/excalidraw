@@ -164,7 +164,8 @@ export type ToolType =
   | "embeddable"
   | "laser"
   | "autoshape"
-  | "bucketfill";
+  | "bucketfill"
+  | "mindmap";
 
 export type ElementOrToolType = ExcalidrawElementType | ToolType | "custom";
 
@@ -474,9 +475,11 @@ export interface AppState {
   openDialog:
     | null
     | { name: "imageExport" | "help" | "jsonExport" }
+    | { name: "mindmapTextImport" }
     | { name: "ttd"; tab: "text-to-diagram" | "mermaid" }
     | { name: "commandPalette" }
     | { name: "settings" }
+    | { name: "mindmapDelete"; nodeId: string }
     | { name: "elementLinkSelector"; sourceElementId: ExcalidrawElement["id"] }
     | { name: "charts"; data: Spreadsheet; rawText: string };
   /**
@@ -1130,6 +1133,7 @@ export type UIOptions = Partial<{
   canvasActions: CanvasActions;
   tools: {
     image: boolean;
+    mindmap?: boolean;
   };
   /**
    * Optionally control the editor form factor and desktop UI mode from the host app.
@@ -1203,6 +1207,8 @@ export type AppClassProperties = {
   getName: App["getName"];
   dismissLinearEditor: App["dismissLinearEditor"];
   flowchart: App["flowchart"];
+  mindmap: App["mindmap"];
+  setMindmapDragOpacity: App["setMindmapDragOpacity"];
   drawShape: App["drawShape"];
   arrowText: App["arrowText"];
   cursor: App["cursor"];
@@ -1280,6 +1286,8 @@ export type PointerDownState = Readonly<{
     allHitElements: NonDeleted<ExcalidrawElement>[];
     // This is determined on the initial pointer down event
     wasAddedToSelection: boolean;
+    // Whether pointer down replaced the previous selection.
+    replacedSelection: boolean;
     // Whether selected element(s) were duplicated, might change during the
     // pointer interaction
     hasBeenDuplicated: boolean;

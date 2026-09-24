@@ -211,6 +211,51 @@ export const actionDeleteSelected = register({
   icon: TrashIcon,
   trackEvent: { category: "element", action: "delete" },
   perform: (elements, appState, formData, app) => {
+    if (app.mindmap.hasSelectedMindmapElement()) {
+      if (app.mindmap.getSelectedNode()) {
+        return app.mindmap.getDeleteActionResult();
+      }
+      const graphElements = app.mindmap.deleteCompleteSelectedGraphs(elements);
+      if (!graphElements) {
+        return false;
+      }
+      const ordinarySelectedElementIds: Record<string, true> = {};
+      graphElements.forEach((element) => {
+        if (!element.isDeleted && appState.selectedElementIds[element.id]) {
+          ordinarySelectedElementIds[element.id] = true;
+        }
+      });
+      const { elements: nextElements, appState: nextAppState } =
+        deleteSelectedElements(
+          graphElements,
+          { ...appState, selectedElementIds: ordinarySelectedElementIds },
+          app,
+        );
+      fixBindingsAfterDeletion(
+        nextElements,
+        nextElements.filter((element) => element.isDeleted),
+      );
+      const nonDeletedIds = new Set(
+        nextElements
+          .filter((element) => !element.isDeleted)
+          .map(({ id }) => id),
+      );
+      return {
+        elements: nextElements,
+        appState: {
+          ...nextAppState,
+          selectedElementIds: Object.fromEntries(
+            Object.keys(nextAppState.selectedElementIds)
+              .filter((id) => nonDeletedIds.has(id))
+              .map((id) => [id, true]),
+          ),
+          previousSelectedElementIds: {},
+          selectedLinearElement: null,
+          hoveredElementIds: {},
+        },
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      };
+    }
     if (appState.selectedLinearElement?.isEditing) {
       const { elementId, selectedPointsIndices } =
         appState.selectedLinearElement;

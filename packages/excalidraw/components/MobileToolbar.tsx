@@ -34,6 +34,7 @@ import {
   mermaidLogoIcon,
   MagicIcon,
   stickyNoteToolIcon,
+  mindmapIcon,
 } from "./icons";
 
 import "./ToolIcon.scss";
@@ -121,6 +122,7 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
       "embeddable",
       "laser",
       "bucketfill",
+      "mindmap",
       "magicframe",
     ] as const
   ).filter((tool) => {
@@ -148,6 +150,8 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
       ? laserPointerToolIcon
       : activeTool.type === "bucketfill"
       ? bucketFillIcon
+      : activeTool.type === "mindmap"
+      ? mindmapIcon
       : activeTool.type === "magicframe"
       ? MagicIcon
       : DotsIcon
@@ -345,6 +349,18 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
           >
             {t("toolBar.bucketfill")}
           </DropdownMenu.Item>
+          {app.props.UIOptions.tools?.mindmap !== false && (
+            <DropdownMenu.Item
+              onSelect={() => app.setActiveTool({ type: "mindmap" })}
+              icon={mindmapIcon}
+              shortcut={getToolShortcut("mindmap")}
+              data-testid="toolbar-mindmap"
+              selected={activeTool.type === "mindmap"}
+              disabled={isToolButtonDisabled(app, "mindmap")}
+            >
+              {t("toolBar.mindmap")}
+            </DropdownMenu.Item>
+          )}
           <div style={{ margin: "6px 0", fontSize: 14, fontWeight: 600 }}>
             Generate
           </div>

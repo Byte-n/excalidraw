@@ -89,6 +89,18 @@ export class ActionManager {
   private isActionBlockedByViewportTransition = (action: Action) =>
     action.navigation === true && this.app.viewport.isLockedTransitionPending;
 
+  private prepareActionResult = (
+    action: Action,
+    result: ActionResult | Promise<ActionResult>,
+  ): ActionResult | Promise<ActionResult> => {
+    if (isPromiseLike(result)) {
+      return result.then((resolved) =>
+        this.app.mindmap.relayoutActionResult(action.name, resolved),
+      );
+    }
+    return this.app.mindmap.relayoutActionResult(action.name, result);
+  };
+
   handleKeyDown(event: React.KeyboardEvent | KeyboardEvent) {
     if (!this.app.isInteractionEnabled() && !this.app.isNavigationEnabled()) {
       return false;
@@ -140,11 +152,23 @@ export class ActionManager {
     const appState = this.getAppState();
     const value = null;
 
+    if (this.app.mindmap.shouldBlockNativeAction(action.name)) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.app.mindmap.notifyUnsupportedOperation(action.name);
+      return true;
+    }
+
     trackAction(action, "keyboard", appState, elements, this.app, null);
 
     event.preventDefault();
     event.stopPropagation();
-    this.updater(data[0].perform(elements, appState, value, this.app));
+    this.updater(
+      this.prepareActionResult(
+        data[0],
+        data[0].perform(elements, appState, value, this.app),
+      ),
+    );
     return true;
   }
 
@@ -171,9 +195,19 @@ export class ActionManager {
     const elements = this.getElementsIncludingDeleted();
     const appState = this.getAppState();
 
+    if (this.app.mindmap.shouldBlockNativeAction(action.name)) {
+      this.app.mindmap.notifyUnsupportedOperation(action.name);
+      return;
+    }
+
     trackAction(action, source, appState, elements, this.app, value);
 
-    this.updater(action.perform(elements, appState, value, this.app));
+    this.updater(
+      this.prepareActionResult(
+        action,
+        action.perform(elements, appState, value, this.app),
+      ),
+    );
   }
 
   /**
@@ -197,6 +231,11 @@ export class ActionManager {
           return;
         }
 
+        if (this.app.mindmap.shouldBlockNativeAction(action.name)) {
+          this.app.mindmap.notifyUnsupportedOperation(action.name);
+          return;
+        }
+
         // read fresh state at call time — memoized panel children may invoke
         // an `updateData` closure minted by an earlier render
         trackAction(
@@ -209,11 +248,14 @@ export class ActionManager {
         );
 
         this.updater(
-          action.perform(
-            this.getElementsIncludingDeleted(),
-            this.getAppState(),
-            formState,
-            this.app,
+          this.prepareActionResult(
+            action,
+            action.perform(
+              this.getElementsIncludingDeleted(),
+              this.getAppState(),
+              formState,
+              this.app,
+            ),
           ),
         );
       };

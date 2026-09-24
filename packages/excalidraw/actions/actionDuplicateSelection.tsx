@@ -5,7 +5,10 @@ import {
   arrayToMap,
 } from "@excalidraw/common";
 
-import { getNonDeletedElements } from "@excalidraw/element";
+import {
+  getMindmapElementsForSelection,
+  getNonDeletedElements,
+} from "@excalidraw/element";
 
 import { LinearElementEditor } from "@excalidraw/element";
 
@@ -60,15 +63,19 @@ export const actionDuplicateSelection = register({
       }
     }
 
+    const selectedElements = getSelectedElements(elements, appState, {
+      includeBoundTextElement: true,
+      includeElementsInFrames: true,
+    });
+    const elementsToDuplicate = getMindmapElementsForSelection(
+      elements,
+      selectedElements,
+    );
+
     const duplication = duplicateElements({
       type: "in-place",
       elements,
-      idsOfElementsToDuplicate: arrayToMap(
-        getSelectedElements(elements, appState, {
-          includeBoundTextElement: true,
-          includeElementsInFrames: true,
-        }),
-      ),
+      idsOfElementsToDuplicate: arrayToMap(elementsToDuplicate),
       appState,
       randomizeSeed: true,
       overrides: ({ origElement, origIdToDuplicateId }) => {
