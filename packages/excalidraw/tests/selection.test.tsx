@@ -1390,7 +1390,9 @@ describe("tool locking & selection", () => {
         value !== "frame" &&
         value !== "embeddable" &&
         value !== "autoshape" &&
-        value !== "bucketfill"
+        value !== "bucketfill" &&
+        // mindmap is also rendered in the extra-tools dropdown
+        value !== "mindmap"
       ) {
         const element = UI.createElement(value);
         expect(h.state.selectedElementIds[element.id]).not.toBe(true);

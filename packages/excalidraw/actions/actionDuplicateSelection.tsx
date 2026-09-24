@@ -5,7 +5,11 @@ import {
   arrayToMap,
 } from "@excalidraw/common";
 
-import { getNonDeletedElements } from "@excalidraw/element";
+import {
+  getNonDeletedElements,
+  isMindmapEdgeElement,
+  isMindmapNodeElement,
+} from "@excalidraw/element";
 
 import { LinearElementEditor } from "@excalidraw/element";
 
@@ -39,6 +43,20 @@ export const actionDuplicateSelection = register({
   perform: (elements, appState, formData, app) => {
     if (appState.selectedElementsAreBeingDragged) {
       return false;
+    }
+
+    if (
+      getSelectedElements(elements, appState).some(
+        (element) =>
+          isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+      )
+    ) {
+      app.mindmap.notifyUnsupportedOperation();
+      return {
+        elements,
+        appState,
+        captureUpdate: CaptureUpdateAction.NEVER,
+      };
     }
 
     // duplicate selected point(s) if editing a line

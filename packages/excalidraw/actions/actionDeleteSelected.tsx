@@ -18,6 +18,8 @@ import { getFrameChildren } from "@excalidraw/element";
 
 import {
   getElementsInGroup,
+  isMindmapEdgeElement,
+  isMindmapNodeElement,
   selectGroupsForSelectedElements,
 } from "@excalidraw/element";
 
@@ -211,6 +213,19 @@ export const actionDeleteSelected = register({
   icon: TrashIcon,
   trackEvent: { category: "element", action: "delete" },
   perform: (elements, appState, formData, app) => {
+    if (
+      getSelectedElements(elements, appState).some(
+        (element) =>
+          isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+      )
+    ) {
+      app.mindmap.notifyUnsupportedOperation();
+      return {
+        elements,
+        appState,
+        captureUpdate: CaptureUpdateAction.NEVER,
+      };
+    }
     if (appState.selectedLinearElement?.isEditing) {
       const { elementId, selectedPointsIndices } =
         appState.selectedLinearElement;

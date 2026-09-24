@@ -164,7 +164,8 @@ export type ToolType =
   | "embeddable"
   | "laser"
   | "autoshape"
-  | "bucketfill";
+  | "bucketfill"
+  | "mindmap";
 
 export type ElementOrToolType = ExcalidrawElementType | ToolType | "custom";
 
@@ -1130,6 +1131,7 @@ export type UIOptions = Partial<{
   canvasActions: CanvasActions;
   tools: {
     image: boolean;
+    mindmap?: boolean;
   };
   /**
    * Optionally control the editor form factor and desktop UI mode from the host app.
@@ -1203,6 +1205,7 @@ export type AppClassProperties = {
   getName: App["getName"];
   dismissLinearEditor: App["dismissLinearEditor"];
   flowchart: App["flowchart"];
+  mindmap: App["mindmap"];
   drawShape: App["drawShape"];
   arrowText: App["arrowText"];
   cursor: App["cursor"];

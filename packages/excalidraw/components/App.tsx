@@ -150,6 +150,8 @@ import {
   isIframeElement,
   isIframeLikeElement,
   isMagicFrameElement,
+  isMindmapEdgeElement,
+  isMindmapNodeElement,
   isTextBindableContainer,
   isElbowArrow,
   isBindableElement,
@@ -452,6 +454,7 @@ import { AppCursor } from "./App.cursor";
 import { AppDrawShape } from "./App.drawshape";
 import { AppDuplicate } from "./App.duplicate";
 import { AppFlowchart } from "./App.flowchart";
+import { AppMindmap } from "./App.mindmap";
 import { AppPan } from "./App.pan";
 import { AppViewport, RIGHT_SIDEBAR_WIDTH } from "./App.viewport";
 import { AppWheel } from "./App.wheel";
@@ -469,7 +472,7 @@ import { StaticCanvas, InteractiveCanvas } from "./canvases";
 import NewElementCanvas from "./canvases/NewElementCanvas";
 import { isPointHittingLink } from "./hyperlink/helpers";
 import { CursorHint, CursorHints } from "./CursorHint";
-import { MagicIcon, copyIcon, fullscreenIcon } from "./icons";
+import { MagicIcon, PlusIcon, copyIcon, fullscreenIcon } from "./icons";
 import { AppStateObserver, type OnStateChange } from "./AppStateObserver";
 
 import { findShapeByKey, TOGGLE_TOOLS } from "./Tools";
@@ -718,6 +721,7 @@ class App extends React.Component<AppProps, AppState> {
   public duplicate: AppDuplicate = new AppDuplicate(this);
   public toolDrag: AppToolDrag = new AppToolDrag(this);
   public flowchart: AppFlowchart = new AppFlowchart(this);
+  public mindmap: AppMindmap = new AppMindmap(this);
   public cursor: AppCursor = new AppCursor(this);
   public arrowText: AppArrowText = new AppArrowText(this);
   public pan: AppPan = new AppPan(this, {
@@ -2409,6 +2413,15 @@ class App extends React.Component<AppProps, AppState> {
             this.state.cursorButton === "down");
 
     const firstSelectedElement = selectedElements[0];
+    const hoveredMindmapNode = Object.keys(this.state.hoveredElementIds)
+      .map((id) => this.scene.getNonDeletedElement(id))
+      .find(isMindmapNodeElement);
+    const mindmapNodeForControls = hoveredMindmapNode
+      ? hoveredMindmapNode
+      : selectedElements.length === 1 &&
+        isMindmapNodeElement(firstSelectedElement)
+      ? firstSelectedElement
+      : null;
 
     const showShapeSwitchPanel =
       editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
@@ -2559,6 +2572,26 @@ class App extends React.Component<AppProps, AppState> {
                                   this.updateEmbedValidationStatus
                                 }
                               />
+                            )}
+                          {this.isDefaultUIEnabled() &&
+                            mindmapNodeForControls &&
+                            this.state.openDialog?.name !==
+                              "elementLinkSelector" && (
+                              <ElementCanvasButtons
+                                element={mindmapNodeForControls}
+                                elementsMap={renderableElementsMap}
+                              >
+                                <ElementCanvasButton
+                                  title={t("labels.addMindmapChild")}
+                                  icon={PlusIcon}
+                                  checked={false}
+                                  onChange={() =>
+                                    this.mindmap.createChild(
+                                      mindmapNodeForControls.id,
+                                    )
+                                  }
+                                />
+                              </ElementCanvasButtons>
                             )}
                           {this.isDefaultUIEnabled() &&
                             this.props.aiEnabled !== false &&
@@ -3347,6 +3380,7 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     this.flowchart.clear();
+    this.mindmap.clear();
 
     // These components install their own DOM listeners rather than going
     // through App's input handlers, so they must be explicitly unmounted.
@@ -5653,6 +5687,10 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
 
+      if (this.mindmap.handleKeyEvent(event)) {
+        return;
+      }
+
       // Handle Alt key for bind mode
       if (event.key === KEYS.ALT) {
         if (this.state.activeTool.type === "bucketfill") {
@@ -6176,6 +6214,9 @@ class App extends React.Component<AppProps, AppState> {
             lastActiveTool: this.state.activeTool,
           })
         : updateActiveTool(this.state, tool);
+    if (nextActiveTool.type !== "mindmap") {
+      this.mindmap.clearHover();
+    }
     if (nextActiveTool.type === "hand") {
       this.cursor.set(CURSOR_TYPE.GRAB);
     } else if (!this.pan.isSpaceHeld()) {
@@ -6203,6 +6244,10 @@ class App extends React.Component<AppProps, AppState> {
         // only the text tool offers arrow-endpoint binding, and the highlight
         // is refreshed on pointermove — don't leave a stale one behind
         hoveredArrowTextAnchor: null,
+        ...(nextActiveTool.type !== "mindmap" &&
+        Object.keys(prevState.hoveredElementIds).length
+          ? { hoveredElementIds: {} }
+          : {}),
       } as const;
 
       if (nextActiveTool.type === "freedraw") {
@@ -6445,6 +6490,7 @@ class App extends React.Component<AppProps, AppState> {
 
         const isDeleted = !nextOriginalText.trim();
         updateElement(nextOriginalText, isDeleted);
+        const didCreateMindmapNode = this.mindmap.handleTextSubmit(element);
 
         // keyboard-submit keeps focus on the edited object. For bound text, keep
         // the container selected even if the text becomes empty and is deleted.
@@ -6481,7 +6527,8 @@ class App extends React.Component<AppProps, AppState> {
           ]);
         }
 
-        if (!isDeleted || isExistingElement) {
+        // 新建脑图节点即使没有文字，也需要记录创建历史。
+        if (!isDeleted || isExistingElement || didCreateMindmapNode) {
           this.store.scheduleCapture();
         }
 
@@ -7198,6 +7245,13 @@ class App extends React.Component<AppProps, AppState> {
     ) {
       return;
     }
+    const mindmapScenePoint = viewportCoordsToSceneCoords(event, this.state);
+    if (
+      this.mindmap.handleDoubleClick(mindmapScenePoint.x, mindmapScenePoint.y)
+    ) {
+      return;
+    }
+
     // case: double-clicking with arrow/line tool selected would both create
     // text and enter multiElement mode
     if (this.state.multiElement) {
@@ -7828,6 +7882,8 @@ class App extends React.Component<AppProps, AppState> {
       x: scenePointerX,
       y: scenePointerY,
     };
+
+    this.mindmap.handlePointerMove(scenePointerX, scenePointerY);
 
     this.updateMultiTouchGesture(event);
 
@@ -8798,6 +8854,8 @@ class App extends React.Component<AppProps, AppState> {
       return;
     }
 
+    this.mindmap.preparePointerDown(pointerDownState);
+
     const allowOnPointerDown =
       !this.state.penMode ||
       event.pointerType !== "touch" ||
@@ -8975,6 +9033,8 @@ class App extends React.Component<AppProps, AppState> {
       // mode this branch is unreachable:
       // `pan.start` swallows the pointer-down.
       this.bucketFill.handlePointerDown(scenePointer);
+    } else if (this.state.activeTool.type === TOOL_TYPE.mindmap) {
+      this.mindmap.handlePointerDown(pointerDownState);
     } else if (
       this.state.activeTool.type !== "eraser" &&
       this.state.activeTool.type !== "hand" &&
@@ -10615,6 +10675,10 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
       const pointerCoords = viewportCoordsToSceneCoords(event, this.state);
+
+      if (this.mindmap.shouldBlockNativePointer(pointerDownState)) {
+        return;
+      }
 
       if (this.state.activeLockedId) {
         this.setState({
@@ -12530,6 +12594,28 @@ class App extends React.Component<AppProps, AppState> {
 
   private eraseElements = () => {
     let didChange = false;
+
+    const protectedIds = new Set<string>();
+    for (const id of this.elementsPendingErasure) {
+      const element = this.scene.getElement(id);
+      const container =
+        element?.type === "text" && element.containerId
+          ? this.scene.getElement(element.containerId)
+          : null;
+      if (
+        isMindmapNodeElement(element) ||
+        isMindmapEdgeElement(element) ||
+        isMindmapNodeElement(container)
+      ) {
+        protectedIds.add(id);
+      }
+    }
+    if (protectedIds.size) {
+      this.mindmap.notifyUnsupportedOperation();
+      this.elementsPendingErasure = new Set(
+        [...this.elementsPendingErasure].filter((id) => !protectedIds.has(id)),
+      );
+    }
 
     // Binding is double accounted on both elements and if one of them is
     // deleted, the binding should be removed

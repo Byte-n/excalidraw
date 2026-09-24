@@ -40,6 +40,7 @@ import {
 
 import type {
   ExcalidrawElement,
+  ExcalidrawRectangleElement,
   ExcalidrawMindmapNodeElement,
   FractionalIndex,
   MindmapNodeShape,
@@ -103,8 +104,16 @@ describe("mindmap 正式元素模型", () => {
     };
     expect(getCornerRadius(40, ordinaryWithExtraFields)).toBe(0);
     expect(
-      ShapeCache.generateElementShape(ordinaryWithExtraFields, null),
-    ).toEqual(ShapeCache.generateElementShape(rectangle, null));
+      ShapeCache.generateElementShape(
+        ordinaryWithExtraFields as ExcalidrawRectangleElement,
+        null,
+      ),
+    ).toEqual(
+      ShapeCache.generateElementShape(
+        rectangle as ExcalidrawRectangleElement,
+        null,
+      ),
+    );
   });
 
   it.each(["rectangle", "ellipse", "diamond", "pill"] as MindmapNodeShape[])(

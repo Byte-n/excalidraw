@@ -111,6 +111,18 @@ export const PlusIcon = createIcon(
   tablerIconProps,
 );
 
+// tabler-icons: sitemap
+export const mindmapIcon = createIcon(
+  <g>
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <rect x="3" y="3" width="6" height="5" rx="1" />
+    <rect x="15" y="16" width="6" height="5" rx="1" />
+    <rect x="15" y="3" width="6" height="5" rx="1" />
+    <path d="M9 5.5h6M12 5.5v13m0 0h3M12 11.5h3" />
+  </g>,
+  tablerIconProps,
+);
+
 // tabler-icons: dots-vertical
 export const DotsIcon = createIcon(
   <g strokeWidth="1.5">

@@ -115,6 +115,7 @@
     "you": "You",
     "toggleGrid": "Toggle grid",
     "addToLibrary": "Add to library",
+    "addMindmapChild": "Add child node",
     "removeFromLibrary": "Remove from library",
     "libraryLoadingMessage": "Loading library…",
     "libraries": "Browse libraries",
@@ -316,7 +317,8 @@
     },
     "asyncPasteFailedOnRead": "Couldn't paste (couldn't read from system clipboard).",
     "asyncPasteFailedOnParse": "Couldn't paste.",
-    "copyToSystemClipboardFailed": "Couldn't copy to clipboard."
+    "copyToSystemClipboardFailed": "Couldn't copy to clipboard.",
+    "mindmapUnsupported": "This mindmap operation is not available yet."
   },
   "toolBar": {
     "selection": "Selection",
@@ -341,6 +343,7 @@
     "laser": "Laser pointer",
     "autoshape": "Draw to shape",
     "bucketfill": "Bucket fill",
+    "mindmap": "Mindmap",
     "hand": "Hand (panning tool)",
     "extraTools": "More tools",
     "mermaidToExcalidraw": "Mermaid to Excalidraw",

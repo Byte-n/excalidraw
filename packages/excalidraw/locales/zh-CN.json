@@ -114,6 +114,7 @@
     "you": "",
     "toggleGrid": "切换网格显示",
     "addToLibrary": "添加到素材库中",
+    "addMindmapChild": "添加子节点",
     "removeFromLibrary": "从素材库中移除",
     "libraryLoadingMessage": "正在加载素材库…",
     "libraries": "浏览素材库",
@@ -312,7 +313,8 @@
     },
     "asyncPasteFailedOnRead": "无法粘贴（无法读取系统剪贴板）。",
     "asyncPasteFailedOnParse": "无法粘贴。",
-    "copyToSystemClipboardFailed": "无法复制到剪贴板。"
+    "copyToSystemClipboardFailed": "无法复制到剪贴板。",
+    "mindmapUnsupported": "思维导图暂不支持此操作。"
   },
   "toolBar": {
     "selection": "选择",
@@ -336,6 +338,7 @@
     "laser": "激光笔",
     "autoshape": "",
     "bucketfill": "",
+    "mindmap": "思维导图",
     "hand": "抓手（平移工具）",
     "extraTools": "更多工具",
     "mermaidToExcalidraw": "Mermaid 至 Excalidraw",

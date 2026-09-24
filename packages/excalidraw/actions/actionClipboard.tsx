@@ -1,5 +1,9 @@
-import { isTextElement } from "@excalidraw/element";
-import { getTextFromElements } from "@excalidraw/element";
+import {
+  getTextFromElements,
+  isMindmapEdgeElement,
+  isMindmapNodeElement,
+  isTextElement,
+} from "@excalidraw/element";
 
 import { CODES, KEYS, isFirefox } from "@excalidraw/common";
 
@@ -26,6 +30,21 @@ export const actionCopy = register<ClipboardEvent | null>({
   icon: DuplicateIcon,
   trackEvent: { category: "element" },
   perform: async (elements, appState, event, app) => {
+    if (
+      app.scene
+        .getSelectedElements({
+          selectedElementIds: appState.selectedElementIds,
+          includeBoundTextElement: true,
+          includeElementsInFrames: true,
+        })
+        .some(
+          (element) =>
+            isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+        )
+    ) {
+      app.mindmap.notifyUnsupportedOperation();
+      return { captureUpdate: CaptureUpdateAction.NEVER };
+    }
     const elementsToCopy = app.scene.getSelectedElements({
       selectedElementIds: appState.selectedElementIds,
       includeBoundTextElement: true,
@@ -115,6 +134,21 @@ export const actionCut = register<ClipboardEvent | null>({
   icon: cutIcon,
   trackEvent: { category: "element" },
   perform: (elements, appState, event, app) => {
+    if (
+      app.scene
+        .getSelectedElements({
+          selectedElementIds: appState.selectedElementIds,
+          includeBoundTextElement: true,
+          includeElementsInFrames: true,
+        })
+        .some(
+          (element) =>
+            isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+        )
+    ) {
+      app.mindmap.notifyUnsupportedOperation();
+      return { captureUpdate: CaptureUpdateAction.NEVER };
+    }
     actionCopy.perform(elements, appState, event, app);
     return actionDeleteSelected.perform(elements, appState, null, app);
   },

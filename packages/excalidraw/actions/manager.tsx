@@ -140,6 +140,13 @@ export class ActionManager {
     const appState = this.getAppState();
     const value = null;
 
+    if (this.app.mindmap.shouldBlockNativeAction(action.name)) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.app.mindmap.notifyUnsupportedOperation();
+      return true;
+    }
+
     trackAction(action, "keyboard", appState, elements, this.app, null);
 
     event.preventDefault();
@@ -171,6 +178,11 @@ export class ActionManager {
     const elements = this.getElementsIncludingDeleted();
     const appState = this.getAppState();
 
+    if (this.app.mindmap.shouldBlockNativeAction(action.name)) {
+      this.app.mindmap.notifyUnsupportedOperation();
+      return;
+    }
+
     trackAction(action, source, appState, elements, this.app, value);
 
     this.updater(action.perform(elements, appState, value, this.app));
@@ -194,6 +206,11 @@ export class ActionManager {
       PanelComponent.displayName = "PanelComponent";
       const updateData = (formState?: any) => {
         if (this.isActionBlockedByViewportTransition(action)) {
+          return;
+        }
+
+        if (this.app.mindmap.shouldBlockNativeAction(action.name)) {
+          this.app.mindmap.notifyUnsupportedOperation();
           return;
         }
 

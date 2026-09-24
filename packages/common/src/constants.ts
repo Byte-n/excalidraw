@@ -549,6 +549,7 @@ export const TOOL_TYPE = {
   laser: "laser",
   autoshape: "autoshape",
   bucketfill: "bucketfill",
+  mindmap: "mindmap",
 } as const;
 
 export const EDITOR_LS_KEYS = {
