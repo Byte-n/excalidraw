@@ -1,5 +1,12 @@
 export { actionDeleteSelected } from "./actionDeleteSelected";
 export {
+  actionMindmapCreateChild,
+  actionMindmapCreateSibling,
+  actionMindmapToggleCollapse,
+  actionMindmapDeletePreservingChildren,
+  actionMindmapPromote,
+} from "./actionMindmap";
+export {
   actionBringForward,
   actionBringToFront,
   actionSendBackward,

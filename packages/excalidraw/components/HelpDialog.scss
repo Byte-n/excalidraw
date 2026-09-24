@@ -78,6 +78,9 @@
       &__island--editor {
         grid-area: 1 / 2 / 3 / 3;
       }
+      &__island--mindmap {
+        grid-column: 1 / -1;
+      }
     }
 
     &__island {
@@ -92,6 +95,25 @@
         border: 1px solid var(--dialog-border-color);
         border-radius: var(--border-radius-lg);
       }
+    }
+
+    &__note {
+      margin: 0;
+      padding: 0.625rem 0.75rem;
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      border-bottom: 1px solid var(--dialog-border-color);
+
+      &:last-child {
+        border-bottom: none;
+      }
+    }
+
+    &__island--mindmap .HelpDialog__key-container {
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      row-gap: 0.25rem;
+      max-width: 60%;
     }
 
     &__shortcut {

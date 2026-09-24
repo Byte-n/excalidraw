@@ -333,6 +333,11 @@ import {
   actionToggleArrowBinding,
   actionToggleMidpointSnapping,
   actionToggleCropEditor,
+  actionMindmapCreateChild,
+  actionMindmapCreateSibling,
+  actionMindmapToggleCollapse,
+  actionMindmapDeletePreservingChildren,
+  actionMindmapPromote,
 } from "../actions";
 import { actionWrapTextInContainer } from "../actions/actionBoundText";
 import { actionPaste } from "../actions/actionClipboard";
@@ -2575,8 +2580,10 @@ class App extends React.Component<AppProps, AppState> {
                             )}
                           {this.isDefaultUIEnabled() &&
                             mindmapNodeForControls &&
-                            this.state.openDialog?.name !==
-                              "elementLinkSelector" && (
+                            this.mindmap.canEditNode(
+                              mindmapNodeForControls.id,
+                            ) &&
+                            !this.state.openDialog && (
                               <ElementCanvasButtons
                                 element={mindmapNodeForControls}
                                 elementsMap={renderableElementsMap}
@@ -2591,6 +2598,31 @@ class App extends React.Component<AppProps, AppState> {
                                     )
                                   }
                                 />
+                                {this.mindmap.hasChildren(
+                                  mindmapNodeForControls.id,
+                                ) && (
+                                  <ElementCanvasButton
+                                    title={t(
+                                      mindmapNodeForControls.collapsed
+                                        ? "labels.expandMindmap"
+                                        : "labels.collapseMindmap",
+                                    )}
+                                    icon={
+                                      <span aria-hidden="true">
+                                        {mindmapNodeForControls.collapsed
+                                          ? "▸"
+                                          : "▾"}
+                                      </span>
+                                    }
+                                    checked={mindmapNodeForControls.collapsed}
+                                    onChange={() =>
+                                      this.mindmap.executeTreeCommand(
+                                        { type: "toggleCollapse" },
+                                        mindmapNodeForControls.id,
+                                      )
+                                    }
+                                  />
+                                )}
                               </ElementCanvasButtons>
                             )}
                           {this.isDefaultUIEnabled() &&
@@ -6017,6 +6049,9 @@ class App extends React.Component<AppProps, AppState> {
   );
 
   private onKeyUp = withBatchedUpdates((event: KeyboardEvent) => {
+    if (this.mindmap.handleKeyUp(event)) {
+      return;
+    }
     if (!this.isInteractionEnabled()) {
       return;
     }
@@ -13826,6 +13861,18 @@ class App extends React.Component<AppProps, AppState> {
 
     if (this.state.viewModeEnabled) {
       return [actionCopy, ...options];
+    }
+
+    if (this.mindmap.getSelectedNode()) {
+      return [
+        actionMindmapCreateChild,
+        actionMindmapCreateSibling,
+        actionMindmapToggleCollapse,
+        actionMindmapPromote,
+        CONTEXT_MENU_SEPARATOR,
+        { ...actionDeleteSelected, label: "labels.deleteMindmapSubtree" },
+        actionMindmapDeletePreservingChildren,
+      ];
     }
 
     const zIndexActions: ContextMenuItems =

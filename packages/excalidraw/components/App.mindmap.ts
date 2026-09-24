@@ -2,31 +2,37 @@ import { KEYS } from "@excalidraw/common";
 import { generateKeyBetween } from "@excalidraw/fractional-indexing";
 
 import {
+  applyMindmapTreeCommand,
   buildMindmapGraphIndex,
   CaptureUpdateAction,
   computeBoundTextPosition,
   getBoundTextElement,
   handleBindTextResize,
+  isMindmapElementHidden,
   isMindmapEdgeElement,
   isMindmapNodeElement,
   layoutMindmap,
+  navigateMindmap,
   newElementWith,
   newMindmapNodeElement,
   repairMindmapElements,
 } from "@excalidraw/element";
 
 import type {
+  ExcalidrawElement,
   ExcalidrawMindmapNodeElement,
   ExcalidrawTextContainer,
   FractionalIndex,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
 
+import type { MindmapTreeCommand } from "@excalidraw/element";
+
 import { t } from "../i18n";
 
 import type App from "./App";
 import type { PointerDownState } from "../types";
-import type { ActionName } from "../actions/types";
+import type { ActionName, ActionResult } from "../actions/types";
 
 type NewNodeKind = "child" | "sibling";
 
@@ -82,11 +88,13 @@ const unsupportedSelectionActions = new Set<ActionName>([
 export class AppMindmap {
   private readonly pendingTextNodeIds = new Set<string>();
   private hoveredNodeId: string | null = null;
+  private consumedSpace = false;
 
   constructor(private readonly app: App) {}
 
   clear = () => {
     this.pendingTextNodeIds.clear();
+    this.consumedSpace = false;
     this.clearHover();
   };
 
@@ -96,7 +104,7 @@ export class AppMindmap {
 
   handlePointerMove = (sceneX: number, sceneY: number) => {
     if (
-      this.app.state.activeTool.type !== "mindmap" ||
+      !["mindmap", "selection"].includes(this.app.state.activeTool.type) ||
       this.app.state.openDialog?.name === "elementLinkSelector"
     ) {
       if (this.hoveredNodeId) {
@@ -114,10 +122,14 @@ export class AppMindmap {
         ? this.app.scene.getNonDeletedElement(hit.containerId)
         : hit;
     const hoveredNode = node && isMindmapNodeElement(node) ? node : null;
-    if (hoveredNode?.id === this.hoveredNodeId) {
+    const hoveredNodeId = hoveredNode?.id ?? null;
+    if (
+      hoveredNodeId === this.hoveredNodeId &&
+      (!hoveredNode || this.app.state.hoveredElementIds[hoveredNode.id])
+    ) {
       return;
     }
-    this.hoveredNodeId = hoveredNode?.id ?? null;
+    this.hoveredNodeId = hoveredNodeId;
     this.app.setState({
       hoveredElementIds: hoveredNode ? { [hoveredNode.id]: true } : {},
     });
@@ -195,60 +207,221 @@ export class AppMindmap {
   };
 
   handleKeyEvent = (event: React.KeyboardEvent | KeyboardEvent): boolean => {
-    if (event.type !== "keydown" || this.app.state.editingTextElement) {
-      return false;
-    }
-
-    const selected = this.app.scene
-      .getSelectedElements(this.app.state)
-      .filter(isMindmapNodeElement);
-
     if (
-      event.key === KEYS.DELETE ||
-      event.key === KEYS.BACKSPACE ||
-      event.key === KEYS.ARROW_LEFT ||
-      event.key === KEYS.ARROW_RIGHT ||
-      event.key === KEYS.ARROW_UP ||
-      event.key === KEYS.ARROW_DOWN ||
-      (event.key === KEYS.TAB && event.shiftKey) ||
-      (event[KEYS.CTRL_OR_CMD] &&
-        ["c", "x", "d"].includes(event.key.toLowerCase()))
+      ("isComposing" in event
+        ? event.isComposing
+        : event.nativeEvent.isComposing) ||
+      this.app.state.openDialog?.name === "mindmapDelete"
     ) {
-      if (selected.length || this.hasSelectedMindmapElement()) {
-        event.preventDefault();
-        event.stopPropagation();
-        this.notifyUnsupportedOperation();
-        return true;
-      }
+      return this.hasSelectedMindmapElement();
+    }
+    if (
+      event.type !== "keydown" ||
+      this.app.state.editingTextElement ||
+      this.app.state.openDialog ||
+      this.app.state.contextMenu
+    ) {
       return false;
     }
-
+    const arrows: readonly string[] = [
+      KEYS.ARROW_LEFT,
+      KEYS.ARROW_RIGHT,
+      KEYS.ARROW_UP,
+      KEYS.ARROW_DOWN,
+    ];
+    const isArrow = arrows.includes(event.key);
+    const isDelete = event.key === KEYS.DELETE || event.key === KEYS.BACKSPACE;
+    const isCopy =
+      event[KEYS.CTRL_OR_CMD] &&
+      ["c", "x", "d"].includes(event.key.toLowerCase());
     if (
-      selected.length !== 1 ||
-      event.repeat ||
-      event.shiftKey ||
+      !isArrow &&
+      !isDelete &&
+      !isCopy &&
+      event.key !== KEYS.TAB &&
+      event.key !== KEYS.ENTER &&
+      event.key !== KEYS.SPACE
+    ) {
+      return false;
+    }
+    if (!this.hasSelectedMindmapElement()) {
+      return false;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === KEYS.SPACE) {
+      this.consumedSpace = true;
+    }
+    const node = this.getSelectedNode();
+    if (
+      !node ||
+      isCopy ||
       event.altKey ||
-      event[KEYS.CTRL_OR_CMD]
+      event[KEYS.CTRL_OR_CMD] ||
+      (event.shiftKey && !isDelete && event.key !== KEYS.TAB)
     ) {
+      this.notifyUnsupportedOperation();
+      return true;
+    }
+    if (isArrow) {
+      const index = buildMindmapGraphIndex(
+        this.app.scene.getNonDeletedElements(),
+        node.graphId,
+      );
+      const target = navigateMindmap(
+        index,
+        node.id,
+        event.key as Parameters<typeof navigateMindmap>[2],
+      );
+      if (target) {
+        this.selectNode(index.nodes.get(target)!);
+      }
+    } else if (!event.repeat) {
+      if (isDelete) {
+        this.app.syncActionResult(this.getDeleteActionResult(event.shiftKey));
+      } else if (event.key === KEYS.SPACE) {
+        this.executeTreeCommand({ type: "toggleCollapse" }, node.id);
+      } else if (event.key === KEYS.TAB && event.shiftKey) {
+        this.promote(node.id);
+      } else if (event.key === KEYS.TAB) {
+        this.createNode(node, "child");
+      } else if (event.key === KEYS.ENTER) {
+        this.createNode(node, node.role === "root" ? "child" : "sibling");
+      }
+    }
+    return true;
+  };
+
+  handleKeyUp = (event: KeyboardEvent) => {
+    if (event.key === KEYS.SPACE && this.consumedSpace) {
+      this.consumedSpace = false;
+      return true;
+    }
+    return false;
+  };
+
+  getSelectedNode = () => {
+    const selected = this.app.scene.getSelectedElements(this.app.state);
+    return selected.length === 1 &&
+      isMindmapNodeElement(selected[0]) &&
+      !isMindmapElementHidden(
+        selected[0],
+        this.app.scene.getNonDeletedElementsMap(),
+      )
+      ? selected[0]
+      : null;
+  };
+
+  canEditNode = (nodeId: string) => {
+    const node = this.app.scene.getNonDeletedElement(nodeId);
+    return (
+      !!node &&
+      isMindmapNodeElement(node) &&
+      !node.locked &&
+      !this.app.state.viewModeEnabled &&
+      this.app.isInteractionEnabled() &&
+      !this.app.props.isCollaborating &&
+      !this.app.state.editingTextElement &&
+      !isMindmapElementHidden(node, this.app.scene.getNonDeletedElementsMap())
+    );
+  };
+
+  hasChildren = (nodeId: string) =>
+    this.app.scene
+      .getNonDeletedElements()
+      .some(
+        (element) =>
+          isMindmapNodeElement(element) && element.parentId === nodeId,
+      );
+
+  getTreeActionResult = (
+    command: MindmapTreeCommand,
+    nodeId = this.getSelectedNode()?.id,
+  ): ActionResult => {
+    if (!nodeId || !this.canEditNode(nodeId)) {
+      this.notifyUnsupportedOperation();
       return false;
     }
-
-    const node = selected[0];
-    if (event.key === KEYS.TAB) {
-      event.preventDefault();
-      event.stopPropagation();
-      this.createNode(node, "child");
-      return true;
+    const result = applyMindmapTreeCommand(
+      this.app.scene.getElementsIncludingDeleted(),
+      nodeId,
+      command,
+    );
+    if (!result) {
+      return false;
     }
+    return {
+      elements: this.getLaidOutElements(result.elements, result.graphIds),
+      appState: {
+        selectedElementIds: result.selectedNodeId
+          ? { [result.selectedNodeId]: true }
+          : {},
+        selectedGroupIds: {},
+        previousSelectedElementIds: {},
+        selectedLinearElement: null,
+        hoveredElementIds: {},
+        openDialog: null,
+      },
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    };
+  };
 
-    if (event.key === KEYS.ENTER) {
-      event.preventDefault();
-      event.stopPropagation();
+  executeTreeCommand = (command: MindmapTreeCommand, nodeId?: string) => {
+    this.app.syncActionResult(this.getTreeActionResult(command, nodeId));
+  };
+
+  getDeleteActionResult = (preserveChildren = false): ActionResult => {
+    const node = this.getSelectedNode();
+    if (!node || !this.canEditNode(node.id)) {
+      this.notifyUnsupportedOperation();
+      return false;
+    }
+    const children =
+      buildMindmapGraphIndex(
+        this.app.scene.getNonDeletedElements(),
+        node.graphId,
+      ).childrenById.get(node.id) ?? [];
+    if (preserveChildren && children.length > 1) {
+      return {
+        appState: {
+          openDialog: { name: "mindmapDelete", nodeId: node.id },
+        },
+        captureUpdate: CaptureUpdateAction.NEVER,
+      };
+    }
+    return this.getTreeActionResult(
+      { type: preserveChildren ? "deletePreservingChildren" : "delete" },
+      node.id,
+    );
+  };
+
+  getPromoteActionResult = (
+    nodeId = this.getSelectedNode()?.id,
+  ): ActionResult => {
+    const used = new Set(
+      this.app.scene
+        .getElementsIncludingDeleted()
+        .filter(isMindmapNodeElement)
+        .map((node) => node.graphId),
+    );
+    const base = `mindmap:${nodeId}`;
+    let newGraphId = base;
+    let suffix = 0;
+    while (used.has(newGraphId)) {
+      newGraphId = `${base}:${++suffix}`;
+    }
+    return this.getTreeActionResult({ type: "promote", newGraphId }, nodeId);
+  };
+
+  promote = (nodeId: string) => {
+    this.app.syncActionResult(this.getPromoteActionResult(nodeId));
+  };
+
+  createSibling = (nodeId: string) => {
+    const node = this.app.scene.getNonDeletedElement(nodeId);
+    if (node && isMindmapNodeElement(node)) {
       this.createNode(node, node.role === "root" ? "child" : "sibling");
-      return true;
     }
-
-    return false;
   };
 
   /** Called by App after the shared text editor has committed its value. */
@@ -277,6 +450,10 @@ export class AppMindmap {
   };
 
   private createRoot(x: number, y: number) {
+    if (this.app.props.isCollaborating || this.app.state.viewModeEnabled) {
+      this.notifyUnsupportedOperation();
+      return;
+    }
     const root = newMindmapNodeElement({
       x: x - 80,
       y: y - 28,
@@ -294,6 +471,13 @@ export class AppMindmap {
   }
 
   private createNode(parent: ExcalidrawMindmapNodeElement, kind: NewNodeKind) {
+    if (!this.canEditNode(parent.id)) {
+      this.notifyUnsupportedOperation();
+      return;
+    }
+    if (kind === "child" && parent.collapsed) {
+      this.app.scene.mutateElement(parent, { collapsed: false });
+    }
     const index = buildMindmapGraphIndex(
       this.app.scene.getNonDeletedElements(),
       parent.graphId,
@@ -331,6 +515,10 @@ export class AppMindmap {
   }
 
   private startNodeEditing(node: ExcalidrawMindmapNodeElement) {
+    if (!this.canEditNode(node.id)) {
+      this.notifyUnsupportedOperation();
+      return;
+    }
     const current = this.app.scene.getNonDeletedElement(node.id);
     if (!current || !isMindmapNodeElement(current)) {
       return;
@@ -346,52 +534,64 @@ export class AppMindmap {
   }
 
   private layoutGraph(graphId: string) {
-    const previous = this.app.scene.getElementsMapIncludingDeleted();
-    const repaired = repairMindmapElements(
-      this.app.scene.getElementsIncludingDeleted(),
-    );
-    const graph = repaired.filter(
-      (element) =>
-        !element.isDeleted &&
-        ((element.type === "mindmap-node" && element.graphId === graphId) ||
-          (element.type === "mindmap-edge" && element.graphId === graphId)),
-    );
-    const index = buildMindmapGraphIndex(graph, graphId);
-    const layout = layoutMindmap(index);
-    const updated = new Map(repaired.map((element) => [element.id, element]));
-    for (const element of [...layout.elements, ...layout.edges]) {
-      updated.set(element.id, element);
-    }
-    for (const node of layout.elements) {
-      const text = getBoundTextElement(node, updated);
-      if (text) {
-        updated.set(text.id, {
-          ...text,
-          ...computeBoundTextPosition(node, text, updated),
-        });
-      }
-    }
     // 布局和派生连接线随文字提交一并进入历史，不能作为 NEVER 更新排除。
     this.app.updateScene({
-      elements: repaired.map((element) => {
-        const next = updated.get(element.id) ?? element;
-        const prev = previous.get(element.id);
-        if (!prev || prev === next) {
-          return next;
-        }
-        // 纯修复和布局不改版本，在写回边界只提交真实差异，供历史与协作识别。
-        const updates = Object.fromEntries(
-          Object.entries(next).filter(
-            ([key, value]) =>
-              key !== "version" &&
-              key !== "versionNonce" &&
-              key !== "updated" &&
-              prev[key as keyof typeof prev] !== value,
-          ),
-        );
-        return newElementWith(prev, updates);
-      }),
+      elements: this.getLaidOutElements(
+        this.app.scene.getElementsIncludingDeleted(),
+        [graphId],
+      ),
       captureUpdate: CaptureUpdateAction.EVENTUALLY,
+    });
+  }
+
+  private getLaidOutElements(
+    elements: readonly ExcalidrawElement[],
+    graphIds: readonly string[],
+  ) {
+    const previous = this.app.scene.getElementsMapIncludingDeleted();
+    const repaired = repairMindmapElements(elements);
+    const updated = new Map(repaired.map((element) => [element.id, element]));
+    for (const graphId of graphIds) {
+      const graph = repaired.filter(
+        (element) =>
+          !element.isDeleted &&
+          (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+          element.graphId === graphId,
+      );
+      if (!graph.some(isMindmapNodeElement)) {
+        continue;
+      }
+      const layout = layoutMindmap(buildMindmapGraphIndex(graph, graphId));
+      for (const element of [...layout.elements, ...layout.edges]) {
+        updated.set(element.id, element);
+      }
+      for (const node of layout.elements) {
+        const text = getBoundTextElement(node, updated);
+        if (text) {
+          updated.set(text.id, {
+            ...text,
+            ...computeBoundTextPosition(node, text, updated),
+          });
+        }
+      }
+    }
+    return repaired.map((element) => {
+      const next = updated.get(element.id) ?? element;
+      const prev = previous.get(element.id);
+      if (!prev || prev === next) {
+        return next;
+      }
+      // 纯修复和布局不改版本，在写回边界只提交真实差异，供历史与协作识别。
+      const updates = Object.fromEntries(
+        Object.entries(next).filter(
+          ([key, value]) =>
+            key !== "version" &&
+            key !== "versionNonce" &&
+            key !== "updated" &&
+            prev[key as keyof typeof prev] !== value,
+        ),
+      );
+      return newElementWith(prev, updates);
     });
   }
 
@@ -403,12 +603,15 @@ export class AppMindmap {
       {
         selectedElementIds: { [node.id]: true },
         selectedLinearElement: null,
+        hoveredElementIds: {},
+        selectedGroupIds: {},
+        editingGroupId: null,
       },
       onSelect,
     );
   }
 
-  private hasSelectedMindmapElement() {
+  hasSelectedMindmapElement = () => {
     return this.app.scene
       .getSelectedElements({
         selectedElementIds: this.app.state.selectedElementIds,
@@ -416,7 +619,7 @@ export class AppMindmap {
         includeElementsInFrames: true,
       })
       .some(this.isMindmapRelatedElement);
-  }
+  };
 
   private isMindmapRelatedElement = (element: NonDeletedExcalidrawElement) =>
     isMindmapNodeElement(element) ||

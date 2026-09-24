@@ -26,7 +26,7 @@
 mindmap 节点使用新的元素类型：
 
 ```ts
-type: "mindmap-node"
+type: "mindmap-node";
 ```
 
 根节点和普通节点通过 `role` 区分，而不是使用两个不同的字符串类型。这样节点提升为根节点时只需要修改角色和父节点关系，不需要替换元素类型。
@@ -49,11 +49,7 @@ mindmap 不提供 `layoutMode` 或 `positionMode`。
 
 ```ts
 type MindmapNodeRole = "root" | "node";
-type MindmapNodeShape =
-  | "rectangle"
-  | "ellipse"
-  | "diamond"
-  | "pill";
+type MindmapNodeShape = "rectangle" | "ellipse" | "diamond" | "pill";
 
 type ExcalidrawMindmapNodeElement = {
   type: "mindmap-node";
@@ -78,16 +74,16 @@ type ExcalidrawMindmapNodeElement = {
 根节点必须满足：
 
 ```ts
-role === "root"
-parentId === null
-order === null
+role === "root";
+parentId === null;
+order === null;
 ```
 
 普通节点必须满足：
 
 ```ts
-role === "node"
-parentId !== null
+role === "node";
+parentId !== null;
 ```
 
 在 TypeScript 中可以将这两种情况表达为判别联合，以便在编译期检查关系约束。
@@ -105,7 +101,7 @@ parentId !== null
 建议新增专用元素类型：
 
 ```ts
-type: "mindmap-edge"
+type: "mindmap-edge";
 ```
 
 建议字段：
@@ -303,8 +299,8 @@ type MindmapDragSession = {
 - `Tab`：创建子节点；
 - `Shift + Tab`：将节点提升一级；
 - `Space`：折叠或展开；
-- `Delete`：删除节点；
-- `Shift + Delete`：删除整个子树；
+- `Delete`：无弹窗删除节点及完整子树，根节点则删除整张图；
+- `Shift + Delete`：删除当前节点并保留后代；仅多个直属子节点时选择处理方式；
 - `Escape`：退出当前操作。
 
 文字编辑期间保留文本编辑器的默认按键行为。
@@ -313,10 +309,13 @@ type MindmapDragSession = {
 
 ### 删除
 
-- 删除叶子节点时，同时删除对应 edge。
-- 删除有子节点的节点时，默认将子节点提升到原父节点，并保持原顺序。
-- `Shift + Delete` 删除整个子树。
-- 删除根节点时需要明确选择“删除整棵图”或“保留子树并指定新根”。
+- `Delete` 默认删除当前节点及全部后代，包括折叠隐藏的后代、绑定文字与对应 edge，不弹窗；删除根节点就是删除整张图。
+- `Shift + Delete` 保留后代，只删除当前节点。子节点数量按直属子节点计算。
+- 根节点没有子节点时直接删除；只有一个子节点时自动将其作为新根；多个子节点时弹窗指定新根，其余分支按原顺序追加到新根已有子节点之后。
+- 普通节点没有子节点时直接删除；只有一个子节点时由它接替被删节点的位置，仍挂在原父节点下。
+- 普通节点有多个子节点时弹窗选择：将所有子节点按原顺序放入原父节点下、占据原节点的位置；或指定一个直属子节点接替原节点，其余分支按原顺序追加到接替节点已有子节点之后。
+- 普通节点的接替操作保留原父节点、同级位置和 `graphId`，不拆图；所有分支的内部关系和绑定文字保留。
+- 弹窗取消不改变场景或历史；确认后的结构及自动布局可一次撤销重做。菜单与键盘规则一致。
 
 ### 折叠
 

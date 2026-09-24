@@ -514,6 +514,85 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
               shortcuts={[getShortcutKey("CtrlOrCmd+Shift+>")]}
             />
           </ShortcutIsland>
+          <ShortcutIsland
+            className="HelpDialog__island--mindmap"
+            caption={t("toolBar.mindmap")}
+          >
+            <p className="HelpDialog__note">
+              {t("helpDialog.mindmap.context")}
+            </p>
+            <Shortcut
+              label={t("labels.addMindmapChild")}
+              shortcuts={[
+                getShortcutKey(
+                  getShortcutFromShortcutName("mindmapCreateChild"),
+                ),
+              ]}
+            />
+            <Shortcut
+              label={t("labels.addMindmapSibling")}
+              shortcuts={[
+                getShortcutKey(
+                  getShortcutFromShortcutName("mindmapCreateSibling"),
+                ),
+              ]}
+            />
+            <Shortcut
+              label={t("helpDialog.mindmap.previousSibling")}
+              shortcuts={["↑"]}
+            />
+            <Shortcut
+              label={t("helpDialog.mindmap.nextSibling")}
+              shortcuts={["↓"]}
+            />
+            <Shortcut
+              label={t("helpDialog.mindmap.parent")}
+              shortcuts={["←"]}
+            />
+            <Shortcut
+              label={t("helpDialog.mindmap.firstChild")}
+              shortcuts={["→"]}
+            />
+            <Shortcut
+              label={t("helpDialog.mindmap.toggleCollapse")}
+              shortcuts={[
+                getShortcutKey(
+                  getShortcutFromShortcutName("mindmapToggleCollapse"),
+                ),
+              ]}
+            />
+            <Shortcut
+              label={t("helpDialog.mindmap.promote")}
+              shortcuts={[
+                getShortcutKey(getShortcutFromShortcutName("mindmapPromote")),
+              ]}
+            />
+            <Shortcut
+              label={t("labels.deleteMindmapSubtree")}
+              shortcuts={[getShortcutKey("Delete"), KEYS.BACKSPACE]}
+            />
+            <Shortcut
+              label={t("labels.deleteMindmapPreservingChildren")}
+              shortcuts={[
+                getShortcutKey(
+                  getShortcutFromShortcutName(
+                    "mindmapDeletePreservingChildren",
+                  ),
+                ),
+                getShortcutKey("Shift+Backspace"),
+              ]}
+            />
+            <Shortcut
+              label={t("helpDialog.editText")}
+              shortcuts={[t("helpDialog.doubleClick")]}
+            />
+            <p className="HelpDialog__note">
+              {t("helpDialog.mindmap.deleteHint")}
+            </p>
+            <p className="HelpDialog__note">
+              {t("helpDialog.mindmap.preserveHint")}
+            </p>
+          </ShortcutIsland>
         </Section>
       </Dialog>
     </>

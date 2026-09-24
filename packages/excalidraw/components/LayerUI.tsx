@@ -22,6 +22,7 @@ import { actionToggleStats } from "../actions";
 import { trackEvent } from "../analytics";
 import { TunnelsContext, useInitializeTunnels } from "../context/tunnels";
 import { UIAppStateContext } from "../context/ui-appState";
+
 import { useAtom, useAtomValue } from "../editor-jotai";
 
 import { t } from "../i18n";
@@ -31,6 +32,8 @@ import {
   resolveColorTarget,
   type ColorDefaultKey,
 } from "../actions/colorTargets";
+
+import { MindmapRootDeleteDialog } from "./MindmapRootDeleteDialog";
 
 import { SelectedShapeActions, CompactShapeActions } from "./Actions";
 import { LoadingMessage } from "./LoadingMessage";
@@ -596,6 +599,13 @@ const LayerUI = ({
         />
       )}
       <ActiveConfirmDialog />
+      {appState.openDialog?.name === "mindmapDelete" && (
+        <MindmapRootDeleteDialog
+          key={appState.openDialog.nodeId}
+          app={app}
+          nodeId={appState.openDialog.nodeId}
+        />
+      )}
       {defaultUIEnabled && appState.openDialog?.name === "elementLinkSelector" && (
         <ElementLinkDialog
           sourceElementId={appState.openDialog.sourceElementId}

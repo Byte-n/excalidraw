@@ -4,6 +4,8 @@ import { pointFrom } from "@excalidraw/math";
 import type { GlobalPoint } from "@excalidraw/math";
 
 import {
+  applyMindmapTreeCommand,
+  navigateMindmap,
   buildMindmapGraphIndex,
   compareMindmapNodes,
   getMindmapEdgePath,
@@ -264,6 +266,256 @@ describe("mindmap 索引与结构修复", () => {
     ]);
     expect(repaired[0]).toBe(deleted);
     expect(indexOf(repaired).rootId).toBe("a");
+  });
+});
+
+describe("mindmap P02 纯树命令", () => {
+  const fixture = () =>
+    repairMindmapElements([
+      ...graph(),
+      node("d", "a", { order: "a1" as FractionalIndex }),
+      node("e", "c"),
+    ]);
+
+  it("导航按逻辑顺序且边界不循环，不进入折叠后代", () => {
+    const index = indexOf(fixture());
+    expect(navigateMindmap(index, "a", "ArrowUp")).toBeNull();
+    expect(navigateMindmap(index, "b", "ArrowDown")).toBeNull();
+    expect(navigateMindmap(index, "a", "ArrowDown")).toBe("b");
+    expect(navigateMindmap(index, "b", "ArrowUp")).toBe("a");
+    expect(navigateMindmap(index, "a", "ArrowLeft")).toBe("root");
+    expect(navigateMindmap(index, "a", "ArrowRight")).toBe("c");
+    expect(navigateMindmap(index, "root", "ArrowLeft")).toBeNull();
+    expect(navigateMindmap(index, "e", "ArrowRight")).toBeNull();
+    const folded = applyMindmapTreeCommand(fixture(), "a", {
+      type: "toggleCollapse",
+    })!;
+    expect(
+      navigateMindmap(indexOf(folded.elements), "a", "ArrowRight"),
+    ).toBeNull();
+    expect(
+      navigateMindmap(indexOf(folded.elements), "c", "ArrowDown"),
+    ).toBeNull();
+  });
+
+  it("保留子节点删除时，在原位置依次提升子节点并保留内部关系和边样式", () => {
+    const elements = fixture();
+    const before = JSON.stringify(elements);
+    const edge = indexOf(elements).edgeByChildId.get("c")!;
+    const result = applyMindmapTreeCommand(elements, "a", {
+      type: "deletePreservingChildren",
+    })!;
+    const index = indexOf(result.elements);
+    expect(index.childrenById.get("root")).toEqual(["c", "d", "b"]);
+    expect(index.parentById.get("e")).toBe("c");
+    expect(index.edgeByChildId.get("c")).toMatchObject({
+      id: edge.id,
+      parentId: "root",
+      strokeColor: edge.strokeColor,
+    });
+    expect(result.selectedNodeId).toBe("c");
+    expect(JSON.stringify(elements)).toBe(before);
+    expect(repairMindmapElements(result.elements)).toBe(result.elements);
+  });
+
+  it("删除折叠子树包含隐藏文本、所有后代和入边", () => {
+    const elements = fixture();
+    const text = newTextElement({ x: 0, y: 0, text: "隐藏", containerId: "e" });
+    const folded = applyMindmapTreeCommand([...elements, text], "a", {
+      type: "toggleCollapse",
+    })!;
+    const result = applyMindmapTreeCommand(folded.elements, "a", {
+      type: "delete",
+    })!;
+    expect([...indexOf(result.elements).nodes.keys()]).toEqual(["root", "b"]);
+    expect(indexOf(result.elements).edgeByChildId.size).toBe(1);
+    expect(
+      result.elements.find((element) => element.id === text.id)?.isDeleted,
+    ).toBe(true);
+  });
+
+  it("保留子树删除多子根必须指定直属新根，其他分支追加且保持内部顺序", () => {
+    const elements = fixture();
+    expect(() =>
+      applyMindmapTreeCommand(elements, "root", {
+        type: "deletePreservingChildren",
+      }),
+    ).toThrow();
+    expect(() =>
+      applyMindmapTreeCommand(elements, "root", {
+        type: "deletePreservingChildren",
+        replacementId: "c",
+      }),
+    ).toThrow();
+    const result = applyMindmapTreeCommand(elements, "root", {
+      type: "deletePreservingChildren",
+      replacementId: "a",
+    })!;
+    const index = indexOf(result.elements);
+    expect(index.rootId).toBe("a");
+    expect(index.nodes.get("a")).toMatchObject({
+      parentId: null,
+      order: null,
+      collapsed: false,
+    });
+    expect(index.childrenById.get("a")).toEqual(["c", "d", "b"]);
+    expect(index.parentById.get("e")).toBe("c");
+    expect(index.edgeByChildId.has("a")).toBe(false);
+    expect(index.edgeByChildId.size).toBe(index.nodes.size - 1);
+  });
+
+  it("删除整图不触碰另一张图和普通图形", () => {
+    const foreign = node("foreign", null, { graphId: "foreign" });
+    const rectangle = newElement({ type: "rectangle", x: 0, y: 0 });
+    const elements = [...fixture(), foreign, rectangle];
+    const result = applyMindmapTreeCommand(elements, "root", {
+      type: "delete",
+    })!;
+    expect(result.elements.filter((element) => !element.isDeleted)).toEqual([
+      foreign,
+      rectangle,
+    ]);
+    expect(result.selectedNodeId).toBeNull();
+  });
+
+  it("普通节点选择接替者不换图、不换父节点，并保留接替者已有子节点", () => {
+    const elements = repairMindmapElements([
+      ...fixture().map((element) =>
+        element.id === "c" ? { ...element, collapsed: true } : element,
+      ),
+      node("before", "root", { order: "Zz" as FractionalIndex }),
+    ]);
+    const before = JSON.stringify(elements);
+    const original = indexOf(elements);
+    const result = applyMindmapTreeCommand(elements, "a", {
+      type: "deletePreservingChildren",
+      replacementId: "c",
+    })!;
+    const index = indexOf(result.elements);
+    expect(index.rootId).toBe("root");
+    expect(index.childrenById.get("root")).toEqual(["before", "c", "b"]);
+    expect(index.nodes.get("c")).toMatchObject({
+      role: "node",
+      parentId: "root",
+      graphId: "graph",
+      order: original.nodes.get("a")!.order,
+      collapsed: true,
+    });
+    expect(index.childrenById.get("c")).toEqual(["e", "d"]);
+    expect(index.edgeByChildId.get("c")).toMatchObject({
+      id: original.edgeByChildId.get("c")!.id,
+      parentId: "root",
+    });
+    expect(index.edgeByChildId.get("d")?.parentId).toBe("c");
+    expect(index.edgeByChildId.size).toBe(index.nodes.size - 1);
+    expect(result.graphIds).toEqual(["graph"]);
+    expect(result.selectedNodeId).toBe("c");
+    expect(JSON.stringify(elements)).toBe(before);
+    expect(repairMindmapElements(result.elements)).toBe(result.elements);
+    for (const replacementId of ["root", "a", "e", "missing"]) {
+      expect(() =>
+        applyMindmapTreeCommand(elements, "a", {
+          type: "deletePreservingChildren",
+          replacementId,
+        }),
+      ).toThrow();
+    }
+  });
+
+  it("裸根直接删除，唯一直属子节点自动接替且不丢失更深后代", () => {
+    const empty = applyMindmapTreeCommand([node("root")], "root", {
+      type: "deletePreservingChildren",
+    })!;
+    expect(empty.elements.every((element) => element.isDeleted)).toBe(true);
+    expect(empty.selectedNodeId).toBeNull();
+    const elements = repairMindmapElements([
+      node("root"),
+      node("a", "root"),
+      node("c", "a"),
+      node("e", "c"),
+    ]);
+    const result = applyMindmapTreeCommand(elements, "root", {
+      type: "deletePreservingChildren",
+    })!;
+    const index = indexOf(result.elements);
+    expect(index.rootId).toBe("a");
+    expect(index.nodes.size).toBe(3);
+    expect(index.nodes.get("a")).toMatchObject({
+      role: "root",
+      parentId: null,
+      order: null,
+    });
+    expect(index.parentById.get("e")).toBe("c");
+    const replaced = applyMindmapTreeCommand(elements, "a", {
+      type: "deletePreservingChildren",
+    })!;
+    expect(indexOf(replaced.elements).nodes.get("c")).toMatchObject({
+      role: "node",
+      parentId: "root",
+      order: "a0",
+    });
+    expect(indexOf(replaced.elements).parentById.get("e")).toBe("c");
+  });
+
+  it("深层提升插在原父节点之后，再次提升拆图且重用内部 edge", () => {
+    const original = fixture();
+    const promoted = applyMindmapTreeCommand(original, "c", {
+      type: "promote",
+      newGraphId: "new",
+    })!;
+    expect(indexOf(promoted.elements).childrenById.get("root")).toEqual([
+      "a",
+      "c",
+      "b",
+    ]);
+    const edge = indexOf(promoted.elements).edgeByChildId.get("e")!;
+    const split = applyMindmapTreeCommand(promoted.elements, "c", {
+      type: "promote",
+      newGraphId: "new",
+    })!;
+    const index = buildMindmapGraphIndex(split.elements, "new");
+    expect(index.nodes.size).toBe(2);
+    expect(index.nodes.get("c")).toMatchObject({
+      graphId: "new",
+      role: "root",
+      parentId: null,
+      order: null,
+    });
+    expect(index.nodes.get("e")?.parentId).toBe("c");
+    expect(index.edgeByChildId.get("e")).toMatchObject({
+      id: edge.id,
+      graphId: "new",
+    });
+    expect(indexOf(split.elements).nodes.size).toBe(4);
+    expect(repairMindmapElements(split.elements)).toBe(split.elements);
+    expect(() =>
+      applyMindmapTreeCommand(original, "a", {
+        type: "promote",
+        newGraphId: "graph",
+      }),
+    ).toThrow();
+  });
+
+  it("叶子折叠和根提升均无修改，拆图保留折叠后代及绑定", () => {
+    const elements = fixture();
+    expect(
+      applyMindmapTreeCommand(elements, "root", {
+        type: "promote",
+        newGraphId: "new",
+      }),
+    ).toBeNull();
+    expect(
+      applyMindmapTreeCommand(elements, "b", { type: "toggleCollapse" }),
+    ).toBeNull();
+    const folded = applyMindmapTreeCommand(elements, "a", {
+      type: "toggleCollapse",
+    })!;
+    const result = applyMindmapTreeCommand(folded.elements, "a", {
+      type: "promote",
+      newGraphId: "new",
+    })!;
+    expect(buildMindmapGraphIndex(result.elements, "new").nodes.size).toBe(4);
+    expect(getMindmapHiddenElementIds(result.elements).has("e")).toBe(true);
   });
 });
 

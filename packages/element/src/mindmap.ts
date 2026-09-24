@@ -591,6 +591,227 @@ export const layoutMindmap = (
   return { elements: [...positions.values()], edges, bounds };
 };
 
+export type MindmapTreeCommand =
+  | { type: "toggleCollapse" }
+  | { type: "delete" }
+  | { type: "deletePreservingChildren"; replacementId?: string }
+  | { type: "promote"; newGraphId: string };
+
+/** 导航只返回本图可见节点，不改变结构或历史。 */
+export const navigateMindmap = (
+  index: MindmapGraphIndex,
+  nodeId: string,
+  direction: "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight",
+): string | null => {
+  const node = index.nodes.get(nodeId);
+  if (!node) {
+    return null;
+  }
+  let ancestor = node.parentId;
+  while (ancestor) {
+    const parent = index.nodes.get(ancestor)!;
+    if (parent.collapsed) {
+      return null;
+    }
+    ancestor = parent.parentId;
+  }
+  if (direction === "ArrowLeft") {
+    return node.parentId;
+  }
+  if (direction === "ArrowRight") {
+    return node.collapsed ? null : index.childrenById.get(node.id)?.[0] ?? null;
+  }
+  const siblings = index.childrenById.get(node.parentId ?? "") ?? [];
+  const position = siblings.indexOf(node.id);
+  return siblings[position + (direction === "ArrowUp" ? -1 : 1)] ?? null;
+};
+
+/** 纯结构命令：先校验，再维护节点、绑定文字及连接线；不写场景或版本。 */
+export const applyMindmapTreeCommand = (
+  elements: readonly ExcalidrawElement[],
+  nodeId: string,
+  command: MindmapTreeCommand,
+): {
+  elements: readonly ExcalidrawElement[];
+  graphIds: readonly string[];
+  selectedNodeId: string | null;
+} | null => {
+  const node = elements.find(
+    (element): element is ExcalidrawMindmapNodeElement =>
+      element.id === nodeId &&
+      !element.isDeleted &&
+      isMindmapNodeElement(element),
+  );
+  if (!node) {
+    return null;
+  }
+  const index = buildMindmapGraphIndex(elements, node.graphId);
+  const children = index.childrenById.get(node.id) ?? [];
+  const replacements = new Map<string, ExcalidrawElement>();
+  const deletedIds = new Set<string>();
+  const graphIds = [node.graphId];
+  let selectedNodeId: string | null = node.id;
+  const update = (
+    id: string,
+    updates: Partial<ExcalidrawMindmapNodeElement>,
+  ) => {
+    replacements.set(id, withUpdates(index.nodes.get(id)!, updates));
+  };
+  const insertChildren = (
+    ids: readonly string[],
+    parentId: string,
+    previous: FractionalIndex | null,
+    next: FractionalIndex | null,
+  ) => {
+    const orders = generateNKeysBetween(previous, next, ids.length);
+    ids.forEach((id, i) =>
+      update(id, { parentId, order: orders[i] as FractionalIndex }),
+    );
+  };
+
+  if (command.type === "toggleCollapse") {
+    if (!children.length) {
+      return null;
+    }
+    update(node.id, { collapsed: !node.collapsed });
+  } else if (command.type === "promote") {
+    if (node.role === "root") {
+      return null;
+    }
+    const parent = index.nodes.get(node.parentId)!;
+    if (parent.role === "root") {
+      if (
+        !command.newGraphId ||
+        elements.some(
+          (element) =>
+            isMindmapNodeElement(element) &&
+            element.graphId === command.newGraphId,
+        )
+      ) {
+        throw new Error("Mindmap 拆图 ID 必须唯一");
+      }
+      const subtree = new Set(getMindmapSubtreeIds(index, node.id));
+      for (const id of subtree) {
+        update(id, { graphId: command.newGraphId });
+      }
+      replacements.set(node.id, {
+        ...node,
+        graphId: command.newGraphId,
+        role: "root",
+        parentId: null,
+        order: null,
+        x: parent.x,
+        y: layoutMindmap(index).bounds[3] + 80,
+      });
+      for (const edge of index.edgeByChildId.values()) {
+        if (edge.childId === node.id) {
+          replacements.set(edge.id, withUpdates(edge, { isDeleted: true }));
+        } else if (subtree.has(edge.childId)) {
+          replacements.set(
+            edge.id,
+            withUpdates(edge, { graphId: command.newGraphId }),
+          );
+        }
+      }
+      graphIds.push(command.newGraphId);
+    } else {
+      const siblings = index.childrenById.get(parent.parentId)!;
+      const next = siblings[siblings.indexOf(parent.id) + 1];
+      insertChildren(
+        [node.id],
+        parent.parentId,
+        parent.order,
+        next ? index.nodes.get(next)!.order : null,
+      );
+    }
+  } else {
+    const siblings = index.childrenById.get(node.parentId ?? "") ?? [];
+    const position = siblings.indexOf(node.id);
+    const previous = siblings[position - 1];
+    const next = siblings[position + 1];
+    selectedNodeId = next ?? previous ?? node.parentId;
+    if (command.type === "delete") {
+      getMindmapSubtreeIds(index, node.id).forEach((id) => deletedIds.add(id));
+    } else {
+      if (
+        command.replacementId !== undefined &&
+        !children.includes(command.replacementId)
+      ) {
+        throw new Error("Mindmap 接替节点必须是直属子节点");
+      }
+      const replacementId =
+        command.replacementId ??
+        (children.length === 1 ? children[0] : undefined);
+      if (replacementId) {
+        const replacement = index.nodes.get(replacementId)!;
+        const existingChildren = index.childrenById.get(replacement.id) ?? [];
+        insertChildren(
+          children.filter((id) => id !== replacement.id),
+          replacement.id,
+          existingChildren.length
+            ? index.nodes.get(existingChildren[existingChildren.length - 1])!
+                .order
+            : null,
+          null,
+        );
+        // 只接替被删节点的树位置，普通节点仍属于原父节点和原图。
+        update(replacement.id, {
+          ...(node.role === "root"
+            ? { role: "root", parentId: null, order: null }
+            : { role: "node", parentId: node.parentId, order: node.order }),
+          x: node.x,
+          y: node.y,
+        });
+        selectedNodeId = replacement.id;
+      } else if (node.role === "root") {
+        if (children.length) {
+          throw new Error("Mindmap 保留子树删除根节点需要指定新根");
+        }
+      } else {
+        insertChildren(
+          children,
+          node.parentId,
+          previous ? index.nodes.get(previous)!.order : null,
+          next ? index.nodes.get(next)!.order : null,
+        );
+        selectedNodeId = children[0] ?? selectedNodeId;
+      }
+      deletedIds.add(node.id);
+    }
+  }
+  const nextElements = elements.map((element) => {
+    if (element.isDeleted) {
+      return element;
+    }
+    if (
+      deletedIds.has(element.id) ||
+      (element.type === "text" &&
+        element.containerId &&
+        deletedIds.has(element.containerId))
+    ) {
+      return withUpdates(element, { isDeleted: true });
+    }
+    return replacements.get(element.id) ?? element;
+  });
+  // 关系在命令内已确定，修复仅负责派生 edge，不允许静默换根。
+  for (const graphId of graphIds) {
+    const nodes = nextElements.filter(
+      (element) =>
+        !element.isDeleted &&
+        isMindmapNodeElement(element) &&
+        element.graphId === graphId,
+    );
+    if (nodes.length) {
+      buildMindmapGraphIndex(nodes, graphId);
+    }
+  }
+  return {
+    elements: repairMindmapElements(nextElements),
+    graphIds,
+    selectedNodeId,
+  };
+};
+
 /** 影子树操作：拒绝根节点、跨图和环；调用方可先布局预览再原子提交。 */
 export const reparentMindmapNode = (
   index: MindmapGraphIndex,

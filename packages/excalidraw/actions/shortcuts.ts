@@ -20,6 +20,11 @@ export type ShortcutName =
       | "pasteStyles"
       | "selectAll"
       | "deleteSelectedElements"
+      | "mindmapCreateChild"
+      | "mindmapCreateSibling"
+      | "mindmapToggleCollapse"
+      | "mindmapDeletePreservingChildren"
+      | "mindmapPromote"
       | "duplicateSelection"
       | "sendBackward"
       | "bringForward"
@@ -72,6 +77,11 @@ const shortcutMap: Record<ShortcutName, string[]> = {
   pasteStyles: [getShortcutKey("CtrlOrCmd+Alt+V")],
   selectAll: [getShortcutKey("CtrlOrCmd+A")],
   deleteSelectedElements: [getShortcutKey("Delete")],
+  mindmapCreateChild: ["Tab"],
+  mindmapCreateSibling: ["Enter"],
+  mindmapToggleCollapse: ["Space"],
+  mindmapDeletePreservingChildren: [getShortcutKey("Shift+Delete")],
+  mindmapPromote: [getShortcutKey("Shift+Tab")],
   duplicateSelection: [
     getShortcutKey("CtrlOrCmd+D"),
     getShortcutKey(`Alt+${t("helpDialog.drag")}`),
