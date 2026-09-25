@@ -7,7 +7,7 @@
 
 ## 依赖关系
 
-- **前置验收**：[P09 模板与主题](09-mindmap-templates-and-themes.md) 须先通过用户界面审查。
+- **前置验收**：[P08 文本格式导入导出](08-mindmap-import-and-export.md) 须先通过用户界面审查；P09 模板与主题暂缓，不作为本期前置条件。
 - **主要能力依赖**：[P02](02-mindmap-tree-operations.md) 的无键盘树操作；[P03](03-mindmap-drag-and-move.md) 的会话与取消；[P04](04-mindmap-copy-and-integration.md) 的原生集成；[P05](05-mindmap-style-and-layout.md) 的方向适配；[P07](07-mindmap-search-and-outline.md) 的大图定位。
 - **外部依赖**：可用手机、平板，以及固定的桌面性能验收设备；协作回归沿用 P06。
 - **后续承接**：[P11 AI](11-mindmap-ai.md) 基于累计版本接入，并沿用本期的移动界面和规模保护。
