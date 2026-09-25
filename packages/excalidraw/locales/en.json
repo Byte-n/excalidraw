@@ -367,7 +367,9 @@
     "asyncPasteFailedOnRead": "Couldn't paste (couldn't read from system clipboard).",
     "asyncPasteFailedOnParse": "Couldn't paste.",
     "copyToSystemClipboardFailed": "Couldn't copy to clipboard.",
-    "mindmapUnsupported": "This mindmap operation is not available yet."
+    "mindmapUnsupported": "This mindmap operation is not available yet.",
+    "mindmapDeleteIncompleteSelection": "Cannot delete: the selection includes only part of a mindmap. Select the entire mindmap and try again.",
+    "mindmapDeleteLocked": "Cannot delete: a selected mindmap is locked. Unlock it and try again."
   },
   "toolBar": {
     "selection": "Selection",

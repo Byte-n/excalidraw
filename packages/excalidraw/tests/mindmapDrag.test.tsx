@@ -126,6 +126,10 @@ const renderOpacity = (id: string) =>
   (Reflect.get(h.app, "elementRenderOverrides") as ElementRenderOverrides).get(
     id,
   )?.opacity;
+const renderOffset = (id: string) =>
+  (Reflect.get(h.app, "elementRenderOverrides") as ElementRenderOverrides).get(
+    id,
+  )?.offset;
 
 describe("Mindmap P03 drag preview", () => {
   beforeEach(async () => {
@@ -272,17 +276,13 @@ describe("Mindmap P03 drag preview", () => {
     mouse.clickAt(node("root").x + 20, node("root").y + 20);
     expect(h.state.selectedElementIds).toEqual({ root: true });
     expect(h.app.mindmap.getSelectedGraphRoot()).toBeNull();
-    expect(
-      screen.getByTestId("mindmap-shape-rectangle"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("mindmap-shape-rectangle")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Right to left" })).toBeNull();
 
     mouse.clickAt(node("root").x + 20, node("root").y + 20);
     expect(h.state.selectedElementIds).toEqual({ root: true });
     expect(h.app.mindmap.getSelectedGraphRoot()).toBeNull();
-    expect(
-      screen.getByTestId("mindmap-shape-rectangle"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("mindmap-shape-rectangle")).toBeInTheDocument();
 
     API.setSelectedElements([
       node("root"),
@@ -313,6 +313,7 @@ describe("Mindmap P03 drag preview", () => {
       x: rootBefore.x + 80,
       y: rootBefore.y + 60,
     });
+    expect(renderOffset("root")).toBeUndefined();
     mouse.upAt();
   });
 
@@ -579,6 +580,7 @@ describe("Mindmap P03 drag preview", () => {
         x: positions.get(id)!.x + 80,
         y: positions.get(id)!.y + 60,
       });
+      expect(renderOffset(id)).toBeUndefined();
     });
     expect(h.app.mindmap.getDragPreview()).toBeNull();
     expect(renderOpacity("root")).toBeUndefined();
@@ -598,6 +600,26 @@ describe("Mindmap P03 drag preview", () => {
     expect(h.app.scene.getNonDeletedElement("rectangle")?.x).toBe(850);
   });
 
+  it("skips folded descendants before canvas hit testing and refreshes on expand", () => {
+    act(() => h.app.scene.mutateElement(node("a"), { collapsed: true }));
+    const hit = vi.spyOn(h.app, "hitElement");
+    h.app.getElementsAtPosition(800, 800);
+    expect(hit.mock.calls.some(([, , element]) => element.id === "a1")).toBe(
+      false,
+    );
+    expect(hit.mock.calls.some(([, , element]) => element.id === "a")).toBe(
+      true,
+    );
+
+    act(() => h.app.scene.mutateElement(node("a"), { collapsed: false }));
+    hit.mockClear();
+    h.app.getElementsAtPosition(800, 800);
+    expect(hit.mock.calls.some(([, , element]) => element.id === "a1")).toBe(
+      true,
+    );
+    hit.mockRestore();
+  });
+
   it("uses the ordinary selection drag in collaborative mode", async () => {
     await render(
       <Excalidraw
@@ -615,11 +637,7 @@ describe("Mindmap P03 drag preview", () => {
 
     expect(node("root").x).toBe(rootBefore + 80);
     expect(h.app.mindmap.getDragPreview()).toBeNull();
-    expect(
-      (
-        Reflect.get(h.app, "elementRenderOverrides") as ElementRenderOverrides
-      ).get("root")?.offset,
-    ).toBeUndefined();
+    expect(renderOffset("root")).toBeUndefined();
 
     mouse.upAt();
     expect(node("root").x).toBe(rootBefore + 80);

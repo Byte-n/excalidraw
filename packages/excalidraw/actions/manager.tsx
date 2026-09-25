@@ -155,7 +155,7 @@ export class ActionManager {
     if (this.app.mindmap.shouldBlockNativeAction(action.name)) {
       event.preventDefault();
       event.stopPropagation();
-      this.app.mindmap.notifyUnsupportedOperation();
+      this.app.mindmap.notifyUnsupportedOperation(action.name);
       return true;
     }
 
@@ -196,7 +196,7 @@ export class ActionManager {
     const appState = this.getAppState();
 
     if (this.app.mindmap.shouldBlockNativeAction(action.name)) {
-      this.app.mindmap.notifyUnsupportedOperation();
+      this.app.mindmap.notifyUnsupportedOperation(action.name);
       return;
     }
 
@@ -232,7 +232,7 @@ export class ActionManager {
         }
 
         if (this.app.mindmap.shouldBlockNativeAction(action.name)) {
-          this.app.mindmap.notifyUnsupportedOperation();
+          this.app.mindmap.notifyUnsupportedOperation(action.name);
           return;
         }
 

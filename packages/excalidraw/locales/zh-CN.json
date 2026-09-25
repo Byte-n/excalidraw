@@ -349,7 +349,9 @@
     "asyncPasteFailedOnRead": "无法粘贴（无法读取系统剪贴板）。",
     "asyncPasteFailedOnParse": "无法粘贴。",
     "copyToSystemClipboardFailed": "无法复制到剪贴板。",
-    "mindmapUnsupported": "思维导图暂不支持此操作"
+    "mindmapUnsupported": "思维导图暂不支持此操作",
+    "mindmapDeleteIncompleteSelection": "无法删除：选区中的思维导图未完整选中。请选中整张导图后重试。",
+    "mindmapDeleteLocked": "无法删除：选区中的思维导图已锁定。请先解锁后重试。"
   },
   "toolBar": {
     "selection": "选择",

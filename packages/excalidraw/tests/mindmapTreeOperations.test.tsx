@@ -18,6 +18,7 @@ import { Excalidraw } from "../index";
 import { restoreElements } from "../data/restore";
 import { serializeAsJSON } from "../data/json";
 import { actionDeleteSelected } from "../actions/actionDeleteSelected";
+import { t } from "../i18n";
 
 import { getTextEditor, updateTextEditor } from "./queries/dom";
 import { Keyboard, Pointer, UI } from "./helpers/ui";
@@ -401,6 +402,7 @@ describe("Mindmap P02 树操作界面", () => {
 
     expect(snapshot()).toEqual(before);
     expect(API.getUndoStack()).toHaveLength(count);
+    expect(h.state.toast?.message).toBe(t("errors.mindmapDeleteLocked"));
   });
 
   it.each(["root", "a"])(
@@ -643,7 +645,13 @@ describe("Mindmap P02 树操作界面", () => {
     API.setSelectedElements([node("a"), node("rectangle")]);
     const mixed = snapshot();
     Keyboard.keyPress("Delete");
+    expect(h.state.toast?.message).toBe(
+      t("errors.mindmapDeleteIncompleteSelection"),
+    );
     act(() => h.app.actionManager.executeAction(actionDeleteSelected));
+    expect(h.state.toast?.message).toBe(
+      t("errors.mindmapDeleteIncompleteSelection"),
+    );
     pressShift("Delete");
     expect(h.state.openDialog).toBeNull();
     expect(snapshot()).toEqual(mixed);

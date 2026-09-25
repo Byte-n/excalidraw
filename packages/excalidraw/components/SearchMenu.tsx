@@ -28,7 +28,6 @@ import { newTextElement } from "@excalidraw/element";
 import {
   isTextElement,
   isFrameLikeElement,
-  isMindmapElementHidden,
   isMindmapNodeElement,
 } from "@excalidraw/element";
 
@@ -239,10 +238,7 @@ export const SearchMenu = () => {
         if (
           match.mindmap &&
           (!focusedNode ||
-            isMindmapElementHidden(
-              focusedNode,
-              app.scene.getNonDeletedElementsMap(),
-            ))
+            app.scene.getMindmapHiddenElementIds().has(focusedNode.id))
         ) {
           return;
         }
@@ -875,6 +871,7 @@ const handleSearch = debounce(
 
     const elements = app.scene.getNonDeletedElements();
     const elementsMap = app.scene.getNonDeletedElementsMap();
+    const hiddenIds = app.scene.getMindmapHiddenElementIds();
     const outlines = getMindmapOutlines(elements);
     const outlinesByGraphId = new Map(
       outlines.map((outline) => [outline.graphId, outline]),
@@ -909,7 +906,7 @@ const handleSearch = debounce(
         const matchedLines = getMatchedLines(textEl, searchQuery, match.index);
 
         if (matchedLines.length > 0) {
-          if (node && isMindmapElementHidden(node, elementsMap)) {
+          if (node && hiddenIds.has(node.id)) {
             matchedLines.forEach((line) => {
               line.showOnCanvas = false;
             });

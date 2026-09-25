@@ -1141,37 +1141,35 @@ export const reparentMindmapNodes = (
   if (
     requested.some((id) => {
       const node = index.nodes.get(id);
-      return (
-        !node ||
-        node.role === "root" ||
-        node.graphId !== index.graphId ||
-        getMindmapSubtreeIds(index, id).includes(parentId)
-      );
+      return !node || node.role === "root" || node.graphId !== index.graphId;
     })
   ) {
     throw new Error("Mindmap 挂接目标无效");
   }
 
   const selected = new Set(requested);
-  const branchRoots = requested.filter(
-    (id) =>
-      !requested.some(
-        (candidate) =>
-          candidate !== id &&
-          getMindmapSubtreeIds(index, candidate).includes(id),
-      ),
-  );
-  if (!branchRoots.length) {
-    throw new Error("Mindmap 挂接目标无效");
+  for (
+    let id: string | null = parentId;
+    id;
+    id = index.parentById.get(id) ?? null
+  ) {
+    if (selected.has(id)) {
+      throw new Error("Mindmap 挂接目标无效");
+    }
   }
-  const traversal: string[] = [];
-  const visit = (id: string) => {
-    traversal.push(id);
-    (index.childrenById.get(id) ?? []).forEach(visit);
-  };
-  visit(index.rootId);
-  const orderOf = new Map(traversal.map((id, position) => [id, position]));
-  branchRoots.sort((a, b) => (orderOf.get(a) ?? 0) - (orderOf.get(b) ?? 0));
+  const branchRoots: string[] = [];
+  const pending = [index.rootId];
+  while (pending.length) {
+    const id = pending.pop()!;
+    if (selected.has(id)) {
+      branchRoots.push(id);
+      continue;
+    }
+    const children = index.childrenById.get(id) ?? [];
+    for (let i = children.length - 1; i >= 0; i--) {
+      pending.push(children[i]);
+    }
+  }
 
   const siblings = (index.childrenById.get(parentId) ?? []).filter(
     (id) => !selected.has(id),

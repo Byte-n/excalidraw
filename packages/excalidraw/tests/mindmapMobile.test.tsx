@@ -154,6 +154,7 @@ describe("Mindmap mobile actions", () => {
       x: start.x + 80,
       y: start.y + 40,
     });
+    expect(h.app.mindmap.getDragPreview()).toBeNull();
     touch.upAt();
   });
 

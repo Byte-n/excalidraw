@@ -4,7 +4,6 @@ import {
   getContainerElement,
   isElementInViewport,
   isTextElement,
-  getMindmapHiddenElementIds,
 } from "@excalidraw/element";
 
 import { arrayToMap, memoize, toBrandedType } from "@excalidraw/common";
@@ -251,7 +250,7 @@ export class Renderer {
   }) {
     const elementsMap = toBrandedType<RenderableElementsMap>(new Map());
     const newElementCanvasElement = newElement?.frameId ? null : newElement;
-    const hidden = getMindmapHiddenElementIds(elements);
+    const hidden = this.scene.getMindmapHiddenElementIds();
 
     for (const element of elements) {
       if (

@@ -34,6 +34,7 @@ import {
   isTextBindableContainer,
 } from "../src/typeChecks";
 import { getElementsWithinSelection } from "../src/selection";
+import { Scene } from "../src/Scene";
 import { hitElementItself, isPointInElement } from "../src/collision";
 import { ShapeCache } from "../src/shape";
 import { getCornerRadius } from "../src/utils";
@@ -93,6 +94,48 @@ describe("mindmap 大图深度", () => {
     const folded = layoutMindmap(indexOf(elements));
     expect(folded.elements).toHaveLength(9);
     expect(indexOf(elements).nodes).toHaveProperty("size", 2000);
+  });
+
+  it("caches hidden descendants until the scene changes", () => {
+    const elements = [
+      node("root"),
+      node("a", "root", { collapsed: true }),
+      node("b", "a"),
+    ];
+    const scene = new Scene(elements, { skipValidation: true });
+    const hidden = scene.getMindmapHiddenElementIds();
+    expect(hidden.has("b")).toBe(true);
+    expect(scene.getMindmapHiddenElementIds()).toBe(hidden);
+
+    scene.replaceAllElements(
+      elements.map((element) =>
+        element.id === "a" ? { ...element, collapsed: false } : element,
+      ),
+      { skipValidation: true },
+    );
+    expect(scene.getMindmapHiddenElementIds()).not.toBe(hidden);
+    expect(scene.getMindmapHiddenElementIds().has("b")).toBe(false);
+  });
+
+  it("reparents a 2000-level branch without recursive traversal", () => {
+    const elements = [node("root")];
+    for (let i = 1; i < 2000; i++) {
+      elements.push(node(`n${i}`, i === 1 ? "root" : `n${i - 1}`));
+    }
+    elements.push(
+      node("side", "root", { order: "a1" as FractionalIndex }),
+      node("target", "root", { order: "a2" as FractionalIndex }),
+    );
+    const index = indexOf(elements);
+    const moved = reparentMindmapNodes(
+      index,
+      ["side", "n1999", "n1"],
+      "target",
+    );
+    const next = indexOf(moved);
+    expect(next.childrenById.get("target")).toEqual(["n1", "side"]);
+    expect(next.nodes.get("n1999")?.parentId).toBe("n1998");
+    expect(() => reparentMindmapNodes(index, ["n1"], "n1999")).toThrow();
   });
 });
 

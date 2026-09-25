@@ -52,10 +52,10 @@ export const getMindmapPath = (
   const path: string[] = [];
   let current: ExcalidrawMindmapNodeElement | undefined = node;
   while (current) {
-    path.unshift(graph.labels.get(current.id)!);
+    path.push(graph.labels.get(current.id)!);
     current = current.parentId
       ? graph.index.nodes.get(current.parentId)
       : undefined;
   }
-  return path;
+  return path.reverse();
 };
