@@ -4,6 +4,7 @@ import {
   generateNKeysBetween,
 } from "@excalidraw/fractional-indexing";
 import { pointFrom } from "@excalidraw/math";
+import { flushSync } from "react-dom";
 
 import {
   applyMindmapTreeCommand,
@@ -152,7 +153,6 @@ export class AppMindmap {
   private dimmedDragElementIds = new Set<string>();
   private cancelledPointerDown: PointerDownState | null = null;
   private renderOverlay: (() => void) | null = null;
-  private selectedSingleVisibleNodeGraphId: string | null = null;
 
   constructor(private readonly app: App) {}
 
@@ -161,7 +161,6 @@ export class AppMindmap {
     this.consumedSpace = false;
     this.cancelDrag();
     this.clearHover();
-    this.selectedSingleVisibleNodeGraphId = null;
   };
 
   clearHover = () => {
@@ -247,6 +246,24 @@ export class AppMindmap {
       this.app.state.activeTool.type !== "selection" &&
       this.app.state.activeTool.type !== "mindmap"
     ) {
+      return false;
+    }
+    const hitNode = this.getMindmapNodeFromPointerDown(pointerDownState);
+    if (
+      this.app.state.activeTool.type === "selection" &&
+      hitNode?.role === "root" &&
+      this.isRootOnlySelection(hitNode)
+    ) {
+      const distance = Math.hypot(
+        scenePoint.x - pointerDownState.origin.x,
+        scenePoint.y - pointerDownState.origin.y,
+      );
+      if (distance * this.app.state.zoom.value < DRAGGING_THRESHOLD) {
+        return true;
+      }
+      flushSync(() => {
+        this.selectGraph(hitNode.graphId, false);
+      });
       return false;
     }
     const candidate = this.dragSession
@@ -669,36 +686,29 @@ export class AppMindmap {
     );
   };
 
-  preparePointerDown = (pointerDownState: PointerDownState) => {
-    const pointerHit = pointerDownState.hit.element;
-    const hit =
-      pointerHit?.type === "text" && pointerHit.containerId
-        ? this.app.scene.getNonDeletedElement(pointerHit.containerId)
-        : pointerHit;
+  preparePointerDown = (
+    pointerDownState: PointerDownState,
+    modifiers: { shiftKey: boolean },
+  ) => {
+    const hit = this.getMindmapNodeFromPointerDown(pointerDownState);
     if (
       this.app.state.activeTool.type === "selection" &&
       hit &&
       isMindmapNodeElement(hit) &&
-      hit.role === "root" &&
-      !this.app.scene
-        .getNonDeletedElements()
-        .some(
-          (element) =>
-            isMindmapNodeElement(element) &&
-            element.graphId === hit.graphId &&
-            element.id !== hit.id &&
-            !isMindmapElementHidden(
-              element,
-              this.app.scene.getNonDeletedElementsMap(),
-            ),
-        )
+      hit.role === "root"
     ) {
-      this.selectedSingleVisibleNodeGraphId =
-        this.selectedSingleVisibleNodeGraphId === hit.graphId
-          ? null
-          : hit.graphId;
-    } else {
-      this.selectedSingleVisibleNodeGraphId = null;
+      const shouldSelectRootOnly =
+        pointerDownState.withCmdOrCtrl ||
+        (!modifiers.shiftKey &&
+          this.isCompleteMindmapSelection() &&
+          this.getSelectedGraphRoot()?.id === hit.id);
+      if (shouldSelectRootOnly) {
+        this.selectNode(hit);
+      } else {
+        this.selectGraph(hit.graphId, modifiers.shiftKey);
+      }
+      pointerDownState.hit.wasAddedToSelection = true;
+      return;
     }
     if (pointerDownState.hit.element) {
       this.app.setState((prevState) => {
@@ -893,8 +903,6 @@ export class AppMindmap {
       (node) => !isMindmapElementHidden(node, elementsMap),
     );
     if (
-      (visibleNodes.length === 1 &&
-        this.selectedSingleVisibleNodeGraphId !== root.graphId) ||
       visibleNodes.some((node) => !this.app.state.selectedElementIds[node.id])
     ) {
       return null;
@@ -2202,6 +2210,63 @@ export class AppMindmap {
       onSelect,
     );
   }
+
+  private selectGraph = (graphId: string, preserveSelection: boolean) => {
+    const graphElementIds = this.getGraphElementIds(graphId);
+    this.app.setState((prevState) => {
+      const selectedElementIds = preserveSelection
+        ? { ...prevState.selectedElementIds }
+        : {};
+      graphElementIds.forEach((id) => {
+        selectedElementIds[id] = true;
+      });
+      return {
+        selectedElementIds,
+        selectedLinearElement: null,
+        hoveredElementIds: {},
+        selectedGroupIds: {},
+        editingGroupId: null,
+      };
+    });
+  };
+
+  private getGraphElementIds = (graphId: string) => {
+    const elements = this.app.scene.getNonDeletedElements();
+    const nodeIds = new Set(
+      elements
+        .filter(isMindmapNodeElement)
+        .filter((node) => node.graphId === graphId)
+        .map((node) => node.id),
+    );
+    return new Set(
+      elements
+        .filter(
+          (element) =>
+            ((isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+              element.graphId === graphId) ||
+            (element.type === "text" &&
+              !!element.containerId &&
+              nodeIds.has(element.containerId)),
+        )
+        .map((element) => element.id),
+    );
+  };
+
+  private getMindmapNodeFromPointerDown = (
+    pointerDownState: PointerDownState,
+  ) => {
+    const pointerHit = pointerDownState.hit.element;
+    const hit =
+      pointerHit?.type === "text" && pointerHit.containerId
+        ? this.app.scene.getNonDeletedElement(pointerHit.containerId)
+        : pointerHit;
+    return hit && isMindmapNodeElement(hit) ? hit : null;
+  };
+
+  private isRootOnlySelection = (node: ExcalidrawMindmapNodeElement) => {
+    const selected = this.app.scene.getSelectedElements(this.app.state);
+    return selected.length === 1 && selected[0].id === node.id;
+  };
 
   hasSelectedMindmapElement = () => {
     return this.app.scene

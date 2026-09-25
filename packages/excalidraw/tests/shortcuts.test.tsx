@@ -45,6 +45,10 @@ describe("shortcuts", () => {
             "labels.deleteMindmapPreservingChildren",
             [t("keys.shift"), t("keys.delete"), t("keys.shift"), "Backspace"],
           ],
+          [
+            "helpDialog.mindmap.selectRoot",
+            [t("keys.ctrl"), t("helpDialog.click")],
+          ],
           ["helpDialog.editText", [t("helpDialog.doubleClick")]],
         ] as const;
         for (const [label, keys] of shortcuts) {
@@ -57,6 +61,9 @@ describe("shortcuts", () => {
         }
         expect(
           help.getByText(t("helpDialog.mindmap.context")),
+        ).toBeInTheDocument();
+        expect(
+          help.getByText(t("helpDialog.mindmap.selectionHint")),
         ).toBeInTheDocument();
         expect(
           help.getByText(t("helpDialog.mindmap.deleteHint")),

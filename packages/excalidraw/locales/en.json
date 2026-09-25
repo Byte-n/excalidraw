@@ -484,6 +484,8 @@
     "navigateFlowchart": "Navigate a flowchart",
     "mindmap": {
       "context": "Select a single mindmap node to use these shortcuts. While editing text or using an input method, keys keep their normal text-editing behavior.",
+      "selectionHint": "Click a root to select the whole mindmap. Click the selected root again to select only the root; Ctrl/Cmd+click selects only the root directly. Dragging moves the whole mindmap like a regular selection.",
+      "selectRoot": "Select only the root node",
       "previousSibling": "Select previous sibling",
       "nextSibling": "Select next sibling",
       "parent": "Select parent",

@@ -8931,7 +8931,9 @@ class App extends React.Component<AppProps, AppState> {
       return;
     }
 
-    this.mindmap.preparePointerDown(pointerDownState);
+    this.mindmap.preparePointerDown(pointerDownState, {
+      shiftKey: event.shiftKey,
+    });
 
     const allowOnPointerDown =
       !this.state.penMode ||

@@ -13,7 +13,7 @@ import type {
   FractionalIndex,
 } from "@excalidraw/element/types";
 
-import { CaptureUpdateAction, Excalidraw } from "../index";
+import { Excalidraw } from "../index";
 import { actionDuplicateSelection, actionToggleElementLock } from "../actions";
 import { restoreElements } from "../data/restore";
 
@@ -199,7 +199,6 @@ describe("Mindmap P03 drag preview", () => {
     expect(
       screen.queryByRole("button", { name: "Right to left" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByTestId("mindmap-shape-rectangle")).toBeInTheDocument();
   });
 
   it("edits only the selected node's incoming edge", () => {
@@ -260,7 +259,7 @@ describe("Mindmap P03 drag preview", () => {
     expect(h.state.toast).toBeNull();
   });
 
-  it("toggles graph design on repeated clicks of a lone root", () => {
+  it("keeps a lone root and its label selected on repeated clicks", () => {
     API.setElements(
       h.app.scene
         .getNonDeletedElements()
@@ -277,11 +276,33 @@ describe("Mindmap P03 drag preview", () => {
     ).toBeInTheDocument();
 
     mouse.clickAt(node("root").x + 20, node("root").y + 20);
-    expect(h.app.mindmap.getSelectedGraphRoot()).toBeNull();
+    expect(h.state.selectedElementIds).toEqual({ root: true });
+    expect(h.app.mindmap.getSelectedGraphRoot()?.id).toBe("root");
     expect(
-      screen.queryByRole("button", { name: "Right to left" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByTestId("mindmap-shape-rectangle")).toBeInTheDocument();
+      screen.getByRole("button", { name: "Right to left" }),
+    ).toBeInTheDocument();
+  });
+
+  it("selects only the root with Ctrl-click and promotes it before dragging", () => {
+    const mouse = new Pointer("mouse");
+    Keyboard.withModifierKeys({ ctrl: true }, () => {
+      mouse.clickAt(node("root").x + 20, node("root").y + 20);
+    });
+
+    expect(h.state.selectedElementIds).toEqual({ root: true });
+    expect(h.app.mindmap.isCompleteMindmapSelection()).toBe(false);
+
+    const rootBefore = { x: node("root").x, y: node("root").y };
+    mouse.downAt(node("root").x + 20, node("root").y + 20);
+    mouse.moveTo(node("root").x + 100, node("root").y + 80);
+
+    expect(h.app.mindmap.getDragPreview()).toBeNull();
+    expect(h.app.mindmap.isCompleteMindmapSelection()).toBe(true);
+    expect(node("root")).toMatchObject({
+      x: rootBefore.x + 80,
+      y: rootBefore.y + 60,
+    });
+    mouse.upAt();
   });
 
   it("moves only the node preview with the pointer and connects it to the candidate parent", () => {
@@ -486,18 +507,11 @@ describe("Mindmap P03 drag preview", () => {
   });
 
   it("root drag moves the full graph, including collapsed descendants and labels", () => {
-    API.setSelectedElements([node("root")]);
     act(() => h.app.scene.mutateElement(node("a"), { collapsed: true }));
-    const tracked = [
-      "root",
-      "root-text",
-      "a",
-      "a-text",
-      "a1",
-      "a1-text",
-      "b",
-      "b-text",
-    ];
+    const tracked = h.app.scene
+      .getNonDeletedElements()
+      .filter((element) => element.id !== "rectangle")
+      .map((element) => element.id);
     const positions = new Map(
       tracked.map((id) => {
         const element = h.app.scene.getNonDeletedElement(id)!;
@@ -509,6 +523,11 @@ describe("Mindmap P03 drag preview", () => {
       "graph",
     );
     const mouse = new Pointer("mouse");
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
+    tracked.forEach((id) => {
+      expect(h.state.selectedElementIds[id]).toBe(true);
+    });
+    expect(h.app.mindmap.isCompleteMindmapSelection()).toBe(true);
     mouse.downAt(node("root").x + 20, node("root").y + 20);
     mouse.moveTo(node("root").x + 100, node("root").y + 80);
     tracked.forEach((id) => {
@@ -517,7 +536,7 @@ describe("Mindmap P03 drag preview", () => {
         y: positions.get(id)!.y + 60,
       });
     });
-    expect(h.app.mindmap.getDragPreview()?.previewElements).toEqual([]);
+    expect(h.app.mindmap.getDragPreview()).toBeNull();
     expect(renderOpacity("root")).toBeUndefined();
     expect(renderOpacity("a1")).toBeUndefined();
     mouse.upAt();
@@ -535,7 +554,7 @@ describe("Mindmap P03 drag preview", () => {
     expect(h.app.scene.getNonDeletedElement("rectangle")?.x).toBe(850);
   });
 
-  it("keeps collaborative move previews out of the synchronized scene", async () => {
+  it("uses the ordinary selection drag in collaborative mode", async () => {
     await render(
       <Excalidraw
         handleKeyboardGlobally
@@ -543,19 +562,20 @@ describe("Mindmap P03 drag preview", () => {
         initialData={{ elements: fixture() }}
       />,
     );
-    API.setSelectedElements([node("root")]);
     const rootBefore = node("root").x;
     const mouse = new Pointer("mouse");
 
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
     mouse.downAt(node("root").x + 20, node("root").y + 20);
     mouse.moveTo(node("root").x + 100, node("root").y + 80);
 
-    expect(node("root").x).toBe(rootBefore);
+    expect(node("root").x).toBe(rootBefore + 80);
+    expect(h.app.mindmap.getDragPreview()).toBeNull();
     expect(
       (
         Reflect.get(h.app, "elementRenderOverrides") as ElementRenderOverrides
       ).get("root")?.offset,
-    ).toEqual({ x: 80, y: 60 });
+    ).toBeUndefined();
 
     mouse.upAt();
     expect(node("root").x).toBe(rootBefore + 80);
@@ -564,53 +584,6 @@ describe("Mindmap P03 drag preview", () => {
         Reflect.get(h.app, "elementRenderOverrides") as ElementRenderOverrides
       ).get("root"),
     ).toBeUndefined();
-  });
-
-  it("cancels a collaborative drag when the remote scene deletes its source", async () => {
-    await render(
-      <Excalidraw
-        handleKeyboardGlobally
-        isCollaborating
-        initialData={{ elements: fixture() }}
-      />,
-    );
-    API.setSelectedElements([node("root")]);
-    const mouse = new Pointer("mouse");
-    mouse.downAt(node("root").x + 20, node("root").y + 20);
-    mouse.moveTo(node("root").x + 100, node("root").y + 80);
-    expect(h.app.mindmap.getDragPreview()).not.toBeNull();
-
-    const remoteElements = h.app.scene
-      .getElementsIncludingDeleted()
-      .map((element) =>
-        element.id === "root" ? { ...element, isDeleted: true } : element,
-      );
-    act(() => {
-      h.app.updateScene({
-        elements: remoteElements,
-        captureUpdate: CaptureUpdateAction.NEVER,
-      });
-    });
-
-    expect(h.app.mindmap.getDragPreview()).toBeNull();
-    mouse.upAt();
-  });
-
-  it("restores a directly moved graph when the drag is cancelled", () => {
-    API.setSelectedElements([node("root")]);
-    const before = snapshot();
-    const historyLength = API.getUndoStack().length;
-    const rootBefore = { x: node("root").x, y: node("root").y };
-    const mouse = new Pointer("mouse");
-    mouse.downAt(node("root").x + 20, node("root").y + 20);
-    mouse.moveTo(node("root").x + 100, node("root").y + 80);
-    expect(node("root").x).toBe(rootBefore.x + 80);
-    expect(node("root").y).toBe(rootBefore.y + 60);
-    Keyboard.keyDown("Escape", h.app.ownerWindow);
-    mouse.upAt();
-
-    expect(snapshot()).toBe(before);
-    expect(API.getUndoStack()).toHaveLength(historyLength);
   });
 
   it("mixed selection expands to visible graph nodes and moves the rectangle with the full graph", () => {

@@ -521,6 +521,13 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
             <p className="HelpDialog__note">
               {t("helpDialog.mindmap.context")}
             </p>
+            <p className="HelpDialog__note">
+              {t("helpDialog.mindmap.selectionHint")}
+            </p>
+            <Shortcut
+              label={t("helpDialog.mindmap.selectRoot")}
+              shortcuts={[getShortcutKey(`CtrlOrCmd+${t("helpDialog.click")}`)]}
+            />
             <Shortcut
               label={t("labels.addMindmapChild")}
               shortcuts={[
