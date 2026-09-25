@@ -12,6 +12,7 @@ import {
   buildMindmapGraphIndex,
   CaptureUpdateAction,
   computeBoundTextPosition,
+  getCommonBounds,
   computeContainerDimensionForBoundText,
   getBoundTextMaxHeight,
   getBoundTextMaxWidth,
@@ -1723,9 +1724,166 @@ export class AppMindmap {
     this.app.syncActionResult(this.getTreeActionResult(command, nodeId));
   };
 
-  getDeleteActionResult = (preserveChildren = false): ActionResult => {
-    const node = this.getSelectedNode();
-    if (!node || !this.canEditNode(node.id)) {
+  focusNode = (nodeId: string) => {
+    const node = this.app.scene.getNonDeletedElement(nodeId);
+    if (!node || !isMindmapNodeElement(node)) {
+      return false;
+    }
+    const index = buildMindmapGraphIndex(
+      this.app.scene.getNonDeletedElements(),
+      node.graphId,
+    );
+    const collapsedAncestors = new Set<string>();
+    let parentId = node.parentId;
+    while (parentId) {
+      const parent = index.nodes.get(parentId)!;
+      if (parent.collapsed) {
+        collapsedAncestors.add(parentId);
+      }
+      parentId = parent.parentId;
+    }
+    if (collapsedAncestors.size) {
+      const root = index.nodes.get(index.rootId)!;
+      if (
+        this.app.state.viewModeEnabled ||
+        this.app.state.editingTextElement ||
+        !this.app.isInteractionEnabled() ||
+        this.hasLockedMindmapGraph([
+          this.app.scene.getNonDeletedElement(root.id)!,
+        ])
+      ) {
+        return false;
+      }
+      const elements = this.app.scene
+        .getElementsIncludingDeleted()
+        .map((el) =>
+          collapsedAncestors.has(el.id) && isMindmapNodeElement(el)
+            ? newElementWith(el, { collapsed: false })
+            : el,
+        );
+      this.app.syncActionResult({
+        elements: this.getLaidOutElements(elements, [node.graphId]),
+        appState: {
+          selectedElementIds: { [node.id]: true },
+          selectedGroupIds: {},
+          previousSelectedElementIds: {},
+          selectedLinearElement: null,
+          hoveredElementIds: {},
+          editingGroupId: null,
+        },
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+    } else {
+      this.selectNode(node);
+    }
+    const target = this.app.scene.getNonDeletedElement(node.id);
+    if (target) {
+      this.app.viewport.setViewport({
+        target: getCommonBounds([target]),
+        fit: "scale-down",
+        animation: { duration: 300 },
+        offsets: { ui: true },
+      });
+    }
+    return true;
+  };
+
+  renameNode = (nodeId: string, title: string) => {
+    const node = this.app.scene.getNonDeletedElement(nodeId);
+    if (!node || !isMindmapNodeElement(node) || !this.canEditNode(nodeId)) {
+      return false;
+    }
+    const boundText = getBoundTextElement(
+      node,
+      this.app.scene.getNonDeletedElementsMap(),
+    );
+    if (!boundText || boundText.originalText === title) {
+      return false;
+    }
+    const elements = this.app.scene
+      .getElementsIncludingDeleted()
+      .map((el) =>
+        el.id === boundText.id
+          ? newElementWith(boundText, { originalText: title, text: title })
+          : el,
+      );
+    this.app.syncActionResult({
+      elements: this.getLaidOutElements(elements, [node.graphId]),
+      appState: {
+        selectedElementIds: { [node.id]: true },
+        selectedGroupIds: {},
+        previousSelectedElementIds: {},
+        selectedLinearElement: null,
+        hoveredElementIds: {},
+        editingGroupId: null,
+      },
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    return true;
+  };
+
+  reparentNode = (
+    nodeId: string,
+    parentId: string,
+    beforeId: string | null,
+  ) => {
+    const node = this.app.scene.getNonDeletedElement(nodeId);
+    const parent = this.app.scene.getNonDeletedElement(parentId);
+    if (
+      !node ||
+      !parent ||
+      !isMindmapNodeElement(node) ||
+      !isMindmapNodeElement(parent) ||
+      node.graphId !== parent.graphId ||
+      !this.canEditNode(nodeId) ||
+      !this.canEditNode(parentId)
+    ) {
+      return false;
+    }
+    const index = buildMindmapGraphIndex(
+      this.app.scene.getNonDeletedElements(),
+      node.graphId,
+    );
+    let reordered: readonly ExcalidrawMindmapNodeElement[];
+    try {
+      reordered = reparentMindmapNodes(index, [nodeId], parentId, beforeId);
+    } catch {
+      return false;
+    }
+    const updates = new Map(reordered.map((item) => [item.id, item]));
+    if (parent.collapsed) {
+      updates.set(parent.id, newElementWith(parent, { collapsed: false }));
+    }
+    if (
+      !parent.collapsed &&
+      reordered.every((item) => item === index.nodes.get(item.id))
+    ) {
+      return false;
+    }
+    const elements = this.app.scene
+      .getElementsIncludingDeleted()
+      .map((el) => updates.get(el.id) ?? el);
+    this.app.syncActionResult({
+      elements: this.getLaidOutElements(elements, [node.graphId]),
+      appState: {
+        selectedElementIds: { [nodeId]: true },
+        selectedGroupIds: {},
+        previousSelectedElementIds: {},
+        selectedLinearElement: null,
+        hoveredElementIds: {},
+        editingGroupId: null,
+      },
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    return true;
+  };
+
+  getDeleteActionResult = (
+    preserveChildren = false,
+    nodeId = this.getSelectedNode()?.id,
+  ): ActionResult => {
+    const node = nodeId && this.app.scene.getNonDeletedElement(nodeId);
+    if (!node || !isMindmapNodeElement(node) || !this.canEditNode(node.id)) {
       this.notifyUnsupportedOperation();
       return false;
     }

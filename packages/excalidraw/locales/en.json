@@ -244,6 +244,21 @@
     "frames": "Frames",
     "texts": "Texts"
   },
+  "outline": {
+    "title": "Mindmap outline",
+    "empty": "No mindmaps on this canvas",
+    "graph": "Mindmap {{number}}",
+    "actions": "Actions for {{name}}",
+    "expand": "Expand branch",
+    "collapse": "Collapse branch",
+    "rename": "Rename",
+    "renameNode": "Rename {{name}}",
+    "addChild": "Add child",
+    "addSibling": "Add sibling",
+    "promote": "Promote or detach branch",
+    "deleteKeepChildren": "Delete node, keep children",
+    "deleteBranch": "Delete branch"
+  },
   "buttons": {
     "clearReset": "Reset the canvas",
     "exportJSON": "Export to file",

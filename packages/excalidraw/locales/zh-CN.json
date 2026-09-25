@@ -240,6 +240,21 @@
     "frames": "画框",
     "texts": "文本"
   },
+  "outline": {
+    "title": "思维导图大纲",
+    "empty": "画布上没有思维导图",
+    "graph": "思维导图 {{number}}",
+    "actions": "{{name}} 的操作",
+    "expand": "展开分支",
+    "collapse": "折叠分支",
+    "rename": "重命名",
+    "renameNode": "重命名 {{name}}",
+    "addChild": "添加子节点",
+    "addSibling": "添加同级节点",
+    "promote": "提升或拆分分支",
+    "deleteKeepChildren": "删除节点，保留后代",
+    "deleteBranch": "删除整个分支"
+  },
   "buttons": {
     "clearReset": "重置画布",
     "exportJSON": "导出为文件",

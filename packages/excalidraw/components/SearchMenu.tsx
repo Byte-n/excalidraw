@@ -25,7 +25,12 @@ import {
 } from "@excalidraw/common";
 
 import { newTextElement } from "@excalidraw/element";
-import { isTextElement, isFrameLikeElement } from "@excalidraw/element";
+import {
+  isTextElement,
+  isFrameLikeElement,
+  isMindmapElementHidden,
+  isMindmapNodeElement,
+} from "@excalidraw/element";
 
 import { getDefaultFrameName } from "@excalidraw/element/frame";
 
@@ -37,11 +42,13 @@ import type {
 import { atom, useAtom } from "../editor-jotai";
 
 import { useStable } from "../hooks/useStable";
+import { useSceneNonce } from "../hooks/useSceneNonce";
 import { t } from "../i18n";
 
 import { useApp, useExcalidrawSetAppState } from "./App";
 import { Button } from "./Button";
 import { TextField } from "./TextField";
+import { getMindmapOutlines, getMindmapPath } from "./mindmapOutlineModel";
 import {
   collapseDownIcon,
   upIcon,
@@ -70,6 +77,12 @@ type SearchMatchItem = {
     moreAfter: boolean;
   };
   matchedLines: SearchMatch["matchedLines"];
+  mindmap?: {
+    nodeId: string;
+    graphTitle: string;
+    graphNumber: number;
+    path: string[];
+  };
 };
 
 type SearchMatches = {
@@ -96,8 +109,10 @@ export const SearchMenu = () => {
   });
   const searchedQueryRef = useRef<SearchQuery | null>(null);
   const lastSceneNonceRef = useRef<number | undefined>(undefined);
+  const focusedMatchRef = useRef<string | null>(null);
 
   const [focusIndex, setFocusIndex] = useAtom(searchItemInFocusAtom);
+  const sceneNonce = useSceneNonce(app.scene);
   const elementsMap = app.scene.getNonDeletedElementsMap();
 
   useEffect(() => {
@@ -106,16 +121,22 @@ export const SearchMenu = () => {
     }
     if (
       searchQuery !== searchedQueryRef.current ||
-      app.scene.getSceneNonce() !== lastSceneNonceRef.current
+      sceneNonce !== lastSceneNonceRef.current
     ) {
       searchedQueryRef.current = null;
       handleSearch(searchQuery, app, (matchItems, index) => {
+        const retainedIndex = focusedMatchRef.current
+          ? matchItems.findIndex(
+              (item) => item.element.id === focusedMatchRef.current,
+            )
+          : -1;
         setSearchMatches({
           nonce: randomInteger(),
           items: matchItems,
         });
         searchedQueryRef.current = searchQuery;
         lastSceneNonceRef.current = app.scene.getSceneNonce();
+        setFocusIndex(retainedIndex >= 0 ? retainedIndex : null);
         setAppState({
           searchMatches: matchItems.length
             ? {
@@ -134,6 +155,7 @@ export const SearchMenu = () => {
     isSearching,
     searchQuery,
     elementsMap,
+    sceneNonce,
     app,
     setAppState,
     setFocusIndex,
@@ -192,24 +214,52 @@ export const SearchMenu = () => {
   }, [focusIndex, setAppState]);
 
   useEffect(() => {
+    focusedMatchRef.current =
+      focusIndex !== null
+        ? searchMatches.items[focusIndex]?.element.id ?? null
+        : null;
+  }, [focusIndex, searchMatches]);
+
+  useEffect(() => {
     if (searchMatches.items.length > 0 && focusIndex !== null) {
       const match = searchMatches.items[focusIndex];
 
       if (match) {
+        const currentElement = app.scene.getNonDeletedElement(match.element.id);
+        if (
+          !currentElement ||
+          (!isTextElement(currentElement) &&
+            !isFrameLikeElement(currentElement))
+        ) {
+          return;
+        }
+        const focusedNode = match.mindmap
+          ? app.scene.getNonDeletedElement(match.mindmap.nodeId)
+          : null;
+        if (
+          match.mindmap &&
+          (!focusedNode ||
+            isMindmapElementHidden(
+              focusedNode,
+              app.scene.getNonDeletedElementsMap(),
+            ))
+        ) {
+          return;
+        }
         const zoomValue = app.state.zoom.value;
 
         const matchAsElement = newTextElement({
           text: match.searchQuery,
-          x: match.element.x + (match.matchedLines[0]?.offsetX ?? 0),
-          y: match.element.y + (match.matchedLines[0]?.offsetY ?? 0),
+          x: currentElement.x + (match.matchedLines[0]?.offsetX ?? 0),
+          y: currentElement.y + (match.matchedLines[0]?.offsetY ?? 0),
           width: match.matchedLines[0]?.width,
           height: match.matchedLines[0]?.height,
-          fontSize: isFrameLikeElement(match.element)
+          fontSize: isFrameLikeElement(currentElement)
             ? FRAME_STYLE.nameFontSize
-            : match.element.fontSize,
-          fontFamily: isFrameLikeElement(match.element)
+            : currentElement.fontSize,
+          fontFamily: isFrameLikeElement(currentElement)
             ? FONT_FAMILY.Assistant
-            : match.element.fontFamily,
+            : currentElement.fontFamily,
         });
 
         const FONT_SIZE_LEGIBILITY_THRESHOLD = 14;
@@ -353,6 +403,7 @@ export const SearchMenu = () => {
           onChange={(value) => {
             setInputValue(value);
             setIsSearching(true);
+            focusedMatchRef.current = null;
             const searchQuery = value.trim() as SearchQuery;
             handleSearch(searchQuery, app, (matchItems, index) => {
               setSearchMatches({
@@ -422,7 +473,30 @@ export const SearchMenu = () => {
 
       <MatchList
         matches={searchMatches}
-        onItemClick={setFocusIndex}
+        onItemClick={(index) => {
+          const match = searchMatches.items[index];
+          if (!match) {
+            return;
+          }
+          if (match.mindmap) {
+            const node = app.scene.getNonDeletedElement(match.mindmap.nodeId);
+            const text = app.scene.getNonDeletedElement(match.element.id);
+            if (
+              !node ||
+              !isMindmapNodeElement(node) ||
+              !text ||
+              text.type !== "text" ||
+              text.containerId !== node.id ||
+              !app.mindmap.focusNode(node.id)
+            ) {
+              return;
+            }
+          } else if (!app.scene.getNonDeletedElement(match.element.id)) {
+            return;
+          }
+          focusedMatchRef.current = match.element.id;
+          setFocusIndex(index);
+        }}
         focusIndex={focusIndex}
         searchQuery={searchQuery}
       />
@@ -434,6 +508,7 @@ const ListItem = (props: {
   preview: SearchMatchItem["preview"];
   searchQuery: SearchQuery;
   highlighted: boolean;
+  mindmap?: SearchMatchItem["mindmap"];
   onClick?: () => void;
 }) => {
   const preview = [
@@ -467,6 +542,13 @@ const ListItem = (props: {
           <Fragment key={idx}>{idx === 2 ? <b>{text}</b> : text}</Fragment>
         ))}
       </div>
+      {props.mindmap && (
+        <div className="mindmap-search-path">
+          {t("outline.graph", { number: props.mindmap.graphNumber })}:{" "}
+          {props.mindmap.graphTitle}
+          <span>{props.mindmap.path.join(" / ")}</span>
+        </div>
+      )}
     </div>
   );
 };
@@ -503,6 +585,7 @@ const MatchListBase = (props: MatchListProps) => {
               key={searchMatch.element.id + searchMatch.index}
               searchQuery={props.searchQuery}
               preview={searchMatch.preview}
+              mindmap={searchMatch.mindmap}
               highlighted={index === props.focusIndex}
               onClick={() => props.onItemClick(index)}
             />
@@ -523,6 +606,7 @@ const MatchListBase = (props: MatchListProps) => {
               key={searchMatch.element.id + searchMatch.index}
               searchQuery={props.searchQuery}
               preview={searchMatch.preview}
+              mindmap={searchMatch.mindmap}
               highlighted={index + frameNameMatches.length === props.focusIndex}
               onClick={() => props.onItemClick(index + frameNameMatches.length)}
             />
@@ -790,6 +874,11 @@ const handleSearch = debounce(
     }
 
     const elements = app.scene.getNonDeletedElements();
+    const elementsMap = app.scene.getNonDeletedElementsMap();
+    const outlines = getMindmapOutlines(elements);
+    const outlinesByGraphId = new Map(
+      outlines.map((outline) => [outline.graphId, outline]),
+    );
     const texts = elements.filter((el) =>
       isTextElement(el),
     ) as ExcalidrawTextElement[];
@@ -808,19 +897,42 @@ const handleSearch = debounce(
     for (const textEl of texts) {
       let match = null;
       const text = textEl.originalText;
+      const container = textEl.containerId
+        ? elementsMap.get(textEl.containerId)
+        : null;
+      const node =
+        container && isMindmapNodeElement(container) ? container : null;
+      const outline = node ? outlinesByGraphId.get(node.graphId) : null;
 
       while ((match = regex.exec(text)) !== null) {
         const preview = getMatchPreview(text, match.index, searchQuery);
         const matchedLines = getMatchedLines(textEl, searchQuery, match.index);
 
         if (matchedLines.length > 0) {
+          if (node && isMindmapElementHidden(node, elementsMap)) {
+            matchedLines.forEach((line) => {
+              line.showOnCanvas = false;
+            });
+          }
           textMatches.push({
             element: textEl,
             searchQuery,
             preview,
             index: match.index,
             matchedLines,
+            mindmap:
+              node && outline
+                ? {
+                    nodeId: node.id,
+                    graphTitle: outline.title,
+                    graphNumber: outline.number,
+                    path: getMindmapPath(outline, node),
+                  }
+                : undefined,
           });
+          if (node) {
+            break;
+          }
         }
       }
     }
@@ -859,10 +971,10 @@ const handleSearch = debounce(
     // putting frame matches first
     const matchItems: SearchMatchItem[] = [...frameMatches, ...textMatches];
 
-    const focusIndex =
-      matchItems.findIndex((matchItem) =>
-        visibleIds.has(matchItem.element.id),
-      ) ?? null;
+    const visibleIndex = matchItems.findIndex((matchItem) =>
+      visibleIds.has(matchItem.element.id),
+    );
+    const focusIndex = visibleIndex >= 0 ? visibleIndex : null;
 
     cb(matchItems, focusIndex);
   },
