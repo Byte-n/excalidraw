@@ -259,7 +259,7 @@ describe("Mindmap P03 drag preview", () => {
     expect(h.state.toast).toBeNull();
   });
 
-  it("keeps a lone root and its label selected on repeated clicks", () => {
+  it("selects a lone root as a node on the first and repeated clicks", () => {
     API.setElements(
       h.app.scene
         .getNonDeletedElements()
@@ -270,13 +270,24 @@ describe("Mindmap P03 drag preview", () => {
     const mouse = new Pointer("mouse");
 
     mouse.clickAt(node("root").x + 20, node("root").y + 20);
-    expect(h.app.mindmap.getSelectedGraphRoot()?.id).toBe("root");
+    expect(h.state.selectedElementIds).toEqual({ root: true });
+    expect(h.app.mindmap.getSelectedGraphRoot()).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Right to left" }),
+      screen.getByTestId("mindmap-shape-rectangle"),
     ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Right to left" })).toBeNull();
 
     mouse.clickAt(node("root").x + 20, node("root").y + 20);
     expect(h.state.selectedElementIds).toEqual({ root: true });
+    expect(h.app.mindmap.getSelectedGraphRoot()).toBeNull();
+    expect(
+      screen.getByTestId("mindmap-shape-rectangle"),
+    ).toBeInTheDocument();
+
+    API.setSelectedElements([
+      node("root"),
+      h.app.scene.getNonDeletedElement("root-text")!,
+    ]);
     expect(h.app.mindmap.getSelectedGraphRoot()?.id).toBe("root");
     expect(
       screen.getByRole("button", { name: "Right to left" }),
@@ -502,6 +513,28 @@ describe("Mindmap P03 drag preview", () => {
     });
     expect(h.app.mindmap.getDragPreview()).toBeNull();
     expect(renderOpacity("a")).toBeUndefined();
+    expect(snapshot()).toBe(before);
+    expect(API.getUndoStack()).toHaveLength(historyLength);
+  });
+
+  it("cancels a touch reparent when a second finger starts", () => {
+    API.setSelectedElements([node("a")]);
+    const before = snapshot();
+    const historyLength = API.getUndoStack().length;
+    const touch = new Pointer("touch", 1);
+    touch.downAt(node("a").x + 20, node("a").y + 20);
+    touch.moveTo(node("b").x + 80, node("b").y + 28);
+    expect(h.app.mindmap.getDragPreview()).not.toBeNull();
+
+    fireEvent.touchStart(h.app.interactiveCanvas!, {
+      touches: [
+        { identifier: 1, clientX: 0, clientY: 0 },
+        { identifier: 2, clientX: 20, clientY: 20 },
+      ],
+    });
+    expect(h.app.mindmap.getDragPreview()).toBeNull();
+    touch.moveTo(node("b").x + 90, node("b").y + 28);
+    touch.upAt();
     expect(snapshot()).toBe(before);
     expect(API.getUndoStack()).toHaveLength(historyLength);
   });

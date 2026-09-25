@@ -116,6 +116,7 @@
     "toggleGrid": "Toggle grid",
     "addToLibrary": "Add to library",
     "addMindmapChild": "Add child node",
+    "editMindmapNode": "Edit node",
     "addMindmapSibling": "Add sibling node (child for root)",
     "collapseMindmap": "Collapse branch",
     "expandMindmap": "Expand branch",

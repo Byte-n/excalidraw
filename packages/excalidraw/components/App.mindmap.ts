@@ -69,6 +69,7 @@ type MindmapDropTarget = {
 };
 
 type MindmapDragSession = {
+  pointerDownState: PointerDownState;
   mode: "reparent" | "move";
   nodeIds: readonly string[];
   graphIds: readonly string[];
@@ -83,6 +84,11 @@ type MindmapDragSession = {
   copyMode: "graph" | "subtree" | null;
   duplicated: boolean;
   unsupportedAltNotified: boolean;
+  dropIndex: ReturnType<typeof buildMindmapGraphIndex> | null;
+  dropNodes: readonly ExcalidrawMindmapNodeElement[];
+  nextSiblingById: ReadonlyMap<string, string | null>;
+  sourceLabel: NonDeletedExcalidrawElement | null;
+  sourceEdge: NonDeletedExcalidrawElement | null;
 };
 
 type MindmapDragCandidate = {
@@ -173,6 +179,9 @@ export class AppMindmap {
   };
 
   handlePointerMove = (sceneX: number, sceneY: number) => {
+    if (this.dragSession) {
+      return;
+    }
     if (
       !["mindmap", "selection"].includes(this.app.state.activeTool.type) ||
       this.app.state.openDialog?.name === "elementLinkSelector"
@@ -245,6 +254,11 @@ export class AppMindmap {
     scenePoint: { x: number; y: number },
   ): boolean => {
     if (this.cancelledPointerDown === pointerDownState) {
+      return true;
+    }
+    if (event.type === "pointercancel") {
+      this.cancelledPointerDown = pointerDownState;
+      this.cancelDrag();
       return true;
     }
     if (
@@ -359,7 +373,7 @@ export class AppMindmap {
     } else if (session.mode === "reparent") {
       const target = session.paused
         ? null
-        : this.getDropTarget(scenePoint, session.nodeIds);
+        : this.getDropTarget(scenePoint, session);
       session.target = target;
       session.invalid = !session.target;
       session.previewElements = this.getReparentPreview(session);
@@ -390,7 +404,7 @@ export class AppMindmap {
     if (session.mode === "reparent") {
       session.paused = event.shiftKey || event.altKey;
       session.target = !session.paused
-        ? this.getDropTarget(scenePoint, session.nodeIds)
+        ? this.getDropTarget(scenePoint, session)
         : null;
       session.invalid = !session.target;
     }
@@ -482,6 +496,13 @@ export class AppMindmap {
       hoveredElementIds: {},
     });
     this.renderOverlay?.();
+  };
+
+  cancelTouchDrag = () => {
+    if (this.dragSession) {
+      this.cancelledPointerDown = this.dragSession.pointerDownState;
+      this.cancelDrag();
+    }
   };
 
   /** Cancels a local drag when a remote update invalidates its source or target. */
@@ -705,8 +726,9 @@ export class AppMindmap {
       const shouldSelectRootOnly =
         pointerDownState.withCmdOrCtrl ||
         (!modifiers.shiftKey &&
-          this.isCompleteMindmapSelection() &&
-          this.getSelectedGraphRoot()?.id === hit.id);
+          (!this.hasChildren(hit.id) ||
+            (this.isCompleteMindmapSelection() &&
+              this.getSelectedGraphRoot()?.id === hit.id)));
       if (shouldSelectRootOnly) {
         this.selectNode(hit);
       } else {
@@ -904,6 +926,9 @@ export class AppMindmap {
       .getNonDeletedElements()
       .filter(isMindmapNodeElement)
       .filter((node) => node.graphId === root.graphId);
+    if (graphNodes.length === 1 && selected.length === 1) {
+      return null;
+    }
     const visibleNodes = graphNodes.filter(
       (node) => !isMindmapElementHidden(node, elementsMap),
     );
@@ -1392,8 +1417,32 @@ export class AppMindmap {
     pointerDownState: PointerDownState,
     candidate: MindmapDragCandidate,
   ): MindmapDragSession => {
+    const elements = this.app.scene.getNonDeletedElements();
+    const source = this.app.scene.getNonDeletedElement(candidate.nodeIds[0]);
+    const dropIndex =
+      candidate.mode === "reparent" && source && isMindmapNodeElement(source)
+        ? buildMindmapGraphIndex(elements, source.graphId)
+        : null;
+    const excluded = new Set<string>();
+    candidate.nodeIds.forEach((id) => {
+      if (dropIndex) {
+        this.getSubtreeIds(dropIndex, id).forEach((childId) =>
+          excluded.add(childId),
+        );
+      }
+    });
+    const selected = new Set(candidate.nodeIds);
+    const nextSiblingById = new Map<string, string | null>();
+    dropIndex?.childrenById.forEach((children) => {
+      const available = children.filter((id) => !selected.has(id));
+      available.forEach((id, i) =>
+        nextSiblingById.set(id, available[i + 1] ?? null),
+      );
+    });
+    const elementsMap = this.app.scene.getNonDeletedElementsMap();
     const session: MindmapDragSession = {
       ...candidate,
+      pointerDownState,
       initialElements: new Map(
         this.app.scene
           .getNonDeletedElements()
@@ -1408,6 +1457,26 @@ export class AppMindmap {
       previewElements: [],
       duplicated: false,
       unsupportedAltNotified: false,
+      dropIndex,
+      dropNodes: dropIndex
+        ? [...dropIndex.nodes.values()].filter(
+            (node) =>
+              !excluded.has(node.id) &&
+              !node.locked &&
+              !isMindmapElementHidden(node, elementsMap),
+          )
+        : [],
+      nextSiblingById,
+      sourceLabel:
+        elements.find(
+          (element) =>
+            element.type === "text" && element.containerId === source?.id,
+        ) ?? null,
+      sourceEdge:
+        elements.find(
+          (element) =>
+            isMindmapEdgeElement(element) && element.childId === source?.id,
+        ) ?? null,
     };
     session.previewElements =
       session.mode === "move" ? [] : this.getReparentPreview(session);
@@ -1416,20 +1485,12 @@ export class AppMindmap {
 
   private getDropTarget = (
     scenePoint: { x: number; y: number },
-    nodeIds: readonly string[],
+    session: MindmapDragSession,
   ): MindmapDropTarget | null => {
-    const source = this.app.scene.getNonDeletedElement(nodeIds[0]);
-    if (!source || !isMindmapNodeElement(source)) {
+    const index = session.dropIndex;
+    if (!index) {
       return null;
     }
-    const index = buildMindmapGraphIndex(
-      this.app.scene.getNonDeletedElements(),
-      source.graphId,
-    );
-    const selected = new Set(nodeIds);
-    const excluded = new Set(
-      nodeIds.flatMap((id) => this.getSubtreeIds(index, id)),
-    );
     const tolerance = 40 / this.app.state.zoom.value;
     const root = index.nodes.get(index.rootId)!;
     const { direction } = getMindmapLayoutConfig(root);
@@ -1438,14 +1499,7 @@ export class AppMindmap {
     const mainSign =
       direction === "right-to-left" || direction === "bottom-to-top" ? -1 : 1;
     let closest: { target: MindmapDropTarget; distance: number } | null = null;
-    for (const node of index.nodes.values()) {
-      if (
-        excluded.has(node.id) ||
-        node.locked ||
-        isMindmapElementHidden(node, this.app.scene.getNonDeletedElementsMap())
-      ) {
-        continue;
-      }
+    for (const node of session.dropNodes) {
       const main = isVertical ? scenePoint.y : scenePoint.x;
       const cross = isVertical ? scenePoint.x : scenePoint.y;
       const nodeMain = isVertical ? node.y : node.x;
@@ -1496,11 +1550,7 @@ export class AppMindmap {
       if (Math.abs(cross - edgeCross) > tolerance) {
         continue;
       }
-      const siblings = (index.childrenById.get(node.parentId) ?? []).filter(
-        (id) => !selected.has(id),
-      );
-      const position = siblings.indexOf(node.id);
-      if (position < 0) {
+      if (!session.nextSiblingById.has(node.id)) {
         continue;
       }
       const distance =
@@ -1510,7 +1560,9 @@ export class AppMindmap {
         closest = {
           target: {
             parentId: node.parentId,
-            beforeId: above ? node.id : siblings[position + 1] ?? null,
+            beforeId: above
+              ? node.id
+              : session.nextSiblingById.get(node.id) ?? null,
           },
           distance,
         };
@@ -1526,10 +1578,10 @@ export class AppMindmap {
     if (!source || !isMindmapNodeElement(source)) {
       return [];
     }
-    const sourceIndex = buildMindmapGraphIndex(
-      this.app.scene.getNonDeletedElements(),
-      source.graphId,
-    );
+    const sourceIndex = session.dropIndex;
+    if (!sourceIndex) {
+      return [];
+    }
     const { direction } = getMindmapLayoutConfig(
       sourceIndex.nodes.get(sourceIndex.rootId),
     );
@@ -1538,12 +1590,7 @@ export class AppMindmap {
       x: source.x + session.offset.x,
       y: source.y + session.offset.y,
     };
-    const label = this.app.scene
-      .getNonDeletedElements()
-      .find(
-        (element) =>
-          element.type === "text" && element.containerId === source.id,
-      );
+    const label = session.sourceLabel;
     const preview: ExcalidrawElement[] = [previewNode];
     if (label) {
       preview.push({
@@ -1556,12 +1603,7 @@ export class AppMindmap {
       const parent = this.app.scene.getNonDeletedElement(
         session.target.parentId,
       );
-      const edge = this.app.scene
-        .getNonDeletedElements()
-        .find(
-          (element) =>
-            isMindmapEdgeElement(element) && element.childId === source.id,
-        );
+      const edge = session.sourceEdge;
       if (
         parent &&
         isMindmapNodeElement(parent) &&
@@ -1961,6 +2003,13 @@ export class AppMindmap {
     const node = this.app.scene.getNonDeletedElement(nodeId);
     if (node && isMindmapNodeElement(node)) {
       this.createNode(node, "child");
+    }
+  };
+
+  editSelectedNode = () => {
+    const node = this.getSelectedNode();
+    if (node) {
+      this.startNodeEditing(node);
     }
   };
 

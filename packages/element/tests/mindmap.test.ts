@@ -80,6 +80,22 @@ const graph = () => [
 const indexOf = (elements: readonly ExcalidrawElement[]) =>
   buildMindmapGraphIndex(elements, "graph");
 
+describe("mindmap 大图深度", () => {
+  it("indexes and lays out 2000 levels without recursion", () => {
+    const elements = [node("root")];
+    for (let i = 1; i < 2000; i++) {
+      elements.push(node(`n${i}`, i === 1 ? "root" : `n${i - 1}`));
+    }
+    const index = indexOf(elements);
+    expect(index.depthById.get("n1999")).toBe(1999);
+    expect(layoutMindmap(index).elements).toHaveLength(2000);
+    elements[8] = { ...elements[8], collapsed: true };
+    const folded = layoutMindmap(indexOf(elements));
+    expect(folded.elements).toHaveLength(9);
+    expect(indexOf(elements).nodes).toHaveProperty("size", 2000);
+  });
+});
+
 describe("mindmap 正式元素模型", () => {
   it("普通图形、流程图节点和 Arrow 不混入 mindmap", () => {
     const root = node("root");

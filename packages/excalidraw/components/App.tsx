@@ -2599,6 +2599,10 @@ class App extends React.Component<AppProps, AppState> {
                                 )}
                               >
                                 <ElementCanvasButton
+                                  isMobile={
+                                    this.editorInterface.formFactor !==
+                                    "desktop"
+                                  }
                                   title={t("labels.addMindmapChild")}
                                   icon={PlusIcon}
                                   checked={false}
@@ -2612,6 +2616,10 @@ class App extends React.Component<AppProps, AppState> {
                                   mindmapNodeForControls.id,
                                 ) && (
                                   <ElementCanvasButton
+                                    isMobile={
+                                      this.editorInterface.formFactor !==
+                                      "desktop"
+                                    }
                                     title={t(
                                       mindmapNodeForControls.collapsed
                                         ? "labels.expandMindmap"
@@ -4596,6 +4604,9 @@ class App extends React.Component<AppProps, AppState> {
     if (!this.isInteractionEnabled()) {
       return;
     }
+    if (event.touches.length > 1) {
+      this.mindmap.cancelTouchDrag();
+    }
 
     // fix for Apple Pencil Scribble (do not prevent for other devices)
     if (isIOS) {
@@ -5197,6 +5208,7 @@ class App extends React.Component<AppProps, AppState> {
       // the browser took the pointer over (scroll, palm rejection) — no
       // pointerup will follow, so the armed bucket fill must not commit
       this.bucketFill.cancel();
+      this.mindmap.cancelTouchDrag();
     }
 
     const wasMultiTouchGesture = gesture.pointers.size >= 2;
