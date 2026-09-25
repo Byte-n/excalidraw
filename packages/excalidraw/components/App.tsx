@@ -747,6 +747,7 @@ class App extends React.Component<AppProps, AppState> {
 
   hitLinkElement?: NonDeletedExcalidrawElement;
   lastPointerDownEvent: React.PointerEvent<HTMLElement> | null = null;
+  private touchMindmapContextMenuAllowed: boolean | null = null;
   /**
    * the handle of the resize in progress while `state.isResizing` — for UI
    * that words itself by handle (a sticky note's corners resize
@@ -8691,6 +8692,7 @@ class App extends React.Component<AppProps, AppState> {
     // everything except the tool-usage path (laser & custom tools)
 
     const selectedElements = this.scene.getSelectedElements(this.state);
+    const selectedElementIdsBeforePointerDown = this.state.selectedElementIds;
 
     // If Ctrl is not held, ensure isBindingEnabled reflects the user preference.
     if (!event.ctrlKey) {
@@ -8806,7 +8808,10 @@ class App extends React.Component<AppProps, AppState> {
     if (selection?.anchorNode) {
       selection.removeAllRanges();
     }
-    this.maybeOpenContextMenuAfterPointerDownOnTouchDevices(event);
+    this.maybeOpenContextMenuAfterPointerDownOnTouchDevices(
+      event,
+      selectedElementIdsBeforePointerDown,
+    );
 
     //fires only once, if pen is detected, penMode is enabled
     //the user can disable this by toggling the penMode button
@@ -8945,6 +8950,8 @@ class App extends React.Component<AppProps, AppState> {
 
     this.mindmap.preparePointerDown(pointerDownState, {
       shiftKey: event.shiftKey,
+      pointerType: event.pointerType,
+      selectedElementIdsBeforePointerDown,
     });
 
     const allowOnPointerDown =
@@ -9230,6 +9237,7 @@ class App extends React.Component<AppProps, AppState> {
 
   private maybeOpenContextMenuAfterPointerDownOnTouchDevices = (
     event: React.PointerEvent<HTMLElement>,
+    selectedElementIdsBeforePointerDown: AppState["selectedElementIds"],
   ): void => {
     // deal with opening context menu on touch devices
     if (event.pointerType === "touch") {
@@ -9241,11 +9249,27 @@ class App extends React.Component<AppProps, AppState> {
         // context menu.
         invalidateContextMenu = true;
       } else {
+        const scenePoint = viewportCoordsToSceneCoords(event, this.state);
+        const hit = this.getElementAtPosition(scenePoint.x, scenePoint.y, {
+          includeBoundTextElement: true,
+        });
+        const node =
+          hit?.type === "text" && hit.containerId
+            ? this.scene.getNonDeletedElement(hit.containerId)
+            : hit;
+        const canOpenMindmapMenu =
+          this.editorInterface.formFactor === "desktop" ||
+          !isMindmapNodeElement(node) ||
+          (this.state.activeTool.type === "selection" &&
+            !!selectedElementIdsBeforePointerDown[node.id]);
+        this.touchMindmapContextMenuAllowed = isMindmapNodeElement(node)
+          ? canOpenMindmapMenu
+          : null;
         // open the context menu with the first touch's clientX and clientY
         // if the touch is not moving
         touchTimeout = this.ownerWindow.setTimeout(() => {
           touchTimeout = 0;
-          if (!invalidateContextMenu) {
+          if (!invalidateContextMenu && canOpenMindmapMenu) {
             this.handleCanvasContextMenu(event);
           }
         }, TOUCH_CTX_MENU_TIMEOUT);
@@ -13457,6 +13481,16 @@ class App extends React.Component<AppProps, AppState> {
     // In non-interactive mode there is no menu, so the native one cannot be
     // mistaken for Excalidraw's own.
     if (!this.isInteractionEnabled()) {
+      return;
+    }
+
+    if (
+      this.touchMindmapContextMenuAllowed === false &&
+      (pointer.pointerType === "touch" ||
+        (pointer.pointerType === undefined &&
+          this.lastPointerDownEvent?.pointerType === "touch" &&
+          gesture.pointers.size > 0))
+    ) {
       return;
     }
 

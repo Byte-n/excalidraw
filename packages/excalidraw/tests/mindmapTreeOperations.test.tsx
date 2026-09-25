@@ -299,6 +299,110 @@ describe("Mindmap P02 树操作界面", () => {
     expectAtomic(before, count);
   });
 
+  it("单击根节点选中整图后，Delete 删除整图并可一次撤销", () => {
+    const mouse = new Pointer("mouse");
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
+    expect(h.app.mindmap.getSelectedGraphRoot()?.id).toBe("root");
+    const before = snapshot();
+    const count = API.getUndoStack().length;
+
+    Keyboard.keyPress("Delete");
+
+    expect(
+      h.app.scene
+        .getNonDeletedElements()
+        .some(
+          (element) =>
+            isMindmapNodeElement(element) && element.graphId === "graph",
+        ),
+    ).toBe(false);
+    expect(node("foreign")).not.toBeNull();
+    expect(node("rectangle")).not.toBeNull();
+    expect(h.state.toast).toBeNull();
+    expectAtomic(before, count);
+  });
+
+  it("圈选折叠的整图后，Backspace 删除隐藏后代", () => {
+    API.updateElement(node("a"), { collapsed: true });
+    const hiddenIds = getMindmapHiddenElementIds(
+      h.app.scene.getNonDeletedElements(),
+    );
+    const graphElements = h.app.scene
+      .getNonDeletedElements()
+      .filter(
+        (element) =>
+          element.id !== "rectangle" &&
+          element.id !== "foreign" &&
+          element.id !== "foreign-text" &&
+          !hiddenIds.has(element.id),
+      );
+    const mouse = new Pointer("mouse");
+    mouse.downAt(50, 50);
+    mouse.moveTo(60, 60);
+    mouse.moveTo(
+      Math.max(...graphElements.map((element) => element.x + element.width)) +
+        30,
+      Math.max(...graphElements.map((element) => element.y + element.height)) +
+        30,
+    );
+    mouse.upAt();
+    expect(h.state.selectedElementIds.a1).toBe(true);
+    expect(h.app.mindmap.getSelectedGraphRoot()?.id).toBe("root");
+    const before = snapshot();
+    const count = API.getUndoStack().length;
+
+    Keyboard.keyPress("Backspace");
+
+    expect(h.app.scene.getNonDeletedElement("root")).toBeNull();
+    expect(h.app.scene.getNonDeletedElement("a1-text")).toBeNull();
+    expectAtomic(before, count);
+  });
+
+  it("完整的多图与普通图形混选后，一次删除并撤销", () => {
+    API.setSelectedElements([...h.app.scene.getNonDeletedElements()]);
+    expect(h.app.mindmap.isCompleteMindmapSelection()).toBe(true);
+    const before = snapshot();
+    const count = API.getUndoStack().length;
+
+    act(() => h.app.actionManager.executeAction(actionDeleteSelected));
+
+    expect(h.app.scene.getNonDeletedElements()).toHaveLength(0);
+    expect(h.state.toast).toBeNull();
+    expectAtomic(before, count);
+  });
+
+  it("圈选整图和普通图形时保留选区外的思维导图", () => {
+    const mouse = new Pointer("mouse");
+    mouse.downAt(50, 50);
+    mouse.moveTo(60, 60);
+    mouse.moveTo(930, 500);
+    mouse.upAt();
+    expect(h.state.selectedElementIds.root).toBe(true);
+    expect(h.state.selectedElementIds.rectangle).toBe(true);
+    expect(h.state.selectedElementIds.foreign).toBeUndefined();
+    const before = snapshot();
+    const count = API.getUndoStack().length;
+
+    Keyboard.keyPress("Delete");
+
+    expect(h.app.scene.getNonDeletedElement("root")).toBeNull();
+    expect(h.app.scene.getNonDeletedElement("rectangle")).toBeNull();
+    expect(node("foreign")).not.toBeNull();
+    expectAtomic(before, count);
+  });
+
+  it("整图混选含锁定节点时不删除任何元素", () => {
+    API.updateElement(node("a"), { locked: true });
+    API.setSelectedElements([...h.app.scene.getNonDeletedElements()]);
+    const before = snapshot();
+    const count = API.getUndoStack().length;
+
+    Keyboard.keyPress("Delete");
+
+    expect(snapshot()).toEqual(before);
+    expect(API.getUndoStack()).toHaveLength(count);
+  });
+
   it.each(["root", "a"])(
     "Shift 删除仅有一个直属子节点的 %s 自动接替，保留深层后代",
     (id) => {

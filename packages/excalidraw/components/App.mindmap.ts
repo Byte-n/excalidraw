@@ -163,6 +163,7 @@ export class AppMindmap {
   private dragOpacityApplied = false;
   private dimmedDragElementIds = new Set<string>();
   private cancelledPointerDown: PointerDownState | null = null;
+  private blockedTouchPointerDown: PointerDownState | null = null;
   private renderOverlay: (() => void) | null = null;
 
   constructor(private readonly app: App) {}
@@ -170,6 +171,7 @@ export class AppMindmap {
   clear = () => {
     this.pendingTextNodeIds.clear();
     this.consumedSpace = false;
+    this.blockedTouchPointerDown = null;
     this.cancelDrag();
     this.clearHover();
   };
@@ -253,6 +255,9 @@ export class AppMindmap {
     event: PointerEvent,
     scenePoint: { x: number; y: number },
   ): boolean => {
+    if (this.blockedTouchPointerDown === pointerDownState) {
+      return true;
+    }
     if (this.cancelledPointerDown === pointerDownState) {
       return true;
     }
@@ -393,6 +398,9 @@ export class AppMindmap {
     event: PointerEvent,
     scenePoint: { x: number; y: number },
   ): boolean => {
+    if (this.blockedTouchPointerDown === pointerDownState) {
+      this.blockedTouchPointerDown = null;
+    }
     if (this.cancelledPointerDown === pointerDownState) {
       this.cancelledPointerDown = null;
       return true;
@@ -714,9 +722,23 @@ export class AppMindmap {
 
   preparePointerDown = (
     pointerDownState: PointerDownState,
-    modifiers: { shiftKey: boolean },
+    modifiers: {
+      shiftKey: boolean;
+      pointerType: string;
+      selectedElementIdsBeforePointerDown: Readonly<Record<string, true>>;
+    },
   ) => {
     const hit = this.getMindmapNodeFromPointerDown(pointerDownState);
+    if (
+      modifiers.pointerType === "touch" &&
+      this.app.editorInterface.formFactor !== "desktop" &&
+      hit &&
+      (this.app.state.activeTool.type !== "selection" ||
+        !modifiers.selectedElementIdsBeforePointerDown[hit.id])
+    ) {
+      this.blockedTouchPointerDown = pointerDownState;
+      pointerDownState.drag.blockDragging = true;
+    }
     if (
       this.app.state.activeTool.type === "selection" &&
       hit &&
@@ -837,6 +859,20 @@ export class AppMindmap {
     }
     const node = this.getSelectedNode();
     if (
+      isDelete &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !event[KEYS.CTRL_OR_CMD]
+    ) {
+      if (!event.repeat) {
+        this.app.actionManager.executeAction(
+          this.app.actionManager.actions.deleteSelectedElements,
+          "keyboard",
+        );
+      }
+      return true;
+    }
+    if (
       !node ||
       event.altKey ||
       event[KEYS.CTRL_OR_CMD] ||
@@ -860,7 +896,7 @@ export class AppMindmap {
       }
     } else if (!event.repeat) {
       if (isDelete) {
-        this.app.syncActionResult(this.getDeleteActionResult(event.shiftKey));
+        this.app.syncActionResult(this.getDeleteActionResult(true));
       } else if (event.key === KEYS.SPACE) {
         this.executeTreeCommand({ type: "toggleCollapse" }, node.id);
       } else if (event.key === KEYS.TAB && event.shiftKey) {
@@ -1949,6 +1985,37 @@ export class AppMindmap {
     return this.getTreeActionResult(
       { type: preserveChildren ? "deletePreservingChildren" : "delete" },
       node.id,
+    );
+  };
+
+  deleteCompleteSelectedGraphs = (
+    elements: readonly ExcalidrawElement[],
+  ): readonly ExcalidrawElement[] | null => {
+    if (!this.isCompleteMindmapSelection()) {
+      this.notifyUnsupportedOperation();
+      return null;
+    }
+    const roots = this.app.scene
+      .getSelectedElements(this.app.state)
+      .filter(isMindmapNodeElement)
+      .filter((node) => node.role === "root");
+    if (!roots.length || roots.some((root) => !this.canEditNode(root.id))) {
+      this.notifyUnsupportedOperation();
+      return null;
+    }
+    let nextElements = elements;
+    for (const root of roots) {
+      const result = applyMindmapTreeCommand(nextElements, root.id, {
+        type: "delete",
+      });
+      if (!result) {
+        return null;
+      }
+      nextElements = result.elements;
+    }
+    return this.getLaidOutElements(
+      nextElements,
+      roots.map((root) => root.graphId),
     );
   };
 

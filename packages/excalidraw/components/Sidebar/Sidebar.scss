@@ -100,15 +100,14 @@
     flex-direction: column;
     flex: 1 1 auto;
     padding: 1rem 0;
+    height: 100%;
 
     [role="tabpanel"] {
-      flex: 1;
-      outline: none;
-
       flex: 1 1 auto;
       display: flex;
       flex-direction: column;
       outline: none;
+      min-height: 0;
     }
 
     [role="tabpanel"][data-state="inactive"] {

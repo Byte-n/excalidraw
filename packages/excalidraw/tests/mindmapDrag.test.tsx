@@ -316,6 +316,17 @@ describe("Mindmap P03 drag preview", () => {
     mouse.upAt();
   });
 
+  it("keeps the desktop first-press node drag", () => {
+    const mouse = new Pointer("mouse");
+    expect(h.state.selectedElementIds.a).toBeUndefined();
+
+    mouse.downAt(node("a").x + 20, node("a").y + 20);
+    mouse.moveTo(node("a").x + 100, node("a").y + 60);
+
+    expect(h.app.mindmap.getDragPreview()?.nodeIds).toContain("a");
+    mouse.upAt();
+  });
+
   it("moves only the node preview with the pointer and connects it to the candidate parent", () => {
     API.setSelectedElements([node("a")]);
     const before = snapshot();
