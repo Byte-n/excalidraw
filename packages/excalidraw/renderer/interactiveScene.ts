@@ -1895,24 +1895,30 @@ const _renderInteractiveScene = ({
     !appState.selectedLinearElement?.isEditing &&
     !app.mindmap.isReparenting()
   ) {
+    const hiddenMindmapIds = app.scene.getMindmapHiddenElementIds();
+    const visibleSelectedElements = selectedElements.filter(
+      (element) => !hiddenMindmapIds.has(element.id),
+    );
     const showBoundingBox = hasBoundingBox(
-      selectedElements,
+      visibleSelectedElements,
       appState,
       editorInterface,
     );
 
     const isSingleLinearElementSelected =
-      selectedElements.length === 1 && isLinearElement(selectedElements[0]);
+      visibleSelectedElements.length === 1 &&
+      isLinearElement(visibleSelectedElements[0]);
     // render selected linear element points
     if (
       isSingleLinearElementSelected &&
-      appState.selectedLinearElement?.elementId === selectedElements[0].id &&
-      !selectedElements[0].locked
+      appState.selectedLinearElement?.elementId ===
+        visibleSelectedElements[0].id &&
+      !visibleSelectedElements[0].locked
     ) {
       renderLinearPointHandles(
         context,
         appState,
-        selectedElements[0] as NonDeleted<ExcalidrawLinearElement>,
+        visibleSelectedElements[0] as NonDeleted<ExcalidrawLinearElement>,
         elementsMap,
       );
     }
@@ -1923,9 +1929,9 @@ const _renderInteractiveScene = ({
 
     if (showBoundingBox) {
       // Optimisation for finding quickly relevant element ids
-      const locallySelectedIds = arrayToMap(selectedElements);
+      const locallySelectedIds = arrayToMap(visibleSelectedElements);
       const selectedMindmapRootGraphIds = new Set(
-        selectedElements
+        visibleSelectedElements
           .filter(isMindmapNodeElement)
           .filter((node) => node.role === "root")
           .map((node) => node.graphId),
@@ -1934,6 +1940,9 @@ const _renderInteractiveScene = ({
       const selections: ElementSelectionBorder[] = [];
 
       for (const element of elementsMap.values()) {
+        if (hiddenMindmapIds.has(element.id)) {
+          continue;
+        }
         const selectionColors = [];
         const remoteClients = renderConfig.remoteSelectedElementIds.get(
           element.id,
@@ -2046,10 +2055,10 @@ const _renderInteractiveScene = ({
     context.save();
     context.translate(appState.scrollX, appState.scrollY);
 
-    if (selectedElements.length === 1) {
+    if (visibleSelectedElements.length === 1) {
       context.fillStyle = getThemedColor("#fff", appState.theme);
       const transformHandles = getTransformHandles(
-        selectedElements[0],
+        visibleSelectedElements[0],
         appState.zoom,
         elementsMap,
         "mouse", // when we render we don't know which pointer type so use mouse,
@@ -2068,7 +2077,7 @@ const _renderInteractiveScene = ({
           renderConfig,
           appState,
           transformHandles,
-          selectedElements[0].angle,
+          visibleSelectedElements[0].angle,
         );
       }
 
@@ -2086,14 +2095,17 @@ const _renderInteractiveScene = ({
         }
       }
     } else if (
-      selectedElements.length > 1 &&
+      visibleSelectedElements.length > 1 &&
       !appState.isRotating &&
-      !selectedElements.some((el) => el.locked)
+      !visibleSelectedElements.some((el) => el.locked)
     ) {
       const dashedLinePadding =
         (DEFAULT_TRANSFORM_HANDLE_SPACING * 2) / appState.zoom.value;
       context.fillStyle = getThemedColor("#fff", appState.theme);
-      const [x1, y1, x2, y2] = getCommonBounds(selectedElements, elementsMap);
+      const [x1, y1, x2, y2] = getCommonBounds(
+        visibleSelectedElements,
+        elementsMap,
+      );
       const initialLineDash = context.getLineDash();
       context.setLineDash([2 / appState.zoom.value]);
       const lineWidth = context.lineWidth;
@@ -2116,14 +2128,18 @@ const _renderInteractiveScene = ({
         0 as Radians,
         appState.zoom,
         "mouse",
-        isFrameSelected
+        isFrameSelected ||
+          visibleSelectedElements.some(
+            (element) =>
+              isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+          )
           ? {
               ...getOmitSidesForEditorInterface(editorInterface),
               rotation: true,
             }
           : getOmitSidesForEditorInterface(editorInterface),
       );
-      if (selectedElements.some((element) => !element.locked)) {
+      if (visibleSelectedElements.some((element) => !element.locked)) {
         renderTransformHandles(
           context,
           renderConfig,

@@ -782,7 +782,7 @@ export const restoreElement = (
         routing: element.routing === "curved" ? "curved" : "orthogonal",
         points,
       });
-      return { ...restored, angle: 0 as Radians, locked: true };
+      return { ...restored, angle: 0 as Radians, locked: false };
     }
 
     // generic elements

@@ -1104,6 +1104,82 @@ describe("Mindmap P03 drag preview", () => {
     });
   });
 
+  it("selects and moves Mindmap edges with Ctrl+A", () => {
+    Keyboard.withModifierKeys({ ctrl: true }, () => {
+      Keyboard.keyPress("a");
+    });
+
+    expect(h.state.selectedElementIds.root).toBe(true);
+    const edges = h.app.scene
+      .getNonDeletedElements()
+      .filter(isMindmapEdgeElement);
+    expect(edges.length).toBeGreaterThan(0);
+    edges.forEach((edge) => {
+      expect(edge.locked).toBe(false);
+      expect(h.state.selectedElementIds[edge.id]).toBe(true);
+    });
+
+    const before = new Map(
+      edges.map((edge) => [edge.id, { x: edge.x, y: edge.y }]),
+    );
+    const rectangle = h.app.scene.getNonDeletedElement("rectangle")!;
+    const mouse = new Pointer("mouse");
+    mouse.downAt(rectangle.x + 20, rectangle.y + 20);
+    mouse.moveTo(rectangle.x + 100, rectangle.y + 80);
+    mouse.upAt();
+
+    edges.forEach((edge) => {
+      expect(h.app.scene.getNonDeletedElement(edge.id)).toMatchObject({
+        x: before.get(edge.id)!.x + 80,
+        y: before.get(edge.id)!.y + 60,
+      });
+    });
+  });
+
+  it("selects an edge for styling without dragging it", () => {
+    const target = h.app.scene
+      .getNonDeletedElements()
+      .filter(isMindmapEdgeElement)
+      .flatMap((edge) =>
+        edge.points.slice(1).map((point, index) => ({
+          edge,
+          x: edge.x + (edge.points[index][0] + point[0]) / 2,
+          y: edge.y + (edge.points[index][1] + point[1]) / 2,
+        })),
+      )
+      .find(
+        ({ edge, x, y }) => h.app.getElementAtPosition(x, y)?.id === edge.id,
+      );
+    expect(target).toBeDefined();
+    const { edge, x, y } = target!;
+    const mouse = new Pointer("mouse");
+    mouse.clickAt(x, y);
+
+    expect(h.state.selectedElementIds[edge.id]).toBe(true);
+    expect(
+      screen.getByRole("region", { name: "Mindmap edge" }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Mindmap edge color"), {
+      target: { value: "#ff0000" },
+    });
+    expect(h.app.scene.getNonDeletedElement(edge.id)?.strokeColor).toBe(
+      "#ff0000",
+    );
+
+    const elementCount = h.app.scene.getNonDeletedElements().length;
+    API.executeAction(actionDuplicateSelection);
+    expect(h.app.scene.getNonDeletedElements()).toHaveLength(elementCount);
+
+    const before = h.app.scene.getNonDeletedElement(edge.id)!;
+    mouse.downAt(x, y);
+    mouse.moveTo(x + 80, y + 60);
+    mouse.upAt();
+    expect(h.app.scene.getNonDeletedElement(edge.id)).toMatchObject({
+      x: before.x,
+      y: before.y,
+    });
+  });
+
   it("treats descendants of a boxed collapsed parent as selected", () => {
     API.updateElement(node("a"), { collapsed: true });
     const visibleElements = h.app.scene
@@ -1142,6 +1218,29 @@ describe("Mindmap P03 drag preview", () => {
       x: hiddenBefore.x + 80,
       y: hiddenBefore.y + 60,
     });
+  });
+
+  it("excludes collapsed descendants from the selection bounds", () => {
+    API.updateElement(node("a"), { collapsed: true });
+    API.updateElement(node("a1"), { x: 3000, y: 3000 });
+    const mouse = new Pointer("mouse");
+    mouse.clickAt(node("root").x + 20, node("root").y + 20);
+    expect(h.state.selectedElementIds.a1).toBe(true);
+
+    const hitSelectionBounds = Reflect.get(
+      h.app,
+      "isHittingCommonBoundingBoxOfSelectedElements",
+    ) as (
+      point: { x: number; y: number },
+      selectedElements: readonly ExcalidrawElement[],
+    ) => boolean;
+    expect(
+      hitSelectionBounds.call(
+        h.app,
+        { x: 3000, y: 3000 },
+        h.app.scene.getSelectedElements(h.state),
+      ),
+    ).toBe(false);
   });
 
   it("drags a boxed Mindmap and rectangle from the rectangle", () => {

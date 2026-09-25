@@ -498,7 +498,7 @@ const createDerivedEdge = (
   updated: child.updated,
   created: child.created,
   link: null,
-  locked: true,
+  locked: false,
 });
 
 /**

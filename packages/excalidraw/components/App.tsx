@@ -8360,14 +8360,28 @@ class App extends React.Component<AppProps, AppState> {
       this.state.openDialog?.name !== "elementLinkSelector"
     ) {
       const transformHandleType = getTransformHandleTypeFromCoords(
-        getCommonBounds(selectedElements),
+        getCommonBounds(
+          selectedElements.filter(
+            (element) =>
+              !this.scene.getMindmapHiddenElementIds().has(element.id),
+          ),
+        ),
         scenePointerX,
         scenePointerY,
         this.state.zoom,
         event.pointerType,
         this.editorInterface,
       );
-      if (transformHandleType) {
+      if (
+        transformHandleType &&
+        !(
+          transformHandleType === "rotation" &&
+          selectedElements.some(
+            (element) =>
+              isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+          )
+        )
+      ) {
         this.cursor.set(
           getCursorForResizingElement({
             transformHandleType,
@@ -8433,6 +8447,12 @@ class App extends React.Component<AppProps, AppState> {
             ? CURSOR_TYPE.TEXT
             : CURSOR_TYPE.CROSSHAIR,
         );
+      } else if (
+        hitElement &&
+        isMindmapEdgeElement(hitElement) &&
+        !this.mindmap.isCompleteMindmapSelection()
+      ) {
+        this.cursor.set(CURSOR_TYPE.POINTER);
       } else if (
         !event[KEYS.CTRL_OR_CMD] &&
         this.isHittingCommonBoundingBoxOfSelectedElements(
@@ -9573,13 +9593,27 @@ class App extends React.Component<AppProps, AppState> {
         }
       } else if (selectedElements.length > 1) {
         pointerDownState.resize.handleType = getTransformHandleTypeFromCoords(
-          getCommonBounds(selectedElements),
+          getCommonBounds(
+            selectedElements.filter(
+              (element) =>
+                !this.scene.getMindmapHiddenElementIds().has(element.id),
+            ),
+          ),
           pointerDownState.origin.x,
           pointerDownState.origin.y,
           this.state.zoom,
           event.pointerType,
           this.editorInterface,
         );
+        if (
+          pointerDownState.resize.handleType === "rotation" &&
+          selectedElements.some(
+            (element) =>
+              isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+          )
+        ) {
+          pointerDownState.resize.handleType = false;
+        }
       }
       if (pointerDownState.resize.handleType) {
         pointerDownState.resize.isResizing = true;
@@ -9971,7 +10005,10 @@ class App extends React.Component<AppProps, AppState> {
     point: Readonly<{ x: number; y: number }>,
     selectedElements: readonly ExcalidrawElement[],
   ): boolean {
-    if (selectedElements.length < 2) {
+    const visibleSelectedElements = selectedElements.filter(
+      (element) => !this.scene.getMindmapHiddenElementIds().has(element.id),
+    );
+    if (visibleSelectedElements.length < 2) {
       return false;
     }
 
@@ -9982,7 +10019,7 @@ class App extends React.Component<AppProps, AppState> {
     );
     const boundsPadding =
       (DEFAULT_TRANSFORM_HANDLE_SPACING * 2) / this.state.zoom.value;
-    const [x1, y1, x2, y2] = getCommonBounds(selectedElements);
+    const [x1, y1, x2, y2] = getCommonBounds(visibleSelectedElements);
     return (
       point.x > x1 - boundsPadding - threshold &&
       point.x < x2 + boundsPadding + threshold &&

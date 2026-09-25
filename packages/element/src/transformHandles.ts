@@ -281,6 +281,7 @@ export const getTransformHandles = (
   // you can't move/resize
   if (
     element.locked ||
+    element.type === "mindmap-edge" ||
     // Elbow arrows cannot be rotated
     isElbowArrow(element)
   ) {

@@ -227,6 +227,27 @@ const MindmapNodeStylePanel = ({ app }: { app: AppClassProperties }) => {
   );
 };
 
+const MindmapSelectedEdgeStylePanel = ({
+  app,
+}: {
+  app: AppClassProperties;
+}) => {
+  const edge = app.mindmap.getSelectedEdge();
+  if (!edge) {
+    return null;
+  }
+  return (
+    <div className="mindmap-style-panel">
+      <MindmapEdgeStyleControls
+        title="Mindmap edge"
+        style={edge}
+        disabled={!app.mindmap.canEditNode(edge.childId)}
+        onChange={app.mindmap.setSelectedEdgeStyle}
+      />
+    </div>
+  );
+};
+
 const MindmapGraphStylePanel = ({ app }: { app: AppClassProperties }) => {
   const root = app.mindmap.getSelectedGraphRoot();
   if (!root) {
@@ -365,6 +386,14 @@ export const SelectedShapeActions = ({
     elementsMap,
     app,
   );
+
+  if (app.mindmap.getSelectedEdge()) {
+    return (
+      <div className="selected-shape-actions">
+        <MindmapSelectedEdgeStylePanel app={app} />
+      </div>
+    );
+  }
 
   // the bucket fill tool configures only the fill it creates: color, fill
   // style, and opacity (shared `currentItem*` values; no stroke properties)
@@ -849,6 +878,14 @@ export const CompactShapeActions = ({
     app,
   );
   const { container } = useExcalidrawContainer();
+
+  if (app.mindmap.getSelectedEdge()) {
+    return (
+      <div className="compact-shape-actions">
+        <MindmapSelectedEdgeStylePanel app={app} />
+      </div>
+    );
+  }
 
   return (
     <div className="compact-shape-actions">

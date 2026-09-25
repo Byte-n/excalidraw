@@ -1,5 +1,5 @@
 import { arrayToMap } from "@excalidraw/common";
-import { pointFrom } from "@excalidraw/math";
+import { bezierEquation, curve, pointFrom } from "@excalidraw/math";
 
 import type { GlobalPoint } from "@excalidraw/math";
 
@@ -857,19 +857,34 @@ describe("mindmap 纯布局与影子树", () => {
     expect(() => reparentMindmapNodes(index, ["root"], "a")).toThrow();
   });
 
-  it("orthogonal 与 curved 渲染采用不同路径且 edge 不可独立命中", () => {
+  it("orthogonal 与 curved 连线按各自路径命中", () => {
     const edge = layoutMindmap(indexOf(graph())).edges[0];
     expect(getMindmapEdgePath(edge)).toContain("L ");
-    expect(getMindmapEdgePath({ ...edge, routing: "curved" })).toContain("C ");
+    const curved = { ...edge, routing: "curved" as const };
+    expect(getMindmapEdgePath(curved)).toContain("C ");
     expect(ShapeCache.generateElementShape(edge, null)).toBeTruthy();
+    const points = edge.points.map(([x, y]) =>
+      pointFrom<GlobalPoint>(edge.x + x, edge.y + y),
+    );
     expect(
       hitElementItself({
         element: edge,
         elementsMap: arrayToMap([edge]),
-        point: pointFrom<GlobalPoint>(edge.x, edge.y),
+        point: points[1],
         threshold: 10,
       }),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      hitElementItself({
+        element: curved,
+        elementsMap: arrayToMap([curved]),
+        point: bezierEquation(
+          curve(points[0], points[1], points[2], points[3]),
+          0.5,
+        ),
+        threshold: 10,
+      }),
+    ).toBe(true);
   });
 
   it("折叠后代不参与命中或框选", () => {

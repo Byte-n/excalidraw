@@ -142,10 +142,7 @@ export const hitElementItself = ({
   frameNameBound = null,
   overrideShouldTestInside = false,
 }: HitTestArgs) => {
-  if (
-    element.type === "mindmap-edge" ||
-    isMindmapElementHidden(element, elementsMap)
-  ) {
+  if (isMindmapElementHidden(element, elementsMap)) {
     return false;
   }
   // Return cached result if the same point and element version is tested again.

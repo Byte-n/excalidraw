@@ -713,8 +713,10 @@ export class AppMindmap {
       return this.hasLockedMindmapGraph();
     }
     return Boolean(
-      pointerDownState.hit.element &&
+      (pointerDownState.hit.element &&
         (this.isMindmapRelatedElement(pointerDownState.hit.element) ||
+          this.hasSelectedMindmapElement())) ||
+        (pointerDownState.hit.hasHitCommonBoundingBoxOfSelectedElements &&
           this.hasSelectedMindmapElement()),
     );
   };
@@ -926,6 +928,13 @@ export class AppMindmap {
       : null;
   };
 
+  getSelectedEdge = () => {
+    const selected = this.app.scene.getSelectedElements(this.app.state);
+    return selected.length === 1 && isMindmapEdgeElement(selected[0])
+      ? selected[0]
+      : null;
+  };
+
   getSelectedGraphRoot = () => {
     const selected = this.app.scene.getSelectedElements(this.app.state);
     const roots = selected
@@ -1023,6 +1032,24 @@ export class AppMindmap {
     }
     this.commitGraphUpdate(node.graphId, (element) =>
       isMindmapEdgeElement(element) && element.childId === node.id
+        ? newElementWith(element, style)
+        : element,
+    );
+  };
+
+  setSelectedEdgeStyle = (style: {
+    strokeColor?: string;
+    strokeWidth?: number;
+    strokeStyle?: StrokeStyle;
+    routing?: MindmapEdgeRouting;
+  }) => {
+    const edge = this.getSelectedEdge();
+    if (!edge || !this.canEditNode(edge.childId)) {
+      this.notifyUnsupportedOperation();
+      return;
+    }
+    this.commitGraphUpdate(edge.graphId, (element) =>
+      element.id === edge.id && isMindmapEdgeElement(element)
         ? newElementWith(element, style)
         : element,
     );
@@ -2666,6 +2693,15 @@ export class AppMindmap {
       return false;
     }
     if (unsupportedSelectionActions.has(name)) {
+      return true;
+    }
+    if (
+      (name === "copy" || lockedMindmapMutationActions.has(name)) &&
+      !this.isCompleteMindmapSelection() &&
+      this.app.scene
+        .getSelectedElements(this.app.state)
+        .some(isMindmapEdgeElement)
+    ) {
       return true;
     }
     return (

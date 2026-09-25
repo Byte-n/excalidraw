@@ -32,9 +32,7 @@ import type {
 } from "./types";
 
 const shouldIgnoreElementFromSelection = (element: ExcalidrawElement) =>
-  element.locked ||
-  element.type === "mindmap-edge" ||
-  isBoundToContainer(element);
+  element.locked || isBoundToContainer(element);
 
 const excludeElementsFromFrames = <T extends ExcalidrawElement>(
   selectedElements: readonly T[],
