@@ -295,6 +295,9 @@ export const IMAGE_MIME_TYPES = {
 
 export const STRING_MIME_TYPES = {
   text: "text/plain",
+  txt: "text/plain",
+  md: "text/markdown",
+  opml: "application/xml",
   html: "text/html",
   json: "application/json",
   // excalidraw data

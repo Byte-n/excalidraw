@@ -30,6 +30,7 @@ import {
   newElementWith,
   newLinearElement,
   newMindmapNodeElement,
+  newTextElement,
   measureText,
   reparentMindmapNodes,
   repairMindmapElements,
@@ -52,6 +53,9 @@ import type {
 import type { MindmapTreeCommand } from "@excalidraw/element";
 
 import { t } from "../i18n";
+import { validateMindmapTextTree } from "../data/mindmapText";
+
+import type { MindmapTextNode } from "../data/mindmapText";
 
 import type App from "./App";
 import type { PointerDownState } from "../types";
@@ -1958,6 +1962,100 @@ export class AppMindmap {
     if (node && isMindmapNodeElement(node)) {
       this.createNode(node, "child");
     }
+  };
+
+  importTextTree = (tree: MindmapTextNode): boolean => {
+    if (
+      this.app.state.viewModeEnabled ||
+      this.app.state.editingTextElement ||
+      !this.app.isInteractionEnabled()
+    ) {
+      this.notifyUnsupportedOperation();
+      return false;
+    }
+    validateMindmapTextTree(tree);
+    const currentElements = this.app.scene.getElementsIncludingDeleted();
+    const active = this.app.scene.getNonDeletedElements();
+    const sceneRight = active.reduce(
+      (right, element) => Math.max(right, element.x + element.width),
+      -Infinity,
+    );
+    const viewportX =
+      this.app.state.width / (2 * this.app.state.zoom.value) -
+      this.app.state.scrollX;
+    const viewportY =
+      this.app.state.height / (2 * this.app.state.zoom.value) -
+      this.app.state.scrollY;
+    const x = Math.max(viewportX - 80, sceneRight + 80);
+    const y = viewportY - 28;
+    const root = newMindmapNodeElement({
+      x,
+      y,
+      graphId: "",
+      role: "root",
+      parentId: null,
+      order: null,
+    });
+    const graphId = `mindmap:${root.id}`;
+    const created: ExcalidrawElement[] = [];
+    const add = (
+      item: MindmapTextNode,
+      parentId: string | null,
+      order: FractionalIndex | null,
+      node = parentId
+        ? newMindmapNodeElement({
+            x,
+            y,
+            graphId,
+            role: "node",
+            parentId,
+            order,
+          })
+        : { ...root, graphId },
+    ) => {
+      const text = newTextElement({
+        x: node.x + node.width / 2,
+        y: node.y + node.height / 2,
+        text: item.text,
+        containerId: node.id,
+        textAlign: "center",
+        verticalAlign: "middle",
+        fontFamily: this.app.state.currentItemFontFamily,
+        fontSize: this.app.state.currentItemFontSize,
+      });
+      created.push({ ...node, boundElements: [{ id: text.id, type: "text" }] });
+      created.push(text);
+      const orders = generateNKeysBetween(null, null, item.children.length);
+      item.children.forEach((child, index) =>
+        add(child, node.id, orders[index] as FractionalIndex),
+      );
+    };
+    add(tree, null, null);
+    this.app.syncActionResult({
+      elements: this.getLaidOutElements(
+        [...currentElements, ...created],
+        [graphId],
+      ),
+      appState: {
+        selectedElementIds: { [root.id]: true },
+        selectedGroupIds: {},
+        previousSelectedElementIds: {},
+        selectedLinearElement: null,
+        hoveredElementIds: {},
+        openDialog: null,
+      },
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    const importedRoot = this.app.scene.getNonDeletedElement(root.id);
+    if (importedRoot) {
+      this.app.viewport.setViewport({
+        target: getCommonBounds([importedRoot]),
+        fit: "scale-down",
+        animation: { duration: 300 },
+        offsets: { ui: true },
+      });
+    }
+    return true;
   };
 
   private createRoot(x: number, y: number) {

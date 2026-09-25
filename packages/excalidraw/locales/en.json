@@ -259,6 +259,19 @@
     "deleteKeepChildren": "Delete node, keep children",
     "deleteBranch": "Delete branch"
   },
+  "mindmapText": {
+    "importTitle": "Import mindmap text",
+    "exportTitle": "Export mindmap text",
+    "exportFormat": "Export {{format}}",
+    "format": "Format",
+    "chooseFile": "Choose file",
+    "placeholder": "Paste a Markdown, Outline, or OPML tree here...",
+    "inputLabel": "Mindmap text input",
+    "lossHint": "Text export keeps labels, hierarchy, and order. Styles, coordinates, and collapsed state are not included.",
+    "import": "Create mindmap",
+    "exported": "Exported {{format}}",
+    "noMindmap": "Select or create a mindmap before exporting."
+  },
   "buttons": {
     "clearReset": "Reset the canvas",
     "exportJSON": "Export to file",

@@ -34,6 +34,7 @@ import {
 } from "../actions/colorTargets";
 
 import { MindmapRootDeleteDialog } from "./MindmapRootDeleteDialog";
+import { MindmapTextDialog } from "./MindmapTextDialog";
 
 import { SelectedShapeActions, CompactShapeActions } from "./Actions";
 import { LoadingMessage } from "./LoadingMessage";
@@ -125,6 +126,8 @@ const DefaultMainMenu: React.FC<{
       {UIOptions.canvasActions.saveAsImage && (
         <MainMenu.DefaultItems.SaveAsImage />
       )}
+      <MainMenu.DefaultItems.MindmapTextImport />
+      <MainMenu.DefaultItems.MindmapTextExport />
       <MainMenu.DefaultItems.SearchMenu />
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
@@ -606,6 +609,10 @@ const LayerUI = ({
           nodeId={appState.openDialog.nodeId}
         />
       )}
+      {defaultUIEnabled &&
+        appState.openDialog?.name === "mindmapTextImport" && (
+          <MindmapTextDialog />
+        )}
       {defaultUIEnabled && appState.openDialog?.name === "elementLinkSelector" && (
         <ElementLinkDialog
           sourceElementId={appState.openDialog.sourceElementId}

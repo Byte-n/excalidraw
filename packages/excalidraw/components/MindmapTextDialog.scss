@@ -1,0 +1,73 @@
+.mindmap-text-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(720px, 80vw);
+}
+
+.mindmap-text-dialog__toolbar,
+.mindmap-text-dialog__actions,
+.mindmap-text-dialog__exports {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mindmap-text-dialog__toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mindmap-text-dialog select,
+.mindmap-text-dialog__file,
+.mindmap-text-dialog__exports button {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--default-border-color);
+  border-radius: 4px;
+  background: var(--island-bg-color);
+  color: var(--text-primary-color);
+}
+
+.mindmap-text-dialog__file,
+.mindmap-text-dialog__exports button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mindmap-text-dialog__input {
+  min-height: 280px;
+  width: 100%;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--default-border-color);
+  border-radius: 4px;
+  font: 14px/1.5 monospace;
+  color: var(--text-primary-color);
+  background: var(--input-bg-color);
+}
+
+.mindmap-text-dialog__error {
+  color: var(--color-danger);
+  white-space: pre-wrap;
+}
+
+.mindmap-text-dialog__hint {
+  margin: 0;
+  color: var(--text-secondary-color);
+  font-size: 12px;
+}
+
+.mindmap-text-dialog__actions {
+  justify-content: flex-end;
+}
+
+.mindmap-text-dialog__exports {
+  border-top: 1px solid var(--default-border-color);
+  padding-top: 12px;
+}

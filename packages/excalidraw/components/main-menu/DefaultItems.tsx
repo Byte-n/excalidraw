@@ -41,6 +41,7 @@ import DropdownMenuItemCheckbox from "../dropdownMenu/DropdownMenuItemCheckbox";
 import DropdownMenuItemContentRadio from "../dropdownMenu/DropdownMenuItemContentRadio";
 import DropdownMenuItemLink from "../dropdownMenu/DropdownMenuItemLink";
 import DropdownMenuSub from "../dropdownMenu/DropdownMenuSub";
+import { MindmapTextExportItems } from "../MindmapTextDialog";
 import {
   GithubIcon,
   DiscordIcon,
@@ -146,6 +147,39 @@ export const SaveAsImage = () => {
   );
 };
 SaveAsImage.displayName = "SaveAsImage";
+
+export const MindmapTextImport = () => {
+  const { t } = useI18n();
+  const setAppState = useExcalidrawSetAppState();
+  return (
+    <DropdownMenuItem
+      icon={LoadIcon}
+      data-testid="mindmap-text-import"
+      onSelect={() =>
+        setAppState({ openDialog: { name: "mindmapTextImport" } })
+      }
+      aria-label={t("mindmapText.importTitle")}
+    >
+      {t("mindmapText.importTitle")}
+    </DropdownMenuItem>
+  );
+};
+MindmapTextImport.displayName = "MindmapTextImport";
+
+export const MindmapTextExport = () => {
+  const { t } = useI18n();
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSub.Trigger icon={ExportIcon}>
+        {t("mindmapText.exportTitle")}
+      </DropdownMenuSub.Trigger>
+      <DropdownMenuSub.Content>
+        <MindmapTextExportItems />
+      </DropdownMenuSub.Content>
+    </DropdownMenuSub>
+  );
+};
+MindmapTextExport.displayName = "MindmapTextExport";
 
 export const CommandPalette = (opts?: { className?: string }) => {
   const setAppState = useExcalidrawSetAppState();

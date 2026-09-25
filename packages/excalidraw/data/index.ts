@@ -43,6 +43,14 @@ import type { AppState, BinaryFiles } from "../types";
 
 export { loadFromBlob } from "./blob";
 export { loadFromJSON, saveAsJSON } from "./json";
+export {
+  getMindmapTextTree,
+  MindmapTextError,
+  parseMindmapText,
+  serializeMindmapText,
+  validateMindmapTextTree,
+} from "./mindmapText";
+export type { MindmapTextFormat, MindmapTextNode } from "./mindmapText";
 
 export type ExportedElements = readonly NonDeletedExcalidrawElement[] & {
   _brand: "exportedElements";
