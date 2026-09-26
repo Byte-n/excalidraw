@@ -34,11 +34,8 @@ import {
   ELEMENT_TRANSLATE_AMOUNT,
   EVENT,
   FRAME_STYLE,
-  IMAGE_MIME_TYPES,
   IMAGE_RENDER_TIMEOUT,
   LINE_CONFIRM_THRESHOLD,
-  MIME_TYPES,
-  MQ_RIGHT_SIDEBAR_MIN_WIDTH,
   POINTER_BUTTON,
   ROUNDNESS,
   SCROLL_TIMEOUT,
@@ -59,7 +56,6 @@ import {
   debounce,
   distance,
   getFontString,
-  getNearestScrollableContainer,
   isInputLike,
   isToolIcon,
   isWritableElement,
@@ -77,7 +73,6 @@ import {
   normalizeEOL,
   getDateTime,
   isShallowEqual,
-  arrayToMap,
   AppEventBus,
   type EXPORT_IMAGE_TYPES,
   CLASSES,
@@ -87,23 +82,17 @@ import {
   BIND_MODE_TIMEOUT,
   invariant,
   getFeatureFlag,
-  createUserAgentDescriptor,
-  getFormFactor,
   deriveStylesPanelMode,
   isIOS,
-  isBrave,
   isSafari,
   type EditorInterface,
   type StylesPanelMode,
-  loadDesktopUIModePreference,
-  setDesktopUIMode,
   isSelectionLikeTool,
   oneOf,
   getStrokeWidthByKey,
 } from "@excalidraw/common";
 
 import {
-  getObservedAppState,
   getCommonBounds,
   getElementAbsoluteCoords,
   bindOrUnbindBindingElements,
@@ -124,7 +113,6 @@ import {
   newLinearElement,
   newTextElement,
   deepCopyElement,
-  duplicateElements,
   hasBoundTextElement,
   isArrowElement,
   isBindingElement,
@@ -154,8 +142,6 @@ import {
   maybeParseEmbedSrc,
   getEmbedLink,
   getInitializedImageElements,
-  normalizeSVG,
-  updateImageCache as _updateImageCache,
   getBoundTextElement,
   getContainerCenter,
   getContainerElement,
@@ -181,15 +167,12 @@ import {
   hitElementItself,
   getVisibleSceneBounds,
   wrapText,
-  isElementLink,
-  isMeasureTextSupported,
   normalizeText,
   measureText,
   getLineHeightInPx,
   getApproxMinLineWidth,
   getApproxMinLineHeight,
   getMinTextElementWidth,
-  ShapeCache,
   resolveElementRenderState,
   getElementsInGroup,
   getSelectedGroupIdForElement,
@@ -213,9 +196,7 @@ import {
   type ElementUpdate,
   isLineElement,
   isSimpleArrow,
-  StoreDelta,
   type ApplyToOptions,
-  positionElementsOnGrid,
   bindOrUnbindBindingElement,
   getElementBounds,
   doBoundsIntersect,
@@ -230,7 +211,6 @@ import {
   maybeHandleArrowPointlikeDrag,
   getUncroppedWidthAndHeight,
   getBindingStrategyForDraggingBindingElementEndpoints,
-  isNonDeletedElement,
   DEFAULT_BOUND_TEXT_LABEL_POSITION,
 } from "@excalidraw/element";
 
@@ -255,13 +235,12 @@ import type {
   MagicGenerationData,
   ExcalidrawArrowElement,
   ExcalidrawElbowArrowElement,
-  SceneElementsMap,
-  NonDeletedSceneElementsMap,
 } from "@excalidraw/element/types";
 
 import type {
   ArrowEndpoint,
   TransformHandleDirection,
+  StoreDelta,
 } from "@excalidraw/element";
 
 import type { Mutable } from "@excalidraw/common/utility-types";
@@ -334,44 +313,26 @@ import {
   type ParsedDataTransferFile,
 } from "../clipboard";
 
-import { exportCanvas, loadFromBlob } from "../data";
-import Library, { distributeLibraryItemsOnSquareGrid } from "../data/library";
-import { restoreAppState, restoreElements } from "../data/restore";
-import {
-  copyElementRenderOverrides,
-  getElementRenderOffsets,
-} from "../renderOverrides";
+import { exportCanvas } from "../data";
+import Library from "../data/library";
+import { restoreElements } from "../data/restore";
 import { History } from "../history";
 import { defaultLang, languages, setLanguage, t } from "../i18n";
 
 import {
-  getScrollToContentState,
   getElementsWithinSelection,
   getSelectedElements,
   hasBackground,
   isSomeElementSelected,
 } from "../scene";
 import {
-  dataURLToString,
-  generateIdFromFile,
-  getDataURL,
-  getDataURL_sync,
   ImageURLToFile,
   isImageFileHandle,
-  isSupportedImageFile,
-  loadSceneOrLibraryFromBlob,
-  normalizeFile,
-  parseLibraryJSON,
-  resizeImageFile,
   SVGStringToFile,
 } from "../data/blob";
 
-import { fileOpen } from "../data/filesystem";
-import { hideHyperlinkToolip } from "../components/hyperlink/Hyperlink";
-
 import { Fonts } from "../fonts";
 import { editorJotaiStore, type WritableAtom } from "../editor-jotai";
-import { ImageSceneDataError } from "../errors";
 import {
   getSnapLinesAtPointer,
   snapDraggedElements,
@@ -438,11 +399,9 @@ import {
   attachPointerSessionListeners,
   handleDraggingScrollBar,
   resetContextMenuTimer,
-  resetInteractionState,
   resetTapTwice,
   type InteractionState,
 } from "./app/pointerSession";
-import BraveMeasureTextError from "./BraveMeasureTextError";
 import { CONTEXT_MENU_SEPARATOR } from "./ContextMenu";
 import { activeEyeDropperAtom } from "./EyeDropper";
 import { searchItemInFocusAtom } from "./SearchMenu";
@@ -455,8 +414,6 @@ import { findShapeByKey, TOGGLE_TOOLS } from "./Tools";
 import { editorInterfaceContextInitialValue } from "./app/context";
 
 import type { textWysiwyg } from "../wysiwyg/textWysiwyg";
-
-import type { ExcalidrawLibraryIds } from "../data/types";
 
 import type { RenderInteractiveSceneCallback } from "../scene/types";
 
@@ -2009,97 +1966,6 @@ class App extends React.Component<AppProps, AppState> {
     sceneController.syncActionResult(this, actionResult),
   );
 
-  public syncActionResultImpl = withBatchedUpdates(
-    (actionResult: ActionResult) => {
-      if (this.unmounted || actionResult === false) {
-        return;
-      }
-
-      this.store.scheduleAction(actionResult.captureUpdate);
-
-      let didUpdate = false;
-
-      let editingTextElement: AppState["editingTextElement"] | null = null;
-      if (actionResult.elements) {
-        this.scene.replaceAllElements(actionResult.elements);
-        didUpdate = true;
-      }
-
-      if (actionResult.files) {
-        this.addMissingFiles(actionResult.files, actionResult.replaceFiles);
-        this.addNewImagesToImageCache();
-      }
-
-      if (
-        actionResult.appState ||
-        editingTextElement ||
-        this.state.contextMenu
-      ) {
-        let viewModeEnabled = actionResult?.appState?.viewModeEnabled || false;
-        let zenModeEnabled = actionResult?.appState?.zenModeEnabled || false;
-        const theme =
-          actionResult?.appState?.theme || this.props.theme || THEME.LIGHT;
-        const name = actionResult?.appState?.name ?? this.state.name;
-        const errorMessage =
-          actionResult?.appState?.errorMessage ?? this.state.errorMessage;
-        if (typeof this.props.viewModeEnabled !== "undefined") {
-          viewModeEnabled = this.props.viewModeEnabled;
-        }
-
-        // non-interactive editor implies view mode (overrides both the action
-        // result and the host-supplied `viewModeEnabled` prop)
-        if (!this.isInteractionEnabled()) {
-          viewModeEnabled = true;
-        }
-
-        if (typeof this.props.zenModeEnabled !== "undefined") {
-          zenModeEnabled = this.props.zenModeEnabled;
-        }
-
-        editingTextElement = actionResult.appState?.editingTextElement || null;
-
-        // make sure editingTextElement points to latest element reference
-        if (actionResult.elements && editingTextElement) {
-          const editingTextElementId = editingTextElement.id;
-          const nextElement = actionResult.elements.find(
-            (element) => element.id === editingTextElementId,
-          );
-          editingTextElement =
-            nextElement &&
-            isNonDeletedElement(nextElement) &&
-            isTextElement(nextElement)
-              ? nextElement
-              : null;
-        }
-
-        this.setState((prevAppState) => {
-          const actionAppState = actionResult.appState || {};
-
-          return {
-            ...prevAppState,
-            ...actionAppState,
-            // NOTE this will prevent opening context menu using an action
-            // or programmatically from the host, so it will need to be
-            // rewritten later
-            contextMenu: null,
-            editingTextElement,
-            viewModeEnabled,
-            zenModeEnabled,
-            theme,
-            name,
-            errorMessage,
-          };
-        });
-
-        didUpdate = true;
-      }
-
-      if (!didUpdate) {
-        this.scene.triggerUpdate();
-      }
-    },
-  );
-
   public resetHistory = () => sceneController.resetHistory(this);
   public resetStore = () => sceneController.resetStore(this);
   public resetScene = (opts?: { resetLoadingState: boolean }) =>
@@ -2121,20 +1987,12 @@ class App extends React.Component<AppProps, AppState> {
 
   // Lifecycle
 
-  private onBlur = withBatchedUpdates(() => {
-    this.pan.setSpaceHeld(false);
-    this.setState({
-      isBindingEnabled: this.state.bindingPreference === "enabled",
-    });
-  });
+  private onBlur = withBatchedUpdates(() => eventListeners.onBlur(this));
 
-  private onUnload = () => {
-    this.onBlur();
-  };
+  private onUnload = () => eventListeners.onUnload(this);
 
-  private disableEvent: EventListener = (event) => {
-    event.preventDefault();
-  };
+  private disableEvent: EventListener = (event) =>
+    eventListeners.disableEvent(event);
 
   // handles only the navigation keyboard: page-scroll keys and
   // `navigation`-flagged action shortcuts (canvas zoom & zoom-to-fit — see
@@ -2161,177 +2019,8 @@ class App extends React.Component<AppProps, AppState> {
 
   /** Ends active input sessions before switching to a view-mode/non-interactive
    *  mode. */
-  private terminateActiveInteraction = () => {
-    // Complete any active pointer interaction before clearing the state it
-    // relies on. Among other things this tears down window-level listeners.
-    this.maybeCleanupAfterMissingPointerUp(null);
-
-    this.pan.setSpaceHeld(false);
-    resetInteractionState(this);
-
-    this.gesture.pointers.clear();
-    this.gesture.lastCenter = null;
-    this.gesture.initialDistance = null;
-    this.gesture.initialScale = null;
-
-    resetContextMenuTimer(this);
-
-    if (this.bindModeHandler) {
-      clearTimeout(this.bindModeHandler);
-      this.bindModeHandler = null;
-    }
-
-    this.flowchart.clear();
-    this.mindmap.clear();
-
-    // These components install their own DOM listeners rather than going
-    // through App's input handlers, so they must be explicitly unmounted.
-    editorJotaiStore.set(activeEyeDropperAtom, null);
-    editorJotaiStore.set(convertElementTypePopupAtom, null);
-
-    if (this.state.editingFrame) {
-      const frame = this.scene.getNonDeletedElement(this.state.editingFrame);
-      this.resetEditingFrame(frame && isFrameLikeElement(frame) ? frame : null);
-    }
-
-    // textWysiwyg's submit path uses flushSync. Defer until after the current
-    // componentDidUpdate lifecycle, then submit whichever text-editing session
-    // is active if editing is still disabled.
-    queueMicrotask(() => {
-      if (!this.isInteractionEnabled() || this.state.viewModeEnabled) {
-        this.textWysiwygSubmitHandler?.();
-      }
-    });
-
-    this.setState({
-      contextMenu: null,
-      openMenu: null,
-      openPopup: null,
-      cursorButton: "up",
-      bindMode: "orbit",
-      activeEmbeddable: null,
-      activeLockedId: null,
-      selectedElementsAreBeingDragged: false,
-      selectionElement: null,
-      resizingElement: null,
-      isResizing: false,
-      isRotating: false,
-      isCropping: false,
-      croppingElementId: null,
-      suggestedBinding: null,
-      frameToHighlight: null,
-      elementsToHighlight: null,
-      snapLines: [],
-      showHyperlinkPopup: false,
-    });
-    this.deselectElements();
-    if (!this.isInteractionEnabled()) {
-      this.setState({ originSnapOffset: null });
-      this.cursor.reset();
-    }
-  };
-
-  public handleInteractionStateChangeImpl = (
-    prevProps: AppProps,
-    prevState: AppState,
-  ) => {
-    const wasInteractionEnabled = this.isInteractionEnabled(prevProps);
-    const interactionEnabledChanged =
-      wasInteractionEnabled !== this.isInteractionEnabled();
-    const viewModePropChanged =
-      prevProps.viewModeEnabled !== this.props.viewModeEnabled;
-
-    // Preserve internally toggled view mode while interactive and
-    // uncontrolled. Synchronize it when its prop changes, when interaction is
-    // re-enabled, or when non-interactive mode needs to force it on.
-    let nextViewModeEnabled = this.state.viewModeEnabled;
-    if (!this.isInteractionEnabled()) {
-      nextViewModeEnabled = true;
-    } else if (viewModePropChanged || interactionEnabledChanged) {
-      nextViewModeEnabled = !!this.props.viewModeEnabled;
-    }
-    if (nextViewModeEnabled !== this.state.viewModeEnabled) {
-      this.setState({ viewModeEnabled: nextViewModeEnabled });
-    }
-
-    const editingWasEnabled =
-      wasInteractionEnabled && !prevState.viewModeEnabled;
-    const editingEnabled =
-      this.isInteractionEnabled() && !this.state.viewModeEnabled;
-    const becameNonInteractive =
-      interactionEnabledChanged && !this.isInteractionEnabled();
-
-    if (becameNonInteractive || (editingWasEnabled && !editingEnabled)) {
-      this.terminateActiveInteraction();
-    }
-
-    if (interactionEnabledChanged) {
-      // listener tiers depend on `props.interaction` even when
-      // `state.viewModeEnabled` ends up unchanged
-      this.addEventListeners();
-    }
-
-    // NOTE link icons appearing/disappearing is handled by the re-render
-    // itself (`renderConfig.renderLinks`)
-    if (this.isLinksEnabled(prevProps) !== this.isLinksEnabled()) {
-      if (!this.isLinksEnabled()) {
-        this.hitLinkElement = undefined;
-        hideHyperlinkToolip();
-        this.cursor.reset();
-      }
-    }
-
-    if (this.isEmbedsEnabled(prevProps) !== this.isEmbedsEnabled()) {
-      if (!this.isEmbedsEnabled()) {
-        this.setState({ activeEmbeddable: null });
-      }
-    }
-
-    if (
-      this.isToolSupported(prevState.activeTool.type, prevProps) !==
-      this.isToolSupported(this.state.activeTool.type)
-    ) {
-      if (!this.isToolSupported(this.state.activeTool.type)) {
-        // end a possibly mid-stroke laser trail (the stroke's own window
-        // listeners tear down on the next pointerup)
-        this.laserTrails.endPath();
-      }
-      this.cursor.reset();
-    }
-
-    // invariant: while non-interactive, the active tool is either
-    // input-enabled (`interaction.enabled.tools`) or the neutral default —
-    // reset stale tool state (e.g. a presenter's laser after handing off)
-    // so it doesn't leak through `onChange` / collab pointer payloads or
-    // linger until interaction is re-enabled
-    if (
-      !this.isInteractionEnabled() &&
-      !this.isToolSupported(this.state.activeTool.type) &&
-      this.state.activeTool.type !== "selection"
-    ) {
-      this.setState({
-        activeTool: updateActiveTool(this.state, { type: "selection" }),
-      });
-    }
-
-    if (
-      this.isBrowserZoomEnabled(prevProps) !== this.isBrowserZoomEnabled() ||
-      this.isNavigationEnabled(prevProps) !== this.isNavigationEnabled()
-    ) {
-      this.addEventListeners();
-      this.cursor.reset();
-    }
-
-    if (prevState.viewModeEnabled !== this.state.viewModeEnabled) {
-      if (this.isInteractionEnabled()) {
-        this.addEventListeners();
-      }
-      if (!this.state.viewModeEnabled) {
-        this.deselectElements();
-      }
-      this.cursor.reset();
-    }
-  };
+  private terminateActiveInteraction = () =>
+    lifecycle.terminateActiveInteraction(this);
 
   /** whether the two values reference the same tool (incl. custom subtype) */
   private isSameForcedTool = (
@@ -2342,953 +2031,26 @@ class App extends React.Component<AppProps, AppState> {
     (a?.type === "custom" ? a.customType ?? null : null) ===
       (b?.type === "custom" ? b.customType ?? null : null);
 
-  /**
-   * Keeps `state.activeTool` synced to the host-controlled
-   * `props.activeTool`. `setActiveTool` refuses non-matching activations
-   * while forced (user input, API); this backstop covers the writers that
-   * bypass the funnel (`actionFinalize`/`actionDeselect`, `restore()` on
-   * scene load, ...) and re-applies the tool once it becomes activatable
-   * (e.g. `interaction` config changes).
-   */
-  public handleForcedToolChangeImpl = (
-    prevProps: AppProps,
-    prevState: AppState,
-  ) => {
-    const forcedTool = this.props.activeTool;
-    if (!forcedTool) {
-      return;
-    }
+  private getFormFactor = (editorWidth: number, editorHeight: number) =>
+    lifecycle.getFormFactor(this, editorWidth, editorHeight);
 
-    const forcedToolChanged = !this.isSameForcedTool(
-      prevProps.activeTool,
-      forcedTool,
-    );
+  public refreshEditorInterface = () => lifecycle.refreshEditorInterface(this);
 
-    if ((forcedTool.type as string) === "image") {
-      if (forcedToolChanged) {
-        console.warn(`"image" tool cannot be forced via "props.activeTool"`);
-      }
-      return;
-    }
-
-    if (this.isSameForcedTool(forcedTool, this.state.activeTool)) {
-      return;
-    }
-
-    // (re)force only on relevant changes so that a standing refusal (tool
-    // disabled, or not enabled while non-interactive) warns once instead of
-    // on every update
-    if (
-      forcedToolChanged ||
-      prevState.activeTool !== this.state.activeTool ||
-      this.isToolSupported(forcedTool.type, prevProps) !==
-        this.isToolSupported(forcedTool.type, this.props)
-    ) {
-      this.setActiveTool(forcedTool);
-    }
-  };
-
-  public resetHistoryImpl = () => {
-    this.history.clear();
-  };
-
-  public resetStoreImpl = () => {
-    this.store.clear();
-  };
-
-  /**
-   * Resets scene & history.
-   * ! Do not use to clear scene user action !
-   */
-  public resetSceneImpl = withBatchedUpdates(
-    (opts?: { resetLoadingState: boolean }) => {
-      this.elementRenderOverrides = new Map();
-      this.elementRenderOffsets = new Map();
-      this.scene.replaceAllElements([]);
-      this.setState((state) => ({
-        ...getDefaultAppState(),
-        isLoading: opts?.resetLoadingState ? false : state.isLoading,
-        theme: this.state.theme,
-      }));
-      this.resetStoreImpl();
-      this.resetHistoryImpl();
-    },
-  );
-
-  public initializeSceneImpl = async () => {
-    if (
-      "launchQueue" in this.ownerWindow &&
-      "LaunchParams" in this.ownerWindow
-    ) {
-      (this.ownerWindow as any).launchQueue.setConsumer(
-        async (launchParams: { files: any[] }) => {
-          if (!launchParams.files.length) {
-            return;
-          }
-          const fileHandle = launchParams.files[0];
-          const blob: Blob = await fileHandle.getFile();
-          this.loadFileToCanvas(
-            new File([blob], blob.name || "", { type: blob.type }),
-            fileHandle,
-          );
-        },
-      );
-    }
-
-    if (this.props.theme) {
-      this.setState({ theme: this.props.theme });
-    }
-    if (!this.state.isLoading) {
-      this.setState({ isLoading: true });
-    }
-    let initialData = null;
-    try {
-      if (typeof this.props.initialData === "function") {
-        initialData = (await this.props.initialData()) || null;
-      } else {
-        initialData = (await this.props.initialData) || null;
-      }
-      if (initialData?.libraryItems) {
-        this.library
-          .updateLibrary({
-            libraryItems: initialData.libraryItems,
-            merge: true,
-          })
-          .catch((error) => {
-            console.error(error);
-          });
-      }
-    } catch (error: any) {
-      console.error(error);
-      initialData = {
-        appState: {
-          errorMessage:
-            error.message ||
-            "Encountered an error during importing or restoring scene data",
-        },
-      };
-    }
-    const restoredElements = restoreElements(initialData?.elements, null, {
-      repairBindings: true,
-      deleteInvisibleElements: true,
-    });
-    let restoredAppState = restoreAppState(initialData?.appState, null);
-    const activeTool = restoredAppState.activeTool;
-
-    if (!restoredAppState.preferredSelectionTool.initialized) {
-      restoredAppState.preferredSelectionTool = {
-        type:
-          this.editorInterface.formFactor === "phone" ? "lasso" : "selection",
-        initialized: true,
-      };
-    }
-
-    restoredAppState = {
-      ...restoredAppState,
-      theme: this.props.theme || restoredAppState.theme,
-      // we're falling back to current (pre-init) state when deciding
-      // whether to open the library, to handle a case where we
-      // update the state outside of initialData (e.g. when loading the app
-      // with a library install link, which should auto-open the library)
-      openSidebar: restoredAppState?.openSidebar || this.state.openSidebar,
-      activeTool:
-        activeTool.type === "image" ||
-        activeTool.type === "lasso" ||
-        activeTool.type === "selection"
-          ? {
-              ...activeTool,
-              type: restoredAppState.preferredSelectionTool.type,
-            }
-          : restoredAppState.activeTool,
-      isLoading: false,
-      toast: this.state.toast,
-    };
-
-    const viewportAppState = {
-      ...restoredAppState,
-      width: this.state.width,
-      height: this.state.height,
-      offsetTop: this.state.offsetTop,
-      offsetLeft: this.state.offsetLeft,
-    };
-    const initialViewport = this.props.initialState?.viewport;
-
-    if (initialViewport) {
-      const restoredNonDeletedElements = restoredElements.filter(
-        (element) => !element.isDeleted,
-      ) as readonly NonDeletedExcalidrawElement[];
-      const restoredElementsMap = arrayToMap(
-        restoredNonDeletedElements,
-      ) as NonDeletedSceneElementsMap;
-
-      const initialViewportState = this.viewport.resolveInitialViewport(
-        initialViewport,
-        restoredElementsMap,
-        viewportAppState,
-      );
-
-      if (initialViewportState) {
-        restoredAppState = {
-          ...restoredAppState,
-          ...initialViewportState,
-        };
-      }
-    } else if (initialData?.scrollToContent) {
-      restoredAppState = {
-        ...restoredAppState,
-        ...getScrollToContentState(restoredElements, viewportAppState),
-      };
-    }
-
-    this.resetStoreImpl();
-    this.resetHistoryImpl();
-    this.syncActionResult({
-      elements: restoredElements,
-      appState: restoredAppState,
-      files: initialData?.files,
-      captureUpdate: CaptureUpdateAction.NEVER,
-    });
-
-    // clear the shape and image cache so that any images in initialData
-    // can be loaded fresh
-    this.clearImageShapeCache();
-
-    // manually loading the font faces seems faster even in browsers that do fire the loadingdone event
-    this.fonts.loadSceneFonts().then((fontFaces) => {
-      this.fonts.onLoaded(fontFaces);
-    });
-
-    if (isElementLink(this.ownerWindow.location.href)) {
-      this.viewport.setViewport({
-        target: this.ownerWindow.location.href,
-        fit: "scale-down",
-        animation: false,
-      });
-    }
-  };
-
-  private getFormFactor = (editorWidth: number, editorHeight: number) => {
-    return (
-      this.props.UIOptions.getFormFactor?.(editorWidth, editorHeight) ??
-      getFormFactor(editorWidth, editorHeight)
-    );
-  };
-
-  public refreshEditorInterface = () => {
-    const container = this.excalidrawContainerRef.current;
-    if (!container) {
-      return;
-    }
-
-    const { width: editorWidth, height: editorHeight } =
-      container.getBoundingClientRect();
-
-    const storedDesktopUIMode = loadDesktopUIModePreference();
-    const userAgentDescriptor = createUserAgentDescriptor(
-      typeof navigator !== "undefined" ? navigator.userAgent : "",
-    );
-    // allow host app to control formFactor and desktopUIMode via props
-    const sidebarBreakpoint =
-      this.props.UIOptions.dockedSidebarBreakpoint != null
-        ? this.props.UIOptions.dockedSidebarBreakpoint
-        : MQ_RIGHT_SIDEBAR_MIN_WIDTH;
-    const nextEditorInterface = updateObject(this.editorInterface, {
-      desktopUIMode: storedDesktopUIMode ?? this.editorInterface.desktopUIMode,
-      formFactor: this.getFormFactor(editorWidth, editorHeight),
-      userAgent: userAgentDescriptor,
-      canFitSidebar: editorWidth > sidebarBreakpoint,
-      isLandscape: editorWidth > editorHeight,
-    });
-
-    this.editorInterface = nextEditorInterface;
-    this.reconcileStylesPanelMode(nextEditorInterface);
-  };
-
-  private reconcileStylesPanelMode = (nextEditorInterface: EditorInterface) => {
-    const nextStylesPanelMode = deriveStylesPanelMode(nextEditorInterface);
-    if (nextStylesPanelMode === this.stylesPanelMode) {
-      return;
-    }
-
-    const prevStylesPanelMode = this.stylesPanelMode;
-    this.stylesPanelMode = nextStylesPanelMode;
-
-    // the panel footprint differs between modes (compact vs full), so a
-    // measurement taken in the previous mode no longer applies
-    this.viewport.invalidateUIOffset("stylesPanel");
-
-    if (prevStylesPanelMode !== "full" && nextStylesPanelMode === "full") {
-      this.setState((prevState) => ({
-        preferredSelectionTool: {
-          type: "selection",
-          initialized: true,
-        },
-      }));
-    }
-  };
+  private reconcileStylesPanelMode = (nextEditorInterface: EditorInterface) =>
+    lifecycle.reconcileStylesPanelMode(this, nextEditorInterface);
 
   /** TO BE USED LATER */
-  private setDesktopUIMode = (mode: EditorInterface["desktopUIMode"]) => {
-    const nextMode = setDesktopUIMode(mode);
-    this.editorInterface = updateObject(this.editorInterface, {
-      desktopUIMode: nextMode,
-    });
-    this.reconcileStylesPanelMode(this.editorInterface);
-  };
+  private setDesktopUIMode = (mode: EditorInterface["desktopUIMode"]) =>
+    lifecycle.setDesktopUIMode(this, mode);
 
   private clearImageShapeCache(filesMap?: BinaryFiles) {
-    const files = filesMap ?? this.files;
-    this.scene.getNonDeletedElements().forEach((element) => {
-      if (isInitializedImageElement(element) && files[element.fileId]) {
-        this.imageCache.delete(element.fileId);
-        ShapeCache.delete(element);
-      }
-    });
+    return filesController.clearImageShapeCache(this, filesMap);
   }
 
-  public async componentDidMountImpl() {
-    this.unmounted = false;
-    this.api = this.createExcalidrawAPI();
-
-    this.excalidrawContainerValue.container =
-      this.excalidrawContainerRef.current;
-
-    if (isTestEnv() || isDevEnv()) {
-      const setState = this.setState.bind(this);
-      Object.defineProperties(window.h, {
-        state: {
-          configurable: true,
-          get: () => {
-            return this.state;
-          },
-        },
-        setState: {
-          configurable: true,
-          value: (...args: Parameters<typeof setState>) => {
-            return this.setState(...args);
-          },
-        },
-        app: {
-          configurable: true,
-          value: this,
-        },
-        history: {
-          configurable: true,
-          value: this.history,
-        },
-        store: {
-          configurable: true,
-          value: this.store,
-        },
-        fonts: {
-          configurable: true,
-          value: this.fonts,
-        },
-      });
-    }
-
-    this.store.onDurableIncrementEmitter.on((increment) => {
-      this.history.record(increment.delta);
-    });
-
-    // per. optimmisation, only subscribe if there is the `onIncrement` prop registered, to avoid unnecessary computation
-    if (this.props.onIncrement) {
-      this.store.onStoreIncrementEmitter.on((increment) => {
-        this.props.onIncrement?.(increment);
-      });
-    }
-
-    this.scene.onUpdate(this.triggerRender);
-    this.addEventListeners();
-
-    if (this.props.autoFocus && this.excalidrawContainerRef.current) {
-      this.focusContainer();
-    }
-
-    if (
-      typeof this.ownerWindow.ResizeObserver === "function" &&
-      this.excalidrawContainerRef.current
-    ) {
-      this.resizeObserver = new this.ownerWindow.ResizeObserver(() => {
-        this.refreshEditorInterface();
-        this.updateDOMRect();
-      });
-      this.resizeObserver?.observe(this.excalidrawContainerRef.current);
-    }
-
-    const searchParams = new URLSearchParams(
-      this.ownerWindow.location.search.slice(1),
-    );
-
-    if (searchParams.has("web-share-target")) {
-      // Obtain a file that was shared via the Web Share Target API.
-      this.restoreFileFromShare();
-    } else {
-      this.updateDOMRect(this.initializeScene);
-    }
-
-    // note that this check seems to always pass in localhost
-    if (isBrave() && !isMeasureTextSupported()) {
-      this.setState({
-        errorMessage: <BraveMeasureTextError />,
-      });
-    }
-
-    const mountPayload = {
-      excalidrawAPI: this.api,
-      container: this.excalidrawContainerRef.current,
-    };
-
-    this.editorLifecycleEvents.emit("editor:mount", mountPayload);
-    this.props.onMount?.(mountPayload);
-    this.props.onExcalidrawAPI?.(this.api);
-  }
-
-  public componentWillUnmountImpl() {
-    // we're recreating the api object reference so that the
-    // <ExcalidrawAPIContext.Provider/> picks up on it
-    this.api = { ...this.api, isDestroyed: true };
-
-    for (const key of Object.keys(this.api) as (keyof typeof this.api)[]) {
-      if (
-        (key.startsWith("get") ||
-          key === "onStateChange" ||
-          key === "onEvent") &&
-        typeof this.api[key] === "function"
-      ) {
-        (this.api as any)[key] = () => {
-          throw new Error(
-            "ExcalidrawAPI is no longer usable after the editor has been unmounted and will return invalid/empty data. You should check for `ExcalidrawAPI.isDestroyed` before calling get* methods on subscribing to state/event changes.",
-          );
-        };
-      }
-    }
-
-    this.editorLifecycleEvents.emit("editor:unmount");
-    this.props.onUnmount?.();
-    this.props.onExcalidrawAPI?.(null);
-    this.elementRenderOverrides = new Map();
-    this.elementRenderOffsets = new Map();
-
-    (this.ownerWindow as any).launchQueue?.setConsumer(() => {});
-
-    this.renderer.destroy();
-    this.scene.destroy();
-    this.scene = new Scene();
-    this.fonts = new Fonts(this.scene, this.ownerDocument);
-    this.renderer = new Renderer(this.scene);
-    this.files = {};
-    this.imageCache.clear();
-    this.resizeObserver?.disconnect();
-    this.unmounted = true;
-    this.viewport.destroy();
-    this.removeEventListeners();
-    this.library.destroy();
-    this.laserTrails.stop();
-    this.drawShape.stop();
-    this.toolDrag.cancel();
-    this.eraserTrail.stop();
-    this.onChangeEmitter.clear();
-    this.store.onStoreIncrementEmitter.clear();
-    this.store.onDurableIncrementEmitter.clear();
-    this.appStateObserver.clear();
-    this.editorLifecycleEvents.clear();
-    ShapeCache.destroy();
-    SnapCache.destroy();
-    this.ownerWindow.clearTimeout(this.interactionState.touchTimeout);
-    isSomeElementSelected.clearCache();
-    selectGroupsForSelectedElements.clearCache();
-    this.interactionState.touchTimeout = 0;
-    this.ownerDocument.documentElement.style.overscrollBehaviorX = "";
-  }
-
-  private onResize = withBatchedUpdates(() => {
-    this.scene
-      .getElementsIncludingDeleted()
-      .forEach((element) => ShapeCache.delete(element));
-    this.refreshEditorInterface();
-    this.updateDOMRect();
-    this.setState({});
-  });
+  private onResize = withBatchedUpdates(() => eventListeners.onResize(this));
 
   /** generally invoked only if fullscreen was invoked programmatically */
-  private onFullscreenChange = () => {
-    if (
-      // points to the iframe element we fullscreened
-      !this.ownerDocument.fullscreenElement &&
-      this.state.activeEmbeddable?.state === "active"
-    ) {
-      this.setState({
-        activeEmbeddable: null,
-      });
-    }
-  };
-
-  public removeEventListenersImpl() {
-    this.onRemoveEventListenersEmitter.trigger();
-  }
-
-  public addEventListenersImpl() {
-    // remove first as we can add event listeners multiple times
-    this.removeEventListeners();
-
-    // -------------------------------------------------------------------------
-    //          listeners active even when the editor is non-interactive
-    // -------------------------------------------------------------------------
-
-    this.onRemoveEventListenersEmitter.once(
-      addEventListener(
-        this.ownerWindow,
-        EVENT.MESSAGE,
-        this.onWindowMessage,
-        false,
-      ),
-      addEventListener(
-        this.ownerDocument,
-        EVENT.POINTER_UP,
-        this.removePointer,
-        {
-          passive: false,
-        },
-      ), // #3553
-      // rerender text elements on font load to fix #637 && #1553
-      addEventListener(
-        this.ownerDocument.fonts,
-        "loadingdone",
-        (event) => {
-          const fontFaces = (event as FontFaceSetLoadEvent).fontfaces;
-          this.fonts.onLoaded(fontFaces);
-        },
-        { passive: false },
-      ),
-      addEventListener(
-        this.ownerWindow,
-        EVENT.FOCUS,
-        () => {
-          this.maybeCleanupAfterMissingPointerUp(null);
-          // browsers (chrome?) tend to free up memory a lot, which results
-          // in canvas context being cleared. Thus re-render on focus.
-          this.triggerRender(true);
-        },
-        { passive: false },
-      ),
-    );
-
-    if (!this.isInteractionEnabled()) {
-      // NOTE by not attaching the wheel/touch/gesture listeners below (which
-      // preventDefault), the browser default behavior — such as scrolling the
-      // page over the editor — is retained while non-interactive
-      if (this.isNavigationEnabled()) {
-        // wheel pan/zoom & pinch — the editor consumes these again, so the
-        // page no longer scrolls over the editor
-        this.onRemoveEventListenersEmitter.once(
-          addEventListener(
-            this.excalidrawContainerRef.current,
-            EVENT.WHEEL,
-            this.wheel.handle,
-            { passive: false },
-          ),
-          // navigation action shortcuts (canvas zoom & zoom-to-fit)
-          addEventListener(
-            this.props.handleKeyboardGlobally
-              ? this.ownerDocument
-              : this.excalidrawContainerRef.current,
-            EVENT.KEYDOWN,
-            this.handleNavigationModeKeyDown as EventListener,
-            false,
-          ),
-          // wheel zoom is anchored on `viewport.lastPosition`
-          addEventListener(
-            this.ownerDocument,
-            EVENT.POINTER_MOVE,
-            this.updateCurrentCursorPosition,
-            { passive: false },
-          ),
-          // Safari-only desktop pinch
-          addEventListener(
-            this.ownerDocument,
-            EVENT.GESTURE_START,
-            this.onGestureStart as any,
-            false,
-          ),
-          addEventListener(
-            this.ownerDocument,
-            EVENT.GESTURE_CHANGE,
-            this.onGestureChange as any,
-            false,
-          ),
-          addEventListener(
-            this.ownerDocument,
-            EVENT.GESTURE_END,
-            this.onGestureEnd as any,
-            false,
-          ),
-        );
-      }
-      if (!this.isBrowserZoomEnabled()) {
-        // the browser's own zoom is prevented over the editor by default,
-        // mirroring the interactive editor (opt out via
-        // `interaction: { enabled: { browserZoom: true } }`)
-        if (!this.isNavigationEnabled()) {
-          // with navigation enabled, wheel & pinch are consumed by the
-          // editor's own handlers above instead
-          this.onRemoveEventListenersEmitter.once(
-            addEventListener(
-              this.excalidrawContainerRef.current,
-              EVENT.WHEEL,
-              this.wheel.preventBrowserZoom,
-              { passive: false },
-            ),
-            // Safari-only desktop pinch
-            addEventListener(
-              this.excalidrawContainerRef.current,
-              EVENT.GESTURE_START as any,
-              this.disableEvent,
-              false,
-            ),
-            addEventListener(
-              this.excalidrawContainerRef.current,
-              EVENT.GESTURE_CHANGE as any,
-              this.disableEvent,
-              false,
-            ),
-            addEventListener(
-              this.excalidrawContainerRef.current,
-              EVENT.GESTURE_END as any,
-              this.disableEvent,
-              false,
-            ),
-          );
-        }
-        this.onRemoveEventListenersEmitter.once(
-          addEventListener(
-            this.props.handleKeyboardGlobally
-              ? this.ownerDocument
-              : this.excalidrawContainerRef.current,
-            EVENT.KEYDOWN,
-            this.preventBrowserZoomKeyDown as EventListener,
-            false,
-          ),
-        );
-      }
-      return;
-    }
-
-    // -------------------------------------------------------------------------
-    //                        view+edit mode listeners
-    // -------------------------------------------------------------------------
-
-    if (this.props.handleKeyboardGlobally) {
-      this.onRemoveEventListenersEmitter.once(
-        addEventListener(
-          this.ownerDocument,
-          EVENT.KEYDOWN,
-          this.onKeyDown,
-          false,
-        ),
-      );
-    }
-
-    this.onRemoveEventListenersEmitter.once(
-      addEventListener(
-        this.excalidrawContainerRef.current,
-        EVENT.WHEEL,
-        this.wheel.handle,
-        { passive: false },
-      ),
-      addEventListener(this.ownerDocument, EVENT.COPY, this.onCopy, {
-        passive: false,
-      }),
-      addEventListener(this.ownerDocument, EVENT.KEYUP, this.onKeyUp, {
-        passive: true,
-      }),
-      addEventListener(
-        this.ownerDocument,
-        EVENT.POINTER_MOVE,
-        this.updateCurrentCursorPosition,
-        { passive: false },
-      ),
-      // Safari-only desktop pinch zoom
-      addEventListener(
-        this.ownerDocument,
-        EVENT.GESTURE_START,
-        this.onGestureStart as any,
-        false,
-      ),
-      addEventListener(
-        this.ownerDocument,
-        EVENT.GESTURE_CHANGE,
-        this.onGestureChange as any,
-        false,
-      ),
-      addEventListener(
-        this.ownerDocument,
-        EVENT.GESTURE_END,
-        this.onGestureEnd as any,
-        false,
-      ),
-    );
-
-    if (this.state.viewModeEnabled) {
-      return;
-    }
-
-    // -------------------------------------------------------------------------
-    //                        edit-mode listeners only
-    // -------------------------------------------------------------------------
-
-    this.onRemoveEventListenersEmitter.once(
-      addEventListener(
-        this.ownerDocument,
-        EVENT.FULLSCREENCHANGE,
-        this.onFullscreenChange,
-        { passive: false },
-      ),
-      addEventListener(
-        this.ownerDocument,
-        EVENT.PASTE,
-        this.pasteFromClipboard,
-        {
-          passive: false,
-        },
-      ),
-      addEventListener(this.ownerDocument, EVENT.CUT, this.onCut, {
-        passive: false,
-      }),
-      addEventListener(this.ownerWindow, EVENT.RESIZE, this.onResize, false),
-      addEventListener(this.ownerWindow, EVENT.UNLOAD, this.onUnload, false),
-      addEventListener(this.ownerWindow, EVENT.BLUR, this.onBlur, false),
-      addEventListener(
-        this.excalidrawContainerRef.current,
-        EVENT.WHEEL,
-        this.wheel.handle,
-        { passive: false },
-      ),
-      addEventListener(
-        this.excalidrawContainerRef.current,
-        EVENT.DRAG_OVER,
-        this.disableEvent,
-        false,
-      ),
-      addEventListener(
-        this.excalidrawContainerRef.current,
-        EVENT.DROP,
-        this.disableEvent,
-        false,
-      ),
-    );
-
-    if (this.props.detectScroll) {
-      this.onRemoveEventListenersEmitter.once(
-        addEventListener(
-          getNearestScrollableContainer(this.excalidrawContainerRef.current!),
-          EVENT.SCROLL,
-          this.onScroll,
-          { passive: false },
-        ),
-      );
-    }
-  }
-
-  public componentDidUpdateImpl(prevProps: AppProps, prevState: AppState) {
-    const renderOverridesUpdatePending = this.renderOverridesUpdatePending;
-    this.renderOverridesUpdatePending = false;
-    // Only a requested visual update can skip the document pipeline. Real
-    // props/state changes batched with it must still commit and notify.
-    if (
-      renderOverridesUpdatePending &&
-      prevProps === this.props &&
-      prevState === this.state
-    ) {
-      return;
-    }
-
-    // must be updated *before* state change listeners are triggered below
-    if (!this._initialized && !this.state.isLoading) {
-      this._initialized = true;
-      this.editorLifecycleEvents.emit("editor:initialize", this.api);
-      this.props.onInitialize?.(this.api);
-    }
-
-    lifecycle.handleInteractionStateChange(this, prevProps, prevState);
-    lifecycle.handleForcedToolChange(this, prevProps, prevState);
-
-    this.appStateObserver.flush(prevState);
-
-    this.updateEmbeddables();
-    const elements = this.scene.getElementsIncludingDeleted();
-    const elementsMap = this.scene.getElementsMapIncludingDeleted();
-
-    const shouldExportWithDarkMode =
-      (this.sessionExportThemeOverride ?? this.state.theme) === THEME.DARK;
-
-    if (this.state.exportWithDarkMode !== shouldExportWithDarkMode) {
-      this.setState({ exportWithDarkMode: shouldExportWithDarkMode });
-    }
-
-    if (!this.state.showWelcomeScreen && !elements.length) {
-      this.setState({ showWelcomeScreen: true });
-    }
-
-    if (
-      prevState.zoom.value !== this.state.zoom.value ||
-      prevState.scrollX !== this.state.scrollX ||
-      prevState.scrollY !== this.state.scrollY
-    ) {
-      this.props?.onScrollChange?.(
-        this.state.scrollX,
-        this.state.scrollY,
-        this.state.zoom,
-      );
-      this.onScrollChangeEmitter.trigger(
-        this.state.scrollX,
-        this.state.scrollY,
-        this.state.zoom,
-      );
-    }
-
-    if (
-      Object.keys(this.state.selectedElementIds).length &&
-      isEraserActive(this.state)
-    ) {
-      this.setState({
-        activeTool: updateActiveTool(this.state, { type: "selection" }),
-      });
-    }
-    if (
-      this.state.activeTool.type === "eraser" &&
-      prevState.theme !== this.state.theme
-    ) {
-      this.cursor.applyForTool();
-    }
-    if (
-      this.state.activeTool.type === "bucketfill" &&
-      prevState.currentItemBackgroundColor !==
-        this.state.currentItemBackgroundColor
-    ) {
-      this.cursor.applyForTool();
-    }
-
-    // Hide hyperlink popup if shown when element type is not selection
-    if (
-      prevState.activeTool.type === "selection" &&
-      this.state.activeTool.type !== "selection" &&
-      this.state.showHyperlinkPopup
-    ) {
-      this.setState({ showHyperlinkPopup: false });
-    }
-    if (prevProps.langCode !== this.props.langCode) {
-      this.updateLanguage();
-    }
-
-    if (isEraserActive(prevState) && !isEraserActive(this.state)) {
-      this.eraserTrail.endPath();
-    }
-
-    // cleanup
-    if (
-      (prevState.openDialog?.name === "elementLinkSelector" ||
-        this.state.openDialog?.name === "elementLinkSelector") &&
-      prevState.openDialog?.name !== this.state.openDialog?.name
-    ) {
-      this.deselectElements();
-      this.setState({
-        hoveredElementIds: {},
-      });
-    }
-
-    if (prevProps.zenModeEnabled !== this.props.zenModeEnabled) {
-      this.setState({ zenModeEnabled: !!this.props.zenModeEnabled });
-    }
-
-    if (prevProps.theme !== this.props.theme && this.props.theme) {
-      this.setState({ theme: this.props.theme });
-    }
-
-    this.excalidrawContainerRef.current?.classList.toggle(
-      "theme--dark",
-      this.state.theme === THEME.DARK,
-    );
-
-    if (
-      this.state.selectedLinearElement?.isEditing &&
-      !this.state.selectedElementIds[this.state.selectedLinearElement.elementId]
-    ) {
-      // defer so that the scheduleCapture flag isn't reset via current update
-      setTimeout(() => {
-        // execute only if the condition still holds when the deferred callback
-        // executes (it can be scheduled multiple times depending on how
-        // many times the component renders)
-        this.state.selectedLinearElement?.isEditing &&
-          this.actionManager.executeAction(actionFinalize);
-      });
-    }
-
-    // selection may only contain non-deleted elements. Resolved post-commit,
-    // so the elements we filter against are the latest.
-    const selectedElementIds = Object.keys(this.state.selectedElementIds);
-    if (selectedElementIds.length) {
-      const staleSelectedElementIds = selectedElementIds.filter((id) => {
-        const element = this.scene.getElement(id);
-        return !element || element.isDeleted;
-      });
-
-      // only update when actually stale, so we retain the object identity
-      // `selectedElementIds` is cached on (e.g. `Scene.getSelectedElements`)
-      if (staleSelectedElementIds.length) {
-        this.setState((prevState) => {
-          const nextSelectedElementIds = { ...prevState.selectedElementIds };
-          for (const id of staleSelectedElementIds) {
-            delete nextSelectedElementIds[id];
-          }
-          return {
-            selectedElementIds: makeNextSelectedElementIds(
-              nextSelectedElementIds,
-              prevState,
-            ),
-          };
-        });
-      }
-    }
-
-    // failsafe in case the state is being updated in incorrect order resulting
-    // in the editingTextElement being now a deleted element. Resolved against
-    // the scene by id, since the state holds an immutable snapshot whose
-    // `isDeleted` never flips once the element is deleted.
-    if (this.state.editingTextElement) {
-      const sceneElement = this.scene.getElement(
-        this.state.editingTextElement.id,
-      );
-      if (!sceneElement || sceneElement.isDeleted) {
-        this.setState({ editingTextElement: null });
-      }
-    }
-
-    // Forced false while a viewport animation runs — the scroll-back-to-content
-    // button must not render mid-animation (clicking it would fight the
-    // animation, which overwrites the viewport every frame). The animation's
-    // final commit lands after the animation is unregistered, settling this
-    // on the target viewport.
-    const scrolledOutside =
-      // hide when editing text
-      this.state.editingTextElement || this.viewport.isAnimating
-        ? false
-        : !this.visibleElements.length && this.hasRenderableElements;
-    if (this.state.scrolledOutside !== scrolledOutside) {
-      this.setState({ scrolledOutside });
-    }
-
-    this.store.commit(elementsMap, this.state);
-
-    // Do not notify consumers if we're still loading the scene. Among other
-    // potential issues, this fixes a case where the tab isn't focused during
-    // init, which would trigger onChange with empty elements, which would then
-    // override whatever is in localStorage currently.
-    if (!this.state.isLoading) {
-      this.props.onChange?.(elements, this.state, this.files);
-      this.onChangeEmitter.trigger(elements, this.state, this.files);
-    }
-  }
+  private onFullscreenChange = () => eventListeners.onFullscreenChange(this);
 
   public renderInteractiveSceneCallback = ({
     scrollBars,
@@ -3300,15 +2062,10 @@ class App extends React.Component<AppProps, AppState> {
     this.scheduleImageRefresh();
   };
 
-  private onScroll = debounce(() => {
-    const { offsetTop, offsetLeft } = this.getCanvasOffsets();
-    this.setState((state) => {
-      if (state.offsetLeft === offsetLeft && state.offsetTop === offsetTop) {
-        return null;
-      }
-      return { offsetTop, offsetLeft };
-    });
-  }, SCROLL_TIMEOUT);
+  private onScroll = debounce(
+    () => eventListeners.onScroll(this),
+    SCROLL_TIMEOUT,
+  );
 
   // Copy/paste
 
@@ -4119,189 +2876,17 @@ class App extends React.Component<AppProps, AppState> {
    * adds supplied files to existing files in the appState.
    * NOTE if file already exists in editor state, the file data is not updated
    * */
-  public addFilesImpl: ExcalidrawImperativeAPI["addFiles"] = withBatchedUpdates(
-    (files) => {
-      const { addedFiles } = this.addMissingFiles(files);
-
-      this.clearImageShapeCache(addedFiles);
-      this.scene.triggerUpdate();
-
-      this.addNewImagesToImageCache();
-    },
-  );
-
   public addFiles: ExcalidrawImperativeAPI["addFiles"] = (files) =>
     filesController.addFiles(this, files);
 
   private addMissingFiles = (
     files: BinaryFiles | BinaryFileData[],
     replace = false,
-  ) => {
-    const nextFiles = replace ? {} : { ...this.files };
-    const addedFiles: BinaryFiles = {};
-
-    const _files = Array.isArray(files) ? files : Object.values(files);
-
-    for (const fileData of _files) {
-      if (nextFiles[fileData.id]) {
-        continue;
-      }
-
-      addedFiles[fileData.id] = fileData;
-      nextFiles[fileData.id] = fileData;
-
-      if (fileData.mimeType === MIME_TYPES.svg) {
-        try {
-          const restoredDataURL = getDataURL_sync(
-            normalizeSVG(dataURLToString(fileData.dataURL)),
-            MIME_TYPES.svg,
-          );
-          if (fileData.dataURL !== restoredDataURL) {
-            // bump version so persistence layer can update the store
-            fileData.version = (fileData.version ?? 1) + 1;
-            fileData.dataURL = restoredDataURL;
-          }
-        } catch (error) {
-          console.error(error);
-        }
-      }
-    }
-
-    this.files = nextFiles;
-
-    return { addedFiles };
-  };
-
-  public updateSceneImpl = withBatchedUpdates(
-    <K extends keyof AppState>(sceneData: {
-      elements?: SceneData["elements"];
-      appState?: Pick<AppState, K> | null;
-      collaborators?: SceneData["collaborators"];
-      /**
-       *  Controls which updates should be captured by the `Store`. Captured updates are emmitted and listened to by other components, such as `History` for undo / redo purposes.
-       *
-       *  - `CaptureUpdateAction.IMMEDIATELY`: Updates are immediately undoable. Use for most local updates.
-       *  - `CaptureUpdateAction.NEVER`: Updates never make it to undo/redo stack. Use for remote updates or scene initialization.
-       *  - `CaptureUpdateAction.EVENTUALLY`: Updates will be eventually be captured as part of a future increment.
-       *
-       * Check [API docs](https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/props/excalidraw-api#captureUpdate) for more details.
-       *
-       * @default CaptureUpdateAction.EVENTUALLY
-       */
-      captureUpdate?: SceneData["captureUpdate"];
-    }) => {
-      const { elements, appState, collaborators, captureUpdate } = sceneData;
-
-      if (captureUpdate) {
-        const nextElements = elements ? elements : undefined;
-        const observedAppState = appState
-          ? getObservedAppState({
-              ...this.store.snapshot.appState,
-              ...appState,
-            })
-          : undefined;
-
-        this.store.scheduleMicroAction({
-          action: captureUpdate,
-          elements: nextElements,
-          appState: observedAppState,
-        });
-      }
-
-      if (appState) {
-        this.setState(appState as Pick<AppState, K> | null);
-      }
-
-      if (elements) {
-        if (captureUpdate === CaptureUpdateAction.NEVER) {
-          this.mindmap.handleRemoteSceneUpdate(elements);
-        }
-        this.scene.replaceAllElements(elements);
-      }
-
-      if (collaborators) {
-        this.laserTrails.updateCollabTrails(collaborators);
-        this.setState({ collaborators });
-      }
-    },
-  );
-
-  /**
-   * see {@link ExcalidrawImperativeAPI.setElementRenderOverrides} for details
-   */
-  public setElementRenderOverridesImpl = (
-    overrides: ElementRenderOverrides | null,
-  ) => {
-    if (this.unmounted) {
-      return;
-    }
-    const nextOverrides = copyElementRenderOverrides(overrides);
-    // clearing an already clear snapshot is the one cheap no-op worth having
-    if (!nextOverrides.size && !this.elementRenderOverrides.size) {
-      return;
-    }
-    this.elementRenderOverrides = nextOverrides;
-    this.elementRenderOffsets = getElementRenderOffsets(
-      this.elementRenderOverrides,
-      this.elementRenderOffsets,
-    );
-    this.renderOverridesUpdatePending = true;
-    // Preserve AppState identity and explicitly request a visual-only commit.
-    this.forceUpdate();
-  };
+  ) => filesController.addMissingFiles(this, files, replace);
 
   /** Applies transient opacity to the source branch during a mindmap drag. */
-  public setMindmapDragOpacity = (ids: readonly string[] | null) => {
-    const next = new Map(this.elementRenderOverrides);
-    this.mindmapDragOpacityIds.forEach((id) => {
-      const previous = this.mindmapDragOpacityPrevious.get(id);
-      if (previous) {
-        next.set(id, previous);
-      } else {
-        next.delete(id);
-      }
-    });
-    this.mindmapDragOpacityIds = new Set(ids ?? []);
-    this.mindmapDragOpacityPrevious.clear();
-    this.mindmapDragOpacityIds.forEach((id) => {
-      const previous = next.get(id);
-      this.mindmapDragOpacityPrevious.set(id, previous);
-      next.set(id, { ...(previous ?? {}), opacity: 24 });
-    });
-    this.setElementRenderOverrides(next.size ? next : null);
-  };
-
-  public applyDeltasImpl = (
-    deltas: StoreDelta[],
-    options?: ApplyToOptions,
-  ): [SceneElementsMap, AppState, boolean] => {
-    // squash all deltas together, starting with a fresh new delta instance
-    const aggregatedDelta = StoreDelta.squash(...deltas);
-
-    // create new instance of elements map & appState, so we don't accidentaly mutate existing ones
-    const nextAppState = { ...this.state };
-    const nextElements = new Map(
-      this.scene.getElementsMapIncludingDeleted(),
-    ) as SceneElementsMap;
-
-    return StoreDelta.applyTo(
-      aggregatedDelta,
-      nextElements,
-      nextAppState,
-      options,
-    );
-  };
-
-  public mutateElementImpl = <TElement extends Mutable<ExcalidrawElement>>(
-    element: TElement,
-    updates: ElementUpdate<TElement>,
-    informMutation = true,
-  ) => {
-    return this.scene.mutateElement(element, updates, {
-      informMutation,
-      isDragging: false,
-    });
-  };
+  public setMindmapDragOpacity = (ids: readonly string[] | null) =>
+    sceneController.setMindmapDragOpacity(this, ids);
 
   public updateScene = <K extends keyof AppState>(sceneData: {
     elements?: SceneData["elements"];
@@ -4309,6 +2894,9 @@ class App extends React.Component<AppProps, AppState> {
     collaborators?: SceneData["collaborators"];
     captureUpdate?: SceneData["captureUpdate"];
   }) => sceneController.updateScene(this, sceneData);
+  /**
+   * see {@link ExcalidrawImperativeAPI.setElementRenderOverrides} for details
+   */
   public setElementRenderOverrides = (
     overrides: ElementRenderOverrides | null,
   ) => sceneController.setElementRenderOverrides(this, overrides);
@@ -10185,130 +8773,6 @@ class App extends React.Component<AppProps, AppState> {
     pointerEraseController.eraseElements(this);
   };
 
-  public initializeImageImpl = async (
-    placeholderImageElement: ExcalidrawImageElement,
-    imageFile: File,
-  ) => {
-    // at this point this should be guaranteed image file, but we do this check
-    // to satisfy TS down the line
-    if (!isSupportedImageFile(imageFile)) {
-      throw new Error(t("errors.unsupportedFileType"));
-    }
-    const mimeType = imageFile.type;
-
-    this.cursor.set("wait");
-
-    if (mimeType === MIME_TYPES.svg) {
-      try {
-        imageFile = SVGStringToFile(
-          normalizeSVG(await imageFile.text()),
-          imageFile.name,
-        );
-      } catch (error: any) {
-        console.warn(error);
-        throw new Error(t("errors.svgImageInsertError"));
-      }
-    }
-
-    // generate image id (by default the file digest) before any
-    // resizing/compression takes place to keep it more portable
-    const fileId = await ((this.props.generateIdForFile?.(
-      imageFile,
-    ) as Promise<FileId>) || generateIdFromFile(imageFile));
-
-    if (!fileId) {
-      console.warn(
-        "Couldn't generate file id or the supplied `generateIdForFile` didn't resolve to one.",
-      );
-      throw new Error(t("errors.imageInsertError"));
-    }
-
-    const existingFileData = this.files[fileId];
-    if (!existingFileData?.dataURL) {
-      const { maxWidthOrHeight, maxFileSizeBytes } = this.props.imageOptions;
-
-      try {
-        imageFile = await resizeImageFile(imageFile, {
-          maxWidthOrHeight,
-        });
-      } catch (error: any) {
-        console.error(
-          "Error trying to resizing image file on insertion",
-          error,
-        );
-      }
-
-      if (imageFile.size > maxFileSizeBytes) {
-        throw new Error(
-          t("errors.fileTooBig", {
-            maxSize: `${Math.trunc(maxFileSizeBytes / 1024 / 1024)}MB`,
-          }),
-        );
-      }
-    }
-
-    const dataURL =
-      this.files[fileId]?.dataURL || (await getDataURL(imageFile));
-
-    return new Promise<NonDeleted<InitializedExcalidrawImageElement>>(
-      async (resolve, reject) => {
-        try {
-          let initializedImageElement = this.getLatestInitializedImageElement(
-            placeholderImageElement,
-            fileId,
-          );
-
-          this.addMissingFiles([
-            {
-              mimeType,
-              id: fileId,
-              dataURL,
-              created: Date.now(),
-              lastRetrieved: Date.now(),
-            },
-          ]);
-
-          if (!this.imageCache.get(fileId)) {
-            this.addNewImagesToImageCache();
-
-            const { erroredFiles } = await this.updateImageCache([
-              initializedImageElement,
-            ]);
-
-            if (erroredFiles.size) {
-              throw new Error("Image cache update resulted with an error.");
-            }
-          }
-
-          const imageHTML = await this.imageCache.get(fileId)?.image;
-
-          if (
-            imageHTML &&
-            this.state.newElement?.id !== initializedImageElement.id
-          ) {
-            initializedImageElement = this.getLatestInitializedImageElement(
-              placeholderImageElement,
-              fileId,
-            );
-
-            const naturalDimensions = this.getImageNaturalDimensions(
-              initializedImageElement,
-              imageHTML,
-            );
-
-            // no need to create a new instance anymore, just assign the natural dimensions
-            Object.assign(initializedImageElement, naturalDimensions);
-          }
-
-          resolve(initializedImageElement);
-        } catch (error: any) {
-          console.error(error);
-          reject(new Error(t("errors.imageInsertError")));
-        }
-      },
-    );
-  };
-
   /**
    * use during async image initialization,
    * when the placeholder image could have been modified in the meantime,
@@ -10317,160 +8781,40 @@ class App extends React.Component<AppProps, AppState> {
   private getLatestInitializedImageElement = (
     imagePlaceholder: ExcalidrawImageElement,
     fileId: FileId,
-  ) => {
-    const latestImageElement =
-      this.scene.getElement(imagePlaceholder.id) ?? imagePlaceholder;
-
-    return newElementWith(
-      latestImageElement as NonDeleted<InitializedExcalidrawImageElement>,
-      {
-        fileId,
-      },
+  ) =>
+    filesController.getLatestInitializedImageElement(
+      this,
+      imagePlaceholder,
+      fileId,
     );
-  };
 
-  private onImageToolbarButtonClick = async () => {
-    try {
-      const clientX = this.state.width / 2 + this.state.offsetLeft;
-      const clientY = this.state.height / 2 + this.state.offsetTop;
-
-      const { x, y } = viewportCoordsToSceneCoords(
-        { clientX, clientY },
-        this.state,
-      );
-
-      const imageFiles = await fileOpen({
-        description: "Image",
-        extensions: Object.keys(
-          IMAGE_MIME_TYPES,
-        ) as (keyof typeof IMAGE_MIME_TYPES)[],
-        multiple: true,
-      });
-
-      this.insertImages(imageFiles, x, y);
-    } catch (error: any) {
-      if (error.name !== "AbortError") {
-        console.error(error);
-      } else {
-        console.warn(error);
-      }
-      this.setState(
-        {
-          newElement: null,
-          activeTool: updateActiveTool(this.state, {
-            type: this.state.preferredSelectionTool.type,
-          }),
-        },
-        () => {
-          this.actionManager.executeAction(actionFinalize);
-        },
-      );
-    }
-  };
+  private onImageToolbarButtonClick = () =>
+    filesController.onImageToolbarButtonClick(this);
 
   private getImageNaturalDimensions = (
     imageElement: ExcalidrawImageElement,
     imageHTML: HTMLImageElement,
-  ) => {
-    const minHeight = Math.max(this.state.height - 120, 160);
-    // max 65% of canvas height, clamped to <300px, vh - 120px>
-    const maxHeight = Math.min(
-      minHeight,
-      Math.floor(this.state.height * 0.5) / this.state.zoom.value,
-    );
+  ) => filesController.getImageNaturalDimensions(this, imageElement, imageHTML);
 
-    const height = Math.min(imageHTML.naturalHeight, maxHeight);
-    const width = height * (imageHTML.naturalWidth / imageHTML.naturalHeight);
+  /** generally you should use `addNewImagesToImageCache()` directly if you need
+   *  to render new images. This is just a failsafe  */
+  private initializeImage = (
+    placeholderImageElement: ExcalidrawImageElement,
+    imageFile: File,
+  ) =>
+    filesController.initializeImage(this, placeholderImageElement, imageFile);
 
-    // add current imageElement width/height to account for previous centering
-    // of the placeholder image
-    const x = imageElement.x + imageElement.width / 2 - width / 2;
-    const y = imageElement.y + imageElement.height / 2 - height / 2;
-
-    return {
-      x,
-      y,
-      width,
-      height,
-      crop: null,
-    };
-  };
-
-  /** updates image cache, refreshing updated elements and/or setting status
-      to error for images that fail during <img> element creation */
-  public updateImageCacheImpl = async (
+  private updateImageCache = (
     elements: readonly InitializedExcalidrawImageElement[],
-    files = this.files,
-  ) => {
-    const { updatedFiles, erroredFiles } = await _updateImageCache({
-      imageCache: this.imageCache,
-      fileIds: elements.map((element) => element.fileId),
-      files,
-    });
+    files: BinaryFiles = this.files,
+  ) => filesController.updateImageCache(this, elements, files);
 
-    if (erroredFiles.size) {
-      this.store.scheduleAction(CaptureUpdateAction.NEVER);
-      this.scene.replaceAllElements(
-        this.scene.getElementsIncludingDeleted().map((element) => {
-          if (
-            isInitializedImageElement(element) &&
-            erroredFiles.has(element.fileId)
-          ) {
-            return newElementWith(element, {
-              status: "error",
-            });
-          }
-          return element;
-        }),
-      );
-    }
-
-    return { updatedFiles, erroredFiles };
-  };
-
-  /** adds new images to imageCache and re-renders if needed */
-  public addNewImagesToImageCacheImpl = async (
+  private addNewImagesToImageCache = (
     imageElements: InitializedExcalidrawImageElement[] = getInitializedImageElements(
       this.scene.getNonDeletedElements(),
     ),
     files: BinaryFiles = this.files,
-  ) => {
-    const uncachedImageElements = imageElements.filter(
-      (element) => !element.isDeleted && !this.imageCache.has(element.fileId),
-    );
-
-    if (uncachedImageElements.length) {
-      const { updatedFiles } = await this.updateImageCache(
-        uncachedImageElements,
-        files,
-      );
-
-      if (updatedFiles.size) {
-        for (const element of uncachedImageElements) {
-          if (updatedFiles.has(element.fileId)) {
-            ShapeCache.delete(element);
-          }
-        }
-      }
-
-      if (updatedFiles.size) {
-        this.scene.triggerUpdate();
-      }
-    }
-  };
-
-  /** generally you should use `addNewImagesToImageCache()` directly if you need
-   *  to render new images. This is just a failsafe  */
-  private initializeImage = (...args: Parameters<App["initializeImageImpl"]>) =>
-    filesController.initializeImage(this, ...args);
-
-  private updateImageCache = (
-    ...args: Parameters<App["updateImageCacheImpl"]>
-  ) => filesController.updateImageCache(this, ...args);
-
-  private addNewImagesToImageCache = (
-    ...args: Parameters<App["addNewImagesToImageCacheImpl"]>
-  ) => filesController.addNewImagesToImageCache(this, ...args);
+  ) => filesController.addNewImagesToImageCache(this, imageElements, files);
 
   private scheduleImageRefresh = throttle(() => {
     this.addNewImagesToImageCache();
@@ -10531,281 +8875,8 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private insertImages = async (
-    imageFiles: File[],
-    sceneX: number,
-    sceneY: number,
-  ) => {
-    const gridPadding = 50 / this.state.zoom.value;
-    // Create, position, and insert placeholders
-    const placeholders = positionElementsOnGrid(
-      imageFiles.map(() => this.newImagePlaceholder({ sceneX, sceneY })),
-      sceneX,
-      sceneY,
-      gridPadding,
-    );
-    this.insertNewElements(placeholders);
-
-    // Create, position, insert and select initialized (replacing placeholders)
-    const initialized = await Promise.all(
-      placeholders.map(async (placeholder, i) => {
-        try {
-          return await this.initializeImage(
-            placeholder,
-            await normalizeFile(imageFiles[i]),
-          );
-        } catch (error: any) {
-          this.setState({
-            errorMessage: error.message || t("errors.imageInsertError"),
-          });
-          return newElementWith(placeholder as ExcalidrawImageElement, {
-            isDeleted: true,
-          });
-        }
-      }),
-    );
-    const initializedMap = arrayToMap(initialized);
-
-    const positioned = positionElementsOnGrid(
-      initialized.filter((el) => !el.isDeleted),
-      sceneX,
-      sceneY,
-      gridPadding,
-    );
-    const positionedMap = arrayToMap(positioned);
-
-    const nextElements = this.scene
-      .getElementsIncludingDeleted()
-      .map((el) => positionedMap.get(el.id) ?? initializedMap.get(el.id) ?? el);
-
-    this.updateScene({
-      appState: {
-        selectedElementIds: makeNextSelectedElementIds(
-          Object.fromEntries(positioned.map((el) => [el.id, true])),
-          this.state,
-        ),
-      },
-      elements: nextElements,
-      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-    });
-
-    this.setState({}, () => {
-      // actionFinalize after all state values have been updated
-      this.actionManager.executeAction(actionFinalize);
-    });
-  };
-
-  public handleAppOnDropImpl = async (
-    event: React.DragEvent<HTMLDivElement>,
-  ) => {
-    // NOTE no preventDefault so the host page can handle the drop itself
-    if (!this.isInteractionEnabled()) {
-      return;
-    }
-    const { x: sceneX, y: sceneY } = viewportCoordsToSceneCoords(
-      event,
-      this.state,
-    );
-    const dataTransferList = await parseDataTransferEvent(event);
-
-    // must be retrieved first, in the same frame
-    const fileItems = dataTransferList.getFiles();
-
-    if (fileItems.length === 1) {
-      const { file, fileHandle } = fileItems[0];
-
-      if (
-        file &&
-        (file.type === MIME_TYPES.png || file.type === MIME_TYPES.svg)
-      ) {
-        try {
-          const scene = await loadFromBlob(
-            file,
-            this.state,
-            this.scene.getElementsIncludingDeleted(),
-            fileHandle,
-          );
-          this.syncActionResult({
-            ...scene,
-            appState: {
-              ...(scene.appState || this.state),
-              isLoading: false,
-            },
-            replaceFiles: true,
-            captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-          });
-          return;
-        } catch (error: any) {
-          if (error.name !== "EncodingError") {
-            throw new Error(t("alerts.couldNotLoadInvalidFile"));
-          }
-          // if EncodingError, fall through to insert as regular image
-        }
-      }
-    }
-
-    const imageFiles = fileItems
-      .map((data) => data.file)
-      .filter((file) => isSupportedImageFile(file));
-
-    if (imageFiles.length > 0 && this.isToolSupported("image")) {
-      return this.insertImages(imageFiles, sceneX, sceneY);
-    }
-    const excalidrawLibrary_ids = dataTransferList.getData(
-      MIME_TYPES.excalidrawlibIds,
-    );
-    const excalidrawLibrary_data = dataTransferList.getData(
-      MIME_TYPES.excalidrawlib,
-    );
-    if (excalidrawLibrary_ids || excalidrawLibrary_data) {
-      try {
-        let libraryItems: LibraryItems | null = null;
-        if (excalidrawLibrary_ids) {
-          const { itemIds } = JSON.parse(
-            excalidrawLibrary_ids,
-          ) as ExcalidrawLibraryIds;
-          const allLibraryItems = await this.library.getLatestLibrary();
-          libraryItems = allLibraryItems.filter((item) =>
-            itemIds.includes(item.id),
-          );
-          // legacy library dataTransfer format
-        } else if (excalidrawLibrary_data) {
-          libraryItems = parseLibraryJSON(excalidrawLibrary_data);
-        }
-        if (libraryItems?.length) {
-          libraryItems = libraryItems.map((item) => ({
-            ...item,
-            // #6465
-            elements: duplicateElements({
-              type: "everything",
-              elements: item.elements,
-              randomizeSeed: true,
-              preserveFrameChildrenOrder: true,
-            }).duplicatedElements,
-          }));
-
-          this.addElementsFromPasteOrLibrary({
-            elements: distributeLibraryItemsOnSquareGrid(libraryItems),
-            position: event,
-            files: null,
-          });
-        }
-      } catch (error: any) {
-        this.setState({ errorMessage: error.message });
-      }
-      return;
-    }
-
-    if (fileItems.length > 0) {
-      const { file, fileHandle } = fileItems[0];
-      if (file) {
-        // Attempt to parse an excalidraw/excalidrawlib file
-        await this.loadFileToCanvas(file, fileHandle);
-      }
-    }
-
-    const textItem = dataTransferList.findByType(MIME_TYPES.text);
-
-    if (textItem) {
-      const text = textItem.value;
-      if (
-        text &&
-        embeddableURLValidator(text, this.props.validateEmbeddable) &&
-        (/^(http|https):\/\/[^\s/$.?#].[^\s]*$/.test(text) ||
-          getEmbedLink(text)?.type === "video")
-      ) {
-        const embeddable = this.insertEmbeddableElement({
-          sceneX,
-          sceneY,
-          link: normalizeLink(text),
-        });
-        if (embeddable) {
-          this.store.scheduleCapture();
-          this.setState({ selectedElementIds: { [embeddable.id]: true } });
-        }
-      }
-    }
-  };
-
-  public loadFileToCanvasImpl = async (
-    file: File,
-    fileHandle: FileSystemFileHandle | null,
-  ) => {
-    file = await normalizeFile(file);
-    try {
-      const elements = this.scene.getElementsIncludingDeleted();
-      let ret;
-      try {
-        ret = await loadSceneOrLibraryFromBlob(
-          file,
-          this.state,
-          elements,
-          fileHandle,
-        );
-      } catch (error: any) {
-        console.error("load file to canvas", error);
-        const imageSceneDataError = error instanceof ImageSceneDataError;
-        if (
-          imageSceneDataError &&
-          error.code === "IMAGE_NOT_CONTAINS_SCENE_DATA" &&
-          !this.isToolSupported("image")
-        ) {
-          this.setState({
-            isLoading: false,
-            errorMessage: t("errors.imageToolNotSupported"),
-          });
-          return;
-        }
-        const errorMessage = imageSceneDataError
-          ? t("alerts.cannotRestoreFromImage")
-          : t("alerts.couldNotLoadInvalidFile");
-        this.setState({
-          isLoading: false,
-          errorMessage,
-        });
-      }
-      if (!ret) {
-        return;
-      }
-
-      if (ret.type === MIME_TYPES.excalidraw) {
-        // restore the fractional indices by mutating elements
-        syncInvalidIndices(elements.concat(ret.data.elements));
-
-        // don't capture and only update the store snapshot for old elements,
-        // otherwise we would end up with duplicated fractional indices on undo
-        this.store.scheduleMicroAction({
-          action: CaptureUpdateAction.NEVER,
-          elements,
-          appState: undefined,
-        });
-
-        this.setState({ isLoading: true });
-        this.syncActionResult({
-          ...ret.data,
-          appState: {
-            ...(ret.data.appState || this.state),
-            isLoading: false,
-          },
-          replaceFiles: true,
-          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-        });
-      } else if (ret.type === MIME_TYPES.excalidrawlib) {
-        await this.library
-          .updateLibrary({
-            libraryItems: file,
-            merge: true,
-            openLibraryMenu: true,
-          })
-          .catch((error) => {
-            console.error(error);
-            this.setState({ errorMessage: t("errors.importLibraryError") });
-          });
-      }
-    } catch (error: any) {
-      this.setState({ isLoading: false, errorMessage: error.message });
-    }
-  };
+  private insertImages = (imageFiles: File[], sceneX: number, sceneY: number) =>
+    filesController.insertImages(this, imageFiles, sceneX, sceneY);
 
   public handleAppOnDrop = (event: React.DragEvent<HTMLDivElement>) =>
     filesController.handleAppOnDrop(this, event);

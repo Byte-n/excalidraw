@@ -3,19 +3,27 @@ import { vi } from "vitest";
 
 import { reseed } from "@excalidraw/common";
 
+import type { FileId } from "@excalidraw/element/types";
+
 import { Excalidraw } from "../index";
+
 import { updateGestureOnPointerDown } from "../components/app/gesture";
 import {
   cleanupAfterMissingPointerUp,
   createInteractionState,
 } from "../components/app/pointerSession";
 import * as StaticScene from "../renderer/staticScene";
+
 import {
   act,
   render,
   queryByTestId,
   unmountComponent,
 } from "../tests/test-utils";
+
+import { API } from "./helpers/api";
+
+import type { DataURL } from "../types";
 
 const renderStaticScene = vi.spyOn(StaticScene, "renderStaticScene");
 
@@ -66,6 +74,11 @@ describe("Test <App/>", () => {
     onChange.mockClear();
     onScrollChange.mockClear();
     events.length = 0;
+    const onStateChange = vi.fn(() => events.push("onStateChange"));
+    const unsubscribe = window.h.app.api.onStateChange(
+      "scrollX",
+      onStateChange,
+    );
     const commit = vi.spyOn(window.h.app.store, "commit");
     commit.mockClear();
 
@@ -73,13 +86,66 @@ describe("Test <App/>", () => {
       window.h.app.api.updateScene({ appState: { scrollX: 42 } });
     });
 
+    expect(onStateChange).toHaveBeenCalledTimes(1);
     expect(onScrollChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(["onScrollChange", "onChange"]);
+    expect(events).toEqual(["onStateChange", "onScrollChange", "onChange"]);
+    expect(onStateChange.mock.invocationCallOrder[0]).toBeLessThan(
+      commit.mock.invocationCallOrder[0],
+    );
     expect(commit.mock.invocationCallOrder[0]).toBeLessThan(
       onChange.mock.invocationCallOrder[0],
     );
+    unsubscribe();
     commit.mockRestore();
+  });
+
+  it("removes and reinstalls native listeners without leaving a blur handler behind", async () => {
+    await render(<Excalidraw />);
+    const app = window.h.app;
+    const blur = () =>
+      app.ownerWindow.dispatchEvent(new app.ownerWindow.Event("blur"));
+
+    app.pan.setSpaceHeld(true);
+    act(blur);
+    expect(app.pan.isSpaceHeld()).toBe(false);
+
+    app.removeEventListeners();
+    app.pan.setSpaceHeld(true);
+    act(blur);
+    expect(app.pan.isSpaceHeld()).toBe(true);
+
+    app.addEventListeners();
+    act(blur);
+    expect(app.pan.isSpaceHeld()).toBe(false);
+  });
+
+  it("keeps existing files and queues an inserted image for cache loading", async () => {
+    await render(<Excalidraw />);
+    const app = window.h.app;
+    const id = "stage-two-image" as FileId;
+    const image = API.createElement({ type: "image", fileId: id });
+    const file = {
+      id,
+      dataURL:
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==" as DataURL,
+      mimeType: "image/png" as const,
+      created: Date.now(),
+      lastRetrieved: Date.now(),
+    };
+
+    act(() => {
+      app.api.updateScene({ elements: [image] });
+      app.api.addFiles([file]);
+    });
+
+    expect(app.api.getFiles()[id]).toBe(file);
+    expect(app.imageCache.get(id)?.mimeType).toBe("image/png");
+
+    act(() => {
+      app.api.addFiles([{ ...file, dataURL: "different" as DataURL }]);
+    });
+    expect(app.api.getFiles()[id]).toBe(file);
   });
 
   it("handles page navigation through the mounted editor document", async () => {
