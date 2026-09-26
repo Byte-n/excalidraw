@@ -452,6 +452,10 @@ import { AppWheel } from "./App.wheel";
 import { AppFrames } from "./app/frames";
 import { AppEmbeds } from "./app/embeds";
 import { AppView } from "./app/render";
+import * as lifecycle from "./app/lifecycle";
+import * as eventListeners from "./app/eventListeners";
+import * as sceneController from "./app/scene";
+import * as filesController from "./app/files";
 import BraveMeasureTextError from "./BraveMeasureTextError";
 import { CONTEXT_MENU_SEPARATOR } from "./ContextMenu";
 import { activeEyeDropperAtom } from "./EyeDropper";
@@ -2027,90 +2031,117 @@ class App extends React.Component<AppProps, AppState> {
     });
   };
 
-  public syncActionResult = withBatchedUpdates((actionResult: ActionResult) => {
-    if (this.unmounted || actionResult === false) {
-      return;
-    }
+  public syncActionResult = withBatchedUpdates((actionResult: ActionResult) =>
+    sceneController.syncActionResult(this, actionResult),
+  );
 
-    this.store.scheduleAction(actionResult.captureUpdate);
-
-    let didUpdate = false;
-
-    let editingTextElement: AppState["editingTextElement"] | null = null;
-    if (actionResult.elements) {
-      this.scene.replaceAllElements(actionResult.elements);
-      didUpdate = true;
-    }
-
-    if (actionResult.files) {
-      this.addMissingFiles(actionResult.files, actionResult.replaceFiles);
-      this.addNewImagesToImageCache();
-    }
-
-    if (actionResult.appState || editingTextElement || this.state.contextMenu) {
-      let viewModeEnabled = actionResult?.appState?.viewModeEnabled || false;
-      let zenModeEnabled = actionResult?.appState?.zenModeEnabled || false;
-      const theme =
-        actionResult?.appState?.theme || this.props.theme || THEME.LIGHT;
-      const name = actionResult?.appState?.name ?? this.state.name;
-      const errorMessage =
-        actionResult?.appState?.errorMessage ?? this.state.errorMessage;
-      if (typeof this.props.viewModeEnabled !== "undefined") {
-        viewModeEnabled = this.props.viewModeEnabled;
+  public syncActionResultImpl = withBatchedUpdates(
+    (actionResult: ActionResult) => {
+      if (this.unmounted || actionResult === false) {
+        return;
       }
 
-      // non-interactive editor implies view mode (overrides both the action
-      // result and the host-supplied `viewModeEnabled` prop)
-      if (!this.isInteractionEnabled()) {
-        viewModeEnabled = true;
+      this.store.scheduleAction(actionResult.captureUpdate);
+
+      let didUpdate = false;
+
+      let editingTextElement: AppState["editingTextElement"] | null = null;
+      if (actionResult.elements) {
+        this.scene.replaceAllElements(actionResult.elements);
+        didUpdate = true;
       }
 
-      if (typeof this.props.zenModeEnabled !== "undefined") {
-        zenModeEnabled = this.props.zenModeEnabled;
+      if (actionResult.files) {
+        this.addMissingFiles(actionResult.files, actionResult.replaceFiles);
+        this.addNewImagesToImageCache();
       }
 
-      editingTextElement = actionResult.appState?.editingTextElement || null;
+      if (
+        actionResult.appState ||
+        editingTextElement ||
+        this.state.contextMenu
+      ) {
+        let viewModeEnabled = actionResult?.appState?.viewModeEnabled || false;
+        let zenModeEnabled = actionResult?.appState?.zenModeEnabled || false;
+        const theme =
+          actionResult?.appState?.theme || this.props.theme || THEME.LIGHT;
+        const name = actionResult?.appState?.name ?? this.state.name;
+        const errorMessage =
+          actionResult?.appState?.errorMessage ?? this.state.errorMessage;
+        if (typeof this.props.viewModeEnabled !== "undefined") {
+          viewModeEnabled = this.props.viewModeEnabled;
+        }
 
-      // make sure editingTextElement points to latest element reference
-      if (actionResult.elements && editingTextElement) {
-        const editingTextElementId = editingTextElement.id;
-        const nextElement = actionResult.elements.find(
-          (element) => element.id === editingTextElementId,
-        );
-        editingTextElement =
-          nextElement &&
-          isNonDeletedElement(nextElement) &&
-          isTextElement(nextElement)
-            ? nextElement
-            : null;
+        // non-interactive editor implies view mode (overrides both the action
+        // result and the host-supplied `viewModeEnabled` prop)
+        if (!this.isInteractionEnabled()) {
+          viewModeEnabled = true;
+        }
+
+        if (typeof this.props.zenModeEnabled !== "undefined") {
+          zenModeEnabled = this.props.zenModeEnabled;
+        }
+
+        editingTextElement = actionResult.appState?.editingTextElement || null;
+
+        // make sure editingTextElement points to latest element reference
+        if (actionResult.elements && editingTextElement) {
+          const editingTextElementId = editingTextElement.id;
+          const nextElement = actionResult.elements.find(
+            (element) => element.id === editingTextElementId,
+          );
+          editingTextElement =
+            nextElement &&
+            isNonDeletedElement(nextElement) &&
+            isTextElement(nextElement)
+              ? nextElement
+              : null;
+        }
+
+        this.setState((prevAppState) => {
+          const actionAppState = actionResult.appState || {};
+
+          return {
+            ...prevAppState,
+            ...actionAppState,
+            // NOTE this will prevent opening context menu using an action
+            // or programmatically from the host, so it will need to be
+            // rewritten later
+            contextMenu: null,
+            editingTextElement,
+            viewModeEnabled,
+            zenModeEnabled,
+            theme,
+            name,
+            errorMessage,
+          };
+        });
+
+        didUpdate = true;
       }
 
-      this.setState((prevAppState) => {
-        const actionAppState = actionResult.appState || {};
+      if (!didUpdate) {
+        this.scene.triggerUpdate();
+      }
+    },
+  );
 
-        return {
-          ...prevAppState,
-          ...actionAppState,
-          // NOTE this will prevent opening context menu using an action
-          // or programmatically from the host, so it will need to be
-          // rewritten later
-          contextMenu: null,
-          editingTextElement,
-          viewModeEnabled,
-          zenModeEnabled,
-          theme,
-          name,
-          errorMessage,
-        };
-      });
-
-      didUpdate = true;
-    }
-
-    if (!didUpdate) {
-      this.scene.triggerUpdate();
-    }
-  });
+  public resetHistory = () => sceneController.resetHistory(this);
+  public resetStore = () => sceneController.resetStore(this);
+  public resetScene = (opts?: { resetLoadingState: boolean }) =>
+    sceneController.resetScene(this, opts);
+  public initializeScene = () => lifecycle.initializeScene(this);
+  public componentDidMount() {
+    return lifecycle.componentDidMount(this);
+  }
+  public componentWillUnmount() {
+    return lifecycle.componentWillUnmount(this);
+  }
+  public componentDidUpdate(prevProps: AppProps, prevState: AppState) {
+    return lifecycle.componentDidUpdate(this, prevProps, prevState);
+  }
+  public addEventListeners = () => eventListeners.addEventListeners(this);
+  public removeEventListeners = () => eventListeners.removeEventListeners(this);
 
   public scheduleCapture = () => this.store.scheduleCapture();
 
@@ -2267,7 +2298,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private handleInteractionStateChange = (
+  public handleInteractionStateChangeImpl = (
     prevProps: AppProps,
     prevState: AppState,
   ) => {
@@ -2386,7 +2417,7 @@ class App extends React.Component<AppProps, AppState> {
    * scene load, ...) and re-applies the tool once it becomes activatable
    * (e.g. `interaction` config changes).
    */
-  private handleForcedToolChange = (
+  public handleForcedToolChangeImpl = (
     prevProps: AppProps,
     prevState: AppState,
   ) => {
@@ -2424,11 +2455,11 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private resetHistory = () => {
+  public resetHistoryImpl = () => {
     this.history.clear();
   };
 
-  private resetStore = () => {
+  public resetStoreImpl = () => {
     this.store.clear();
   };
 
@@ -2436,7 +2467,7 @@ class App extends React.Component<AppProps, AppState> {
    * Resets scene & history.
    * ! Do not use to clear scene user action !
    */
-  private resetScene = withBatchedUpdates(
+  public resetSceneImpl = withBatchedUpdates(
     (opts?: { resetLoadingState: boolean }) => {
       this.elementRenderOverrides = new Map();
       this.elementRenderOffsets = new Map();
@@ -2446,12 +2477,12 @@ class App extends React.Component<AppProps, AppState> {
         isLoading: opts?.resetLoadingState ? false : state.isLoading,
         theme: this.state.theme,
       }));
-      this.resetStore();
-      this.resetHistory();
+      this.resetStoreImpl();
+      this.resetHistoryImpl();
     },
   );
 
-  private initializeScene = async () => {
+  public initializeSceneImpl = async () => {
     if (
       "launchQueue" in this.ownerWindow &&
       "LaunchParams" in this.ownerWindow
@@ -2576,8 +2607,8 @@ class App extends React.Component<AppProps, AppState> {
       };
     }
 
-    this.resetStore();
-    this.resetHistory();
+    this.resetStoreImpl();
+    this.resetHistoryImpl();
     this.syncActionResult({
       elements: restoredElements,
       appState: restoredAppState,
@@ -2682,7 +2713,7 @@ class App extends React.Component<AppProps, AppState> {
     });
   }
 
-  public async componentDidMount() {
+  public async componentDidMountImpl() {
     this.unmounted = false;
     this.api = this.createExcalidrawAPI();
 
@@ -2780,7 +2811,7 @@ class App extends React.Component<AppProps, AppState> {
     this.props.onExcalidrawAPI?.(this.api);
   }
 
-  public componentWillUnmount() {
+  public componentWillUnmountImpl() {
     // we're recreating the api object reference so that the
     // <ExcalidrawAPIContext.Provider/> picks up on it
     this.api = { ...this.api, isDestroyed: true };
@@ -2860,11 +2891,11 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private removeEventListeners() {
+  public removeEventListenersImpl() {
     this.onRemoveEventListenersEmitter.trigger();
   }
 
-  private addEventListeners() {
+  public addEventListenersImpl() {
     // remove first as we can add event listeners multiple times
     this.removeEventListeners();
 
@@ -3126,7 +3157,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   }
 
-  componentDidUpdate(prevProps: AppProps, prevState: AppState) {
+  public componentDidUpdateImpl(prevProps: AppProps, prevState: AppState) {
     const renderOverridesUpdatePending = this.renderOverridesUpdatePending;
     this.renderOverridesUpdatePending = false;
     // Only a requested visual update can skip the document pipeline. Real
@@ -3146,8 +3177,8 @@ class App extends React.Component<AppProps, AppState> {
       this.props.onInitialize?.(this.api);
     }
 
-    this.handleInteractionStateChange(prevProps, prevState);
-    this.handleForcedToolChange(prevProps, prevState);
+    lifecycle.handleInteractionStateChange(this, prevProps, prevState);
+    lifecycle.handleForcedToolChange(this, prevProps, prevState);
 
     this.appStateObserver.flush(prevState);
 
@@ -4152,7 +4183,7 @@ class App extends React.Component<AppProps, AppState> {
    * adds supplied files to existing files in the appState.
    * NOTE if file already exists in editor state, the file data is not updated
    * */
-  public addFiles: ExcalidrawImperativeAPI["addFiles"] = withBatchedUpdates(
+  public addFilesImpl: ExcalidrawImperativeAPI["addFiles"] = withBatchedUpdates(
     (files) => {
       const { addedFiles } = this.addMissingFiles(files);
 
@@ -4162,6 +4193,9 @@ class App extends React.Component<AppProps, AppState> {
       this.addNewImagesToImageCache();
     },
   );
+
+  public addFiles: ExcalidrawImperativeAPI["addFiles"] = (files) =>
+    filesController.addFiles(this, files);
 
   private addMissingFiles = (
     files: BinaryFiles | BinaryFileData[],
@@ -4202,7 +4236,7 @@ class App extends React.Component<AppProps, AppState> {
     return { addedFiles };
   };
 
-  public updateScene = withBatchedUpdates(
+  public updateSceneImpl = withBatchedUpdates(
     <K extends keyof AppState>(sceneData: {
       elements?: SceneData["elements"];
       appState?: Pick<AppState, K> | null;
@@ -4259,7 +4293,7 @@ class App extends React.Component<AppProps, AppState> {
   /**
    * see {@link ExcalidrawImperativeAPI.setElementRenderOverrides} for details
    */
-  public setElementRenderOverrides = (
+  public setElementRenderOverridesImpl = (
     overrides: ElementRenderOverrides | null,
   ) => {
     if (this.unmounted) {
@@ -4301,7 +4335,7 @@ class App extends React.Component<AppProps, AppState> {
     this.setElementRenderOverrides(next.size ? next : null);
   };
 
-  public applyDeltas = (
+  public applyDeltasImpl = (
     deltas: StoreDelta[],
     options?: ApplyToOptions,
   ): [SceneElementsMap, AppState, boolean] => {
@@ -4322,7 +4356,7 @@ class App extends React.Component<AppProps, AppState> {
     );
   };
 
-  public mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
+  public mutateElementImpl = <TElement extends Mutable<ExcalidrawElement>>(
     element: TElement,
     updates: ElementUpdate<TElement>,
     informMutation = true,
@@ -4332,6 +4366,23 @@ class App extends React.Component<AppProps, AppState> {
       isDragging: false,
     });
   };
+
+  public updateScene = <K extends keyof AppState>(sceneData: {
+    elements?: SceneData["elements"];
+    appState?: Pick<AppState, K> | null;
+    collaborators?: SceneData["collaborators"];
+    captureUpdate?: SceneData["captureUpdate"];
+  }) => sceneController.updateScene(this, sceneData);
+  public setElementRenderOverrides = (
+    overrides: ElementRenderOverrides | null,
+  ) => sceneController.setElementRenderOverrides(this, overrides);
+  public applyDeltas = (deltas: StoreDelta[], options?: ApplyToOptions) =>
+    sceneController.applyDeltas(this, deltas, options);
+  public mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
+    element: TElement,
+    updates: ElementUpdate<TElement>,
+    informMutation = true,
+  ) => sceneController.mutateElement(this, element, updates, informMutation);
 
   public triggerRender = (
     /** force always re-renders canvas even if no change */
@@ -11666,7 +11717,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private initializeImage = async (
+  public initializeImageImpl = async (
     placeholderImageElement: ExcalidrawImageElement,
     imageFile: File,
   ) => {
@@ -11879,7 +11930,7 @@ class App extends React.Component<AppProps, AppState> {
 
   /** updates image cache, refreshing updated elements and/or setting status
       to error for images that fail during <img> element creation */
-  private updateImageCache = async (
+  public updateImageCacheImpl = async (
     elements: readonly InitializedExcalidrawImageElement[],
     files = this.files,
   ) => {
@@ -11910,7 +11961,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   /** adds new images to imageCache and re-renders if needed */
-  private addNewImagesToImageCache = async (
+  public addNewImagesToImageCacheImpl = async (
     imageElements: InitializedExcalidrawImageElement[] = getInitializedImageElements(
       this.scene.getNonDeletedElements(),
     ),
@@ -11942,6 +11993,17 @@ class App extends React.Component<AppProps, AppState> {
 
   /** generally you should use `addNewImagesToImageCache()` directly if you need
    *  to render new images. This is just a failsafe  */
+  private initializeImage = (...args: Parameters<App["initializeImageImpl"]>) =>
+    filesController.initializeImage(this, ...args);
+
+  private updateImageCache = (
+    ...args: Parameters<App["updateImageCacheImpl"]>
+  ) => filesController.updateImageCache(this, ...args);
+
+  private addNewImagesToImageCache = (
+    ...args: Parameters<App["addNewImagesToImageCacheImpl"]>
+  ) => filesController.addNewImagesToImageCache(this, ...args);
+
   private scheduleImageRefresh = throttle(() => {
     this.addNewImagesToImageCache();
   }, IMAGE_RENDER_TIMEOUT);
@@ -12065,7 +12127,9 @@ class App extends React.Component<AppProps, AppState> {
     });
   };
 
-  public handleAppOnDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+  public handleAppOnDropImpl = async (
+    event: React.DragEvent<HTMLDivElement>,
+  ) => {
     // NOTE no preventDefault so the host page can handle the drop itself
     if (!this.isInteractionEnabled()) {
       return;
@@ -12195,7 +12259,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  loadFileToCanvas = async (
+  public loadFileToCanvasImpl = async (
     file: File,
     fileHandle: FileSystemFileHandle | null,
   ) => {
@@ -12274,6 +12338,14 @@ class App extends React.Component<AppProps, AppState> {
       this.setState({ isLoading: false, errorMessage: error.message });
     }
   };
+
+  public handleAppOnDrop = (event: React.DragEvent<HTMLDivElement>) =>
+    filesController.handleAppOnDrop(this, event);
+
+  public loadFileToCanvas = (
+    file: File,
+    fileHandle: FileSystemFileHandle | null,
+  ) => filesController.loadFileToCanvas(this, file, fileHandle);
 
   public handleCanvasContextMenu = (
     event: React.MouseEvent<HTMLElement | HTMLCanvasElement>,

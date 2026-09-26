@@ -5,7 +5,12 @@ import { reseed } from "@excalidraw/common";
 
 import { Excalidraw } from "../index";
 import * as StaticScene from "../renderer/staticScene";
-import { render, queryByTestId, unmountComponent } from "../tests/test-utils";
+import {
+  act,
+  render,
+  queryByTestId,
+  unmountComponent,
+} from "../tests/test-utils";
 
 const renderStaticScene = vi.spyOn(StaticScene, "renderStaticScene");
 
@@ -42,5 +47,33 @@ describe("Test <App/>", () => {
         "brave-measure-text-error",
       ),
     ).toMatchSnapshot();
+  });
+
+  it("keeps viewport notification, store commit, and change notification ordering", async () => {
+    const events: string[] = [];
+    const onChange = vi.fn(() => events.push("onChange"));
+    const onScrollChange = vi.fn(() => events.push("onScrollChange"));
+
+    await render(
+      <Excalidraw onChange={onChange} onScrollChange={onScrollChange} />,
+    );
+
+    onChange.mockClear();
+    onScrollChange.mockClear();
+    events.length = 0;
+    const commit = vi.spyOn(window.h.app.store, "commit");
+    commit.mockClear();
+
+    act(() => {
+      window.h.app.api.updateScene({ appState: { scrollX: 42 } });
+    });
+
+    expect(onScrollChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["onScrollChange", "onChange"]);
+    expect(commit.mock.invocationCallOrder[0]).toBeLessThan(
+      onChange.mock.invocationCallOrder[0],
+    );
+    commit.mockRestore();
   });
 });
