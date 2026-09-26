@@ -5,7 +5,7 @@ import { vi } from "vitest";
 
 import { setDateTimeForTests, reseed } from "@excalidraw/common";
 
-import { isInGroup } from "@excalidraw/element";
+import { getElementShapeType, isInGroup } from "@excalidraw/element";
 
 import { isTextElement } from "@excalidraw/element";
 
@@ -18,7 +18,7 @@ import type {
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
 
-import { Excalidraw, getCommonBounds } from "../..";
+import { Excalidraw, getCommonBounds } from "../../index";
 import { actionGroup } from "../../actions";
 import { t } from "../../i18n";
 import * as StaticScene from "../../renderer/staticScene";
@@ -600,7 +600,9 @@ describe("stats for multiple elements", () => {
     API.setElements([...h.elements, frame]);
 
     const text = h.elements.find((el) => el.type === "text");
-    const rectangle = h.elements.find((el) => el.type === "rectangle");
+    const rectangle = h.elements.find(
+      (el) => getElementShapeType(el) === "rectangle",
+    );
 
     API.setAppState({
       selectedElementIds: h.elements.reduce((acc, el) => {

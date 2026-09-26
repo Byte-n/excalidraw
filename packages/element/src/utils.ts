@@ -35,6 +35,7 @@ import type {
 } from "@excalidraw/excalidraw/types";
 
 import { elementCenterPoint, getDiamondPoints } from "./bounds";
+import { getElementShapeType, isCompositeShapeId } from "./compositeShape";
 
 import { generateLinearCollisionShape } from "./shape";
 
@@ -556,7 +557,7 @@ const getDiagonalsForBindableElement = (
 ) => {
   // for rectangles, shrink the diagonals a bit because there's something
   // going on with the focus points around the corners. Ask Mark for details.
-  const OFFSET_PX = element.type === "rectangle" ? 15 : 0;
+  const OFFSET_PX = getElementShapeType(element) === "rectangle" ? 15 : 0;
   const shrinkSegment = (seg: LineSegment<GlobalPoint>) => {
     const v = vectorNormalize(vectorFromPoint(seg[1], seg[0]));
     const offset = vectorScale(v, OFFSET_PX);
@@ -641,46 +642,45 @@ export const getSnapOutlineMidPoint = (
   zoom: AppState["zoom"],
 ) => {
   const center = elementCenterPoint(element, elementsMap);
-  const sideMidpoints =
-    element.type === "diamond"
-      ? getDiamondBaseCorners(element).map((curve) => {
-          const point = bezierEquation(curve, 0.5);
-          const rotatedPoint = pointRotateRads(point, center, element.angle);
+  const sideMidpoints = isCompositeShapeId(element, "diamond")
+    ? getDiamondBaseCorners(element).map((curve) => {
+        const point = bezierEquation(curve, 0.5);
+        const rotatedPoint = pointRotateRads(point, center, element.angle);
 
-          return pointFrom<GlobalPoint>(rotatedPoint[0], rotatedPoint[1]);
-        })
-      : [
-          // RIGHT midpoint
-          pointRotateRads(
-            pointFrom<GlobalPoint>(
-              element.x + element.width,
-              element.y + element.height / 2,
-            ),
-            center,
-            element.angle,
+        return pointFrom<GlobalPoint>(rotatedPoint[0], rotatedPoint[1]);
+      })
+    : [
+        // RIGHT midpoint
+        pointRotateRads(
+          pointFrom<GlobalPoint>(
+            element.x + element.width,
+            element.y + element.height / 2,
           ),
-          // BOTTOM midpoint
-          pointRotateRads(
-            pointFrom<GlobalPoint>(
-              element.x + element.width / 2,
-              element.y + element.height,
-            ),
-            center,
-            element.angle,
+          center,
+          element.angle,
+        ),
+        // BOTTOM midpoint
+        pointRotateRads(
+          pointFrom<GlobalPoint>(
+            element.x + element.width / 2,
+            element.y + element.height,
           ),
-          // LEFT midpoint
-          pointRotateRads(
-            pointFrom<GlobalPoint>(element.x, element.y + element.height / 2),
-            center,
-            element.angle,
-          ),
-          // TOP midpoint
-          pointRotateRads(
-            pointFrom<GlobalPoint>(element.x + element.width / 2, element.y),
-            center,
-            element.angle,
-          ),
-        ];
+          center,
+          element.angle,
+        ),
+        // LEFT midpoint
+        pointRotateRads(
+          pointFrom<GlobalPoint>(element.x, element.y + element.height / 2),
+          center,
+          element.angle,
+        ),
+        // TOP midpoint
+        pointRotateRads(
+          pointFrom<GlobalPoint>(element.x + element.width / 2, element.y),
+          center,
+          element.angle,
+        ),
+      ];
   const candidate = sideMidpoints.find(
     (midpoint) =>
       pointDistance(point, midpoint) <=

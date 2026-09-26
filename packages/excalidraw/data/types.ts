@@ -8,7 +8,6 @@ import type {
   BinaryFiles,
   LibraryItem,
   LibraryItems,
-  LibraryItems_anyVersion,
 } from "../types";
 
 export interface ExportedDataState {
@@ -45,7 +44,7 @@ export interface ImportedDataState {
     >
   > | null;
   scrollToContent?: boolean;
-  libraryItems?: LibraryItems_anyVersion;
+  libraryItems?: LibraryItems;
   files?: BinaryFiles;
 }
 
@@ -57,8 +56,7 @@ export interface ExportedLibraryData {
 }
 
 export interface ImportedLibraryData extends Partial<ExportedLibraryData> {
-  /** @deprecated v1 */
-  library?: LibraryItems;
+  libraryItems: LibraryItems;
 }
 
 export type ExcalidrawLibraryIds = {

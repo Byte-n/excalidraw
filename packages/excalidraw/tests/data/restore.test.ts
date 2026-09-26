@@ -10,6 +10,8 @@ import {
   STICKY_NOTE_MAX_FONT_SIZE,
   DEFAULT_STICKY_NOTE_BG,
   STICKY_NOTE_MIN_FONT_SIZE,
+  EXPORT_DATA_TYPES,
+  VERSIONS,
 } from "@excalidraw/common";
 
 import { newElementWith } from "@excalidraw/element";
@@ -33,10 +35,10 @@ import type { NormalizedZoomValue } from "@excalidraw/excalidraw/types";
 import { API } from "../helpers/api";
 import * as restore from "../../data/restore";
 import { getDefaultAppState } from "../../appState";
-import { serializeAsJSON } from "../../data/json";
+import { isValidExcalidrawData, serializeAsJSON } from "../../data/json";
 
 import type { ImportedDataState } from "../../data/types";
-import type { LibraryItem, LibraryItem_v1, LibraryItems } from "../../types";
+import type { LibraryItem, LibraryItems } from "../../types";
 
 describe("restoreElements", () => {
   const mockSizeHelper = vi.spyOn(sizeHelpers, "isInvisiblySmallElement");
@@ -129,7 +131,7 @@ describe("restoreElements", () => {
     expect(sizeHelpers.isInvisiblySmallElement).toBeCalledTimes(0);
   });
 
-  it("should return empty array when input type is not supported", () => {
+  it("silently drops unsupported element types", () => {
     const dummyNotSupportedElement: any = API.createElement({
       type: "text",
     });
@@ -138,6 +140,26 @@ describe("restoreElements", () => {
     expect(
       restore.restoreElements([dummyNotSupportedElement], null).length,
     ).toBe(0);
+  });
+
+  it("rejects unsupported composite shape schemas", () => {
+    const rectangle = API.createElement({ type: "rectangle" });
+    expect(() =>
+      restore.restoreElements(
+        [{ ...rectangle, shape: { id: "rectangle", schemaVersion: 2 } }] as any,
+        null,
+      ),
+    ).toThrow("Unsupported composite shape data");
+  });
+
+  it("accepts only the current file format version", () => {
+    const data = {
+      type: EXPORT_DATA_TYPES.excalidraw,
+      version: VERSIONS.excalidraw,
+      elements: [API.createElement({ type: "rectangle" })],
+    };
+    expect(isValidExcalidrawData(data)).toBe(true);
+    expect(isValidExcalidrawData({ ...data, version: 2 })).toBe(false);
   });
 
   it("should return empty array when isInvisiblySmallElement is true", () => {
@@ -1551,47 +1573,32 @@ describe("repairing bindings", () => {
   });
 });
 
-describe("restoreLibraryItems creation timestamps", () => {
-  it.each([1, 2])(
-    "accepts v%s input with missing creation metadata",
-    (version) => {
-      const { created, ...legacyElement } = API.createElement({
-        type: "rectangle",
-      });
-      // models library data persisted before `created` existed; the declared
-      // input type is a complete element, restore fills the field at runtime
-      const elements = [
-        legacyElement,
-        API.createElement({ type: "rectangle", created: 123 }),
-        API.createElement({ type: "rectangle", created: null }),
-      ] as unknown as LibraryItem["elements"];
-      const legacyItem: LibraryItem_v1 = elements;
-      const currentItem: LibraryItem = {
-        id: "library-item",
-        status: "unpublished",
-        created: 456,
-        elements,
-      };
-      const imported: ImportedDataState = {
-        libraryItems: version === 1 ? [legacyItem] : [currentItem],
-      };
-
-      const restoredItems: LibraryItems = restore.restoreLibraryItems(
-        imported.libraryItems,
+describe("restoreLibraryItems", () => {
+  it("rejects legacy array items", () => {
+    const element = API.createElement({ type: "rectangle" });
+    expect(() =>
+      restore.restoreLibraryItems(
+        [[element]] as unknown as LibraryItems,
         "unpublished",
-      );
+      ),
+    ).toThrow("Unsupported library item format");
+  });
 
-      expect(restoredItems).toHaveLength(1);
-      expect(
-        restoredItems[0].elements.map((element) => element.created),
-      ).toEqual([null, 123, null]);
-      expect(restoredItems[0].elements.map((element) => element.id)).toEqual(
-        elements.map((element) => element.id),
-      );
-      expect(legacyElement).not.toHaveProperty("created");
-      if (version === 2) {
-        expect(restoredItems[0].created).toBe(456);
-      }
-    },
-  );
+  it("preserves current library item metadata", () => {
+    const element = API.createElement({ type: "rectangle", created: 123 });
+    const item: LibraryItem = {
+      id: "library-item",
+      status: "unpublished",
+      created: 456,
+      elements: [element],
+    };
+    expect(restore.restoreLibraryItems([item], "published")).toEqual([
+      expect.objectContaining({
+        id: item.id,
+        status: item.status,
+        created: item.created,
+        elements: [expect.objectContaining({ id: element.id, created: 123 })],
+      }),
+    ]);
+  });
 });

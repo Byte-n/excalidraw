@@ -28,6 +28,7 @@ import type { AppState } from "@excalidraw/excalidraw/types";
 import type { Mutable } from "@excalidraw/common/utility-types";
 
 import { generateRoughOptions } from "./shape";
+import { getElementShapeType, isCompositeShapeId } from "./compositeShape";
 import { ShapeCache } from "./shape";
 import { LinearElementEditor } from "./linearElementEditor";
 import { getBoundTextElement, getContainerElement } from "./textElement";
@@ -57,6 +58,8 @@ import type {
   ElementsMapOrArray,
   ExcalidrawElement,
   ExcalidrawEllipseElement,
+  ExcalidrawCompositeShapeElement,
+  ExcalidrawRectangleElement,
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
   ExcalidrawRectanguloidElement,
@@ -173,7 +176,7 @@ export class ElementBounds {
       ];
     } else if (isLinearElement(element)) {
       bounds = getLinearElementRotatedBounds(element, cx, cy, elementsMap);
-    } else if (element.type === "diamond") {
+    } else if (getElementShapeType(element) === "diamond") {
       const [x11, y11] = pointRotateRads(
         pointFrom(cx, y1),
         pointFrom(cx, cy),
@@ -199,7 +202,7 @@ export class ElementBounds {
       const maxX = Math.max(x11, x12, x22, x21);
       const maxY = Math.max(y11, y12, y22, y21);
       bounds = [minX, minY, maxX, maxY];
-    } else if (element.type === "ellipse") {
+    } else if (getElementShapeType(element) === "ellipse") {
       const w = (x2 - x1) / 2;
       const h = (y2 - y1) / 2;
       const cos = Math.cos(element.angle);
@@ -357,7 +360,7 @@ export const getElementLineSegments = (
       .flat();
     const rotatedSides = getRotatedSides(sides, center, element.angle);
     return [...rotatedSides, ...cornerSegments];
-  } else if (element.type === "diamond") {
+  } else if (isCompositeShapeId(element, "diamond")) {
     const [sides, corners] = deconstructDiamondElement(element);
     const cornerSegments = corners
       .map((corner) => getSegmentsOnCurve(corner, center, element.angle))
@@ -385,8 +388,8 @@ export const getElementLineSegments = (
       segments.push(lineSegment(points[i], points[i + 1]));
     }
     return segments;
-  } else if (shape.type === "ellipse") {
-    return getSegmentsOnEllipse(element as ExcalidrawEllipseElement);
+  } else if (isCompositeShapeId(element, "ellipse")) {
+    return getSegmentsOnEllipse(element);
   }
 
   const [nw, ne, sw, se, , , w, e] = (
@@ -416,10 +419,12 @@ export const getElementLineSegments = (
 
 const _isRectanguloidElement = (
   element: ExcalidrawElement,
-): element is ExcalidrawRectanguloidElement => {
+): element is
+  | Exclude<ExcalidrawRectanguloidElement, ExcalidrawCompositeShapeElement>
+  | ExcalidrawRectangleElement => {
   return (
     element != null &&
-    (element.type === "rectangle" ||
+    (getElementShapeType(element) === "rectangle" ||
       element.type === "stickynote" ||
       element.type === "image" ||
       element.type === "iframe" ||

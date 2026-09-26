@@ -1,3 +1,5 @@
+import { assertNever } from "@excalidraw/common";
+
 import {
   curve,
   curvePointDistance,
@@ -65,7 +67,6 @@ export const distanceToElement = (
           ),
       );
     case "selection":
-    case "rectangle":
     case "stickynote":
     case "image":
     case "text":
@@ -74,10 +75,25 @@ export const distanceToElement = (
     case "frame":
     case "magicframe":
       return distanceToRectanguloidElement(element, elementsMap, p);
-    case "diamond":
-      return distanceToDiamondElement(element, elementsMap, p);
-    case "ellipse":
-      return distanceToEllipseElement(element, elementsMap, p);
+    case "composite_shape":
+      switch (element.shape.id) {
+        case "rectangle":
+          return distanceToRectanguloidElement(element, elementsMap, p);
+        case "diamond":
+          return distanceToDiamondElement(
+            element as ExcalidrawDiamondElement,
+            elementsMap,
+            p,
+          );
+        case "ellipse":
+          return distanceToEllipseElement(
+            element as ExcalidrawEllipseElement,
+            elementsMap,
+            p,
+          );
+        default:
+          return assertNever(element.shape, "Unsupported composite shape");
+      }
     case "line":
     case "arrow":
       return distanceToLinearOrFreeDraElement(element, elementsMap, p);

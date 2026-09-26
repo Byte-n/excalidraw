@@ -67,7 +67,10 @@ describe("convert element type keeps bound arrows attached", () => {
             nextType: toType,
           });
         });
-        expect(h.elements[0].type).toBe(toType);
+        expect(h.elements[0]).toMatchObject({
+          type: "composite_shape",
+          shape: { id: toType, schemaVersion: 1 },
+        });
 
         const converted = h.elements[0] as ExcalidrawBindableElement;
         const arrowAfter = h.elements[1] as ExcalidrawArrowElement;

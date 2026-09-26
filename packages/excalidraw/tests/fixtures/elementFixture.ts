@@ -35,7 +35,8 @@ const elementBase: Omit<ExcalidrawElement, "type"> = {
 
 export const rectangleFixture: ExcalidrawElement = {
   ...elementBase,
-  type: "rectangle",
+  type: "composite_shape",
+  shape: { id: "rectangle", schemaVersion: 1 },
 };
 export const embeddableFixture: ExcalidrawElement = {
   ...elementBase,
@@ -43,15 +44,18 @@ export const embeddableFixture: ExcalidrawElement = {
 };
 export const ellipseFixture: ExcalidrawElement = {
   ...elementBase,
-  type: "ellipse",
+  type: "composite_shape",
+  shape: { id: "ellipse", schemaVersion: 1 },
 };
 export const diamondFixture: ExcalidrawElement = {
   ...elementBase,
-  type: "diamond",
+  type: "composite_shape",
+  shape: { id: "diamond", schemaVersion: 1 },
 };
 export const rectangleWithLinkFixture: ExcalidrawElement = {
   ...elementBase,
-  type: "rectangle",
+  type: "composite_shape",
+  shape: { id: "rectangle", schemaVersion: 1 },
   link: "excalidraw.com",
 };
 

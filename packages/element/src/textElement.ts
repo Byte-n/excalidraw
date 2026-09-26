@@ -53,6 +53,8 @@ const getTextContainerShape = (container: ExcalidrawElement) =>
     ? container.shape === "pill"
       ? "ellipse"
       : container.shape
+    : container.type === "composite_shape"
+    ? container.shape.id
     : container.type;
 
 export const redrawTextBoundingBox = (
@@ -485,6 +487,7 @@ export const suppportsHorizontalAlign = (
 
 const VALID_CONTAINER_TYPES = new Set([
   "mindmap-node",
+  "composite_shape",
   "rectangle",
   "stickynote",
   "ellipse",

@@ -672,7 +672,10 @@ describe("ui={false}", () => {
     mouse.upAt(150, 60);
 
     expect(h.elements.length).toBe(2);
-    expect(h.elements[1].type).toBe("rectangle");
+    expect(h.elements[1]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "rectangle", schemaVersion: 1 },
+    });
   });
 
   it("right-click sets contextMenu state but renders no menu", () => {

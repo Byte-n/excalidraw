@@ -9,15 +9,14 @@ import type { LocalPoint, Radians } from "@excalidraw/math";
 import type { Bounds } from "@excalidraw/common";
 
 import { isMindmapEdgeElement, isMindmapNodeElement } from "./typeChecks";
+import { baseShapeData } from "./compositeShape";
 
 import type {
   ExcalidrawElement,
   ExcalidrawMindmapEdgeElement,
   ExcalidrawMindmapNodeElement,
   FractionalIndex,
-  ExcalidrawRectangleElement,
-  ExcalidrawDiamondElement,
-  ExcalidrawEllipseElement,
+  ExcalidrawCompositeShapeElement,
   ElementsMap,
   MindmapLayoutDirection,
   MindmapEdgeRouting,
@@ -129,14 +128,10 @@ export const copyMindmapGraphConfig = (
 /** 仅供几何计算复用，不允许把此临时形状写入 Scene。 */
 export const getMindmapNodeGeometry = (
   node: ExcalidrawMindmapNodeElement,
-):
-  | ExcalidrawRectangleElement
-  | ExcalidrawDiamondElement
-  | ExcalidrawEllipseElement => ({
+): ExcalidrawCompositeShapeElement => ({
   ...node,
-  // Clipboard data from older Mindmap versions may not contain `shape`.
-  // Keep rendering total and use the default rectangle in that case.
-  type: node.shape === "pill" ? "rectangle" : node.shape ?? "rectangle",
+  type: "composite_shape",
+  shape: baseShapeData(node.shape === "pill" ? "rectangle" : node.shape),
 });
 
 export const getMindmapEdgePath = (

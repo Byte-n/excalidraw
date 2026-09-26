@@ -1,6 +1,6 @@
 {
   "type": "excalidraw",
-  "version": 2,
+  "version": 3,
   "source": "https://github.com/excalidraw/excalidraw",
   "elements": [
     {
@@ -20,10 +20,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-product-root" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-product-root"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -52,10 +59,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-research" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-research"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -84,10 +98,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-plan" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-plan"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -116,10 +137,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-launch" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-launch"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -148,10 +176,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-interviews" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-interviews"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -180,10 +215,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-competitors" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-competitors"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -212,10 +254,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-prototype" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-prototype"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -244,10 +293,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-team-root" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-team-root"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -276,10 +332,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-frontend" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-frontend"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -308,10 +371,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-backend" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-backend"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -340,10 +410,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-review" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-review"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -372,10 +449,17 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
-      "boundElements": [{ "type": "text", "id": "tx-api" }],
+      "boundElements": [
+        {
+          "type": "text",
+          "id": "tx-api"
+        }
+      ],
       "updated": 1,
       "created": 1,
       "link": null,
@@ -389,7 +473,7 @@
     },
     {
       "id": "regular-note",
-      "type": "rectangle",
+      "type": "composite_shape",
       "x": 120,
       "y": 480,
       "width": 220,
@@ -404,7 +488,9 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "index": null,
       "isDeleted": false,
       "boundElements": null,
@@ -412,7 +498,13 @@
       "created": 1,
       "link": null,
       "locked": false,
-      "customData": { "host": "p01-sample" }
+      "customData": {
+        "host": "p01-sample"
+      },
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "regular-arrow",
@@ -431,7 +523,9 @@
       "opacity": 100,
       "groupIds": [],
       "frameId": null,
-      "roundness": { "type": 2 },
+      "roundness": {
+        "type": 2
+      },
       "index": null,
       "isDeleted": false,
       "boundElements": null,
@@ -439,8 +533,20 @@
       "created": 1,
       "link": null,
       "locked": false,
-      "points": [[0, 0], [260, 0]],
-      "lastCommittedPoint": [260, 0],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          260,
+          0
+        ]
+      ],
+      "lastCommittedPoint": [
+        260,
+        0
+      ],
       "startBinding": null,
       "endBinding": null,
       "startArrowhead": null,

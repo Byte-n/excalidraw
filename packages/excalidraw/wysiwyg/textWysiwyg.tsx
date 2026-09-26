@@ -16,6 +16,7 @@ import { pointFrom, pointRotateRads, type Radians } from "@excalidraw/math";
 
 import {
   getTextFromElements,
+  getElementShapeType,
   originalContainerCache,
   updateBoundElements,
   updateOriginalContainerCache,
@@ -348,7 +349,7 @@ export const textWysiwyg = ({
           if (!isArrowElement(container) && height > maxHeight) {
             const targetContainerHeight = computeContainerDimensionForBoundText(
               height,
-              container.type,
+              getElementShapeType(container),
             );
 
             app.scene.mutateElement(container, {
@@ -365,7 +366,7 @@ export const textWysiwyg = ({
           ) {
             const targetContainerHeight = computeContainerDimensionForBoundText(
               height,
-              container.type,
+              getElementShapeType(container),
             );
             app.scene.mutateElement(container, {
               height: targetContainerHeight,

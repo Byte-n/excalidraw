@@ -34,6 +34,7 @@ import { normalizeText, measureText } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
 
 import { isLineElement } from "./typeChecks";
+import { assertBaseShapeData, baseShapeData } from "./compositeShape";
 
 import type {
   ExcalidrawElement,
@@ -63,10 +64,16 @@ import type {
   MindmapNodeShape,
   MindmapLayoutDirection,
   MindmapEdgeRouting,
+  BaseShapeData,
+  ExcalidrawCompositeShapeElement,
+  ExcalidrawSelectionElement,
 } from "./types";
 
 export type ElementConstructorOpts = MarkOptional<
-  Omit<ExcalidrawGenericElement, "id" | "type" | "isDeleted" | "updated">,
+  Omit<
+    ExcalidrawGenericElement,
+    "id" | "type" | "shape" | "isDeleted" | "updated"
+  >,
   | "width"
   | "height"
   | "angle"
@@ -179,11 +186,28 @@ const _newElementBase = <T extends ExcalidrawElement>(
 };
 
 export const newElement = (
-  opts: {
-    type: ExcalidrawGenericElement["type"];
-  } & ElementConstructorOpts,
-): NonDeleted<ExcalidrawGenericElement> =>
-  _newElementBase<ExcalidrawGenericElement>(opts.type, opts);
+  opts: ElementConstructorOpts &
+    (
+      | { type: BaseShapeData["id"] | "selection" }
+      | { type: "composite_shape"; shape: BaseShapeData }
+    ),
+): NonDeleted<ExcalidrawGenericElement> => {
+  if (opts.type === "selection") {
+    return _newElementBase<ExcalidrawSelectionElement>("selection", opts);
+  }
+  const shape =
+    opts.type === "composite_shape"
+      ? assertBaseShapeData(opts.shape)
+      : baseShapeData(opts.type);
+  return {
+    ..._newElementBase<ExcalidrawCompositeShapeElement>(
+      "composite_shape",
+      opts,
+    ),
+    type: "composite_shape",
+    shape,
+  };
+};
 
 /**
  * Style invariants of a sticky note: never-transparent colors, solid fill.

@@ -4,7 +4,7 @@ import { vi } from "vitest";
 
 import { MIME_TYPES, ORIG_ID } from "@excalidraw/common";
 
-import { getCommonBoundingBox } from "@excalidraw/element";
+import { getCommonBoundingBox, getElementShapeType } from "@excalidraw/element";
 
 import type {
   ExcalidrawGenericElement,
@@ -47,6 +47,32 @@ vi.mock("../data/filesystem.ts", async (importOriginal) => {
     ...module,
     fileOpen: vi.fn(() => mockLibraryFilePromise),
   };
+});
+
+describe("library format", () => {
+  it("rejects old versions and the legacy library field", () => {
+    const element = API.createElement({ type: "rectangle" });
+    const item = {
+      id: "item",
+      status: "unpublished",
+      created: 1,
+      elements: [element],
+    };
+    expect(() =>
+      parseLibraryJSON(
+        JSON.stringify({
+          type: "excalidrawlib",
+          version: 2,
+          libraryItems: [item],
+        }),
+      ),
+    ).toThrow("Invalid library");
+    expect(() =>
+      parseLibraryJSON(
+        JSON.stringify({ type: "excalidrawlib", version: 3, library: [item] }),
+      ),
+    ).toThrow("Invalid library");
+  });
 });
 
 describe("library items inserting", () => {
@@ -110,13 +136,16 @@ describe("library items inserting", () => {
     ]);
 
     await waitFor(() => {
-      const rectangle = h.elements.find((e) => e.type === "rectangle")!;
+      const rectangle = h.elements.find(
+        (e) => getElementShapeType(e) === "rectangle",
+      )!;
       const text = h.elements.find((e) => e.type === "text")!;
       const arrow = h.elements.find((e) => e.type === "arrow")!;
       expect(h.elements).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            type: "rectangle",
+            type: "composite_shape",
+            shape: { id: "rectangle", schemaVersion: 1 },
             id: expect.not.stringMatching("rectangle1"),
             boundElements: expect.arrayContaining([
               { type: "text", id: text.id },

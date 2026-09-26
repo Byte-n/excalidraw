@@ -4,6 +4,7 @@ import { API } from "@excalidraw/excalidraw/tests/helpers/api";
 
 import type { LocalPoint } from "@excalidraw/math";
 
+import { baseShapeData, type BaseShapeId } from "../src/compositeShape";
 import {
   elementsOverlappingBBox,
   getElementAbsoluteCoords,
@@ -28,7 +29,10 @@ const _ce = ({
   t?: string;
 }) =>
   ({
-    type: t || "rectangle",
+    type: t === "line" ? "line" : "composite_shape",
+    ...(t === "line"
+      ? {}
+      : { shape: baseShapeData((t || "rectangle") as BaseShapeId) }),
     strokeColor: "#000",
     backgroundColor: "#000",
     fillStyle: "solid",

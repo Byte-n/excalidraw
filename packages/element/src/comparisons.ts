@@ -1,6 +1,7 @@
 import type { ElementOrToolType } from "@excalidraw/excalidraw/types";
 
 export const hasBackground = (type: ElementOrToolType) =>
+  type === "composite_shape" ||
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "stickynote" ||
@@ -18,6 +19,7 @@ export const hasFillStyle = (type: ElementOrToolType) =>
   hasBackground(type) && type !== "stickynote";
 
 export const hasStrokeColor = (type: ElementOrToolType) =>
+  type === "composite_shape" ||
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "stickynote" ||
@@ -31,6 +33,7 @@ export const hasStrokeColor = (type: ElementOrToolType) =>
   type === "autoshape";
 
 export const hasStrokeWidth = (type: ElementOrToolType) =>
+  type === "composite_shape" ||
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "iframe" ||
@@ -43,6 +46,7 @@ export const hasStrokeWidth = (type: ElementOrToolType) =>
   type === "autoshape";
 
 export const hasStrokeStyle = (type: ElementOrToolType) =>
+  type === "composite_shape" ||
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "iframe" ||

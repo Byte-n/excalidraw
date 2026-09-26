@@ -160,6 +160,16 @@ describe("collaboration", () => {
 
     const rect1 = API.createElement({ ...rect1Props });
     const rect2 = API.createElement({ ...rect2Props });
+    const expectedRect1 = {
+      ...rect1Props,
+      type: "composite_shape",
+      shape: { id: "rectangle", schemaVersion: 1 },
+    };
+    const expectedRect2 = {
+      ...rect2Props,
+      type: "composite_shape",
+      shape: { id: "rectangle", schemaVersion: 1 },
+    };
 
     API.updateScene({
       elements: syncInvalidIndices([rect1, rect2]),
@@ -177,12 +187,12 @@ describe("collaboration", () => {
     await waitFor(() => {
       expect(API.getUndoStack().length).toBe(2);
       expect(API.getSnapshot()).toEqual([
-        expect.objectContaining(rect1Props),
-        expect.objectContaining({ ...rect2Props, isDeleted: true }),
+        expect.objectContaining(expectedRect1),
+        expect.objectContaining({ ...expectedRect2, isDeleted: true }),
       ]);
       expect(h.elements).toEqual([
-        expect.objectContaining(rect1Props),
-        expect.objectContaining({ ...rect2Props, isDeleted: true }),
+        expect.objectContaining(expectedRect1),
+        expect.objectContaining({ ...expectedRect2, isDeleted: true }),
       ]);
     });
 
@@ -193,10 +203,10 @@ describe("collaboration", () => {
       expect(API.getUndoStack().length).toBe(2);
       // we never delete from the local snapshot as it is used for correct diff calculation
       expect(API.getSnapshot()).toEqual([
-        expect.objectContaining(rect1Props),
-        expect.objectContaining({ ...rect2Props, isDeleted: true }),
+        expect.objectContaining(expectedRect1),
+        expect.objectContaining({ ...expectedRect2, isDeleted: true }),
       ]);
-      expect(h.elements).toEqual([expect.objectContaining(rect1Props)]);
+      expect(h.elements).toEqual([expect.objectContaining(expectedRect1)]);
     });
 
     const undoAction = createUndoAction(h.history);
@@ -207,12 +217,12 @@ describe("collaboration", () => {
       expect(API.getUndoStack().length).toBe(1);
       expect(API.getRedoStack().length).toBe(1);
       expect(API.getSnapshot()).toEqual([
-        expect.objectContaining(rect1Props),
-        expect.objectContaining({ ...rect2Props, isDeleted: false }),
+        expect.objectContaining(expectedRect1),
+        expect.objectContaining({ ...expectedRect2, isDeleted: false }),
       ]);
       expect(h.elements).toEqual([
-        expect.objectContaining(rect1Props),
-        expect.objectContaining({ ...rect2Props, isDeleted: false }),
+        expect.objectContaining(expectedRect1),
+        expect.objectContaining({ ...expectedRect2, isDeleted: false }),
       ]);
     });
 
@@ -226,10 +236,10 @@ describe("collaboration", () => {
       expect(API.getUndoStack().length).toBe(1);
       expect(API.getRedoStack().length).toBe(1);
       expect(API.getSnapshot()).toEqual([
-        expect.objectContaining(rect1Props),
-        expect.objectContaining({ ...rect2Props, isDeleted: true }),
+        expect.objectContaining(expectedRect1),
+        expect.objectContaining({ ...expectedRect2, isDeleted: true }),
       ]);
-      expect(h.elements).toEqual([expect.objectContaining(rect1Props)]);
+      expect(h.elements).toEqual([expect.objectContaining(expectedRect1)]);
     });
 
     const redoAction = createRedoAction(h.history);
@@ -240,12 +250,12 @@ describe("collaboration", () => {
       expect(API.getUndoStack().length).toBe(2);
       expect(API.getRedoStack().length).toBe(0);
       expect(API.getSnapshot()).toEqual([
-        expect.objectContaining(rect1Props),
-        expect.objectContaining({ ...rect2Props, isDeleted: true }),
+        expect.objectContaining(expectedRect1),
+        expect.objectContaining({ ...expectedRect2, isDeleted: true }),
       ]);
       expect(h.elements).toEqual([
-        expect.objectContaining(rect1Props),
-        expect.objectContaining({ ...rect2Props, isDeleted: true }),
+        expect.objectContaining(expectedRect1),
+        expect.objectContaining({ ...expectedRect2, isDeleted: true }),
       ]);
     });
   });

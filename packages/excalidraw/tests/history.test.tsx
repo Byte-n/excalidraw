@@ -12,6 +12,7 @@ import { newElementWith } from "@excalidraw/element";
 
 import {
   EXPORT_DATA_TYPES,
+  VERSIONS,
   MIME_TYPES,
   ORIG_ID,
   KEYS,
@@ -576,6 +577,7 @@ describe("history", () => {
             [
               JSON.stringify({
                 type: EXPORT_DATA_TYPES.excalidraw,
+                version: VERSIONS.excalidraw,
                 appState: {
                   ...getDefaultAppState(),
                   viewBackgroundColor: "#000",
@@ -3262,6 +3264,11 @@ describe("history", () => {
         type: "rectangle",
         strokeColor: blue,
       } as const;
+      const expectedRectProps = {
+        ...rectProps,
+        type: "composite_shape",
+        shape: { id: "rectangle", schemaVersion: 1 },
+      };
 
       // Simulate remote update
       const rect = API.createElement({ ...rectProps });
@@ -3285,7 +3292,7 @@ describe("history", () => {
           type: "freedraw",
           isDeleted: true,
         }),
-        expect.objectContaining(rectProps),
+        expect.objectContaining(expectedRectProps),
       ]);
 
       Keyboard.redo();
@@ -3297,7 +3304,7 @@ describe("history", () => {
           type: "freedraw",
           isDeleted: false,
         }),
-        expect.objectContaining(rectProps),
+        expect.objectContaining(expectedRectProps),
       ]);
     });
 
@@ -3315,6 +3322,11 @@ describe("history", () => {
         type: "rectangle",
         strokeColor: blue,
       } as const;
+      const expectedRect3Props = {
+        ...rect3Props,
+        type: "composite_shape",
+        shape: { id: "rectangle", schemaVersion: 1 },
+      };
 
       const rect3 = API.createElement({ ...rect3Props });
 
@@ -3338,7 +3350,7 @@ describe("history", () => {
           width: 90,
           height: 90,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
 
       Keyboard.undo();
@@ -3349,7 +3361,7 @@ describe("history", () => {
           ...props1,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
 
       Keyboard.undo();
@@ -3360,7 +3372,7 @@ describe("history", () => {
           ...props1,
           isDeleted: true,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
 
       Keyboard.redo();
@@ -3371,7 +3383,7 @@ describe("history", () => {
           ...props1,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
 
       Keyboard.redo();
@@ -3386,7 +3398,7 @@ describe("history", () => {
           width: 90,
           height: 90,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
     });
 
@@ -3405,6 +3417,11 @@ describe("history", () => {
         type: "rectangle",
         strokeColor: blue,
       } as const;
+      const expectedRect3Props = {
+        ...rect3Props,
+        type: "composite_shape",
+        shape: { id: "rectangle", schemaVersion: 1 },
+      };
 
       const rect3 = API.createElement({ ...rect3Props });
 
@@ -3433,7 +3450,7 @@ describe("history", () => {
           y: 110,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
 
       Keyboard.undo();
@@ -3451,7 +3468,7 @@ describe("history", () => {
           y: 30,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
 
       Keyboard.undo();
@@ -3475,7 +3492,7 @@ describe("history", () => {
           y: 30,
           isDeleted: true,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
 
       Keyboard.undo();
@@ -3493,7 +3510,7 @@ describe("history", () => {
           y: 30,
           isDeleted: true,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
 
       Keyboard.redo();
@@ -3511,7 +3528,7 @@ describe("history", () => {
           y: 30,
           isDeleted: true,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
 
       Keyboard.redo();
@@ -3535,7 +3552,7 @@ describe("history", () => {
           y: 30,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
 
       Keyboard.redo();
@@ -3555,7 +3572,7 @@ describe("history", () => {
           y: 110,
           isDeleted: false,
         }),
-        expect.objectContaining(rect3Props),
+        expect.objectContaining(expectedRect3Props),
       ]);
     });
 
@@ -3570,6 +3587,11 @@ describe("history", () => {
         y: 10,
         angle: 0,
       } as const;
+      const expectedContainerProps = {
+        ...containerProps,
+        type: "composite_shape",
+        shape: { id: "rectangle", schemaVersion: 1 },
+      };
 
       const textProps = {
         type: "text",
@@ -3906,7 +3928,7 @@ describe("history", () => {
           expect(API.getRedoStack().length).toBe(1);
           expect(h.elements).toEqual([
             expect.objectContaining({
-              ...containerProps,
+              ...expectedContainerProps,
               id: container.id,
               // binding from deleted to non deleted is correct!
               // so that we could restore the bindings on history actions (subsequent redo in this case)
@@ -3927,7 +3949,7 @@ describe("history", () => {
           expect(API.getRedoStack().length).toBe(0);
           expect(h.elements).toEqual([
             expect.objectContaining({
-              ...containerProps,
+              ...expectedContainerProps,
               id: container.id,
               boundElements: [{ id: text.id, type: "text" }],
               isDeleted: false,
@@ -3967,7 +3989,7 @@ describe("history", () => {
           expect(API.getRedoStack().length).toBe(1);
           expect(h.elements).toEqual([
             expect.objectContaining({
-              ...containerProps,
+              ...expectedContainerProps,
               id: container.id,
               // we trigged unbind - bindings from non deleted to deleted cannot exist!
               boundElements: [],
@@ -3987,7 +4009,7 @@ describe("history", () => {
           expect(API.getRedoStack().length).toBe(0);
           expect(h.elements).toEqual([
             expect.objectContaining({
-              ...containerProps,
+              ...expectedContainerProps,
               id: container.id,
               // we triggered rebind!
               boundElements: [{ id: text.id, type: "text" }],
@@ -4363,7 +4385,7 @@ describe("history", () => {
 
         expect(h.elements).toEqual([
           expect.objectContaining({
-            ...containerProps,
+            ...expectedContainerProps,
             id: container.id,
             boundElements: [{ id: text.id, type: "text" }],
             isDeleted: false,
@@ -4381,7 +4403,7 @@ describe("history", () => {
         expect(API.getRedoStack().length).toBe(0);
         expect(h.elements).toEqual([
           expect.objectContaining({
-            ...containerProps,
+            ...expectedContainerProps,
             x: 200,
             y: 200,
             angle: 90,
@@ -4407,7 +4429,7 @@ describe("history", () => {
         // both elements got redrawn!
         expect(h.elements).toEqual([
           expect.objectContaining({
-            ...containerProps,
+            ...expectedContainerProps,
             id: container.id,
             boundElements: [{ id: text.id, type: "text" }],
             isDeleted: false,
@@ -4426,7 +4448,7 @@ describe("history", () => {
         // both elements got redrawn!
         expect(h.elements).toEqual([
           expect.objectContaining({
-            ...containerProps,
+            ...expectedContainerProps,
             x: 200,
             y: 200,
             angle: 90,
@@ -4485,7 +4507,7 @@ describe("history", () => {
         expect(API.getRedoStack().length).toBe(1);
         expect(h.elements).toEqual([
           expect.objectContaining({
-            ...containerProps,
+            ...expectedContainerProps,
             id: container.id,
             boundElements: [{ id: text.id, type: "text" }],
             isDeleted: false,
@@ -4503,7 +4525,7 @@ describe("history", () => {
         expect(API.getRedoStack().length).toBe(0);
         expect(h.elements).toEqual([
           expect.objectContaining({
-            ...containerProps,
+            ...expectedContainerProps,
             id: container.id,
             boundElements: [{ id: text.id, type: "text" }],
             isDeleted: false,
@@ -4523,7 +4545,7 @@ describe("history", () => {
         // both elements got redrawn!
         expect(h.elements).toEqual([
           expect.objectContaining({
-            ...containerProps,
+            ...expectedContainerProps,
             id: container.id,
             boundElements: [{ id: text.id, type: "text" }],
             isDeleted: false,

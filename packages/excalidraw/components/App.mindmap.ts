@@ -13,6 +13,7 @@ import {
   CaptureUpdateAction,
   computeBoundTextPosition,
   getCommonBounds,
+  getElementShapeType,
   computeContainerDimensionForBoundText,
   getBoundTextMaxHeight,
   getBoundTextMaxWidth,
@@ -600,9 +601,9 @@ export class AppMindmap {
       .filter(
         (element) =>
           isMindmapNodeElement(element) ||
-          element.type === "rectangle" ||
-          element.type === "ellipse" ||
-          element.type === "diamond",
+          getElementShapeType(element) === "rectangle" ||
+          getElementShapeType(element) === "ellipse" ||
+          getElementShapeType(element) === "diamond",
       )
       .forEach((element) => {
         context.fillStyle = element.backgroundColor;

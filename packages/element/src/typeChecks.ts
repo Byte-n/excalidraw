@@ -6,6 +6,8 @@ import type { ElementOrToolType } from "@excalidraw/excalidraw/types";
 
 import type { MarkNonNullable } from "@excalidraw/common/utility-types";
 
+import { assertBaseShapeData, getElementShapeType } from "./compositeShape";
+
 import type {
   ExcalidrawElement,
   ExcalidrawTextElement,
@@ -200,11 +202,9 @@ export const isBindableElement = <T extends ExcalidrawElement>(
   return (
     element != null &&
     (!element.locked || includeLocked === true) &&
-    (element.type === "rectangle" ||
+    (element.type === "composite_shape" ||
       element.type === "stickynote" ||
       element.type === "mindmap-node" ||
-      element.type === "diamond" ||
-      element.type === "ellipse" ||
       element.type === "image" ||
       element.type === "iframe" ||
       element.type === "embeddable" ||
@@ -219,9 +219,8 @@ export const isRectanguloidElement = <T extends ExcalidrawElement>(
 ): element is T & ExcalidrawBindableElement => {
   return (
     element != null &&
-    (element.type === "rectangle" ||
+    ((element.type === "composite_shape" && element.shape.id !== "ellipse") ||
       element.type === "stickynote" ||
-      element.type === "diamond" ||
       element.type === "image" ||
       element.type === "iframe" ||
       element.type === "embeddable" ||
@@ -238,7 +237,7 @@ export const isRectangularElement = <T extends ExcalidrawElement>(
 ): element is T & ExcalidrawBindableElement => {
   return (
     element != null &&
-    (element.type === "rectangle" ||
+    ((element.type === "composite_shape" && element.shape.id === "rectangle") ||
       element.type === "stickynote" ||
       element.type === "image" ||
       element.type === "text" ||
@@ -257,11 +256,9 @@ export const isTextBindableContainer = <T extends ExcalidrawElement>(
   return (
     element != null &&
     (!element.locked || includeLocked === true) &&
-    (element.type === "rectangle" ||
+    (element.type === "composite_shape" ||
       element.type === "stickynote" ||
       element.type === "mindmap-node" ||
-      element.type === "diamond" ||
-      element.type === "ellipse" ||
       isArrowElement(element))
   );
 };
@@ -274,15 +271,15 @@ export const isExcalidrawElement = (
     return false;
   }
   switch (type) {
+    case "composite_shape":
+      assertBaseShapeData(element.shape);
+      return true;
     case "text":
-    case "diamond":
-    case "rectangle":
     case "stickynote":
     case "mindmap-node":
     case "mindmap-edge":
     case "iframe":
     case "embeddable":
-    case "ellipse":
     case "arrow":
     case "freedraw":
     case "line":
@@ -302,12 +299,7 @@ export const isExcalidrawElement = (
 export const isFlowchartNodeElement = <T extends ExcalidrawElement>(
   element: T,
 ): element is T & ExcalidrawFlowchartNodeElement => {
-  return (
-    element.type === "rectangle" ||
-    element.type === "stickynote" ||
-    element.type === "ellipse" ||
-    element.type === "diamond"
-  );
+  return element.type === "composite_shape" || element.type === "stickynote";
 };
 
 export const hasBoundTextElement = <T extends ExcalidrawElement>(
@@ -356,13 +348,13 @@ export const canApplyRoundnessTypeToElement = (
       // if legacy roundness, it can be applied to elements that currently
       // use adaptive radius
       roundnessType === ROUNDNESS.LEGACY) &&
-    isUsingAdaptiveRadius(element.type)
+    isUsingAdaptiveRadius(getElementShapeType(element))
   ) {
     return true;
   }
   if (
     roundnessType === ROUNDNESS.PROPORTIONAL_RADIUS &&
-    isUsingProportionalRadius(element.type)
+    isUsingProportionalRadius(getElementShapeType(element))
   ) {
     return true;
   }
@@ -373,13 +365,13 @@ export const canApplyRoundnessTypeToElement = (
 export const getDefaultRoundnessTypeForElement = (
   element: ExcalidrawElement,
 ) => {
-  if (isUsingProportionalRadius(element.type)) {
+  if (isUsingProportionalRadius(getElementShapeType(element))) {
     return {
       type: ROUNDNESS.PROPORTIONAL_RADIUS,
     };
   }
 
-  if (isUsingAdaptiveRadius(element.type)) {
+  if (isUsingAdaptiveRadius(getElementShapeType(element))) {
     return {
       type: ROUNDNESS.ADAPTIVE_RADIUS,
     };
@@ -428,6 +420,7 @@ export const canBecomePolygon = (
 
 export const isEligibleFrameChildType = (type: ElementOrToolType) => {
   switch (type) {
+    case "composite_shape":
     case "rectangle":
     case "stickynote":
     case "diamond":

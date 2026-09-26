@@ -57,6 +57,21 @@ describe("parseClipboard()", () => {
     expect(clipboardData.elements).toEqual([rect]);
   });
 
+  it("passes old shape elements through for restoration", async () => {
+    const rect = API.createElement({ type: "rectangle" });
+    const oldRect = { ...rect, type: "rectangle", shape: undefined };
+    const json = JSON.stringify({
+      type: "excalidraw/clipboard",
+      elements: [oldRect],
+    });
+    const clipboardData = await parseClipboard(
+      await parseDataTransferEvent(
+        createPasteEvent({ types: { "text/plain": json } }),
+      ),
+    );
+    expect(clipboardData.elements).toEqual([oldRect]);
+  });
+
   it("should parse valid excalidraw JSON if inside text/html", async () => {
     const rect = API.createElement({ type: "rectangle" });
 

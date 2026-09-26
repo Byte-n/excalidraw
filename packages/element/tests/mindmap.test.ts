@@ -162,8 +162,8 @@ describe("mindmap 正式元素模型", () => {
     expect(root).toMatchObject({ role: "root", parentId: null, order: null });
     const ordinaryWithExtraFields = {
       ...rectangle,
-      shape: "pill",
       graphId: "graph",
+      collapsed: true,
     };
     expect(getCornerRadius(40, ordinaryWithExtraFields)).toBe(0);
     expect(

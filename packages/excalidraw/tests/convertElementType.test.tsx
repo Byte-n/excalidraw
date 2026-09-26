@@ -37,7 +37,10 @@ describe("convert element type", () => {
       });
     });
 
-    expect(h.elements[0].type).toBe("diamond");
+    expect(h.elements[0]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "diamond", schemaVersion: 1 },
+    });
     expect(h.elements[0].roundness?.type).toBe(ROUNDNESS.PROPORTIONAL_RADIUS);
 
     act(() => {
@@ -47,7 +50,10 @@ describe("convert element type", () => {
       });
     });
 
-    expect(h.elements[0].type).toBe("rectangle");
+    expect(h.elements[0]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "rectangle", schemaVersion: 1 },
+    });
     expect(h.elements[0].roundness?.type).toBe(ROUNDNESS.ADAPTIVE_RADIUS);
   });
 
@@ -106,8 +112,14 @@ describe("convert element type", () => {
     expect(h.app.scene.getNonDeletedElements().some(isMindmapEdgeElement)).toBe(
       false,
     );
-    expect(h.app.scene.getNonDeletedElement("root")?.type).toBe("rectangle");
-    expect(h.app.scene.getNonDeletedElement("child")?.type).toBe("rectangle");
+    expect(h.app.scene.getNonDeletedElement("root")).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "rectangle", schemaVersion: 1 },
+    });
+    expect(h.app.scene.getNonDeletedElement("child")).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "rectangle", schemaVersion: 1 },
+    });
     expect(h.app.scene.getNonDeletedElement("edge")?.type).toBe("line");
     const rootText = h.app.scene.getNonDeletedElement("root-text");
     expect(isTextElement(rootText) && rootText.containerId).toBe("root");
@@ -177,7 +189,10 @@ describe("convert element type", () => {
       });
     });
 
-    expect(h.app.scene.getNonDeletedElement("branch")?.type).toBe("ellipse");
+    expect(h.app.scene.getNonDeletedElement("branch")).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "ellipse", schemaVersion: 1 },
+    });
     const promotedLeaf = h.app.scene.getNonDeletedElement("leaf");
     expect(isMindmapNodeElement(promotedLeaf) && promotedLeaf.parentId).toBe(
       "root",

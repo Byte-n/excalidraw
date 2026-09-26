@@ -10,6 +10,7 @@ import {
 } from "@excalidraw/common";
 import { isNonDeletedElement } from "@excalidraw/element";
 import { isFrameLikeElement } from "@excalidraw/element";
+import { isExcalidrawElement } from "@excalidraw/element";
 import { getElementsInGroup } from "@excalidraw/element";
 
 import {
@@ -289,6 +290,14 @@ export class Scene {
     // we do trust the insertion order on the map, though maybe we shouldn't and should prefer order defined by fractional indices
     const _nextElements = toArray(nextElements);
     const nextFrameLikes: ExcalidrawFrameLikeElement[] = [];
+
+    for (const element of _nextElements) {
+      if (!isExcalidrawElement(element)) {
+        throw new Error(
+          `Unsupported element type: ${(element as { type: string }).type}`,
+        );
+      }
+    }
 
     if (!options?.skipValidation) {
       validateIndicesThrottled(_nextElements);

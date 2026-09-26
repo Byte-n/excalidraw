@@ -47,6 +47,7 @@ import {
   buildMindmapGraphIndex,
   layoutMindmap,
   computeBoundTextPosition,
+  assertBaseShapeData,
 } from "@excalidraw/element";
 import { normalizeFixedPoint } from "@excalidraw/element";
 import {
@@ -110,7 +111,7 @@ import type {
   StrokeRoundness,
 } from "@excalidraw/element/types";
 
-import type { MarkOptional, Mutable } from "@excalidraw/common/utility-types";
+import type { Mutable } from "@excalidraw/common/utility-types";
 
 import { getDefaultAppState } from "../appState";
 
@@ -124,6 +125,7 @@ import type {
   AppState,
   BinaryFiles,
   LibraryItem,
+  LibraryItems,
   NormalizedZoomValue,
 } from "../types";
 import type { ImportedDataState, LegacyAppState } from "./types";
@@ -786,9 +788,9 @@ export const restoreElement = (
     }
 
     // generic elements
-    case "ellipse":
-    case "rectangle":
-    case "diamond":
+    case "composite_shape":
+      assertBaseShapeData(element.shape);
+      return restoreElementWithProperties(element, { shape: element.shape });
     case "iframe":
     case "embeddable":
       return restoreElementWithProperties(element, {});
@@ -807,11 +809,11 @@ export const restoreElement = (
         name: element.name ?? null,
       });
 
-    // Don't use default case so as to catch a missing an element type case.
-    // We also don't want to throw, but instead return void so we filter
-    // out these unsupported elements from the restored array.
+    // Keep this exhaustive so unsupported persisted element types fail clearly.
   }
-  return null;
+  throw new Error(
+    `Unsupported element type: ${(element as ExcalidrawElement).type}`,
+  );
 };
 
 /**
@@ -1074,6 +1076,9 @@ export const restoreElements = <T extends ExcalidrawElement>(
       // and causing issues if retained
       if (element.type === "selection") {
         return elements;
+      }
+      if (element.type === "composite_shape") {
+        assertBaseShapeData(element.shape);
       }
       let migratedElement: ExcalidrawElement | null;
       try {
@@ -1464,36 +1469,17 @@ const restoreLibraryItem = (libraryItem: LibraryItem): LibraryItem | null => {
 };
 
 export const restoreLibraryItems = (
-  libraryItems: ImportedDataState["libraryItems"] = [],
+  libraryItems: LibraryItems = [],
   defaultStatus: LibraryItem["status"],
 ) => {
   const restoredItems: LibraryItem[] = [];
   for (const item of libraryItems) {
-    // migrate older libraries
     if (Array.isArray(item)) {
-      const restoredItem = restoreLibraryItem({
-        status: defaultStatus,
-        elements: item,
-        id: randomId(),
-        created: Date.now(),
-      });
-      if (restoredItem) {
-        restoredItems.push(restoredItem);
-      }
-    } else {
-      const _item = item as MarkOptional<
-        LibraryItem,
-        "id" | "status" | "created"
-      >;
-      const restoredItem = restoreLibraryItem({
-        ..._item,
-        id: _item.id || randomId(),
-        status: _item.status || defaultStatus,
-        created: _item.created || Date.now(),
-      });
-      if (restoredItem) {
-        restoredItems.push(restoredItem);
-      }
+      throw new Error("Unsupported library item format");
+    }
+    const restoredItem = restoreLibraryItem(item);
+    if (restoredItem) {
+      restoredItems.push(restoredItem);
     }
   }
   return restoredItems;

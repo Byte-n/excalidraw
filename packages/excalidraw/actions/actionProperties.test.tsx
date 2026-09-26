@@ -1,4 +1,5 @@
 import { fireEvent, queryByTestId } from "@testing-library/react";
+import { getElementShapeType } from "@excalidraw/element";
 
 import {
   COLOR_PALETTE,
@@ -190,7 +191,7 @@ describe("element locking", () => {
 
       const selectedElements = API.getSelectedElements();
       const selectedRect = selectedElements.find(
-        (element) => element.type === "rectangle",
+        (element) => getElementShapeType(element) === "rectangle",
       );
       const selectedFreedraw = selectedElements.find(
         (element) => element.type === "freedraw",

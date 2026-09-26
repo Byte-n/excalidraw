@@ -26,6 +26,8 @@ import {
   deconstructDiamondElement,
   deconstructRectanguloidElement,
   elementCenterPoint,
+  getElementShapeType,
+  isCompositeShapeId,
   getDiamondBaseCorners,
   FOCUS_POINT_SIZE,
   getOmitSidesForEditorInterface,
@@ -71,6 +73,7 @@ import type {
   ElementsMap,
   ExcalidrawArrowElement,
   ExcalidrawBindableElement,
+  ExcalidrawDiamondElement,
   ExcalidrawElement,
   ExcalidrawFrameLikeElement,
   ExcalidrawImageElement,
@@ -373,7 +376,7 @@ const renderBindingHighlightForBindableElement_simple = (
         Math.max(0.25, appState.zoom.value);
       context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, 1)`;
 
-      switch (suggestedBinding.element.type) {
+      switch (getElementShapeType(suggestedBinding.element)) {
         case "ellipse":
           context.beginPath();
           context.ellipse(
@@ -391,7 +394,7 @@ const renderBindingHighlightForBindableElement_simple = (
         case "diamond":
           {
             const [segments, curves] = deconstructDiamondElement(
-              suggestedBinding.element,
+              suggestedBinding.element as ExcalidrawDiamondElement,
             );
 
             // Draw each line segment individually
@@ -510,7 +513,7 @@ const renderBindingHighlightForBindableElement_simple = (
       const center = elementCenterPoint(suggestedBinding.element, elementsMap);
 
       let midpoints: GlobalPoint[];
-      if (suggestedBinding.element.type === "diamond") {
+      if (isCompositeShapeId(suggestedBinding.element, "diamond")) {
         const center = elementCenterPoint(
           suggestedBinding.element,
           elementsMap,
@@ -710,7 +713,7 @@ const renderBindingHighlightForBindableElement_complex = (
         opacity / 2
       })`;
 
-      switch (element.type) {
+      switch (getElementShapeType(element)) {
         case "ellipse":
           context.beginPath();
           context.ellipse(
@@ -728,7 +731,7 @@ const renderBindingHighlightForBindableElement_complex = (
         case "diamond":
           {
             const [segments, curves] = deconstructDiamondElement(
-              element,
+              element as ExcalidrawDiamondElement,
               offset,
             );
 
@@ -885,7 +888,7 @@ const renderBindingHighlightForBindableElement_complex = (
       const cutoutRadius = midpointRadius + cutoutPadding;
 
       let midpoints;
-      if (element.type === "diamond") {
+      if (isCompositeShapeId(element, "diamond")) {
         const [, curves] = deconstructDiamondElement(element);
         const center = elementCenterPoint(element, allElementsMap);
 

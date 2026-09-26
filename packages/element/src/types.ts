@@ -90,9 +90,21 @@ export type ExcalidrawSelectionElement = _ExcalidrawElementBase & {
   type: "selection";
 };
 
-export type ExcalidrawRectangleElement = _ExcalidrawElementBase & {
-  type: "rectangle";
-};
+export type BaseShapeData =
+  | Readonly<{ id: "rectangle"; schemaVersion: 1 }>
+  | Readonly<{ id: "diamond"; schemaVersion: 1 }>
+  | Readonly<{ id: "ellipse"; schemaVersion: 1 }>;
+
+export type ExcalidrawCompositeShapeElement = _ExcalidrawElementBase &
+  Readonly<{
+    type: "composite_shape";
+    shape: BaseShapeData;
+  }>;
+
+export type ExcalidrawRectangleElement = Merge<
+  ExcalidrawCompositeShapeElement,
+  { shape: Extract<BaseShapeData, { id: "rectangle" }> }
+>;
 
 export type ExcalidrawStickyNoteElement = _ExcalidrawElementBase &
   Readonly<{
@@ -147,13 +159,15 @@ export type ExcalidrawMindmapEdgeElement = _ExcalidrawElementBase &
     routing: "orthogonal" | "curved";
   }>;
 
-export type ExcalidrawDiamondElement = _ExcalidrawElementBase & {
-  type: "diamond";
-};
+export type ExcalidrawDiamondElement = Merge<
+  ExcalidrawCompositeShapeElement,
+  { shape: Extract<BaseShapeData, { id: "diamond" }> }
+>;
 
-export type ExcalidrawEllipseElement = _ExcalidrawElementBase & {
-  type: "ellipse";
-};
+export type ExcalidrawEllipseElement = Merge<
+  ExcalidrawCompositeShapeElement,
+  { shape: Extract<BaseShapeData, { id: "ellipse" }> }
+>;
 
 export type ExcalidrawEmbeddableElement = _ExcalidrawElementBase &
   Readonly<{
@@ -237,20 +251,16 @@ export type ExcalidrawFrameLikeElement =
  */
 export type ExcalidrawGenericElement =
   | ExcalidrawSelectionElement
-  | ExcalidrawRectangleElement
-  | ExcalidrawDiamondElement
-  | ExcalidrawEllipseElement;
+  | ExcalidrawCompositeShapeElement;
 
 export type ExcalidrawFlowchartNodeElement =
-  | ExcalidrawRectangleElement
-  | ExcalidrawStickyNoteElement
-  | ExcalidrawDiamondElement
-  | ExcalidrawEllipseElement;
+  | ExcalidrawCompositeShapeElement
+  | ExcalidrawStickyNoteElement;
 
 export type ExcalidrawRectanguloidElement =
   | ExcalidrawMindmapNodeElement
   | ExcalidrawMindmapEdgeElement
-  | ExcalidrawRectangleElement
+  | ExcalidrawCompositeShapeElement
   | ExcalidrawStickyNoteElement
   | ExcalidrawImageElement
   | ExcalidrawTextElement
@@ -339,10 +349,8 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
 
 export type ExcalidrawBindableElement =
   | ExcalidrawMindmapNodeElement
-  | ExcalidrawRectangleElement
+  | ExcalidrawCompositeShapeElement
   | ExcalidrawStickyNoteElement
-  | ExcalidrawDiamondElement
-  | ExcalidrawEllipseElement
   | ExcalidrawTextElement
   | ExcalidrawImageElement
   | ExcalidrawIframeElement
@@ -352,10 +360,8 @@ export type ExcalidrawBindableElement =
 
 export type ExcalidrawTextContainer =
   | ExcalidrawMindmapNodeElement
-  | ExcalidrawRectangleElement
+  | ExcalidrawCompositeShapeElement
   | ExcalidrawStickyNoteElement
-  | ExcalidrawDiamondElement
-  | ExcalidrawEllipseElement
   | ExcalidrawArrowElement;
 
 export type ExcalidrawTextElementWithContainer = {

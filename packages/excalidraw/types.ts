@@ -630,12 +630,6 @@ export declare class GestureEvent extends UIEvent {
 
 // libraries
 // -----------------------------------------------------------------------------
-/** @deprecated legacy: do not use outside of migration paths */
-export type LibraryItem_v1 = readonly NonDeleted<ExcalidrawElement>[];
-/** @deprecated legacy: do not use outside of migration paths */
-type LibraryItems_v1 = readonly LibraryItem_v1[];
-
-/** v2 library item */
 export type LibraryItem = {
   id: string;
   status: "published" | "unpublished";
@@ -646,13 +640,9 @@ export type LibraryItem = {
   error?: string;
 };
 export type LibraryItems = readonly LibraryItem[];
-export type LibraryItems_anyVersion = LibraryItems | LibraryItems_v1;
-
 export type LibraryItemsSource =
-  | ((
-      currentLibraryItems: LibraryItems,
-    ) => MaybePromise<LibraryItems_anyVersion | Blob>)
-  | MaybePromise<LibraryItems_anyVersion | Blob>;
+  | ((currentLibraryItems: LibraryItems) => MaybePromise<LibraryItems | Blob>)
+  | MaybePromise<LibraryItems | Blob>;
 // -----------------------------------------------------------------------------
 
 export type ExcalidrawInitialDataState = Merge<

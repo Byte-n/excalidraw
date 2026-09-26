@@ -269,7 +269,6 @@ import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
 import type {
   ExcalidrawElement,
   ExcalidrawFreeDrawElement,
-  ExcalidrawGenericElement,
   ExcalidrawLinearElement,
   ExcalidrawTextElement,
   NonDeleted,
@@ -10644,7 +10643,9 @@ class App extends React.Component<AppProps, AppState> {
       : null;
   }
 
-  public getCurrentItemStrokeWidth(elementType: ExcalidrawElement["type"]) {
+  public getCurrentItemStrokeWidth(
+    elementType: ExcalidrawElement["type"] | ToolType,
+  ) {
     return getStrokeWidthByKey(
       elementType,
       this.state.currentItemStrokeWidthKey,
@@ -10652,7 +10653,10 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   private createGenericElementOnPointerDown = (
-    elementType: ExcalidrawGenericElement["type"] | "embeddable" | "stickynote",
+    elementType:
+      | Extract<ToolType, "selection" | "rectangle" | "diamond" | "ellipse">
+      | "embeddable"
+      | "stickynote",
     pointerDownState: PointerDownState,
   ): void => {
     const [gridX, gridY] = getGridPoint(
@@ -13426,6 +13430,7 @@ class App extends React.Component<AppProps, AppState> {
           fileHandle,
         );
       } catch (error: any) {
+        console.error("load file to canvas", error);
         const imageSceneDataError = error instanceof ImageSceneDataError;
         if (
           imageSceneDataError &&

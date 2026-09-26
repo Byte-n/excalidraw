@@ -6,9 +6,10 @@ import {
   isMemberOf,
   isPromiseLike,
   EVENT,
+  VERSIONS,
 } from "@excalidraw/common";
 
-import { mutateElement } from "@excalidraw/element";
+import { assertBaseShapeData, mutateElement } from "@excalidraw/element";
 import { deepCopyElement } from "@excalidraw/element";
 import {
   isFrameLikeElement,
@@ -73,7 +74,12 @@ export const probablySupportsClipboardBlob =
 
 const clipboardContainsElements = (
   contents: any,
-): contents is { elements: ExcalidrawElement[]; files?: BinaryFiles } => {
+): contents is {
+  type: string;
+  version?: number;
+  elements: ExcalidrawElement[];
+  files?: BinaryFiles;
+} => {
   if (
     [
       EXPORT_DATA_TYPES.excalidraw,
@@ -540,6 +546,21 @@ export const parseClipboard = async (
     const programmaticAPI =
       systemClipboardData.type === EXPORT_DATA_TYPES.excalidrawClipboardWithAPI;
     if (clipboardContainsElements(systemClipboardData)) {
+      if (
+        systemClipboardData.type === EXPORT_DATA_TYPES.excalidraw &&
+        systemClipboardData.version !== VERSIONS.excalidraw
+      ) {
+        return { errorMessage: "Unsupported clipboard format" };
+      }
+      for (const element of systemClipboardData.elements) {
+        if (element.type === "composite_shape") {
+          try {
+            assertBaseShapeData(element.shape);
+          } catch {
+            return { errorMessage: "Unsupported composite shape data" };
+          }
+        }
+      }
       return {
         elements: systemClipboardData.elements,
         files: systemClipboardData.files,

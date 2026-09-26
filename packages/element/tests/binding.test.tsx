@@ -17,6 +17,7 @@ import {
 import { defaultLang, setLanguage } from "@excalidraw/excalidraw/i18n";
 
 import { bindBindingElement, updateBoundElements } from "../src/binding";
+import { getElementShapeType } from "../src/compositeShape";
 import { getTransformHandles } from "../src/transformHandles";
 import {
   getTextEditor,
@@ -419,7 +420,7 @@ describe("binding for simple arrows", () => {
         mouse.reset();
         mouse.clickAt(0, 0);
         expect(h.state.selectedLinearElement).toBeNull();
-        expect(API.getSelectedElement().type).toBe("rectangle");
+        expect(getElementShapeType(API.getSelectedElement())).toBe("rectangle");
       },
     );
 
@@ -439,7 +440,7 @@ describe("binding for simple arrows", () => {
       expect(arrow.endBinding?.elementId).toBe(rectangle.id);
 
       mouse.select(rectangle);
-      expect(API.getSelectedElement().type).toBe("rectangle");
+      expect(getElementShapeType(API.getSelectedElement())).toBe("rectangle");
       Keyboard.keyDown(KEYS.DELETE);
       expect(arrow.endBinding).toBe(null);
     });
@@ -659,7 +660,7 @@ describe("binding for simple arrows", () => {
       // new text container will be placed before the text element
       const container = h.elements.at(-2)!;
 
-      expect(container.type).toBe("rectangle");
+      expect(getElementShapeType(container)).toBe("rectangle");
       expect(container.id).not.toBe(rectangle1.id);
 
       expect(container).toEqual(

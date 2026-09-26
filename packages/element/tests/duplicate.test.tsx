@@ -31,6 +31,7 @@ import {
   duplicateElements,
 } from "../src/duplicate";
 import { newMindmapNodeElement } from "../src/newElement";
+import { getElementShapeType } from "../src/compositeShape";
 
 import type { ExcalidrawLinearElement } from "../src/types";
 
@@ -268,7 +269,7 @@ describe("duplicating multiple elements", () => {
         type: clonedText1.type,
       }),
     );
-    expect(clonedRectangle.type).toBe("rectangle");
+    expect(getElementShapeType(clonedRectangle)).toBe("rectangle");
 
     clonedArrows.forEach((arrow) => {
       expect(

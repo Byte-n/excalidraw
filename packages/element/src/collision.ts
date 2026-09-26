@@ -1,4 +1,9 @@
-import { invariant, isTransparent, type Bounds } from "@excalidraw/common";
+import {
+  assertNever,
+  invariant,
+  isTransparent,
+  type Bounds,
+} from "@excalidraw/common";
 import {
   curveIntersectLineSegment,
   isPointWithinBounds,
@@ -30,6 +35,7 @@ import type {
 import type { FrameNameBounds } from "@excalidraw/excalidraw/types";
 
 import { isPathALoop } from "./utils";
+import { getElementShapeType } from "./compositeShape";
 import { getMindmapNodeGeometry, isMindmapElementHidden } from "./mindmap";
 import {
   doBoundsIntersect,
@@ -496,7 +502,6 @@ export const intersectElementWithLineSegment = (
       );
     case "mindmap-edge":
       return [];
-    case "rectangle":
     case "stickynote":
     case "image":
     case "text":
@@ -512,21 +517,34 @@ export const intersectElementWithLineSegment = (
         offset,
         onlyFirst,
       );
-    case "diamond":
-      return intersectDiamondWithLineSegment(
-        element,
-        elementsMap,
-        line,
-        offset,
-        onlyFirst,
-      );
-    case "ellipse":
-      return intersectEllipseWithLineSegment(
-        element,
-        elementsMap,
-        line,
-        offset,
-      );
+    case "composite_shape":
+      switch (element.shape.id) {
+        case "rectangle":
+          return intersectRectanguloidWithLineSegment(
+            element,
+            elementsMap,
+            line,
+            offset,
+            onlyFirst,
+          );
+        case "diamond":
+          return intersectDiamondWithLineSegment(
+            element as ExcalidrawDiamondElement,
+            elementsMap,
+            line,
+            offset,
+            onlyFirst,
+          );
+        case "ellipse":
+          return intersectEllipseWithLineSegment(
+            element as ExcalidrawEllipseElement,
+            elementsMap,
+            line,
+            offset,
+          );
+        default:
+          return assertNever(element.shape, "Unsupported composite shape");
+      }
     case "line":
     case "freedraw":
     case "arrow":
@@ -885,7 +903,7 @@ export const isBindableElementInsideOtherBindable = (
     const { x, y, width, height, angle } = element;
     const center = elementCenterPoint(element, elementsMap);
 
-    if (element.type === "diamond") {
+    if (getElementShapeType(element) === "diamond") {
       // Diamond has 4 corner points at the middle of each side
       const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
         getDiamondPoints(element);
@@ -897,7 +915,7 @@ export const isBindableElementInsideOtherBindable = (
       ];
       return corners.map((corner) => pointRotateRads(corner, center, angle));
     }
-    if (element.type === "ellipse") {
+    if (getElementShapeType(element) === "ellipse") {
       // For ellipse, test points at the extremes (top, right, bottom, left)
       const cx = x + width / 2;
       const cy = y + height / 2;

@@ -3,7 +3,7 @@ import {
   COLOR_PALETTE,
   KEYS,
 } from "@excalidraw/common";
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction, getElementShapeType } from "@excalidraw/element";
 import { pointFrom } from "@excalidraw/math";
 
 import type { LocalPoint } from "@excalidraw/math";
@@ -833,7 +833,9 @@ describe("bucket fill tool", () => {
     ).toBeUndefined();
     // the owner rectangle survives
     expect(
-      h.elements.filter((el) => el.type === "rectangle" && !el.isDeleted),
+      h.elements.filter(
+        (el) => getElementShapeType(el) === "rectangle" && !el.isDeleted,
+      ),
     ).toHaveLength(1);
   });
 });

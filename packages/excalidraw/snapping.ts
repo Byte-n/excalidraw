@@ -12,6 +12,7 @@ import {
   getCommonBounds,
   getDraggedElementsBounds,
   getElementAbsoluteCoords,
+  getElementShapeType,
 } from "@excalidraw/element";
 import { isBoundToContainer } from "@excalidraw/element";
 
@@ -235,7 +236,8 @@ export const getElementsCorners = (
     const halfHeight = (y2 - y1) / 2;
 
     if (
-      (element.type === "diamond" || element.type === "ellipse") &&
+      (getElementShapeType(element) === "diamond" ||
+        getElementShapeType(element) === "ellipse") &&
       !boundingBoxCorners
     ) {
       const leftMid = pointRotateRads<GlobalPoint>(

@@ -41,7 +41,6 @@ import type {
   LibraryItem,
   ExcalidrawImperativeAPI,
   LibraryItemsSource,
-  LibraryItems_anyVersion,
 } from "../types";
 
 /**
@@ -89,7 +88,7 @@ export interface LibraryPersistenceAdapter {
      * purposes, in which case host app can implement more aggressive caching.
      */
     source: LibraryAdatapterSource;
-  }): MaybePromise<{ libraryItems: LibraryItems_anyVersion } | null>;
+  }): MaybePromise<{ libraryItems: LibraryItems } | null>;
   /** Should persist to the database as is (do no change the data structure). */
   save(libraryData: LibraryPersistedData): MaybePromise<void>;
 }
@@ -99,7 +98,7 @@ export interface LibraryMigrationAdapter {
    * loads data from legacy data source. Returns `null` if no data is
    * to be migrated.
    */
-  load(): MaybePromise<{ libraryItems: LibraryItems_anyVersion } | null>;
+  load(): MaybePromise<{ libraryItems: LibraryItems } | null>;
 
   /** clears entire storage afterwards */
   clear(): MaybePromise<void>;
