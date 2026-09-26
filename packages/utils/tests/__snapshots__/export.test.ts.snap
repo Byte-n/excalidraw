@@ -90,6 +90,7 @@ exports[`exportToSvg > with default arguments 1`] = `
   },
   "penDetected": false,
   "penMode": false,
+  "preferredGenericShape": "rectangle",
   "preferredSelectionTool": {
     "initialized": false,
     "type": "selection",

@@ -10,6 +10,33 @@ import { Keyboard } from "./helpers/ui";
 import { act, fireEvent, render, screen, waitFor, within } from "./test-utils";
 
 describe("shortcuts", () => {
+  it.each(["en", "zh-CN"])(
+    "%s shows only R/2 for the generic shape group",
+    async (langCode) => {
+      await render(<Excalidraw handleKeyboardGlobally langCode={langCode} />);
+      await waitFor(() =>
+        expect(window.h.app.ownerDocument.documentElement.lang).toBe(langCode),
+      );
+
+      Keyboard.keyPress("?");
+      const tools = screen
+        .getByRole("heading", { level: 4, name: t("helpDialog.tools") })
+        .closest(".HelpDialog__island")! as HTMLElement;
+      const genericShapeRow = within(tools)
+        .getByText(t("toolBar.genericShape"))
+        .closest(".HelpDialog__shortcut")!;
+
+      expect(
+        Array.from(
+          genericShapeRow.querySelectorAll("kbd"),
+          (key) => key.textContent,
+        ),
+      ).toEqual(["R", "2"]);
+      expect(within(tools).queryByText(t("toolBar.diamond"))).toBeNull();
+      expect(within(tools).queryByText(t("toolBar.ellipse"))).toBeNull();
+    },
+  );
+
   describe("HelpDialog 脑图快捷键说明", () => {
     afterEach(async () => {
       await act(async () => setLanguage(defaultLang));

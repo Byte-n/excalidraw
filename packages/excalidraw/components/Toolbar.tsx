@@ -29,17 +29,15 @@ import {
 } from "./icons";
 import {
   ArrowToolButton,
-  DiamondToolButton,
-  EllipseToolButton,
   EraserToolButton,
   FreedrawToolPopover,
+  GenericShapeToolPopover,
   FreedrawToolButton,
   getToolShortcut,
   HandToolButton,
   isToolButtonDisabled,
   LassoToolButton,
   LineToolButton,
-  RectangleToolButton,
   SelectionToolButton,
   SelectionToolPopover,
   StickyNoteToolButton,
@@ -304,9 +302,7 @@ export const Toolbar = ({
         ) : (
           <SelectionToolButton {...toolProps} />
         )}
-        <RectangleToolButton {...toolProps} />
-        <DiamondToolButton {...toolProps} />
-        <EllipseToolButton {...toolProps} />
+        <GenericShapeToolPopover {...toolProps} />
         <ArrowToolButton {...toolProps} />
         <LineToolButton {...toolProps} />
         {isCompactStylesPanel ? (

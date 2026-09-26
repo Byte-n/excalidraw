@@ -13,6 +13,7 @@ import {
   EraserToolButton,
   FrameToolButton,
   FreedrawToolPopover,
+  GenericShapeToolPopover,
   getToolShortcut,
   HandToolButton,
   ImageToolButton,
@@ -50,23 +51,9 @@ type MobileToolbarProps = {
 export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
   const activeTool = app.state.activeTool;
   const [isOtherShapesMenuOpen, setIsOtherShapesMenuOpen] = useState(false);
-  const [lastActiveGenericShape, setLastActiveGenericShape] = useState<
-    "rectangle" | "diamond" | "ellipse"
-  >("rectangle");
   const [lastActiveLinearElement, setLastActiveLinearElement] = useState<
     "arrow" | "line"
   >("arrow");
-
-  // keep lastActiveGenericShape in sync with active tool if user switches via other UI
-  useEffect(() => {
-    if (
-      activeTool.type === "rectangle" ||
-      activeTool.type === "diamond" ||
-      activeTool.type === "ellipse"
-    ) {
-      setLastActiveGenericShape(activeTool.type);
-    }
-  }, [activeTool.type]);
 
   // keep lastActiveLinearElement in sync with active tool if user switches via other UI
   useEffect(() => {
@@ -83,15 +70,6 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
   const stickyNoteToolSelected = activeTool.type === "stickynote";
 
   const { TTDDialogTriggerTunnel } = useTunnels();
-
-  const SHAPE_TOOLS = (["rectangle", "diamond", "ellipse"] as const).map(
-    (type) => ({
-      type,
-      icon: TOOLS[type].icon,
-      title: capitalizeString(t(`toolBar.${type}`)),
-      fillable: TOOLS[type].fillable,
-    }),
-  );
 
   const LINEAR_ELEMENT_TOOLS = (["arrow", "line"] as const).map((type) => ({
     type,
@@ -181,27 +159,7 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
       <EraserToolButton {...toolProps} hideShortcut />
 
       {/* Rectangle/Diamond/Ellipse */}
-      <ToolPopover
-        app={app}
-        options={SHAPE_TOOLS}
-        activeTool={activeTool}
-        defaultOption={lastActiveGenericShape}
-        data-testid="toolbar-rectangle"
-        onToolChange={(type: string) => {
-          if (
-            type === "rectangle" ||
-            type === "diamond" ||
-            type === "ellipse"
-          ) {
-            setLastActiveGenericShape(type);
-            app.setActiveTool({ type });
-          }
-        }}
-        displayedOption={
-          SHAPE_TOOLS.find((tool) => tool.type === lastActiveGenericShape) ||
-          SHAPE_TOOLS[0]
-        }
-      />
+      <GenericShapeToolPopover {...toolProps} hideShortcut />
 
       {/* Arrow/Line */}
       <ToolPopover
