@@ -1,6 +1,5 @@
-import clsx from "clsx";
 import throttle from "lodash.throttle";
-import React, { useContext } from "react";
+import React from "react";
 import { flushSync } from "react-dom";
 import rough from "roughjs/bin/rough";
 import { nanoid } from "nanoid";
@@ -18,7 +17,6 @@ import {
 } from "@excalidraw/math";
 
 import {
-  COLOR_PALETTE,
   CODES,
   shouldResizeFromCenter,
   shouldMaintainAspectRatio,
@@ -50,16 +48,13 @@ import {
   TOUCH_CTX_MENU_TIMEOUT,
   VERTICAL_ALIGN,
   YOUTUBE_STATES,
-  POINTER_EVENTS,
   TOOL_TYPE,
   DEFAULT_COLLISION_THRESHOLD,
   DEFAULT_TEXT_ALIGN,
   ARROW_TYPE,
-  DEFAULT_REDUCED_GLOBAL_ALPHA,
   DEFAULT_STICKY_NOTE_SIZE,
   isLocalLink,
   normalizeLink,
-  toValidURL,
   getGridPoint,
   getLineHeight,
   debounce,
@@ -85,7 +80,6 @@ import {
   getDateTime,
   isShallowEqual,
   arrayToMap,
-  applyDarkModeFilter,
   AppEventBus,
   type EXPORT_IMAGE_TYPES,
   CLASSES,
@@ -159,11 +153,8 @@ import {
   isStickyNoteElement,
   getNormalizedDimensions,
   isElementCompletelyInViewport,
-  isElementInViewport,
   isInvisiblySmallElement,
-  getCornerRadius,
   isPathALoop,
-  createSrcDoc,
   embeddableURLValidator,
   maybeParseEmbedSrc,
   getEmbedLink,
@@ -192,7 +183,6 @@ import {
   elementOverlapsWithFrame,
   updateFrameMembershipOfSelectedElements,
   isElementInFrame,
-  getFrameLikeTitle,
   getElementsOverlappingFrame,
   hitElementBoundText,
   hitElementBoundingBoxOnly,
@@ -210,7 +200,6 @@ import {
   getMinTextElementWidth,
   ShapeCache,
   resolveElementRenderState,
-  getRenderElementWithPositionOverride,
   editGroupForSelectedElement,
   getElementsInGroup,
   getSelectedGroupIdForElement,
@@ -280,7 +269,6 @@ import type {
   ExcalidrawFrameLikeElement,
   ExcalidrawMagicFrameElement,
   ExcalidrawIframeLikeElement,
-  IframeData,
   ExcalidrawIframeElement,
   ExcalidrawEmbeddableElement,
   Ordered,
@@ -297,7 +285,7 @@ import type {
   TransformHandleDirection,
 } from "@excalidraw/element";
 
-import type { Mutable, ValueOf } from "@excalidraw/common/utility-types";
+import type { Mutable } from "@excalidraw/common/utility-types";
 
 import {
   actionAddToLibrary,
@@ -376,7 +364,7 @@ import {
   getElementRenderOffsets,
 } from "../renderOverrides";
 import { History } from "../history";
-import { defaultLang, getLanguage, languages, setLanguage, t } from "../i18n";
+import { defaultLang, languages, setLanguage, t } from "../i18n";
 
 import {
   getScrollToContentState,
@@ -405,7 +393,6 @@ import { fileOpen } from "../data/filesystem";
 import {
   showHyperlinkTooltip,
   hideHyperlinkToolip,
-  Hyperlink,
 } from "../components/hyperlink/Hyperlink";
 
 import { Fonts } from "../fonts";
@@ -428,7 +415,6 @@ import {
   type SetViewportOptions,
   getViewportForZoomWithScrollConstraints,
 } from "../viewport";
-import { ElementCanvasButtons } from "../components/ElementCanvasButtons";
 import { LaserTrails } from "../laserTrails";
 import { withBatchedUpdates, withBatchedUpdatesThrottled } from "../reactUtils";
 import { isPointHittingTextAutoResizeHandle } from "../textAutoResizeHandle";
@@ -445,7 +431,7 @@ import {
   resolveColorTarget,
 } from "../actions/colorTargets";
 
-import ConvertElementTypePopup, {
+import {
   getConversionTypeFromElements,
   convertElementTypePopupAtom,
   convertElementTypes,
@@ -454,35 +440,30 @@ import ConvertElementTypePopup, {
 import { activeConfirmDialogAtom } from "./ActiveConfirmDialog";
 import { AppArrowText } from "./App.arrowText";
 import { AppBucketFill } from "./App.bucketFill";
-import { AppToolDrag, TOOL_DRAG_PREVIEW_OPACITY } from "./App.toolDrag";
+import { AppToolDrag } from "./App.toolDrag";
 import { AppCursor } from "./App.cursor";
 import { AppDrawShape } from "./App.drawshape";
 import { AppDuplicate } from "./App.duplicate";
 import { AppFlowchart } from "./App.flowchart";
 import { AppMindmap } from "./App.mindmap";
 import { AppPan } from "./App.pan";
-import { AppViewport, RIGHT_SIDEBAR_WIDTH } from "./App.viewport";
+import { AppViewport } from "./App.viewport";
 import { AppWheel } from "./App.wheel";
+import { AppFrames } from "./app/frames";
+import { AppEmbeds } from "./app/embeds";
+import { AppView } from "./app/render";
 import BraveMeasureTextError from "./BraveMeasureTextError";
-import { ContextMenu, CONTEXT_MENU_SEPARATOR } from "./ContextMenu";
+import { CONTEXT_MENU_SEPARATOR } from "./ContextMenu";
 import { activeEyeDropperAtom } from "./EyeDropper";
-import { ViewportStatusBorder } from "./ViewportStatusFrame/ViewportStatusFrame";
-import LayerUI from "./LayerUI";
-import { ElementCanvasButton } from "./MagicButton";
-import { SVGLayer } from "./SVGLayer";
-import Spinner from "./Spinner";
 import { searchItemInFocusAtom } from "./SearchMenu";
 import { isSidebarDockedAtom } from "./Sidebar/Sidebar";
-import { StaticCanvas, InteractiveCanvas } from "./canvases";
-import NewElementCanvas from "./canvases/NewElementCanvas";
 import { isPointHittingLink } from "./hyperlink/helpers";
-import { CursorHint, CursorHints } from "./CursorHint";
-import { MagicIcon, PlusIcon, copyIcon, fullscreenIcon } from "./icons";
+import { CursorHints } from "./CursorHint";
 import { AppStateObserver, type OnStateChange } from "./AppStateObserver";
 
 import { findShapeByKey, TOGGLE_TOOLS } from "./Tools";
 
-import UnlockPopup from "./UnlockPopup";
+import { editorInterfaceContextInitialValue } from "./app/context";
 
 import type { ExcalidrawLibraryIds } from "../data/types";
 
@@ -518,7 +499,6 @@ import type {
   ToolType,
   OnUserFollowedPayload,
   UnsubscribeCallback,
-  EmbedsValidationStatus,
   ElementsPendingErasure,
   ExcalidrawImperativeAPIEventMap,
   GenerateDiagramToCode,
@@ -528,91 +508,27 @@ import type {
 import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { Action, ActionResult } from "../actions/types";
 
-const AppContext = React.createContext<AppClassProperties>(null!);
-const AppPropsContext = React.createContext<AppProps>(null!);
-
-const editorInterfaceContextInitialValue: EditorInterface = {
-  formFactor: "desktop",
-  desktopUIMode: "full",
-  userAgent: createUserAgentDescriptor(
-    typeof navigator !== "undefined" ? navigator.userAgent : "",
-  ),
-  isTouchScreen: false,
-  canFitSidebar: false,
-  isLandscape: true,
-};
-const EditorInterfaceContext = React.createContext<EditorInterface>(
-  editorInterfaceContextInitialValue,
-);
-EditorInterfaceContext.displayName = "EditorInterfaceContext";
+export {
+  ExcalidrawContainerContext,
+  ExcalidrawAPIContext,
+  ExcalidrawAPISetContext,
+  useApp,
+  useAppProps,
+  useEditorInterface,
+  useStylesPanelMode,
+  useExcalidrawContainer,
+  useExcalidrawElements,
+  useExcalidrawAppState,
+  useExcalidrawSetAppState,
+  useExcalidrawActionManager,
+  useExcalidrawAPI,
+} from "./app/context";
 
 const editorLifecycleEventBehavior = {
   "editor:mount": { cardinality: "once", replay: "last" },
   "editor:initialize": { cardinality: "once", replay: "last" },
   "editor:unmount": { cardinality: "once", replay: "last" },
 } as const;
-
-export const ExcalidrawContainerContext = React.createContext<{
-  container: HTMLDivElement | null;
-  id: string | null;
-}>({ container: null, id: null });
-ExcalidrawContainerContext.displayName = "ExcalidrawContainerContext";
-
-const ExcalidrawElementsContext = React.createContext<
-  readonly NonDeletedExcalidrawElement[]
->([]);
-ExcalidrawElementsContext.displayName = "ExcalidrawElementsContext";
-
-const ExcalidrawAppStateContext = React.createContext<AppState>({
-  ...getDefaultAppState(),
-  width: 0,
-  height: 0,
-  offsetLeft: 0,
-  offsetTop: 0,
-});
-ExcalidrawAppStateContext.displayName = "ExcalidrawAppStateContext";
-
-const ExcalidrawSetAppStateContext = React.createContext<
-  React.Component<any, AppState>["setState"]
->(() => {
-  console.warn("Uninitialized ExcalidrawSetAppStateContext context!");
-});
-ExcalidrawSetAppStateContext.displayName = "ExcalidrawSetAppStateContext";
-
-const ExcalidrawActionManagerContext = React.createContext<ActionManager>(
-  null!,
-);
-ExcalidrawActionManagerContext.displayName = "ExcalidrawActionManagerContext";
-
-export const ExcalidrawAPIContext =
-  React.createContext<ExcalidrawImperativeAPI | null>(null);
-ExcalidrawAPIContext.displayName = "ExcalidrawAPIContext";
-
-export const ExcalidrawAPISetContext = React.createContext<
-  ((api: ExcalidrawImperativeAPI | null) => void) | null
->(null);
-ExcalidrawAPISetContext.displayName = "ExcalidrawAPISetContext";
-
-export const useApp = () => useContext(AppContext);
-export const useAppProps = () => useContext(AppPropsContext);
-export const useEditorInterface = () =>
-  useContext<EditorInterface>(EditorInterfaceContext);
-export const useStylesPanelMode = () =>
-  deriveStylesPanelMode(useEditorInterface());
-export const useExcalidrawContainer = () =>
-  useContext(ExcalidrawContainerContext);
-export const useExcalidrawElements = () =>
-  useContext(ExcalidrawElementsContext);
-export const useExcalidrawAppState = () =>
-  useContext(ExcalidrawAppStateContext);
-export const useExcalidrawSetAppState = () =>
-  useContext(ExcalidrawSetAppStateContext);
-export const useExcalidrawActionManager = () =>
-  useContext(ExcalidrawActionManagerContext);
-/**
- * Requires wrapping your component in <ExcalidrawAPIContext.Provider>
- */
-export const useExcalidrawAPI = () => useContext(ExcalidrawAPIContext);
 
 let didTapTwice: boolean = false;
 let tappedTwiceTimer = 0;
@@ -621,16 +537,6 @@ let isDraggingScrollBar: boolean = false;
 let currentScrollBars: ScrollBars = { horizontal: null, vertical: null };
 let touchTimeout = 0;
 let invalidateContextMenu = false;
-
-/**
- * Map of youtube embed video states
- */
-const YOUTUBE_VIDEO_STATES = new Map<
-  ExcalidrawElement["id"],
-  ValueOf<typeof YOUTUBE_STATES>
->();
-
-const MAX_EMBEDDABLE_VIEWPORT_SCALE = 4;
 
 let IS_PLAIN_PASTE = false;
 let IS_PLAIN_PASTE_TIMER = 0;
@@ -656,7 +562,7 @@ class App extends React.Component<AppProps, AppState> {
     editorInterfaceContextInitialValue,
   );
 
-  private excalidrawContainerRef = React.createRef<HTMLDivElement>();
+  public excalidrawContainerRef = React.createRef<HTMLDivElement>();
 
   public get ownerDocument(): Document {
     return (
@@ -677,7 +583,7 @@ class App extends React.Component<AppProps, AppState> {
   public visibleElements: readonly NonDeletedExcalidrawElement[];
   /** whether the last render had any renderable elements (excludes e.g. the
    * in-progress `newElement` and the edited text element) */
-  private hasRenderableElements: boolean = false;
+  public hasRenderableElements: boolean = false;
   private resizeObserver: ResizeObserver | undefined;
   public library: AppClassProperties["library"];
   public libraryItemsFromStorage: LibraryItems | undefined;
@@ -691,19 +597,10 @@ class App extends React.Component<AppProps, AppState> {
 
   public files: BinaryFiles = {};
   public imageCache: AppClassProperties["imageCache"] = new Map();
-  private iFrameRefs = new Map<ExcalidrawElement["id"], HTMLIFrameElement>();
-  /**
-   * Indicates whether the embeddable's url has been validated for rendering.
-   * If value not set, indicates that the validation is pending.
-   * Initially or on url change the flag is not reset so that we can guarantee
-   * the validation came from a trusted source (the editor).
-   **/
-  private embedsValidationStatus: EmbedsValidationStatus = new Map();
-  /** embeds that have been inserted to DOM (as a perf optim, we don't want to
-   * insert to DOM before user initially scrolls to them) */
-  private initializedEmbeds = new Set<ExcalidrawIframeLikeElement["id"]>();
+  public embeds = new AppEmbeds(this);
+  public embedsValidationStatus = this.embeds.validationStatus;
 
-  private elementsPendingErasure: ElementsPendingErasure = new Set();
+  public elementsPendingErasure: ElementsPendingErasure = new Set();
 
   private _initialized = false;
 
@@ -808,21 +705,21 @@ class App extends React.Component<AppProps, AppState> {
   onRemoveEventListenersEmitter = new Emitter<[]>();
 
   api: ExcalidrawImperativeAPI;
-  private elementRenderOverrides: ElementRenderOverrides = new Map();
+  public elementRenderOverrides: ElementRenderOverrides = new Map();
   private mindmapDragOpacityIds = new Set<string>();
   private mindmapDragOpacityPrevious = new Map<
     string,
     ElementRenderOverride | undefined
   >();
   /** offsets of `elementRenderOverrides`; keeps its identity while they don't change */
-  private elementRenderOffsets: ElementRenderOffsets = new Map();
+  public elementRenderOffsets: ElementRenderOffsets = new Map();
   private renderOverridesUpdatePending = false;
 
-  private getRenderOverrideConfig = () => ({
+  public getRenderOverrideConfig = () => ({
     elementRenderOverrides: this.elementRenderOverrides,
   });
 
-  private getElementRenderState = (
+  public getElementRenderState = (
     element: ExcalidrawElement,
     overrides: ElementRenderOverrides | null = this.elementRenderOverrides,
   ) =>
@@ -1140,68 +1037,8 @@ class App extends React.Component<AppProps, AppState> {
     return result;
   };
 
-  private onWindowMessage = (event: MessageEvent) => {
-    if (
-      event.origin !== "https://player.vimeo.com" &&
-      event.origin !== "https://www.youtube.com"
-    ) {
-      return;
-    }
-
-    let data = null;
-    try {
-      data = JSON.parse(event.data);
-    } catch (e) {}
-    if (!data) {
-      return;
-    }
-
-    switch (event.origin) {
-      case "https://player.vimeo.com":
-        //Allowing for multiple instances of Excalidraw running in the window
-        if (data.method === "paused") {
-          let source: Window | null = null;
-          const iframes = this.ownerDocument.body.querySelectorAll(
-            "iframe.excalidraw__embeddable",
-          );
-          if (!iframes) {
-            break;
-          }
-          for (const iframe of iframes as NodeListOf<HTMLIFrameElement>) {
-            if (iframe.contentWindow === event.source) {
-              source = iframe.contentWindow;
-            }
-          }
-          source?.postMessage(
-            JSON.stringify({
-              method: data.value ? "play" : "pause",
-              value: true,
-            }),
-            "*",
-          );
-        }
-        break;
-      case "https://www.youtube.com":
-        if (
-          data.event === "infoDelivery" &&
-          data.info &&
-          data.id &&
-          typeof data.info.playerState === "number"
-        ) {
-          const id = data.id;
-          const playerState = data.info.playerState as number;
-          if (
-            (Object.values(YOUTUBE_STATES) as number[]).includes(playerState)
-          ) {
-            YOUTUBE_VIDEO_STATES.set(
-              id,
-              playerState as ValueOf<typeof YOUTUBE_STATES>,
-            );
-          }
-        }
-        break;
-    }
-  };
+  private onWindowMessage = (event: MessageEvent) =>
+    this.embeds.onWindowMessage(event);
 
   private handleSkipBindMode() {
     if (
@@ -1517,15 +1354,6 @@ class App extends React.Component<AppProps, AppState> {
     this.previousHoveredBindableElement = hoveredElement;
   }
 
-  private cacheEmbeddableRef(
-    element: ExcalidrawIframeLikeElement,
-    ref: HTMLIFrameElement | null,
-  ) {
-    if (ref) {
-      this.iFrameRefs.set(element.id, ref);
-    }
-  }
-
   /**
    * Returns gridSize taking into account `gridModeEnabled`.
    * If disabled, returns null.
@@ -1556,10 +1384,8 @@ class App extends React.Component<AppProps, AppState> {
     };
   };
 
-  private getHTMLIFrameElement(
-    element: ExcalidrawIframeLikeElement,
-  ): HTMLIFrameElement | undefined {
-    return this.iFrameRefs.get(element.id);
+  public getHTMLIFrameElement(element: ExcalidrawIframeLikeElement) {
+    return this.embeds.getHTMLIFrameElement(element);
   }
 
   /**
@@ -1712,9 +1538,9 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     if (iframe.src.includes("youtube")) {
-      const state = YOUTUBE_VIDEO_STATES.get(iframeLikeElement.id);
+      const state = this.embeds.youtubeVideoStates.get(iframeLikeElement.id);
       if (!state) {
-        YOUTUBE_VIDEO_STATES.set(
+        this.embeds.youtubeVideoStates.set(
           iframeLikeElement.id,
           YOUTUBE_STATES.UNSTARTED,
         );
@@ -1799,570 +1625,25 @@ class App extends React.Component<AppProps, AppState> {
     );
   }
 
-  private updateEmbedValidationStatus = (
+  public updateEmbedValidationStatus = (
     element: ExcalidrawEmbeddableElement,
     status: boolean,
-  ) => {
-    this.embedsValidationStatus.set(element.id, status);
-    ShapeCache.delete(element);
-  };
+  ) => this.embeds.updateEmbedValidationStatus(element, status);
 
-  private updateEmbeddables = () => {
-    const iframeLikes = new Set<ExcalidrawIframeLikeElement["id"]>();
+  private updateEmbeddables = () => this.embeds.updateEmbeddables();
 
-    let updated = false;
-    this.scene.getNonDeletedElements().filter((element) => {
-      if (isEmbeddableElement(element)) {
-        iframeLikes.add(element.id);
-        if (!this.embedsValidationStatus.has(element.id)) {
-          updated = true;
-
-          const validated = embeddableURLValidator(
-            element.link,
-            this.props.validateEmbeddable,
-          );
-
-          this.updateEmbedValidationStatus(element, validated);
-        }
-      } else if (isIframeElement(element)) {
-        iframeLikes.add(element.id);
-      }
-      return false;
-    });
-
-    if (updated) {
-      this.scene.triggerUpdate();
-    }
-
-    // GC
-    this.iFrameRefs.forEach((ref, id) => {
-      if (!iframeLikes.has(id)) {
-        this.iFrameRefs.delete(id);
-      }
-    });
-  };
-
-  private renderEmbeddables() {
-    const scale = this.state.zoom.value;
-    const normalizedWidth = this.state.width;
-    const normalizedHeight = this.state.height;
-
-    const embeddableElements = this.scene
-      .getNonDeletedElements()
-      .filter(
-        (el): el is Ordered<NonDeleted<ExcalidrawIframeLikeElement>> =>
-          (isEmbeddableElement(el) &&
-            this.embedsValidationStatus.get(el.id) === true) ||
-          isIframeElement(el),
-      );
-
-    return (
-      <>
-        {embeddableElements.map((el) => {
-          const renderState = this.getElementRenderState(el);
-          const { x, y } = sceneCoordsToViewportCoords(
-            { sceneX: el.x, sceneY: el.y },
-            this.state,
-          );
-
-          const isVisible = isElementInViewport(
-            getRenderElementWithPositionOverride(el, renderState.offset),
-            normalizedWidth,
-            normalizedHeight,
-            this.state,
-            this.scene.getNonDeletedElementsMap(),
-          );
-          const hasBeenInitialized = this.initializedEmbeds.has(el.id);
-
-          if (isVisible && !hasBeenInitialized) {
-            this.initializedEmbeds.add(el.id);
-          }
-          const shouldRender = isVisible || hasBeenInitialized;
-
-          if (!shouldRender) {
-            return null;
-          }
-
-          let src: IframeData | null;
-          let isPendingGeneration = false;
-
-          if (isIframeElement(el)) {
-            src = null;
-
-            const data: MagicGenerationData = (el.customData?.generationData ??
-              this.magicGenerations.get(el.id)) || {
-              status: "error",
-              message: "No generation data",
-              code: "ERR_NO_GENERATION_DATA",
-            };
-
-            if (data.status === "done") {
-              const html = data.html;
-              src = {
-                intrinsicSize: { w: el.width, h: el.height },
-                type: "document",
-                srcdoc: () => {
-                  return html;
-                },
-              } as const;
-            } else if (data.status === "pending") {
-              src = {
-                intrinsicSize: { w: el.width, h: el.height },
-                type: "document",
-                srcdoc: () => {
-                  return createSrcDoc(`
-                    <style>
-                      html, body {
-                        width: 100%;
-                        height: 100%;
-                        margin: 0;
-                      }
-                    </style>
-                    <script>
-                      // progressively renders the partial HTML snapshots the
-                      // editor streams in during generation by document.write-
-                      // ing them into this very document — feeding the
-                      // browser's incremental HTML parser, so incomplete
-                      // markup renders progressively
-                      // (see App.onMagicFrameGenerate)
-                      let writtenLength = 0;
-                      let opened = false;
-
-                      const onPartialMessage = (event) => {
-                        const data = event.data;
-                        if (
-                          !data ||
-                          data.type !== "excalidraw:diagramToCode:partial" ||
-                          typeof data.html !== "string" ||
-                          data.html.length <= writtenLength
-                        ) {
-                          return;
-                        }
-                        if (!opened) {
-                          opened = true;
-                          document.open();
-                          // document.open() wipes all listeners from both the
-                          // document and the window, so re-register
-                          window.addEventListener("message", onPartialMessage);
-                        }
-                        document.write(data.html.slice(writtenLength));
-                        writtenLength = data.html.length;
-                      };
-
-                      window.addEventListener("message", onPartialMessage);
-                    </script>
-                  `);
-                },
-              } as const;
-              isPendingGeneration = true;
-            } else {
-              let message: string;
-              if (data.code === "ERR_GENERATION_INTERRUPTED") {
-                message = "Generation was interrupted...";
-              } else {
-                message = data.message || "Generation failed";
-              }
-              src = {
-                intrinsicSize: { w: el.width, h: el.height },
-                type: "document",
-                srcdoc: () => {
-                  return createSrcDoc(`
-                    <style>
-                    html, body {
-                      height: 100%;
-                    }
-                      body {
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        color: ${COLOR_PALETTE.red[3]};
-                      }
-                      h1, h3 {
-                        margin-top: 0;
-                        margin-bottom: 0.5rem;
-                      }
-                    </style>
-                    <h1>Error!</h1>
-                    <h3>${message}</h3>
-                  `);
-                },
-              } as const;
-            }
-          } else {
-            src = getEmbedLink(toValidURL(el.link || ""));
-          }
-
-          const isActive =
-            this.state.activeEmbeddable?.element === el &&
-            this.state.activeEmbeddable?.state === "active";
-          const isHovered =
-            this.state.activeEmbeddable?.element === el &&
-            this.state.activeEmbeddable?.state === "hover";
-
-          // scale video embeds based on zoom (capped) so that smaller embeds
-          // on canvas when zoomed are still of legible quality
-          // (note: for some embed types like gdrive, the quality is poor when
-          // scaling mid playback and works only when you initially start the
-          // playback at the higher zoom level)
-          const shouldScaleEmbeddableViewport = src?.type === "video";
-          const embeddableViewportScale = clamp(
-            shouldScaleEmbeddableViewport ? scale : 1,
-            0.75,
-            MAX_EMBEDDABLE_VIEWPORT_SCALE,
-          );
-
-          return (
-            <div
-              key={el.id}
-              className={clsx("excalidraw__embeddable-container", {
-                "is-hovered": isHovered,
-              })}
-              style={{
-                transform: isVisible
-                  ? `translate(${
-                      x +
-                      renderState.offset.x * this.state.zoom.value -
-                      this.state.offsetLeft
-                    }px, ${
-                      y +
-                      renderState.offset.y * this.state.zoom.value -
-                      this.state.offsetTop
-                    }px) scale(${scale})`
-                  : "none",
-                display: isVisible ? "block" : "none",
-                opacity:
-                  renderState.opacity *
-                  (this.state.openDialog?.name === "elementLinkSelector"
-                    ? DEFAULT_REDUCED_GLOBAL_ALPHA
-                    : 1),
-                ["--embeddable-radius" as string]: `${getCornerRadius(
-                  Math.min(el.width, el.height),
-                  el,
-                )}px`,
-              }}
-            >
-              <div
-                //this is a hack that addresses isse with embedded excalidraw.com embeddable
-                //https://github.com/excalidraw/excalidraw/pull/6691#issuecomment-1607383938
-                /*ref={(ref) => {
-                  if (!this.excalidrawContainerRef.current) {
-                    return;
-                  }
-                  const container = this.excalidrawContainerRef.current;
-                  const sh = container.scrollHeight;
-                  const ch = container.clientHeight;
-                  if (sh !== ch) {
-                    container.style.height = `${sh}px`;
-                    setTimeout(() => {
-                      container.style.height = `100%`;
-                    });
-                  }
-                }}*/
-                className="excalidraw__embeddable-container__inner"
-                style={{
-                  width: isVisible ? `${el.width}px` : 0,
-                  height: isVisible ? `${el.height}px` : 0,
-                  transform: isVisible ? `rotate(${el.angle}rad)` : "none",
-                  pointerEvents: isActive
-                    ? POINTER_EVENTS.enabled
-                    : POINTER_EVENTS.disabled,
-                }}
-              >
-                {isHovered && (
-                  <div className="excalidraw__embeddable-hint">
-                    {t("buttons.embeddableInteractionButton")}
-                  </div>
-                )}
-                <div
-                  className="excalidraw__embeddable__outer"
-                  style={{
-                    padding: `${el.strokeWidth}px`,
-                  }}
-                >
-                  <div
-                    className="excalidraw__embeddable__content"
-                    style={{
-                      width: `${embeddableViewportScale * 100}%`,
-                      height: `${embeddableViewportScale * 100}%`,
-                      transform: `scale(${1 / embeddableViewportScale})`,
-                    }}
-                  >
-                    {(isEmbeddableElement(el)
-                      ? this.props.renderEmbeddable?.(el, this.state)
-                      : null) ?? (
-                      <iframe
-                        ref={(ref) => this.cacheEmbeddableRef(el, ref)}
-                        className="excalidraw__embeddable"
-                        srcDoc={
-                          src?.type === "document"
-                            ? src.srcdoc(this.state.theme)
-                            : undefined
-                        }
-                        src={
-                          src?.type !== "document" ? src?.link ?? "" : undefined
-                        }
-                        // https://stackoverflow.com/q/18470015
-                        scrolling="no"
-                        referrerPolicy="no-referrer-when-downgrade"
-                        title="Excalidraw Embedded Content"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen={true}
-                        sandbox={`${
-                          src?.sandbox?.allowSameOrigin
-                            ? "allow-same-origin"
-                            : ""
-                        } allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-downloads`}
-                      />
-                    )}
-                  </div>
-                </div>
-                {isPendingGeneration && (
-                  <div className="excalidraw__embeddable__generating">
-                    <Spinner size="1em" />
-                    Generating…
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </>
-    );
+  public renderEmbeddables() {
+    return this.embeds.renderEmbeddables();
   }
 
-  private getFrameNameDOMId = (frameElement: ExcalidrawElement) => {
-    return `${this.id}-frame-name-${frameElement.id}`;
-  };
+  public frames = new AppFrames(this);
+  public frameNameBoundsCache: FrameNameBoundsCache =
+    this.frames.frameNameBoundsCache;
 
-  frameNameBoundsCache: FrameNameBoundsCache = {
-    get: (frameElement) => {
-      let bounds = this.frameNameBoundsCache._cache.get(frameElement.id);
-      if (
-        !bounds ||
-        bounds.zoom !== this.state.zoom.value ||
-        bounds.versionNonce !== frameElement.versionNonce
-      ) {
-        const frameNameDiv = this.ownerDocument.getElementById(
-          this.getFrameNameDOMId(frameElement),
-        );
+  private resetEditingFrame = (frame: ExcalidrawFrameLikeElement | null) =>
+    this.frames.resetEditingFrame(frame);
 
-        if (frameNameDiv) {
-          const box = frameNameDiv.getBoundingClientRect();
-          const zoom = this.state.zoom.value;
-
-          // Only the title's size comes from layout: its visual position may
-          // have an override. Hit bounds stay anchored to the document frame,
-          // with the title's bottom nameOffsetY screen pixels above it.
-          bounds = {
-            x: frameElement.x,
-            y: frameElement.y - (box.height + FRAME_STYLE.nameOffsetY) / zoom,
-            width: box.width / zoom,
-            height: box.height / zoom,
-            zoom,
-            versionNonce: frameElement.versionNonce,
-          };
-
-          this.frameNameBoundsCache._cache.set(frameElement.id, bounds);
-
-          return bounds;
-        }
-        return null;
-      }
-
-      return bounds;
-    },
-    /**
-     * @private
-     */
-    _cache: new Map(),
-  };
-
-  private resetEditingFrame = (frame: ExcalidrawFrameLikeElement | null) => {
-    if (frame) {
-      this.scene.mutateElement(frame, { name: frame.name?.trim() || null });
-    }
-    this.setState({ editingFrame: null });
-  };
-
-  private renderFrameNames = () => {
-    if (!this.state.frameRendering.enabled || !this.state.frameRendering.name) {
-      if (this.state.editingFrame) {
-        this.resetEditingFrame(null);
-      }
-      return null;
-    }
-
-    const isDarkTheme = this.state.theme === THEME.DARK;
-    const nonDeletedFramesLikes = this.scene.getNonDeletedFramesLikes();
-
-    const focusedSearchMatch =
-      nonDeletedFramesLikes.length > 0
-        ? this.state.searchMatches?.focusedId &&
-          isFrameLikeElement(
-            this.scene.getElement(this.state.searchMatches.focusedId),
-          )
-          ? this.state.searchMatches.matches.find((sm) => sm.focus)
-          : null
-        : null;
-
-    return nonDeletedFramesLikes.map((f) => {
-      // The name is a decoration that follows the frame's render overrides,
-      // except while it's being edited: editing is interaction and keeps to
-      // document geometry like everything else interactive. Culling by the
-      // translated frame would otherwise end the edit (and commit the name)
-      // from a render-only override.
-      const renderState = this.getElementRenderState(
-        f,
-        f.id === this.state.editingFrame ? null : this.elementRenderOverrides,
-      );
-      if (
-        !isElementInViewport(
-          getRenderElementWithPositionOverride(f, renderState.offset),
-          this.canvas.width / this.ownerWindow.devicePixelRatio,
-          this.canvas.height / this.ownerWindow.devicePixelRatio,
-          {
-            offsetLeft: this.state.offsetLeft,
-            offsetTop: this.state.offsetTop,
-            scrollX: this.state.scrollX,
-            scrollY: this.state.scrollY,
-            zoom: this.state.zoom,
-          },
-          this.scene.getNonDeletedElementsMap(),
-        )
-      ) {
-        if (this.state.editingFrame === f.id) {
-          this.resetEditingFrame(f);
-        }
-        // if frame not visible, don't render its name
-        return null;
-      }
-
-      const { x: x1, y: y1 } = sceneCoordsToViewportCoords(
-        {
-          sceneX: f.x + renderState.offset.x,
-          sceneY: f.y + renderState.offset.y,
-        },
-        this.state,
-      );
-
-      const FRAME_NAME_EDIT_PADDING = 6;
-
-      let frameNameJSX;
-
-      const frameName = getFrameLikeTitle(f);
-
-      if (f.id === this.state.editingFrame) {
-        const frameNameInEdit = frameName;
-
-        frameNameJSX = (
-          <input
-            autoFocus
-            value={frameNameInEdit}
-            onChange={(e) => {
-              this.scene.mutateElement(f, {
-                name: e.target.value,
-              });
-            }}
-            onFocus={(e) => e.target.select()}
-            onBlur={() => this.resetEditingFrame(f)}
-            onKeyDown={(event) => {
-              // for some inexplicable reason, `onBlur` triggered on ESC
-              // does not reset `state.editingFrame` despite being called,
-              // and we need to reset it here as well
-              if (event.key === KEYS.ESCAPE || event.key === KEYS.ENTER) {
-                this.resetEditingFrame(f);
-              }
-            }}
-            style={{
-              background: applyDarkModeFilter(
-                this.state.viewBackgroundColor,
-                isDarkTheme,
-              ),
-              zIndex: 2,
-              border: "none",
-              display: "block",
-              padding: `${FRAME_NAME_EDIT_PADDING}px`,
-              borderRadius: 4,
-              boxShadow: "inset 0 0 0 1px var(--color-primary)",
-              fontFamily: "Assistant",
-              fontSize: `${FRAME_STYLE.nameFontSize}px`,
-              transform: `translate(-${FRAME_NAME_EDIT_PADDING}px, ${FRAME_NAME_EDIT_PADDING}px)`,
-              color: isDarkTheme
-                ? FRAME_STYLE.nameColorDarkTheme
-                : FRAME_STYLE.nameColorLightTheme,
-              overflow: "hidden",
-              maxWidth: `${
-                this.ownerDocument.body.clientWidth -
-                x1 -
-                FRAME_NAME_EDIT_PADDING
-              }px`,
-            }}
-            size={frameNameInEdit.length + 1 || 1}
-            dir="auto"
-            autoComplete="off"
-            autoCapitalize="off"
-            autoCorrect="off"
-          />
-        );
-      } else {
-        frameNameJSX = frameName;
-      }
-
-      return (
-        <div
-          id={this.getFrameNameDOMId(f)}
-          className={CLASSES.FRAME_NAME}
-          key={f.id}
-          style={{
-            position: "absolute",
-            opacity: renderState.opacity,
-            // Positioning from bottom so that we don't to either
-            // calculate text height or adjust using transform (which)
-            // messes up input position when editing the frame name.
-            // This makes the positioning deterministic and we can calculate
-            // the same position when rendering to canvas / svg.
-            bottom: `${
-              this.state.height +
-              FRAME_STYLE.nameOffsetY -
-              y1 +
-              this.state.offsetTop
-            }px`,
-            left: `${x1 - this.state.offsetLeft}px`,
-            zIndex: 2,
-            fontSize: FRAME_STYLE.nameFontSize,
-            color: isDarkTheme
-              ? FRAME_STYLE.nameColorDarkTheme
-              : FRAME_STYLE.nameColorLightTheme,
-            lineHeight: FRAME_STYLE.nameLineHeight,
-            width: "max-content",
-            maxWidth:
-              focusedSearchMatch?.id === f.id && focusedSearchMatch?.focus
-                ? "none"
-                : `${f.width * this.state.zoom.value}px`,
-            overflow: f.id === this.state.editingFrame ? "visible" : "hidden",
-            whiteSpace: "nowrap",
-            textOverflow: "ellipsis",
-            cursor: CURSOR_TYPE.MOVE,
-            pointerEvents: this.state.viewModeEnabled
-              ? POINTER_EVENTS.disabled
-              : POINTER_EVENTS.enabled,
-          }}
-          onPointerDown={(event) => this.handleCanvasPointerDown(event)}
-          onContextMenu={this.handleCanvasContextMenu}
-          onDoubleClick={() => {
-            this.setState({
-              editingFrame: f.id,
-            });
-          }}
-        >
-          {frameNameJSX}
-        </div>
-      );
-    });
-  };
-
-  private toggleOverscrollBehavior = (event: React.PointerEvent) => {
+  public toggleOverscrollBehavior = (event: React.PointerEvent) => {
     // when pointer inside editor, disable overscroll behavior to prevent
     // panning to trigger history back/forward on MacOS Chrome
     this.ownerDocument.documentElement.style.overscrollBehaviorX =
@@ -2370,505 +1651,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   public render() {
-    const selectedElements = this.scene.getSelectedElements(this.state);
-    const {
-      renderTopRightUI,
-      renderTopLeftUI,
-      renderTopCenterToolbar,
-      renderCustomStats,
-    } = this.props;
-
-    const {
-      elementsMap: renderableElementsMap,
-      visibleElements,
-      canvasNonce,
-      /**
-       * element to draw on the <NewElementCanvas> for optimization purposes.
-       * Can be null even if this.state.newElement defined
-       * (e.g. when its zIndex isn't on top) */
-      newElementCanvasElement,
-    } = this.renderer.getRenderableElements({
-      zoom: this.state.zoom,
-      offsetLeft: this.state.offsetLeft,
-      offsetTop: this.state.offsetTop,
-      scrollX: this.state.scrollX,
-      scrollY: this.state.scrollY,
-      height: this.state.height,
-      width: this.state.width,
-      editingTextElement: this.state.editingTextElement,
-      newElement: this.state.newElement,
-      selectedElements,
-      selectedElementsAreBeingDragged:
-        this.state.selectedElementsAreBeingDragged,
-      frameToHighlight: this.state.frameToHighlight,
-    });
-    this.visibleElements = visibleElements;
-    this.hasRenderableElements = renderableElementsMap.size > 0;
-
-    const allElementsMap = this.scene.getNonDeletedElementsMap();
-
-    // a tool dragged out of the toolbar previews on the new-element canvas
-    // (it is not in the scene until dropped)
-    const previewElement = newElementCanvasElement ?? this.toolDrag.preview;
-
-    const shouldBlockPointerEvents =
-      // default back to `--ui-pointerEvents` flow if setPointerCapture
-      // not supported
-      "setPointerCapture" in this.ownerWindow.HTMLElement.prototype
-        ? false
-        : this.state.selectionElement ||
-          this.state.newElement ||
-          this.state.selectedElementsAreBeingDragged ||
-          this.state.resizingElement ||
-          (this.state.activeTool.type === "laser" &&
-            // technically we can just test on this once we make it more safe
-            this.state.cursorButton === "down");
-
-    const firstSelectedElement = selectedElements[0];
-    const hoveredMindmapNode = Object.keys(this.state.hoveredElementIds)
-      .map((id) => this.scene.getNonDeletedElement(id))
-      .find(isMindmapNodeElement);
-    const mindmapNodeForControls = hoveredMindmapNode
-      ? hoveredMindmapNode
-      : selectedElements.length === 1 &&
-        isMindmapNodeElement(firstSelectedElement)
-      ? firstSelectedElement
-      : null;
-
-    const showShapeSwitchPanel =
-      editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
-
-    return (
-      <div
-        translate="no"
-        className={clsx(
-          "excalidraw excalidraw-container notranslate",
-          this.props.className,
-          {
-            "excalidraw--view-mode":
-              this.state.viewModeEnabled ||
-              this.state.openDialog?.name === "elementLinkSelector",
-            "excalidraw--mobile": this.editorInterface.formFactor === "phone",
-            "excalidraw--non-interactive": !this.isInteractionEnabled(),
-            "excalidraw--navigation":
-              !this.isInteractionEnabled() && this.isNavigationEnabled(),
-            "excalidraw--tools":
-              !this.isInteractionEnabled() &&
-              this.isToolSupported(this.state.activeTool.type),
-            "excalidraw--embeds":
-              !this.isInteractionEnabled() && this.isEmbedsEnabled(),
-            "excalidraw--allow-browser-zoom":
-              !this.isInteractionEnabled() && this.isBrowserZoomEnabled(),
-            "excalidraw--ui-hidden": !this.isDefaultUIEnabled(),
-            "excalidraw--mobile-toolbar":
-              this.editorInterface.formFactor === "phone" &&
-              this.isDefaultUIEnabled() &&
-              !this.state.viewModeEnabled,
-            "excalidraw--viewport-status-border":
-              !!this.props.viewportStatusFrame?.border,
-            "excalidraw--viewport-status-label":
-              !!this.props.viewportStatusFrame?.label,
-            "excalidraw--zen-mode": this.state.zenModeEnabled,
-          },
-        )}
-        style={{
-          ["--ui-pointerEvents" as any]: shouldBlockPointerEvents
-            ? POINTER_EVENTS.disabled
-            : POINTER_EVENTS.enabled,
-          ["--right-sidebar-width" as any]: `${RIGHT_SIDEBAR_WIDTH}px`,
-        }}
-        ref={this.excalidrawContainerRef}
-        onDrop={this.isInteractionEnabled() ? this.handleAppOnDrop : undefined}
-        tabIndex={0}
-        onKeyDown={
-          this.props.handleKeyboardGlobally || !this.isInteractionEnabled()
-            ? undefined
-            : this.onKeyDown
-        }
-        onPointerEnter={
-          this.isInteractionEnabled()
-            ? this.toggleOverscrollBehavior
-            : undefined
-        }
-        onPointerLeave={
-          this.isInteractionEnabled()
-            ? this.toggleOverscrollBehavior
-            : undefined
-        }
-      >
-        <ExcalidrawAPIContext.Provider value={this.api}>
-          <AppContext.Provider value={this}>
-            <AppPropsContext.Provider value={this.props}>
-              <ExcalidrawContainerContext.Provider
-                value={this.excalidrawContainerValue}
-              >
-                <EditorInterfaceContext.Provider value={this.editorInterface}>
-                  <ExcalidrawSetAppStateContext.Provider
-                    value={this.setAppState}
-                  >
-                    <ExcalidrawAppStateContext.Provider value={this.state}>
-                      <ExcalidrawElementsContext.Provider
-                        value={this.scene.getNonDeletedElements()}
-                      >
-                        <ExcalidrawActionManagerContext.Provider
-                          value={this.actionManager}
-                        >
-                          <LayerUI
-                            canvas={this.canvas}
-                            appState={this.state}
-                            defaultUIEnabled={this.isDefaultUIEnabled()}
-                            zoomUIEnabled={this.isUIControlEnabled("zoom")}
-                            scrollBackToContentUIEnabled={this.isUIControlEnabled(
-                              "scrollBackToContent",
-                            )}
-                            files={this.files}
-                            setAppState={this.setAppState}
-                            actionManager={this.actionManager}
-                            elements={this.scene.getNonDeletedElements()}
-                            onLockToggle={this.toggleLock}
-                            onPenModeToggle={this.togglePenMode}
-                            langCode={getLanguage().code}
-                            renderTopLeftUI={renderTopLeftUI}
-                            renderTopRightUI={renderTopRightUI}
-                            renderTopCenterToolbar={renderTopCenterToolbar}
-                            renderCustomStats={renderCustomStats}
-                            showExitZenModeBtn={
-                              typeof this.props?.zenModeEnabled ===
-                                "undefined" && this.state.zenModeEnabled
-                            }
-                            UIOptions={this.props.UIOptions}
-                            onExportImage={this.onExportImage}
-                            renderWelcomeScreen={
-                              !this.state.isLoading &&
-                              this.state.showWelcomeScreen &&
-                              this.state.activeTool.type ===
-                                this.state.preferredSelectionTool.type &&
-                              !this.state.zenModeEnabled &&
-                              !this.scene.getElementsIncludingDeleted().length
-                            }
-                            app={this}
-                            isCollaborating={this.props.isCollaborating}
-                            generateLinkForSelection={
-                              this.props.generateLinkForSelection
-                            }
-                            currentUserControls={this.props.currentUserControls}
-                          >
-                            {this.props.children}
-                          </LayerUI>
-
-                          <div className="excalidraw-textEditorContainer" />
-                          <div className="excalidraw-contextMenuContainer" />
-                          <div className="excalidraw-eye-dropper-container" />
-                          <SVGLayer
-                            trails={[
-                              this.laserTrails,
-                              this.lassoTrail,
-                              this.eraserTrail,
-                              this.drawShape.trail,
-                            ]}
-                          />
-                          {this.isDefaultUIEnabled() && <CursorHint />}
-                          {this.isDefaultUIEnabled() &&
-                            selectedElements.length === 1 &&
-                            this.state.openDialog?.name !==
-                              "elementLinkSelector" &&
-                            this.state.showHyperlinkPopup && (
-                              <Hyperlink
-                                key={firstSelectedElement.id}
-                                element={firstSelectedElement}
-                                scene={this.scene}
-                                setAppState={this.setAppState}
-                                onLinkOpen={this.props.onLinkOpen}
-                                setToast={this.setToast}
-                                updateEmbedValidationStatus={
-                                  this.updateEmbedValidationStatus
-                                }
-                              />
-                            )}
-                          {this.isDefaultUIEnabled() &&
-                            mindmapNodeForControls &&
-                            this.mindmap.canEditNode(
-                              mindmapNodeForControls.id,
-                            ) &&
-                            !this.state.openDialog && (
-                              <ElementCanvasButtons
-                                element={mindmapNodeForControls}
-                                elementsMap={renderableElementsMap}
-                                layoutDirection={this.mindmap.getLayoutDirection(
-                                  mindmapNodeForControls.graphId,
-                                )}
-                              >
-                                <ElementCanvasButton
-                                  isMobile={
-                                    this.editorInterface.formFactor !==
-                                    "desktop"
-                                  }
-                                  title={t("labels.addMindmapChild")}
-                                  icon={PlusIcon}
-                                  checked={false}
-                                  onChange={() =>
-                                    this.mindmap.createChild(
-                                      mindmapNodeForControls.id,
-                                    )
-                                  }
-                                />
-                                {this.mindmap.hasChildren(
-                                  mindmapNodeForControls.id,
-                                ) && (
-                                  <ElementCanvasButton
-                                    isMobile={
-                                      this.editorInterface.formFactor !==
-                                      "desktop"
-                                    }
-                                    title={t(
-                                      mindmapNodeForControls.collapsed
-                                        ? "labels.expandMindmap"
-                                        : "labels.collapseMindmap",
-                                    )}
-                                    icon={
-                                      <span aria-hidden="true">
-                                        {mindmapNodeForControls.collapsed
-                                          ? "▸"
-                                          : "▾"}
-                                      </span>
-                                    }
-                                    checked={mindmapNodeForControls.collapsed}
-                                    onChange={() =>
-                                      this.mindmap.executeTreeCommand(
-                                        { type: "toggleCollapse" },
-                                        mindmapNodeForControls.id,
-                                      )
-                                    }
-                                  />
-                                )}
-                              </ElementCanvasButtons>
-                            )}
-                          {this.isDefaultUIEnabled() &&
-                            this.props.aiEnabled !== false &&
-                            selectedElements.length === 1 &&
-                            isMagicFrameElement(firstSelectedElement) && (
-                              <ElementCanvasButtons
-                                element={firstSelectedElement}
-                                elementsMap={renderableElementsMap}
-                              >
-                                <ElementCanvasButton
-                                  title={t("labels.convertToCode")}
-                                  icon={MagicIcon}
-                                  checked={false}
-                                  onChange={() =>
-                                    this.onMagicFrameGenerate(
-                                      firstSelectedElement,
-                                      "button",
-                                    )
-                                  }
-                                />
-                              </ElementCanvasButtons>
-                            )}
-                          {this.isDefaultUIEnabled() &&
-                            selectedElements.length === 1 &&
-                            isIframeElement(firstSelectedElement) &&
-                            firstSelectedElement.customData?.generationData
-                              ?.status === "done" && (
-                              <ElementCanvasButtons
-                                element={firstSelectedElement}
-                                elementsMap={renderableElementsMap}
-                              >
-                                <ElementCanvasButton
-                                  title={t("labels.copySource")}
-                                  icon={copyIcon}
-                                  checked={false}
-                                  onChange={() =>
-                                    this.onIframeSrcCopy(firstSelectedElement)
-                                  }
-                                />
-                                <ElementCanvasButton
-                                  title="Enter fullscreen"
-                                  icon={fullscreenIcon}
-                                  checked={false}
-                                  onChange={() => {
-                                    const iframe =
-                                      this.getHTMLIFrameElement(
-                                        firstSelectedElement,
-                                      );
-                                    if (iframe) {
-                                      try {
-                                        iframe.requestFullscreen();
-                                        this.setState({
-                                          activeEmbeddable: {
-                                            element: firstSelectedElement,
-                                            state: "active",
-                                          },
-                                          selectedElementIds: {
-                                            [firstSelectedElement.id]: true,
-                                          },
-                                          newElement: null,
-                                          selectionElement: null,
-                                        });
-                                      } catch (err: any) {
-                                        console.warn(err);
-                                        this.setState({
-                                          errorMessage:
-                                            "Couldn't enter fullscreen",
-                                        });
-                                      }
-                                    }
-                                  }}
-                                />
-                              </ElementCanvasButtons>
-                            )}
-
-                          {this.isDefaultUIEnabled() && this.state.contextMenu && (
-                            <ContextMenu
-                              items={this.state.contextMenu.items}
-                              top={this.state.contextMenu.top}
-                              left={this.state.contextMenu.left}
-                              actionManager={this.actionManager}
-                              onClose={(callback) => {
-                                this.setState({ contextMenu: null }, () => {
-                                  this.focusContainer();
-                                  callback?.();
-                                });
-                              }}
-                            />
-                          )}
-                          <StaticCanvas
-                            canvas={this.canvas}
-                            rc={this.rc}
-                            elementsMap={renderableElementsMap}
-                            allElementsMap={allElementsMap}
-                            visibleElements={
-                              this.elementRenderOffsets.size
-                                ? this.renderer.getVisibleElementsWithRenderOffsets(
-                                    visibleElements,
-                                    renderableElementsMap,
-                                    this.state,
-                                    this.elementRenderOffsets,
-                                  )
-                                : visibleElements
-                            }
-                            canvasNonce={canvasNonce}
-                            selectionNonce={
-                              this.state.selectionElement?.versionNonce
-                            }
-                            scale={this.ownerWindow.devicePixelRatio}
-                            appState={this.state}
-                            renderConfig={{
-                              imageCache: this.imageCache,
-                              isExporting: false,
-                              renderGrid: isGridModeEnabled(this),
-                              renderLinks: this.isLinksEnabled(),
-                              canvasBackgroundColor:
-                                this.state.viewBackgroundColor,
-                              embedsValidationStatus:
-                                this.embedsValidationStatus,
-                              elementsPendingErasure:
-                                this.elementsPendingErasure,
-                              pendingFlowchartNodes:
-                                this.flowchart.pendingNodes,
-                              theme: this.state.theme,
-                              ...this.getRenderOverrideConfig(),
-                            }}
-                          />
-                          {previewElement && (
-                            <NewElementCanvas
-                              appState={this.state}
-                              newElement={previewElement}
-                              scale={this.ownerWindow.devicePixelRatio}
-                              rc={this.rc}
-                              elementsMap={renderableElementsMap}
-                              allElementsMap={allElementsMap}
-                              renderConfig={{
-                                imageCache: this.imageCache,
-                                isExporting: false,
-                                renderGrid: false,
-                                canvasBackgroundColor:
-                                  this.state.viewBackgroundColor,
-                                embedsValidationStatus:
-                                  this.embedsValidationStatus,
-                                elementsPendingErasure:
-                                  this.elementsPendingErasure,
-                                pendingFlowchartNodes: null,
-                                theme: this.state.theme,
-                                ...this.getRenderOverrideConfig(),
-                              }}
-                              // a tool dragged out of the toolbar previews
-                              // translucently; the element itself is drawn
-                              // exactly as it will land
-                              opacity={
-                                this.toolDrag.preview
-                                  ? TOOL_DRAG_PREVIEW_OPACITY
-                                  : undefined
-                              }
-                            />
-                          )}
-                          <InteractiveCanvas
-                            app={this}
-                            containerRef={this.excalidrawContainerRef}
-                            canvas={this.interactiveCanvas}
-                            elementsMap={renderableElementsMap}
-                            visibleElements={visibleElements}
-                            allElementsMap={allElementsMap}
-                            selectedElements={selectedElements}
-                            canvasNonce={canvasNonce}
-                            selectionNonce={
-                              this.state.selectionElement?.versionNonce
-                            }
-                            scale={this.ownerWindow.devicePixelRatio}
-                            appState={this.state}
-                            renderScrollbars={
-                              this.props.renderScrollbars === true
-                            }
-                            editorInterface={this.editorInterface}
-                            interactionEnabled={this.isInteractionEnabled()}
-                            navigationEnabled={this.isNavigationEnabled()}
-                            renderInteractiveSceneCallback={
-                              this.renderInteractiveSceneCallback
-                            }
-                            handleCanvasRef={this.handleInteractiveCanvasRef}
-                            onContextMenu={this.handleCanvasContextMenu}
-                            onClick={this.handleCanvasClick}
-                            onPointerMove={this.handleCanvasPointerMove}
-                            onPointerUp={this.handleCanvasPointerUp}
-                            onPointerCancel={(event) => {
-                              this.removePointer(event);
-                              this.maybeCleanupAfterMissingPointerUp(
-                                event.nativeEvent,
-                              );
-                            }}
-                            onTouchMove={this.handleTouchMove}
-                            onPointerDown={this.handleCanvasPointerDown}
-                            onDoubleClick={this.handleCanvasDoubleClick}
-                          />
-                          {this.props.viewportStatusFrame?.border &&
-                            this.editorInterface.formFactor === "phone" && (
-                              <ViewportStatusBorder
-                                border={this.props.viewportStatusFrame.border}
-                              />
-                            )}
-                          {this.renderFrameNames()}
-                          {this.isDefaultUIEnabled() &&
-                            this.state.activeLockedId && (
-                              <UnlockPopup
-                                app={this}
-                                activeLockedId={this.state.activeLockedId}
-                              />
-                            )}
-                          {this.isDefaultUIEnabled() &&
-                            showShapeSwitchPanel && (
-                              <ConvertElementTypePopup app={this} />
-                            )}
-                        </ExcalidrawActionManagerContext.Provider>
-                        {this.renderEmbeddables()}
-                      </ExcalidrawElementsContext.Provider>
-                    </ExcalidrawAppStateContext.Provider>
-                  </ExcalidrawSetAppStateContext.Provider>
-                </EditorInterfaceContext.Provider>
-              </ExcalidrawContainerContext.Provider>
-            </AppPropsContext.Provider>
-          </AppContext.Provider>
-        </ExcalidrawAPIContext.Provider>
-      </div>
-    );
+    return <AppView app={this} />;
   }
 
   public focusContainer: AppClassProperties["focusContainer"] = () => {
@@ -2928,7 +1711,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private magicGenerations = new Map<
+  public magicGenerations = new Map<
     ExcalidrawIframeElement["id"],
     MagicGenerationData
   >();
@@ -2975,7 +1758,7 @@ class App extends React.Component<AppProps, AppState> {
     Object.assign(this.plugins, plugins);
   }
 
-  private async onMagicFrameGenerate(
+  public async onMagicFrameGenerate(
     magicFrame: Readonly<NonDeleted<ExcalidrawMagicFrameElement>>,
     source: "button" | "upstream",
   ) {
@@ -3094,7 +1877,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   }
 
-  private onIframeSrcCopy(element: ExcalidrawIframeElement) {
+  public onIframeSrcCopy(element: ExcalidrawIframeElement) {
     if (element.customData?.generationData?.status === "done") {
       copyTextToSystemClipboard(element.customData.generationData.html);
       this.setToast({
@@ -4543,7 +3326,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   }
 
-  private renderInteractiveSceneCallback = ({
+  public renderInteractiveSceneCallback = ({
     scrollBars,
   }: RenderInteractiveSceneCallback) => {
     if (scrollBars) {
@@ -5604,7 +4387,7 @@ class App extends React.Component<AppProps, AppState> {
   );
 
   // Input handling
-  private onKeyDown = withBatchedUpdates(
+  public onKeyDown = withBatchedUpdates(
     (event: React.KeyboardEvent | KeyboardEvent) => {
       if (!this.isInteractionEnabled()) {
         return;
@@ -7319,7 +6102,7 @@ class App extends React.Component<AppProps, AppState> {
     );
   };
 
-  private handleCanvasDoubleClick = (
+  public handleCanvasDoubleClick = (
     event: Pick<
       React.MouseEvent<HTMLCanvasElement>,
       | "type"
@@ -7545,7 +6328,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+  public handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (!this.isInteractionEnabled()) {
       return;
     }
@@ -7944,7 +6727,7 @@ class App extends React.Component<AppProps, AppState> {
     );
   };
 
-  private handleCanvasPointerMove = (
+  public handleCanvasPointerMove = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
     if (!this.isInteractionEnabled()) {
@@ -8549,7 +7332,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   // set touch moving for mobile context menu
-  private handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
+  public handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
     if (!this.isInteractionEnabled()) {
       return;
     }
@@ -8687,9 +7470,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   }
 
-  private handleCanvasPointerDown = (
-    event: React.PointerEvent<HTMLElement>,
-  ) => {
+  public handleCanvasPointerDown = (event: React.PointerEvent<HTMLElement>) => {
     if (
       !this.isInteractionEnabled() &&
       !this.isToolSupported(this.state.activeTool.type)
@@ -9206,7 +7987,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private handleCanvasPointerUp = (
+  public handleCanvasPointerUp = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
     if (!this.isInteractionEnabled()) {
@@ -9311,7 +8092,7 @@ class App extends React.Component<AppProps, AppState> {
    * to properly cleanup pointerdown state, we need to fire any hanging
    * pointerup handlers manually
    */
-  private maybeCleanupAfterMissingPointerUp = (event: PointerEvent | null) => {
+  public maybeCleanupAfterMissingPointerUp = (event: PointerEvent | null) => {
     this.pan.end();
     lastPointerUp?.();
     this.missingPointerEventCleanupEmitter.trigger(event).clear();
@@ -13187,7 +11968,7 @@ class App extends React.Component<AppProps, AppState> {
     });
   }
 
-  private handleInteractiveCanvasRef = (canvas: HTMLCanvasElement | null) => {
+  public handleInteractiveCanvasRef = (canvas: HTMLCanvasElement | null) => {
     // canvas is null when unmounting
     if (canvas !== null) {
       this.interactiveCanvas = canvas;
@@ -13284,7 +12065,7 @@ class App extends React.Component<AppProps, AppState> {
     });
   };
 
-  private handleAppOnDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+  public handleAppOnDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     // NOTE no preventDefault so the host page can handle the drop itself
     if (!this.isInteractionEnabled()) {
       return;
@@ -13494,7 +12275,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private handleCanvasContextMenu = (
+  public handleCanvasContextMenu = (
     event: React.MouseEvent<HTMLElement | HTMLCanvasElement>,
   ) => {
     // Always suppress the native menu over the canvas.
