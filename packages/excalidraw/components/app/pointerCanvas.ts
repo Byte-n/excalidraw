@@ -1,5 +1,6 @@
 import {
   CURSOR_TYPE,
+  getFeatureFlag,
   isLocalLink,
   normalizeLink,
   DRAGGING_THRESHOLD,
@@ -93,6 +94,59 @@ export const maybeUpdateFrameToHighlightOnPointerMove = (
       ? app.getTopLayerFrameAtSceneCoords(sceneCoords)
       : null,
   );
+};
+
+export const handleCanvasPointerUp = (
+  app: any,
+  event: React.PointerEvent<HTMLCanvasElement>,
+) => {
+  if (!app.isInteractionEnabled()) {
+    if (app.isLinksEnabled() || app.isEmbedsEnabled()) {
+      app.handleInteractiveContentPointerUp(event);
+    }
+    return;
+  }
+  if (getFeatureFlag("COMPLEX_BINDINGS")) {
+    app.resetDelayedBindMode();
+  }
+
+  app.removePointer(event);
+  app.lastPointerUpIsDoubleClick = app.isDoubleClick(
+    app.lastPointerUpEvent,
+    event,
+  );
+  app.lastPointerUpEvent = event;
+
+  if (!event.ctrlKey) {
+    const preferenceEnabled = app.state.bindingPreference === "enabled";
+    if (app.state.isBindingEnabled !== preferenceEnabled) {
+      app.setState({ isBindingEnabled: preferenceEnabled });
+    }
+  }
+
+  const scenePointer = viewportCoordsToSceneCoords(
+    { clientX: event.clientX, clientY: event.clientY },
+    app.state,
+  );
+  const { x: scenePointerX, y: scenePointerY } = scenePointer;
+  app.lastPointerMoveCoords = {
+    x: scenePointerX,
+    y: scenePointerY,
+  };
+
+  if (app.handleIframeLikeCenterClick()) {
+    return;
+  }
+
+  if (
+    !app.maybeHandleElementLinkClick(event, scenePointer) &&
+    app.state.viewModeEnabled
+  ) {
+    app.setState({
+      activeEmbeddable: null,
+      selectedElementIds: {},
+    });
+  }
 };
 
 /** Opens an element link after a click that did not turn into a drag. */

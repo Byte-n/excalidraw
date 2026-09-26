@@ -435,6 +435,7 @@ import * as pointerSelectionController from "./app/pointerSelection";
 import {
   cleanupAfterMissingPointerUp,
   createInteractionState,
+  attachPointerSessionListeners,
   handleDraggingScrollBar,
   resetContextMenuTimer,
   resetInteractionState,
@@ -7215,81 +7216,13 @@ class App extends React.Component<AppProps, AppState> {
       );
     }
 
-    const onPointerMove =
-      this.onPointerMoveFromPointerDownHandler(pointerDownState);
-
-    const onPointerUp =
-      this.onPointerUpFromPointerDownHandler(pointerDownState);
-
-    const onKeyDown = this.onKeyDownFromPointerDownHandler(pointerDownState);
-    const onKeyUp = this.onKeyUpFromPointerDownHandler(pointerDownState);
-
-    this.missingPointerEventCleanupEmitter.once((_event) =>
-      onPointerUp(_event || event.nativeEvent),
-    );
-
-    if (!this.state.viewModeEnabled || this.isActiveToolPointerCapturing()) {
-      this.ownerWindow.addEventListener(EVENT.POINTER_MOVE, onPointerMove);
-      this.ownerWindow.addEventListener(EVENT.POINTER_UP, onPointerUp);
-      this.ownerWindow.addEventListener(EVENT.KEYDOWN, onKeyDown);
-      this.ownerWindow.addEventListener(EVENT.KEYUP, onKeyUp);
-      pointerDownState.eventListeners.onMove = onPointerMove;
-      pointerDownState.eventListeners.onUp = onPointerUp;
-      pointerDownState.eventListeners.onKeyUp = onKeyUp;
-      pointerDownState.eventListeners.onKeyDown = onKeyDown;
-    }
+    attachPointerSessionListeners(this, event, pointerDownState);
   };
 
   public handleCanvasPointerUp = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
-    if (!this.isInteractionEnabled()) {
-      if (this.isLinksEnabled() || this.isEmbedsEnabled()) {
-        this.handleInteractiveContentPointerUp(event);
-      }
-      return;
-    }
-    if (getFeatureFlag("COMPLEX_BINDINGS")) {
-      this.resetDelayedBindMode();
-    }
-
-    this.removePointer(event);
-    this.lastPointerUpIsDoubleClick = this.isDoubleClick(
-      this.lastPointerUpEvent,
-      event,
-    );
-    this.lastPointerUpEvent = event;
-
-    if (!event.ctrlKey) {
-      const preferenceEnabled = this.state.bindingPreference === "enabled";
-      if (this.state.isBindingEnabled !== preferenceEnabled) {
-        this.setState({ isBindingEnabled: preferenceEnabled });
-      }
-    }
-
-    const scenePointer = viewportCoordsToSceneCoords(
-      { clientX: event.clientX, clientY: event.clientY },
-      this.state,
-    );
-    const { x: scenePointerX, y: scenePointerY } = scenePointer;
-    this.lastPointerMoveCoords = {
-      x: scenePointerX,
-      y: scenePointerY,
-    };
-
-    if (this.handleIframeLikeCenterClick()) {
-      return;
-    }
-
-    if (
-      !this.maybeHandleElementLinkClick(event, scenePointer) &&
-      this.state.viewModeEnabled
-    ) {
-      this.setState({
-        activeEmbeddable: null,
-        selectedElementIds: {},
-      });
-    }
+    pointerCanvasController.handleCanvasPointerUp(this, event);
   };
 
   private maybeOpenContextMenuAfterPointerDownOnTouchDevices = (

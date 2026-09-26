@@ -137,6 +137,36 @@ export const resetContextMenuTimer = (app: {
   app.interactionState.invalidateContextMenu = false;
 };
 
+/** Installs the window-level listeners for one pointer-down session and keeps
+ * their callbacks on that session's state for deterministic teardown. */
+export const attachPointerSessionListeners = (
+  app: any,
+  event: React.PointerEvent<HTMLElement>,
+  pointerDownState: PointerDownState,
+) => {
+  const onPointerMove =
+    app.onPointerMoveFromPointerDownHandler(pointerDownState);
+  const onPointerUp = app.onPointerUpFromPointerDownHandler(pointerDownState);
+  const onKeyDown = app.onKeyDownFromPointerDownHandler(pointerDownState);
+  const onKeyUp = app.onKeyUpFromPointerDownHandler(pointerDownState);
+
+  app.missingPointerEventCleanupEmitter.once(
+    (cleanupEvent: PointerEvent | null) =>
+      onPointerUp(cleanupEvent || event.nativeEvent),
+  );
+
+  if (!app.state.viewModeEnabled || app.isActiveToolPointerCapturing()) {
+    app.ownerWindow.addEventListener(EVENT.POINTER_MOVE, onPointerMove);
+    app.ownerWindow.addEventListener(EVENT.POINTER_UP, onPointerUp);
+    app.ownerWindow.addEventListener(EVENT.KEYDOWN, onKeyDown);
+    app.ownerWindow.addEventListener(EVENT.KEYUP, onKeyUp);
+    pointerDownState.eventListeners.onMove = onPointerMove;
+    pointerDownState.eventListeners.onUp = onPointerUp;
+    pointerDownState.eventListeners.onKeyUp = onKeyUp;
+    pointerDownState.eventListeners.onKeyDown = onKeyDown;
+  }
+};
+
 export type PointerSessionApp = {
   state: AppState;
 };
