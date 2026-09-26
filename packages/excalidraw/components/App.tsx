@@ -146,7 +146,6 @@ import {
   isMagicFrameElement,
   isMindmapEdgeElement,
   isMindmapNodeElement,
-  isTextBindableContainer,
   isElbowArrow,
   isBindableElement,
   isTextElement,
@@ -169,7 +168,6 @@ import {
   getStickyNoteMinSize,
   isValidTextContainer,
   redrawTextBoundingBox,
-  hasBoundingBox,
   getCommonFrameId,
   getFrameChildren,
   getFrameChildrenInsertionIndex,
@@ -184,7 +182,6 @@ import {
   updateFrameMembershipOfSelectedElements,
   isElementInFrame,
   getElementsOverlappingFrame,
-  hitElementBoundText,
   hitElementBoundingBoxOnly,
   hitElementItself,
   getVisibleSceneBounds,
@@ -224,7 +221,6 @@ import {
   Store,
   CaptureUpdateAction,
   type ElementUpdate,
-  hitElementBoundingBox,
   isLineElement,
   isSimpleArrow,
   StoreDelta,
@@ -246,7 +242,6 @@ import {
   handleFocusPointPointerUp,
   maybeHandleArrowPointlikeDrag,
   getUncroppedWidthAndHeight,
-  getActiveTextElement,
   isEligibleFrameChildType,
   getBindingStrategyForDraggingBindingElementEndpoints,
   isNonDeletedElement,
@@ -271,7 +266,6 @@ import type {
   ExcalidrawIframeLikeElement,
   ExcalidrawIframeElement,
   ExcalidrawEmbeddableElement,
-  Ordered,
   MagicGenerationData,
   ExcalidrawArrowElement,
   ExcalidrawElbowArrowElement,
@@ -358,7 +352,6 @@ import {
 import { exportCanvas, loadFromBlob } from "../data";
 import Library, { distributeLibraryItemsOnSquareGrid } from "../data/library";
 import { restoreAppState, restoreElements } from "../data/restore";
-import { getCenter, getDistance } from "../gesture";
 import {
   copyElementRenderOverrides,
   getElementRenderOffsets,
@@ -369,7 +362,6 @@ import { defaultLang, languages, setLanguage, t } from "../i18n";
 import {
   getScrollToContentState,
   getElementsWithinSelection,
-  getNormalizedZoom,
   getSelectedElements,
   hasBackground,
   isSomeElementSelected,
@@ -411,13 +403,9 @@ import {
   isGridModeEnabled,
 } from "../snapping";
 import { Renderer } from "../scene/Renderer";
-import {
-  type SetViewportOptions,
-  getViewportForZoomWithScrollConstraints,
-} from "../viewport";
+import { type SetViewportOptions } from "../viewport";
 import { LaserTrails } from "../laserTrails";
 import { withBatchedUpdates, withBatchedUpdatesThrottled } from "../reactUtils";
-import { isPointHittingTextAutoResizeHandle } from "../textAutoResizeHandle";
 import { textWysiwyg } from "../wysiwyg/textWysiwyg";
 import { isOverScrollBars } from "../scene/scrollbars";
 import { isMaybeMermaidDefinition } from "../mermaid";
@@ -456,6 +444,10 @@ import * as lifecycle from "./app/lifecycle";
 import * as eventListeners from "./app/eventListeners";
 import * as sceneController from "./app/scene";
 import * as filesController from "./app/files";
+import * as gestureController from "./app/gesture";
+import * as hitTestController from "./app/hitTest";
+import * as textController from "./app/text";
+import * as keyboardController from "./app/keyboard";
 import BraveMeasureTextError from "./BraveMeasureTextError";
 import { CONTEXT_MENU_SEPARATOR } from "./ContextMenu";
 import { activeEyeDropperAtom } from "./EyeDropper";
@@ -547,17 +539,17 @@ let IS_PLAIN_PASTE_TIMER = 0;
 let PLAIN_PASTE_TOAST_SHOWN = false;
 
 let lastPointerUp: (() => void) | null = null;
-const gesture: Gesture = {
-  pointers: new Map(),
-  lastCenter: null,
-  initialDistance: null,
-  initialScale: null,
-};
-
 class App extends React.Component<AppProps, AppState> {
   canvas: AppClassProperties["canvas"];
   interactiveCanvas: AppClassProperties["interactiveCanvas"] = null;
   public sessionExportThemeOverride: AppState["theme"] | undefined;
+  /** Pointer gesture state belongs to this editor instance. */
+  public gesture: Gesture = {
+    pointers: new Map(),
+    lastCenter: null,
+    initialDistance: null,
+    initialScale: null,
+  };
   rc: RoughCanvas;
   unmounted: boolean = false;
   actionManager: ActionManager;
@@ -632,12 +624,13 @@ class App extends React.Component<AppProps, AppState> {
   public cursor: AppCursor = new AppCursor(this);
   public arrowText: AppArrowText = new AppArrowText(this);
   public pan: AppPan = new AppPan(this, {
-    getPointerCount: () => gesture.pointers.size,
+    getPointerCount: () => this.gesture.pointers.size,
   });
   public viewport: AppViewport = new AppViewport(this, {
     getContainer: () => this.excalidrawContainerRef.current,
     getStylesPanelMode: () => this.stylesPanelMode,
-    isGestureActive: () => gesture.pointers.size >= 2 || this.pan.isActive(),
+    isGestureActive: () =>
+      this.gesture.pointers.size >= 2 || this.pan.isActive(),
   });
   public wheel: AppWheel = new AppWheel(this);
 
@@ -1491,7 +1484,7 @@ class App extends React.Component<AppProps, AppState> {
       hitElement &&
       this.lastPointerUpEvent.timeStamp - this.lastPointerDownEvent.timeStamp <=
         300 &&
-      gesture.pointers.size < 2 &&
+      this.gesture.pointers.size < 2 &&
       isIframeLikeElement(hitElement) &&
       this.isIframeLikeInteractive(hitElement) &&
       (this.state.viewModeEnabled ||
@@ -2167,12 +2160,7 @@ class App extends React.Component<AppProps, AppState> {
   // `ActionManager.handleKeyDown` gates); the rest of the keyboard handling
   // stays disabled while non-interactive
   private handleNavigationModeKeyDown = (event: KeyboardEvent) => {
-    if (this.maybeHandlePageScrollKeyDown(event)) {
-      // the editor consumes the input — the page must not scroll along
-      event.preventDefault();
-      return;
-    }
-    this.actionManager.handleKeyDown(event);
+    keyboardController.handleNavigationModeKeyDown(this, event);
   };
 
   /**
@@ -2183,39 +2171,11 @@ class App extends React.Component<AppProps, AppState> {
   private maybeHandlePageScrollKeyDown = (
     event: KeyboardEvent | React.KeyboardEvent,
   ): boolean => {
-    if (event.key !== KEYS.PAGE_UP && event.key !== KEYS.PAGE_DOWN) {
-      return false;
-    }
-    let offset =
-      (event.shiftKey ? this.state.width : this.state.height) /
-      this.state.zoom.value;
-    if (event.key === KEYS.PAGE_DOWN) {
-      offset = -offset;
-    }
-    if (event.shiftKey) {
-      this.viewport.translate((state) => ({
-        scrollX: state.scrollX + offset,
-      }));
-    } else {
-      this.viewport.translate((state) => ({
-        scrollY: state.scrollY + offset,
-      }));
-    }
-    return true;
+    return keyboardController.maybeHandlePageScrollKeyDown(this, event);
   };
 
   private preventBrowserZoomKeyDown = (event: KeyboardEvent) => {
-    if (
-      event[KEYS.CTRL_OR_CMD] &&
-      (event.code === CODES.EQUAL ||
-        event.code === CODES.MINUS ||
-        event.code === CODES.ZERO ||
-        event.code === CODES.NUM_ADD ||
-        event.code === CODES.NUM_SUBTRACT ||
-        event.code === CODES.NUM_ZERO)
-    ) {
-      event.preventDefault();
-    }
+    keyboardController.preventBrowserZoomKeyDown(event);
   };
 
   /** Ends active input sessions before switching to a view-mode/non-interactive
@@ -2229,10 +2189,10 @@ class App extends React.Component<AppProps, AppState> {
     isDraggingScrollBar = false;
     lastPointerUp = null;
 
-    gesture.pointers.clear();
-    gesture.lastCenter = null;
-    gesture.initialDistance = null;
-    gesture.initialScale = null;
+    this.gesture.pointers.clear();
+    this.gesture.lastCenter = null;
+    this.gesture.initialDistance = null;
+    this.gesture.initialScale = null;
 
     clearTimeout(tappedTwiceTimer);
     tappedTwiceTimer = 0;
@@ -3496,7 +3456,7 @@ class App extends React.Component<AppProps, AppState> {
         ),
       });
     } else {
-      gesture.pointers.clear();
+      this.gesture.pointers.clear();
     }
   };
 
@@ -4025,15 +3985,15 @@ class App extends React.Component<AppProps, AppState> {
       this.mindmap.cancelTouchDrag();
     }
 
-    const wasMultiTouchGesture = gesture.pointers.size >= 2;
-    gesture.pointers.delete(event.pointerId);
+    const wasMultiTouchGesture = this.gesture.pointers.size >= 2;
+    this.gesture.pointers.delete(event.pointerId);
 
     // the multi-touch viewport gesture just disengaged: release the
     // rubberband that was withheld while it was active
     // (see `snapBackToScrollConstraints`)
     if (
       wasMultiTouchGesture &&
-      gesture.pointers.size < 2 &&
+      this.gesture.pointers.size < 2 &&
       this.state.scrollConstraints
     ) {
       this.viewport.releaseOverscroll();
@@ -4846,7 +4806,7 @@ class App extends React.Component<AppProps, AppState> {
         }
       }
 
-      if (event.key === KEYS.SPACE && gesture.pointers.size === 0) {
+      if (event.key === KEYS.SPACE && this.gesture.pointers.size === 0) {
         this.pan.setSpaceHeld(true);
         this.cursor.set(CURSOR_TYPE.GRAB);
         event.preventDefault();
@@ -4933,7 +4893,11 @@ class App extends React.Component<AppProps, AppState> {
     },
   );
 
-  private onKeyUp = withBatchedUpdates((event: KeyboardEvent) => {
+  private onKeyUp = withBatchedUpdates((event: KeyboardEvent) =>
+    keyboardController.onKeyUp(this, event),
+  );
+
+  private onKeyUpLegacy = withBatchedUpdates((event: KeyboardEvent) => {
     if (this.mindmap.handleKeyUp(event)) {
       return;
     }
@@ -5221,10 +5185,7 @@ class App extends React.Component<AppProps, AppState> {
    * GestureEvent is standardized.
    */
   private isTouchScreenMultiTouchGesture = () => {
-    // we don't want to deselect when using trackpad, and multi-point gestures
-    // only work on touch screens, so checking for >= pointers means we're on a
-    // touchscreen
-    return gesture.pointers.size >= 2;
+    return gestureController.isTouchScreenMultiTouchGesture(this);
   };
 
   public getName = () => {
@@ -5237,83 +5198,30 @@ class App extends React.Component<AppProps, AppState> {
 
   // fires only on Safari
   private onGestureStart = withBatchedUpdates((event: GestureEvent) => {
-    if (!this.isNavigationEnabled()) {
-      return;
-    }
-    event.preventDefault();
-
-    // we only want to deselect on touch screens because user may have selected
-    // elements by mistake while zooming
-    if (this.isTouchScreenMultiTouchGesture()) {
-      this.setState({
-        selectedElementIds: makeNextSelectedElementIds({}, this.state),
-        activeEmbeddable: null,
-      });
-    }
-    gesture.initialScale = this.state.zoom.value;
+    gestureController.onGestureStart(this, event);
   });
 
   // fires only on Safari
   private onGestureChange = withBatchedUpdates((event: GestureEvent) => {
-    if (!this.isNavigationEnabled()) {
-      return;
-    }
-    event.preventDefault();
-
-    // onGestureChange only has zoom factor but not the center.
-    // If we're on iPad or iPhone, then we recognize multi-touch and will
-    // zoom in at the right location in the touchmove handler
-    // (handleCanvasPointerMove).
-    //
-    // On Macbook trackpad, we don't have those events so will zoom in at the
-    // current location instead.
-    //
-    // As such, bail from this handler on touch devices.
-    if (this.isTouchScreenMultiTouchGesture()) {
-      return;
-    }
-
-    const initialScale = gesture.initialScale;
-    if (initialScale) {
-      this.viewport.translate(
-        (state) => ({
-          ...getViewportForZoomWithScrollConstraints(
-            {
-              viewportX: this.viewport.lastPosition.x,
-              viewportY: this.viewport.lastPosition.y,
-              nextZoom: getNormalizedZoom(initialScale * event.scale),
-            },
-            state,
-          ),
-        }),
-        {
-          zoomPreConstrained: true,
-          preserveScrollConstraintsSnapBack: true,
-        },
-      );
-    }
+    gestureController.onGestureChange(this, event);
   });
 
   // fires only on Safari
   private onGestureEnd = withBatchedUpdates((event: GestureEvent) => {
-    if (!this.isNavigationEnabled()) {
-      return;
-    }
-    event.preventDefault();
-    // reselect elements only on touch screens (see onGestureStart)
-    if (this.isTouchScreenMultiTouchGesture()) {
-      this.setState({
-        previousSelectedElementIds: {},
-        selectedElementIds: makeNextSelectedElementIds(
-          this.state.previousSelectedElementIds,
-          this.state,
-        ),
-      });
-    }
-    gesture.initialScale = null;
+    gestureController.onGestureEnd(this, event);
   });
 
   private handleTextWysiwyg(
+    element: NonDeleted<ExcalidrawTextElement>,
+    options: {
+      isExistingElement?: boolean;
+      initialCaretSceneCoords?: { x: number; y: number } | null;
+    },
+  ) {
+    return textController.handleTextWysiwyg(this, element, options);
+  }
+
+  private handleTextWysiwygLegacy(
     element: NonDeleted<ExcalidrawTextElement>,
     {
       isExistingElement = false,
@@ -5500,128 +5408,47 @@ class App extends React.Component<AppProps, AppState> {
   private getSelectedTextElement(
     container?: ExcalidrawTextContainer | null,
   ): NonDeleted<ExcalidrawTextElement> | null {
-    const selectedElements = this.scene.getSelectedElements(this.state);
-
-    if (selectedElements.length !== 1) {
-      return null;
-    }
-
-    const selectedElement = selectedElements[0]!;
-
-    if (isTextElement(selectedElement)) {
-      return selectedElement;
-    }
-
-    if (!container) {
-      return null;
-    }
-
-    return getBoundTextElement(
-      selectedElement,
-      this.scene.getNonDeletedElementsMap(),
-    ) as NonDeleted<ExcalidrawTextElement> | null;
+    return textController.getSelectedTextElement(this, container);
   }
 
   private getSelectedTextEditingContainerAtPosition(
     hitElement: NonDeletedExcalidrawElement | null,
     sceneCoords: { x: number; y: number },
   ): ExcalidrawTextContainer | null | undefined {
-    const selectedElements = this.scene.getSelectedElements(this.state);
-
-    if (
-      selectedElements.length !== 1 ||
-      !hitElement ||
-      hitElement.id !== selectedElements[0]!.id
-    ) {
-      return null;
-    }
-
-    const selectedElement = selectedElements[0]!;
-
-    if (isTextElement(selectedElement)) {
-      return null;
-    }
-
-    if (!isValidTextContainer(selectedElement)) {
-      return undefined;
-    }
-
-    const textElement = this.getSelectedTextElement(selectedElement);
-    const hitTextElement = this.getTextElementAtPosition(
-      sceneCoords.x,
-      sceneCoords.y,
+    return textController.getSelectedTextEditingContainerAtPosition(
+      this,
+      hitElement,
+      sceneCoords,
     );
-
-    if (!textElement || hitTextElement?.id !== textElement.id) {
-      return undefined;
-    }
-
-    return selectedElement;
   }
 
   getTextElementAtPosition(
     x: number,
     y: number,
   ): NonDeleted<ExcalidrawTextElement> | null {
-    const element = this.getElementAtPosition(x, y, {
-      includeBoundTextElement: true,
-    });
-    if (element && isTextElement(element) && !element.isDeleted) {
-      return element;
-    }
-    return null;
+    return textController.getTextElementAtPosition(this, x, y);
   }
 
   private isHittingTextAutoResizeHandle = (
     selectedElements: NonDeleted<ExcalidrawElement>[],
     point: Readonly<{ x: number; y: number }>,
   ): boolean => {
-    const activeTextElement = getActiveTextElement(
+    return textController.isHittingTextAutoResizeHandle(
+      this,
       selectedElements,
-      this.state,
+      point,
     );
-
-    if (
-      activeTextElement &&
-      !activeTextElement.isDeleted &&
-      !activeTextElement.autoResize &&
-      isPointHittingTextAutoResizeHandle(
-        point,
-        activeTextElement,
-        this.state.zoom.value,
-        this.editorInterface.formFactor,
-      )
-    ) {
-      return true;
-    }
-
-    return false;
   };
 
   private handleTextAutoResizeHandlePointerDown = (
     selectedElements: NonDeleted<ExcalidrawElement>[],
     point: Readonly<{ x: number; y: number }>,
   ) => {
-    const activeTextElement = getActiveTextElement(
+    return textController.handleTextAutoResizeHandlePointerDown(
+      this,
       selectedElements,
-      this.state,
+      point,
     );
-    if (
-      !activeTextElement ||
-      !this.isHittingTextAutoResizeHandle(selectedElements, point)
-    ) {
-      return false;
-    }
-
-    this.actionManager.executeAction(
-      actionTextAutoResize,
-      "ui",
-      // we need to pass down the element since it may already be deselected
-      // due to the pointerdown
-      activeTextElement,
-    );
-    this.cursor.reset();
-    return true;
   };
 
   // NOTE: Hot path for hit testing, so avoid unnecessary computations
@@ -5640,48 +5467,7 @@ class App extends React.Component<AppProps, AppState> {
       preferSelected?: boolean;
     },
   ): NonDeleted<ExcalidrawElement> | null {
-    let allHitElements: NonDeleted<ExcalidrawElement>[] = [];
-    if (opts && "allHitElements" in opts) {
-      allHitElements = opts?.allHitElements || [];
-    } else {
-      allHitElements = this.getElementsAtPosition(x, y, {
-        includeBoundTextElement: opts?.includeBoundTextElement,
-        includeLockedElements: opts?.includeLockedElements,
-      });
-    }
-
-    if (allHitElements.length > 1) {
-      if (opts?.preferSelected) {
-        for (let index = allHitElements.length - 1; index > -1; index--) {
-          if (this.state.selectedElementIds[allHitElements[index].id]) {
-            return allHitElements[index];
-          }
-        }
-      }
-      const elementWithHighestZIndex =
-        allHitElements[allHitElements.length - 1];
-
-      // If we're hitting element with highest z-index only on its bounding box
-      // while also hitting other element figure, the latter should be considered.
-      return hitElementItself({
-        point: pointFrom(x, y),
-        element: elementWithHighestZIndex,
-        // when overlapping, we would like to be more precise
-        // this also avoids the need to update past tests
-        threshold: this.getElementHitThreshold(elementWithHighestZIndex) / 2,
-        elementsMap: this.scene.getNonDeletedElementsMap(),
-        frameNameBound: isFrameLikeElement(elementWithHighestZIndex)
-          ? this.frameNameBoundsCache.get(elementWithHighestZIndex)
-          : null,
-      })
-        ? elementWithHighestZIndex
-        : allHitElements[allHitElements.length - 2];
-    }
-    if (allHitElements.length === 1) {
-      return allHitElements[0];
-    }
-
-    return null;
+    return hitTestController.getElementAtPosition(this, x, y, opts);
   }
 
   // NOTE: Hot path for hit testing, so avoid unnecessary computations
@@ -5693,70 +5479,11 @@ class App extends React.Component<AppProps, AppState> {
       includeLockedElements?: boolean;
     },
   ): NonDeleted<ExcalidrawElement>[] {
-    const iframeLikes: Ordered<NonDeleted<ExcalidrawIframeLikeElement>>[] = [];
-
-    const elementsMap = this.scene.getNonDeletedElementsMap();
-    const hiddenMindmapElementIds = this.scene.getMindmapHiddenElementIds();
-
-    const elements = (
-      opts?.includeBoundTextElement && opts?.includeLockedElements
-        ? this.scene.getNonDeletedElements()
-        : this.scene
-            .getNonDeletedElements()
-            .filter(
-              (element) =>
-                (opts?.includeLockedElements || !element.locked) &&
-                (opts?.includeBoundTextElement ||
-                  !(isTextElement(element) && element.containerId)),
-            )
-    )
-      .filter(
-        (el) =>
-          !hiddenMindmapElementIds.has(el.id) && this.hitElement(x, y, el),
-      )
-      .filter((element) => {
-        // hitting a frame's element from outside the frame is not considered a hit
-        const containingFrame = getContainingFrame(element, elementsMap);
-        if (containingFrame && !isNonDeletedElement(containingFrame)) {
-          console.error("[NONDELETED][INVARIANT] Containing frame is deleted");
-        }
-        return containingFrame &&
-          this.state.frameRendering.enabled &&
-          this.state.frameRendering.clip &&
-          // iframe-like elements are rendered as DOM overlays and are not
-          // visually clipped by their containing frames
-          !isIframeLikeElement(element)
-          ? isCursorInFrame(
-              { x, y },
-              containingFrame as NonDeleted<ExcalidrawFrameLikeElement>,
-              elementsMap,
-            )
-          : true;
-      })
-      .filter((el) => {
-        // The parameter elements comes ordered from lower z-index to higher.
-        // We want to preserve that order on the returned array.
-        // Exception being embeddables which should be on top of everything else in
-        // terms of hit testing.
-        if (isIframeLikeElement(el)) {
-          iframeLikes.push(el);
-          return false;
-        }
-        return true;
-      })
-      .concat(iframeLikes) as NonDeleted<ExcalidrawElement>[];
-
-    return elements;
+    return hitTestController.getElementsAtPosition(this, x, y, opts);
   }
 
   getElementHitThreshold(element: ExcalidrawElement) {
-    return Math.max(
-      element.strokeWidth / 2 + 0.1,
-      // NOTE: Here be dragons. Do not go under the 0.63 multiplier unless you're
-      // willing to test extensively. The hit testing starts to become unreliable
-      // due to FP imprecision under 0.63 in high zoom levels.
-      0.85 * (DEFAULT_COLLISION_THRESHOLD / this.state.zoom.value),
-    );
+    return hitTestController.getElementHitThreshold(this, element);
   }
 
   hitElement(
@@ -5765,89 +5492,17 @@ class App extends React.Component<AppProps, AppState> {
     element: NonDeletedExcalidrawElement,
     considerBoundingBox = true,
   ) {
-    // if the element is selected, then hit test is done against its bounding box
-    if (
-      considerBoundingBox &&
-      this.state.selectedElementIds[element.id] &&
-      hasBoundingBox([element], this.state, this.editorInterface)
-    ) {
-      // if hitting the bounding box, return early
-      // but if not, we should check for other cases as well (e.g. frame name)
-      if (
-        hitElementBoundingBox(
-          pointFrom(x, y),
-          element,
-          this.scene.getNonDeletedElementsMap(),
-          this.getElementHitThreshold(element),
-        )
-      ) {
-        return true;
-      }
-    }
-
-    // take bound text element into consideration for hit collision as well
-    const hitBoundTextOfElement = hitElementBoundText(
-      pointFrom(x, y),
+    return hitTestController.hitElement(
+      this,
+      x,
+      y,
       element,
-      this.scene.getNonDeletedElementsMap(),
+      considerBoundingBox,
     );
-    if (hitBoundTextOfElement) {
-      return true;
-    }
-
-    return hitElementItself({
-      point: pointFrom(x, y),
-      element,
-      threshold: this.getElementHitThreshold(element),
-      elementsMap: this.scene.getNonDeletedElementsMap(),
-      frameNameBound: isFrameLikeElement(element)
-        ? this.frameNameBoundsCache.get(element)
-        : null,
-    });
   }
 
   getTextBindableContainerAtPosition(x: number, y: number) {
-    const elements = this.scene.getNonDeletedElements();
-    const selectedElements = this.scene.getSelectedElements(this.state);
-    if (selectedElements.length === 1) {
-      return isTextBindableContainer(selectedElements[0], false)
-        ? selectedElements[0]
-        : null;
-    }
-    let hitElement = null;
-    // We need to do hit testing from front (end of the array) to back (beginning of the array)
-    for (let index = elements.length - 1; index >= 0; --index) {
-      if (elements[index].isDeleted) {
-        continue;
-      }
-      const [x1, y1, x2, y2] = getElementAbsoluteCoords(
-        elements[index],
-        this.scene.getNonDeletedElementsMap(),
-      );
-      if (
-        isArrowElement(elements[index]) &&
-        hitElementItself({
-          point: pointFrom(x, y),
-          element: elements[index],
-          elementsMap: this.scene.getNonDeletedElementsMap(),
-          threshold: this.getElementHitThreshold(elements[index]),
-        })
-      ) {
-        hitElement = elements[index];
-        break;
-      } else if (x1 < x && x < x2 && y1 < y && y < y2) {
-        // to allow binding to containers within frames,
-        // ignore frames in hit testing
-        if (isFrameLikeElement(elements[index])) {
-          continue;
-        }
-
-        hitElement = elements[index];
-        break;
-      }
-    }
-
-    return isTextBindableContainer(hitElement, false) ? hitElement : null;
+    return hitTestController.getTextBindableContainerAtPosition(this, x, y);
   }
 
   /**
@@ -5862,9 +5517,7 @@ class App extends React.Component<AppProps, AppState> {
    * so the whole create-and-type lands in a single entry.
    */
   private isEditingTextContent() {
-    return (
-      !!this.state.editingTextElement || isTextElement(this.state.newElement)
-    );
+    return textController.isEditingTextContent(this);
   }
 
   public startTextEditing = ({
@@ -7772,7 +7425,7 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     // don't select while panning
-    if (gesture.pointers.size > 1) {
+    if (this.gesture.pointers.size > 1) {
       return;
     }
 
@@ -8152,18 +7805,7 @@ class App extends React.Component<AppProps, AppState> {
   private updateGestureOnPointerDown(
     event: React.PointerEvent<HTMLElement>,
   ): void {
-    gesture.pointers.set(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-    });
-
-    if (gesture.pointers.size === 2) {
-      gesture.lastCenter = getCenter(gesture.pointers);
-      gesture.initialScale = this.state.zoom.value;
-      gesture.initialDistance = getDistance(
-        Array.from(gesture.pointers.values()),
-      );
-    }
+    gestureController.updateGestureOnPointerDown(this, event);
   }
 
   /**
@@ -8173,73 +7815,7 @@ class App extends React.Component<AppProps, AppState> {
   private updateMultiTouchGesture = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
-    if (gesture.pointers.has(event.pointerId)) {
-      gesture.pointers.set(event.pointerId, {
-        x: event.clientX,
-        y: event.clientY,
-      });
-    }
-
-    const initialScale = gesture.initialScale;
-    if (
-      gesture.pointers.size === 2 &&
-      gesture.lastCenter &&
-      initialScale &&
-      gesture.initialDistance
-    ) {
-      const center = getCenter(gesture.pointers);
-      const deltaX = center.x - gesture.lastCenter.x;
-      const deltaY = center.y - gesture.lastCenter.y;
-      gesture.lastCenter = center;
-
-      const distance = getDistance(Array.from(gesture.pointers.values()));
-      const scaleFactor =
-        this.state.activeTool.type === "freedraw" && this.state.penMode
-          ? 1
-          : distance / gesture.initialDistance;
-
-      const nextZoom = scaleFactor
-        ? getNormalizedZoom(initialScale * scaleFactor)
-        : this.state.zoom.value;
-
-      this.setState((state) => {
-        // Preserve any existing screen-space overscroll through the zoom,
-        // then apply this frame's pan delta on top. `viewport.translate`
-        // rubberband-clamps the combined result against the scroll lock.
-        const zoomedViewport = getViewportForZoomWithScrollConstraints(
-          {
-            viewportX: center.x,
-            viewportY: center.y,
-            nextZoom,
-          },
-          state,
-        );
-        const zoomValue = zoomedViewport.zoom.value;
-
-        this.viewport.translate(
-          {
-            zoom: zoomedViewport.zoom,
-            // 2x multiplier is just a magic number that makes this work correctly
-            // on touchscreen devices (note: if we get report that panning is slower/faster
-            // than actual movement, consider swapping with devicePixelRatio)
-            scrollX: zoomedViewport.scrollX + (2 * deltaX) / zoomValue,
-            scrollY: zoomedViewport.scrollY + (2 * deltaY) / zoomValue,
-            shouldCacheIgnoreZoom: true,
-          },
-          { zoomPreConstrained: true },
-        );
-
-        return null;
-      });
-      if (!this.viewport.isLockedTransitionPending) {
-        this.resetShouldCacheIgnoreZoomDebounced();
-      }
-    } else {
-      gesture.lastCenter =
-        gesture.initialDistance =
-        gesture.initialScale =
-          null;
-    }
+    gestureController.updateMultiTouchGesture(this, event);
   };
 
   private initialPointerDownState(
@@ -12388,7 +11964,7 @@ class App extends React.Component<AppProps, AppState> {
       (pointer.pointerType === "touch" ||
         (pointer.pointerType === undefined &&
           this.lastPointerDownEvent?.pointerType === "touch" &&
-          gesture.pointers.size > 0))
+          this.gesture.pointers.size > 0))
     ) {
       return;
     }
@@ -13017,7 +12593,7 @@ class App extends React.Component<AppProps, AppState> {
     this.props.onPointerUpdate?.({
       pointer,
       button,
-      pointersMap: gesture.pointers,
+      pointersMap: this.gesture.pointers,
     });
   };
 
