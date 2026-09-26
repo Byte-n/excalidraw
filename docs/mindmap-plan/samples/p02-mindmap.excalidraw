@@ -15,7 +15,10 @@
       "parentId": null,
       "order": null,
       "collapsed": false,
-      "shape": "rectangle",
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      },
       "backgroundColor": "#d0bfff",
       "fillStyle": "solid",
       "roughness": 0,
@@ -39,7 +42,10 @@
       "parentId": "root",
       "order": "a0",
       "collapsed": true,
-      "shape": "rectangle",
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      },
       "backgroundColor": "#e5dbff",
       "fillStyle": "solid",
       "roughness": 0,
@@ -63,7 +69,10 @@
       "parentId": "root",
       "order": "a1",
       "collapsed": false,
-      "shape": "rectangle",
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      },
       "backgroundColor": "#e5dbff",
       "fillStyle": "solid",
       "roughness": 0,
@@ -87,7 +96,10 @@
       "parentId": "root",
       "order": "a2",
       "collapsed": false,
-      "shape": "rectangle",
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      },
       "backgroundColor": "#e5dbff",
       "fillStyle": "solid",
       "roughness": 0,
@@ -111,7 +123,10 @@
       "parentId": "research",
       "order": "a0",
       "collapsed": false,
-      "shape": "rectangle",
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      },
       "backgroundColor": "#f3f0ff",
       "fillStyle": "solid",
       "roughness": 0,
@@ -135,7 +150,10 @@
       "parentId": "research",
       "order": "a1",
       "collapsed": false,
-      "shape": "rectangle",
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      },
       "backgroundColor": "#f3f0ff",
       "fillStyle": "solid",
       "roughness": 0,
@@ -159,7 +177,10 @@
       "parentId": "design",
       "order": "a0",
       "collapsed": false,
-      "shape": "rectangle",
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      },
       "backgroundColor": "#f3f0ff",
       "fillStyle": "solid",
       "roughness": 0,
@@ -183,7 +204,10 @@
       "parentId": null,
       "order": null,
       "collapsed": false,
-      "shape": "pill",
+      "shape": {
+        "id": "pill",
+        "schemaVersion": 1
+      },
       "backgroundColor": "#b2f2bb",
       "fillStyle": "solid",
       "roughness": 0,

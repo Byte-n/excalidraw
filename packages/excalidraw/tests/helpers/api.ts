@@ -331,7 +331,7 @@ export class API {
         element = newMindmapNodeElement({
           ...base,
           graphId: props?.graphId ?? id ?? "mindmap",
-          shape: props?.shape,
+          shape: props?.shape?.id,
           collapsed: props?.collapsed,
           ...(props?.parentId
             ? { role: "node", parentId: props.parentId, order: props.order ?? null }

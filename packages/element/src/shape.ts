@@ -46,8 +46,12 @@ import type {
 } from "@excalidraw/excalidraw/scene/types";
 
 import { elementWithCanvasCache } from "./renderElement";
-import { getElementShapeType } from "./compositeShape";
-import { getMindmapEdgePath, getMindmapNodeGeometry } from "./mindmap";
+import { isCompositeShapeId } from "./compositeShape";
+import {
+  getMindmapEdgePath,
+  getMindmapNodeGeometry,
+  getMindmapShapeId,
+} from "./mindmap";
 
 import {
   canBecomePolygon,
@@ -186,7 +190,9 @@ function adjustRoughness(element: ExcalidrawElement): number {
     // is round & both sides above 15px
     (minSize >= 15 &&
       !!element.roundness &&
-      canChangeRoundness(getElementShapeType(element))) ||
+      canChangeRoundness(
+        element.type === "composite_shape" ? element.shape.id : element.type,
+      )) ||
     // relatively long linear element
     (isLinearElement(element) && maxSize >= 50)
   ) {
@@ -238,7 +244,11 @@ export const generateRoughOptions = (
       options.fill = isTransparent(element.backgroundColor)
         ? undefined
         : applyDarkModeFilter(element.backgroundColor, isDarkMode);
-      if (getElementShapeType(element) === "ellipse") {
+      if (
+        isCompositeShapeId(element, "ellipse") ||
+        (element.type === "mindmap-node" &&
+          getMindmapShapeId(element) === "ellipse")
+      ) {
         options.curveFitting = 1;
       }
       return options;
@@ -789,7 +799,7 @@ const _generateElementShape = (
   const isDarkMode = theme === THEME.DARK;
   switch (element.type) {
     case "mindmap-node": {
-      if (element.shape === "pill") {
+      if (getMindmapShapeId(element) === "pill") {
         const { width: w, height: h } = element;
         const r = Math.min(w, h) / 2;
         return generator.path(

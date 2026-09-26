@@ -3,8 +3,6 @@ import { API } from "@excalidraw/excalidraw/tests/helpers/api";
 
 import { FONT_FAMILY, TEXT_ALIGN, VERTICAL_ALIGN } from "@excalidraw/common";
 
-import { getElementShapeType } from "../src/compositeShape";
-
 import {
   computeContainerDimensionForBoundText,
   getContainerCoords,
@@ -55,48 +53,22 @@ describe("Test measureText", () => {
   });
 
   describe("Test computeContainerDimensionForBoundText", () => {
-    const params = {
-      width: 178,
-      height: 194,
-    };
-
     it("should compute container height correctly for rectangle", () => {
-      const element = API.createElement({
-        type: "rectangle",
-        ...params,
-      });
-      expect(
-        computeContainerDimensionForBoundText(
-          150,
-          getElementShapeType(element),
-        ),
-      ).toEqual(160);
+      expect(computeContainerDimensionForBoundText(150, "rectangle")).toEqual(
+        160,
+      );
     });
 
     it("should compute container height correctly for ellipse", () => {
-      const element = API.createElement({
-        type: "ellipse",
-        ...params,
-      });
-      expect(
-        computeContainerDimensionForBoundText(
-          150,
-          getElementShapeType(element),
-        ),
-      ).toEqual(226);
+      expect(computeContainerDimensionForBoundText(150, "ellipse")).toEqual(
+        226,
+      );
     });
 
     it("should compute container height correctly for diamond", () => {
-      const element = API.createElement({
-        type: "diamond",
-        ...params,
-      });
-      expect(
-        computeContainerDimensionForBoundText(
-          150,
-          getElementShapeType(element),
-        ),
-      ).toEqual(320);
+      expect(computeContainerDimensionForBoundText(150, "diamond")).toEqual(
+        320,
+      );
     });
   });
 

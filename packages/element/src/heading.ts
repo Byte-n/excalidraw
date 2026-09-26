@@ -25,7 +25,7 @@ import type {
 } from "@excalidraw/math";
 
 import { getCenterForBounds } from "./bounds";
-import { getElementShapeType } from "./compositeShape";
+import { isCompositeShapeId } from "./compositeShape";
 
 import type { ExcalidrawBindableElement } from "./types";
 
@@ -238,7 +238,7 @@ export const headingForPointFromElement = <Point extends GlobalPoint>(
 
   const midPoint = getCenterForBounds(aabb);
 
-  if (getElementShapeType(element) === "diamond") {
+  if (isCompositeShapeId(element, "diamond")) {
     return headingForPointFromDiamondElement(element, aabb, p);
   }
 

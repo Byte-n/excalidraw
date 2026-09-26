@@ -48,6 +48,7 @@ import {
   layoutMindmap,
   computeBoundTextPosition,
   assertBaseShapeData,
+  assertMindmapShapeData,
 } from "@excalidraw/element";
 import { normalizeFixedPoint } from "@excalidraw/element";
 import {
@@ -736,6 +737,7 @@ export const restoreElement = (
     }
 
     case "mindmap-node": {
+      assertMindmapShapeData(element.shape);
       const relation =
         element.role === "root"
           ? { role: "root" as const, parentId: null, order: null }
@@ -752,11 +754,7 @@ export const restoreElement = (
             : `mindmap:${element.id}`,
         ...relation,
         collapsed: element.collapsed === true,
-        shape: ["rectangle", "ellipse", "diamond", "pill"].includes(
-          element.shape,
-        )
-          ? element.shape
-          : "rectangle",
+        shape: element.shape,
       });
       return {
         ...restored,
@@ -1079,6 +1077,8 @@ export const restoreElements = <T extends ExcalidrawElement>(
       }
       if (element.type === "composite_shape") {
         assertBaseShapeData(element.shape);
+      } else if (element.type === "mindmap-node") {
+        assertMindmapShapeData(element.shape);
       }
       let migratedElement: ExcalidrawElement | null;
       try {

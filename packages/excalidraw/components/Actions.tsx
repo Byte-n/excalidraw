@@ -4,7 +4,11 @@ import { Popover } from "radix-ui";
 
 import { CLASSES } from "@excalidraw/common";
 
-import { isArrowElement, isMindmapEdgeElement } from "@excalidraw/element";
+import {
+  getMindmapShapeId,
+  isArrowElement,
+  isMindmapEdgeElement,
+} from "@excalidraw/element";
 
 import type {
   ExcalidrawElement,
@@ -206,7 +210,7 @@ const MindmapNodeStylePanel = ({ app }: { app: AppClassProperties }) => {
               key={shape}
               type="toggle"
               icon={icon}
-              checked={node.shape === shape}
+              checked={getMindmapShapeId(node) === shape}
               title={shape}
               aria-label={shape}
               data-testid={`mindmap-shape-${shape}`}

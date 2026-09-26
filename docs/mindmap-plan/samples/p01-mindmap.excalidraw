@@ -40,7 +40,10 @@
       "parentId": null,
       "order": null,
       "collapsed": false,
-      "shape": "rectangle"
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "mm-research",
@@ -79,7 +82,10 @@
       "parentId": "mm-product-root",
       "order": "a0",
       "collapsed": true,
-      "shape": "rectangle"
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "mm-plan",
@@ -118,7 +124,10 @@
       "parentId": "mm-product-root",
       "order": "a1",
       "collapsed": false,
-      "shape": "rectangle"
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "mm-launch",
@@ -157,7 +166,10 @@
       "parentId": "mm-product-root",
       "order": "a2",
       "collapsed": false,
-      "shape": "rectangle"
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "mm-interviews",
@@ -196,7 +208,10 @@
       "parentId": "mm-research",
       "order": "a0",
       "collapsed": false,
-      "shape": "rectangle"
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "mm-competitors",
@@ -235,7 +250,10 @@
       "parentId": "mm-research",
       "order": "a1",
       "collapsed": false,
-      "shape": "rectangle"
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "mm-prototype",
@@ -274,7 +292,10 @@
       "parentId": "mm-plan",
       "order": "a0",
       "collapsed": false,
-      "shape": "rectangle"
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "mm-team-root",
@@ -313,7 +334,10 @@
       "parentId": null,
       "order": null,
       "collapsed": false,
-      "shape": "pill"
+      "shape": {
+        "id": "pill",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "mm-frontend",
@@ -352,7 +376,10 @@
       "parentId": "mm-team-root",
       "order": "a0",
       "collapsed": false,
-      "shape": "rectangle"
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "mm-backend",
@@ -391,7 +418,10 @@
       "parentId": "mm-team-root",
       "order": "a1",
       "collapsed": false,
-      "shape": "rectangle"
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "mm-review",
@@ -430,7 +460,10 @@
       "parentId": "mm-frontend",
       "order": "a0",
       "collapsed": false,
-      "shape": "rectangle"
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "mm-api",
@@ -469,7 +502,10 @@
       "parentId": "mm-backend",
       "order": "a0",
       "collapsed": false,
-      "shape": "rectangle"
+      "shape": {
+        "id": "rectangle",
+        "schemaVersion": 1
+      }
     },
     {
       "id": "regular-note",

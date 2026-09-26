@@ -9,7 +9,11 @@ import {
   VERSIONS,
 } from "@excalidraw/common";
 
-import { assertBaseShapeData, mutateElement } from "@excalidraw/element";
+import {
+  assertBaseShapeData,
+  assertMindmapShapeData,
+  mutateElement,
+} from "@excalidraw/element";
 import { deepCopyElement } from "@excalidraw/element";
 import {
   isFrameLikeElement,
@@ -558,6 +562,12 @@ export const parseClipboard = async (
             assertBaseShapeData(element.shape);
           } catch {
             return { errorMessage: "Unsupported composite shape data" };
+          }
+        } else if (element.type === "mindmap-node") {
+          try {
+            assertMindmapShapeData(element.shape);
+          } catch {
+            return { errorMessage: "Unsupported mindmap shape data" };
           }
         }
       }

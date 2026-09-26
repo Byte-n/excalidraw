@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   bumpVersion,
-  getElementShapeType,
+  getMindmapShapeId,
   getLinearElementSubType,
   mutateElement,
   updateElbowArrowPoints,
@@ -137,7 +137,7 @@ const isConvertibleGenericType = (
 
 const getGenericType = (element: ExcalidrawElement) =>
   element.type === "mindmap-node"
-    ? element.shape
+    ? getMindmapShapeId(element)
     : element.type === "composite_shape"
     ? element.shape.id
     : null;
@@ -692,7 +692,10 @@ export const getConversionTypeFromElements = (
 
   let canBeLinear = false;
   for (const element of elements) {
-    if (isConvertibleGenericType(getElementShapeType(element))) {
+    if (
+      element.type === "composite_shape" &&
+      isConvertibleGenericType(element.shape.id)
+    ) {
       // generic type conversion have preference
       return "generic";
     }
@@ -728,7 +731,8 @@ const filterGenericConvetibleElements = <T extends ExcalidrawElement>(
 ) =>
   elements.filter(
     (element) =>
-      isConvertibleGenericType(getElementShapeType(element)) ||
+      (element.type === "composite_shape" &&
+        isConvertibleGenericType(element.shape.id)) ||
       isMindmapNodeElement(element),
   ) as unknown as Array<
     T extends NonDeletedExcalidrawElement
@@ -889,14 +893,16 @@ const convertElementType = <
   targetType: ConvertibleTypes,
   app: AppClassProperties,
 ): NonDeletedExcalidrawElement => {
-  if (!isValidConversion(getElementShapeType(element), targetType)) {
+  const sourceType =
+    element.type === "composite_shape" ? element.shape.id : element.type;
+  if (!isValidConversion(sourceType, targetType)) {
     if (!isProdEnv()) {
       throw Error(`Invalid conversion from ${element.type} to ${targetType}.`);
     }
     return element;
   }
 
-  if (getElementShapeType(element) === targetType) {
+  if (sourceType === targetType) {
     return element;
   }
 

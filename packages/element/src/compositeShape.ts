@@ -35,6 +35,3 @@ export const isCompositeShapeId = <K extends BaseShapeId>(
 ): element is ExcalidrawCompositeShapeElement & {
   shape: Extract<BaseShapeData, { id: K }>;
 } => element?.type === "composite_shape" && element.shape.id === id;
-
-export const getElementShapeType = (element: ExcalidrawElement) =>
-  element.type === "composite_shape" ? element.shape.id : element.type;

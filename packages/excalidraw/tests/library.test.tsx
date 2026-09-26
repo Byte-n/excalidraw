@@ -4,7 +4,7 @@ import { vi } from "vitest";
 
 import { MIME_TYPES, ORIG_ID } from "@excalidraw/common";
 
-import { getCommonBoundingBox, getElementShapeType } from "@excalidraw/element";
+import { getCommonBoundingBox, isCompositeShapeId } from "@excalidraw/element";
 
 import type {
   ExcalidrawGenericElement,
@@ -73,6 +73,25 @@ describe("library format", () => {
       ),
     ).toThrow("Invalid library");
   });
+
+  it("validates mindmap shapes in a version 3 library", () => {
+    const node = API.createElement({ type: "mindmap-node" });
+    const item = {
+      id: "item",
+      status: "unpublished",
+      created: 1,
+      elements: [{ ...node, shape: { id: "unknown", schemaVersion: 1 } }],
+    };
+    expect(() =>
+      parseLibraryJSON(
+        JSON.stringify({
+          type: "excalidrawlib",
+          version: 3,
+          libraryItems: [item],
+        }),
+      ),
+    ).toThrow("Unsupported mindmap shape data");
+  });
 });
 
 describe("library items inserting", () => {
@@ -136,8 +155,8 @@ describe("library items inserting", () => {
     ]);
 
     await waitFor(() => {
-      const rectangle = h.elements.find(
-        (e) => getElementShapeType(e) === "rectangle",
+      const rectangle = h.elements.find((e) =>
+        isCompositeShapeId(e, "rectangle"),
       )!;
       const text = h.elements.find((e) => e.type === "text")!;
       const arrow = h.elements.find((e) => e.type === "arrow")!;

@@ -20,6 +20,8 @@ import type {
   ElementsMap,
   MindmapLayoutDirection,
   MindmapEdgeRouting,
+  MindmapNodeShape,
+  MindmapShapeData,
   StrokeStyle,
 } from "./types";
 
@@ -38,7 +40,7 @@ export type MindmapLayoutConfig = {
 };
 
 export type MindmapGraphStyleConfig = {
-  defaultNodeShape?: ExcalidrawMindmapNodeElement["shape"];
+  defaultNodeShape?: MindmapNodeShape;
   defaultEdgeRouting?: MindmapEdgeRouting;
   defaultEdgeStrokeColor?: string;
   defaultEdgeStrokeWidth?: number;
@@ -53,13 +55,36 @@ const isMindmapLayoutDirection = (
   value === "top-to-bottom" ||
   value === "bottom-to-top";
 
-const isMindmapNodeShape = (
-  value: unknown,
-): value is ExcalidrawMindmapNodeElement["shape"] =>
+const isMindmapNodeShape = (value: unknown): value is MindmapNodeShape =>
   value === "rectangle" ||
   value === "ellipse" ||
   value === "diamond" ||
   value === "pill";
+
+export const mindmapShapeData = (id: MindmapNodeShape): MindmapShapeData => {
+  if (!isMindmapNodeShape(id)) {
+    throw new Error(`Unsupported mindmap shape id: ${JSON.stringify(id)}`);
+  }
+  return { id, schemaVersion: 1 };
+};
+
+export const assertMindmapShapeData = (shape: unknown): MindmapShapeData => {
+  if (
+    !shape ||
+    typeof shape !== "object" ||
+    Array.isArray(shape) ||
+    !isMindmapNodeShape((shape as MindmapShapeData).id) ||
+    (shape as MindmapShapeData).schemaVersion !== 1 ||
+    Object.keys(shape).length !== 2 ||
+    Object.keys(shape).some((key) => key !== "id" && key !== "schemaVersion")
+  ) {
+    throw new Error(`Unsupported mindmap shape data: ${JSON.stringify(shape)}`);
+  }
+  return shape as MindmapShapeData;
+};
+
+export const getMindmapShapeId = (node: ExcalidrawMindmapNodeElement) =>
+  node.shape.id;
 
 const isMindmapEdgeRouting = (value: unknown): value is MindmapEdgeRouting =>
   value === "orthogonal" || value === "curved";
@@ -128,11 +153,14 @@ export const copyMindmapGraphConfig = (
 /** 仅供几何计算复用，不允许把此临时形状写入 Scene。 */
 export const getMindmapNodeGeometry = (
   node: ExcalidrawMindmapNodeElement,
-): ExcalidrawCompositeShapeElement => ({
-  ...node,
-  type: "composite_shape",
-  shape: baseShapeData(node.shape === "pill" ? "rectangle" : node.shape),
-});
+): ExcalidrawCompositeShapeElement => {
+  const shapeId = getMindmapShapeId(node);
+  return {
+    ...node,
+    type: "composite_shape",
+    shape: baseShapeData(shapeId === "pill" ? "rectangle" : shapeId),
+  };
+};
 
 export const getMindmapEdgePath = (
   edge: ExcalidrawMindmapEdgeElement,

@@ -21,7 +21,11 @@ import {
 } from "./utils";
 
 import { elementCenterPoint } from "./bounds";
-import { getMindmapNodeGeometry, isMindmapElementHidden } from "./mindmap";
+import {
+  getMindmapNodeGeometry,
+  getMindmapShapeId,
+  isMindmapElementHidden,
+} from "./mindmap";
 
 import type {
   ElementsMap,
@@ -43,7 +47,7 @@ export const distanceToElement = (
   }
   switch (element.type) {
     case "mindmap-node":
-      return element.shape === "pill"
+      return getMindmapShapeId(element) === "pill"
         ? distanceToRectanguloidElement(element, elementsMap, p)
         : distanceToElement(getMindmapNodeGeometry(element), elementsMap, p);
     case "mindmap-edge":

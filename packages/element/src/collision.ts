@@ -35,8 +35,12 @@ import type {
 import type { FrameNameBounds } from "@excalidraw/excalidraw/types";
 
 import { isPathALoop } from "./utils";
-import { getElementShapeType } from "./compositeShape";
-import { getMindmapNodeGeometry, isMindmapElementHidden } from "./mindmap";
+import { isCompositeShapeId } from "./compositeShape";
+import {
+  getMindmapNodeGeometry,
+  getMindmapShapeId,
+  isMindmapElementHidden,
+} from "./mindmap";
 import {
   doBoundsIntersect,
   elementCenterPoint,
@@ -484,7 +488,7 @@ export const intersectElementWithLineSegment = (
   // Do the actual intersection test against the element's shape
   switch (element.type) {
     case "mindmap-node":
-      if (element.shape === "pill") {
+      if (getMindmapShapeId(element) === "pill") {
         return intersectRectanguloidWithLineSegment(
           element,
           elementsMap,
@@ -831,7 +835,10 @@ export const isPointInElement = (
   ) {
     return false;
   }
-  if (element.type === "mindmap-node" && element.shape !== "pill") {
+  if (
+    element.type === "mindmap-node" &&
+    getMindmapShapeId(element) !== "pill"
+  ) {
     return isPointInElement(
       point,
       getMindmapNodeGeometry(element),
@@ -903,7 +910,7 @@ export const isBindableElementInsideOtherBindable = (
     const { x, y, width, height, angle } = element;
     const center = elementCenterPoint(element, elementsMap);
 
-    if (getElementShapeType(element) === "diamond") {
+    if (isCompositeShapeId(element, "diamond")) {
       // Diamond has 4 corner points at the middle of each side
       const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
         getDiamondPoints(element);
@@ -915,7 +922,7 @@ export const isBindableElementInsideOtherBindable = (
       ];
       return corners.map((corner) => pointRotateRads(corner, center, angle));
     }
-    if (getElementShapeType(element) === "ellipse") {
+    if (isCompositeShapeId(element, "ellipse")) {
       // For ellipse, test points at the extremes (top, right, bottom, left)
       const cx = x + width / 2;
       const cy = y + height / 2;

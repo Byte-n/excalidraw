@@ -72,6 +72,25 @@ describe("parseClipboard()", () => {
     expect(clipboardData.elements).toEqual([oldRect]);
   });
 
+  it.each([{ id: "unknown", schemaVersion: 1 }])(
+    "rejects invalid mindmap shape data: %j",
+    async (shape) => {
+      const node = API.createElement({ type: "mindmap-node" });
+      const json = JSON.stringify({
+        type: "excalidraw/clipboard",
+        elements: [{ ...node, shape }],
+      });
+      const clipboardData = await parseClipboard(
+        await parseDataTransferEvent(
+          createPasteEvent({ types: { "text/plain": json } }),
+        ),
+      );
+      expect(clipboardData).toMatchObject({
+        errorMessage: "Unsupported mindmap shape data",
+      });
+    },
+  );
+
   it("should parse valid excalidraw JSON if inside text/html", async () => {
     const rect = API.createElement({ type: "rectangle" });
 

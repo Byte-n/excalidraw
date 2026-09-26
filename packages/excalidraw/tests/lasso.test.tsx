@@ -14,7 +14,7 @@
  * - selects group if any group from group is selected
  */
 
-import { baseShapeData, getElementShapeType } from "@excalidraw/element";
+import { baseShapeData, isCompositeShapeId } from "@excalidraw/element";
 
 import {
   type GlobalPoint,
@@ -661,8 +661,7 @@ describe("Basic lasso selection tests", () => {
     expect(selectedElements.length).toBe(3);
     expect(selectedElements.filter((e) => e.type === "arrow").length).toBe(1);
     expect(
-      selectedElements.filter((e) => getElementShapeType(e) === "rectangle")
-        .length,
+      selectedElements.filter((e) => isCompositeShapeId(e, "rectangle")).length,
     ).toBe(1);
     expect(selectedElements.filter((e) => e.type === "freedraw").length).toBe(
       1,
@@ -885,12 +884,10 @@ describe("Basic lasso selection tests", () => {
     expect(selectedElements.length).toBe(4);
     expect(selectedElements.filter((e) => e.type === "line").length).toBe(1);
     expect(
-      selectedElements.filter((e) => getElementShapeType(e) === "ellipse")
-        .length,
+      selectedElements.filter((e) => isCompositeShapeId(e, "ellipse")).length,
     ).toBe(1);
     expect(
-      selectedElements.filter((e) => getElementShapeType(e) === "diamond")
-        .length,
+      selectedElements.filter((e) => isCompositeShapeId(e, "diamond")).length,
     ).toBe(1);
     expect(selectedElements.filter((e) => e.type === "freedraw").length).toBe(
       1,

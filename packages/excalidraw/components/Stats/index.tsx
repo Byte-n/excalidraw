@@ -4,7 +4,7 @@ import throttle from "lodash.throttle";
 import { useEffect, useMemo, useState, memo } from "react";
 
 import { STATS_PANELS } from "@excalidraw/common";
-import { getCommonBounds, getElementShapeType } from "@excalidraw/element";
+import { getCommonBounds } from "@excalidraw/element";
 import { getUncroppedWidthAndHeight } from "@excalidraw/element";
 import { isImageElement } from "@excalidraw/element";
 
@@ -296,7 +296,13 @@ export const StatsInner = memo(
                       >
                         {appState.croppingElementId
                           ? t("labels.imageCropping")
-                          : t(`element.${getElementShapeType(singleElement)}`)}
+                          : t(
+                              `element.${
+                                singleElement.type === "composite_shape"
+                                  ? singleElement.shape.id
+                                  : singleElement.type
+                              }`,
+                            )}
                       </StatsRow>
 
                       <StatsRow>

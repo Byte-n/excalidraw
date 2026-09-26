@@ -35,6 +35,7 @@ import { wrapText } from "./textWrapping";
 
 import { isLineElement } from "./typeChecks";
 import { assertBaseShapeData, baseShapeData } from "./compositeShape";
+import { mindmapShapeData } from "./mindmap";
 
 import type {
   ExcalidrawElement,
@@ -299,7 +300,7 @@ export const newMindmapNodeElement = (
   }),
   graphId: opts.graphId,
   collapsed: opts.collapsed ?? false,
-  shape: opts.shape ?? "rectangle",
+  shape: mindmapShapeData(opts.shape ?? "rectangle"),
   ...(opts.role === "root"
     ? {
         layoutDirection: opts.layoutDirection ?? "left-to-right",

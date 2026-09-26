@@ -29,7 +29,7 @@ import type { MapEntry, Mutable } from "@excalidraw/common/utility-types";
 import type { Bounds } from "@excalidraw/common";
 
 import { getCenterForBounds } from "./bounds";
-import { getElementShapeType, isCompositeShapeId } from "./compositeShape";
+import { isCompositeShapeId } from "./compositeShape";
 import {
   getAllHoveredElementAtPoint,
   getHoveredElementForBinding,
@@ -1870,7 +1870,7 @@ export const snapToMid = (
       center,
       angle,
     );
-  } else if (getElementShapeType(bindTarget) === "diamond") {
+  } else if (isCompositeShapeId(bindTarget, "diamond")) {
     const distance = bindingGap;
     const topLeft = pointFrom<GlobalPoint>(
       x + width / 4 - distance,
@@ -1976,8 +1976,8 @@ const snapBoundPointToGrid = (
   // outline point is near a cardinal zone or an angled diamond face.
   const heading =
     adjacentPoint &&
-    (getElementShapeType(bindableElement) === "ellipse" ||
-      getElementShapeType(bindableElement) === "diamond")
+    (isCompositeShapeId(bindableElement, "ellipse") ||
+      isCompositeShapeId(bindableElement, "diamond"))
       ? vectorToHeading(vectorFromPoint(adjacentPoint, outlinePoint))
       : headingForPointFromElement(bindableElement, aabb, outlinePoint);
 
@@ -3092,7 +3092,7 @@ export const getBindingSideMidPoint = (
     return pointRotateRads(pointFrom(x, y), center, bindableElement.angle);
   }
 
-  if (getElementShapeType(bindableElement) === "ellipse") {
+  if (isCompositeShapeId(bindableElement, "ellipse")) {
     const ellipseCenterX = bindableElement.x + bindableElement.width / 2;
     const ellipseCenterY = bindableElement.y + bindableElement.height / 2;
     const radiusX = bindableElement.width / 2;

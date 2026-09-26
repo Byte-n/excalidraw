@@ -35,7 +35,8 @@ import type {
 } from "@excalidraw/excalidraw/types";
 
 import { elementCenterPoint, getDiamondPoints } from "./bounds";
-import { getElementShapeType, isCompositeShapeId } from "./compositeShape";
+import { isCompositeShapeId } from "./compositeShape";
+import { getMindmapShapeId } from "./mindmap";
 
 import { generateLinearCollisionShape } from "./shape";
 
@@ -526,7 +527,10 @@ export const isPathALoop = (
 };
 
 export const getCornerRadius = (x: number, element: ExcalidrawElement) => {
-  if (element.type === "mindmap-node" && element.shape === "pill") {
+  if (
+    element.type === "mindmap-node" &&
+    getMindmapShapeId(element) === "pill"
+  ) {
     return Math.min(element.width, element.height) / 2;
   }
   if (
@@ -557,7 +561,7 @@ const getDiagonalsForBindableElement = (
 ) => {
   // for rectangles, shrink the diagonals a bit because there's something
   // going on with the focus points around the corners. Ask Mark for details.
-  const OFFSET_PX = getElementShapeType(element) === "rectangle" ? 15 : 0;
+  const OFFSET_PX = isCompositeShapeId(element, "rectangle") ? 15 : 0;
   const shrinkSegment = (seg: LineSegment<GlobalPoint>) => {
     const v = vectorNormalize(vectorFromPoint(seg[1], seg[0]));
     const offset = vectorScale(v, OFFSET_PX);

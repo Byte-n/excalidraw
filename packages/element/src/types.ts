@@ -118,6 +118,10 @@ export type ExcalidrawStickyNoteElement = _ExcalidrawElementBase &
 
 export type MindmapNodeRole = "root" | "node";
 export type MindmapNodeShape = "rectangle" | "ellipse" | "diamond" | "pill";
+export type MindmapShapeData = Readonly<{
+  id: MindmapNodeShape;
+  schemaVersion: 1;
+}>;
 export type MindmapLayoutDirection =
   | "left-to-right"
   | "right-to-left"
@@ -138,7 +142,7 @@ export type ExcalidrawMindmapNodeElement = _ExcalidrawElementBase &
     type: "mindmap-node";
     graphId: string;
     collapsed: boolean;
-    shape: MindmapNodeShape;
+    shape: MindmapShapeData;
     /** Graph configuration is meaningful on the root and omitted on children. */
     layoutDirection?: MindmapLayoutDirection;
     defaultNodeShape?: MindmapNodeShape;

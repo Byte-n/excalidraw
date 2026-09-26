@@ -5,7 +5,7 @@ import { vi } from "vitest";
 
 import { setDateTimeForTests, reseed } from "@excalidraw/common";
 
-import { getElementShapeType, isInGroup } from "@excalidraw/element";
+import { isCompositeShapeId, isInGroup } from "@excalidraw/element";
 
 import { isTextElement } from "@excalidraw/element";
 
@@ -600,8 +600,8 @@ describe("stats for multiple elements", () => {
     API.setElements([...h.elements, frame]);
 
     const text = h.elements.find((el) => el.type === "text");
-    const rectangle = h.elements.find(
-      (el) => getElementShapeType(el) === "rectangle",
+    const rectangle = h.elements.find((el) =>
+      isCompositeShapeId(el, "rectangle"),
     );
 
     API.setAppState({

@@ -28,7 +28,8 @@ import type { AppState } from "@excalidraw/excalidraw/types";
 import type { Mutable } from "@excalidraw/common/utility-types";
 
 import { generateRoughOptions } from "./shape";
-import { getElementShapeType, isCompositeShapeId } from "./compositeShape";
+import { isCompositeShapeId } from "./compositeShape";
+import { getMindmapShapeId } from "./mindmap";
 import { ShapeCache } from "./shape";
 import { LinearElementEditor } from "./linearElementEditor";
 import { getBoundTextElement, getContainerElement } from "./textElement";
@@ -176,7 +177,11 @@ export class ElementBounds {
       ];
     } else if (isLinearElement(element)) {
       bounds = getLinearElementRotatedBounds(element, cx, cy, elementsMap);
-    } else if (getElementShapeType(element) === "diamond") {
+    } else if (
+      isCompositeShapeId(element, "diamond") ||
+      (element.type === "mindmap-node" &&
+        getMindmapShapeId(element) === "diamond")
+    ) {
       const [x11, y11] = pointRotateRads(
         pointFrom(cx, y1),
         pointFrom(cx, cy),
@@ -202,7 +207,11 @@ export class ElementBounds {
       const maxX = Math.max(x11, x12, x22, x21);
       const maxY = Math.max(y11, y12, y22, y21);
       bounds = [minX, minY, maxX, maxY];
-    } else if (getElementShapeType(element) === "ellipse") {
+    } else if (
+      isCompositeShapeId(element, "ellipse") ||
+      (element.type === "mindmap-node" &&
+        getMindmapShapeId(element) === "ellipse")
+    ) {
       const w = (x2 - x1) / 2;
       const h = (y2 - y1) / 2;
       const cos = Math.cos(element.angle);
@@ -424,7 +433,7 @@ const _isRectanguloidElement = (
   | ExcalidrawRectangleElement => {
   return (
     element != null &&
-    (getElementShapeType(element) === "rectangle" ||
+    (isCompositeShapeId(element, "rectangle") ||
       element.type === "stickynote" ||
       element.type === "image" ||
       element.type === "iframe" ||

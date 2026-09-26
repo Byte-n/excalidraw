@@ -65,7 +65,7 @@ describe("convert element type", () => {
         graphId: "graph",
         parentId: null,
         order: null,
-        shape: "rectangle",
+        shape: { id: "rectangle", schemaVersion: 1 },
         collapsed: false,
       },
     });
@@ -76,7 +76,7 @@ describe("convert element type", () => {
         graphId: "graph",
         parentId: "root",
         order: "a0" as FractionalIndex,
-        shape: "rectangle",
+        shape: { id: "rectangle", schemaVersion: 1 },
         collapsed: false,
       },
     });
@@ -133,7 +133,7 @@ describe("convert element type", () => {
         graphId: "graph",
         parentId: null,
         order: null,
-        shape: "rectangle",
+        shape: { id: "rectangle", schemaVersion: 1 },
         collapsed: false,
       },
     });
@@ -144,7 +144,7 @@ describe("convert element type", () => {
         graphId: "graph",
         parentId: "root",
         order: "a0" as FractionalIndex,
-        shape: "rectangle",
+        shape: { id: "rectangle", schemaVersion: 1 },
         collapsed: false,
       },
     });
@@ -155,7 +155,7 @@ describe("convert element type", () => {
         graphId: "graph",
         parentId: "branch",
         order: "a0" as FractionalIndex,
-        shape: "rectangle",
+        shape: { id: "rectangle", schemaVersion: 1 },
         collapsed: false,
       },
     });

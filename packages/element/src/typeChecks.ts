@@ -6,7 +6,8 @@ import type { ElementOrToolType } from "@excalidraw/excalidraw/types";
 
 import type { MarkNonNullable } from "@excalidraw/common/utility-types";
 
-import { assertBaseShapeData, getElementShapeType } from "./compositeShape";
+import { assertBaseShapeData } from "./compositeShape";
+import { assertMindmapShapeData } from "./mindmap";
 
 import type {
   ExcalidrawElement,
@@ -274,9 +275,11 @@ export const isExcalidrawElement = (
     case "composite_shape":
       assertBaseShapeData(element.shape);
       return true;
+    case "mindmap-node":
+      assertMindmapShapeData(element.shape);
+      return true;
     case "text":
     case "stickynote":
-    case "mindmap-node":
     case "mindmap-edge":
     case "iframe":
     case "embeddable":
@@ -339,6 +342,9 @@ export const isUsingProportionalRadius = (type: string) =>
   type === "diamond" ||
   type === "stickynote";
 
+const getRoundnessShapeType = (element: ExcalidrawElement) =>
+  element.type === "composite_shape" ? element.shape.id : element.type;
+
 export const canApplyRoundnessTypeToElement = (
   roundnessType: RoundnessType,
   element: ExcalidrawElement,
@@ -348,13 +354,13 @@ export const canApplyRoundnessTypeToElement = (
       // if legacy roundness, it can be applied to elements that currently
       // use adaptive radius
       roundnessType === ROUNDNESS.LEGACY) &&
-    isUsingAdaptiveRadius(getElementShapeType(element))
+    isUsingAdaptiveRadius(getRoundnessShapeType(element))
   ) {
     return true;
   }
   if (
     roundnessType === ROUNDNESS.PROPORTIONAL_RADIUS &&
-    isUsingProportionalRadius(getElementShapeType(element))
+    isUsingProportionalRadius(getRoundnessShapeType(element))
   ) {
     return true;
   }
@@ -365,13 +371,13 @@ export const canApplyRoundnessTypeToElement = (
 export const getDefaultRoundnessTypeForElement = (
   element: ExcalidrawElement,
 ) => {
-  if (isUsingProportionalRadius(getElementShapeType(element))) {
+  if (isUsingProportionalRadius(getRoundnessShapeType(element))) {
     return {
       type: ROUNDNESS.PROPORTIONAL_RADIUS,
     };
   }
 
-  if (isUsingAdaptiveRadius(getElementShapeType(element))) {
+  if (isUsingAdaptiveRadius(getRoundnessShapeType(element))) {
     return {
       type: ROUNDNESS.ADAPTIVE_RADIUS,
     };

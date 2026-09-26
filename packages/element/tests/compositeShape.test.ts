@@ -6,10 +6,7 @@ import {
   isPointInElement,
   intersectElementWithLineSegment,
 } from "../src/collision";
-import {
-  assertBaseShapeData,
-  getElementShapeType,
-} from "../src/compositeShape";
+import { assertBaseShapeData, isCompositeShapeId } from "../src/compositeShape";
 import { distanceToElement } from "../src/distance";
 import { deepCopyElement } from "../src/duplicate";
 import { newElement } from "../src/newElement";
@@ -25,7 +22,7 @@ describe("composite shape data", () => {
     (type) => {
       const element = newElement({ type, x: 12, y: 34 });
       expect(element.type).toBe("composite_shape");
-      expect(getElementShapeType(element)).toBe(type);
+      expect(isCompositeShapeId(element, type)).toBe(true);
       expect(element).toMatchObject({
         shape: { id: type, schemaVersion: 1 },
       });
@@ -53,7 +50,10 @@ describe("composite shape data", () => {
       ShapeCache.generateElementShape(
         {
           ...element,
-          shape: { id: "unknown", schemaVersion: 1 } as unknown as BaseShapeData,
+          shape: {
+            id: "unknown",
+            schemaVersion: 1,
+          } as unknown as BaseShapeData,
         },
         null,
       ),

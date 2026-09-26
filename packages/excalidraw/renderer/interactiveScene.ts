@@ -26,7 +26,6 @@ import {
   deconstructDiamondElement,
   deconstructRectanguloidElement,
   elementCenterPoint,
-  getElementShapeType,
   isCompositeShapeId,
   getDiamondBaseCorners,
   FOCUS_POINT_SIZE,
@@ -376,7 +375,11 @@ const renderBindingHighlightForBindableElement_simple = (
         Math.max(0.25, appState.zoom.value);
       context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, 1)`;
 
-      switch (getElementShapeType(suggestedBinding.element)) {
+      switch (
+        suggestedBinding.element.type === "composite_shape"
+          ? suggestedBinding.element.shape.id
+          : suggestedBinding.element.type
+      ) {
         case "ellipse":
           context.beginPath();
           context.ellipse(
@@ -713,7 +716,9 @@ const renderBindingHighlightForBindableElement_complex = (
         opacity / 2
       })`;
 
-      switch (getElementShapeType(element)) {
+      switch (
+        element.type === "composite_shape" ? element.shape.id : element.type
+      ) {
         case "ellipse":
           context.beginPath();
           context.ellipse(
