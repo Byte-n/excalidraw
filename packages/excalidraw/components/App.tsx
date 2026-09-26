@@ -53,7 +53,6 @@ import {
   DEFAULT_TEXT_ALIGN,
   ARROW_TYPE,
   DEFAULT_STICKY_NOTE_SIZE,
-  isLocalLink,
   normalizeLink,
   getGridPoint,
   getLineHeight,
@@ -67,7 +66,6 @@ import {
   sceneCoordsToViewportCoords,
   tupleToCoors,
   viewportCoordsToSceneCoords,
-  wrapEvent,
   updateObject,
   updateActiveTool,
   isTransparent,
@@ -228,7 +226,6 @@ import {
   positionElementsOnGrid,
   calculateFixedPointForNonElbowArrowBinding,
   bindOrUnbindBindingElement,
-  mutateElement,
   getElementBounds,
   doBoundsIntersect,
   isPointInElement,
@@ -242,7 +239,6 @@ import {
   handleFocusPointPointerUp,
   maybeHandleArrowPointlikeDrag,
   getUncroppedWidthAndHeight,
-  isEligibleFrameChildType,
   getBindingStrategyForDraggingBindingElementEndpoints,
   isNonDeletedElement,
   DEFAULT_BOUND_TEXT_LABEL_POSITION,
@@ -382,10 +378,7 @@ import {
 } from "../data/blob";
 
 import { fileOpen } from "../data/filesystem";
-import {
-  showHyperlinkTooltip,
-  hideHyperlinkToolip,
-} from "../components/hyperlink/Hyperlink";
+import { hideHyperlinkToolip } from "../components/hyperlink/Hyperlink";
 
 import { Fonts } from "../fonts";
 import { editorJotaiStore, type WritableAtom } from "../editor-jotai";
@@ -448,12 +441,23 @@ import * as gestureController from "./app/gesture";
 import * as hitTestController from "./app/hitTest";
 import * as textController from "./app/text";
 import * as keyboardController from "./app/keyboard";
+import * as pointerCanvasController from "./app/pointerCanvas";
+import * as pointerEraseController from "./app/pointerErase";
+import * as pointerSelectionController from "./app/pointerSelection";
+import {
+  cleanupAfterMissingPointerUp,
+  createInteractionState,
+  handleDraggingScrollBar,
+  resetContextMenuTimer,
+  resetInteractionState,
+  resetTapTwice,
+  type InteractionState,
+} from "./app/pointerSession";
 import BraveMeasureTextError from "./BraveMeasureTextError";
 import { CONTEXT_MENU_SEPARATOR } from "./ContextMenu";
 import { activeEyeDropperAtom } from "./EyeDropper";
 import { searchItemInFocusAtom } from "./SearchMenu";
 import { isSidebarDockedAtom } from "./Sidebar/Sidebar";
-import { isPointHittingLink } from "./hyperlink/helpers";
 import { CursorHints } from "./CursorHint";
 import { AppStateObserver, type OnStateChange } from "./AppStateObserver";
 
@@ -463,10 +467,7 @@ import { editorInterfaceContextInitialValue } from "./app/context";
 
 import type { ExcalidrawLibraryIds } from "../data/types";
 
-import type {
-  RenderInteractiveSceneCallback,
-  ScrollBars,
-} from "../scene/types";
+import type { RenderInteractiveSceneCallback } from "../scene/types";
 
 import type { ClipboardData, PastedMixedContent } from "../clipboard";
 import type { ExportedElements } from "../data";
@@ -526,19 +527,6 @@ const editorLifecycleEventBehavior = {
   "editor:unmount": { cardinality: "once", replay: "last" },
 } as const;
 
-let didTapTwice: boolean = false;
-let tappedTwiceTimer = 0;
-let firstTapPosition: { x: number; y: number } | null = null;
-let isDraggingScrollBar: boolean = false;
-let currentScrollBars: ScrollBars = { horizontal: null, vertical: null };
-let touchTimeout = 0;
-let invalidateContextMenu = false;
-
-let IS_PLAIN_PASTE = false;
-let IS_PLAIN_PASTE_TIMER = 0;
-let PLAIN_PASTE_TOAST_SHOWN = false;
-
-let lastPointerUp: (() => void) | null = null;
 class App extends React.Component<AppProps, AppState> {
   canvas: AppClassProperties["canvas"];
   interactiveCanvas: AppClassProperties["interactiveCanvas"] = null;
@@ -550,6 +538,8 @@ class App extends React.Component<AppProps, AppState> {
     initialDistance: null,
     initialScale: null,
   };
+  /** All transient pointer/touch/paste state belongs to this mounted editor. */
+  public interactionState: InteractionState = createInteractionState();
   rc: RoughCanvas;
   unmounted: boolean = false;
   actionManager: ActionManager;
@@ -2186,22 +2176,14 @@ class App extends React.Component<AppProps, AppState> {
     this.maybeCleanupAfterMissingPointerUp(null);
 
     this.pan.setSpaceHeld(false);
-    isDraggingScrollBar = false;
-    lastPointerUp = null;
+    resetInteractionState(this);
 
     this.gesture.pointers.clear();
     this.gesture.lastCenter = null;
     this.gesture.initialDistance = null;
     this.gesture.initialScale = null;
 
-    clearTimeout(tappedTwiceTimer);
-    tappedTwiceTimer = 0;
-    App.resetTapTwice();
-    this.resetContextMenuTimer();
-
-    clearTimeout(IS_PLAIN_PASTE_TIMER);
-    IS_PLAIN_PASTE_TIMER = 0;
-    IS_PLAIN_PASTE = false;
+    resetContextMenuTimer(this);
 
     if (this.bindModeHandler) {
       clearTimeout(this.bindModeHandler);
@@ -2822,10 +2804,10 @@ class App extends React.Component<AppProps, AppState> {
     this.editorLifecycleEvents.clear();
     ShapeCache.destroy();
     SnapCache.destroy();
-    clearTimeout(touchTimeout);
+    this.ownerWindow.clearTimeout(this.interactionState.touchTimeout);
     isSomeElementSelected.clearCache();
     selectGroupsForSelectedElements.clearCache();
-    touchTimeout = 0;
+    this.interactionState.touchTimeout = 0;
     this.ownerDocument.documentElement.style.overscrollBehaviorX = "";
   }
 
@@ -3321,7 +3303,7 @@ class App extends React.Component<AppProps, AppState> {
     scrollBars,
   }: RenderInteractiveSceneCallback) => {
     if (scrollBars) {
-      currentScrollBars = scrollBars;
+      this.interactionState.currentScrollBars = scrollBars;
     }
 
     this.scheduleImageRefresh();
@@ -3369,11 +3351,6 @@ class App extends React.Component<AppProps, AppState> {
     event.stopPropagation();
   });
 
-  private static resetTapTwice() {
-    didTapTwice = false;
-    firstTapPosition = null;
-  }
-
   private onTouchStart = (event: TouchEvent) => {
     if (!this.isInteractionEnabled()) {
       return;
@@ -3387,18 +3364,18 @@ class App extends React.Component<AppProps, AppState> {
       event.preventDefault();
     }
 
-    if (!didTapTwice) {
-      didTapTwice = true;
+    if (!this.interactionState.didTapTwice) {
+      this.interactionState.didTapTwice = true;
 
       if (event.touches.length === 1) {
-        firstTapPosition = {
+        this.interactionState.firstTapPosition = {
           x: event.touches[0].clientX,
           y: event.touches[0].clientY,
         };
       }
-      clearTimeout(tappedTwiceTimer);
-      tappedTwiceTimer = this.ownerWindow.setTimeout(
-        App.resetTapTwice,
+      this.ownerWindow.clearTimeout(this.interactionState.tappedTwiceTimer);
+      this.interactionState.tappedTwiceTimer = this.ownerWindow.setTimeout(
+        () => resetTapTwice(this.interactionState),
         TAP_TWICE_TIMEOUT,
       );
       return;
@@ -3406,11 +3383,18 @@ class App extends React.Component<AppProps, AppState> {
 
     // insert text only if we tapped twice with a single finger at approximately the same position
     // event.touches.length === 1 will also prevent inserting text when user's zooming
-    if (didTapTwice && event.touches.length === 1 && firstTapPosition) {
+    if (
+      this.interactionState.didTapTwice &&
+      event.touches.length === 1 &&
+      this.interactionState.firstTapPosition
+    ) {
       const touch = event.touches[0];
       const distance = pointDistance(
         pointFrom(touch.clientX, touch.clientY),
-        pointFrom(firstTapPosition.x, firstTapPosition.y),
+        pointFrom(
+          this.interactionState.firstTapPosition.x,
+          this.interactionState.firstTapPosition.y,
+        ),
       );
 
       // only create text if the second tap is within the threshold of the first tap
@@ -3430,8 +3414,9 @@ class App extends React.Component<AppProps, AppState> {
           shiftKey: false,
         });
       }
-      didTapTwice = false;
-      clearTimeout(tappedTwiceTimer);
+      resetTapTwice(this.interactionState);
+      this.ownerWindow.clearTimeout(this.interactionState.tappedTwiceTimer);
+      this.interactionState.tappedTwiceTimer = 0;
     }
 
     if (event.touches.length === 2) {
@@ -3634,7 +3619,7 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
 
-      const isPlainPaste = !!IS_PLAIN_PASTE;
+      const isPlainPaste = this.interactionState.isPlainPaste;
 
       // #686
       const target = this.ownerDocument.activeElement;
@@ -3953,7 +3938,7 @@ class App extends React.Component<AppProps, AppState> {
     if (
       !isPlainPaste &&
       textElements.length > 1 &&
-      PLAIN_PASTE_TOAST_SHOWN === false &&
+      this.interactionState.plainPasteToastShown === false &&
       this.editorInterface.formFactor !== "phone"
     ) {
       this.setToast({
@@ -3962,7 +3947,7 @@ class App extends React.Component<AppProps, AppState> {
         }),
         duration: 5000,
       });
-      PLAIN_PASTE_TOAST_SHOWN = true;
+      this.interactionState.plainPasteToastShown = true;
     }
   }
 
@@ -3974,7 +3959,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   removePointer = (event: React.PointerEvent<HTMLElement> | PointerEvent) => {
-    if (touchTimeout) {
+    if (this.interactionState.touchTimeout) {
       this.resetContextMenuTimer();
     }
 
@@ -4508,14 +4493,17 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (event[KEYS.CTRL_OR_CMD] && event.key.toLowerCase() === KEYS.V) {
-        IS_PLAIN_PASTE = event.shiftKey;
-        clearTimeout(IS_PLAIN_PASTE_TIMER);
+        this.interactionState.isPlainPaste = event.shiftKey;
+        this.ownerWindow.clearTimeout(this.interactionState.plainPasteTimer);
         // reset (100ms to be safe that we it runs after the ensuing
         // paste event). Though, technically unnecessary to reset since we
         // (re)set the flag before each paste event.
-        IS_PLAIN_PASTE_TIMER = this.ownerWindow.setTimeout(() => {
-          IS_PLAIN_PASTE = false;
-        }, 100);
+        this.interactionState.plainPasteTimer = this.ownerWindow.setTimeout(
+          () => {
+            this.interactionState.isPlainPaste = false;
+          },
+          100,
+        );
       }
 
       // prevent browser zoom in input fields
@@ -6054,103 +6042,17 @@ class App extends React.Component<AppProps, AppState> {
     scenePointer: Readonly<{ x: number; y: number }>,
     hitElementMightBeLocked: NonDeletedExcalidrawElement | null,
   ): NonDeletedExcalidrawElement | undefined => {
-    if (hitElementMightBeLocked && hitElementMightBeLocked.locked) {
-      return undefined;
-    }
-
-    const elements = this.scene.getNonDeletedElements();
-    let hitElementIndex = -1;
-
-    for (let index = elements.length - 1; index >= 0; index--) {
-      const element = elements[index];
-      if (
-        hitElementMightBeLocked &&
-        element.id === hitElementMightBeLocked.id
-      ) {
-        hitElementIndex = index;
-      }
-      if (
-        element.link &&
-        index >= hitElementIndex &&
-        isPointHittingLink(
-          element,
-          this.scene.getNonDeletedElementsMap(),
-          this.state,
-          pointFrom(scenePointer.x, scenePointer.y),
-          this.editorInterface.formFactor === "phone",
-        )
-      ) {
-        return element;
-      }
-    }
+    return pointerCanvasController.getElementLinkAtPosition(
+      this,
+      scenePointer,
+      hitElementMightBeLocked,
+    );
   };
 
   private handleElementLinkClick = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
-    const draggedDistance = pointDistance(
-      pointFrom(
-        this.lastPointerDownEvent!.clientX,
-        this.lastPointerDownEvent!.clientY,
-      ),
-      pointFrom(
-        this.lastPointerUpEvent!.clientX,
-        this.lastPointerUpEvent!.clientY,
-      ),
-    );
-    if (!this.hitLinkElement || draggedDistance > DRAGGING_THRESHOLD) {
-      return;
-    }
-    const lastPointerDownCoords = viewportCoordsToSceneCoords(
-      this.lastPointerDownEvent!,
-      this.state,
-    );
-    const elementsMap = this.scene.getNonDeletedElementsMap();
-    const lastPointerDownHittingLinkIcon = isPointHittingLink(
-      this.hitLinkElement,
-      elementsMap,
-      this.state,
-      pointFrom(lastPointerDownCoords.x, lastPointerDownCoords.y),
-      this.editorInterface.formFactor === "phone",
-    );
-    const lastPointerUpCoords = viewportCoordsToSceneCoords(
-      this.lastPointerUpEvent!,
-      this.state,
-    );
-    const lastPointerUpHittingLinkIcon = isPointHittingLink(
-      this.hitLinkElement,
-      elementsMap,
-      this.state,
-      pointFrom(lastPointerUpCoords.x, lastPointerUpCoords.y),
-      this.editorInterface.formFactor === "phone",
-    );
-    if (lastPointerDownHittingLinkIcon && lastPointerUpHittingLinkIcon) {
-      hideHyperlinkToolip();
-      let url = this.hitLinkElement.link;
-      if (url) {
-        url = normalizeLink(url);
-        let customEvent;
-        if (this.props.onLinkOpen) {
-          customEvent = wrapEvent(EVENT.EXCALIDRAW_LINK, event.nativeEvent);
-          this.props.onLinkOpen(
-            {
-              ...this.hitLinkElement,
-              link: url,
-            },
-            customEvent,
-          );
-        }
-        if (!customEvent?.defaultPrevented) {
-          const target = isLocalLink(url) ? "_self" : "_blank";
-          const newWindow = this.ownerWindow.open(undefined, target);
-          // https://mathiasbynens.github.io/rel-noopener/
-          if (newWindow) {
-            newWindow.opener = null;
-            newWindow.location = url;
-          }
-        }
-      }
-    }
+    pointerCanvasController.handleElementLinkClick(this, event);
   };
 
   /**
@@ -6159,21 +6061,7 @@ class App extends React.Component<AppProps, AppState> {
    * link is being hovered.
    */
   private applyElementLinkHoverAffordance = (): boolean => {
-    if (
-      this.hitLinkElement &&
-      !this.state.selectedElementIds[this.hitLinkElement.id]
-    ) {
-      this.cursor.set(CURSOR_TYPE.POINTER);
-
-      showHyperlinkTooltip(
-        this.hitLinkElement,
-        this.state,
-        this.scene.getNonDeletedElementsMap(),
-      );
-      return true;
-    }
-    hideHyperlinkToolip();
-    return false;
+    return pointerCanvasController.applyElementLinkHoverAffordance(this);
   };
 
   /**
@@ -6359,9 +6247,7 @@ class App extends React.Component<AppProps, AppState> {
   private updateFrameToHighlight = (
     frameToHighlight: AppState["frameToHighlight"],
   ) => {
-    if (this.state.frameToHighlight !== frameToHighlight) {
-      this.setState({ frameToHighlight });
-    }
+    pointerCanvasController.updateFrameToHighlight(this, frameToHighlight);
   };
 
   private maybeUpdateFrameToHighlightOnPointerMove = (
@@ -6373,19 +6259,10 @@ class App extends React.Component<AppProps, AppState> {
     //
     // But, we still want to reset on pointermove in case the state is stale
     // so we updte even for non-eligible tool types
-    if (
-      this.state.newElement ||
-      this.state.multiElement ||
-      this.state.selectionElement ||
-      this.state.selectedElementsAreBeingDragged
-    ) {
-      return;
-    }
-
-    this.updateFrameToHighlight(
-      !isOverScrollBar && isEligibleFrameChildType(this.state.activeTool.type)
-        ? this.getTopLayerFrameAtSceneCoords(sceneCoords)
-        : null,
+    pointerCanvasController.maybeUpdateFrameToHighlightOnPointerMove(
+      this,
+      sceneCoords,
+      isOverScrollBar,
     );
   };
 
@@ -6470,14 +6347,14 @@ class App extends React.Component<AppProps, AppState> {
     if (
       this.pan.isSpaceHeld() ||
       this.pan.isActive() ||
-      isDraggingScrollBar ||
+      this.interactionState.isDraggingScrollBar ||
       isHandToolActive(this.state)
     ) {
       return;
     }
 
     const isPointerOverScrollBars = isOverScrollBars(
-      currentScrollBars,
+      this.interactionState.currentScrollBars,
       event.clientX - this.state.offsetLeft,
       event.clientY - this.state.offsetTop,
     );
@@ -7025,14 +6902,7 @@ class App extends React.Component<AppProps, AppState> {
     event: PointerEvent,
     scenePointer: { x: number; y: number },
   ) => {
-    const elementsToErase = this.eraserTrail.addPointToPath(
-      scenePointer.x,
-      scenePointer.y,
-      event.altKey,
-    );
-
-    this.elementsPendingErasure = new Set(elementsToErase);
-    this.triggerRender();
+    pointerEraseController.handleEraser(this, event, scenePointer);
   };
 
   // set touch moving for mobile context menu
@@ -7040,7 +6910,7 @@ class App extends React.Component<AppProps, AppState> {
     if (!this.isInteractionEnabled()) {
       return;
     }
-    invalidateContextMenu = true;
+    this.interactionState.invalidateContextMenu = true;
   };
 
   /**
@@ -7749,13 +7619,13 @@ class App extends React.Component<AppProps, AppState> {
   ): void => {
     // deal with opening context menu on touch devices
     if (event.pointerType === "touch") {
-      invalidateContextMenu = false;
+      this.interactionState.invalidateContextMenu = false;
 
-      if (touchTimeout) {
+      if (this.interactionState.touchTimeout) {
         // If there's already a touchTimeout, this means that there's another
         // touch down and we are doing another touch, so we shouldn't open the
         // context menu.
-        invalidateContextMenu = true;
+        this.interactionState.invalidateContextMenu = true;
       } else {
         const scenePoint = viewportCoordsToSceneCoords(event, this.state);
         const hit = this.getElementAtPosition(scenePoint.x, scenePoint.y, {
@@ -7775,9 +7645,12 @@ class App extends React.Component<AppProps, AppState> {
           : null;
         // open the context menu with the first touch's clientX and clientY
         // if the touch is not moving
-        touchTimeout = this.ownerWindow.setTimeout(() => {
-          touchTimeout = 0;
-          if (!invalidateContextMenu && canOpenMindmapMenu) {
+        this.interactionState.touchTimeout = this.ownerWindow.setTimeout(() => {
+          this.interactionState.touchTimeout = 0;
+          if (
+            !this.interactionState.invalidateContextMenu &&
+            canOpenMindmapMenu
+          ) {
             this.handleCanvasContextMenu(event);
           }
         }, TOUCH_CTX_MENU_TIMEOUT);
@@ -7786,9 +7659,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private resetContextMenuTimer = () => {
-    clearTimeout(touchTimeout);
-    touchTimeout = 0;
-    invalidateContextMenu = false;
+    resetContextMenuTimer(this);
   };
 
   /**
@@ -7797,9 +7668,7 @@ class App extends React.Component<AppProps, AppState> {
    * pointerup handlers manually
    */
   public maybeCleanupAfterMissingPointerUp = (event: PointerEvent | null) => {
-    this.pan.end();
-    lastPointerUp?.();
-    this.missingPointerEventCleanupEmitter.trigger(event).clear();
+    cleanupAfterMissingPointerUp(this, event);
   };
 
   private updateGestureOnPointerDown(
@@ -7839,7 +7708,7 @@ class App extends React.Component<AppProps, AppState> {
         ),
       ),
       scrollbars: isOverScrollBars(
-        currentScrollBars,
+        this.interactionState.currentScrollBars,
         event.clientX - this.state.offsetLeft,
         event.clientY - this.state.offsetTop,
       ),
@@ -7894,51 +7763,11 @@ class App extends React.Component<AppProps, AppState> {
     event: React.PointerEvent<HTMLElement>,
     pointerDownState: PointerDownState,
   ): boolean {
-    if (
-      !(pointerDownState.scrollbars.isOverEither && !this.state.multiElement)
-    ) {
-      return false;
-    }
-    isDraggingScrollBar = true;
-    pointerDownState.lastCoords.x = event.clientX;
-    pointerDownState.lastCoords.y = event.clientY;
-    const onPointerMove = withBatchedUpdatesThrottled((event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof this.ownerWindow.HTMLElement)) {
-        return;
-      }
-
-      this.handlePointerMoveOverScrollbars(event, pointerDownState);
-    });
-    const onPointerUp = withBatchedUpdates(() => {
-      lastPointerUp = null;
-      isDraggingScrollBar = false;
-      this.cursor.applyForTool();
-      this.setState({
-        cursorButton: "up",
-      });
-      this.savePointer(event.clientX, event.clientY, "up");
-      this.ownerWindow.removeEventListener(EVENT.POINTER_MOVE, onPointerMove);
-      this.ownerWindow.removeEventListener(EVENT.POINTER_UP, onPointerUp);
-      onPointerMove.flush();
-    });
-
-    lastPointerUp = onPointerUp;
-
-    this.ownerWindow.addEventListener(EVENT.POINTER_MOVE, onPointerMove);
-    this.ownerWindow.addEventListener(EVENT.POINTER_UP, onPointerUp);
-    return true;
+    return handleDraggingScrollBar(this, event, pointerDownState);
   }
 
   private clearSelectionIfNotUsingSelection = (): void => {
-    if (!isSelectionLikeTool(this.state.activeTool.type)) {
-      this.setState({
-        selectedElementIds: makeNextSelectedElementIds({}, this.state),
-        selectedGroupIds: {},
-        editingGroupId: null,
-        activeEmbeddable: null,
-      });
-    }
+    pointerSelectionController.clearSelectionIfNotUsingSelection(this);
   };
 
   /**
@@ -8405,7 +8234,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private isASelectedElement(hitElement: ExcalidrawElement | null): boolean {
-    return hitElement != null && this.state.selectedElementIds[hitElement.id];
+    return pointerSelectionController.isASelectedElement(this, hitElement);
   }
 
   private isHittingCommonBoundingBoxOfSelectedElements(
@@ -10031,7 +9860,9 @@ class App extends React.Component<AppProps, AppState> {
       this.viewport.translate({
         scrollX:
           this.state.scrollX -
-          (dx * (currentScrollBars.horizontal?.deltaMultiplier || 1)) /
+          (dx *
+            (this.interactionState.currentScrollBars.horizontal
+              ?.deltaMultiplier || 1)) /
             this.state.zoom.value,
       });
       pointerDownState.lastCoords.x = x;
@@ -10044,7 +9875,9 @@ class App extends React.Component<AppProps, AppState> {
       this.viewport.translate({
         scrollY:
           this.state.scrollY -
-          (dy * (currentScrollBars.vertical?.deltaMultiplier || 1)) /
+          (dy *
+            (this.interactionState.currentScrollBars.vertical
+              ?.deltaMultiplier || 1)) /
             this.state.zoom.value,
       });
       pointerDownState.lastCoords.y = y;
@@ -11183,114 +11016,11 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   private restoreReadyToEraseElements = () => {
-    this.elementsPendingErasure = new Set();
-    this.triggerRender();
+    pointerEraseController.restoreReadyToEraseElements(this);
   };
 
   private eraseElements = () => {
-    let didChange = false;
-
-    const protectedIds = new Set<string>();
-    for (const id of this.elementsPendingErasure) {
-      const element = this.scene.getElement(id);
-      const container =
-        element?.type === "text" && element.containerId
-          ? this.scene.getElement(element.containerId)
-          : null;
-      if (
-        isMindmapNodeElement(element) ||
-        isMindmapEdgeElement(element) ||
-        isMindmapNodeElement(container)
-      ) {
-        protectedIds.add(id);
-      }
-    }
-    if (protectedIds.size) {
-      this.mindmap.notifyUnsupportedOperation();
-      this.elementsPendingErasure = new Set(
-        [...this.elementsPendingErasure].filter((id) => !protectedIds.has(id)),
-      );
-    }
-
-    // Binding is double accounted on both elements and if one of them is
-    // deleted, the binding should be removed
-    this.elementsPendingErasure.forEach((id) => {
-      const element = this.scene.getElement(id);
-      if (isBindingElement(element)) {
-        if (element.startBinding) {
-          const bindable = this.scene.getElement(
-            element.startBinding.elementId,
-          )!;
-          // NOTE: We use the raw mutateElement() because we don't want history
-          // entries or multiplayer updates
-          mutateElement(bindable, this.scene.getElementsMapIncludingDeleted(), {
-            boundElements: bindable.boundElements!.filter(
-              (e) => e.id !== element.id,
-            ),
-          });
-        }
-        if (element.endBinding) {
-          const bindable = this.scene.getElement(element.endBinding.elementId)!;
-          // NOTE: We use the raw mutateElement() because we don't want history
-          // entries or multiplayer updates
-          mutateElement(bindable, this.scene.getElementsMapIncludingDeleted(), {
-            boundElements: bindable.boundElements!.filter(
-              (e) => e.id !== element.id,
-            ),
-          });
-        }
-      } else if (isBindableElement(element)) {
-        element.boundElements?.forEach((boundElement) => {
-          if (boundElement.type === "arrow") {
-            const arrow = this.scene.getElement(
-              boundElement.id,
-            ) as ExcalidrawArrowElement;
-            if (arrow?.startBinding?.elementId === element.id) {
-              // NOTE: We use the raw mutateElement() because we don't want history
-              // entries or multiplayer updates
-              mutateElement(
-                arrow,
-                this.scene.getElementsMapIncludingDeleted(),
-                {
-                  startBinding: null,
-                },
-              );
-            }
-            if (arrow?.endBinding?.elementId === element.id) {
-              // NOTE: We use the raw mutateElement() because we don't want history
-              // entries or multiplayer updates
-              mutateElement(
-                arrow,
-                this.scene.getElementsMapIncludingDeleted(),
-                {
-                  endBinding: null,
-                },
-              );
-            }
-          }
-        });
-      }
-    });
-
-    const elements = this.scene.getElementsIncludingDeleted().map((ele) => {
-      if (
-        this.elementsPendingErasure.has(ele.id) ||
-        (ele.frameId && this.elementsPendingErasure.has(ele.frameId)) ||
-        (isBoundToContainer(ele) &&
-          this.elementsPendingErasure.has(ele.containerId))
-      ) {
-        didChange = true;
-        return newElementWith(ele, { isDeleted: true });
-      }
-      return ele;
-    });
-
-    this.elementsPendingErasure = new Set();
-
-    if (didChange) {
-      this.store.scheduleCapture();
-      this.scene.replaceAllElements(elements);
-    }
+    pointerEraseController.eraseElements(this);
   };
 
   public initializeImageImpl = async (

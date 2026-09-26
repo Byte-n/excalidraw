@@ -5,6 +5,7 @@ import { reseed } from "@excalidraw/common";
 
 import { Excalidraw } from "../index";
 import { updateGestureOnPointerDown } from "../components/app/gesture";
+import { createInteractionState } from "../components/app/pointerSession";
 import * as StaticScene from "../renderer/staticScene";
 import {
   act,
@@ -118,5 +119,24 @@ describe("Test <App/>", () => {
 
     expect(first.gesture.pointers.size).toBe(1);
     expect(second.gesture.pointers.size).toBe(0);
+  });
+
+  it("keeps pointer session state isolated per App instance", () => {
+    const first = createInteractionState();
+    const second = createInteractionState();
+
+    first.didTapTwice = true;
+    first.firstTapPosition = { x: 10, y: 20 };
+    first.currentScrollBars.horizontal = {
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      deltaMultiplier: 1,
+    };
+
+    expect(second.didTapTwice).toBe(false);
+    expect(second.firstTapPosition).toBeNull();
+    expect(second.currentScrollBars.horizontal).toBeNull();
   });
 });
