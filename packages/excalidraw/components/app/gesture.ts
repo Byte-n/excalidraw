@@ -5,24 +5,22 @@ import { getNormalizedZoom } from "../../scene";
 
 import { getViewportForZoomWithScrollConstraints } from "../../viewport";
 
-import type { AppState, Gesture, GestureEvent } from "../../types";
+import type { AppState, GestureEvent } from "../../types";
+import type App from "../App";
 
 /** The small part of App used by touch and Safari gesture handling. */
-export type GestureApp = {
-  gesture: Gesture;
-  state: AppState;
-  viewport: {
-    lastPosition: { x: number; y: number };
-    isLockedTransitionPending: boolean;
-    translate: (...args: any[]) => void;
-  };
-  isNavigationEnabled: () => boolean;
-  setState: (state: any) => void;
-  resetShouldCacheIgnoreZoomDebounced: () => void;
-};
+export type GestureApp = Pick<
+  App,
+  | "gesture"
+  | "state"
+  | "viewport"
+  | "isNavigationEnabled"
+  | "setState"
+  | "resetShouldCacheIgnoreZoomDebounced"
+>;
 
 export const updateGestureOnPointerDown = (
-  app: GestureApp,
+  app: Pick<GestureApp, "gesture" | "state">,
   event: { pointerId: number; clientX: number; clientY: number },
 ) => {
   app.gesture.pointers.set(event.pointerId, {
@@ -36,6 +34,22 @@ export const updateGestureOnPointerDown = (
     app.gesture.initialDistance = getDistance(
       Array.from(app.gesture.pointers.values()),
     );
+  }
+};
+
+export const removeGesturePointer = (
+  app: Pick<GestureApp, "gesture" | "state" | "viewport">,
+  pointerId: number,
+) => {
+  const wasMultiTouchGesture = app.gesture.pointers.size >= 2;
+  app.gesture.pointers.delete(pointerId);
+
+  if (
+    wasMultiTouchGesture &&
+    app.gesture.pointers.size < 2 &&
+    app.state.scrollConstraints
+  ) {
+    app.viewport.releaseOverscroll();
   }
 };
 

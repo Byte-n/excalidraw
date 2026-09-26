@@ -17,11 +17,9 @@ import {
 } from "@excalidraw/math";
 
 import {
-  CODES,
   shouldResizeFromCenter,
   shouldMaintainAspectRatio,
   shouldRotateWithDiscreteAngle,
-  isArrowKey,
   KEYS,
   APP_NAME,
   CURSOR_TYPE,
@@ -30,8 +28,6 @@ import {
   DEFAULT_TRANSFORM_HANDLE_SPACING,
   DEFAULT_VERTICAL_ALIGN,
   DRAGGING_THRESHOLD,
-  ELEMENT_SHIFT_TRANSLATE_AMOUNT,
-  ELEMENT_TRANSLATE_AMOUNT,
   EVENT,
   FRAME_STYLE,
   IMAGE_RENDER_TIMEOUT,
@@ -43,7 +39,6 @@ import {
   TEXT_TO_CENTER_SNAP_THRESHOLD,
   THEME,
   TOUCH_CTX_MENU_TIMEOUT,
-  VERTICAL_ALIGN,
   YOUTUBE_STATES,
   TOOL_TYPE,
   DEFAULT_COLLISION_THRESHOLD,
@@ -56,7 +51,6 @@ import {
   debounce,
   distance,
   getFontString,
-  isInputLike,
   isToolIcon,
   isWritableElement,
   sceneCoordsToViewportCoords,
@@ -75,7 +69,6 @@ import {
   isShallowEqual,
   AppEventBus,
   type EXPORT_IMAGE_TYPES,
-  CLASSES,
   Emitter,
   MINIMUM_ARROW_SIZE,
   DOUBLE_TAP_POSITION_THRESHOLD,
@@ -98,7 +91,6 @@ import {
   bindOrUnbindBindingElements,
   getHoveredElementForBinding,
   isBindingEnabled,
-  updateBoundElements,
   LinearElementEditor,
   newElementWith,
   newFrameElement,
@@ -142,12 +134,10 @@ import {
   maybeParseEmbedSrc,
   getEmbedLink,
   getInitializedImageElements,
-  getBoundTextElement,
   getContainerCenter,
   getContainerElement,
   getColorUpdate,
   getStickyNoteMinSize,
-  isValidTextContainer,
   redrawTextBoundingBox,
   getCommonFrameId,
   getFrameChildren,
@@ -170,8 +160,6 @@ import {
   normalizeText,
   measureText,
   getLineHeightInPx,
-  getApproxMinLineWidth,
-  getApproxMinLineHeight,
   getMinTextElementWidth,
   resolveElementRenderState,
   getElementsInGroup,
@@ -208,13 +196,11 @@ import {
   handleFocusPointDrag,
   handleFocusPointHover,
   handleFocusPointPointerUp,
-  maybeHandleArrowPointlikeDrag,
   getUncroppedWidthAndHeight,
   getBindingStrategyForDraggingBindingElementEndpoints,
-  DEFAULT_BOUND_TEXT_LABEL_POSITION,
 } from "@excalidraw/element";
 
-import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
 
 import type {
   ExcalidrawElement,
@@ -237,11 +223,7 @@ import type {
   ExcalidrawElbowArrowElement,
 } from "@excalidraw/element/types";
 
-import type {
-  ArrowEndpoint,
-  TransformHandleDirection,
-  StoreDelta,
-} from "@excalidraw/element";
+import type { TransformHandleDirection, StoreDelta } from "@excalidraw/element";
 
 import type { Mutable } from "@excalidraw/common/utility-types";
 
@@ -299,7 +281,6 @@ import { actionToggleViewMode } from "../actions/actionToggleViewMode";
 import { actionToggleShapeSwitch } from "../actions/actionToggleShapeSwitch";
 import { ActionManager } from "../actions/manager";
 import { actions } from "../actions/register";
-import { getShortcutFromShortcutName } from "../actions/shortcuts";
 import { trackEvent } from "../analytics";
 import {
   getDefaultAppState,
@@ -322,7 +303,6 @@ import { defaultLang, languages, setLanguage, t } from "../i18n";
 import {
   getElementsWithinSelection,
   getSelectedElements,
-  hasBackground,
   isSomeElementSelected,
 } from "../scene";
 import {
@@ -361,13 +341,8 @@ import {
   resolveColorTarget,
 } from "../actions/colorTargets";
 
-import {
-  getConversionTypeFromElements,
-  convertElementTypePopupAtom,
-  convertElementTypes,
-} from "./ConvertElementTypePopup";
+import { convertElementTypePopupAtom } from "./ConvertElementTypePopup";
 
-import { activeConfirmDialogAtom } from "./ActiveConfirmDialog";
 import { AppArrowText } from "./App.arrowText";
 import { AppBucketFill } from "./App.bucketFill";
 import { AppToolDrag } from "./App.toolDrag";
@@ -409,7 +384,7 @@ import { isSidebarDockedAtom } from "./Sidebar/Sidebar";
 import { CursorHints } from "./CursorHint";
 import { AppStateObserver, type OnStateChange } from "./AppStateObserver";
 
-import { findShapeByKey, TOGGLE_TOOLS } from "./Tools";
+import { TOGGLE_TOOLS } from "./Tools";
 
 import { editorInterfaceContextInitialValue } from "./app/context";
 
@@ -573,8 +548,7 @@ class App extends React.Component<AppProps, AppState> {
   public wheel: AppWheel = new AppWheel(this);
 
   bindModeHandler: ReturnType<typeof setTimeout> | null = null;
-  private textWysiwygSubmitHandler: ReturnType<typeof textWysiwyg> | null =
-    null;
+  public textWysiwygSubmitHandler: ReturnType<typeof textWysiwyg> | null = null;
 
   hitLinkElement?: NonDeletedExcalidrawElement;
   lastPointerDownEvent: React.PointerEvent<HTMLElement> | null = null;
@@ -975,7 +949,7 @@ class App extends React.Component<AppProps, AppState> {
   private onWindowMessage = (event: MessageEvent) =>
     this.embeds.onWindowMessage(event);
 
-  private handleSkipBindMode() {
+  public handleSkipBindMode() {
     if (
       this.state.selectedLinearElement?.initialState &&
       !this.state.selectedLinearElement.initialState.arrowStartIsInside
@@ -1062,7 +1036,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   }
 
-  private resetDelayedBindMode() {
+  public resetDelayedBindMode() {
     if (this.bindModeHandler) {
       clearTimeout(this.bindModeHandler);
       this.bindModeHandler = null;
@@ -1082,7 +1056,7 @@ class App extends React.Component<AppProps, AppState> {
   private previousHoveredBindableElement: NonDeletedExcalidrawElement | null =
     null;
 
-  private handleDelayedBindModeChange(
+  public handleDelayedBindModeChange(
     arrow: ExcalidrawArrowElement,
     hoveredElement: NonDeletedExcalidrawElement | null,
   ) {
@@ -1299,7 +1273,7 @@ class App extends React.Component<AppProps, AppState> {
     ) as NullableGridSize;
   };
 
-  private getTextCreationGridPoint = (x: number, y: number) => {
+  public getTextCreationGridPoint = (x: number, y: number) => {
     const effectiveGridSize = this.getEffectiveGridSize();
 
     if (effectiveGridSize === null) {
@@ -1887,7 +1861,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private openEyeDropper = ({ type }: { type: "stroke" | "background" }) => {
+  public openEyeDropper = ({ type }: { type: "stroke" | "background" }) => {
     this.updateEditorAtom(activeEyeDropperAtom, {
       swapPreviewOnAlt: true,
       colorPickerType:
@@ -2007,7 +1981,7 @@ class App extends React.Component<AppProps, AppState> {
    * horizontally with shift. Respects `appState.scrollConstraints`
    * (via `viewport.translate`).
    */
-  private maybeHandlePageScrollKeyDown = (
+  public maybeHandlePageScrollKeyDown = (
     event: KeyboardEvent | React.KeyboardEvent,
   ): boolean => {
     return keyboardController.maybeHandlePageScrollKeyDown(this, event);
@@ -2718,19 +2692,7 @@ class App extends React.Component<AppProps, AppState> {
       this.mindmap.cancelTouchDrag();
     }
 
-    const wasMultiTouchGesture = this.gesture.pointers.size >= 2;
-    this.gesture.pointers.delete(event.pointerId);
-
-    // the multi-touch viewport gesture just disengaged: release the
-    // rubberband that was withheld while it was active
-    // (see `snapBackToScrollConstraints`)
-    if (
-      wasMultiTouchGesture &&
-      this.gesture.pointers.size < 2 &&
-      this.state.scrollConstraints
-    ) {
-      this.viewport.releaseOverscroll();
-    }
+    gestureController.removeGesturePointer(this, event.pointerId);
   };
 
   toggleLock = (source: "keyboard" | "ui" = "ui") => {
@@ -2963,501 +2925,8 @@ class App extends React.Component<AppProps, AppState> {
 
   // Input handling
   public onKeyDown = withBatchedUpdates(
-    (event: React.KeyboardEvent | KeyboardEvent) => {
-      if (!this.isInteractionEnabled()) {
-        return;
-      }
-
-      // normalize `event.key` when CapsLock is pressed #2372
-
-      if (
-        "Proxy" in this.ownerWindow &&
-        ((!event.shiftKey && /^[A-Z]$/.test(event.key)) ||
-          (event.shiftKey && /^[a-z]$/.test(event.key)))
-      ) {
-        event = new Proxy(event, {
-          get(ev: any, prop) {
-            const value = ev[prop];
-            if (typeof value === "function") {
-              // fix for Proxies hijacking `this`
-              return value.bind(ev);
-            }
-            return prop === "key"
-              ? // CapsLock inverts capitalization based on ShiftKey, so invert
-                // it back
-                event.shiftKey
-                ? ev.key.toUpperCase()
-                : ev.key.toLowerCase()
-              : value;
-          },
-        });
-      }
-
-      if (!isInputLike(event.target)) {
-        if (
-          (event.key === KEYS.ESCAPE || event.key === KEYS.ENTER) &&
-          this.state.croppingElementId
-        ) {
-          this.finishImageCropping();
-          return;
-        }
-
-        const selectedElements = getSelectedElements(
-          this.scene.getNonDeletedElementsMap(),
-          this.state,
-        );
-
-        if (
-          selectedElements.length === 1 &&
-          isImageElement(selectedElements[0]) &&
-          event.key === KEYS.ENTER
-        ) {
-          this.startImageCropping(selectedElements[0]);
-          return;
-        }
-
-        // Shape switching
-        if (event.key === KEYS.ESCAPE) {
-          this.updateEditorAtom(convertElementTypePopupAtom, null);
-        } else if (
-          event.key === KEYS.TAB &&
-          (this.ownerDocument.activeElement ===
-            this.excalidrawContainerRef?.current ||
-            this.ownerDocument.activeElement?.classList.contains(
-              CLASSES.CONVERT_ELEMENT_TYPE_POPUP,
-            ))
-        ) {
-          event.preventDefault();
-
-          const conversionType =
-            getConversionTypeFromElements(selectedElements);
-
-          if (
-            editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel"
-          ) {
-            if (
-              convertElementTypes(this, {
-                conversionType,
-                direction: event.shiftKey ? "left" : "right",
-              })
-            ) {
-              this.store.scheduleCapture();
-            }
-          }
-          if (conversionType) {
-            this.updateEditorAtom(convertElementTypePopupAtom, {
-              type: "panel",
-            });
-          }
-        }
-
-        if (this.flowchart.handleKeyEvent(event)) {
-          return;
-        }
-      }
-
-      if (
-        event[KEYS.CTRL_OR_CMD] &&
-        event.key === KEYS.P &&
-        !event.shiftKey &&
-        !event.altKey
-      ) {
-        this.setToast({
-          message: t("commandPalette.shortcutHint", {
-            shortcut: getShortcutFromShortcutName("commandPalette"),
-          }),
-        });
-        event.preventDefault();
-        return;
-      }
-
-      if (event[KEYS.CTRL_OR_CMD] && event.key.toLowerCase() === KEYS.V) {
-        this.interactionState.isPlainPaste = event.shiftKey;
-        this.ownerWindow.clearTimeout(this.interactionState.plainPasteTimer);
-        // reset (100ms to be safe that we it runs after the ensuing
-        // paste event). Though, technically unnecessary to reset since we
-        // (re)set the flag before each paste event.
-        this.interactionState.plainPasteTimer = this.ownerWindow.setTimeout(
-          () => {
-            this.interactionState.isPlainPaste = false;
-          },
-          100,
-        );
-      }
-
-      // prevent browser zoom in input fields
-      if (event[KEYS.CTRL_OR_CMD] && isWritableElement(event.target)) {
-        if (event.code === CODES.MINUS || event.code === CODES.EQUAL) {
-          event.preventDefault();
-          return;
-        }
-      }
-
-      // bail if
-      if (
-        // inside an input
-        (isWritableElement(event.target) &&
-          // unless pressing escape (finalize action)
-          event.key !== KEYS.ESCAPE) ||
-        // or unless using arrows (to move between buttons)
-        (isArrowKey(event.key) && isInputLike(event.target))
-      ) {
-        return;
-      }
-
-      if (event.key === KEYS.QUESTION_MARK) {
-        this.setState({
-          openDialog: { name: "help" },
-        });
-        return;
-      } else if (
-        event.key.toLowerCase() === KEYS.E &&
-        event.shiftKey &&
-        event[KEYS.CTRL_OR_CMD]
-      ) {
-        event.preventDefault();
-        this.setState({ openDialog: { name: "imageExport" } });
-        return;
-      }
-
-      if (this.maybeHandlePageScrollKeyDown(event)) {
-        // Page navigation belongs to the canvas even when a pending locked
-        // viewport transition is temporarily withholding the mutation.
-        event.preventDefault();
-        return;
-      }
-
-      if (this.state.openDialog?.name === "elementLinkSelector") {
-        return;
-      }
-
-      if (this.mindmap.handleKeyEvent(event)) {
-        return;
-      }
-
-      // Handle Alt key for bind mode
-      if (event.key === KEYS.ALT) {
-        if (this.state.activeTool.type === "bucketfill") {
-          this.bucketFill.openTemporaryEyeDropper();
-          event.preventDefault();
-          return;
-        } else if (getFeatureFlag("COMPLEX_BINDINGS")) {
-          this.handleSkipBindMode();
-        } else {
-          maybeHandleArrowPointlikeDrag({ app: this, event });
-        }
-      }
-
-      if (this.actionManager.handleKeyDown(event)) {
-        return;
-      }
-
-      // view mode hardcoded from upstream -> disable tool switching for now
-      const shouldPreventToolSwitching = this.props.viewModeEnabled === true;
-
-      if (
-        !shouldPreventToolSwitching &&
-        this.state.viewModeEnabled &&
-        event.key === KEYS.ESCAPE
-      ) {
-        this.setActiveTool({ type: "selection" });
-        return;
-      }
-
-      if (
-        !shouldPreventToolSwitching &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !event.metaKey &&
-        !this.state.newElement &&
-        !this.state.selectionElement &&
-        !this.state.selectedElementsAreBeingDragged
-      ) {
-        const shape = findShapeByKey(event.key, this, event.shiftKey);
-
-        if (this.state.viewModeEnabled && !oneOf(shape, ["laser", "hand"])) {
-          return;
-        }
-
-        if (shape) {
-          if (this.state.activeTool.type !== shape) {
-            trackEvent(
-              "toolbar",
-              shape,
-              `keyboard (${
-                this.editorInterface.formFactor === "phone"
-                  ? "mobile"
-                  : "desktop"
-              })`,
-            );
-          }
-          if (shape === "arrow" && this.state.activeTool.type === "arrow") {
-            const nextArrowType =
-              this.state.currentItemArrowType === ARROW_TYPE.sharp
-                ? ARROW_TYPE.round
-                : this.state.currentItemArrowType === ARROW_TYPE.round
-                ? ARROW_TYPE.elbow
-                : ARROW_TYPE.sharp;
-            this.setState({ currentItemArrowType: nextArrowType });
-            this.cursorHints.onArrowTypeCycled(nextArrowType);
-          } else if (shape === "arrow" || shape === "line") {
-            this.cursorHints.onToolShortcut(
-              shape,
-              /^\d$/.test(event.key) ? "digit" : "letter",
-            );
-          }
-
-          if (
-            shape === "bucketfill" &&
-            this.state.activeTool.type === "bucketfill"
-          ) {
-            this.bucketFill.cycleBackgroundColor();
-          } else if (
-            shape === "lasso" &&
-            this.state.activeTool.type === "laser"
-          ) {
-            this.setActiveTool({
-              type: this.state.preferredSelectionTool.type,
-            });
-          } else {
-            this.setActiveTool({ type: shape }, { toggle: true });
-          }
-
-          event.stopPropagation();
-
-          return;
-        } else if (event.key === KEYS.Q) {
-          this.toggleLock("keyboard");
-          event.stopPropagation();
-          return;
-        }
-      }
-
-      if (this.state.viewModeEnabled) {
-        return;
-      }
-
-      if (event[KEYS.CTRL_OR_CMD] && !event.repeat) {
-        if (getFeatureFlag("COMPLEX_BINDINGS")) {
-          this.resetDelayedBindMode();
-        }
-
-        flushSync(() => {
-          this.setState({
-            isBindingEnabled: this.state.bindingPreference !== "enabled",
-          });
-        });
-
-        // the toggle changes what a text-tool click at the current position
-        // would do, with no pointermove to refresh the affordance
-        this.arrowText.refresh();
-
-        maybeHandleArrowPointlikeDrag({ app: this, event });
-      }
-
-      if (isArrowKey(event.key)) {
-        let selectedElements = this.scene.getSelectedElements({
-          selectedElementIds: this.state.selectedElementIds,
-          includeBoundTextElement: true,
-          includeElementsInFrames: true,
-        });
-
-        const arrowIdsToRemove = new Set<string>();
-
-        selectedElements
-          .filter((el): el is NonDeleted<ExcalidrawArrowElement> =>
-            isBindingElement(el),
-          )
-          .filter((arrow) => {
-            const startElementNotInSelection =
-              arrow.startBinding &&
-              !selectedElements.some(
-                (el) => el.id === arrow.startBinding?.elementId,
-              );
-            const endElementNotInSelection =
-              arrow.endBinding &&
-              !selectedElements.some(
-                (el) => el.id === arrow.endBinding?.elementId,
-              );
-            return startElementNotInSelection || endElementNotInSelection;
-          })
-          .forEach((arrow) => arrowIdsToRemove.add(arrow.id));
-
-        selectedElements = selectedElements.filter(
-          (el) => !arrowIdsToRemove.has(el.id),
-        );
-
-        const step =
-          (this.getEffectiveGridSize() &&
-            (event.shiftKey
-              ? ELEMENT_TRANSLATE_AMOUNT
-              : this.getEffectiveGridSize())) ||
-          (event.shiftKey
-            ? ELEMENT_SHIFT_TRANSLATE_AMOUNT
-            : ELEMENT_TRANSLATE_AMOUNT);
-
-        let offsetX = 0;
-        let offsetY = 0;
-
-        if (event.key === KEYS.ARROW_LEFT) {
-          offsetX = -step;
-        } else if (event.key === KEYS.ARROW_RIGHT) {
-          offsetX = step;
-        } else if (event.key === KEYS.ARROW_UP) {
-          offsetY = -step;
-        } else if (event.key === KEYS.ARROW_DOWN) {
-          offsetY = step;
-        }
-
-        selectedElements.forEach((element) => {
-          this.scene.mutateElement(
-            element,
-            {
-              x: element.x + offsetX,
-              y: element.y + offsetY,
-            },
-            { informMutation: false, isDragging: false },
-          );
-
-          updateBoundElements(element, this.scene, {
-            simultaneouslyUpdated: selectedElements,
-          });
-        });
-
-        this.scene.triggerUpdate();
-
-        event.preventDefault();
-      } else if (event.key === KEYS.ENTER) {
-        const selectedElements = this.scene.getSelectedElements(this.state);
-        if (selectedElements.length === 1) {
-          const selectedElement = selectedElements[0];
-          if (event[KEYS.CTRL_OR_CMD] || isLineElement(selectedElement)) {
-            if (isLinearElement(selectedElement)) {
-              if (
-                !this.state.selectedLinearElement?.isEditing ||
-                this.state.selectedLinearElement.elementId !==
-                  selectedElement.id
-              ) {
-                this.store.scheduleCapture();
-                if (!isElbowArrow(selectedElement)) {
-                  this.actionManager.executeAction(actionToggleLinearEditor);
-                }
-              }
-            }
-          } else if (
-            isTextElement(selectedElement) ||
-            isValidTextContainer(selectedElement)
-          ) {
-            let container;
-            if (!isTextElement(selectedElement)) {
-              container = selectedElement as ExcalidrawTextContainer;
-            }
-            const midPoint = getContainerCenter(
-              selectedElement,
-              this.scene.getNonDeletedElementsMap(),
-            );
-            const sceneX = midPoint.x;
-            const sceneY = midPoint.y;
-            this.startTextEditing({
-              sceneX,
-              sceneY,
-              container,
-            });
-            event.preventDefault();
-            return;
-          } else if (isFrameLikeElement(selectedElement)) {
-            this.setState({
-              editingFrame: selectedElement.id,
-            });
-          }
-        }
-      }
-
-      if (event.key === KEYS.SPACE && this.gesture.pointers.size === 0) {
-        this.pan.setSpaceHeld(true);
-        this.cursor.set(CURSOR_TYPE.GRAB);
-        event.preventDefault();
-      }
-
-      if (
-        (event.key === KEYS.G || event.key === KEYS.S) &&
-        !event.altKey &&
-        !event[KEYS.CTRL_OR_CMD]
-      ) {
-        const selectedElements = this.scene.getSelectedElements(this.state);
-        if (
-          this.state.activeTool.type === "selection" &&
-          !selectedElements.length
-        ) {
-          return;
-        }
-
-        if (
-          event.key === KEYS.G &&
-          (hasBackground(this.state.activeTool.type) ||
-            selectedElements.some((element) => hasBackground(element.type)))
-        ) {
-          this.setState({ openPopup: "elementBackground" });
-          event.stopPropagation();
-        }
-        if (event.key === KEYS.S) {
-          this.setState({ openPopup: "elementStroke" });
-          event.stopPropagation();
-        }
-      }
-
-      if (
-        !event[KEYS.CTRL_OR_CMD] &&
-        event.shiftKey &&
-        event.key.toLowerCase() === KEYS.F
-      ) {
-        const selectedElements = this.scene.getSelectedElements(this.state);
-
-        if (
-          this.state.activeTool.type === "selection" &&
-          !selectedElements.length
-        ) {
-          return;
-        }
-
-        if (
-          this.state.activeTool.type === "text" ||
-          selectedElements.find(
-            (element) =>
-              isTextElement(element) ||
-              getBoundTextElement(
-                element,
-                this.scene.getNonDeletedElementsMap(),
-              ),
-          )
-        ) {
-          event.preventDefault();
-          this.setState({ openPopup: "fontFamily" });
-        }
-      }
-
-      if (
-        event[KEYS.CTRL_OR_CMD] &&
-        (event.key === KEYS.BACKSPACE || event.key === KEYS.DELETE)
-      ) {
-        this.updateEditorAtom(activeConfirmDialogAtom, "clearCanvas");
-      }
-
-      // eye dropper
-      // -----------------------------------------------------------------------
-      const lowerCased = event.key.toLocaleLowerCase();
-      const isPickingStroke =
-        lowerCased === KEYS.S && event.shiftKey && !event[KEYS.CTRL_OR_CMD];
-      const isPickingBackground =
-        event.key === KEYS.I || (lowerCased === KEYS.G && event.shiftKey);
-
-      if (isPickingStroke || isPickingBackground) {
-        this.openEyeDropper({
-          type: isPickingStroke ? "stroke" : "background",
-        });
-      }
-      // -----------------------------------------------------------------------
-    },
+    (event: React.KeyboardEvent | KeyboardEvent) =>
+      keyboardController.onKeyDown(this, event),
   );
 
   private onKeyUp = withBatchedUpdates((event: KeyboardEvent) =>
@@ -3642,7 +3111,7 @@ class App extends React.Component<AppProps, AppState> {
     gestureController.onGestureEnd(this, event);
   });
 
-  private handleTextWysiwyg(
+  public handleTextWysiwyg(
     element: NonDeleted<ExcalidrawTextElement>,
     options: {
       isExistingElement?: boolean;
@@ -3652,7 +3121,7 @@ class App extends React.Component<AppProps, AppState> {
     return textController.handleTextWysiwyg(this, element, options);
   }
 
-  private deselectElements() {
+  public deselectElements() {
     this.setState({
       selectedElementIds: makeNextSelectedElementIds({}, this.state),
       selectedGroupIds: {},
@@ -3661,7 +3130,7 @@ class App extends React.Component<AppProps, AppState> {
     });
   }
 
-  private getSelectedTextElement(
+  public getSelectedTextElement(
     container?: ExcalidrawTextContainer | null,
   ): NonDeleted<ExcalidrawTextElement> | null {
     return textController.getSelectedTextElement(this, container);
@@ -3776,260 +3245,18 @@ class App extends React.Component<AppProps, AppState> {
     return textController.isEditingTextContent(this);
   }
 
-  public startTextEditing = ({
-    sceneX,
-    sceneY,
-    insertAtParentCenter = true,
-    container,
-    autoEdit = true,
-    initialCaretSceneCoords,
-    arrowEndpoint,
-  }: {
-    /** X position to insert text at */
-    sceneX: number;
-    /** Y position to insert text at */
-    sceneY: number;
-    /** whether to attempt to insert at element center if applicable */
-    insertAtParentCenter?: boolean;
-    container?: ExcalidrawTextContainer | null;
-    autoEdit?: boolean;
-    initialCaretSceneCoords?: { x: number; y: number };
-    /**
-     * creates the text as a label for this arrow endpoint: the binding then
-     * dictates the text's position and alignment, overriding (sceneX, sceneY)
-     */
-    arrowEndpoint?: ArrowEndpoint | null;
-  }) => {
-    let shouldBindToContainer = false;
+  public startTextEditing = (
+    options: Parameters<typeof textController.startTextEditing>[1],
+  ) => textController.startTextEditing(this, options);
 
-    // Resolved here rather than by the caller so that the stroke width the
-    // binding gap derives from (see `getBindingGap`) is, by construction, the
-    // one the text is created with below.
-    const arrowEndpointBinding =
-      arrowEndpoint &&
-      this.arrowText.getTextBinding(
-        arrowEndpoint,
-        this.getCurrentItemStrokeWidth("text"),
-      );
-
-    if (arrowEndpointBinding) {
-      // an arrow endpoint is not a text container — the text is a sibling the
-      // arrow binds to, not a label inside it
-      container = null;
-      insertAtParentCenter = false;
-      // the scene position of the text's bound side midpoint, not a caret
-      // position
-      sceneX = arrowEndpointBinding.anchor[0];
-      sceneY = arrowEndpointBinding.anchor[1];
-    }
-
-    let parentCenterPosition =
-      insertAtParentCenter &&
-      this.getTextWysiwygSnappedToCenterPosition(
-        sceneX,
-        sceneY,
-        this.state,
-        container,
-      );
-    if (container && parentCenterPosition) {
-      const boundTextElementToContainer = getBoundTextElement(
-        container,
-        this.scene.getNonDeletedElementsMap(),
-      );
-      if (!boundTextElementToContainer) {
-        shouldBindToContainer = true;
-      }
-    }
-    const existingTextElement = arrowEndpointBinding
-      ? null
-      : this.getSelectedTextElement(container) ||
-        (container && isArrowElement(container)
-          ? getBoundTextElement(
-              container,
-              this.scene.getNonDeletedElementsMap(),
-            )
-          : null) ||
-        this.getTextElementAtPosition(sceneX, sceneY);
-
-    const fontFamily =
-      existingTextElement?.fontFamily || this.state.currentItemFontFamily;
-
-    const lineHeight =
-      existingTextElement?.lineHeight || getLineHeight(fontFamily);
-    const fontSize = this.state.currentItemFontSize;
-
-    if (
-      !existingTextElement &&
-      shouldBindToContainer &&
-      container &&
-      !isArrowElement(container) &&
-      !isStickyNoteElement(container)
-    ) {
-      const fontString = {
-        fontSize,
-        fontFamily,
-      };
-      const minWidth = getApproxMinLineWidth(
-        getFontString(fontString),
-        lineHeight,
-      );
-      const minHeight = getApproxMinLineHeight(fontSize, lineHeight);
-      const newHeight = Math.max(container.height, minHeight);
-      const newWidth = Math.max(container.width, minWidth);
-      this.scene.mutateElement(container, {
-        height: newHeight,
-        width: newWidth,
-      });
-      sceneX = container.x + newWidth / 2;
-      sceneY = container.y + newHeight / 2;
-      if (parentCenterPosition) {
-        parentCenterPosition = this.getTextWysiwygSnappedToCenterPosition(
-          sceneX,
-          sceneY,
-          this.state,
-          container,
-        );
-      }
-    }
-
-    const textCreationGridPoint = this.getTextCreationGridPoint(sceneX, sceneY);
-
-    const newTextElementPosition = arrowEndpointBinding
-      ? // the anchor is dictated by the arrow, so neither the grid nor the
-        // caret-centering fudge may nudge it
-        { x: sceneX, y: sceneY }
-      : parentCenterPosition
-      ? {
-          x: parentCenterPosition.elementCenterX,
-          y: parentCenterPosition.elementCenterY,
-        }
-      : !existingTextElement
-      ? {
-          x: textCreationGridPoint?.x ?? sceneX,
-          y:
-            textCreationGridPoint === null
-              ? // Free text starts from a point cursor, so center the first line box on it.
-                sceneY - getLineHeightInPx(fontSize, lineHeight) / 2
-              : textCreationGridPoint.y,
-        }
-      : {
-          x: sceneX,
-          y: sceneY,
-        };
-
-    const topLayerFrame = this.getTopLayerFrameAtSceneCoords({
-      x: newTextElementPosition.x,
-      y: newTextElementPosition.y,
-    });
-
-    // container has higher priority. Only add to frame if container is in the same frame.
-    const frameId =
-      topLayerFrame &&
-      (!shouldBindToContainer ||
-        !container ||
-        container.frameId === topLayerFrame.id)
-        ? topLayerFrame.id
-        : null;
-
-    const element =
-      existingTextElement ||
-      newTextElement({
-        x: newTextElementPosition.x,
-        y: newTextElementPosition.y,
-        // a note's stroke color is its text color: the label inherits it
-        strokeColor:
-          shouldBindToContainer && isStickyNoteElement(container)
-            ? container.strokeColor
-            : this.state.currentItemStrokeColor,
-        backgroundColor: this.state.currentItemBackgroundColor,
-        fillStyle: this.state.currentItemFillStyle,
-        strokeWidth: this.getCurrentItemStrokeWidth("text"),
-        strokeStyle: this.state.currentItemStrokeStyle,
-        roughness: this.state.currentItemRoughness,
-        opacity: this.state.currentItemOpacity,
-        text: "",
-        fontSize,
-        baseFontSize:
-          shouldBindToContainer && isStickyNoteElement(container)
-            ? fontSize
-            : null,
-        fontFamily,
-        textAlign:
-          arrowEndpointBinding?.textAlign ??
-          (parentCenterPosition ? "center" : this.state.currentItemTextAlign),
-        verticalAlign:
-          arrowEndpointBinding?.verticalAlign ??
-          (parentCenterPosition
-            ? VERTICAL_ALIGN.MIDDLE
-            : DEFAULT_VERTICAL_ALIGN),
-        containerId: shouldBindToContainer ? container?.id : undefined,
-        labelPosition:
-          shouldBindToContainer && container && isArrowElement(container)
-            ? DEFAULT_BOUND_TEXT_LABEL_POSITION
-            : null,
-        groupIds: container?.groupIds ?? [],
-        lineHeight,
-        angle: container
-          ? isArrowElement(container)
-            ? (0 as Radians)
-            : container.angle
-          : (0 as Radians),
-        frameId,
-      });
-
-    if (!existingTextElement && shouldBindToContainer && container) {
-      this.scene.mutateElement(container, {
-        boundElements: (container.boundElements || []).concat({
-          type: "text",
-          id: element.id,
-        }),
-      });
-    }
-    this.setState({ editingTextElement: element });
-
-    if (!existingTextElement) {
-      if (container && shouldBindToContainer) {
-        const containerIndex = this.scene.getElementIndex(container.id);
-        // TODO should use insertNewElement, after we update it to handle
-        // elements with containerId + frameId at the same time (containerId
-        // should take precedence when it comes to z-index)
-        this.scene.insertElementsAtIndex([element], containerIndex + 1);
-      } else {
-        this.insertNewElement(element);
-      }
-    }
-
-    if (arrowEndpoint && arrowEndpointBinding) {
-      this.arrowText.bindText(
-        arrowEndpoint,
-        element,
-        arrowEndpointBinding.fixedPoint,
-      );
-    }
-
-    if (autoEdit || existingTextElement || container) {
-      this.handleTextWysiwyg(element, {
-        isExistingElement: !!existingTextElement,
-        initialCaretSceneCoords: existingTextElement
-          ? initialCaretSceneCoords
-          : null,
-      });
-    } else {
-      this.setState({
-        newElement: element,
-        multiElement: null,
-      });
-    }
-  };
-
-  private startImageCropping = (image: ExcalidrawImageElement) => {
+  public startImageCropping = (image: ExcalidrawImageElement) => {
     this.store.scheduleCapture();
     this.setState({
       croppingElementId: image.id,
     });
   };
 
-  private finishImageCropping = () => {
+  public finishImageCropping = () => {
     if (this.state.croppingElementId) {
       this.store.scheduleCapture();
       this.setState({

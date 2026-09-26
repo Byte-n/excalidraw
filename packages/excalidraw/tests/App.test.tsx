@@ -1,13 +1,18 @@
 import React from "react";
 import { vi } from "vitest";
 
-import { reseed } from "@excalidraw/common";
+import { CODES, KEYS, reseed } from "@excalidraw/common";
+import { isValidTextContainer } from "@excalidraw/element";
 
 import type { FileId } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
 
-import { updateGestureOnPointerDown } from "../components/app/gesture";
+import {
+  removeGesturePointer,
+  updateGestureOnPointerDown,
+  updateMultiTouchGesture,
+} from "../components/app/gesture";
 import {
   cleanupAfterMissingPointerUp,
   createInteractionState,
@@ -16,6 +21,7 @@ import * as StaticScene from "../renderer/staticScene";
 
 import {
   act,
+  fireEvent,
   render,
   queryByTestId,
   unmountComponent,
@@ -166,6 +172,175 @@ describe("Test <App/>", () => {
     });
 
     expect(app.state.scrollY).toBeLessThan(before);
+  });
+
+  it("handles tool shortcuts and prevents browser zoom in the mounted document", async () => {
+    await render(<Excalidraw handleKeyboardGlobally />);
+    const app = window.h.app;
+
+    act(() => {
+      app.ownerDocument.dispatchEvent(
+        new app.ownerWindow.KeyboardEvent("keydown", {
+          key: "r",
+          code: "KeyR",
+          bubbles: true,
+        }),
+      );
+    });
+    expect(app.state.activeTool.type).toBe("rectangle");
+
+    const zoomEvent = new app.ownerWindow.KeyboardEvent("keydown", {
+      key: "-",
+      code: CODES.MINUS,
+      [KEYS.CTRL_OR_CMD]: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      app.ownerDocument.dispatchEvent(zoomEvent);
+    });
+    expect(zoomEvent.defaultPrevented).toBe(true);
+  });
+
+  it("pauses zoom with a third pointer and keeps gesture state local", async () => {
+    await render(<Excalidraw />);
+    const app = window.h.app;
+    const translate = vi
+      .spyOn(app.viewport, "translate")
+      .mockImplementation(() => true);
+    const other = {
+      gesture: {
+        pointers: new Map(),
+        lastCenter: null,
+        initialDistance: null,
+        initialScale: null,
+      },
+      state: app.state,
+    };
+
+    updateGestureOnPointerDown(app, {
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+    });
+    updateGestureOnPointerDown(app, {
+      pointerId: 2,
+      clientX: 200,
+      clientY: 100,
+    });
+    expect(app.gesture.initialDistance).toBe(100);
+    expect(other.gesture.pointers.size).toBe(0);
+
+    act(() => {
+      updateMultiTouchGesture(app, {
+        pointerId: 2,
+        clientX: 250,
+        clientY: 100,
+      });
+    });
+    expect(translate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        zoom: expect.objectContaining({ value: 1.5 }),
+      }),
+      { zoomPreConstrained: true },
+    );
+
+    updateGestureOnPointerDown(app, {
+      pointerId: 3,
+      clientX: 300,
+      clientY: 100,
+    });
+    const calls = translate.mock.calls.length;
+    act(() => {
+      updateMultiTouchGesture(app, {
+        pointerId: 2,
+        clientX: 280,
+        clientY: 100,
+      });
+    });
+    expect(translate).toHaveBeenCalledTimes(calls);
+    removeGesturePointer(app, 3);
+    expect(app.gesture.pointers.size).toBe(2);
+    expect(other.gesture.pointers.size).toBe(0);
+    translate.mockRestore();
+  });
+
+  it("binds a new text editor to its container", async () => {
+    await render(<Excalidraw />);
+    const app = window.h.app;
+    const rectangle = API.createElement({
+      type: "rectangle",
+      x: 100,
+      y: 100,
+      width: 160,
+      height: 80,
+    });
+    if (!isValidTextContainer(rectangle)) {
+      throw new Error("Expected a text container");
+    }
+
+    act(() => {
+      app.api.updateScene({ elements: [rectangle] });
+      app.startTextEditing({
+        sceneX: 180,
+        sceneY: 140,
+        container: rectangle,
+      });
+    });
+
+    const text = app.state.editingTextElement;
+    expect(text?.containerId).toBe(rectangle.id);
+    expect(app.scene.getElement(rectangle.id)?.boundElements).toContainEqual({
+      type: "text",
+      id: text?.id,
+    });
+    const editor = app.excalidrawContainerRef.current?.querySelector(
+      ".excalidraw-wysiwyg",
+    ) as HTMLTextAreaElement;
+    expect(editor).not.toBeNull();
+    fireEvent.input(editor, { target: { value: "Bound label" } });
+    act(() => {
+      app.textWysiwygSubmitHandler?.();
+    });
+    expect(app.scene.getElement(text!.id)).toMatchObject({
+      originalText: "Bound label",
+      containerId: rectangle.id,
+    });
+    expect(app.scene.getElement(rectangle.id)?.boundElements).toContainEqual({
+      type: "text",
+      id: text?.id,
+    });
+  });
+
+  it("prefers a selected hit among overlapping elements and rejects distant points", async () => {
+    await render(<Excalidraw />);
+    const app = window.h.app;
+    const back = API.createElement({
+      type: "rectangle",
+      x: 100,
+      y: 100,
+      width: 100,
+      height: 100,
+    });
+    const front = API.createElement({
+      type: "rectangle",
+      x: 100,
+      y: 100,
+      width: 100,
+      height: 100,
+    });
+    act(() => {
+      app.api.updateScene({ elements: [back, front] });
+    });
+
+    expect(app.getElementAtPosition(100, 150)?.id).toBe(front.id);
+    act(() => {
+      app.setState({ selectedElementIds: { [back.id]: true } });
+    });
+    expect(
+      app.getElementAtPosition(100, 150, { preferSelected: true })?.id,
+    ).toBe(back.id);
+    expect(app.getElementAtPosition(300, 300)).toBeNull();
   });
 
   it("keeps gesture state isolated per App instance", async () => {
