@@ -78,7 +78,10 @@ describe("Test dragCreate", () => {
       expect(h.state.selectionElement).toBeNull();
 
       expect(h.elements.length).toEqual(1);
-      expect(h.elements[0].type).toEqual("rectangle");
+      expect(h.elements[0]).toMatchObject({
+        type: "composite_shape",
+        shape: { id: "rectangle", schemaVersion: 1 },
+      });
       expect(h.elements[0].x).toEqual(30);
       expect(h.elements[0].y).toEqual(20);
       expect(h.elements[0].width).toEqual(30); // 60 - 30
@@ -113,7 +116,10 @@ describe("Test dragCreate", () => {
       expect(h.state.selectionElement).toBeNull();
 
       expect(h.elements.length).toEqual(1);
-      expect(h.elements[0].type).toEqual("ellipse");
+      expect(h.elements[0]).toMatchObject({
+        type: "composite_shape",
+        shape: { id: "ellipse", schemaVersion: 1 },
+      });
       expect(h.elements[0].x).toEqual(30);
       expect(h.elements[0].y).toEqual(20);
       expect(h.elements[0].width).toEqual(30); // 60 - 30
@@ -147,7 +153,10 @@ describe("Test dragCreate", () => {
       expect(h.state.selectionElement).toBeNull();
 
       expect(h.elements.length).toEqual(1);
-      expect(h.elements[0].type).toEqual("diamond");
+      expect(h.elements[0]).toMatchObject({
+        type: "composite_shape",
+        shape: { id: "diamond", schemaVersion: 1 },
+      });
       expect(h.elements[0].x).toEqual(30);
       expect(h.elements[0].y).toEqual(20);
       expect(h.elements[0].width).toEqual(30); // 60 - 30

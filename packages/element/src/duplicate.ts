@@ -717,7 +717,10 @@ const _deepCopyElement = (val: any, depth: number = 0) => {
         // populated when the element is rendered.
         if (
           depth === 0 &&
-          (key === "canvas" || (key === "shape" && !isMindmapNodeElement(val)))
+          (key === "canvas" ||
+            (key === "shape" &&
+              val.type !== "mindmap-node" &&
+              val.type !== "composite_shape"))
         ) {
           continue;
         }

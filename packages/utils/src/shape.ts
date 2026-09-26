@@ -34,7 +34,10 @@ import {
   type LocalPoint,
 } from "@excalidraw/math";
 
-import { getElementAbsoluteCoords } from "@excalidraw/element";
+import {
+  getElementAbsoluteCoords,
+  isCompositeShapeId,
+} from "@excalidraw/element";
 
 import type {
   ElementsMap,
@@ -127,7 +130,7 @@ export const getPolygonShape = <Point extends GlobalPoint | LocalPoint>(
 
   let data: Polygon<Point>;
 
-  if (element.type === "diamond") {
+  if (isCompositeShapeId(element, "diamond")) {
     data = polygon(
       pointRotateRads(pointFrom(cx, y), center, angle),
       pointRotateRads(pointFrom(x + width, cy), center, angle),

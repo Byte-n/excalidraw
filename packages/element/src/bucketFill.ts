@@ -574,9 +574,7 @@ export const rendersOpaqueFill = (element: ExcalidrawElement): boolean => {
  * arrows are excluded in v1.
  */
 const FILL_BOUNDARY_TYPES = new Set<ExcalidrawElement["type"]>([
-  "rectangle",
-  "diamond",
-  "ellipse",
+  "composite_shape",
   "frame",
   "magicframe",
   "line",

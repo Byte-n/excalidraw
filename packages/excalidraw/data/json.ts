@@ -114,11 +114,13 @@ export const loadFromJSON = async (
 
 export const isValidExcalidrawData = (data?: {
   type?: any;
+  version?: any;
   elements?: any;
   appState?: any;
 }): data is ImportedDataState => {
   return (
     data?.type === EXPORT_DATA_TYPES.excalidraw &&
+    data.version === VERSIONS.excalidraw &&
     (!data.elements ||
       (Array.isArray(data.elements) &&
         (!data.appState || typeof data.appState === "object")))
@@ -130,7 +132,8 @@ export const isValidLibrary = (json: any): json is ImportedLibraryData => {
     typeof json === "object" &&
     json &&
     json.type === EXPORT_DATA_TYPES.excalidrawLibrary &&
-    (json.version === 1 || json.version === 2)
+    json.version === VERSIONS.excalidrawLibrary &&
+    Array.isArray(json.libraryItems)
   );
 };
 

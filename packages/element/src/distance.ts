@@ -1,3 +1,5 @@
+import { assertNever } from "@excalidraw/common";
+
 import {
   curve,
   curvePointDistance,
@@ -19,7 +21,11 @@ import {
 } from "./utils";
 
 import { elementCenterPoint } from "./bounds";
-import { getMindmapNodeGeometry, isMindmapElementHidden } from "./mindmap";
+import {
+  getMindmapNodeGeometry,
+  getMindmapShapeId,
+  isMindmapElementHidden,
+} from "./mindmap";
 
 import type {
   ElementsMap,
@@ -41,7 +47,7 @@ export const distanceToElement = (
   }
   switch (element.type) {
     case "mindmap-node":
-      return element.shape === "pill"
+      return getMindmapShapeId(element) === "pill"
         ? distanceToRectanguloidElement(element, elementsMap, p)
         : distanceToElement(getMindmapNodeGeometry(element), elementsMap, p);
     case "mindmap-edge":
@@ -65,7 +71,6 @@ export const distanceToElement = (
           ),
       );
     case "selection":
-    case "rectangle":
     case "stickynote":
     case "image":
     case "text":
@@ -74,10 +79,25 @@ export const distanceToElement = (
     case "frame":
     case "magicframe":
       return distanceToRectanguloidElement(element, elementsMap, p);
-    case "diamond":
-      return distanceToDiamondElement(element, elementsMap, p);
-    case "ellipse":
-      return distanceToEllipseElement(element, elementsMap, p);
+    case "composite_shape":
+      switch (element.shape.id) {
+        case "rectangle":
+          return distanceToRectanguloidElement(element, elementsMap, p);
+        case "diamond":
+          return distanceToDiamondElement(
+            element as ExcalidrawDiamondElement,
+            elementsMap,
+            p,
+          );
+        case "ellipse":
+          return distanceToEllipseElement(
+            element as ExcalidrawEllipseElement,
+            elementsMap,
+            p,
+          );
+        default:
+          return assertNever(element.shape, "Unsupported composite shape");
+      }
     case "line":
     case "arrow":
       return distanceToLinearOrFreeDraElement(element, elementsMap, p);

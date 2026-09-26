@@ -20,7 +20,7 @@ describe("P10 scale samples", () => {
     it(`restores ${name} without losing nodes`, () => {
       const sample = JSON.parse(
         readFileSync(
-          resolve(`docs/plan/samples/p10-${name}.excalidraw`),
+          resolve(`docs/mindmap-plan/samples/p10-${name}.excalidraw`),
           "utf8",
         ),
       ) as { elements: ExcalidrawElement[] };

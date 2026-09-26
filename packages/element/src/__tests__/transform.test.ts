@@ -468,7 +468,8 @@ describe("Test Transform", () => {
       expect(rectangle).toMatchObject({
         x: 155,
         y: 189,
-        type: "rectangle",
+        type: "composite_shape",
+        shape: { id: "rectangle", schemaVersion: 1 },
         boundElements: [
           {
             id: arrow.id,
@@ -480,7 +481,8 @@ describe("Test Transform", () => {
       expect(ellipse).toMatchObject({
         x: 355,
         y: 189,
-        type: "ellipse",
+        type: "composite_shape",
+        shape: { id: "ellipse", schemaVersion: 1 },
         boundElements: [
           {
             id: arrow.id,

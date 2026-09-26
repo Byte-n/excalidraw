@@ -33,6 +33,8 @@ import {
   isTextElement,
 } from "./typeChecks";
 
+import { getMindmapShapeId } from "./mindmap";
+
 import { isNonDeletedElement } from ".";
 
 import type { Scene } from "./Scene";
@@ -50,9 +52,11 @@ import type {
 
 const getTextContainerShape = (container: ExcalidrawElement) =>
   container.type === "mindmap-node"
-    ? container.shape === "pill"
+    ? getMindmapShapeId(container) === "pill"
       ? "ellipse"
-      : container.shape
+      : getMindmapShapeId(container)
+    : container.type === "composite_shape"
+    ? container.shape.id
     : container.type;
 
 export const redrawTextBoundingBox = (
@@ -485,6 +489,7 @@ export const suppportsHorizontalAlign = (
 
 const VALID_CONTAINER_TYPES = new Set([
   "mindmap-node",
+  "composite_shape",
   "rectangle",
   "stickynote",
   "ellipse",

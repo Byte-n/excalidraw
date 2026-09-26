@@ -125,7 +125,8 @@ describe("actionDuplicateSelection", () => {
         { id: text.id, containerId: rectangle.id, frameId: frame.id },
         { id: frame.id },
         {
-          type: "rectangle",
+          type: "composite_shape",
+          shape: { id: "rectangle", schemaVersion: 1 },
           [ORIG_ID]: `${rectangle.id}`,
         },
         {

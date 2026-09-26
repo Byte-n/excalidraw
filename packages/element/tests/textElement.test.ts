@@ -53,37 +53,20 @@ describe("Test measureText", () => {
   });
 
   describe("Test computeContainerDimensionForBoundText", () => {
-    const params = {
-      width: 178,
-      height: 194,
-    };
-
     it("should compute container height correctly for rectangle", () => {
-      const element = API.createElement({
-        type: "rectangle",
-        ...params,
-      });
-      expect(computeContainerDimensionForBoundText(150, element.type)).toEqual(
+      expect(computeContainerDimensionForBoundText(150, "rectangle")).toEqual(
         160,
       );
     });
 
     it("should compute container height correctly for ellipse", () => {
-      const element = API.createElement({
-        type: "ellipse",
-        ...params,
-      });
-      expect(computeContainerDimensionForBoundText(150, element.type)).toEqual(
+      expect(computeContainerDimensionForBoundText(150, "ellipse")).toEqual(
         226,
       );
     });
 
     it("should compute container height correctly for diamond", () => {
-      const element = API.createElement({
-        type: "diamond",
-        ...params,
-      });
-      expect(computeContainerDimensionForBoundText(150, element.type)).toEqual(
+      expect(computeContainerDimensionForBoundText(150, "diamond")).toEqual(
         320,
       );
     });

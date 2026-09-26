@@ -417,6 +417,7 @@ export const actionLoadScene = register({
         console.warn(error);
         return false;
       }
+      console.error("preform load from json", error);
       return {
         elements,
         appState: { ...appState, errorMessage: error.message },

@@ -2,7 +2,11 @@ import type {
   ExcalidrawElement,
   FontFamilyValues,
 } from "@excalidraw/element/types";
-import type { AppProps, AppState } from "@excalidraw/excalidraw/types";
+import type {
+  AppProps,
+  AppState,
+  ToolType,
+} from "@excalidraw/excalidraw/types";
 
 import { COLOR_PALETTE } from "./colors";
 
@@ -400,8 +404,8 @@ export const SVG_DOCUMENT_PREAMBLE = `<?xml version="1.0" standalone="no"?>
 export const ENCRYPTION_KEY_BITS = 128;
 
 export const VERSIONS = {
-  excalidraw: 2,
-  excalidrawLibrary: 2,
+  excalidraw: 3,
+  excalidrawLibrary: 3,
 } as const;
 
 export const BOUND_TEXT_PADDING = 5;
@@ -487,7 +491,7 @@ export const FREEDRAW_STROKE_WIDTH: Readonly<
 };
 
 export const getStrokeWidthByKey = (
-  elementType: ExcalidrawElement["type"],
+  elementType: ExcalidrawElement["type"] | ToolType,
   strokeWidthKey: StrokeWidthKey,
 ): ExcalidrawElement["strokeWidth"] => {
   return elementType === "freedraw"

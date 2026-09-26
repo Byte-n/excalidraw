@@ -29,6 +29,7 @@ import type { MapEntry, Mutable } from "@excalidraw/common/utility-types";
 import type { Bounds } from "@excalidraw/common";
 
 import { getCenterForBounds } from "./bounds";
+import { isCompositeShapeId } from "./compositeShape";
 import {
   getAllHoveredElementAtPoint,
   getHoveredElementForBinding,
@@ -1869,7 +1870,7 @@ export const snapToMid = (
       center,
       angle,
     );
-  } else if (bindTarget.type === "diamond") {
+  } else if (isCompositeShapeId(bindTarget, "diamond")) {
     const distance = bindingGap;
     const topLeft = pointFrom<GlobalPoint>(
       x + width / 4 - distance,
@@ -1975,7 +1976,8 @@ const snapBoundPointToGrid = (
   // outline point is near a cardinal zone or an angled diamond face.
   const heading =
     adjacentPoint &&
-    (bindableElement.type === "ellipse" || bindableElement.type === "diamond")
+    (isCompositeShapeId(bindableElement, "ellipse") ||
+      isCompositeShapeId(bindableElement, "diamond"))
       ? vectorToHeading(vectorFromPoint(adjacentPoint, outlinePoint))
       : headingForPointFromElement(bindableElement, aabb, outlinePoint);
 
@@ -2849,8 +2851,8 @@ type Side =
   | "top-left";
 type ShapeType = "rectangle" | "ellipse" | "diamond";
 const getShapeType = (element: ExcalidrawBindableElement): ShapeType => {
-  if (element.type === "ellipse" || element.type === "diamond") {
-    return element.type;
+  if (element.type === "composite_shape") {
+    return element.shape.id;
   }
   return "rectangle";
 };
@@ -2995,7 +2997,7 @@ export const getBindingSideMidPoint = (
   // small offset to avoid precision issues in elbow
   const OFFSET = 0.01;
 
-  if (bindableElement.type === "diamond") {
+  if (isCompositeShapeId(bindableElement, "diamond")) {
     const [sides, corners] = deconstructDiamondElement(bindableElement);
     const [bottomRight, bottomLeft, topLeft, topRight] = sides;
 
@@ -3090,7 +3092,7 @@ export const getBindingSideMidPoint = (
     return pointRotateRads(pointFrom(x, y), center, bindableElement.angle);
   }
 
-  if (bindableElement.type === "ellipse") {
+  if (isCompositeShapeId(bindableElement, "ellipse")) {
     const ellipseCenterX = bindableElement.x + bindableElement.width / 2;
     const ellipseCenterY = bindableElement.y + bindableElement.height / 2;
     const radiusX = bindableElement.width / 2;

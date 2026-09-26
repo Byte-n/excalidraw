@@ -31,6 +31,8 @@ import {
   duplicateElements,
 } from "../src/duplicate";
 import { newMindmapNodeElement } from "../src/newElement";
+import { isCompositeShapeId } from "../src/compositeShape";
+import { mindmapShapeData } from "../src/mindmap";
 
 import type { ExcalidrawLinearElement } from "../src/types";
 
@@ -60,8 +62,10 @@ describe("duplicating single elements", () => {
       shape: "pill",
     });
 
-    expect(deepCopyElement(element).shape).toBe("pill");
-    expect(duplicateElement(null, new Map(), element).shape).toBe("pill");
+    expect(deepCopyElement(element).shape).toEqual(mindmapShapeData("pill"));
+    expect(duplicateElement(null, new Map(), element).shape).toEqual(
+      mindmapShapeData("pill"),
+    );
   });
 
   it.each([123, 0, null])(
@@ -268,7 +272,7 @@ describe("duplicating multiple elements", () => {
         type: clonedText1.type,
       }),
     );
-    expect(clonedRectangle.type).toBe("rectangle");
+    expect(isCompositeShapeId(clonedRectangle, "rectangle")).toBe(true);
 
     clonedArrows.forEach((arrow) => {
       expect(
