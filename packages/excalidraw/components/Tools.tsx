@@ -87,14 +87,10 @@ export const TOOLS = defineTools({
   },
   diamond: {
     icon: DiamondIcon,
-    letterKey: KEYS.D,
-    numericKey: KEYS["3"],
     fillable: true,
   },
   ellipse: {
     icon: EllipseIcon,
-    letterKey: KEYS.O,
-    numericKey: KEYS["4"],
     fillable: true,
   },
   arrow: {
@@ -191,7 +187,7 @@ export const getToolShortcut = (type: ToolbarToolType) => {
   const { numericKey } = TOOLS[type];
   return letter && numericKey != null
     ? `${letter} ${t("helpDialog.or")} ${numericKey}`
-    : `${letter || numericKey}`;
+    : letter || numericKey;
 };
 
 export const findShapeByKey = (
@@ -219,9 +215,15 @@ export const findShapeByKey = (
     ) {
       // the selection shortcut activates whichever selection tool the user
       // prefers (selection or lasso)
-      return type === "selection"
-        ? app.state.preferredSelectionTool.type
-        : type;
+      if (type === "selection") {
+        return app.state.preferredSelectionTool.type;
+      }
+      // R/2 activates whichever generic shape the user selected in the
+      // grouped toolbar button.
+      if (type === "rectangle") {
+        return app.state.preferredGenericShape;
+      }
+      return type;
     }
   }
   return null;
@@ -420,6 +422,75 @@ export const SelectionToolPopover = ({
         }
       }}
       displayedOption={displayedOption}
+    />
+  );
+};
+
+type GenericShapeType = "rectangle" | "diamond" | "ellipse";
+
+const isGenericShapeType = (type: string): type is GenericShapeType =>
+  type === "rectangle" || type === "diamond" || type === "ellipse";
+
+/**
+ * The rectangle/diamond/ellipse popover used by the desktop and mobile
+ * toolbars. The trigger displays the user's preferred generic shape.
+ */
+export const GenericShapeToolPopover = ({
+  app,
+  activeTool,
+  hideShortcut = false,
+}: {
+  app: AppClassProperties;
+  activeTool: UIAppState["activeTool"];
+  hideShortcut?: boolean;
+}) => {
+  const SHAPE_TOOLS = (["rectangle", "diamond", "ellipse"] as const).map(
+    (type) => ({
+      type,
+      icon: TOOLS[type].icon,
+      fillable: TOOLS[type].fillable,
+      title: capitalizeString(t(`toolBar.${type}`)),
+    }),
+  );
+
+  useEffect(() => {
+    if (
+      isGenericShapeType(activeTool.type) &&
+      app.state.preferredGenericShape !== activeTool.type
+    ) {
+      app.setAppState({ preferredGenericShape: activeTool.type });
+    }
+  }, [activeTool.type, app]);
+
+  const preferredGenericShape = isGenericShapeType(activeTool.type)
+    ? activeTool.type
+    : app.state.preferredGenericShape;
+
+  const displayedOption =
+    SHAPE_TOOLS.find((tool) => tool.type === preferredGenericShape) ||
+    SHAPE_TOOLS[0];
+
+  return (
+    <ToolPopover
+      app={app}
+      options={SHAPE_TOOLS}
+      activeTool={activeTool}
+      defaultOption={preferredGenericShape}
+      data-testid="toolbar-rectangle"
+      onToolChange={(type: string) => {
+        if (isGenericShapeType(type)) {
+          app.setAppState({ preferredGenericShape: type });
+          app.setActiveTool({ type });
+        }
+      }}
+      displayedOption={displayedOption}
+      keyBindingLabel={
+        hideShortcut
+          ? undefined
+          : getToolLetter("rectangle") || TOOLS.rectangle.numericKey
+      }
+      ariaKeyshortcuts={hideShortcut ? undefined : getToolShortcut("rectangle")}
+      shortcut={hideShortcut ? null : getToolShortcut("rectangle")}
     />
   );
 };

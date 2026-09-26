@@ -20,6 +20,7 @@ import * as InteractiveScene from "../renderer/interactiveScene";
 import * as StaticScene from "../renderer/staticScene";
 
 import { API } from "./helpers/api";
+import { UI } from "./helpers/ui";
 
 import {
   render,
@@ -92,10 +93,9 @@ describe("Test dragCreate", () => {
     });
 
     it("ellipse", async () => {
-      const { getByToolName, container } = await render(<Excalidraw />);
+      const { container } = await render(<Excalidraw />);
       // select tool
-      const tool = getByToolName("ellipse");
-      fireEvent.click(tool);
+      UI.clickTool("ellipse");
 
       const canvas = container.querySelector("canvas.interactive")!;
 
@@ -109,7 +109,7 @@ describe("Test dragCreate", () => {
       fireEvent.pointerUp(canvas);
 
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `5`,
+        `6`,
       );
       expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
 
@@ -130,10 +130,9 @@ describe("Test dragCreate", () => {
     });
 
     it("diamond", async () => {
-      const { getByToolName, container } = await render(<Excalidraw />);
+      const { container } = await render(<Excalidraw />);
       // select tool
-      const tool = getByToolName("diamond");
-      fireEvent.click(tool);
+      UI.clickTool("diamond");
 
       const canvas = container.querySelector("canvas.interactive")!;
 
@@ -147,7 +146,7 @@ describe("Test dragCreate", () => {
       fireEvent.pointerUp(canvas);
 
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `5`,
+        `6`,
       );
       expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
       expect(h.state.selectionElement).toBeNull();
@@ -495,10 +494,9 @@ describe("Test dragCreate", () => {
     });
 
     it("ellipse", async () => {
-      const { getByToolName, container } = await render(<Excalidraw />);
+      const { container } = await render(<Excalidraw />);
       // select tool
-      const tool = getByToolName("ellipse");
-      fireEvent.click(tool);
+      UI.clickTool("ellipse");
 
       const canvas = container.querySelector("canvas.interactive")!;
 
@@ -509,7 +507,7 @@ describe("Test dragCreate", () => {
       fireEvent.pointerUp(canvas);
 
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `5`,
+        `6`,
       );
       expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
       expect(h.state.selectionElement).toBeNull();
@@ -517,10 +515,9 @@ describe("Test dragCreate", () => {
     });
 
     it("diamond", async () => {
-      const { getByToolName, container } = await render(<Excalidraw />);
+      const { container } = await render(<Excalidraw />);
       // select tool
-      const tool = getByToolName("diamond");
-      fireEvent.click(tool);
+      UI.clickTool("diamond");
 
       const canvas = container.querySelector("canvas.interactive")!;
 
@@ -531,7 +528,7 @@ describe("Test dragCreate", () => {
       fireEvent.pointerUp(canvas);
 
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `5`,
+        `6`,
       );
       expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
       expect(h.state.selectionElement).toBeNull();

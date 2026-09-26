@@ -423,6 +423,7 @@ export interface AppState {
     type: "selection" | "lasso";
     initialized: boolean;
   };
+  preferredGenericShape: "rectangle" | "diamond" | "ellipse";
 
   // Pen handling
   penMode: boolean;
