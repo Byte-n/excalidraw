@@ -448,6 +448,32 @@ type Element<T extends DrawingToolName> = T extends "line" | "freedraw"
 
 export class UI {
   static clickTool = (toolName: ToolType | "lock") => {
+    if (
+      toolName === "rectangle" ||
+      toolName === "diamond" ||
+      toolName === "ellipse"
+    ) {
+      const ownerDocument =
+        GlobalTestState.renderResult.container.ownerDocument;
+      let shapeOption = ownerDocument.querySelector<HTMLElement>(
+        `.tool-popover-content [data-testid="toolbar-${toolName}"]`,
+      );
+
+      for (let attempt = 0; !shapeOption && attempt < 2; attempt++) {
+        fireEvent.click(
+          ownerDocument.querySelector<HTMLElement>(
+            '[data-testid="toolbar-rectangle"]',
+          )!,
+        );
+        shapeOption = ownerDocument.querySelector<HTMLElement>(
+          `.tool-popover-content [data-testid="toolbar-${toolName}"]`,
+        );
+      }
+
+      fireEvent.click(shapeOption!);
+      return;
+    }
+
     fireEvent.click(GlobalTestState.renderResult.getByToolName(toolName));
   };
 

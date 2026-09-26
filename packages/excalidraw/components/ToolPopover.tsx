@@ -31,6 +31,9 @@ type ToolPopoverProps = {
   "data-testid": string;
   onToolChange: (type: string) => void;
   displayedOption: ToolOption;
+  keyBindingLabel?: string | null;
+  ariaKeyshortcuts?: string;
+  shortcut?: string | null;
 };
 
 export const ToolPopover = ({
@@ -41,6 +44,9 @@ export const ToolPopover = ({
   "data-testid": dataTestId,
   onToolChange,
   displayedOption,
+  keyBindingLabel,
+  ariaKeyshortcuts,
+  shortcut,
 }: ToolPopoverProps) => {
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const currentType = activeTool.type;
@@ -73,8 +79,12 @@ export const ToolPopover = ({
           disabled={options.every((option) =>
             isToolButtonDisabled(app, option.type),
           )}
-          title={capitalizeString(displayedOption.title)}
+          title={`${capitalizeString(displayedOption.title)}${
+            shortcut ? ` — ${shortcut}` : ""
+          }`}
           aria-label={capitalizeString(displayedOption.title)}
+          aria-keyshortcuts={ariaKeyshortcuts}
+          keyBindingLabel={keyBindingLabel}
           data-testid={dataTestId}
           onSelect={() => {
             setIsPopupOpen((v) => !v);
@@ -96,8 +106,8 @@ export const ToolPopover = ({
             icon={icon}
             checked={currentType === type}
             disabled={isToolButtonDisabled(app, type)}
-            title={capitalizeString(type)}
-            aria-label={capitalizeString(type)}
+            title={capitalizeString(title)}
+            aria-label={capitalizeString(title)}
             data-testid={`toolbar-${type}`}
             onSelect={() => {
               if (app.state.activeTool.type !== type) {

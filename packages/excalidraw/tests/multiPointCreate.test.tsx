@@ -17,6 +17,7 @@ import {
   restoreOriginalGetBoundingClientRect,
   unmountComponent,
 } from "./test-utils";
+import { UI } from "./helpers/ui";
 
 unmountComponent();
 
@@ -61,31 +62,29 @@ describe("remove shape in non linear elements", () => {
   });
 
   it("ellipse", async () => {
-    const { getByToolName, container } = await render(<Excalidraw />);
+    const { container } = await render(<Excalidraw />);
     // select tool
-    const tool = getByToolName("ellipse");
-    fireEvent.click(tool);
+    UI.clickTool("ellipse");
 
     const canvas = container.querySelector("canvas.interactive")!;
     fireEvent.pointerDown(canvas, { clientX: 30, clientY: 20 });
     fireEvent.pointerUp(canvas, { clientX: 30, clientY: 30 });
 
-    expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`5`);
+    expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`6`);
     expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
     expect(h.elements.length).toEqual(0);
   });
 
   it("diamond", async () => {
-    const { getByToolName, container } = await render(<Excalidraw />);
+    const { container } = await render(<Excalidraw />);
     // select tool
-    const tool = getByToolName("diamond");
-    fireEvent.click(tool);
+    UI.clickTool("diamond");
 
     const canvas = container.querySelector("canvas.interactive")!;
     fireEvent.pointerDown(canvas, { clientX: 30, clientY: 20 });
     fireEvent.pointerUp(canvas, { clientX: 30, clientY: 30 });
 
-    expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`5`);
+    expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`6`);
     expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
     expect(h.elements.length).toEqual(0);
   });

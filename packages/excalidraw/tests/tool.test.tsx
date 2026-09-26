@@ -83,6 +83,7 @@ describe("findShapeByKey()", () => {
         preferredSelectionTool: {
           type: preferredSelectionTool,
         },
+        preferredGenericShape: "rectangle",
       },
     } as AppClassProperties);
 
@@ -106,6 +107,31 @@ describe("findShapeByKey()", () => {
     expect(findShapeByKey("V", app)).toBe("selection");
     expect(findShapeByKey("R", app)).toBe("rectangle");
     expect(findShapeByKey("X", app)).toBe("freedraw");
+  });
+
+  it.each(["rectangle", "diamond", "ellipse"] as const)(
+    "rectangle shortcuts activate the preferred %s tool",
+    (preferredGenericShape) => {
+      const app = {
+        ...appWithPreferredTool("selection"),
+        state: {
+          ...appWithPreferredTool("selection").state,
+          preferredGenericShape,
+        },
+      } as AppClassProperties;
+
+      expect(findShapeByKey("r", app)).toBe(preferredGenericShape);
+      expect(findShapeByKey("2", app)).toBe(preferredGenericShape);
+    },
+  );
+
+  it("does not activate generic shapes with their removed shortcuts", () => {
+    const app = appWithPreferredTool("selection");
+
+    expect(findShapeByKey("d", app)).toBeNull();
+    expect(findShapeByKey("3", app)).toBeNull();
+    expect(findShapeByKey("o", app)).toBeNull();
+    expect(findShapeByKey("4", app)).toBeNull();
   });
 
   it("matches shift-bound tools only when shift is held", () => {
@@ -350,6 +376,7 @@ describe("props.activeTool (forced tool)", () => {
 });
 
 describe("toolbar", () => {
+  const h = window.h;
   const queryTool = (type: string) =>
     document.querySelector<HTMLButtonElement>(
       `[data-testid="toolbar-${type}"]`,
@@ -385,4 +412,29 @@ describe("toolbar", () => {
     expect(badge("stickynote")).toBe("N");
     expect(badge("eraser")).toBe("E");
   });
+
+  it.each([
+    ["diamond", "r"],
+    ["ellipse", "2"],
+  ] as const)(
+    "activates the selected %s with the generic shape shortcut",
+    async (shape, key) => {
+      await render(<Excalidraw handleKeyboardGlobally />);
+
+      fireEvent.click(queryTool("rectangle")!);
+      fireEvent.click(
+        h.app.ownerDocument.querySelector<HTMLButtonElement>(
+          `.tool-popover-content [data-testid="toolbar-${shape}"]`,
+        )!,
+      );
+      expect(h.state.preferredGenericShape).toBe(shape);
+      expect(queryTool("rectangle")?.getAttribute("aria-label")).toBe(
+        shape === "diamond" ? "Diamond" : "Ellipse",
+      );
+
+      fireEvent.click(queryTool("arrow")!);
+      fireEvent.keyDown(h.app.ownerDocument, { key });
+      expect(h.state.activeTool.type).toBe(shape);
+    },
+  );
 });

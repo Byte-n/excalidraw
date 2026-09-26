@@ -375,6 +375,7 @@
     "selection": "Selection",
     "lasso": "Lasso selection",
     "image": "Insert image",
+    "genericShape": "Shape",
     "rectangle": "Rectangle",
     "diamond": "Diamond",
     "ellipse": "Ellipse",
