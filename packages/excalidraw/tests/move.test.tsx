@@ -35,6 +35,20 @@ beforeEach(() => {
 const { h } = window;
 
 describe("move element", () => {
+  it("keeps selection and drag state when moving an existing element", async () => {
+    const { container } = await render(<Excalidraw />);
+    const canvas = container.querySelector("canvas.interactive")!;
+    const rectangle = UI.createElement("rectangle", { x: 0, y: 0, size: 40 });
+
+    new Pointer("mouse").clickOn(rectangle);
+    fireEvent.pointerDown(canvas, { clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(canvas, { clientX: 50, clientY: 45 });
+    fireEvent.pointerUp(canvas);
+
+    expect(h.state.selectedElementIds[rectangle.id]).toBe(true);
+    expect([rectangle.x, rectangle.y]).toEqual([30, 25]);
+  });
+
   it("rectangle", async () => {
     const { getByToolName, container } = await render(<Excalidraw />);
     const canvas = container.querySelector("canvas.interactive")!;
