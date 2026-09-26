@@ -5,7 +5,10 @@ import { reseed } from "@excalidraw/common";
 
 import { Excalidraw } from "../index";
 import { updateGestureOnPointerDown } from "../components/app/gesture";
-import { createInteractionState } from "../components/app/pointerSession";
+import {
+  cleanupAfterMissingPointerUp,
+  createInteractionState,
+} from "../components/app/pointerSession";
 import * as StaticScene from "../renderer/staticScene";
 import {
   act,
@@ -138,5 +141,29 @@ describe("Test <App/>", () => {
     expect(second.didTapTwice).toBe(false);
     expect(second.firstTapPosition).toBeNull();
     expect(second.currentScrollBars.horizontal).toBeNull();
+  });
+
+  it("cleans up only the pointer session that lost its pointerup", () => {
+    const firstCleanup = vi.fn();
+    const secondCleanup = vi.fn();
+    const makeApp = (cleanup: () => void) => ({
+      pan: { end: vi.fn() },
+      interactionState: {
+        ...createInteractionState(),
+        lastPointerUp: cleanup,
+      },
+      missingPointerEventCleanupEmitter: {
+        trigger: vi.fn(() => ({ clear: vi.fn() })),
+      },
+    });
+    const first = makeApp(firstCleanup);
+    const second = makeApp(secondCleanup);
+
+    cleanupAfterMissingPointerUp(first, null);
+
+    expect(firstCleanup).toHaveBeenCalledTimes(1);
+    expect(secondCleanup).not.toHaveBeenCalled();
+    expect(first.pan.end).toHaveBeenCalledTimes(1);
+    expect(second.pan.end).not.toHaveBeenCalled();
   });
 });

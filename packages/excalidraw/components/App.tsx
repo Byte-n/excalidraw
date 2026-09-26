@@ -107,7 +107,6 @@ import {
   getCommonBounds,
   getElementAbsoluteCoords,
   bindOrUnbindBindingElements,
-  fixBindingsAfterDeletion,
   getHoveredElementForBinding,
   isBindingEnabled,
   updateBoundElements,
@@ -124,7 +123,6 @@ import {
   newImageElement,
   newLinearElement,
   newTextElement,
-  refreshTextDimensions,
   deepCopyElement,
   duplicateElements,
   hasBoundTextElement,
@@ -162,7 +160,6 @@ import {
   getContainerCenter,
   getContainerElement,
   getColorUpdate,
-  getStickyNoteLayout,
   getStickyNoteMinSize,
   isValidTextContainer,
   redrawTextBoundingBox,
@@ -183,7 +180,6 @@ import {
   hitElementBoundingBoxOnly,
   hitElementItself,
   getVisibleSceneBounds,
-  cropElement,
   wrapText,
   isElementLink,
   isMeasureTextSupported,
@@ -208,7 +204,6 @@ import {
   makeNextSelectedElementIds,
   getResizeOffsetXY,
   getResizeArrowDirection,
-  transformElements,
   getCursorForResizingElement,
   getElementWithTransformHandleType,
   getTransformHandleTypeFromCoords,
@@ -224,7 +219,6 @@ import {
   StoreDelta,
   type ApplyToOptions,
   positionElementsOnGrid,
-  calculateFixedPointForNonElbowArrowBinding,
   bindOrUnbindBindingElement,
   getElementBounds,
   doBoundsIntersect,
@@ -267,7 +261,6 @@ import type {
   ExcalidrawElbowArrowElement,
   SceneElementsMap,
   NonDeletedSceneElementsMap,
-  ExcalidrawBindableElement,
 } from "@excalidraw/element/types";
 
 import type {
@@ -388,7 +381,6 @@ import {
   snapDraggedElements,
   isActiveToolNonLinearSnappable,
   snapNewElement,
-  snapResizingElements,
   isSnappingEnabled,
   getVisibleGaps,
   getReferenceSnapPoints,
@@ -399,7 +391,7 @@ import { Renderer } from "../scene/Renderer";
 import { type SetViewportOptions } from "../viewport";
 import { LaserTrails } from "../laserTrails";
 import { withBatchedUpdates, withBatchedUpdatesThrottled } from "../reactUtils";
-import { textWysiwyg } from "../wysiwyg/textWysiwyg";
+
 import { isOverScrollBars } from "../scene/scrollbars";
 import { isMaybeMermaidDefinition } from "../mermaid";
 import { LassoTrail } from "../lasso";
@@ -464,6 +456,8 @@ import { AppStateObserver, type OnStateChange } from "./AppStateObserver";
 import { findShapeByKey, TOGGLE_TOOLS } from "./Tools";
 
 import { editorInterfaceContextInitialValue } from "./app/context";
+
+import type { textWysiwyg } from "../wysiwyg/textWysiwyg";
 
 import type { ExcalidrawLibraryIds } from "../data/types";
 
@@ -4885,142 +4879,6 @@ class App extends React.Component<AppProps, AppState> {
     keyboardController.onKeyUp(this, event),
   );
 
-  private onKeyUpLegacy = withBatchedUpdates((event: KeyboardEvent) => {
-    if (this.mindmap.handleKeyUp(event)) {
-      return;
-    }
-    if (!this.isInteractionEnabled()) {
-      return;
-    }
-    if (event.key === KEYS.SPACE) {
-      if (
-        (this.state.viewModeEnabled &&
-          this.state.activeTool.type !== "laser") ||
-        this.state.openDialog?.name === "elementLinkSelector"
-      ) {
-        this.cursor.set(CURSOR_TYPE.GRAB);
-      } else if (isSelectionLikeTool(this.state.activeTool.type)) {
-        this.cursor.reset();
-      } else {
-        this.cursor.applyForTool();
-        this.setState({
-          selectedElementIds: makeNextSelectedElementIds({}, this.state),
-          selectedGroupIds: {},
-          editingGroupId: null,
-          activeEmbeddable: null,
-        });
-      }
-      this.pan.setSpaceHeld(false);
-    }
-
-    if (event.key === KEYS.ALT) {
-      this.bucketFill.closeTemporaryEyeDropper();
-      maybeHandleArrowPointlikeDrag({ app: this, event });
-    }
-
-    if (
-      (event.key === KEYS.ALT && this.state.bindMode === "skip") ||
-      (!event[KEYS.CTRL_OR_CMD] && !isBindingEnabled(this.state))
-    ) {
-      // Handle Alt key release for bind mode
-      this.setState({
-        bindMode: "orbit",
-      });
-
-      // Restart the timer if we're creating/editing a linear element and hovering over an element
-      if (this.lastPointerMoveEvent && getFeatureFlag("COMPLEX_BINDINGS")) {
-        const scenePointer = viewportCoordsToSceneCoords(
-          {
-            clientX: this.lastPointerMoveEvent.clientX,
-            clientY: this.lastPointerMoveEvent.clientY,
-          },
-          this.state,
-        );
-
-        const hoveredElement = getHoveredElementForBinding(
-          pointFrom<GlobalPoint>(scenePointer.x, scenePointer.y),
-          this.scene.getNonDeletedElements(),
-          this.scene.getNonDeletedElementsMap(),
-        );
-
-        if (this.state.selectedLinearElement) {
-          const element = LinearElementEditor.getElement(
-            this.state.selectedLinearElement.elementId,
-            this.scene.getNonDeletedElementsMap(),
-          );
-
-          if (isBindingElement(element)) {
-            this.handleDelayedBindModeChange(element, hoveredElement);
-          }
-        }
-      }
-    }
-    if (!event[KEYS.CTRL_OR_CMD]) {
-      const preferenceEnabled = this.state.bindingPreference === "enabled";
-      if (this.state.isBindingEnabled !== preferenceEnabled) {
-        flushSync(() => {
-          this.setState({ isBindingEnabled: preferenceEnabled });
-        });
-
-        this.arrowText.refresh();
-      }
-
-      maybeHandleArrowPointlikeDrag({ app: this, event });
-    }
-    if (isArrowKey(event.key)) {
-      bindOrUnbindBindingElements(
-        this.scene.getSelectedElements(this.state).filter(isArrowElement),
-        this.scene,
-        this.state,
-      );
-
-      const elementsMap = this.scene.getNonDeletedElementsMap();
-
-      this.scene
-        .getSelectedElements(this.state)
-        .filter(isSimpleArrow)
-        .forEach((element) => {
-          // Update the fixed point bindings for non-elbow arrows
-          // when the pointer is released, so that they are correctly positioned
-          // after the drag.
-          if (element.startBinding) {
-            this.scene.mutateElement(element, {
-              startBinding: {
-                ...element.startBinding,
-                ...calculateFixedPointForNonElbowArrowBinding(
-                  element,
-                  elementsMap.get(
-                    element.startBinding.elementId,
-                  ) as NonDeleted<ExcalidrawBindableElement>,
-                  "start",
-                  elementsMap,
-                ),
-              },
-            });
-          }
-          if (element.endBinding) {
-            this.scene.mutateElement(element, {
-              endBinding: {
-                ...element.endBinding,
-                ...calculateFixedPointForNonElbowArrowBinding(
-                  element,
-                  elementsMap.get(
-                    element.endBinding.elementId,
-                  ) as NonDeleted<ExcalidrawBindableElement>,
-                  "end",
-                  elementsMap,
-                ),
-              },
-            });
-          }
-        });
-
-      this.setState({ suggestedBinding: null });
-    }
-
-    this.flowchart.handleKeyEvent(event);
-  });
-
   setActiveTool = (
     tool: ({ type: ToolType } | { type: "custom"; customType: string }) & {
       locked?: boolean;
@@ -5207,181 +5065,6 @@ class App extends React.Component<AppProps, AppState> {
     },
   ) {
     return textController.handleTextWysiwyg(this, element, options);
-  }
-
-  private handleTextWysiwygLegacy(
-    element: NonDeleted<ExcalidrawTextElement>,
-    {
-      isExistingElement = false,
-      initialCaretSceneCoords = null,
-    }: {
-      isExistingElement?: boolean;
-      /**
-       * supply null if no caret positioning is desired, and instead
-       * text should be auto-selected
-       */
-      initialCaretSceneCoords?: { x: number; y: number } | null;
-    },
-  ) {
-    const elementsMap = this.scene.getElementsMapIncludingDeleted();
-
-    const updateElement = (nextOriginalText: string, isDeleted: boolean) => {
-      const latestTextElement = this.scene.getElement<ExcalidrawTextElement>(
-        element.id,
-      );
-
-      if (!latestTextElement || !isTextElement(latestTextElement)) {
-        return;
-      }
-
-      const container = getContainerElement(latestTextElement, elementsMap);
-      const stickyContainer =
-        container && isStickyNoteElement(container) ? container : null;
-      // sticky notes: the fit owns both the label and the note geometry
-      const stickyLayout = stickyContainer
-        ? getStickyNoteLayout(stickyContainer, latestTextElement, {
-            originalText: nextOriginalText,
-          })
-        : null;
-
-      this.scene.replaceAllElements([
-        // Not sure why we include deleted elements as well hence using deleted elements map
-        ...this.scene.getElementsIncludingDeleted().map((_element) => {
-          if (
-            stickyLayout &&
-            _element.id === stickyContainer?.id &&
-            isStickyNoteElement(_element)
-          ) {
-            return newElementWith(_element, stickyLayout.container);
-          }
-          if (_element.id === latestTextElement.id && isTextElement(_element)) {
-            return newElementWith(_element, {
-              originalText: nextOriginalText,
-              isDeleted: isDeleted ?? _element.isDeleted,
-              ...(stickyLayout?.text ??
-                // returns (wrapped) text and new dimensions
-                refreshTextDimensions(
-                  _element,
-                  getContainerElement(_element, elementsMap),
-                  elementsMap,
-                  nextOriginalText,
-                )),
-            });
-          }
-          return _element;
-        }),
-      ]);
-
-      if (stickyContainer) {
-        // the note may have grown or shrunk — arrows bound to it must follow
-        const latestContainer = this.scene.getNonDeletedElement(
-          stickyContainer.id,
-        );
-        if (latestContainer) {
-          updateBoundElements(latestContainer, this.scene);
-        }
-      }
-    };
-
-    this.textWysiwygSubmitHandler = textWysiwyg({
-      canvas: this.canvas,
-      getViewportCoords: (x, y) => {
-        const { x: viewportX, y: viewportY } = sceneCoordsToViewportCoords(
-          {
-            sceneX: x,
-            sceneY: y,
-          },
-          this.state,
-        );
-        return [
-          viewportX - this.state.offsetLeft,
-          viewportY - this.state.offsetTop,
-        ];
-      },
-      onChange: withBatchedUpdates((nextOriginalText) => {
-        updateElement(nextOriginalText, false);
-        if (isNonDeletedElement(element)) {
-          updateBoundElements(element, this.scene);
-        }
-      }),
-      onSubmit: withBatchedUpdates(({ viaKeyboard, nextOriginalText }) => {
-        this.textWysiwygSubmitHandler = null;
-
-        const isDeleted = !nextOriginalText.trim();
-        updateElement(nextOriginalText, isDeleted);
-        const didCreateMindmapNode = this.mindmap.handleTextSubmit(element);
-
-        // keyboard-submit keeps focus on the edited object. For bound text, keep
-        // the container selected even if the text becomes empty and is deleted.
-        // The autoshape tool stays active through the editing session and never
-        // selects anything — don't fight the finalize action's selection reset.
-        const elementIdToSelect =
-          viaKeyboard &&
-          !this.isToolLocked() &&
-          this.state.activeTool.type !== "autoshape"
-            ? element.containerId || (!isDeleted ? element.id : null)
-            : null;
-
-        if (elementIdToSelect) {
-          // needed to ensure state is updated before "finalize" action
-          // that's invoked on keyboard-submit as well
-          // TODO either move this into finalize as well, or handle all state
-          // updates in one place, skipping finalize action
-          flushSync(() => {
-            this.setState((prevState) => ({
-              selectedElementIds: makeNextSelectedElementIds(
-                {
-                  ...prevState.selectedElementIds,
-                  [elementIdToSelect]: true,
-                },
-                prevState,
-              ),
-            }));
-          });
-        }
-
-        if (isDeleted) {
-          fixBindingsAfterDeletion(this.scene.getNonDeletedElements(), [
-            element,
-          ]);
-        }
-
-        // 新建脑图节点即使没有文字，也需要记录创建历史。
-        if (!isDeleted || isExistingElement || didCreateMindmapNode) {
-          this.store.scheduleCapture();
-        }
-
-        flushSync(() => {
-          this.setState({
-            newElement: null,
-            editingTextElement: null,
-          });
-        });
-
-        // tools that survive the submit (locked, or autoshape's
-        // double-click-to-type flow) need their cursor back
-        if (this.isToolLocked() || this.state.activeTool.type === "autoshape") {
-          this.cursor.applyForTool();
-        }
-
-        this.focusContainer();
-      }),
-      element,
-      excalidrawContainer: this.excalidrawContainerRef.current,
-      app: this,
-      initialCaretSceneCoords,
-      // when text is selected, it's hard (at least on iOS) to re-position the
-      // caret (i.e. deselect). There's not much use for always selecting
-      // the text on edit anyway (and users can select-all from contextmenu
-      // if needed)
-      autoSelect: !this.editorInterface.isTouchScreen,
-    });
-    // deselect all other elements when inserting text
-    this.deselectElements();
-
-    // do an initial update to re-initialize element position since we were
-    // modifying element's x/y for sake of editor (case: syncing to remote)
-    updateElement(element.originalText, false);
   }
 
   private deselectElements() {
@@ -11896,245 +11579,23 @@ class App extends React.Component<AppProps, AppState> {
     pointerDownState: PointerDownState,
     event: MouseEvent | KeyboardEvent,
   ): boolean => {
-    // to crop, we must already be in the cropping mode, where croppingElement has been set
-    if (!this.state.croppingElementId) {
-      return false;
-    }
-
-    const transformHandleType = pointerDownState.resize.handleType;
-    const pointerCoords = pointerDownState.lastCoords;
-    const [x, y] = getGridPoint(
-      pointerCoords.x - pointerDownState.resize.offset.x,
-      pointerCoords.y - pointerDownState.resize.offset.y,
-      event[KEYS.CTRL_OR_CMD] ? null : this.getEffectiveGridSize(),
+    return pointerSelectionController.maybeHandleCrop(
+      this,
+      pointerDownState,
+      event,
     );
-
-    const croppingElement = this.scene
-      .getNonDeletedElementsMap()
-      .get(this.state.croppingElementId);
-
-    if (
-      transformHandleType &&
-      croppingElement &&
-      isImageElement(croppingElement)
-    ) {
-      const croppingAtStateStart = pointerDownState.originalElements.get(
-        croppingElement.id,
-      );
-
-      const image =
-        isInitializedImageElement(croppingElement) &&
-        this.imageCache.get(croppingElement.fileId)?.image;
-
-      if (
-        croppingAtStateStart &&
-        isImageElement(croppingAtStateStart) &&
-        image &&
-        !(image instanceof Promise)
-      ) {
-        const [gridX, gridY] = getGridPoint(
-          pointerCoords.x,
-          pointerCoords.y,
-          event[KEYS.CTRL_OR_CMD] ? null : this.getEffectiveGridSize(),
-        );
-
-        const dragOffset = {
-          x: gridX - pointerDownState.originInGrid.x,
-          y: gridY - pointerDownState.originInGrid.y,
-        };
-
-        this.maybeCacheReferenceSnapPoints(event, [croppingElement]);
-
-        const { snapOffset, snapLines } = snapResizingElements(
-          [croppingElement],
-          [croppingAtStateStart],
-          this,
-          event,
-          dragOffset,
-          transformHandleType,
-        );
-
-        this.scene.mutateElement(
-          croppingElement,
-          cropElement(
-            croppingElement,
-            this.scene.getNonDeletedElementsMap(),
-            transformHandleType,
-            image.naturalWidth,
-            image.naturalHeight,
-            x + snapOffset.x,
-            y + snapOffset.y,
-            event.shiftKey
-              ? croppingAtStateStart.width / croppingAtStateStart.height
-              : undefined,
-          ),
-        );
-
-        updateBoundElements(croppingElement, this.scene);
-
-        this.setState({
-          isCropping: transformHandleType && transformHandleType !== "rotation",
-          snapLines,
-        });
-      }
-
-      return true;
-    }
-
-    return false;
   };
 
   private maybeHandleResize = (
     pointerDownState: PointerDownState,
     event: MouseEvent | KeyboardEvent,
   ): boolean => {
-    const selectedElements = this.scene.getSelectedElements(this.state);
-    const selectedFrames = selectedElements.filter(isFrameLikeElement);
-
-    const transformHandleType = pointerDownState.resize.handleType;
-
-    if (
-      // Frames cannot be rotated.
-      (selectedFrames.length > 0 && transformHandleType === "rotation") ||
-      // Elbow arrows cannot be transformed (resized or rotated).
-      (selectedElements.length === 1 && isElbowArrow(selectedElements[0])) ||
-      // Do not resize when in crop mode
-      this.state.croppingElementId
-    ) {
-      return false;
-    }
-
-    this.activeResizeHandle =
-      transformHandleType && transformHandleType !== "rotation"
-        ? transformHandleType
-        : null;
-    this.setState({
-      // TODO: rename this state field to "isScaling" to distinguish
-      // it from the generic "isResizing" which includes scaling and
-      // rotating
-      isResizing: transformHandleType && transformHandleType !== "rotation",
-      isRotating: transformHandleType === "rotation",
-      activeEmbeddable: null,
-    });
-    const pointerCoords = pointerDownState.lastCoords;
-    let [resizeX, resizeY] = getGridPoint(
-      pointerCoords.x - pointerDownState.resize.offset.x,
-      pointerCoords.y - pointerDownState.resize.offset.y,
-      event[KEYS.CTRL_OR_CMD] ? null : this.getEffectiveGridSize(),
+    return pointerSelectionController.maybeHandleResize(
+      this,
+      pointerDownState,
+      event,
     );
-
-    const frameElementsOffsetsMap = new Map<
-      string,
-      {
-        x: number;
-        y: number;
-      }
-    >();
-
-    selectedFrames.forEach((frame) => {
-      const elementsInFrame = getFrameChildren(
-        this.scene.getNonDeletedElements(),
-        frame.id,
-      );
-
-      elementsInFrame.forEach((element) => {
-        frameElementsOffsetsMap.set(frame.id + element.id, {
-          x: element.x - frame.x,
-          y: element.y - frame.y,
-        });
-      });
-    });
-
-    // check needed for avoiding flickering when a key gets pressed
-    // during dragging
-    if (!this.state.selectedElementsAreBeingDragged) {
-      const [gridX, gridY] = getGridPoint(
-        pointerCoords.x,
-        pointerCoords.y,
-        event[KEYS.CTRL_OR_CMD] ? null : this.getEffectiveGridSize(),
-      );
-
-      const dragOffset = {
-        x: gridX - pointerDownState.originInGrid.x,
-        y: gridY - pointerDownState.originInGrid.y,
-      };
-
-      const originalElements = [...pointerDownState.originalElements.values()];
-
-      this.maybeCacheReferenceSnapPoints(event, selectedElements);
-
-      const { snapOffset, snapLines } = snapResizingElements(
-        selectedElements,
-        getSelectedElements(originalElements, this.state),
-        this,
-        event,
-        dragOffset,
-        transformHandleType,
-      );
-
-      resizeX += snapOffset.x;
-      resizeY += snapOffset.y;
-
-      this.setState({
-        snapLines,
-      });
-    }
-
-    // images are proportional by default, and so is a sticky note's corner
-    // (its label's font ceiling scales with it); Shift frees them. A note's
-    // edges stay free by default — Shift constrains them like any shape.
-    const proportionalByDefault =
-      selectedElements.some((element) => isImageElement(element)) ||
-      (selectedElements.length === 1 &&
-        isStickyNoteElement(selectedElements[0]) &&
-        typeof transformHandleType === "string" &&
-        transformHandleType.length === 2);
-
-    if (
-      transformElements(
-        pointerDownState.originalElements,
-        transformHandleType,
-        selectedElements,
-        this.scene,
-        shouldRotateWithDiscreteAngle(event),
-        shouldResizeFromCenter(event),
-        proportionalByDefault
-          ? !shouldMaintainAspectRatio(event)
-          : shouldMaintainAspectRatio(event),
-        resizeX,
-        resizeY,
-        pointerDownState.resize.center.x,
-        pointerDownState.resize.center.y,
-      )
-    ) {
-      const elementsToHighlight = new Set<NonDeletedExcalidrawElement>();
-      selectedFrames.forEach((frame) => {
-        getElementsInResizingFrame(
-          this.scene.getNonDeletedElements(),
-          frame,
-          this.state,
-          this.scene.getNonDeletedElementsMap(),
-        ).forEach((element) => {
-          if (isNonDeletedElement(element)) {
-            elementsToHighlight.add(element);
-          } else {
-            // SAFETY: This should never happen, but log it just in case
-            console.error(
-              "[NONDELETED][INVARIANT] Skipped highlighting deleted element in resizing frame",
-            );
-          }
-        });
-      });
-
-      this.setState({
-        elementsToHighlight: [...elementsToHighlight],
-      });
-
-      return true;
-    }
-    return false;
   };
-
   private getContextMenuItems = (
     type: "canvas" | "element",
   ): ContextMenuItems => {
