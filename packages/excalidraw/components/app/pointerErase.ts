@@ -8,10 +8,22 @@ import {
   newElementWith,
 } from "@excalidraw/element";
 
+import type App from "../App";
+
+type PointerEraseApp = Pick<
+  App,
+  | "eraserTrail"
+  | "elementsPendingErasure"
+  | "triggerRender"
+  | "scene"
+  | "mindmap"
+  | "store"
+>;
+
 /** Adds the current pointer location to the eraser trail and publishes the
  * pending ids for the renderer. */
 export const handleEraser = (
-  app: any,
+  app: PointerEraseApp,
   event: PointerEvent,
   scenePointer: { x: number; y: number },
 ) => {
@@ -24,14 +36,14 @@ export const handleEraser = (
   app.triggerRender();
 };
 
-export const restoreReadyToEraseElements = (app: any) => {
+export const restoreReadyToEraseElements = (app: PointerEraseApp) => {
   app.elementsPendingErasure = new Set();
   app.triggerRender();
 };
 
 /** Deletes the trail's elements and repairs binding references in the same
  * transaction as the original pointer eraser implementation. */
-export const eraseElements = (app: any) => {
+export const eraseElements = (app: PointerEraseApp) => {
   let didChange = false;
   const protectedIds = new Set<string>();
   for (const id of app.elementsPendingErasure) {
@@ -64,7 +76,7 @@ export const eraseElements = (app: any) => {
         const bindable = app.scene.getElement(element.startBinding.elementId)!;
         mutateElement(bindable, app.scene.getElementsMapIncludingDeleted(), {
           boundElements: bindable.boundElements!.filter(
-            (boundElement: { id: string }) => boundElement.id !== element.id,
+            (boundElement) => boundElement.id !== element.id,
           ),
         });
       }
@@ -72,50 +84,46 @@ export const eraseElements = (app: any) => {
         const bindable = app.scene.getElement(element.endBinding.elementId)!;
         mutateElement(bindable, app.scene.getElementsMapIncludingDeleted(), {
           boundElements: bindable.boundElements!.filter(
-            (boundElement: { id: string }) => boundElement.id !== element.id,
+            (boundElement) => boundElement.id !== element.id,
           ),
         });
       }
-    } else if (isBindableElement(element as any)) {
-      const bindableElement = element as any;
-      bindableElement.boundElements?.forEach(
-        (boundElement: { id: string; type: string }) => {
-          if (boundElement.type !== "arrow") {
-            return;
-          }
-          const arrow = app.scene.getElement(boundElement.id);
-          if (!arrow) {
-            return;
-          }
-          if (arrow.startBinding?.elementId === bindableElement.id) {
-            mutateElement(arrow, app.scene.getElementsMapIncludingDeleted(), {
-              startBinding: null,
-            });
-          }
-          if (arrow.endBinding?.elementId === bindableElement.id) {
-            mutateElement(arrow, app.scene.getElementsMapIncludingDeleted(), {
-              endBinding: null,
-            });
-          }
-        },
-      );
+    } else if (element && isBindableElement(element)) {
+      const bindableElement = element;
+      bindableElement.boundElements?.forEach((boundElement) => {
+        if (boundElement.type !== "arrow") {
+          return;
+        }
+        const arrow = app.scene.getElement(boundElement.id);
+        if (!isBindingElement(arrow)) {
+          return;
+        }
+        if (arrow.startBinding?.elementId === bindableElement.id) {
+          mutateElement(arrow, app.scene.getElementsMapIncludingDeleted(), {
+            startBinding: null,
+          });
+        }
+        if (arrow.endBinding?.elementId === bindableElement.id) {
+          mutateElement(arrow, app.scene.getElementsMapIncludingDeleted(), {
+            endBinding: null,
+          });
+        }
+      });
     }
   });
 
-  const elements = app.scene
-    .getElementsIncludingDeleted()
-    .map((element: any) => {
-      if (
-        app.elementsPendingErasure.has(element.id) ||
-        (element.frameId && app.elementsPendingErasure.has(element.frameId)) ||
-        (isBoundToContainer(element) &&
-          app.elementsPendingErasure.has(element.containerId))
-      ) {
-        didChange = true;
-        return newElementWith(element, { isDeleted: true });
-      }
-      return element;
-    });
+  const elements = app.scene.getElementsIncludingDeleted().map((element) => {
+    if (
+      app.elementsPendingErasure.has(element.id) ||
+      (element.frameId && app.elementsPendingErasure.has(element.frameId)) ||
+      (isBoundToContainer(element) &&
+        app.elementsPendingErasure.has(element.containerId))
+    ) {
+      didChange = true;
+      return newElementWith(element, { isDeleted: true });
+    }
+    return element;
+  });
 
   app.elementsPendingErasure = new Set();
   if (didChange) {

@@ -43,6 +43,12 @@ export type HitTestApp = {
   >;
   editorInterface: EditorInterface;
   frameNameBoundsCache: FrameNameBoundsCache;
+  hitElement: (
+    x: number,
+    y: number,
+    element: NonDeletedExcalidrawElement,
+    considerBoundingBox?: boolean,
+  ) => boolean;
 };
 
 export const getElementHitThreshold = (
@@ -116,7 +122,7 @@ export const getElementsAtPosition = (
     .filter(
       (element) =>
         !hiddenMindmapElementIds.has(element.id) &&
-        hitElement(app, x, y, element),
+        app.hitElement(x, y, element),
     )
     .filter((element) => {
       const containingFrame = getContainingFrame(element, elementsMap);

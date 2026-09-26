@@ -591,6 +591,9 @@ export async function componentDidMount(app: App) {
 }
 
 export function componentWillUnmount(app: App) {
+  app.maybeCleanupAfterMissingPointerUp(null);
+  resetInteractionState(app);
+
   // we're recreating the api object reference so that the
   // <ExcalidrawAPIContext.Provider/> picks up on it
   app.api = { ...app.api, isDestroyed: true };
