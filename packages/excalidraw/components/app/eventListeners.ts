@@ -8,6 +8,30 @@ import { ShapeCache } from "@excalidraw/element";
 
 import type App from "../App";
 
+export const handleInteractiveCanvasRef = (
+  app: App,
+  canvas: HTMLCanvasElement | null,
+) => {
+  if (canvas !== null) {
+    app.interactiveCanvas = canvas;
+    app.cursor.reset();
+    // React's passive touch listeners cannot prevent the browser default.
+    canvas.addEventListener(EVENT.TOUCH_START, app["onTouchStart"], {
+      passive: false,
+    });
+    canvas.addEventListener(EVENT.TOUCH_END, app["onTouchEnd"]);
+  } else {
+    app.interactiveCanvas?.removeEventListener(
+      EVENT.TOUCH_START,
+      app["onTouchStart"],
+    );
+    app.interactiveCanvas?.removeEventListener(
+      EVENT.TOUCH_END,
+      app["onTouchEnd"],
+    );
+  }
+};
+
 export const onBlur = (app: App) => {
   app.pan.setSpaceHeld(false);
   app.setState({

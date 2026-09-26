@@ -150,10 +150,7 @@ export const createInteractionState = (): InteractionState => ({
   eraserButtonCleanup: null,
 });
 
-export const resetTapTwice = (interactionState: InteractionState) => {
-  interactionState.didTapTwice = false;
-  interactionState.firstTapPosition = null;
-};
+export const resetTapTwice = gestureController.resetTapTwice;
 
 export const resetInteractionState = (app: {
   interactionState: InteractionState;

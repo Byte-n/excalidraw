@@ -1,3 +1,4 @@
+/* eslint-disable dot-notation -- App delegates remain private. */
 import {
   ARROW_TYPE,
   CODES,
@@ -39,12 +40,29 @@ import { flushSync } from "react-dom";
 import { pointFrom } from "@excalidraw/math";
 import { viewportCoordsToSceneCoords } from "@excalidraw/common";
 
+import {
+  isToolIcon,
+  updateActiveTool,
+  BIND_MODE_TIMEOUT,
+  invariant,
+} from "@excalidraw/common";
+
+import {
+  isLinearElementType,
+  getElementBounds,
+  doBoundsIntersect,
+} from "@excalidraw/element";
+
 import type {
   ExcalidrawBindableElement,
   ExcalidrawArrowElement,
   ExcalidrawTextContainer,
   NonDeleted,
 } from "@excalidraw/element/types";
+
+import type { GlobalPoint } from "@excalidraw/math";
+
+import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 
 import { getSelectedElements, hasBackground } from "../../scene";
 import {
@@ -60,9 +78,42 @@ import { trackEvent } from "../../analytics";
 import { actionToggleLinearEditor } from "../../actions";
 import { activeConfirmDialogAtom } from "../ActiveConfirmDialog";
 
+import { actionFinalize } from "../../actions";
+
+import { TOGGLE_TOOLS } from "../Tools";
+
 import type React from "react";
 import type App from "../App";
 import type { AppState } from "../../types";
+
+import type { ToolType } from "../../types";
+
+export const toggleLock = (app: App, source: "keyboard" | "ui" = "ui") => {
+  if (app.props.activeTool) {
+    return;
+  }
+  if (!app.state.activeTool.locked) {
+    trackEvent(
+      "toolbar",
+      "toggleLock",
+      `${source} (${
+        app.editorInterface.formFactor === "phone" ? "mobile" : "desktop"
+      })`,
+    );
+  }
+  app.setState((prevState) => ({
+    activeTool: {
+      ...prevState.activeTool,
+      ...updateActiveTool(
+        app.state,
+        prevState.activeTool.locked
+          ? { type: app.state.preferredSelectionTool.type }
+          : prevState.activeTool,
+      ),
+      locked: !prevState.activeTool.locked,
+    },
+  }));
+};
 
 export type KeyboardApp = App;
 
@@ -706,4 +757,458 @@ export const onKeyDown = (
     });
   }
   // -----------------------------------------------------------------------
+};
+
+export const handleSkipBindMode = (app: App) => {
+  if (
+    app.state.selectedLinearElement?.initialState &&
+    !app.state.selectedLinearElement.initialState.arrowStartIsInside
+  ) {
+    invariant(
+      app.lastPointerMoveCoords,
+      "Missing last pointer move coords when changing bind skip mode for arrow start",
+    );
+    const elementsMap = app.scene.getNonDeletedElementsMap();
+    const hoveredElement = getHoveredElementForBinding(
+      pointFrom<GlobalPoint>(
+        app.lastPointerMoveCoords.x,
+        app.lastPointerMoveCoords.y,
+      ),
+      app.scene.getNonDeletedElements(),
+      elementsMap,
+    );
+    const element = LinearElementEditor.getElement(
+      app.state.selectedLinearElement.elementId,
+      elementsMap,
+    );
+
+    if (
+      element?.startBinding &&
+      hoveredElement?.id === element.startBinding.elementId
+    ) {
+      app.setState({
+        selectedLinearElement: {
+          ...app.state.selectedLinearElement,
+          initialState: {
+            ...app.state.selectedLinearElement.initialState,
+            arrowStartIsInside: true,
+          },
+        },
+      });
+    }
+  }
+
+  if (app.state.bindMode === "orbit") {
+    if (app.bindModeHandler) {
+      clearTimeout(app.bindModeHandler);
+      app.bindModeHandler = null;
+    }
+
+    // PERF: It's okay since it's a single trigger from a key handler
+    // or single call from pointer move handler because the bindMode check
+    // will not pass the second time
+    flushSync(() => {
+      app.setState({
+        bindMode: "skip",
+      });
+    });
+
+    if (
+      app.lastPointerMoveCoords &&
+      app.state.selectedLinearElement?.selectedPointsIndices &&
+      app.state.selectedLinearElement?.selectedPointsIndices.length
+    ) {
+      const { x, y } = app.lastPointerMoveCoords;
+      const event =
+        app.lastPointerMoveEvent ?? app.lastPointerDownEvent?.nativeEvent;
+      invariant(event, "Last event must exist");
+      const deltaX = x - app.state.selectedLinearElement.pointerOffset.x;
+      const deltaY = y - app.state.selectedLinearElement.pointerOffset.y;
+      const newState = app.state.multiElement
+        ? LinearElementEditor.handlePointerMove(
+            event,
+            app,
+            deltaX,
+            deltaY,
+            app.state.selectedLinearElement,
+          )
+        : LinearElementEditor.handlePointDragging(
+            event,
+            app,
+            deltaX,
+            deltaY,
+            app.state.selectedLinearElement,
+          );
+      if (newState) {
+        app.setState(newState);
+      }
+    }
+  }
+};
+
+export const resetDelayedBindMode = (app: App) => {
+  if (app.bindModeHandler) {
+    clearTimeout(app.bindModeHandler);
+    app.bindModeHandler = null;
+  }
+
+  if (app.state.bindMode !== "orbit") {
+    // We need this iteration to complete binding and change
+    // back to orbit mode after that
+    setTimeout(() =>
+      app.setState({
+        bindMode: "orbit",
+      }),
+    );
+  }
+};
+
+export const handleDelayedBindModeChange = (
+  app: App,
+  arrow: ExcalidrawArrowElement,
+  hoveredElement: NonDeletedExcalidrawElement | null,
+) => {
+  if (arrow.isDeleted || isElbowArrow(arrow)) {
+    return;
+  }
+
+  const effector = () => {
+    app.bindModeHandler = null;
+
+    invariant(
+      app.lastPointerMoveCoords,
+      "Expected lastPointerMoveCoords to be set",
+    );
+
+    if (!app.state.multiElement) {
+      if (
+        !app.state.selectedLinearElement ||
+        !app.state.selectedLinearElement.selectedPointsIndices ||
+        !app.state.selectedLinearElement.selectedPointsIndices.length
+      ) {
+        return;
+      }
+
+      const startDragged =
+        app.state.selectedLinearElement.selectedPointsIndices.includes(0);
+      const endDragged =
+        app.state.selectedLinearElement.selectedPointsIndices.includes(
+          arrow.points.length - 1,
+        );
+
+      // Check if the whole arrow is dragged by selecting all endpoints
+      if ((!startDragged && !endDragged) || (startDragged && endDragged)) {
+        return;
+      }
+    }
+
+    const { x, y } = app.lastPointerMoveCoords;
+    const hoveredElement = getHoveredElementForBinding(
+      pointFrom<GlobalPoint>(x, y),
+      app.scene.getNonDeletedElements(),
+      app.scene.getNonDeletedElementsMap(),
+    );
+
+    if (hoveredElement && app.state.bindMode !== "skip") {
+      invariant(
+        app.state.selectedLinearElement?.elementId === arrow.id,
+        "The selectedLinearElement is expected to not change while a bind mode timeout is ticking",
+      );
+
+      // Once the start is set to inside binding, it remains so
+      const arrowStartIsInside =
+        app.state.selectedLinearElement.initialState.arrowStartIsInside ||
+        arrow.startBinding?.elementId === hoveredElement.id;
+
+      // Change the global binding mode
+      flushSync(() => {
+        invariant(
+          app.state.selectedLinearElement,
+          "this.state.selectedLinearElement must exist",
+        );
+
+        app.setState({
+          bindMode: "inside",
+          selectedLinearElement: {
+            ...app.state.selectedLinearElement,
+            initialState: {
+              ...app.state.selectedLinearElement.initialState,
+              arrowStartIsInside,
+            },
+          },
+        });
+      });
+
+      const event =
+        app.lastPointerMoveEvent ?? app.lastPointerDownEvent?.nativeEvent;
+      invariant(event, "Last event must exist");
+      const deltaX = x - app.state.selectedLinearElement.pointerOffset.x;
+      const deltaY = y - app.state.selectedLinearElement.pointerOffset.y;
+      const newState = app.state.multiElement
+        ? LinearElementEditor.handlePointerMove(
+            event,
+            app,
+            deltaX,
+            deltaY,
+            app.state.selectedLinearElement,
+          )
+        : LinearElementEditor.handlePointDragging(
+            event,
+            app,
+            deltaX,
+            deltaY,
+            app.state.selectedLinearElement,
+          );
+      if (newState) {
+        app.setState(newState);
+      }
+    }
+  };
+
+  let isOverlapping = false;
+  if (app.state.selectedLinearElement?.selectedPointsIndices) {
+    const elementsMap = app.scene.getNonDeletedElementsMap();
+    const startDragged =
+      app.state.selectedLinearElement.selectedPointsIndices.includes(0);
+    const endDragged =
+      app.state.selectedLinearElement.selectedPointsIndices.includes(
+        arrow.points.length - 1,
+      );
+    const startElement = startDragged
+      ? hoveredElement
+      : arrow.startBinding && elementsMap.get(arrow.startBinding.elementId);
+    const endElement = endDragged
+      ? hoveredElement
+      : arrow.endBinding && elementsMap.get(arrow.endBinding.elementId);
+    const startBounds =
+      startElement && getElementBounds(startElement, elementsMap);
+    const endBounds = endElement && getElementBounds(endElement, elementsMap);
+    isOverlapping = !!(
+      startBounds &&
+      endBounds &&
+      startElement.id !== endElement.id &&
+      doBoundsIntersect(startBounds, endBounds)
+    );
+  }
+
+  const startDragged =
+    app.state.selectedLinearElement?.selectedPointsIndices?.includes(0);
+  const endDragged =
+    app.state.selectedLinearElement?.selectedPointsIndices?.includes(
+      arrow.points.length - 1,
+    );
+  const currentBinding = startDragged
+    ? "startBinding"
+    : endDragged
+    ? "endBinding"
+    : null;
+  const otherBinding = startDragged
+    ? "endBinding"
+    : endDragged
+    ? "startBinding"
+    : null;
+  const isAlreadyInsideBindingToSameElement =
+    (otherBinding &&
+      arrow[otherBinding]?.mode === "inside" &&
+      arrow[otherBinding]?.elementId === hoveredElement?.id) ||
+    (currentBinding &&
+      arrow[currentBinding]?.mode === "inside" &&
+      hoveredElement?.id === arrow[currentBinding]?.elementId);
+
+  if (
+    currentBinding &&
+    otherBinding &&
+    arrow[currentBinding]?.mode === "inside" &&
+    hoveredElement?.id !== arrow[currentBinding]?.elementId &&
+    arrow[otherBinding]?.elementId !== arrow[currentBinding]?.elementId
+  ) {
+    // Update binding out of place to orbit mode
+    app.scene.mutateElement(
+      arrow,
+      {
+        [currentBinding]: {
+          ...arrow[currentBinding],
+          mode: "orbit",
+        },
+      },
+      {
+        informMutation: false,
+        isDragging: true,
+      },
+    );
+  }
+
+  if (
+    !hoveredElement ||
+    (app["previousHoveredBindableElement"] &&
+      hoveredElement.id !== app["previousHoveredBindableElement"].id)
+  ) {
+    // Clear the timeout if we're not hovering a bindable
+    if (app.bindModeHandler) {
+      clearTimeout(app.bindModeHandler);
+      app.bindModeHandler = null;
+    }
+
+    // Clear the inside binding mode too
+    if (app.state.bindMode === "inside") {
+      flushSync(() => {
+        app.setState({
+          bindMode: "orbit",
+        });
+      });
+    }
+
+    app["previousHoveredBindableElement"] = null;
+  } else if (
+    !app.bindModeHandler &&
+    (!app.state.newElement || !arrow.startBinding || isOverlapping) &&
+    !isAlreadyInsideBindingToSameElement
+  ) {
+    // We are hovering a bindable element
+    app.bindModeHandler = setTimeout(effector, BIND_MODE_TIMEOUT);
+  }
+
+  app["previousHoveredBindableElement"] = hoveredElement;
+};
+
+export const setActiveTool = (
+  app: App,
+  tool: ({ type: ToolType } | { type: "custom"; customType: string }) & {
+    locked?: boolean;
+    fromSelection?: boolean;
+  },
+  opts: {
+    keepSelection?: boolean;
+    /**
+     * When `true`, re-activating an already-active toggle tool (see
+     * `TOGGLE_TOOLS`) switches back to the previously active tool.
+     * Activation is idempotent by default; toggle tools always record the
+     * previously active tool regardless (so ESC and the next `toggle`
+     * activation can switch back to it).
+     */
+    toggle?: boolean;
+  } = {},
+) => {
+  const { keepSelection = false } = opts;
+
+  if (!app.isToolSupported(tool.type)) {
+    console.warn(
+      app.isInteractionEnabled()
+        ? `"${tool.type}" tool is disabled via "UIOptions.canvasActions.tools.${tool.type}"`
+        : `"${tool.type}" tool cannot be activated while the editor is non-interactive (see "interaction.enabled.tools")`,
+    );
+    return;
+  }
+
+  if (
+    app.props.activeTool &&
+    !app["isSameForcedTool"](app.props.activeTool, tool)
+  ) {
+    console.warn(
+      `"${tool.type}" tool activation ignored — the active tool is controlled by the host via "props.activeTool"`,
+    );
+    return;
+  }
+
+  if (app.drawShape.hasPendingGesture()) {
+    // switching tools mid-sketch (e.g. paste resets to the selection tool)
+    // must not strand the gesture — commit it through the finalize funnel
+    // while the drawShape tool is still active
+    app.actionManager.executeAction(actionFinalize);
+  }
+
+  const isToggleTool = TOGGLE_TOOLS.includes(tool.type);
+  const toggle = opts.toggle === true && isToggleTool;
+
+  const nextActiveTool =
+    toggle && app.state.activeTool.type === tool.type
+      ? // toggle back to the tool that was active before this one
+        updateActiveTool(app.state, {
+          ...(app.state.activeTool.lastActiveTool || {
+            type: app.state.preferredSelectionTool.type,
+          }),
+          lastActiveTool: null,
+        })
+      : isToggleTool && app.state.activeTool.type !== tool.type
+      ? // activating a toggle tool records the currently active tool so
+        // ESC and the next `toggle` activation can switch back to it
+        updateActiveTool(app.state, {
+          ...tool,
+          lastActiveTool: app.state.activeTool,
+        })
+      : updateActiveTool(app.state, tool);
+  if (nextActiveTool.type !== app.state.activeTool.type) {
+    app.mindmap.cancelDrag();
+  }
+  if (nextActiveTool.type !== "mindmap") {
+    app.mindmap.clearHover();
+  }
+  if (nextActiveTool.type === "hand") {
+    app.cursor.set(CURSOR_TYPE.GRAB);
+  } else if (!app.pan.isSpaceHeld()) {
+    app.cursor.applyForTool(nextActiveTool);
+  }
+  if (isToolIcon(app.ownerDocument.activeElement)) {
+    app.focusContainer();
+  }
+  if (!isLinearElementType(nextActiveTool.type)) {
+    app.setState({ suggestedBinding: null });
+  }
+  if (nextActiveTool.type === "image") {
+    app["onImageToolbarButtonClick"]();
+  }
+
+  app.setState((prevState) => {
+    const commonResets = {
+      snapLines: prevState.snapLines.length ? [] : prevState.snapLines,
+      originSnapOffset: null,
+      activeEmbeddable: null,
+      selectedLinearElement: isSelectionLikeTool(nextActiveTool.type)
+        ? prevState.selectedLinearElement
+        : null,
+      frameToHighlight: null,
+      // only the text tool offers arrow-endpoint binding, and the highlight
+      // is refreshed on pointermove — don't leave a stale one behind
+      hoveredArrowTextAnchor: null,
+      ...(nextActiveTool.type !== "mindmap" &&
+      Object.keys(prevState.hoveredElementIds).length
+        ? { hoveredElementIds: {} }
+        : {}),
+    } as const;
+
+    if (nextActiveTool.type === "freedraw") {
+      app.store.scheduleCapture();
+    }
+
+    if (nextActiveTool.type === "lasso") {
+      return {
+        ...prevState,
+        ...commonResets,
+        activeTool: nextActiveTool,
+        ...(keepSelection
+          ? {}
+          : {
+              selectedElementIds: makeNextSelectedElementIds({}, prevState),
+              selectedGroupIds: makeNextSelectedElementIds({}, prevState),
+              editingGroupId: null,
+              multiElement: null,
+            }),
+      };
+    } else if (nextActiveTool.type !== "selection") {
+      return {
+        ...prevState,
+        ...commonResets,
+        activeTool: nextActiveTool,
+        selectedElementIds: makeNextSelectedElementIds({}, prevState),
+        selectedGroupIds: makeNextSelectedElementIds({}, prevState),
+        editingGroupId: null,
+        multiElement: null,
+      };
+    }
+    return {
+      ...prevState,
+      ...commonResets,
+      activeTool: nextActiveTool,
+    };
+  });
 };

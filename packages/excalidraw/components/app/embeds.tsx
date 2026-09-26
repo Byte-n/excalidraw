@@ -1,3 +1,4 @@
+/* eslint-disable dot-notation -- App delegates remain private. */
 import clsx from "clsx";
 import { clamp } from "@excalidraw/math";
 import {
@@ -18,6 +19,26 @@ import {
   getEmbedLink,
   ShapeCache,
   getRenderElementWithPositionOverride,
+} from "@excalidraw/element";
+
+import React from "react";
+
+import { pointFrom, pointDistance } from "@excalidraw/math";
+
+import {
+  KEYS,
+  CURSOR_TYPE,
+  DRAGGING_THRESHOLD,
+  POINTER_BUTTON,
+  getGridPoint,
+  viewportCoordsToSceneCoords,
+  oneOf,
+} from "@excalidraw/common";
+
+import {
+  newEmbeddableElement,
+  newIframeElement,
+  isIframeLikeElement,
 } from "@excalidraw/element";
 
 import type {
@@ -461,3 +482,327 @@ export class AppEmbeds {
     );
   }
 }
+
+export const isIframeLikeInteractive = (
+  app: App,
+  element: ExcalidrawElement,
+) => {
+  if (isIframeElement(element)) {
+    const data =
+      element.customData?.generationData ??
+      app.magicGenerations.get(element.id);
+    return data?.status !== "pending";
+  }
+  return true;
+};
+
+export const handleIframeLikeElementHover = (
+  app: App,
+  {
+    hitElement,
+    scenePointer,
+    moveEvent,
+  }: {
+    hitElement: NonDeleted<ExcalidrawElement> | null;
+    scenePointer: { x: number; y: number };
+    moveEvent: React.PointerEvent<HTMLCanvasElement>;
+  },
+) => {
+  if (
+    hitElement &&
+    isIframeLikeElement(hitElement) &&
+    app["isIframeLikeInteractive"](hitElement) &&
+    (app.state.viewModeEnabled ||
+      app.state.activeTool.type === "laser" ||
+      app["isIframeLikeElementCenter"](
+        hitElement,
+        moveEvent,
+        scenePointer.x,
+        scenePointer.y,
+      ))
+  ) {
+    app.cursor.set(CURSOR_TYPE.POINTER);
+    app.setState({
+      activeEmbeddable: { element: hitElement, state: "hover" },
+    });
+    return true;
+  } else if (app.state.activeEmbeddable?.state === "hover") {
+    app.setState({ activeEmbeddable: null });
+  }
+  return false;
+};
+
+export const handleIframeLikeCenterClick = (app: App) => {
+  if (
+    !app.lastPointerDownEvent ||
+    !app.lastPointerUpEvent ||
+    // middle-click or something other than primary
+    app.lastPointerDownEvent.button !== POINTER_BUTTON.MAIN ||
+    // panning
+    app.pan.isSpaceHeld() ||
+    // wrong tool
+    !oneOf(app.state.activeTool.type, ["laser", "selection", "lasso"])
+  ) {
+    return false;
+  }
+
+  const viewportClickStart_scenePoint = pointFrom(
+    viewportCoordsToSceneCoords(
+      {
+        clientX: app.lastPointerDownEvent.clientX,
+        clientY: app.lastPointerDownEvent.clientY,
+      },
+      app.state,
+    ),
+  );
+  const viewportClickEnd_scenePoint = pointFrom(
+    viewportCoordsToSceneCoords(
+      {
+        clientX: app.lastPointerUpEvent.clientX,
+        clientY: app.lastPointerUpEvent.clientY,
+      },
+      app.state,
+    ),
+  );
+
+  const draggedDistance = pointDistance(
+    viewportClickStart_scenePoint,
+    viewportClickEnd_scenePoint,
+  );
+
+  if (draggedDistance > DRAGGING_THRESHOLD) {
+    return false;
+  }
+
+  const hitElement = app.getElementAtPosition(
+    viewportClickStart_scenePoint[0],
+    viewportClickStart_scenePoint[1],
+  );
+
+  const shouldActivate =
+    hitElement &&
+    app.lastPointerUpEvent.timeStamp - app.lastPointerDownEvent.timeStamp <=
+      300 &&
+    app.gesture.pointers.size < 2 &&
+    isIframeLikeElement(hitElement) &&
+    app["isIframeLikeInteractive"](hitElement) &&
+    (app.state.viewModeEnabled ||
+      app.state.activeTool.type === "laser" ||
+      app["isIframeLikeElementCenter"](
+        hitElement,
+        app.lastPointerUpEvent,
+        viewportClickEnd_scenePoint[0],
+        viewportClickEnd_scenePoint[1],
+      ));
+
+  if (!shouldActivate) {
+    return false;
+  }
+
+  const iframeLikeElement = hitElement;
+
+  if (
+    app.state.activeEmbeddable?.element === iframeLikeElement &&
+    app.state.activeEmbeddable?.state === "active"
+  ) {
+    return true;
+  }
+
+  // The delay serves two purposes
+  // 1. To prevent first click propagating to iframe on mobile,
+  //    else the click will immediately start and stop the video
+  // 2. If the user double clicks the frame center to activate it
+  //    without the delay youtube will immediately open the video
+  //    in fullscreen mode
+  setTimeout(() => {
+    app.setState({
+      activeEmbeddable: { element: iframeLikeElement, state: "active" },
+      selectedElementIds: { [iframeLikeElement.id]: true },
+      newElement: null,
+      selectionElement: null,
+    });
+  }, 100);
+
+  if (isIframeElement(iframeLikeElement)) {
+    return true;
+  }
+
+  const iframe = app.getHTMLIFrameElement(iframeLikeElement);
+
+  if (!iframe?.contentWindow) {
+    return true;
+  }
+
+  if (iframe.src.includes("youtube")) {
+    const state = app.embeds.youtubeVideoStates.get(iframeLikeElement.id);
+    if (!state) {
+      app.embeds.youtubeVideoStates.set(
+        iframeLikeElement.id,
+        YOUTUBE_STATES.UNSTARTED,
+      );
+      iframe.contentWindow.postMessage(
+        JSON.stringify({
+          event: "listening",
+          id: iframeLikeElement.id,
+        }),
+        "*",
+      );
+    }
+    switch (state) {
+      case YOUTUBE_STATES.PLAYING:
+      case YOUTUBE_STATES.BUFFERING:
+        iframe.contentWindow?.postMessage(
+          JSON.stringify({
+            event: "command",
+            func: "pauseVideo",
+            args: "",
+          }),
+          "*",
+        );
+        break;
+      default:
+        iframe.contentWindow?.postMessage(
+          JSON.stringify({
+            event: "command",
+            func: "playVideo",
+            args: "",
+          }),
+          "*",
+        );
+    }
+  }
+
+  if (iframe.src.includes("player.vimeo.com")) {
+    iframe.contentWindow.postMessage(
+      JSON.stringify({
+        method: "paused", //video play/pause in onWindowMessage handler
+      }),
+      "*",
+    );
+  }
+
+  return true;
+};
+
+export const isIframeLikeElementCenter = (
+  app: App,
+  el: ExcalidrawIframeLikeElement | null,
+  event: React.PointerEvent<HTMLElement> | PointerEvent,
+  sceneX: number,
+  sceneY: number,
+) => {
+  return (
+    el &&
+    !event.altKey &&
+    !event.shiftKey &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    (app.state.activeEmbeddable?.element !== el ||
+      app.state.activeEmbeddable?.state === "hover" ||
+      !app.state.activeEmbeddable) &&
+    sceneX >= el.x + el.width / 3 &&
+    sceneX <= el.x + (2 * el.width) / 3 &&
+    sceneY >= el.y + el.height / 3 &&
+    sceneY <= el.y + (2 * el.height) / 3
+  );
+};
+
+export const insertIframeElement = (
+  app: App,
+  {
+    sceneX,
+    sceneY,
+    width,
+    height,
+  }: {
+    sceneX: number;
+    sceneY: number;
+    width: number;
+    height: number;
+  },
+) => {
+  const [gridX, gridY] = getGridPoint(
+    sceneX,
+    sceneY,
+    app.lastPointerDownEvent?.[KEYS.CTRL_OR_CMD]
+      ? null
+      : app.getEffectiveGridSize(),
+  );
+
+  const element = newIframeElement({
+    type: "iframe",
+    x: gridX,
+    y: gridY,
+    strokeColor: "transparent",
+    backgroundColor: "transparent",
+    fillStyle: app.state.currentItemFillStyle,
+    strokeWidth: app.getCurrentItemStrokeWidth("iframe"),
+    strokeStyle: app.state.currentItemStrokeStyle,
+    roughness: app.state.currentItemRoughness,
+    roundness: app.getCurrentItemRoundness("iframe"),
+    opacity: app.state.currentItemOpacity,
+    locked: false,
+    width,
+    height,
+  });
+
+  app.insertNewElement(element);
+
+  return element;
+};
+
+export const insertEmbeddableElement = (
+  app: App,
+  {
+    sceneX,
+    sceneY,
+    link,
+  }: {
+    sceneX: number;
+    sceneY: number;
+    link: string;
+  },
+) => {
+  const [gridX, gridY] = getGridPoint(
+    sceneX,
+    sceneY,
+    app.lastPointerDownEvent?.[KEYS.CTRL_OR_CMD]
+      ? null
+      : app.getEffectiveGridSize(),
+  );
+
+  const embedLink = getEmbedLink(link);
+
+  if (!embedLink) {
+    return;
+  }
+
+  if (embedLink.error instanceof URIError) {
+    app.setToast({
+      message: t("toast.unrecognizedLinkFormat"),
+      closable: true,
+    });
+  }
+
+  const element = newEmbeddableElement({
+    type: "embeddable",
+    x: gridX,
+    y: gridY,
+    strokeColor: "transparent",
+    backgroundColor: "transparent",
+    fillStyle: app.state.currentItemFillStyle,
+    strokeWidth: app.getCurrentItemStrokeWidth("embeddable"),
+    strokeStyle: app.state.currentItemStrokeStyle,
+    roughness: app.state.currentItemRoughness,
+    roundness: app.getCurrentItemRoundness("embeddable"),
+    opacity: app.state.currentItemOpacity,
+    locked: false,
+    width: embedLink.intrinsicSize.w,
+    height: embedLink.intrinsicSize.h,
+    link,
+  });
+
+  app.insertNewElement(element);
+
+  return element;
+};

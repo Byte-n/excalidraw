@@ -1,12 +1,24 @@
 import { makeNextSelectedElementIds } from "@excalidraw/element";
 
+import { pointDistance, pointFrom } from "@excalidraw/math";
+
+import {
+  DOUBLE_TAP_POSITION_THRESHOLD,
+  isIOS,
+  TAP_TWICE_TIMEOUT,
+} from "@excalidraw/common";
+
 import { getCenter, getDistance } from "../../gesture";
 import { getNormalizedZoom } from "../../scene";
 
 import { getViewportForZoomWithScrollConstraints } from "../../viewport";
 
+import type { InteractionState } from "./pointerSession";
+
 import type { AppState, GestureEvent } from "../../types";
 import type App from "../App";
+
+/* eslint-disable dot-notation -- App delegates remain private. */
 
 /** The small part of App used by touch and Safari gesture handling. */
 export type GestureApp = Pick<
@@ -18,6 +30,11 @@ export type GestureApp = Pick<
   | "setState"
   | "resetShouldCacheIgnoreZoomDebounced"
 >;
+
+export const resetTapTwice = (interactionState: InteractionState) => {
+  interactionState.didTapTwice = false;
+  interactionState.firstTapPosition = null;
+};
 
 export const updateGestureOnPointerDown = (
   app: Pick<GestureApp, "gesture" | "state">,
@@ -185,4 +202,98 @@ export const onGestureEnd = (app: GestureApp, event: GestureEvent) => {
     });
   }
   app.gesture.initialScale = null;
+};
+
+export const onTouchStart = (app: App, event: TouchEvent) => {
+  if (!app.isInteractionEnabled()) {
+    return;
+  }
+  if (event.touches.length > 1) {
+    app.mindmap.cancelTouchDrag();
+  }
+
+  // fix for Apple Pencil Scribble (do not prevent for other devices)
+  if (isIOS) {
+    event.preventDefault();
+  }
+
+  if (!app.interactionState.didTapTwice) {
+    app.interactionState.didTapTwice = true;
+
+    if (event.touches.length === 1) {
+      app.interactionState.firstTapPosition = {
+        x: event.touches[0].clientX,
+        y: event.touches[0].clientY,
+      };
+    }
+    app.ownerWindow.clearTimeout(app.interactionState.tappedTwiceTimer);
+    app.interactionState.tappedTwiceTimer = app.ownerWindow.setTimeout(
+      () => resetTapTwice(app.interactionState),
+      TAP_TWICE_TIMEOUT,
+    );
+    return;
+  }
+
+  // insert text only if we tapped twice with a single finger at approximately the same position
+  // event.touches.length === 1 will also prevent inserting text when user's zooming
+  if (
+    app.interactionState.didTapTwice &&
+    event.touches.length === 1 &&
+    app.interactionState.firstTapPosition
+  ) {
+    const touch = event.touches[0];
+    const distance = pointDistance(
+      pointFrom(touch.clientX, touch.clientY),
+      pointFrom(
+        app.interactionState.firstTapPosition.x,
+        app.interactionState.firstTapPosition.y,
+      ),
+    );
+
+    // only create text if the second tap is within the threshold of the first tap
+    // this prevents accidental text creation during dragging/selection
+    if (distance <= DOUBLE_TAP_POSITION_THRESHOLD) {
+      // end lasso trail and deselect elements just in case
+      app.lassoTrail.endPath();
+      app.deselectElements();
+
+      app.handleCanvasDoubleClick({
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        type: "touch",
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+      });
+    }
+    resetTapTwice(app.interactionState);
+    app.ownerWindow.clearTimeout(app.interactionState.tappedTwiceTimer);
+    app.interactionState.tappedTwiceTimer = 0;
+  }
+
+  if (event.touches.length === 2) {
+    app.setState({
+      selectedElementIds: makeNextSelectedElementIds({}, app.state),
+      activeEmbeddable: null,
+    });
+  }
+};
+
+export const onTouchEnd = (app: App, event: TouchEvent) => {
+  if (!app.isInteractionEnabled()) {
+    return;
+  }
+  app["resetContextMenuTimer"]();
+  if (event.touches.length > 0) {
+    app.setState({
+      previousSelectedElementIds: {},
+      selectedElementIds: makeNextSelectedElementIds(
+        app.state.previousSelectedElementIds,
+        app.state,
+      ),
+    });
+  } else {
+    app.gesture.pointers.clear();
+  }
 };

@@ -850,3 +850,62 @@ export function componentDidUpdate(
     app.onChangeEmitter.trigger(elements, app.state, app.files);
   }
 }
+
+export const updateDOMRect = (app: App, cb?: () => void) => {
+  if (app.excalidrawContainerRef?.current) {
+    const excalidrawContainer = app.excalidrawContainerRef.current;
+    const {
+      width,
+      height,
+      left: offsetLeft,
+      top: offsetTop,
+    } = excalidrawContainer.getBoundingClientRect();
+    const {
+      width: currentWidth,
+      height: currentHeight,
+      offsetTop: currentOffsetTop,
+      offsetLeft: currentOffsetLeft,
+    } = app.state;
+
+    if (
+      width === currentWidth &&
+      height === currentHeight &&
+      offsetLeft === currentOffsetLeft &&
+      offsetTop === currentOffsetTop
+    ) {
+      if (cb) {
+        cb();
+      }
+      return;
+    }
+
+    app.setState(
+      {
+        width,
+        height,
+        offsetLeft,
+        offsetTop,
+      },
+      () => {
+        cb && cb();
+      },
+    );
+    // a smaller viewport may push the min zoom up / shrink the pan range
+    app.viewport.constrain();
+  }
+};
+
+export const getCanvasOffsets = (app: App) => {
+  if (app.excalidrawContainerRef?.current) {
+    const excalidrawContainer = app.excalidrawContainerRef.current;
+    const { left, top } = excalidrawContainer.getBoundingClientRect();
+    return {
+      offsetLeft: left,
+      offsetTop: top,
+    };
+  }
+  return {
+    offsetLeft: 0,
+    offsetTop: 0,
+  };
+};

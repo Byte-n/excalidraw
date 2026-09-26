@@ -24,6 +24,10 @@ import {
   normalizeLink,
 } from "@excalidraw/common";
 
+import { KEYS, getGridPoint } from "@excalidraw/common";
+
+import { newImageElement } from "@excalidraw/element";
+
 import type {
   ExcalidrawImageElement,
   FileId,
@@ -675,4 +679,52 @@ export const loadFileToCanvas = async (
   } catch (error: any) {
     app.setState({ isLoading: false, errorMessage: error.message });
   }
+};
+
+export const newImagePlaceholder = (
+  app: App,
+  {
+    sceneX,
+    sceneY,
+    addToFrameUnderCursor = true,
+  }: {
+    sceneX: number;
+    sceneY: number;
+    addToFrameUnderCursor?: boolean;
+  },
+) => {
+  const [gridX, gridY] = getGridPoint(
+    sceneX,
+    sceneY,
+    app.lastPointerDownEvent?.[KEYS.CTRL_OR_CMD]
+      ? null
+      : app.getEffectiveGridSize(),
+  );
+
+  const topLayerFrame = addToFrameUnderCursor
+    ? app.getTopLayerFrameAtSceneCoords({
+        x: gridX,
+        y: gridY,
+      })
+    : null;
+
+  const placeholderSize = 100 / app.state.zoom.value;
+
+  return newImageElement({
+    type: "image",
+    strokeColor: app.state.currentItemStrokeColor,
+    backgroundColor: app.state.currentItemBackgroundColor,
+    fillStyle: app.state.currentItemFillStyle,
+    strokeWidth: app.getCurrentItemStrokeWidth("image"),
+    strokeStyle: app.state.currentItemStrokeStyle,
+    roughness: app.state.currentItemRoughness,
+    roundness: null,
+    opacity: app.state.currentItemOpacity,
+    locked: false,
+    frameId: topLayerFrame ? topLayerFrame.id : null,
+    x: gridX - placeholderSize / 2,
+    y: gridY - placeholderSize / 2,
+    width: placeholderSize,
+    height: placeholderSize,
+  });
 };

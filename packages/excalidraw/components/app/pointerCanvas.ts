@@ -87,11 +87,45 @@ import {
 } from "../hyperlink/Hyperlink";
 import { isPointHittingLink } from "../hyperlink/helpers";
 
-import type { AppState } from "../../types";
+import type { AppState, CollaboratorPointer } from "../../types";
 
 import type React from "react";
 
 import type App from "../App";
+
+export const savePointer = (
+  app: App,
+  x: number,
+  y: number,
+  button: "up" | "down",
+) => {
+  if (app.pan.isActive()) {
+    return;
+  }
+  if (
+    !app.isInteractionEnabled() &&
+    !app.isToolSupported(app.state.activeTool.type)
+  ) {
+    return;
+  }
+  if (!x || !y) {
+    return;
+  }
+  const { x: sceneX, y: sceneY } = viewportCoordsToSceneCoords(
+    { clientX: x, clientY: y },
+    app.state,
+  );
+  const pointer: CollaboratorPointer = {
+    x: sceneX,
+    y: sceneY,
+    tool: app.state.activeTool.type === "laser" ? "laser" : "pointer",
+  };
+  app.props.onPointerUpdate?.({
+    pointer,
+    button,
+    pointersMap: app.gesture.pointers,
+  });
+};
 
 type PointerApp = Pick<App, keyof App> & Record<string, any>;
 

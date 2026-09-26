@@ -8,6 +8,7 @@ import {
 import { flushSync } from "react-dom";
 import {
   getContainerElement,
+  getContainerCenter,
   getStickyNoteLayout,
   isNonDeletedElement,
   isStickyNoteElement,
@@ -21,6 +22,7 @@ import { sceneCoordsToViewportCoords } from "@excalidraw/common";
 import {
   DEFAULT_VERTICAL_ALIGN,
   VERTICAL_ALIGN,
+  TEXT_TO_CENTER_SNAP_THRESHOLD,
   getFontString,
   getLineHeight,
 } from "@excalidraw/common";
@@ -53,6 +55,35 @@ import { withBatchedUpdates } from "../../reactUtils";
 import type App from "../App";
 
 import type { AppState } from "../../types";
+
+export const getTextWysiwygSnappedToCenterPosition = (
+  app: App,
+  x: number,
+  y: number,
+  appState: AppState,
+  container?: ExcalidrawTextContainer | null,
+) => {
+  if (container) {
+    let elementCenterX = container.x + container.width / 2;
+    let elementCenterY = container.y + container.height / 2;
+    const elementCenter = getContainerCenter(
+      container,
+      app.scene.getNonDeletedElementsMap(),
+    );
+    if (elementCenter) {
+      elementCenterX = elementCenter.x;
+      elementCenterY = elementCenter.y;
+    }
+    const distanceToCenter = Math.hypot(x - elementCenterX, y - elementCenterY);
+    if (distanceToCenter < TEXT_TO_CENTER_SNAP_THRESHOLD) {
+      const { x: viewportX, y: viewportY } = sceneCoordsToViewportCoords(
+        { sceneX: elementCenterX, sceneY: elementCenterY },
+        appState,
+      );
+      return { viewportX, viewportY, elementCenterX, elementCenterY };
+    }
+  }
+};
 
 export const handleTextWysiwyg = (
   app: App,
