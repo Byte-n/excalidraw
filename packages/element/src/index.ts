@@ -68,6 +68,7 @@ export * from "./bounds";
 export * from "./bucketFill";
 export * from "./collision";
 export * from "./comparisons";
+export * from "./compositeShape";
 export * from "./containerCache";
 export * from "./cropElement";
 export * from "./delta";

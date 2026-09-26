@@ -14,6 +14,8 @@
  * - selects group if any group from group is selected
  */
 
+import { baseShapeData, isCompositeShapeId } from "@excalidraw/element";
+
 import {
   type GlobalPoint,
   type LocalPoint,
@@ -37,6 +39,18 @@ import { API } from "./helpers/api";
 import { act, render } from "./test-utils";
 
 const { h } = window;
+
+const canonicalizeFixtureElements = (elements: ExcalidrawElement[]) =>
+  elements.map((element) => {
+    const type = (element as { type: string }).type;
+    return type === "rectangle" || type === "diamond" || type === "ellipse"
+      ? {
+          ...element,
+          type: "composite_shape" as const,
+          shape: baseShapeData(type),
+        }
+      : element;
+  });
 
 beforeEach(async () => {
   localStorage.clear();
@@ -367,7 +381,7 @@ describe("Basic lasso selection tests", () => {
     );
 
     act(() => {
-      h.elements = elements;
+      h.elements = canonicalizeFixtureElements(elements);
       h.app.setActiveTool({ type: "lasso" });
       h.app.setState({ boxSelectionMode: "overlap" });
     });
@@ -646,9 +660,9 @@ describe("Basic lasso selection tests", () => {
     const selectedElements = getSelectedElements(h.elements, h.state);
     expect(selectedElements.length).toBe(3);
     expect(selectedElements.filter((e) => e.type === "arrow").length).toBe(1);
-    expect(selectedElements.filter((e) => e.type === "rectangle").length).toBe(
-      1,
-    );
+    expect(
+      selectedElements.filter((e) => isCompositeShapeId(e, "rectangle")).length,
+    ).toBe(1);
     expect(selectedElements.filter((e) => e.type === "freedraw").length).toBe(
       1,
     );
@@ -869,8 +883,12 @@ describe("Basic lasso selection tests", () => {
     const selectedElements = getSelectedElements(h.elements, h.state);
     expect(selectedElements.length).toBe(4);
     expect(selectedElements.filter((e) => e.type === "line").length).toBe(1);
-    expect(selectedElements.filter((e) => e.type === "ellipse").length).toBe(1);
-    expect(selectedElements.filter((e) => e.type === "diamond").length).toBe(1);
+    expect(
+      selectedElements.filter((e) => isCompositeShapeId(e, "ellipse")).length,
+    ).toBe(1);
+    expect(
+      selectedElements.filter((e) => isCompositeShapeId(e, "diamond")).length,
+    ).toBe(1);
     expect(selectedElements.filter((e) => e.type === "freedraw").length).toBe(
       1,
     );
@@ -1052,7 +1070,7 @@ describe("Special cases", () => {
         angle: e.angle as Radians,
       })) as ExcalidrawElement[];
 
-      h.elements = elements;
+      h.elements = canonicalizeFixtureElements(elements);
       h.app.setState({ boxSelectionMode: "overlap" });
     });
 
@@ -1773,7 +1791,7 @@ describe("Special cases", () => {
         angle: e.angle as Radians,
       })) as ExcalidrawElement[];
 
-      h.elements = elements;
+      h.elements = canonicalizeFixtureElements(elements);
       h.app.setState({ boxSelectionMode: "overlap" });
     });
 

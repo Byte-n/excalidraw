@@ -270,9 +270,7 @@ const renderElementToSvg = (
     }
     case "mindmap-node":
     case "mindmap-edge":
-    case "rectangle":
-    case "diamond":
-    case "ellipse": {
+    case "composite_shape": {
       const shape = ShapeCache.generateElementShape(element, renderConfig);
       const node = roughSVGDrawWithPrecision(
         rsvg,

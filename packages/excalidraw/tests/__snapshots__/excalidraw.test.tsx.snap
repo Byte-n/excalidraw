@@ -2,7 +2,7 @@
 
 exports[`<Excalidraw/> > <MainMenu/> > should render main menu with host menu items if passed from host 1`] = `
 <div
-  aria-labelledby="radix-:r85:"
+  aria-labelledby="radix-:r9t:"
   aria-orientation="vertical"
   class="dropdown-menu main-menu"
   data-align="start"
@@ -12,7 +12,7 @@ exports[`<Excalidraw/> > <MainMenu/> > should render main menu with host menu it
   data-state="open"
   data-testid="dropdown-menu"
   dir="ltr"
-  id="radix-:r86:"
+  id="radix-:r9u:"
   role="menu"
   style="outline: none; --radix-dropdown-menu-content-transform-origin: var(--radix-popper-transform-origin); --radix-dropdown-menu-content-available-width: var(--radix-popper-available-width); --radix-dropdown-menu-content-available-height: var(--radix-popper-available-height); --radix-dropdown-menu-trigger-width: var(--radix-popper-anchor-width); --radix-dropdown-menu-trigger-height: var(--radix-popper-anchor-height); animation: none;"
   tabindex="-1"
@@ -311,6 +311,117 @@ exports[`<Excalidraw/> > Test UIOptions prop > Test canvasActions > should rende
         Ctrl+Shift+E
       </div>
     </button>
+    <button
+      aria-label="Import mindmap text"
+      class="radix-menu-item dropdown-menu-item dropdown-menu-item-base"
+      data-orientation="vertical"
+      data-radix-collection-item=""
+      data-testid="mindmap-text-import"
+      role="menuitem"
+      tabindex="-1"
+      title="Import mindmap text"
+    >
+      <div
+        class="dropdown-menu-item__icon"
+      >
+        <svg
+          aria-hidden="true"
+          class=""
+          fill="none"
+          focusable="false"
+          role="img"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          viewBox="0 0 20 20"
+        >
+          <path
+            d="m9.257 6.351.183.183H15.819c.34 0 .727.182 1.051.506.323.323.505.708.505 1.05v5.819c0 .316-.183.7-.52 1.035-.337.338-.723.522-1.037.522H4.182c-.352 0-.74-.181-1.058-.5-.318-.318-.499-.705-.499-1.057V5.182c0-.351.181-.736.5-1.054.32-.321.71-.503 1.057-.503H6.53l2.726 2.726Z"
+            stroke-width="1.25"
+          />
+        </svg>
+      </div>
+      <div
+        class="dropdown-menu-item__text"
+      >
+        <span
+          style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"
+        >
+          Import mindmap text
+        </span>
+      </div>
+    </button>
+    <div
+      aria-controls="radix-:r10:"
+      aria-expanded="false"
+      aria-haspopup="menu"
+      class="dropdown-menu-item dropdown-menu-item-base dropdown-menu__submenu-trigger"
+      data-orientation="vertical"
+      data-radix-collection-item=""
+      data-state="closed"
+      id="radix-:r11:"
+      role="menuitem"
+      tabindex="-1"
+    >
+      <div
+        class="dropdown-menu-item__icon"
+      >
+        <svg
+          aria-hidden="true"
+          class=""
+          fill="none"
+          focusable="false"
+          role="img"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          viewBox="0 0 20 20"
+        >
+          <path
+            d="M3.333 14.167v1.666c0 .92.747 1.667 1.667 1.667h10c.92 0 1.667-.746 1.667-1.667v-1.666M5.833 9.167 10 13.333l4.167-4.166M10 3.333v10"
+            stroke-width="1.25"
+          />
+        </svg>
+      </div>
+      <div
+        class="dropdown-menu-item__text"
+      >
+        <span
+          style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"
+        >
+          Export mindmap text
+        </span>
+      </div>
+      <div
+        class="dropdown-menu__submenu-trigger-icon"
+      >
+        <svg
+          aria-hidden="true"
+          class=""
+          fill="none"
+          focusable="false"
+          role="img"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <g
+            stroke-width="1.5"
+          >
+            <path
+              d="M0 0h24v24H0z"
+              fill="none"
+              stroke="none"
+            />
+            <polyline
+              points="9 6 15 12 9 18"
+            />
+          </g>
+        </svg>
+      </div>
+    </div>
     <button
       aria-label="Find on canvas"
       class="radix-menu-item dropdown-menu-item dropdown-menu-item-base"
@@ -763,7 +874,7 @@ exports[`<Excalidraw/> > Test UIOptions prop > Test canvasActions > should rende
             style="width: 1px; height: 1rem; margin: 0px auto;"
           />
           <button
-            aria-controls="radix-:r16:"
+            aria-controls="radix-:r1a:"
             aria-expanded="false"
             aria-haspopup="dialog"
             aria-label="Canvas background"

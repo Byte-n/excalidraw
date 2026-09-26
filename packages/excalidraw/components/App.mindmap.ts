@@ -13,6 +13,8 @@ import {
   CaptureUpdateAction,
   computeBoundTextPosition,
   getCommonBounds,
+  getMindmapShapeId,
+  mindmapShapeData,
   computeContainerDimensionForBoundText,
   getBoundTextMaxHeight,
   getBoundTextMaxWidth,
@@ -46,6 +48,7 @@ import type {
   NonDeletedExcalidrawElement,
   MindmapLayoutDirection,
   MindmapEdgeRouting,
+  MindmapNodeShape,
   StrokeStyle,
 } from "@excalidraw/element/types";
 
@@ -599,10 +602,7 @@ export class AppMindmap {
     preview
       .filter(
         (element) =>
-          isMindmapNodeElement(element) ||
-          element.type === "rectangle" ||
-          element.type === "ellipse" ||
-          element.type === "diamond",
+          isMindmapNodeElement(element) || element.type === "composite_shape",
       )
       .forEach((element) => {
         context.fillStyle = element.backgroundColor;
@@ -610,8 +610,8 @@ export class AppMindmap {
         context.lineWidth = element.strokeWidth;
         context.beginPath();
         const shape = isMindmapNodeElement(element)
-          ? element.shape
-          : element.type;
+          ? getMindmapShapeId(element)
+          : element.shape.id;
         if (shape === "ellipse") {
           context.ellipse(
             element.x + element.width / 2,
@@ -1006,7 +1006,7 @@ export class AppMindmap {
     });
   };
 
-  setNodeShape = (shape: ExcalidrawMindmapNodeElement["shape"]) => {
+  setNodeShape = (shape: MindmapNodeShape) => {
     const node = this.getSelectedNode();
     if (!node || !this.canEditNode(node.id)) {
       this.notifyUnsupportedOperation();
@@ -1014,7 +1014,7 @@ export class AppMindmap {
     }
     this.commitGraphUpdate(node.graphId, (element) =>
       isMindmapNodeElement(element) && element.id === node.id
-        ? newElementWith(element, { shape })
+        ? newElementWith(element, { shape: mindmapShapeData(shape) })
         : element,
     );
   };
@@ -2536,7 +2536,8 @@ export class AppMindmap {
             getFontString(text),
             text.lineHeight,
           );
-          const shape = node.shape === "pill" ? "ellipse" : node.shape;
+          const shape =
+            getMindmapShapeId(node) === "pill" ? "ellipse" : node.shape.id;
           const maxHeight = getBoundTextMaxHeight(node, text);
           const nextNode = newElementWith(node, {
             ...(metrics.width > maxWidth && {

@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   bumpVersion,
+  getMindmapShapeId,
   getLinearElementSubType,
   mutateElement,
   updateElbowArrowPoints,
@@ -134,6 +135,13 @@ const isConvertibleGenericType = (
 ): elementType is ConvertibleGenericTypes =>
   CONVERTIBLE_GENERIC_TYPES.has(elementType as ConvertibleGenericTypes);
 
+const getGenericType = (element: ExcalidrawElement) =>
+  element.type === "mindmap-node"
+    ? getMindmapShapeId(element)
+    : element.type === "composite_shape"
+    ? element.shape.id
+    : null;
+
 const isConvertibleLinearType = (
   elementType: string,
 ): elementType is ConvertibleLinearTypes =>
@@ -216,7 +224,8 @@ const Panel = ({
   const sameType =
     conversionType === "generic"
       ? genericElements.every(
-          (element) => element.type === genericElements[0].type,
+          (element) =>
+            getGenericType(element) === getGenericType(genericElements[0]),
         )
       : conversionType === "linear"
       ? linearElements.every(
@@ -457,11 +466,17 @@ export const convertElementTypes = (
       filterGenericConvetibleElements(selectedElements);
 
     const sameType = convertibleGenericElements.every(
-      (element) => element.type === convertibleGenericElements[0].type,
+      (element) =>
+        getGenericType(element) ===
+        getGenericType(convertibleGenericElements[0]),
     );
 
     const index = sameType
-      ? GENERIC_TYPES.indexOf(convertibleGenericElements[0].type)
+      ? GENERIC_TYPES.indexOf(
+          getGenericType(
+            convertibleGenericElements[0],
+          ) as ConvertibleGenericTypes,
+        )
       : -1;
 
     nextType =
@@ -677,7 +692,10 @@ export const getConversionTypeFromElements = (
 
   let canBeLinear = false;
   for (const element of elements) {
-    if (isConvertibleGenericType(element.type)) {
+    if (
+      element.type === "composite_shape" &&
+      isConvertibleGenericType(element.shape.id)
+    ) {
       // generic type conversion have preference
       return "generic";
     }
@@ -713,7 +731,9 @@ const filterGenericConvetibleElements = <T extends ExcalidrawElement>(
 ) =>
   elements.filter(
     (element) =>
-      isConvertibleGenericType(element.type) || isMindmapNodeElement(element),
+      (element.type === "composite_shape" &&
+        isConvertibleGenericType(element.shape.id)) ||
+      isMindmapNodeElement(element),
   ) as unknown as Array<
     T extends NonDeletedExcalidrawElement
       ? NonDeleted<
@@ -873,14 +893,16 @@ const convertElementType = <
   targetType: ConvertibleTypes,
   app: AppClassProperties,
 ): NonDeletedExcalidrawElement => {
-  if (!isValidConversion(element.type, targetType)) {
+  const sourceType =
+    element.type === "composite_shape" ? element.shape.id : element.type;
+  if (!isValidConversion(sourceType, targetType)) {
     if (!isProdEnv()) {
       throw Error(`Invalid conversion from ${element.type} to ${targetType}.`);
     }
     return element;
   }
 
-  if (element.type === targetType) {
+  if (sourceType === targetType) {
     return element;
   }
 
@@ -962,7 +984,7 @@ const convertElementType = <
 const isValidConversion = (
   startType: string,
   targetType: ConvertibleTypes,
-): startType is ConvertibleTypes => {
+): boolean => {
   if (
     isConvertibleGenericType(startType) &&
     isConvertibleGenericType(targetType)
@@ -988,7 +1010,7 @@ const getConvertibleType = (
   if (isLinearElement(element)) {
     return getLinearElementSubType(element);
   }
-  return element.type;
+  return element.shape.id;
 };
 
 export default ConvertElementTypePopup;

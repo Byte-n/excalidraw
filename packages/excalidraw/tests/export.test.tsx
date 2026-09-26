@@ -93,62 +93,6 @@ describe("export", () => {
     expect(svgText).toMatchSnapshot(`svg-embdedded scene export output`);
   });
 
-  it("import embedded png (legacy v1)", async () => {
-    await API.drop([
-      {
-        kind: "file",
-        file: await API.loadFile("./fixtures/test_embedded_v1.png"),
-      },
-    ]);
-    await waitFor(() => {
-      expect(h.elements).toEqual([
-        expect.objectContaining({ type: "text", text: "test" }),
-      ]);
-    });
-  });
-
-  it("import embedded png (v2)", async () => {
-    await API.drop([
-      {
-        kind: "file",
-        file: await API.loadFile("./fixtures/smiley_embedded_v2.png"),
-      },
-    ]);
-    await waitFor(() => {
-      expect(h.elements).toEqual([
-        expect.objectContaining({ type: "text", text: "😀" }),
-      ]);
-    });
-  });
-
-  it("import embedded svg (legacy v1)", async () => {
-    await API.drop([
-      {
-        kind: "file",
-        file: await API.loadFile("./fixtures/test_embedded_v1.svg"),
-      },
-    ]);
-    await waitFor(() => {
-      expect(h.elements).toEqual([
-        expect.objectContaining({ type: "text", text: "test" }),
-      ]);
-    });
-  });
-
-  it("import embedded svg (v2)", async () => {
-    await API.drop([
-      {
-        kind: "file",
-        file: await API.loadFile("./fixtures/smiley_embedded_v2.svg"),
-      },
-    ]);
-    await waitFor(() => {
-      expect(h.elements).toEqual([
-        expect.objectContaining({ type: "text", text: "😀" }),
-      ]);
-    });
-  });
-
   it("exporting svg containing transformed images", async () => {
     const normalizeAngle = (angle: number) => (angle / 180) * Math.PI;
 

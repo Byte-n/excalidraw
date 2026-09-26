@@ -46,7 +46,12 @@ import type {
 } from "@excalidraw/excalidraw/scene/types";
 
 import { elementWithCanvasCache } from "./renderElement";
-import { getMindmapEdgePath, getMindmapNodeGeometry } from "./mindmap";
+import { isCompositeShapeId } from "./compositeShape";
+import {
+  getMindmapEdgePath,
+  getMindmapNodeGeometry,
+  getMindmapShapeId,
+} from "./mindmap";
 
 import {
   canBecomePolygon,
@@ -70,6 +75,8 @@ import { shouldTestInside } from "./collision";
 
 import type {
   ExcalidrawElement,
+  ExcalidrawEllipseElement,
+  ExcalidrawRectangleElement,
   ExcalidrawSelectionElement,
   ExcalidrawLinearElement,
   ExcalidrawFreeDrawElement,
@@ -183,7 +190,9 @@ function adjustRoughness(element: ExcalidrawElement): number {
     // is round & both sides above 15px
     (minSize >= 15 &&
       !!element.roundness &&
-      canChangeRoundness(element.type)) ||
+      canChangeRoundness(
+        element.type === "composite_shape" ? element.shape.id : element.type,
+      )) ||
     // relatively long linear element
     (isLinearElement(element) && maxSize >= 50)
   ) {
@@ -227,17 +236,19 @@ export const generateRoughOptions = (
   };
 
   switch (element.type) {
-    case "rectangle":
+    case "composite_shape":
     case "mindmap-node":
     case "iframe":
-    case "embeddable":
-    case "diamond":
-    case "ellipse": {
+    case "embeddable": {
       options.fillStyle = element.fillStyle;
       options.fill = isTransparent(element.backgroundColor)
         ? undefined
         : applyDarkModeFilter(element.backgroundColor, isDarkMode);
-      if (element.type === "ellipse") {
+      if (
+        isCompositeShapeId(element, "ellipse") ||
+        (element.type === "mindmap-node" &&
+          getMindmapShapeId(element) === "ellipse")
+      ) {
         options.curveFitting = 1;
       }
       return options;
@@ -788,7 +799,7 @@ const _generateElementShape = (
   const isDarkMode = theme === THEME.DARK;
   switch (element.type) {
     case "mindmap-node": {
-      if (element.shape === "pill") {
+      if (getMindmapShapeId(element) === "pill") {
         const { width: w, height: h } = element;
         const r = Math.min(w, h) / 2;
         return generator.path(
@@ -810,9 +821,73 @@ const _generateElementShape = (
         getMindmapEdgePath(element),
         generateRoughOptions(element, true, isDarkMode),
       );
-    case "rectangle":
+    case "composite_shape":
     case "iframe":
     case "embeddable": {
+      if (element.type === "composite_shape") {
+        const shapeId = element.shape.id;
+        switch (shapeId) {
+          case "ellipse":
+            return generator.ellipse(
+              element.width / 2,
+              element.height / 2,
+              element.width,
+              element.height,
+              generateRoughOptions(element, false, isDarkMode),
+            );
+          case "diamond": {
+            const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
+              getDiamondPoints(element);
+            if (element.roundness) {
+              const verticalRadius = getCornerRadius(
+                Math.abs(topX - leftX),
+                element,
+              );
+              const horizontalRadius = getCornerRadius(
+                Math.abs(rightY - topY),
+                element,
+              );
+              return generator.path(
+                `M ${topX + verticalRadius} ${topY + horizontalRadius} L ${
+                  rightX - verticalRadius
+                } ${rightY - horizontalRadius}
+                C ${rightX} ${rightY}, ${rightX} ${rightY}, ${
+                  rightX - verticalRadius
+                } ${rightY + horizontalRadius}
+                L ${bottomX + verticalRadius} ${bottomY - horizontalRadius}
+                C ${bottomX} ${bottomY}, ${bottomX} ${bottomY}, ${
+                  bottomX - verticalRadius
+                } ${bottomY - horizontalRadius}
+                L ${leftX + verticalRadius} ${leftY + horizontalRadius}
+                C ${leftX} ${leftY}, ${leftX} ${leftY}, ${
+                  leftX + verticalRadius
+                } ${leftY - horizontalRadius}
+                L ${topX - verticalRadius} ${topY + horizontalRadius}
+                C ${topX} ${topY}, ${topX} ${topY}, ${topX + verticalRadius} ${
+                  topY + horizontalRadius
+                }`,
+                generateRoughOptions(element, true, isDarkMode),
+              );
+            }
+            return generator.polygon(
+              [
+                [topX, topY],
+                [rightX, rightY],
+                [bottomX, bottomY],
+                [leftX, leftY],
+              ],
+              generateRoughOptions(element, false, isDarkMode),
+            );
+          }
+          case "rectangle":
+            break;
+          default:
+            assertNever(
+              shapeId,
+              `generateElementShape(): Unimplemented shape ${String(shapeId)}`,
+            );
+        }
+      }
       let shape: ElementShapes[typeof element.type];
       // this is for rendering the stroke/bg of the embeddable, especially
       // when the src url is not set
@@ -854,63 +929,6 @@ const _generateElementShape = (
           ),
         );
       }
-      return shape;
-    }
-    case "diamond": {
-      let shape: ElementShapes[typeof element.type];
-
-      const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
-        getDiamondPoints(element);
-      if (element.roundness) {
-        const verticalRadius = getCornerRadius(Math.abs(topX - leftX), element);
-
-        const horizontalRadius = getCornerRadius(
-          Math.abs(rightY - topY),
-          element,
-        );
-
-        shape = generator.path(
-          `M ${topX + verticalRadius} ${topY + horizontalRadius} L ${
-            rightX - verticalRadius
-          } ${rightY - horizontalRadius}
-            C ${rightX} ${rightY}, ${rightX} ${rightY}, ${
-            rightX - verticalRadius
-          } ${rightY + horizontalRadius}
-            L ${bottomX + verticalRadius} ${bottomY - horizontalRadius}
-            C ${bottomX} ${bottomY}, ${bottomX} ${bottomY}, ${
-            bottomX - verticalRadius
-          } ${bottomY - horizontalRadius}
-            L ${leftX + verticalRadius} ${leftY + horizontalRadius}
-            C ${leftX} ${leftY}, ${leftX} ${leftY}, ${leftX + verticalRadius} ${
-            leftY - horizontalRadius
-          }
-            L ${topX - verticalRadius} ${topY + horizontalRadius}
-            C ${topX} ${topY}, ${topX} ${topY}, ${topX + verticalRadius} ${
-            topY + horizontalRadius
-          }`,
-          generateRoughOptions(element, true, isDarkMode),
-        );
-      } else {
-        shape = generator.polygon(
-          [
-            [topX, topY],
-            [rightX, rightY],
-            [bottomX, bottomY],
-            [leftX, leftY],
-          ],
-          generateRoughOptions(element, false, isDarkMode),
-        );
-      }
-      return shape;
-    }
-    case "ellipse": {
-      const shape: ElementShapes[typeof element.type] = generator.ellipse(
-        element.width / 2,
-        element.height / 2,
-        element.width,
-        element.height,
-        generateRoughOptions(element, false, isDarkMode),
-      );
       return shape;
     }
     case "line":
@@ -1127,9 +1145,8 @@ export const getElementShape = <Point extends GlobalPoint | LocalPoint>(
           element.y + element.height / 2,
         ),
       );
-    case "rectangle":
+    case "composite_shape":
     case "stickynote":
-    case "diamond":
     case "frame":
     case "magicframe":
     case "embeddable":
@@ -1137,7 +1154,10 @@ export const getElementShape = <Point extends GlobalPoint | LocalPoint>(
     case "iframe":
     case "text":
     case "selection":
-      return getPolygonShape(element);
+      return element.type === "composite_shape" &&
+        element.shape.id === "ellipse"
+        ? getEllipseShape(element as ExcalidrawEllipseElement)
+        : getPolygonShape(element as ExcalidrawRectangleElement);
     case "arrow":
     case "line": {
       const roughShape = ShapeCache.generateElementShape(element, null)[0];
@@ -1158,9 +1178,6 @@ export const getElementShape = <Point extends GlobalPoint | LocalPoint>(
             pointFrom(cx, cy),
           );
     }
-
-    case "ellipse":
-      return getEllipseShape(element);
 
     case "freedraw": {
       const [, , , , cx, cy] = getElementAbsoluteCoords(element, elementsMap);

@@ -5,6 +5,7 @@ import type { GlobalPoint } from "@excalidraw/math";
 
 import {
   applyMindmapTreeCommand,
+  assertMindmapShapeData,
   navigateMindmap,
   buildMindmapGraphIndex,
   compareMindmapNodes,
@@ -14,6 +15,7 @@ import {
   getMindmapSubtreeIds,
   isMindmapElementHidden,
   layoutMindmap,
+  mindmapShapeData,
   repairMindmapElements,
   reparentMindmapNode,
   reparentMindmapNodes,
@@ -37,6 +39,7 @@ import { getElementsWithinSelection } from "../src/selection";
 import { Scene } from "../src/Scene";
 import { hitElementItself, isPointInElement } from "../src/collision";
 import { ShapeCache } from "../src/shape";
+import { assertBaseShapeData } from "../src/compositeShape";
 import { getCornerRadius } from "../src/utils";
 import {
   getBoundTextMaxHeight,
@@ -162,8 +165,8 @@ describe("mindmap 正式元素模型", () => {
     expect(root).toMatchObject({ role: "root", parentId: null, order: null });
     const ordinaryWithExtraFields = {
       ...rectangle,
-      shape: "pill",
       graphId: "graph",
+      collapsed: true,
     };
     expect(getCornerRadius(40, ordinaryWithExtraFields)).toBe(0);
     expect(
@@ -182,7 +185,8 @@ describe("mindmap 正式元素模型", () => {
   it.each(["rectangle", "ellipse", "diamond", "pill"] as MindmapNodeShape[])(
     "%s 节点具有可渲染形状和文本空间",
     (shape) => {
-      const root = node("root", null, { shape });
+      const root = node("root", null, { shape: mindmapShapeData(shape) });
+      expect(root.shape).toEqual({ id: shape, schemaVersion: 1 });
       const text = newTextElement({
         x: 0,
         y: 0,
@@ -212,6 +216,28 @@ describe("mindmap 正式元素模型", () => {
       }
     },
   );
+
+  it.each([
+    null,
+    ["pill", 1],
+    Object.create({ id: "pill", schemaVersion: 1 }),
+    { id: "unknown", schemaVersion: 1 },
+    { id: "rectangle" },
+    { id: "pill", schemaVersion: 2 },
+    { id: "ellipse", schemaVersion: 1, extra: true },
+  ])("rejects unsupported mindmap shape data: %j", (shape) => {
+    expect(() => assertMindmapShapeData(shape)).toThrow(
+      "Unsupported mindmap shape data",
+    );
+  });
+
+  it("keeps pill separate from ordinary composite shapes", () => {
+    const pill = mindmapShapeData("pill");
+    expect(assertMindmapShapeData(pill)).toBe(pill);
+    expect(() => assertBaseShapeData(pill)).toThrow(
+      "Unsupported composite shape data",
+    );
+  });
 });
 
 describe("mindmap 索引与结构修复", () => {

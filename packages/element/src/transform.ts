@@ -54,6 +54,8 @@ import { getCommonBounds } from "./bounds";
 
 import { Scene } from "./Scene";
 
+import type { BaseShapeId } from "./compositeShape";
+
 import type {
   ExcalidrawArrowElement,
   ExcalidrawBindableElement,
@@ -76,6 +78,7 @@ import type {
   TextAlign,
   VerticalAlign,
   ExcalidrawStickyNoteElement,
+  BaseShapeData,
 } from "./types";
 
 /**
@@ -103,28 +106,12 @@ export type ValidLinearElement = {
     | (
         | (
             | {
-                type: Exclude<
-                  ExcalidrawBindableElement["type"],
-                  | "image"
-                  | "text"
-                  | "frame"
-                  | "magicframe"
-                  | "embeddable"
-                  | "iframe"
-                >;
+                type: BaseShapeId;
                 id?: ExcalidrawGenericElement["id"];
               }
             | {
                 id: ExcalidrawGenericElement["id"];
-                type?: Exclude<
-                  ExcalidrawBindableElement["type"],
-                  | "image"
-                  | "text"
-                  | "frame"
-                  | "magicframe"
-                  | "embeddable"
-                  | "iframe"
-                >;
+                type?: BaseShapeId;
               }
           )
         | ((
@@ -145,28 +132,12 @@ export type ValidLinearElement = {
     | (
         | (
             | {
-                type: Exclude<
-                  ExcalidrawBindableElement["type"],
-                  | "image"
-                  | "text"
-                  | "frame"
-                  | "magicframe"
-                  | "embeddable"
-                  | "iframe"
-                >;
+                type: BaseShapeId;
                 id?: ExcalidrawGenericElement["id"];
               }
             | {
                 id: ExcalidrawGenericElement["id"];
-                type?: Exclude<
-                  ExcalidrawBindableElement["type"],
-                  | "image"
-                  | "text"
-                  | "frame"
-                  | "magicframe"
-                  | "embeddable"
-                  | "iframe"
-                >;
+                type?: BaseShapeId;
               }
           )
         | ((
@@ -186,8 +157,10 @@ export type ValidLinearElement = {
 } & Partial<ExcalidrawLinearElement>;
 
 export type ValidContainer =
-  | {
-      type: Exclude<ExcalidrawGenericElement["type"], "selection">;
+  | (
+      | { type: BaseShapeId }
+      | { type: "composite_shape"; shape: BaseShapeData }
+    ) & {
       id?: ExcalidrawGenericElement["id"];
       label?: {
         text: string;
@@ -330,7 +303,11 @@ const bindLinearElementToElement = (
 
     const startX = start.x || linearElement.x - width;
     const startY = start.y || linearElement.y - height / 2;
-    const startType = existingElement ? existingElement.type : start.type;
+    const startType = existingElement
+      ? existingElement.type === "composite_shape"
+        ? existingElement.shape.id
+        : existingElement.type
+      : start.type;
 
     if (startType) {
       if (startType === "text") {
@@ -406,7 +383,11 @@ const bindLinearElementToElement = (
     }
     const endX = end.x || linearElement.x + linearElement.width;
     const endY = end.y || linearElement.y - height / 2;
-    const endType = existingElement ? existingElement.type : end.type;
+    const endType = existingElement
+      ? existingElement.type === "composite_shape"
+        ? existingElement.shape.id
+        : existingElement.type
+      : end.type;
 
     if (endType) {
       if (endType === "text") {
@@ -588,6 +569,7 @@ export const convertToExcalidrawElements = (
     }
 
     switch (element.type) {
+      case "composite_shape":
       case "rectangle":
       case "ellipse":
       case "diamond": {
@@ -599,11 +581,21 @@ export const convertToExcalidrawElements = (
           element?.label?.text && element.height === undefined
             ? 0
             : element?.height || DEFAULT_DIMENSION;
-        excalidrawElement = newElement({
-          ...element,
-          width,
-          height,
-        });
+        excalidrawElement =
+          element.type === "composite_shape"
+            ? newElement({
+                ...element,
+                type: "composite_shape",
+                shape: element.shape,
+                width,
+                height,
+              })
+            : newElement({
+                ...element,
+                type: element.type,
+                width,
+                height,
+              });
 
         break;
       }
@@ -742,6 +734,7 @@ export const convertToExcalidrawElements = (
     const excalidrawElement = elementStore.getElement(id)!;
 
     switch (element.type) {
+      case "composite_shape":
       case "rectangle":
       case "ellipse":
       case "diamond":

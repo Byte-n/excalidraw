@@ -35,6 +35,7 @@ import { FONT_SIZES } from "@excalidraw/common";
 
 import type {
   ExcalidrawElement,
+  ExcalidrawCompositeShapeElement,
   ExcalidrawGenericElement,
   ExcalidrawTextElement,
   ExcalidrawLinearElement,
@@ -53,6 +54,7 @@ import type {
   NonDeleted,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
+import type { BaseShapeId } from "@excalidraw/element";
 
 import type { Mutable } from "@excalidraw/common/utility-types";
 
@@ -168,7 +170,7 @@ export class API {
   }
 
   static createElement = <
-    T extends Exclude<ExcalidrawElementType, "selection"> = "rectangle",
+    T extends Exclude<ExcalidrawElementType, "selection"> | BaseShapeId = "rectangle",
   >({
     // @ts-ignore
     type = "rectangle",
@@ -211,6 +213,7 @@ export class API {
       ? ExcalidrawTextElement["verticalAlign"]
       : never;
     boundElements?: ExcalidrawGenericElement["boundElements"];
+    shape?: T extends "composite_shape" ? ExcalidrawCompositeShapeElement["shape"] : never;
     baseHeight?: T extends "stickynote"
       ? ExcalidrawStickyNoteElement["baseHeight"]
       : never;
@@ -274,6 +277,7 @@ export class API {
       ExcalidrawGenericElement,
       | "id"
       | "type"
+      | "shape"
       | "version"
       | "versionNonce"
       | "isDeleted"
@@ -327,7 +331,7 @@ export class API {
         element = newMindmapNodeElement({
           ...base,
           graphId: props?.graphId ?? id ?? "mindmap",
-          shape: props?.shape,
+          shape: props?.shape?.id,
           collapsed: props?.collapsed,
           ...(props?.parentId
             ? { role: "node", parentId: props.parentId, order: props.order ?? null }
@@ -352,6 +356,13 @@ export class API {
       case "ellipse":
         element = newElement({
           type: type as "rectangle" | "diamond" | "ellipse",
+          ...base,
+        });
+        break;
+      case "composite_shape":
+        element = newElement({
+          type: "composite_shape",
+          shape: rest.shape!,
           ...base,
         });
         break;

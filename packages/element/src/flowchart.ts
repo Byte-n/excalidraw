@@ -257,7 +257,8 @@ const cloneFlowchartNode = (
           baseHeight: template.baseHeight,
         })
       : newElement({
-          type: template.type,
+          type: "composite_shape",
+          shape: template.shape,
           ...commonNodeProps,
         });
 

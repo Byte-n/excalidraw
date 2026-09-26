@@ -120,7 +120,10 @@ describe("mindmap 场景恢复与渲染基础", () => {
             defaultEdgeStrokeStyle: "dashed" as const,
           }
         : element.id === input[1].id
-        ? { ...element, shape: "diamond" as const }
+        ? {
+            ...element,
+            shape: { id: "diamond" as const, schemaVersion: 1 as const },
+          }
         : element,
     );
     const restored = restore(configured);
@@ -137,7 +140,7 @@ describe("mindmap 场景恢复与渲染基础", () => {
       defaultEdgeStrokeWidth: 3,
       defaultEdgeStrokeStyle: "dashed",
     });
-    expect(child).toMatchObject({ shape: "diamond" });
+    expect(child).toMatchObject({ shape: { id: "diamond", schemaVersion: 1 } });
   });
 
   it("字段级恢复补全缺省值，独立恢复不擅自提升子节点为根", () => {
@@ -145,7 +148,6 @@ describe("mindmap 场景恢复与渲染基础", () => {
     const child = input[1];
     const partial = {
       ...child,
-      shape: "unknown",
       collapsed: "yes",
       width: NaN,
       height: 0,
@@ -157,7 +159,7 @@ describe("mindmap 场景恢复与渲染基础", () => {
       parentId: input[0].id,
       role: "node",
       order: null,
-      shape: "rectangle",
+      shape: { id: "rectangle", schemaVersion: 1 },
       collapsed: false,
       width: 160,
       height: 56,
@@ -168,6 +170,20 @@ describe("mindmap 场景恢复与渲染基础", () => {
       parentId: input[0].id,
     });
     expect(incremental).toHaveLength(1);
+  });
+
+  it.each([
+    { id: "unknown", schemaVersion: 1 },
+    { id: "rectangle" },
+    { id: "pill", schemaVersion: 2 },
+    { id: "diamond", schemaVersion: 1, extra: true },
+  ])("rejects invalid mindmap shape on restore: %j", (shape) => {
+    const child = fixture()[1];
+    const invalid = { ...child, shape } as unknown as typeof child;
+    expect(() => restoreElement(invalid, arrayToMap([child]), null)).toThrow(
+      "Unsupported mindmap shape data",
+    );
+    expect(() => restore([invalid])).toThrow("Unsupported mindmap shape data");
   });
 
   it("普通图形的恢复结果和位置保持不变", () => {
@@ -182,7 +198,8 @@ describe("mindmap 场景恢复与渲染基础", () => {
     const restored = restore([rectangle]);
     expect(restored).toHaveLength(1);
     expect(restored[0]).toMatchObject({
-      type: "rectangle",
+      type: "composite_shape",
+      shape: { id: "rectangle", schemaVersion: 1 },
       x: 20,
       y: 60,
       width: 80,

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { EXPORT_DATA_TYPES, MIME_TYPES } from "@excalidraw/common";
+import { EXPORT_DATA_TYPES, MIME_TYPES, VERSIONS } from "@excalidraw/common";
 
 import type { ExcalidrawTextElement } from "@excalidraw/element/types";
 
@@ -42,6 +42,7 @@ describe("appState", () => {
           [
             JSON.stringify({
               type: EXPORT_DATA_TYPES.excalidraw,
+              version: VERSIONS.excalidraw,
               appState: {
                 viewBackgroundColor: "#000",
               },

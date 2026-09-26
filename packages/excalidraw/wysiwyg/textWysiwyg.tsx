@@ -16,6 +16,7 @@ import { pointFrom, pointRotateRads, type Radians } from "@excalidraw/math";
 
 import {
   getTextFromElements,
+  getMindmapShapeId,
   originalContainerCache,
   updateBoundElements,
   updateOriginalContainerCache,
@@ -348,7 +349,13 @@ export const textWysiwyg = ({
           if (!isArrowElement(container) && height > maxHeight) {
             const targetContainerHeight = computeContainerDimensionForBoundText(
               height,
-              container.type,
+              container.type === "composite_shape"
+                ? container.shape.id
+                : container.type === "mindmap-node"
+                ? getMindmapShapeId(container) === "pill"
+                  ? "ellipse"
+                  : getMindmapShapeId(container)
+                : "stickynote",
             );
 
             app.scene.mutateElement(container, {
@@ -365,7 +372,13 @@ export const textWysiwyg = ({
           ) {
             const targetContainerHeight = computeContainerDimensionForBoundText(
               height,
-              container.type,
+              container.type === "composite_shape"
+                ? container.shape.id
+                : container.type === "mindmap-node"
+                ? getMindmapShapeId(container) === "pill"
+                  ? "ellipse"
+                  : getMindmapShapeId(container)
+                : "stickynote",
             );
             app.scene.mutateElement(container, {
               height: targetContainerHeight,

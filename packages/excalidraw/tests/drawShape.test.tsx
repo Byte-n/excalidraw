@@ -124,14 +124,20 @@ describe("autoshape tool", () => {
     sketch(rectanglePath(100, 100, 200, 120));
 
     expect(h.elements).toHaveLength(1);
-    expect(h.elements[0].type).toBe("rectangle");
+    expect(h.elements[0]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "rectangle", schemaVersion: 1 },
+    });
   });
 
   it("converts a sketched circle into an ellipse element", () => {
     sketch(circlePath(300, 300, 80));
 
     expect(h.elements).toHaveLength(1);
-    expect(h.elements[0].type).toBe("ellipse");
+    expect(h.elements[0]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "ellipse", schemaVersion: 1 },
+    });
   });
 
   it("keeps the autoshape tool active after finalizing a shape", () => {
@@ -282,7 +288,7 @@ describe("autoshape tool", () => {
     sketch(seg([150, 150], [450, 450], 30));
 
     expect(h.elements.map((element) => element.type)).toEqual([
-      "rectangle",
+      "composite_shape",
       "line",
     ]);
   });
@@ -345,8 +351,14 @@ describe("autoshape tool", () => {
     sketch(circlePath(600, 300, 80));
 
     expect(h.elements).toHaveLength(2);
-    expect(h.elements[0].type).toBe("rectangle");
-    expect(h.elements[1].type).toBe("ellipse");
+    expect(h.elements[0]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "rectangle", schemaVersion: 1 },
+    });
+    expect(h.elements[1]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "ellipse", schemaVersion: 1 },
+    });
     expect(h.state.activeTool.type).toBe("autoshape");
   });
 
@@ -403,7 +415,9 @@ describe("autoshape styles panel & selection (preview path)", () => {
   it("does not select a recognized rectangle drawn with a live preview", () => {
     sketchWithPreview(rectanglePath(100, 100, 200, 120));
 
-    expect(h.elements.map((element) => element.type)).toEqual(["rectangle"]);
+    expect(h.elements.map((element) => element.type)).toEqual([
+      "composite_shape",
+    ]);
     expect(h.state.selectedElementIds).toEqual({});
   });
 
@@ -462,7 +476,10 @@ describe("autoshape styles panel & selection (preview path)", () => {
 
     // the preview exists, but the styles panel must not target it — it keeps
     // showing the tool defaults
-    expect(h.state.newElement?.type).toBe("rectangle");
+    expect(h.state.newElement).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "rectangle", schemaVersion: 1 },
+    });
     const targetElements = getTargetElements(
       h.app.scene.getNonDeletedElementsMap(),
       h.state,
@@ -535,7 +552,9 @@ describe("autoshape finalize funnel", () => {
       h.app.actionManager.executeAction(actionFinalize);
     });
 
-    expect(h.elements.map((element) => element.type)).toEqual(["rectangle"]);
+    expect(h.elements.map((element) => element.type)).toEqual([
+      "composite_shape",
+    ]);
     expect(h.state.newElement).toBeNull();
     expect(h.app.drawShape.hasPendingGesture()).toBe(false);
 
@@ -551,7 +570,9 @@ describe("autoshape finalize funnel", () => {
       h.app.setActiveTool({ type: "selection" });
     });
 
-    expect(h.elements.map((element) => element.type)).toEqual(["rectangle"]);
+    expect(h.elements.map((element) => element.type)).toEqual([
+      "composite_shape",
+    ]);
     expect(h.app.drawShape.hasPendingGesture()).toBe(false);
     expect(h.state.newElement).toBeNull();
     expect(h.state.activeTool.type).toBe("selection");
@@ -727,7 +748,7 @@ describe("autoshape double-click to type", () => {
 
     expect(
       h.elements.filter((element) => !element.isDeleted).map((el) => el.type),
-    ).toEqual(["rectangle"]);
+    ).toEqual(["composite_shape"]);
     expect(h.state.activeTool.type).toBe("autoshape");
   });
 
