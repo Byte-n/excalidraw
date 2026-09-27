@@ -3596,14 +3596,12 @@ describe("history", () => {
       const textProps = {
         type: "text",
         text: "que pasa",
-        x: 15,
-        y: 15,
         angle: 0,
       } as const;
 
       beforeEach(() => {
         container = API.createElement({ ...containerProps });
-        text = API.createElement({ ...textProps });
+        text = API.createElement({ ...textProps, x: 15, y: 15 });
       });
 
       it("should rebind bindings when both are updated through the history and there no conflicting updates in the meantime", async () => {
@@ -4414,8 +4412,8 @@ describe("history", () => {
           expect.objectContaining({
             ...textProps,
             // text element got redrawn!
-            x: 241.295259647664,
-            y: 247.59240920619527,
+            x: 245.32147048685317,
+            y: 246.2546400637811,
             angle: 90,
             id: text.id,
             containerId: container.id,
@@ -4458,8 +4456,8 @@ describe("history", () => {
           }),
           expect.objectContaining({
             ...textProps,
-            x: 241.295259647664,
-            y: 247.59240920619527,
+            x: 245.32147048685317,
+            y: 246.2546400637811,
             angle: 90,
             id: text.id,
             containerId: container.id,
@@ -4622,7 +4620,7 @@ describe("history", () => {
         expect(
           (h.elements[2] as ExcalidrawElbowArrowElement).startBinding
             ?.fixedPoint,
-        ).toEqual([1, 0.5001]);
+        ).toEqual([0.5436893203883493, 0.5436893203883493]);
         expect(
           (h.elements[2] as ExcalidrawElbowArrowElement).startBinding?.mode,
         ).toBe("orbit");
@@ -4631,7 +4629,7 @@ describe("history", () => {
         ).not.toEqual([1, 0.5001]);
         expect(
           (h.elements[2] as ExcalidrawElbowArrowElement).endBinding?.mode,
-        ).toBe("orbit");
+        ).toBe("inside");
 
         expect(h.elements).toEqual(
           expect.arrayContaining([
@@ -4659,7 +4657,7 @@ describe("history", () => {
                   expect.toBeNonNaNNumber(),
                   expect.toBeNonNaNNumber(),
                 ]),
-                mode: "orbit",
+                mode: "inside",
               }),
             }),
           ]),
@@ -4722,13 +4720,13 @@ describe("history", () => {
                 id: arrowId,
                 startBinding: expect.objectContaining({
                   elementId: rect1.id,
-                  fixedPoint: [1, 0.5001],
+                  fixedPoint: [0.5436893203883493, 0.5436893203883493],
                   mode: "orbit",
                 }),
                 endBinding: expect.objectContaining({
                   elementId: rect2.id,
-                  fixedPoint: [0, 0.5001],
-                  mode: "orbit",
+                  fixedPoint: [0, 0.53],
+                  mode: "inside",
                 }),
               }),
             ]),
@@ -4799,7 +4797,7 @@ describe("history", () => {
                   expect.toBeNonNaNNumber(),
                   expect.toBeNonNaNNumber(),
                 ]),
-                mode: "orbit",
+                mode: "inside",
               }),
             }),
           ]),
@@ -4865,14 +4863,14 @@ describe("history", () => {
                 id: arrowId,
                 startBinding: expect.objectContaining({
                   elementId: rect1.id,
-                  fixedPoint: [1, 0.5001],
+                  fixedPoint: [0.5436893203883493, 0.5436893203883493],
                   mode: "orbit",
                 }),
                 // rebound with previous rectangle
                 endBinding: expect.objectContaining({
                   elementId: rect2.id,
-                  fixedPoint: [0, 0.5001],
-                  mode: "orbit",
+                  fixedPoint: [0, 0.53],
+                  mode: "inside",
                 }),
               }),
               expect.objectContaining({

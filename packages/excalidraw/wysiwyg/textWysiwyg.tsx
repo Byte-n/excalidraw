@@ -31,9 +31,11 @@ import {
   redrawTextBoundingBox,
   getBoundTextMaxHeight,
   getBoundTextMaxWidth,
+  getBoundTextContainerDimensions,
   computeContainerDimensionForBoundText,
   computeBoundTextPosition,
   getBoundTextElement,
+  getCompositeShapeTextFitMode,
 } from "@excalidraw/element";
 import { getTextWidth } from "@excalidraw/element";
 import { getLineHeightInPx } from "@excalidraw/element";
@@ -345,36 +347,115 @@ export const textWysiwyg = ({
             }
           }
 
-          // autogrow container height if text exceeds
-          if (!isArrowElement(container) && height > maxHeight) {
-            const targetContainerHeight = computeContainerDimensionForBoundText(
-              height,
-              container.type === "composite_shape"
-                ? container.shape.id
-                : container.type === "mindmap-node"
-                ? getMindmapShapeId(container) === "pill"
-                  ? "ellipse"
-                  : getMindmapShapeId(container)
-                : "stickynote",
-            );
+          const isComposite = container.type === "composite_shape";
+          const isAdaptive =
+            !isComposite || getCompositeShapeTextFitMode(container) === "auto";
+          let layoutContainer = container;
 
-            app.scene.mutateElement(container, {
-              height: targetContainerHeight,
-            });
-            updateBoundElements(container, app.scene);
-            return;
+          // Composite shapes use the same forward safe-area calculation as
+          // redraw/restore. Keep the editor positioned against the resized
+          // container in the same pass, so it cannot jump to (0, 0).
+          if (
+            isAdaptive &&
+            !isArrowElement(container) &&
+            (height > maxHeight + 1e-6 ||
+              (isComposite && width > maxWidth + 1e-6))
+          ) {
+            const dimensions = isComposite
+              ? getBoundTextContainerDimensions(container, width, height)
+              : {
+                  width: container.width,
+                  height: computeContainerDimensionForBoundText(
+                    height,
+                    container.type === "mindmap-node"
+                      ? getMindmapShapeId(container) === "pill"
+                        ? "ellipse"
+                        : getMindmapShapeId(container)
+                      : "stickynote",
+                  ),
+                };
+            if (isComposite) {
+              dimensions.width =
+                Math.abs(dimensions.width - Math.round(dimensions.width)) < 1e-6
+                  ? Math.round(dimensions.width)
+                  : dimensions.width;
+              dimensions.height =
+                Math.abs(dimensions.height - Math.round(dimensions.height)) <
+                1e-6
+                  ? Math.round(dimensions.height)
+                  : dimensions.height;
+            }
+            const updates = {
+              ...(isComposite && { width: dimensions.width }),
+              height: dimensions.height,
+              ...(isComposite && {
+                textFitMinWidth:
+                  container.textFitMinWidth ??
+                  (container.width > 0 ? container.width : dimensions.width),
+                textFitMinHeight:
+                  container.textFitMinHeight ??
+                  (container.height > 0 ? container.height : dimensions.height),
+              }),
+            };
+            if (
+              dimensions.width !== container.width ||
+              dimensions.height !== container.height
+            ) {
+              app.scene.mutateElement(container, updates);
+              updateBoundElements(container, app.scene);
+              layoutContainer = { ...container, ...updates };
+              maxWidth = getBoundTextMaxWidth(
+                layoutContainer,
+                updatedTextElement,
+              );
+              maxHeight = getBoundTextMaxHeight(
+                layoutContainer,
+                updatedTextElement as ExcalidrawTextElementWithContainer,
+              );
+            }
+          } else if (
+            isComposite &&
+            isAdaptive &&
+            !isArrowElement(container) &&
+            height < maxHeight - 1e-6
+          ) {
+            const dimensions = getBoundTextContainerDimensions(
+              container,
+              width,
+              height,
+            );
+            const updates = {
+              width: dimensions.width,
+              height: dimensions.height,
+            };
+            if (
+              dimensions.width !== container.width ||
+              dimensions.height !== container.height
+            ) {
+              app.scene.mutateElement(container, updates);
+              updateBoundElements(container, app.scene);
+              layoutContainer = { ...container, ...updates };
+              maxWidth = getBoundTextMaxWidth(
+                layoutContainer,
+                updatedTextElement,
+              );
+              maxHeight = getBoundTextMaxHeight(
+                layoutContainer,
+                updatedTextElement as ExcalidrawTextElementWithContainer,
+              );
+            }
           } else if (
             // autoshrink container height until original container height
             // is reached when text is removed
+            isAdaptive &&
+            !isComposite &&
             !isArrowElement(container) &&
             container.height > originalContainerData.height &&
             height < maxHeight
           ) {
             const targetContainerHeight = computeContainerDimensionForBoundText(
               height,
-              container.type === "composite_shape"
-                ? container.shape.id
-                : container.type === "mindmap-node"
+              container.type === "mindmap-node"
                 ? getMindmapShapeId(container) === "pill"
                   ? "ellipse"
                   : getMindmapShapeId(container)
@@ -384,15 +465,14 @@ export const textWysiwyg = ({
               height: targetContainerHeight,
             });
             updateBoundElements(container, app.scene);
-          } else {
-            const { x, y } = computeBoundTextPosition(
-              container,
-              updatedTextElement as ExcalidrawTextElementWithContainer,
-              elementsMap,
-            );
-            coordX = x;
-            coordY = y;
           }
+          const { x, y } = computeBoundTextPosition(
+            layoutContainer,
+            updatedTextElement as ExcalidrawTextElementWithContainer,
+            elementsMap,
+          );
+          coordX = x;
+          coordY = y;
         }
       }
       const [viewportX, viewportY] = getViewportCoords(coordX, coordY);
@@ -470,6 +550,12 @@ export const textWysiwyg = ({
   // prevent line wrapping on Safari
   editable.wrap = "off";
   editable.classList.add("excalidraw-wysiwyg");
+  if (
+    app.ownerWindow.EXCALIDRAW_DEBUG_TEXT_AREA &&
+    isBoundToContainer(element)
+  ) {
+    editable.classList.add("excalidraw-wysiwyg--debug-text-area");
+  }
 
   let whiteSpace = "pre";
   let wordBreak = "normal";

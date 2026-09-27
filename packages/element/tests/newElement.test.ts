@@ -49,4 +49,23 @@ describe("element creation time", () => {
       expect(converted).toMatchObject({ id: original.id, created });
     },
   );
+
+  it("preserves composite shape text-fit fields", () => {
+    const element = newElement({
+      type: "cube",
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 80,
+      textFitMode: "fixed",
+      textFitMinWidth: 120,
+      textFitMinHeight: 80,
+    });
+
+    expect(element).toMatchObject({
+      textFitMode: "fixed",
+      textFitMinWidth: 120,
+      textFitMinHeight: 80,
+    });
+  });
 });

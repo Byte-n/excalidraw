@@ -4,12 +4,30 @@
   .tool-popover-content {
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     gap: 0.25rem;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: min(
+      calc(9 * var(--lg-button-size) + 3rem),
+      calc(100vw - 2rem),
+      var(--radix-popover-content-available-width, 100vw)
+    );
     border-radius: 0.5rem;
     background: var(--island-bg-color);
     box-shadow: var(--shadow-island);
     padding: 0.5rem;
     z-index: var(--zIndex-layerUI);
+  }
+
+  @include isMobile() {
+    .tool-popover-content {
+      max-width: min(
+        calc(7 * var(--lg-button-size) + 2.5rem),
+        calc(100vw - 1.5rem),
+        var(--radix-popover-content-available-width, 100vw)
+      );
+    }
   }
 
   &:focus {

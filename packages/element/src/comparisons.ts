@@ -1,22 +1,38 @@
 import type { ElementOrToolType } from "@excalidraw/excalidraw/types";
 
-export const hasBackground = (type: ElementOrToolType) =>
-  type === "composite_shape" ||
-  type === "rectangle" ||
-  type === "mindmap-node" ||
-  type === "stickynote" ||
-  type === "iframe" ||
-  type === "embeddable" ||
-  type === "ellipse" ||
-  type === "diamond" ||
-  type === "line" ||
-  type === "freedraw" ||
-  type === "autoshape" ||
-  // tool-only type; makes the `G` background shortcut work for bucket fill
-  type === "bucketfill";
+import { isBaseShapeId, isCompositeShapeOpen } from "./compositeShape";
 
-export const hasFillStyle = (type: ElementOrToolType) =>
-  hasBackground(type) && type !== "stickynote";
+import type { BaseShapeId, ExcalidrawElement } from "./types";
+
+type FillTarget = ElementOrToolType | BaseShapeId | ExcalidrawElement;
+
+export const supportsFill = (target: FillTarget) => {
+  if (typeof target !== "string" && target.type === "composite_shape") {
+    return !isCompositeShapeOpen(target.shape.id);
+  }
+  const type = typeof target === "string" ? target : target.type;
+  if (isBaseShapeId(type)) {
+    return !isCompositeShapeOpen(type);
+  }
+  return (
+    type === "composite_shape" ||
+    type === "mindmap-node" ||
+    type === "stickynote" ||
+    type === "iframe" ||
+    type === "embeddable" ||
+    type === "line" ||
+    type === "freedraw" ||
+    type === "autoshape" ||
+    // tool-only type; makes the `G` background shortcut work for bucket fill
+    type === "bucketfill"
+  );
+};
+
+export const hasBackground = supportsFill;
+
+export const hasFillStyle = (target: FillTarget) =>
+  hasBackground(target) &&
+  (typeof target === "string" ? target : target.type) !== "stickynote";
 
 export const hasStrokeColor = (type: ElementOrToolType) =>
   type === "composite_shape" ||
@@ -62,7 +78,7 @@ export const hasRoughness = (type: ElementOrToolType) =>
 
 export const hasFreedrawMode = (type: ElementOrToolType) => type === "freedraw";
 
-export const canChangeRoundness = (type: ElementOrToolType) =>
+export const canChangeRoundness = (type: ElementOrToolType | BaseShapeId) =>
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "iframe" ||

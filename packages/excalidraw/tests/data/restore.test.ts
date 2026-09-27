@@ -14,7 +14,7 @@ import {
   VERSIONS,
 } from "@excalidraw/common";
 
-import { newElementWith } from "@excalidraw/element";
+import { newElement, newElementWith } from "@excalidraw/element";
 import * as sizeHelpers from "@excalidraw/element";
 
 import { getStickyNoteLayout } from "@excalidraw/element";
@@ -150,6 +150,29 @@ describe("restoreElements", () => {
         null,
       ),
     ).toThrow("Unsupported composite shape data");
+  });
+
+  it("preserves composite shape text-fit fields when reopening a file", () => {
+    const element = newElement({
+      type: "cube",
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 80,
+      textFitMode: "fixed",
+      textFitMinWidth: 120,
+      textFitMinHeight: 80,
+    });
+    const file = JSON.parse(
+      serializeAsJSON([element], getDefaultAppState(), {}, "local"),
+    );
+    const [restored] = restore.restoreElements(file.elements, null);
+
+    expect(restored).toMatchObject({
+      textFitMode: "fixed",
+      textFitMinWidth: 120,
+      textFitMinHeight: 80,
+    });
   });
 
   it("accepts only the current file format version", () => {

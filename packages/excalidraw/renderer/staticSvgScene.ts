@@ -272,11 +272,16 @@ const renderElementToSvg = (
     case "mindmap-edge":
     case "composite_shape": {
       const shape = ShapeCache.generateElementShape(element, renderConfig);
-      const node = roughSVGDrawWithPrecision(
-        rsvg,
-        shape,
-        MAX_DECIMALS_FOR_SVG_EXPORT,
+      const nodes = (Array.isArray(shape) ? shape : [shape]).map((drawable) =>
+        roughSVGDrawWithPrecision(rsvg, drawable, MAX_DECIMALS_FOR_SVG_EXPORT),
       );
+      const node =
+        nodes.length === 1
+          ? nodes[0]
+          : svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
+      if (nodes.length > 1) {
+        node.append(...nodes);
+      }
       if (opacity !== 1) {
         node.setAttribute("stroke-opacity", `${opacity}`);
         node.setAttribute("fill-opacity", `${opacity}`);

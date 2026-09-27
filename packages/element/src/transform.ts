@@ -54,6 +54,8 @@ import { getCommonBounds } from "./bounds";
 
 import { Scene } from "./Scene";
 
+import { isBaseShapeId } from "./compositeShape";
+
 import type { BaseShapeId } from "./compositeShape";
 
 import type {
@@ -335,30 +337,22 @@ const bindLinearElementToElement = (
           x: start.x || linearElement.x - startBoundElement.width,
           y: start.y || linearElement.y - startBoundElement.height / 2,
         });
+      } else if (isBaseShapeId(startType)) {
+        startBoundElement = newElement({
+          x: startX,
+          y: startY,
+          width,
+          height,
+          ...existingElement,
+          ...start,
+          type: startType,
+        });
       } else {
-        switch (startType) {
-          case "rectangle":
-          case "ellipse":
-          case "diamond": {
-            startBoundElement = newElement({
-              x: startX,
-              y: startY,
-              width,
-              height,
-              ...existingElement,
-              ...start,
-              type: startType,
-            });
-            break;
-          }
-          default: {
-            assertNever(
-              linearElement as never,
-              `Unhandled element start type "${start.type}"`,
-              true,
-            );
-          }
-        }
+        assertNever(
+          linearElement as never,
+          `Unhandled element start type "${start.type}"`,
+          true,
+        );
       }
 
       bindBindingElement(
@@ -415,30 +409,22 @@ const bindLinearElementToElement = (
         Object.assign(endBoundElement, {
           y: end.y || linearElement.y - endBoundElement.height / 2,
         });
+      } else if (isBaseShapeId(endType)) {
+        endBoundElement = newElement({
+          x: endX,
+          y: endY,
+          width,
+          height,
+          ...existingElement,
+          ...end,
+          type: endType,
+        });
       } else {
-        switch (endType) {
-          case "rectangle":
-          case "ellipse":
-          case "diamond": {
-            endBoundElement = newElement({
-              x: endX,
-              y: endY,
-              width,
-              height,
-              ...existingElement,
-              ...end,
-              type: endType,
-            });
-            break;
-          }
-          default: {
-            assertNever(
-              linearElement as never,
-              `Unhandled element end type "${endType}"`,
-              true,
-            );
-          }
-        }
+        assertNever(
+          linearElement as never,
+          `Unhandled element end type "${endType}"`,
+          true,
+        );
       }
 
       bindBindingElement(
@@ -572,7 +558,31 @@ export const convertToExcalidrawElements = (
       case "composite_shape":
       case "rectangle":
       case "ellipse":
-      case "diamond": {
+      case "diamond":
+      case "cross":
+      case "brace-reverse":
+      case "brace":
+      case "cloud":
+      case "double-arrow":
+      case "forward-arrow":
+      case "backward-arrow":
+      case "octagon":
+      case "pentagon":
+      case "hexagon":
+      case "star":
+      case "triangle":
+      case "round-rect":
+      case "rectangle-bubble":
+      case "pill":
+      case "bubble":
+      case "trapezoid":
+      case "parallelogram":
+      case "right-pentagon":
+      case "step":
+      case "cube":
+      case "pie":
+      case "cylinder":
+      case "circular-ring": {
         const width =
           element?.label?.text && element.width === undefined
             ? 0
@@ -738,6 +748,28 @@ export const convertToExcalidrawElements = (
       case "rectangle":
       case "ellipse":
       case "diamond":
+      case "cross":
+      case "brace-reverse":
+      case "brace":
+      case "cloud":
+      case "double-arrow":
+      case "forward-arrow":
+      case "backward-arrow":
+      case "octagon":
+      case "pentagon":
+      case "hexagon":
+      case "star":
+      case "triangle":
+      case "round-rect":
+      case "rectangle-bubble":
+      case "pill":
+      case "bubble":
+      case "trapezoid":
+      case "parallelogram":
+      case "right-pentagon":
+      case "step":
+      case "cube":
+      case "cylinder":
       case "stickynote":
       case "arrow": {
         if (element.label?.text) {

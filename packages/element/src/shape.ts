@@ -24,6 +24,7 @@ import {
   isTransparent,
   assertNever,
   COLOR_PALETTE,
+  colorToHex,
   LINE_POLYGON_POINT_MERGE_DISTANCE,
   applyDarkModeFilter,
   DEFAULT_STROKE_STREAMLINE,
@@ -46,7 +47,16 @@ import type {
 } from "@excalidraw/excalidraw/scene/types";
 
 import { elementWithCanvasCache } from "./renderElement";
-import { isCompositeShapeId } from "./compositeShape";
+import { supportsFill } from "./comparisons";
+import {
+  compositeShapePathToSvg,
+  getCompositeShapeGeometry,
+  getCompositeShapePoints,
+  getCompositeShapeGlobalPoints,
+  isBaseShapeId,
+  isCompositeShapeId,
+  isCompositeShapeOpen,
+} from "./compositeShape";
 import {
   getMindmapEdgePath,
   getMindmapNodeGeometry,
@@ -68,7 +78,6 @@ import { canChangeRoundness } from "./comparisons";
 import {
   elementCenterPoint,
   getArrowheadPoints,
-  getDiamondPoints,
   getElementAbsoluteCoords,
 } from "./bounds";
 import { shouldTestInside } from "./collision";
@@ -241,9 +250,10 @@ export const generateRoughOptions = (
     case "iframe":
     case "embeddable": {
       options.fillStyle = element.fillStyle;
-      options.fill = isTransparent(element.backgroundColor)
-        ? undefined
-        : applyDarkModeFilter(element.backgroundColor, isDarkMode);
+      options.fill =
+        !supportsFill(element) || isTransparent(element.backgroundColor)
+          ? undefined
+          : applyDarkModeFilter(element.backgroundColor, isDarkMode);
       if (
         isCompositeShapeId(element, "ellipse") ||
         (element.type === "mindmap-node" &&
@@ -271,6 +281,28 @@ export const generateRoughOptions = (
       throw new Error(`Unimplemented type ${element.type}`);
     }
   }
+};
+
+const shadeCompositeFill = (
+  color: string,
+  tone: "light" | "base" | "dark",
+): string => {
+  if (tone === "base") {
+    return color;
+  }
+  const hex = colorToHex(color);
+  if (!hex) {
+    return color;
+  }
+  const target = tone === "light" ? 255 : 0;
+  const amount = tone === "light" ? 0.2 : 0.18;
+  const channels = [1, 3, 5].map((offset) => {
+    const original = parseInt(hex.slice(offset, offset + 2), 16);
+    return Math.round(original + (target - original) * amount)
+      .toString(16)
+      .padStart(2, "0");
+  });
+  return `#${channels.join("")}${hex.slice(7)}`;
 };
 
 const modifyIframeLikeForRoughOptions = (
@@ -826,63 +858,144 @@ const _generateElementShape = (
     case "embeddable": {
       if (element.type === "composite_shape") {
         const shapeId = element.shape.id;
+        if (!isBaseShapeId(shapeId)) {
+          throw new Error(
+            `generateElementShape(): Unimplemented shape ${String(shapeId)}`,
+          );
+        }
+        const geometry = getCompositeShapeGeometry(element);
         switch (shapeId) {
-          case "ellipse":
+          case "ellipse": {
+            if (geometry.primitive?.kind !== "ellipse") {
+              throw new Error("Missing ellipse geometry");
+            }
             return generator.ellipse(
-              element.width / 2,
-              element.height / 2,
-              element.width,
-              element.height,
+              geometry.primitive.center[0],
+              geometry.primitive.center[1],
+              geometry.primitive.radiusX * 2,
+              geometry.primitive.radiusY * 2,
               generateRoughOptions(element, false, isDarkMode),
             );
+          }
           case "diamond": {
-            const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
-              getDiamondPoints(element);
+            if (geometry.primitive?.kind !== "diamond") {
+              throw new Error("Missing diamond geometry");
+            }
             if (element.roundness) {
-              const verticalRadius = getCornerRadius(
-                Math.abs(topX - leftX),
-                element,
-              );
-              const horizontalRadius = getCornerRadius(
-                Math.abs(rightY - topY),
-                element,
-              );
               return generator.path(
-                `M ${topX + verticalRadius} ${topY + horizontalRadius} L ${
-                  rightX - verticalRadius
-                } ${rightY - horizontalRadius}
-                C ${rightX} ${rightY}, ${rightX} ${rightY}, ${
-                  rightX - verticalRadius
-                } ${rightY + horizontalRadius}
-                L ${bottomX + verticalRadius} ${bottomY - horizontalRadius}
-                C ${bottomX} ${bottomY}, ${bottomX} ${bottomY}, ${
-                  bottomX - verticalRadius
-                } ${bottomY - horizontalRadius}
-                L ${leftX + verticalRadius} ${leftY + horizontalRadius}
-                C ${leftX} ${leftY}, ${leftX} ${leftY}, ${
-                  leftX + verticalRadius
-                } ${leftY - horizontalRadius}
-                L ${topX - verticalRadius} ${topY + horizontalRadius}
-                C ${topX} ${topY}, ${topX} ${topY}, ${topX + verticalRadius} ${
-                  topY + horizontalRadius
-                }`,
+                compositeShapePathToSvg(geometry.outline),
                 generateRoughOptions(element, true, isDarkMode),
               );
             }
             return generator.polygon(
-              [
-                [topX, topY],
-                [rightX, rightY],
-                [bottomX, bottomY],
-                [leftX, leftY],
-              ],
+              geometry.primitive.points,
               generateRoughOptions(element, false, isDarkMode),
             );
           }
-          case "rectangle":
-            break;
+          case "rectangle": {
+            if (geometry.primitive?.kind !== "rectangle") {
+              throw new Error("Missing rectangle geometry");
+            }
+            return geometry.primitive.radius
+              ? generator.path(
+                  compositeShapePathToSvg(geometry.outline),
+                  generateRoughOptions(element, true, isDarkMode),
+                )
+              : generator.rectangle(
+                  0,
+                  0,
+                  geometry.primitive.width,
+                  geometry.primitive.height,
+                  generateRoughOptions(element, false, isDarkMode),
+                );
+          }
+          case "cross":
+          case "brace-reverse":
+          case "brace":
+          case "cloud":
+          case "double-arrow":
+          case "forward-arrow":
+          case "backward-arrow":
+          case "octagon":
+          case "pentagon":
+          case "hexagon":
+          case "star":
+          case "triangle":
+          case "round-rect":
+          case "rectangle-bubble":
+          case "pill":
+          case "bubble":
+          case "trapezoid":
+          case "parallelogram":
+          case "right-pentagon":
+          case "step":
+          case "cube":
+          case "cylinder":
+          case "pie":
+          case "circular-ring": {
+            const options = generateRoughOptions(
+              element,
+              isCompositeShapeOpen(shapeId),
+              isDarkMode,
+            );
+            if (shapeId === "brace" || shapeId === "brace-reverse") {
+              return generator.path(compositeShapePathToSvg(geometry.outline), {
+                ...options,
+                fill: undefined,
+              });
+            }
+            if (geometry.fillFaces) {
+              const faceOptions = {
+                ...options,
+                preserveVertices: true,
+              };
+              const faces = options.fill
+                ? geometry.fillFaces.map(({ path, tone }, index) =>
+                    generator.path(compositeShapePathToSvg(path), {
+                      ...faceOptions,
+                      fill: shadeCompositeFill(options.fill!, tone),
+                      stroke: "none",
+                      strokeWidth: 0,
+                      seed: element.seed + index + 1,
+                    }),
+                  )
+                : [];
+              const outline = generator.path(
+                compositeShapePathToSvg(geometry.outline),
+                { ...faceOptions, fill: undefined },
+              );
+              const detailSets = geometry.details.flatMap(
+                (path) =>
+                  generator.path(compositeShapePathToSvg(path), {
+                    ...faceOptions,
+                    fill: undefined,
+                  }).sets,
+              );
+              return [
+                ...faces,
+                { ...outline, sets: [...outline.sets, ...detailSets] },
+              ];
+            }
+            if (
+              shapeId === "cloud" ||
+              shapeId === "bubble" ||
+              shapeId === "cross" ||
+              shapeId === "star" ||
+              shapeId === "round-rect" ||
+              shapeId === "pill" ||
+              shapeId === "rectangle-bubble" ||
+              shapeId === "pie" ||
+              shapeId === "circular-ring"
+            ) {
+              return generator.path(compositeShapePathToSvg(geometry.outline), {
+                ...options,
+                preserveVertices: true,
+              });
+            }
+            return generator.polygon(getCompositeShapePoints(element), options);
+          }
           default:
-            assertNever(
+            return assertNever(
               shapeId,
               `generateElementShape(): Unimplemented shape ${String(shapeId)}`,
             );
@@ -1154,10 +1267,30 @@ export const getElementShape = <Point extends GlobalPoint | LocalPoint>(
     case "iframe":
     case "text":
     case "selection":
-      return element.type === "composite_shape" &&
-        element.shape.id === "ellipse"
-        ? getEllipseShape(element as ExcalidrawEllipseElement)
-        : getPolygonShape(element as ExcalidrawRectangleElement);
+      if (element.type === "composite_shape") {
+        if (!isBaseShapeId(element.shape.id)) {
+          throw new Error(
+            `getElementShape(): Unimplemented shape ${String(
+              element.shape.id,
+            )}`,
+          );
+        }
+        if (element.shape.id === "ellipse") {
+          return getEllipseShape(element as ExcalidrawEllipseElement);
+        }
+        const points = getCompositeShapeGlobalPoints(element);
+        if (isCompositeShapeOpen(element.shape.id)) {
+          return {
+            type: "polyline",
+            data: points.slice(1).map((point, index) => [points[index], point]),
+          } as unknown as GeometricShape<Point>;
+        }
+        return {
+          type: "polygon",
+          data: points,
+        } as unknown as GeometricShape<Point>;
+      }
+      return getPolygonShape(element as unknown as ExcalidrawRectangleElement);
     case "arrow":
     case "line": {
       const roughShape = ShapeCache.generateElementShape(element, null)[0];

@@ -46,6 +46,8 @@ import {
   actionMindmapToggleCollapse,
   actionMindmapDeletePreservingChildren,
   actionMindmapPromote,
+  actionSetCompositeShapeTextFitFixed,
+  actionSetCompositeShapeTextFitAuto,
 } from "../../actions";
 import { actionWrapTextInContainer } from "../../actions/actionBoundText";
 import { actionPaste } from "../../actions/actionClipboard";
@@ -278,6 +280,8 @@ export const getContextMenuItems = (
     CONTEXT_MENU_SEPARATOR,
     actionGroup,
     actionTextAutoResize,
+    actionSetCompositeShapeTextFitAuto,
+    actionSetCompositeShapeTextFitFixed,
     actionUnbindText,
     actionBindText,
     actionWrapTextInContainer,

@@ -36,6 +36,7 @@ import type {
   BindMode,
   ExcalidrawTextElement,
   StrokeVariability,
+  BaseShapeId,
 } from "@excalidraw/element/types";
 
 import type {
@@ -423,7 +424,7 @@ export interface AppState {
     type: "selection" | "lasso";
     initialized: boolean;
   };
-  preferredGenericShape: "rectangle" | "diamond" | "ellipse";
+  preferredGenericShape: BaseShapeId | "right-triangle" | "left-triangle";
 
   // Pen handling
   penMode: boolean;
@@ -1256,6 +1257,20 @@ export type PointerDownState = Readonly<{
   // original element frozen snapshots so we can access the original
   // element attribute values at time of pointerdown
   originalElements: Map<string, NonDeleted<ExcalidrawElement>>;
+  compositeControl: {
+    active: {
+      elementId: string;
+      kind:
+        | "triangle-apex"
+        | "trapezoid-width"
+        | "cube-depth"
+        | "sector-start"
+        | "sector-end"
+        | "ring-radius";
+      offset: { x: number; y: number };
+      hasChanged: boolean;
+    } | null;
+  };
   resize: {
     // Handle when resizing, might change during the pointer interaction
     handleType: MaybeTransformHandleType;

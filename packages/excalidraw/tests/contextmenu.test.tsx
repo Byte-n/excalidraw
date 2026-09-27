@@ -125,6 +125,8 @@ describe("contextMenu element", () => {
       "wrapSelectionInFrame",
       "copyStyles",
       "pasteStyles",
+      "setCompositeShapeTextFitAuto",
+      "setCompositeShapeTextFitFixed",
       "deleteSelectedElements",
       "addToLibrary",
       "flipHorizontal",
@@ -212,13 +214,15 @@ describe("contextMenu element", () => {
     const contextMenu = UI.queryContextMenu();
     const contextMenuOptions =
       contextMenu?.querySelectorAll(".context-menu li");
-    const expectedShortcutNames: ShortcutName[] = [
+    const expectedShortcutNames: ActionName[] = [
       "cut",
       "copy",
       "paste",
       "wrapSelectionInFrame",
       "copyStyles",
       "pasteStyles",
+      "setCompositeShapeTextFitAuto",
+      "setCompositeShapeTextFitFixed",
       "deleteSelectedElements",
       "group",
       "addToLibrary",
@@ -276,6 +280,8 @@ describe("contextMenu element", () => {
       "wrapSelectionInFrame",
       "copyStyles",
       "pasteStyles",
+      "setCompositeShapeTextFitAuto",
+      "setCompositeShapeTextFitFixed",
       "deleteSelectedElements",
       "copyElementLink",
       "ungroup",

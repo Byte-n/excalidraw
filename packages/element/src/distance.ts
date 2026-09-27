@@ -1,5 +1,3 @@
-import { assertNever } from "@excalidraw/common";
-
 import {
   curve,
   curvePointDistance,
@@ -15,7 +13,6 @@ import { ellipse, ellipseDistanceFromPoint } from "@excalidraw/math/ellipse";
 import type { GlobalPoint, Radians } from "@excalidraw/math";
 
 import {
-  deconstructDiamondElement,
   deconstructLinearOrFreeDrawElement,
   deconstructRectanguloidElement,
 } from "./utils";
@@ -26,10 +23,13 @@ import {
   getMindmapShapeId,
   isMindmapElementHidden,
 } from "./mindmap";
+import {
+  getCompositeShapeGeometry,
+  getCompositeShapeGlobalPath,
+} from "./compositeShape";
 
 import type {
   ElementsMap,
-  ExcalidrawDiamondElement,
   ExcalidrawElement,
   ExcalidrawEllipseElement,
   ExcalidrawFreeDrawElement,
@@ -80,30 +80,52 @@ export const distanceToElement = (
     case "magicframe":
       return distanceToRectanguloidElement(element, elementsMap, p);
     case "composite_shape":
-      switch (element.shape.id) {
-        case "rectangle":
-          return distanceToRectanguloidElement(element, elementsMap, p);
-        case "diamond":
-          return distanceToDiamondElement(
-            element as ExcalidrawDiamondElement,
-            elementsMap,
-            p,
-          );
-        case "ellipse":
-          return distanceToEllipseElement(
+      return element.shape.id === "ellipse"
+        ? distanceToEllipseElement(
             element as ExcalidrawEllipseElement,
             elementsMap,
             p,
-          );
-        default:
-          return assertNever(element.shape, "Unsupported composite shape");
-      }
+          )
+        : distanceToCompositeShape(element, p);
     case "line":
     case "arrow":
       return distanceToLinearOrFreeDraElement(element, elementsMap, p);
     case "freedraw":
       return distanceToFreeDrawElement(element, elementsMap, p);
   }
+};
+
+const distanceToCompositeShape = (
+  element: ExcalidrawElement & { type: "composite_shape" },
+  p: GlobalPoint,
+) => {
+  const path = getCompositeShapeGlobalPath(element);
+  let distance = Infinity;
+  let previous = pointFrom<GlobalPoint>(...path.start);
+  const commands = [
+    ...path.commands,
+    ...(path.closed ? [{ type: "line" as const, to: path.start }] : []),
+  ];
+  for (const command of commands) {
+    const end = pointFrom<GlobalPoint>(...command.to);
+    distance = Math.min(
+      distance,
+      command.type === "line"
+        ? distanceToLineSegment(p, lineSegment(previous, end))
+        : curvePointDistance(
+            curve(
+              previous,
+              pointFrom<GlobalPoint>(...command.control1),
+              pointFrom<GlobalPoint>(...command.control2),
+              end,
+            ),
+            p,
+            1e-6,
+          ),
+    );
+    previous = end;
+  }
+  return distance;
 };
 
 /**
@@ -134,33 +156,6 @@ const distanceToRectanguloidElement = (
 };
 
 /**
- * Returns the distance of a point and the provided diamond element, accounting
- * for roundness and rotation
- *
- * @param element The diamond element
- * @param p The point to consider
- * @returns The eucledian distance to the outline of the diamond
- */
-const distanceToDiamondElement = (
-  element: ExcalidrawDiamondElement,
-  elementsMap: ElementsMap,
-  p: GlobalPoint,
-): number => {
-  const center = elementCenterPoint(element, elementsMap);
-
-  // Rotate the point to the inverse direction to simulate the rotated diamond
-  // points. It's all the same distance-wise.
-  const rotatedPoint = pointRotateRads(p, center, -element.angle as Radians);
-
-  const [sides, curves] = deconstructDiamondElement(element);
-
-  return Math.min(
-    ...sides.map((s) => distanceToLineSegment(rotatedPoint, s)),
-    ...curves.map((a) => curvePointDistance(a, rotatedPoint)),
-  );
-};
-
-/**
  * Returns the distance of a point and the provided ellipse element, accounting
  * for roundness and rotation
  *
@@ -174,10 +169,14 @@ const distanceToEllipseElement = (
   p: GlobalPoint,
 ): number => {
   const center = elementCenterPoint(element, elementsMap);
+  const primitive = getCompositeShapeGeometry(element).primitive;
+  if (primitive?.kind !== "ellipse") {
+    throw new Error("Missing ellipse geometry");
+  }
   return ellipseDistanceFromPoint(
     // Instead of rotating the ellipse, rotate the point to the inverse angle
     pointRotateRads(p, center, -element.angle as Radians),
-    ellipse(center, element.width / 2, element.height / 2),
+    ellipse(center, primitive.radiusX, primitive.radiusY),
   );
 };
 

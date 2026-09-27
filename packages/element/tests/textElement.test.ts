@@ -1,20 +1,140 @@
 import { getLineHeight } from "@excalidraw/common";
 import { API } from "@excalidraw/excalidraw/tests/helpers/api";
+import { pointRotateRads, pointFrom, type Radians } from "@excalidraw/math";
 
 import { FONT_FAMILY, TEXT_ALIGN, VERTICAL_ALIGN } from "@excalidraw/common";
 
 import {
   computeContainerDimensionForBoundText,
   getContainerCoords,
+  getContainerCenter,
   getBoundTextMaxWidth,
   getBoundTextMaxHeight,
   computeBoundTextPosition,
+  truncateTextToBounds,
 } from "../src/textElement";
+import { getCompositeShapeTextBounds } from "../src/compositeShape";
+import { newElement } from "../src/newElement";
 import { detectLineHeight, getLineHeightInPx } from "../src/textMeasurements";
 
 import type { ExcalidrawTextElementWithContainer } from "../src/types";
 
 describe("Test measureText", () => {
+  it("truncates fixed-size labels without discarding the source text", () => {
+    const font = "20px Virgil" as ReturnType<
+      typeof import("@excalidraw/common").getFontString
+    >;
+    const rendered = truncateTextToBounds(
+      "first line\nsecond line\nthird line",
+      font,
+      1.25 as ExcalidrawTextElementWithContainer["lineHeight"],
+      200,
+      50,
+    );
+    expect(rendered).toBe("first line\nsecond line…");
+  });
+
+  it("keeps one rendered line when the fixed text area is shorter than a line", () => {
+    const font = "20px Virgil" as ReturnType<
+      typeof import("@excalidraw/common").getFontString
+    >;
+    const rendered = truncateTextToBounds(
+      "first line\nsecond line",
+      font,
+      1.25 as ExcalidrawTextElementWithContainer["lineHeight"],
+      200,
+      1,
+    );
+
+    expect(rendered).toBe("first line…");
+    expect(rendered).not.toBe("");
+  });
+
+  it.each([
+    "triangle",
+    "trapezoid",
+    "cube",
+    "cylinder",
+    "bubble",
+    "rectangle-bubble",
+    "brace",
+    "brace-reverse",
+  ] as const)("uses one padded text rectangle for %s", (type) => {
+    for (const [width, height] of [
+      [120, 80],
+      [24, 18],
+    ]) {
+      const container = newElement({
+        type,
+        x: 10,
+        y: 20,
+        width,
+        height,
+      });
+      if (container.type !== "composite_shape") {
+        throw new Error("Expected composite shape");
+      }
+      const bounds = getCompositeShapeTextBounds(container);
+      const coords = getContainerCoords(container);
+      const text = API.createElement({
+        type: "text",
+        containerId: container.id,
+      }) as ExcalidrawTextElementWithContainer;
+      const textWidth = getBoundTextMaxWidth(container, text);
+      const textHeight = getBoundTextMaxHeight(container, text);
+      expect(textWidth).toBeGreaterThan(0);
+      expect(textHeight).toBeGreaterThan(0);
+      expect(coords.x - (container.x + bounds.x)).toBeCloseTo(
+        container.x + bounds.x + bounds.width - (coords.x + textWidth),
+      );
+      expect(coords.y - (container.y + bounds.y)).toBeCloseTo(
+        container.y + bounds.y + bounds.height - (coords.y + textHeight),
+      );
+    }
+  });
+
+  it("rotates a cube label around the element with its front face", () => {
+    const container = newElement({
+      type: "cube",
+      x: 10,
+      y: 20,
+      width: 120,
+      height: 80,
+      angle: (Math.PI / 2) as Radians,
+    });
+    if (container.type !== "composite_shape") {
+      throw new Error("Expected composite shape");
+    }
+    const text = API.createElement({
+      type: "text",
+      containerId: container.id,
+      width: 20,
+      height: 10,
+      textAlign: TEXT_ALIGN.CENTER,
+      verticalAlign: VERTICAL_ALIGN.MIDDLE,
+    }) as ExcalidrawTextElementWithContainer;
+    const center = pointFrom(
+      container.x + container.width / 2,
+      container.y + container.height / 2,
+    );
+    const bounds = getCompositeShapeTextBounds(container);
+    const expected = pointRotateRads(
+      pointFrom(
+        container.x + bounds.x + bounds.width / 2,
+        container.y + bounds.y + bounds.height / 2,
+      ),
+      center,
+      container.angle,
+    );
+    expect(getContainerCenter(container, new Map())).toEqual({
+      x: expected[0],
+      y: expected[1],
+    });
+    const position = computeBoundTextPosition(container, text, new Map());
+    expect(position.x + text.width / 2).toBeCloseTo(expected[0]);
+    expect(position.y + text.height / 2).toBeCloseTo(expected[1]);
+  });
+
   describe("Test getContainerCoords", () => {
     const params = { width: 200, height: 100, x: 10, y: 20 };
 
@@ -24,8 +144,8 @@ describe("Test measureText", () => {
         ...params,
       });
       expect(getContainerCoords(element)).toEqual({
-        x: 44.2893218813452455,
-        y: 39.64466094067262,
+        x: 40.70353544371835,
+        y: 36.05887450304572,
       });
     });
 
@@ -35,8 +155,8 @@ describe("Test measureText", () => {
         ...params,
       });
       expect(getContainerCoords(element)).toEqual({
-        x: 15,
-        y: 25,
+        x: 12,
+        y: 22,
       });
     });
 
@@ -46,8 +166,8 @@ describe("Test measureText", () => {
         ...params,
       });
       expect(getContainerCoords(element)).toEqual({
-        x: 65,
-        y: 50,
+        x: 62.236067977499786,
+        y: 46.11803398874989,
       });
     });
   });
@@ -80,17 +200,17 @@ describe("Test measureText", () => {
 
     it("should return max width when container is rectangle", () => {
       const container = API.createElement({ type: "rectangle", ...params });
-      expect(getBoundTextMaxWidth(container, null)).toBe(168);
+      expect(getBoundTextMaxWidth(container, null)).toBe(174);
     });
 
     it("should return max width when container is ellipse", () => {
       const container = API.createElement({ type: "ellipse", ...params });
-      expect(getBoundTextMaxWidth(container, null)).toBe(116);
+      expect(getBoundTextMaxWidth(container, null)).toBe(123.03657992645924);
     });
 
     it("should return max width when container is diamond", () => {
       const container = API.createElement({ type: "diamond", ...params });
-      expect(getBoundTextMaxWidth(container, null)).toBe(79);
+      expect(getBoundTextMaxWidth(container, null)).toBe(86.28570189958532);
     });
   });
 
@@ -118,17 +238,17 @@ describe("Test measureText", () => {
 
     it("should return max height when container is rectangle", () => {
       const container = API.createElement({ type: "rectangle", ...params });
-      expect(getBoundTextMaxHeight(container, boundTextElement)).toBe(184);
+      expect(getBoundTextMaxHeight(container, boundTextElement)).toBe(190);
     });
 
     it("should return max height when container is ellipse", () => {
       const container = API.createElement({ type: "ellipse", ...params });
-      expect(getBoundTextMaxHeight(container, boundTextElement)).toBe(127);
+      expect(getBoundTextMaxHeight(container, boundTextElement)).toBe(134.35028842544403);
     });
 
     it("should return max height when container is diamond", () => {
       const container = API.createElement({ type: "diamond", ...params });
-      expect(getBoundTextMaxHeight(container, boundTextElement)).toBe(87);
+      expect(getBoundTextMaxHeight(container, boundTextElement)).toBe(94.04172004786263);
     });
 
     it("should return max height when container is arrow", () => {
@@ -237,8 +357,8 @@ describe("Test computeBoundTextPosition", () => {
         elementsMap,
       );
 
-      expect(result.x).toBeCloseTo(185, 1);
-      expect(result.y).toBeCloseTo(75, 1);
+      expect(result.x).toBeCloseTo(188, 1);
+      expect(result.y).toBeCloseTo(72, 1);
     });
 
     it("should position text with LEFT + MIDDLE alignment at 90-degree rotation", () => {
@@ -252,7 +372,7 @@ describe("Test computeBoundTextPosition", () => {
       );
 
       expect(result.x).toBeCloseTo(160, 1);
-      expect(result.y).toBeCloseTo(75, 1);
+      expect(result.y).toBeCloseTo(72, 1);
     });
 
     it("should position text with LEFT + BOTTOM alignment at 90-degree rotation", () => {
@@ -265,8 +385,8 @@ describe("Test computeBoundTextPosition", () => {
         elementsMap,
       );
 
-      expect(result.x).toBeCloseTo(135, 1);
-      expect(result.y).toBeCloseTo(75, 1);
+      expect(result.x).toBeCloseTo(132, 1);
+      expect(result.y).toBeCloseTo(72, 1);
     });
 
     it("should position text with CENTER + TOP alignment at 90-degree rotation", () => {
@@ -279,7 +399,7 @@ describe("Test computeBoundTextPosition", () => {
         elementsMap,
       );
 
-      expect(result.x).toBeCloseTo(185, 1);
+      expect(result.x).toBeCloseTo(188, 1);
       expect(result.y).toBeCloseTo(130, 1);
     });
 
@@ -313,7 +433,7 @@ describe("Test computeBoundTextPosition", () => {
         elementsMap,
       );
 
-      expect(result.x).toBeCloseTo(135, 1);
+      expect(result.x).toBeCloseTo(132, 1);
       expect(result.y).toBeCloseTo(130, 1);
     });
 
@@ -327,8 +447,8 @@ describe("Test computeBoundTextPosition", () => {
         elementsMap,
       );
 
-      expect(result.x).toBeCloseTo(185, 1);
-      expect(result.y).toBeCloseTo(185, 1);
+      expect(result.x).toBeCloseTo(188, 1);
+      expect(result.y).toBeCloseTo(188, 1);
     });
 
     it("should position text with RIGHT + MIDDLE alignment at 90-degree rotation", () => {
@@ -342,7 +462,7 @@ describe("Test computeBoundTextPosition", () => {
       );
 
       expect(result.x).toBeCloseTo(160, 1);
-      expect(result.y).toBeCloseTo(185, 1);
+      expect(result.y).toBeCloseTo(188, 1);
     });
 
     it("should position text with RIGHT + BOTTOM alignment at 90-degree rotation", () => {
@@ -355,8 +475,8 @@ describe("Test computeBoundTextPosition", () => {
         elementsMap,
       );
 
-      expect(result.x).toBeCloseTo(135, 1);
-      expect(result.y).toBeCloseTo(185, 1);
+      expect(result.x).toBeCloseTo(132, 1);
+      expect(result.y).toBeCloseTo(188, 1);
     });
   });
 });

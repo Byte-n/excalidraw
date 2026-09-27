@@ -16,6 +16,7 @@
       "@excalidraw/element": ["./element/src/index.ts"],
       "@excalidraw/element/*": ["./element/src/*"],
       "@excalidraw/excalidraw": ["./excalidraw/index.tsx"],
+      "@excalidraw/excalidraw/element/*": ["./element/src/*"],
       "@excalidraw/excalidraw/*": ["./excalidraw/*"],
       "@excalidraw/laser-pointer": ["./laser-pointer/src/index.ts"],
       "@excalidraw/laser-pointer/*": ["./laser-pointer/src/*"],
