@@ -34,6 +34,7 @@ import {
   getElementBounds,
 } from "./bounds";
 import { LinearElementEditor } from "./linearElementEditor";
+import { getCompositeShapeTextFitMode } from "./compositeShape";
 import {
   getBoundTextElement,
   getBoundTextElementId,
@@ -951,6 +952,16 @@ export const resizeSingleElement = (
       isDragging: false,
     });
 
+    if (
+      latestElement.type === "composite_shape" &&
+      getCompositeShapeTextFitMode(latestElement) === "auto"
+    ) {
+      scene.mutateElement(latestElement, {
+        textFitMinWidth: Math.abs(nextWidth),
+        textFitMinHeight: Math.abs(nextHeight),
+      });
+    }
+
     if (isStickyNoteElement(latestElement)) {
       updateStickyNoteLayout(latestElement, scene, {
         ...getStickyNoteResizeIntent(
@@ -1532,6 +1543,16 @@ export const resizeMultipleElements = (
       const { angle } = update;
 
       scene.mutateElement(element, update);
+
+      if (
+        element.type === "composite_shape" &&
+        getCompositeShapeTextFitMode(element) === "auto"
+      ) {
+        scene.mutateElement(element, {
+          textFitMinWidth: Math.abs(update.width),
+          textFitMinHeight: Math.abs(update.height),
+        });
+      }
 
       if (isStickyNoteElement(element)) {
         // the content correction runs before the (single) arrow pass, which

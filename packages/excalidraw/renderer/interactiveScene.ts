@@ -5,7 +5,6 @@ import {
   type GlobalPoint,
   type LocalPoint,
   type Radians,
-  bezierEquation,
   pointRotateRads,
   pointDistance,
 } from "@excalidraw/math";
@@ -23,11 +22,13 @@ import {
 } from "@excalidraw/common";
 
 import {
-  deconstructDiamondElement,
   deconstructRectanguloidElement,
   elementCenterPoint,
-  isCompositeShapeId,
-  getDiamondBaseCorners,
+  getCompositeShapeAnchors,
+  getCompositeShapeControlPoints,
+  getCompositeShapeGlobalPath,
+  getCompositeShapeOffsetPaths,
+  isCompositeShapeElement,
   FOCUS_POINT_SIZE,
   getOmitSidesForEditorInterface,
   getTransformHandles,
@@ -72,7 +73,7 @@ import type {
   ElementsMap,
   ExcalidrawArrowElement,
   ExcalidrawBindableElement,
-  ExcalidrawDiamondElement,
+  ExcalidrawCompositeShapeElement,
   ExcalidrawElement,
   ExcalidrawFrameLikeElement,
   ExcalidrawImageElement,
@@ -86,6 +87,7 @@ import type {
 } from "@excalidraw/element/types";
 
 import { renderSnaps } from "../renderer/renderSnaps";
+import { getCompositeControlPointGlobal } from "../components/app/compositeShapeControls";
 import { roundRect } from "../renderer/roundRect";
 import {
   getScrollBars,
@@ -294,6 +296,50 @@ const renderSingleLinearPoint = <Point extends GlobalPoint | LocalPoint>(
   );
 };
 
+const strokeCompositeShapeOutline = (
+  context: CanvasRenderingContext2D,
+  element: ExcalidrawCompositeShapeElement,
+  offset = 0,
+) => {
+  if (offset > 0) {
+    for (const points of getCompositeShapeOffsetPaths(element, offset)) {
+      if (!points.length) {
+        continue;
+      }
+      context.beginPath();
+      context.moveTo(points[0][0], points[0][1]);
+      for (const point of points.slice(1)) {
+        context.lineTo(point[0], point[1]);
+      }
+      context.closePath();
+      context.stroke();
+    }
+    return;
+  }
+
+  const path = getCompositeShapeGlobalPath(element);
+  context.beginPath();
+  context.moveTo(path.start[0], path.start[1]);
+  for (const command of path.commands) {
+    if (command.type === "line") {
+      context.lineTo(command.to[0], command.to[1]);
+    } else {
+      context.bezierCurveTo(
+        command.control1[0],
+        command.control1[1],
+        command.control2[0],
+        command.control2[1],
+        command.to[0],
+        command.to[1],
+      );
+    }
+  }
+  if (path.closed) {
+    context.closePath();
+  }
+  context.stroke();
+};
+
 const renderBindingHighlightForBindableElement_simple = (
   context: CanvasRenderingContext2D,
   suggestedBinding: NonNullable<AppState["suggestedBinding"]>,
@@ -362,6 +408,18 @@ const renderBindingHighlightForBindableElement_simple = (
     default:
       context.save();
 
+      if (isCompositeShapeElement(suggestedBinding.element)) {
+        context.lineWidth =
+          clamp(1.75, suggestedBinding.element.strokeWidth, 4) /
+          Math.max(0.25, appState.zoom.value);
+        context.strokeStyle = `rgba(${
+          BINDING_HIGHLIGHT_RGB[appState.theme]
+        }, 1)`;
+        strokeCompositeShapeOutline(context, suggestedBinding.element);
+        context.restore();
+        break;
+      }
+
       const center = elementCenterPoint(suggestedBinding.element, elementsMap);
 
       context.translate(center[0], center[1]);
@@ -375,109 +433,42 @@ const renderBindingHighlightForBindableElement_simple = (
         Math.max(0.25, appState.zoom.value);
       context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, 1)`;
 
-      switch (
-        suggestedBinding.element.type === "composite_shape"
-          ? suggestedBinding.element.shape.id
-          : suggestedBinding.element.type
-      ) {
-        case "ellipse":
-          context.beginPath();
-          context.ellipse(
-            suggestedBinding.element.width / 2,
-            suggestedBinding.element.height / 2,
-            suggestedBinding.element.width / 2,
-            suggestedBinding.element.height / 2,
-            0,
-            0,
-            2 * Math.PI,
-          );
-          context.closePath();
-          context.stroke();
-          break;
-        case "diamond":
-          {
-            const [segments, curves] = deconstructDiamondElement(
-              suggestedBinding.element as ExcalidrawDiamondElement,
-            );
+      const [segments, curves] = deconstructRectanguloidElement(
+        suggestedBinding.element,
+      );
 
-            // Draw each line segment individually
-            segments.forEach((segment) => {
-              context.beginPath();
-              context.moveTo(
-                segment[0][0] - suggestedBinding.element.x,
-                segment[0][1] - suggestedBinding.element.y,
-              );
-              context.lineTo(
-                segment[1][0] - suggestedBinding.element.x,
-                segment[1][1] - suggestedBinding.element.y,
-              );
-              context.stroke();
-            });
+      // Draw each line segment individually
+      segments.forEach((segment) => {
+        context.beginPath();
+        context.moveTo(
+          segment[0][0] - suggestedBinding.element.x,
+          segment[0][1] - suggestedBinding.element.y,
+        );
+        context.lineTo(
+          segment[1][0] - suggestedBinding.element.x,
+          segment[1][1] - suggestedBinding.element.y,
+        );
+        context.stroke();
+      });
 
-            // Draw each curve individually (for rounded corners)
-            curves.forEach((curve) => {
-              const [start, control1, control2, end] = curve;
-              context.beginPath();
-              context.moveTo(
-                start[0] - suggestedBinding.element.x,
-                start[1] - suggestedBinding.element.y,
-              );
-              context.bezierCurveTo(
-                control1[0] - suggestedBinding.element.x,
-                control1[1] - suggestedBinding.element.y,
-                control2[0] - suggestedBinding.element.x,
-                control2[1] - suggestedBinding.element.y,
-                end[0] - suggestedBinding.element.x,
-                end[1] - suggestedBinding.element.y,
-              );
-              context.stroke();
-            });
-          }
-
-          break;
-        default:
-          {
-            const [segments, curves] = deconstructRectanguloidElement(
-              suggestedBinding.element,
-            );
-
-            // Draw each line segment individually
-            segments.forEach((segment) => {
-              context.beginPath();
-              context.moveTo(
-                segment[0][0] - suggestedBinding.element.x,
-                segment[0][1] - suggestedBinding.element.y,
-              );
-              context.lineTo(
-                segment[1][0] - suggestedBinding.element.x,
-                segment[1][1] - suggestedBinding.element.y,
-              );
-              context.stroke();
-            });
-
-            // Draw each curve individually (for rounded corners)
-            curves.forEach((curve) => {
-              const [start, control1, control2, end] = curve;
-              context.beginPath();
-              context.moveTo(
-                start[0] - suggestedBinding.element.x,
-                start[1] - suggestedBinding.element.y,
-              );
-              context.bezierCurveTo(
-                control1[0] - suggestedBinding.element.x,
-                control1[1] - suggestedBinding.element.y,
-                control2[0] - suggestedBinding.element.x,
-                control2[1] - suggestedBinding.element.y,
-                end[0] - suggestedBinding.element.x,
-                end[1] - suggestedBinding.element.y,
-              );
-              context.stroke();
-            });
-          }
-
-          break;
-      }
-
+      // Draw each curve individually (for rounded corners)
+      curves.forEach((curve) => {
+        const [start, control1, control2, end] = curve;
+        context.beginPath();
+        context.moveTo(
+          start[0] - suggestedBinding.element.x,
+          start[1] - suggestedBinding.element.y,
+        );
+        context.bezierCurveTo(
+          control1[0] - suggestedBinding.element.x,
+          control1[1] - suggestedBinding.element.y,
+          control2[0] - suggestedBinding.element.x,
+          control2[1] - suggestedBinding.element.y,
+          end[0] - suggestedBinding.element.x,
+          end[1] - suggestedBinding.element.y,
+        );
+        context.stroke();
+      });
       context.restore();
 
       break;
@@ -516,23 +507,8 @@ const renderBindingHighlightForBindableElement_simple = (
       const center = elementCenterPoint(suggestedBinding.element, elementsMap);
 
       let midpoints: GlobalPoint[];
-      if (isCompositeShapeId(suggestedBinding.element, "diamond")) {
-        const center = elementCenterPoint(
-          suggestedBinding.element,
-          elementsMap,
-        );
-        midpoints = getDiamondBaseCorners(suggestedBinding.element).map(
-          (curve) => {
-            const point = bezierEquation(curve, 0.5);
-            const rotatedPoint = pointRotateRads(
-              point,
-              center,
-              suggestedBinding.element.angle,
-            );
-
-            return pointFrom<GlobalPoint>(rotatedPoint[0], rotatedPoint[1]);
-          },
-        );
+      if (isCompositeShapeElement(suggestedBinding.element)) {
+        midpoints = getCompositeShapeAnchors(suggestedBinding.element);
       } else {
         const basePoints = [
           {
@@ -696,6 +672,19 @@ const renderBindingHighlightForBindableElement_complex = (
     default:
       context.save();
 
+      if (isCompositeShapeElement(element)) {
+        context.translate(appState.scrollX, appState.scrollY);
+        context.lineWidth =
+          clamp(2.5, element.strokeWidth * 1.75, 4) /
+          Math.max(0.25, appState.zoom.value);
+        context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, ${
+          opacity / 2
+        })`;
+        strokeCompositeShapeOutline(context, element, offset);
+        context.restore();
+        break;
+      }
+
       const center = elementCenterPoint(element, allElementsMap);
       const cx = center[0] + appState.scrollX;
       const cy = center[1] + appState.scrollY;
@@ -716,109 +705,43 @@ const renderBindingHighlightForBindableElement_complex = (
         opacity / 2
       })`;
 
-      switch (
-        element.type === "composite_shape" ? element.shape.id : element.type
-      ) {
-        case "ellipse":
-          context.beginPath();
-          context.ellipse(
-            (element.width + offset * 2) / 2,
-            (element.height + offset * 2) / 2,
-            (element.width + offset * 2) / 2,
-            (element.height + offset * 2) / 2,
-            0,
-            0,
-            2 * Math.PI,
-          );
-          context.closePath();
-          context.stroke();
-          break;
-        case "diamond":
-          {
-            const [segments, curves] = deconstructDiamondElement(
-              element as ExcalidrawDiamondElement,
-              offset,
-            );
+      const [segments, curves] = deconstructRectanguloidElement(
+        element,
+        offset,
+      );
 
-            // Draw each line segment individually
-            segments.forEach((segment) => {
-              context.beginPath();
-              context.moveTo(
-                segment[0][0] - element.x + offset,
-                segment[0][1] - element.y + offset,
-              );
-              context.lineTo(
-                segment[1][0] - element.x + offset,
-                segment[1][1] - element.y + offset,
-              );
-              context.stroke();
-            });
+      // Draw each line segment individually
+      segments.forEach((segment) => {
+        context.beginPath();
+        context.moveTo(
+          segment[0][0] - element.x + offset,
+          segment[0][1] - element.y + offset,
+        );
+        context.lineTo(
+          segment[1][0] - element.x + offset,
+          segment[1][1] - element.y + offset,
+        );
+        context.stroke();
+      });
 
-            // Draw each curve individually (for rounded corners)
-            curves.forEach((curve) => {
-              const [start, control1, control2, end] = curve;
-              context.beginPath();
-              context.moveTo(
-                start[0] - element.x + offset,
-                start[1] - element.y + offset,
-              );
-              context.bezierCurveTo(
-                control1[0] - element.x + offset,
-                control1[1] - element.y + offset,
-                control2[0] - element.x + offset,
-                control2[1] - element.y + offset,
-                end[0] - element.x + offset,
-                end[1] - element.y + offset,
-              );
-              context.stroke();
-            });
-          }
-
-          break;
-        default:
-          {
-            const [segments, curves] = deconstructRectanguloidElement(
-              element,
-              offset,
-            );
-
-            // Draw each line segment individually
-            segments.forEach((segment) => {
-              context.beginPath();
-              context.moveTo(
-                segment[0][0] - element.x + offset,
-                segment[0][1] - element.y + offset,
-              );
-              context.lineTo(
-                segment[1][0] - element.x + offset,
-                segment[1][1] - element.y + offset,
-              );
-              context.stroke();
-            });
-
-            // Draw each curve individually (for rounded corners)
-            curves.forEach((curve) => {
-              const [start, control1, control2, end] = curve;
-              context.beginPath();
-              context.moveTo(
-                start[0] - element.x + offset,
-                start[1] - element.y + offset,
-              );
-              context.bezierCurveTo(
-                control1[0] - element.x + offset,
-                control1[1] - element.y + offset,
-                control2[0] - element.x + offset,
-                control2[1] - element.y + offset,
-                end[0] - element.x + offset,
-                end[1] - element.y + offset,
-              );
-              context.stroke();
-            });
-          }
-
-          break;
-      }
-
+      // Draw each curve individually (for rounded corners)
+      curves.forEach((curve) => {
+        const [start, control1, control2, end] = curve;
+        context.beginPath();
+        context.moveTo(
+          start[0] - element.x + offset,
+          start[1] - element.y + offset,
+        );
+        context.bezierCurveTo(
+          control1[0] - element.x + offset,
+          control1[1] - element.y + offset,
+          control2[0] - element.x + offset,
+          control2[1] - element.y + offset,
+          end[0] - element.x + offset,
+          end[1] - element.y + offset,
+        );
+        context.stroke();
+      });
       context.restore();
 
       break;
@@ -893,18 +816,11 @@ const renderBindingHighlightForBindableElement_complex = (
       const cutoutRadius = midpointRadius + cutoutPadding;
 
       let midpoints;
-      if (isCompositeShapeId(element, "diamond")) {
-        const [, curves] = deconstructDiamondElement(element);
-        const center = elementCenterPoint(element, allElementsMap);
-
-        midpoints = curves.map((curve) => {
-          const point = bezierEquation(curve, 0.5);
-          const rotatedPoint = pointRotateRads(point, center, element.angle);
-          return {
-            x: rotatedPoint[0] - element.x,
-            y: rotatedPoint[1] - element.y,
-          };
-        });
+      if (isCompositeShapeElement(element)) {
+        midpoints = getCompositeShapeAnchors(element).map(([x, y]) => ({
+          x: x - element.x,
+          y: y - element.y,
+        }));
       } else {
         const center = elementCenterPoint(element, allElementsMap);
         const basePoints = [
@@ -2087,6 +2003,24 @@ const _renderInteractiveScene = ({
           transformHandles,
           visibleSelectedElements[0].angle,
         );
+        const selected = visibleSelectedElements[0];
+        if (
+          selected.type === "composite_shape" &&
+          !selected.locked &&
+          !isSelectedViaGroup(appState, selected)
+        ) {
+          context.setLineDash([]);
+          context.lineWidth = 1.5 / appState.zoom.value;
+          context.strokeStyle = getThemedColor("#5e5ad8", appState.theme);
+          context.fillStyle = getThemedColor("#fff", appState.theme);
+          for (const point of getCompositeShapeControlPoints(selected)) {
+            const [x, y] = getCompositeControlPointGlobal(selected, point);
+            context.beginPath();
+            context.arc(x, y, 5 / appState.zoom.value, 0, Math.PI * 2);
+            context.fill();
+            context.stroke();
+          }
+        }
       }
 
       if (appState.croppingElementId && !appState.isCropping) {

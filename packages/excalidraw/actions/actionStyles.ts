@@ -8,7 +8,12 @@ import {
   arrayToMap,
 } from "@excalidraw/common";
 
-import { newElementWith, syncStickyNoteInk } from "@excalidraw/element";
+import {
+  hasBackground,
+  hasFillStyle,
+  newElementWith,
+  syncStickyNoteInk,
+} from "@excalidraw/element";
 
 import {
   normalizeStickyNote,
@@ -116,11 +121,15 @@ export const actionPasteStyles = register({
               return element;
             }
             let newElement = newElementWith(element, {
-              backgroundColor: elementStylesToCopyFrom?.backgroundColor,
+              backgroundColor: hasBackground(element)
+                ? elementStylesToCopyFrom.backgroundColor
+                : element.backgroundColor,
               strokeWidth: elementStylesToCopyFrom?.strokeWidth,
               strokeColor: elementStylesToCopyFrom?.strokeColor,
               strokeStyle: elementStylesToCopyFrom?.strokeStyle,
-              fillStyle: elementStylesToCopyFrom?.fillStyle,
+              fillStyle: hasFillStyle(element)
+                ? elementStylesToCopyFrom.fillStyle
+                : element.fillStyle,
               opacity: elementStylesToCopyFrom?.opacity,
               roughness: elementStylesToCopyFrom?.roughness,
               roundness: elementStylesToCopyFrom.roundness

@@ -1,5 +1,7 @@
 import { exportToCanvas, exportToSvg } from "@excalidraw/utils";
 
+import { newElement } from "@excalidraw/element";
+
 import {
   applyDarkModeFilter,
   BOUND_TEXT_PADDING,
@@ -64,6 +66,55 @@ describe("exportToSvg", () => {
     viewBackgroundColor: "#ffffff",
     files: {},
   };
+
+  it.each([
+    "rectangle",
+    "diamond",
+    "ellipse",
+    "cross",
+    "brace-reverse",
+    "brace",
+    "cloud",
+    "double-arrow",
+    "forward-arrow",
+    "backward-arrow",
+    "octagon",
+    "pentagon",
+    "hexagon",
+    "star",
+    "triangle",
+    "round-rect",
+    "rectangle-bubble",
+    "pill",
+    "bubble",
+    "trapezoid",
+    "parallelogram",
+    "right-pentagon",
+    "step",
+    "cube",
+    "cylinder",
+  ] as const)("exports composite shape %s as SVG paths", async (type) => {
+    const element = newElement({
+      type,
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 80,
+      roughness: 0,
+      backgroundColor: "#d0ebff",
+    });
+
+    const svgElement = await exportUtils.exportToSvg(
+      [element],
+      { ...DEFAULT_OPTIONS, exportPadding: 0 },
+      null,
+      { skipInliningFonts: true },
+    );
+
+    const paths = svgElement.querySelectorAll("path");
+    expect(paths.length).toBeGreaterThan(0);
+    expect(Array.from(paths).some((path) => path.getAttribute("d"))).toBe(true);
+  });
 
   it("with default arguments", async () => {
     const svgElement = await exportUtils.exportToSvg(

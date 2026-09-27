@@ -29,12 +29,21 @@ import {
   normalizeStickyNoteBackgroundColor,
   normalizeStickyNoteStrokeColor,
 } from "./stickyNote";
-import { getBoundTextMaxWidth } from "./textElement";
+import {
+  getBoundTextMaxHeight,
+  getBoundTextMaxWidth,
+  truncateTextToBounds,
+} from "./textElement";
 import { normalizeText, measureText } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
 
 import { isLineElement } from "./typeChecks";
-import { assertBaseShapeData, baseShapeData } from "./compositeShape";
+import {
+  assertBaseShapeData,
+  baseShapeData,
+  getCompositeShapeTextFitMode,
+  isCompositeShapeOpen,
+} from "./compositeShape";
 import { mindmapShapeData } from "./mindmap";
 
 import type {
@@ -98,6 +107,14 @@ export type ElementConstructorOpts = MarkOptional<
   | "customData"
   | "created"
 >;
+
+type CompositeShapeConstructorOpts = ElementConstructorOpts &
+  Partial<
+    Pick<
+      ExcalidrawCompositeShapeElement,
+      "textFitMode" | "textFitMinWidth" | "textFitMinHeight"
+    >
+  >;
 
 const _newElementBase = <T extends ExcalidrawElement>(
   type: T["type"],
@@ -187,11 +204,13 @@ const _newElementBase = <T extends ExcalidrawElement>(
 };
 
 export const newElement = (
-  opts: ElementConstructorOpts &
-    (
-      | { type: BaseShapeData["id"] | "selection" }
-      | { type: "composite_shape"; shape: BaseShapeData }
-    ),
+  opts:
+    | (ElementConstructorOpts & { type: "selection" })
+    | (CompositeShapeConstructorOpts &
+        (
+          | { type: BaseShapeData["id"] }
+          | { type: "composite_shape"; shape: BaseShapeData }
+        )),
 ): NonDeleted<ExcalidrawGenericElement> => {
   if (opts.type === "selection") {
     return _newElementBase<ExcalidrawSelectionElement>("selection", opts);
@@ -201,12 +220,23 @@ export const newElement = (
       ? assertBaseShapeData(opts.shape)
       : baseShapeData(opts.type);
   return {
-    ..._newElementBase<ExcalidrawCompositeShapeElement>(
-      "composite_shape",
-      opts,
-    ),
+    ..._newElementBase<ExcalidrawCompositeShapeElement>("composite_shape", {
+      ...opts,
+      backgroundColor: isCompositeShapeOpen(shape.id)
+        ? "transparent"
+        : opts.backgroundColor,
+    }),
     type: "composite_shape",
     shape,
+    ...(opts.textFitMode === undefined
+      ? {}
+      : { textFitMode: opts.textFitMode }),
+    ...(opts.textFitMinWidth === undefined
+      ? {}
+      : { textFitMinWidth: opts.textFitMinWidth }),
+    ...(opts.textFitMinHeight === undefined
+      ? {}
+      : { textFitMinHeight: opts.textFitMinHeight }),
   };
 };
 
@@ -630,13 +660,26 @@ export const refreshTextDimensions = (
     return;
   }
   if (container || !textElement.autoResize) {
-    text = wrapText(
-      text,
-      getFontString(textElement),
-      container
-        ? getBoundTextMaxWidth(container, textElement)
-        : textElement.width,
-    );
+    const font = getFontString(textElement);
+    const maxWidth = container
+      ? getBoundTextMaxWidth(container, textElement)
+      : textElement.width;
+    text = wrapText(text, font, maxWidth);
+    if (
+      container?.type === "composite_shape" &&
+      getCompositeShapeTextFitMode(container) === "fixed"
+    ) {
+      text = truncateTextToBounds(
+        text,
+        font,
+        textElement.lineHeight,
+        maxWidth,
+        getBoundTextMaxHeight(
+          container,
+          textElement as ExcalidrawTextElement & { containerId: string },
+        ),
+      );
+    }
   }
   const dimensions = getAdjustedDimensions(textElement, elementsMap, text);
   return { text, ...dimensions };

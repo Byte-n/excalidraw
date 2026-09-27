@@ -231,12 +231,10 @@ describe("mindmap 正式元素模型", () => {
     );
   });
 
-  it("keeps pill separate from ordinary composite shapes", () => {
+  it("keeps mindmap pill data independent from ordinary composite shapes", () => {
     const pill = mindmapShapeData("pill");
     expect(assertMindmapShapeData(pill)).toBe(pill);
-    expect(() => assertBaseShapeData(pill)).toThrow(
-      "Unsupported composite shape data",
-    );
+    expect(assertBaseShapeData(pill)).toBe(pill);
   });
 });
 

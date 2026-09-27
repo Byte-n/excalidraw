@@ -10,6 +10,7 @@ import {
   isLinearElement,
   isTextElement,
   hasStrokeColor,
+  isBaseShapeId,
   toolIsArrow,
 } from "@excalidraw/element";
 
@@ -66,13 +67,18 @@ export const canChangeBackgroundColor = (
   targetElements: ExcalidrawElement[],
   elementsMap: ElementsMap,
 ) => {
+  const activeFillTarget =
+    appState.activeTool.type === "rectangle" &&
+    isBaseShapeId(appState.preferredGenericShape)
+      ? appState.preferredGenericShape
+      : appState.activeTool.type;
   return (
-    hasBackground(appState.activeTool.type) ||
+    hasBackground(activeFillTarget) ||
     // a note's label (the target while editing it) has no fill, but a
     // background pick on it colors the note — so the picker stays available
     targetElements.some((element) =>
       hasBackground(
-        getColorTargetElement(element, "backgroundColor", elementsMap).type,
+        getColorTargetElement(element, "backgroundColor", elementsMap),
       ),
     )
   );
@@ -92,6 +98,11 @@ export const getShapeActionPredicates = (
   app: AppClassProperties,
 ) => {
   const activeToolType = appState.activeTool.type;
+  const activeFillTarget =
+    activeToolType === "rectangle" &&
+    isBaseShapeId(appState.preferredGenericShape)
+      ? appState.preferredGenericShape
+      : activeToolType;
 
   // A property is relevant when it applies to the active tool (so it can be
   // preconfigured before drawing) or to any currently selected element.
@@ -131,11 +142,11 @@ export const getShapeActionPredicates = (
       // bucket fill never renders transparent (it falls back to a real
       // color), so its fill style stays relevant either way
       activeToolType === "bucketfill" ||
-      (hasFillStyle(activeToolType) &&
+      (hasFillStyle(activeFillTarget) &&
         !isTransparent(appState.currentItemBackgroundColor)) ||
       targetElements.some(
         (element) =>
-          hasFillStyle(element.type) && !isTransparent(element.backgroundColor),
+          hasFillStyle(element) && !isTransparent(element.backgroundColor),
       ),
 
     // stroke / shape properties

@@ -213,7 +213,9 @@ export class API {
       ? ExcalidrawTextElement["verticalAlign"]
       : never;
     boundElements?: ExcalidrawGenericElement["boundElements"];
-    shape?: T extends "composite_shape" ? ExcalidrawCompositeShapeElement["shape"] : never;
+    shape?: T extends "composite_shape" | BaseShapeId
+      ? ExcalidrawCompositeShapeElement["shape"]
+      : never;
     baseHeight?: T extends "stickynote"
       ? ExcalidrawStickyNoteElement["baseHeight"]
       : never;
@@ -306,7 +308,7 @@ export class API {
       fillStyle: rest.fillStyle ?? appState.currentItemFillStyle,
       strokeWidth:
         rest.strokeWidth ??
-        getStrokeWidthByKey(type, appState.currentItemStrokeWidthKey),
+        getStrokeWidthByKey(type as any, appState.currentItemStrokeWidthKey),
       strokeStyle: rest.strokeStyle ?? appState.currentItemStrokeStyle,
       roundness: (
         rest.roundness === undefined
@@ -354,10 +356,40 @@ export class API {
       case "rectangle":
       case "diamond":
       case "ellipse":
-        element = newElement({
-          type: type as "rectangle" | "diamond" | "ellipse",
-          ...base,
-        });
+      case "cross":
+      case "brace-reverse":
+      case "brace":
+      case "cloud":
+      case "double-arrow":
+      case "forward-arrow":
+      case "backward-arrow":
+      case "octagon":
+      case "pentagon":
+      case "hexagon":
+      case "star":
+      case "triangle":
+      case "round-rect":
+      case "rectangle-bubble":
+      case "pill":
+      case "bubble":
+      case "trapezoid":
+      case "parallelogram":
+      case "right-pentagon":
+      case "step":
+      case "cube":
+      case "cylinder":
+      case "pie":
+      case "circular-ring":
+        element = rest.shape
+          ? newElement({
+              type: "composite_shape",
+              shape: rest.shape,
+              ...base,
+            })
+          : newElement({
+              type: type as BaseShapeId,
+              ...base,
+            });
         break;
       case "composite_shape":
         element = newElement({

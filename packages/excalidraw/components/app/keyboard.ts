@@ -28,6 +28,7 @@ import {
   getContainerCenter,
   getBoundTextElement,
   isImageElement,
+  isBaseShapeId,
   isTextElement,
   isValidTextContainer,
   isLineElement,
@@ -700,8 +701,13 @@ export const onKeyDown = (
 
     if (
       event.key === KEYS.G &&
-      (hasBackground(app.state.activeTool.type) ||
-        selectedElements.some((element) => hasBackground(element.type)))
+      (hasBackground(
+        app.state.activeTool.type === "rectangle" &&
+          isBaseShapeId(app.state.preferredGenericShape)
+          ? app.state.preferredGenericShape
+          : app.state.activeTool.type,
+      ) ||
+        selectedElements.some((element) => hasBackground(element)))
     ) {
       app.setState({ openPopup: "elementBackground" });
       event.stopPropagation();

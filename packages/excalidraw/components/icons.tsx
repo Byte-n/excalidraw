@@ -436,6 +436,25 @@ export const TextSizeIcon = createIcon(
   tablerIconProps,
 );
 
+export const TextFitFixedIcon = createIcon(
+  <g strokeWidth="1.5">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <rect x="4" y="4" width="16" height="16" rx="1" />
+    <path d="M7 16h10M8 8h8" />
+    <path d="M8 12h3M13 12h3" />
+  </g>,
+  tablerIconProps,
+);
+
+export const TextFitAutoIcon = createIcon(
+  <g strokeWidth="1.5">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M4 8V5h3M20 8V5h-3M4 16v3h3M20 16v3h-3" />
+    <path d="M8 9h8M8 12h8M8 15h6" />
+  </g>,
+  tablerIconProps,
+);
+
 // modified tabler-icons: photo
 export const ImageIcon = createIcon(
   <g strokeWidth="1.25">

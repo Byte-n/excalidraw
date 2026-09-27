@@ -301,7 +301,7 @@ export const StatsInner = memo(
                                 singleElement.type === "composite_shape"
                                   ? singleElement.shape.id
                                   : singleElement.type
-                              }`,
+                              }` as any,
                             )}
                       </StatsRow>
 

@@ -32,7 +32,7 @@ import { distanceToElement } from "../src/distance";
 import { getLinearElementPathSegments } from "../src/utils";
 import { LinearElementEditor } from "../src/linearElementEditor";
 import { getElementPointsCoords } from "../src/bounds";
-import { computeContainerDimensionForBoundText } from "../src/textElement";
+import { getBoundTextContainerDimensions } from "../src/textElement";
 
 import type {
   ExcalidrawElbowArrowElement,
@@ -294,10 +294,11 @@ describe("generic element", () => {
         "hello\nhello\nhello\nhello\nhello",
       );
       const initCenterY = rectangle.y + rectangle.height / 2;
-      const minContainerHeight = computeContainerDimensionForBoundText(
+      const minContainerHeight = getBoundTextContainerDimensions(
+        rectangle.get(),
+        label.width,
         label.height,
-        rectangle.type,
-      );
+      ).height;
 
       UI.resize(rectangle, handle, move, {
         alt: true,
@@ -1019,13 +1020,12 @@ describe("multiple selection", () => {
     });
     const originalHeight = rectangle.height;
 
-    // Halve the selection and flip vertically. Padding does not scale with
-    // the font, so even a single-line label needs extra container height.
+    // Halve the selection and flip vertically while keeping the label fitted.
     UI.resize([rectangle, other], "se", [-200, -150], { shift: true });
 
     expect(label.fontSize).toBeCloseTo(10);
     expect(label.text).toBe("hello");
-    expect(rectangle.height).toBeGreaterThan(originalHeight / 2);
+    expect(rectangle.height).toBeCloseTo(originalHeight / 2);
     expect(rectangle.y + rectangle.height).toBeCloseTo(0);
   });
 

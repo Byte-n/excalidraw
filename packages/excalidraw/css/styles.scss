@@ -742,6 +742,10 @@ body.excalidraw-cursor-resize * {
     -webkit-text-security: disc;
   }
 
+  .excalidraw-wysiwyg--debug-text-area {
+    box-shadow: 0 0 0 1px #f5a3a3;
+  }
+
   input[type="text"],
   textarea:not(.excalidraw-wysiwyg) {
     color: var(--text-primary-color);

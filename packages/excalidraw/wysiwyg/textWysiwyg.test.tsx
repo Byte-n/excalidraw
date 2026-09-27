@@ -18,6 +18,7 @@ import {
 } from "@excalidraw/common";
 
 import type {
+  ExcalidrawCompositeShapeElement,
   ExcalidrawTextElement,
   ExcalidrawTextElementWithContainer,
   NonDeletedExcalidrawElement,
@@ -77,6 +78,53 @@ describe("textWysiwyg", () => {
     beforeEach(async () => {
       await render(<Excalidraw handleKeyboardGlobally={true} />);
       API.setElements([]);
+    });
+
+    describe("debug text area", () => {
+      afterEach(() => {
+        h.app.ownerWindow.EXCALIDRAW_DEBUG_TEXT_AREA = undefined;
+      });
+
+      it("outlines bound text editors without outlining standalone text", async () => {
+        const container = API.createElement({
+          type: "rectangle",
+          width: 100,
+          height: 100,
+        });
+        const boundText = API.createElement({
+          type: "text",
+          text: "inside",
+          width: 60,
+          height: 20,
+          containerId: container.id,
+        });
+        const standaloneText = API.createElement({
+          type: "text",
+          text: "outside",
+          x: 200,
+          width: 80,
+          height: 20,
+        });
+        API.setElements([container, boundText, standaloneText]);
+        h.app.ownerWindow.EXCALIDRAW_DEBUG_TEXT_AREA = true;
+
+        API.setSelectedElements([boundText]);
+        Keyboard.keyPress(KEYS.ENTER);
+        const boundEditor = await getTextEditor();
+        expect(
+          boundEditor.classList.contains("excalidraw-wysiwyg--debug-text-area"),
+        ).toBe(true);
+
+        Keyboard.exitTextEditor(boundEditor);
+        API.setSelectedElements([standaloneText]);
+        Keyboard.keyPress(KEYS.ENTER);
+        const standaloneEditor = await getTextEditor();
+        expect(
+          standaloneEditor.classList.contains(
+            "excalidraw-wysiwyg--debug-text-area",
+          ),
+        ).toBe(false);
+      });
     });
 
     it("should prefer editing selected text element (non-bindable container present)", async () => {
@@ -882,12 +930,63 @@ describe("textWysiwyg", () => {
         fireEvent.input(editor, { target: { value } }),
       ).not.toThrow();
 
-      expect(diamond.height).toBe(50020);
+      expect(diamond.height).toBeCloseTo(52325.58517372236);
 
       // Clearing text to simulate height decrease
       expect(() => updateTextEditor(editor, "")).not.toThrow();
 
-      expect(diamond.height).toBe(70);
+      // Adaptive text fit retains the original shape as its minimum size.
+      expect(diamond.height).toBe(75);
+    });
+
+    it("keeps the cube editor anchored while text grows and shrinks", async () => {
+      const cube = API.createElement({
+        type: "cube",
+        x: 100,
+        y: 100,
+        width: 120,
+        height: 80,
+      });
+      API.setElements([cube]);
+      API.setSelectedElements([cube]);
+      Keyboard.keyPress(KEYS.ENTER);
+
+      const editor = await getTextEditor();
+      updateTextEditor(editor, new Array(20).fill("line").join("\n"));
+      expect(cube.height).toBeGreaterThan(80);
+      expect(parseFloat(editor.style.left)).toBeGreaterThan(0);
+      expect(parseFloat(editor.style.top)).toBeGreaterThan(0);
+
+      updateTextEditor(editor, "short");
+      expect(cube.height).toBe(80);
+    });
+
+    it("keeps fixed composite shapes unchanged and renders an ellipsis", async () => {
+      const cube = API.createElement({
+        type: "cube",
+        x: 100,
+        y: 100,
+        width: 120,
+        height: 80,
+      });
+      API.setElements([cube]);
+      API.updateElement(cube as ExcalidrawCompositeShapeElement, {
+        textFitMode: "fixed",
+      });
+      API.setSelectedElements([cube]);
+      Keyboard.keyPress(KEYS.ENTER);
+
+      const editor = await getTextEditor();
+      const originalText = new Array(40).fill("long label").join(" ");
+      updateTextEditor(editor, originalText);
+
+      expect(cube.width).toBe(120);
+      expect(cube.height).toBe(80);
+      const boundText = h.elements.find(
+        (element) => element.type === "text" && element.containerId === cube.id,
+      ) as ExcalidrawTextElementWithContainer;
+      expect(boundText.originalText).toBe(originalText);
+      expect(boundText.text).toContain("…");
     });
 
     it("should bind text to container when double clicked inside of the transparent container", async () => {
@@ -1263,8 +1362,8 @@ describe("textWysiwyg", () => {
       UI.resize(rectangle, "ne", [rectangle.x + 100, rectangle.y - 100]);
       expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
         [
-          15,
-          65,
+          12,
+          "68.00000",
         ]
       `);
 
@@ -1283,8 +1382,8 @@ describe("textWysiwyg", () => {
       UI.resize(rectangle, "ne", [rectangle.x + 100, rectangle.y - 100]);
       expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
         [
-          "375.00000",
-          "-535.00000",
+          "378.00000",
+          -538,
         ]
       `);
     });
@@ -1333,7 +1432,7 @@ describe("textWysiwyg", () => {
       });
       expect(rectangle.width).toBe(200);
       expect(rectangle.height).toBe(166.66666666666669);
-      expect(textElement.fontSize).toBe(47.5);
+      expect(textElement.fontSize).toBeCloseTo(45.58139534883721);
     });
 
     it("should bind text correctly when container duplicated with alt-drag", async () => {
@@ -1384,9 +1483,9 @@ describe("textWysiwyg", () => {
       UI.resize(rectangle, "nw", [100, 50]);
       // The NW handle crossed the right edge, so the container flips past it.
       expect(rectangle.x).toBe(100);
-      expect(rectangle.y).toBe(-40);
+      expect(rectangle.y).toBe(-34);
       expect(text.x).toBe(105);
-      expect(text.y).toBe(-35);
+      expect(text.y).toBe(-32);
 
       Keyboard.withModifierKeys({ ctrl: true }, () => {
         Keyboard.keyPress(KEYS.Z);
@@ -1540,7 +1639,7 @@ describe("textWysiwyg", () => {
       expect(
         (h.elements[1] as ExcalidrawTextElementWithContainer).fontSize,
       ).toEqual(36);
-      expect(getOriginalContainerHeightFromCache(rectangle.id)).toBe(100);
+      expect(getOriginalContainerHeightFromCache(rectangle.id)).toBe(94);
     });
 
     it("should update line height when font family updated", async () => {
@@ -1593,8 +1692,8 @@ describe("textWysiwyg", () => {
         fireEvent.click(screen.getByTitle("Align top"));
         expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
           [
-            15,
-            25,
+            12,
+            22,
           ]
         `);
       });
@@ -1605,7 +1704,7 @@ describe("textWysiwyg", () => {
         expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
           [
             30,
-            25,
+            22,
           ]
         `);
       });
@@ -1616,8 +1715,8 @@ describe("textWysiwyg", () => {
 
         expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
           [
-            45,
-            25,
+            48,
+            22,
           ]
         `);
       });
@@ -1627,7 +1726,7 @@ describe("textWysiwyg", () => {
         fireEvent.click(screen.getByTitle("Left"));
         expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
           [
-            15,
+            12,
             45,
           ]
         `);
@@ -1651,7 +1750,7 @@ describe("textWysiwyg", () => {
 
         expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
           [
-            45,
+            48,
             45,
           ]
         `);
@@ -1663,8 +1762,8 @@ describe("textWysiwyg", () => {
 
         expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
           [
-            15,
-            65,
+            12,
+            68,
           ]
         `);
       });
@@ -1675,7 +1774,7 @@ describe("textWysiwyg", () => {
         expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
           [
             30,
-            65,
+            68,
           ]
         `);
       });
@@ -1685,8 +1784,8 @@ describe("textWysiwyg", () => {
         fireEvent.click(screen.getByTitle("Align bottom"));
         expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
           [
-            45,
-            65,
+            48,
+            68,
           ]
         `);
       });

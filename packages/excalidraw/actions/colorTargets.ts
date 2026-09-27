@@ -109,7 +109,7 @@ export const resolveColorTarget = (
   const supports = (element: ExcalidrawElement) =>
     property === "strokeColor"
       ? hasStrokeColor(element.type)
-      : hasBackground(element.type);
+      : hasBackground(element);
 
   const targets: ExcalidrawElement[] = getSelectedElements(elements, appState, {
     includeBoundTextElement: property === "strokeColor",

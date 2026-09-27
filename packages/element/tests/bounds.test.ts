@@ -4,7 +4,11 @@ import { API } from "@excalidraw/excalidraw/tests/helpers/api";
 
 import type { LocalPoint } from "@excalidraw/math";
 
-import { baseShapeData, type BaseShapeId } from "../src/compositeShape";
+import {
+  baseShapeData,
+  getCompositeShapeGlobalPoints,
+  type BaseShapeId,
+} from "../src/compositeShape";
 import {
   elementsOverlappingBBox,
   getElementAbsoluteCoords,
@@ -74,6 +78,18 @@ describe("getElementAbsoluteCoords", () => {
 });
 
 describe("getElementBounds", () => {
+  const expectBoundsToMatchOutline = (element: ExcalidrawElement) => {
+    if (element.type !== "composite_shape") {
+      throw new Error("Expected composite shape");
+    }
+    const points = getCompositeShapeGlobalPoints(element);
+    const [x1, y1, x2, y2] = getElementBounds(element, arrayToMap([element]));
+    expect(x1).toBeCloseTo(Math.min(...points.map(([x]) => x)));
+    expect(y1).toBeCloseTo(Math.min(...points.map(([, y]) => y)));
+    expect(x2).toBeCloseTo(Math.max(...points.map(([x]) => x)));
+    expect(y2).toBeCloseTo(Math.max(...points.map(([, y]) => y)));
+  };
+
   it("rectangle", () => {
     const element = _ce({
       x: 40,
@@ -83,11 +99,7 @@ describe("getElementBounds", () => {
       a: Math.PI / 4,
       t: "rectangle",
     });
-    const [x1, y1, x2, y2] = getElementBounds(element, arrayToMap([element]));
-    expect(x1).toEqual(39.39339828220179);
-    expect(y1).toEqual(24.393398282201787);
-    expect(x2).toEqual(60.60660171779821);
-    expect(y2).toEqual(45.60660171779821);
+    expectBoundsToMatchOutline(element);
   });
 
   it("diamond", () => {
@@ -100,12 +112,7 @@ describe("getElementBounds", () => {
       t: "diamond",
     });
 
-    const [x1, y1, x2, y2] = getElementBounds(element, arrayToMap([element]));
-
-    expect(x1).toEqual(42.928932188134524);
-    expect(y1).toEqual(27.928932188134524);
-    expect(x2).toEqual(57.071067811865476);
-    expect(y2).toEqual(42.071067811865476);
+    expectBoundsToMatchOutline(element);
   });
 
   it("ellipse", () => {

@@ -1,9 +1,4 @@
-import {
-  assertNever,
-  invariant,
-  isTransparent,
-  type Bounds,
-} from "@excalidraw/common";
+import { invariant, isTransparent, type Bounds } from "@excalidraw/common";
 import {
   curveIntersectLineSegment,
   isPointWithinBounds,
@@ -13,6 +8,7 @@ import {
   pointFromVector,
   pointRotateRads,
   pointsEqual,
+  polygonFromPoints,
   polygonIncludesPoint,
   vectorFromPoint,
   vectorNormalize,
@@ -35,7 +31,14 @@ import type {
 import type { FrameNameBounds } from "@excalidraw/excalidraw/types";
 
 import { isPathALoop } from "./utils";
-import { isCompositeShapeId } from "./compositeShape";
+import {
+  getCompositeShapeGeometry,
+  getCompositeShapeGlobalPath,
+  getCompositeShapeGlobalPoints,
+  getCompositeShapeOffsetPaths,
+  isCompositeShapeOpen,
+  isCompositeShapeId,
+} from "./compositeShape";
 import {
   getMindmapNodeGeometry,
   getMindmapShapeId,
@@ -61,7 +64,6 @@ import {
   isTextElement,
 } from "./typeChecks";
 import {
-  deconstructDiamondElement,
   deconstructLinearOrFreeDrawElement,
   deconstructRectanguloidElement,
 } from "./utils";
@@ -82,7 +84,6 @@ import type {
   ElementsMap,
   ExcalidrawArrowElement,
   ExcalidrawBindableElement,
-  ExcalidrawDiamondElement,
   ExcalidrawElement,
   ExcalidrawEllipseElement,
   ExcalidrawFreeDrawElement,
@@ -100,7 +101,7 @@ export const shouldTestInside = (element: ExcalidrawElement) => {
   }
 
   const isDraggableFromInside =
-    (hasBackground(element.type) && !isTransparent(element.backgroundColor)) ||
+    (hasBackground(element) && !isTransparent(element.backgroundColor)) ||
     hasBoundTextElement(element) ||
     isIframeLikeElement(element) ||
     isTextElement(element);
@@ -336,6 +337,13 @@ const bindingBorderTest = (
   );
   const distance = distanceToElement(element, elementsMap, p);
 
+  if (
+    element.type === "composite_shape" &&
+    isCompositeShapeOpen(element.shape.id)
+  ) {
+    return distance <= t;
+  }
+
   return shouldTestInside
     ? intersections.length === 0 || distance <= tolerance
     : intersections.length > 0 && distance <= t;
@@ -365,10 +373,7 @@ export const getAllHoveredElementAtPoint = (
     ) {
       candidateElements.push(element);
 
-      if (
-        hasBackground(element.type) &&
-        !isTransparent(element.backgroundColor)
-      ) {
+      if (hasBackground(element) && !isTransparent(element.backgroundColor)) {
         break;
       }
     }
@@ -522,33 +527,19 @@ export const intersectElementWithLineSegment = (
         onlyFirst,
       );
     case "composite_shape":
-      switch (element.shape.id) {
-        case "rectangle":
-          return intersectRectanguloidWithLineSegment(
-            element,
-            elementsMap,
-            line,
-            offset,
-            onlyFirst,
-          );
-        case "diamond":
-          return intersectDiamondWithLineSegment(
-            element as ExcalidrawDiamondElement,
-            elementsMap,
-            line,
-            offset,
-            onlyFirst,
-          );
-        case "ellipse":
-          return intersectEllipseWithLineSegment(
+      return element.shape.id === "ellipse"
+        ? intersectEllipseWithLineSegment(
             element as ExcalidrawEllipseElement,
             elementsMap,
             line,
             offset,
+          )
+        : intersectCompositeShapeWithLineSegment(
+            element,
+            line,
+            offset,
+            onlyFirst,
           );
-        default:
-          return assertNever(element.shape, "Unsupported composite shape");
-      }
     case "line":
     case "freedraw":
     case "arrow":
@@ -559,6 +550,101 @@ export const intersectElementWithLineSegment = (
         onlyFirst,
       );
   }
+};
+
+const intersectCompositeShapePathsWithLineSegment = (
+  paths: GlobalPoint[][],
+  segment: LineSegment<GlobalPoint>,
+  closed: boolean,
+  onlyFirst: boolean,
+): GlobalPoint[] => {
+  const intersections: GlobalPoint[] = [];
+  for (const points of paths) {
+    const edgeCount = closed ? points.length : points.length - 1;
+    for (let i = 0; i < edgeCount; i++) {
+      const hit = lineSegmentIntersectionPoints(
+        lineSegment(points[i], points[(i + 1) % points.length]),
+        segment,
+      );
+      if (hit) {
+        intersections.push(hit);
+        if (onlyFirst) {
+          return intersections;
+        }
+      }
+    }
+  }
+  return intersections;
+};
+
+const intersectCompositeShapeWithLineSegment = (
+  element: ExcalidrawElement & { type: "composite_shape" },
+  segment: LineSegment<GlobalPoint>,
+  offset: number,
+  onlyFirst = false,
+): GlobalPoint[] => {
+  if (offset !== 0 && (offset > 0 || !isCompositeShapeOpen(element.shape.id))) {
+    return intersectCompositeShapePathsWithLineSegment(
+      getCompositeShapeOffsetPaths(element, offset),
+      segment,
+      true,
+      onlyFirst,
+    );
+  }
+
+  const path = getCompositeShapeGlobalPath(element);
+  const intersections: GlobalPoint[] = [];
+  let previous = pointFrom<GlobalPoint>(...path.start);
+  const commands = [
+    ...path.commands,
+    ...(path.closed ? [{ type: "line" as const, to: path.start }] : []),
+  ];
+  const normalizeEndpoint = (
+    point: GlobalPoint,
+    endpoints: readonly GlobalPoint[],
+  ): GlobalPoint => {
+    // The line equation can turn an exact vertex intersection into values such
+    // as 100.00000000000001. Preserve the canonical path endpoint when the
+    // error is below floating-point noise so bindings remain deterministic.
+    const endpoint = endpoints.find(
+      ([x, y]) =>
+        Math.abs(point[0] - x) < 1e-10 && Math.abs(point[1] - y) < 1e-10,
+    );
+    if (endpoint) {
+      return endpoint;
+    }
+    const snap = (value: number) => {
+      const rounded = Math.round(value);
+      return Math.abs(value - rounded) < 1e-10 ? rounded : value;
+    };
+    return pointFrom<GlobalPoint>(snap(point[0]), snap(point[1]));
+  };
+  for (const command of commands) {
+    const end = pointFrom<GlobalPoint>(...command.to);
+    const endpoints = [previous, end, segment[0], segment[1]];
+    const hits =
+      command.type === "line"
+        ? [lineSegmentIntersectionPoints(lineSegment(previous, end), segment)]
+        : curveIntersectLineSegment(
+            [
+              previous,
+              pointFrom<GlobalPoint>(...command.control1),
+              pointFrom<GlobalPoint>(...command.control2),
+              end,
+            ] as Curve<GlobalPoint>,
+            segment,
+          );
+    for (const hit of hits) {
+      if (hit) {
+        intersections.push(normalizeEndpoint(hit, endpoints));
+        if (onlyFirst) {
+          return intersections;
+        }
+      }
+    }
+    previous = end;
+  }
+  return intersections;
 };
 
 const curveIntersections = (
@@ -735,49 +821,6 @@ const intersectRectanguloidWithLineSegment = (
  * @param b
  * @returns
  */
-const intersectDiamondWithLineSegment = (
-  element: ExcalidrawDiamondElement,
-  elementsMap: ElementsMap,
-  l: LineSegment<GlobalPoint>,
-  offset: number = 0,
-  onlyFirst = false,
-): GlobalPoint[] => {
-  const center = elementCenterPoint(element, elementsMap);
-
-  // Rotate the point to the inverse direction to simulate the rotated diamond
-  // points. It's all the same distance-wise.
-  const rotatedA = pointRotateRads(l[0], center, -element.angle as Radians);
-  const rotatedB = pointRotateRads(l[1], center, -element.angle as Radians);
-  const rotatedIntersector = lineSegment(rotatedA, rotatedB);
-
-  const [sides, corners] = deconstructDiamondElement(element, offset);
-  const intersections: GlobalPoint[] = [];
-
-  lineIntersections(
-    sides,
-    rotatedIntersector,
-    intersections,
-    center,
-    element.angle,
-    onlyFirst,
-  );
-
-  if (onlyFirst && intersections.length > 0) {
-    return intersections;
-  }
-
-  curveIntersections(
-    corners,
-    rotatedIntersector,
-    intersections,
-    center,
-    element.angle,
-    onlyFirst,
-  );
-
-  return intersections;
-};
-
 /**
  *
  * @param element
@@ -792,12 +835,16 @@ const intersectEllipseWithLineSegment = (
   offset: number = 0,
 ): GlobalPoint[] => {
   const center = elementCenterPoint(element, elementsMap);
+  const primitive = getCompositeShapeGeometry(element).primitive;
+  if (primitive?.kind !== "ellipse") {
+    throw new Error("Missing ellipse geometry");
+  }
 
   const rotatedA = pointRotateRads(l[0], center, -element.angle as Radians);
   const rotatedB = pointRotateRads(l[1], center, -element.angle as Radians);
 
   return ellipseSegmentInterceptPoints(
-    ellipse(center, element.width / 2 + offset, element.height / 2 + offset),
+    ellipse(center, primitive.radiusX + offset, primitive.radiusY + offset),
     lineSegment(rotatedA, rotatedB),
   ).map((p) => pointRotateRads(p, center, element.angle));
 };
@@ -832,6 +879,12 @@ export const isPointInElement = (
   if (
     element.type === "mindmap-edge" ||
     isMindmapElementHidden(element, elementsMap)
+  ) {
+    return false;
+  }
+  if (
+    element.type === "composite_shape" &&
+    isCompositeShapeOpen(element.shape.id)
   ) {
     return false;
   }
@@ -879,6 +932,28 @@ export const isPointInElement = (
     return false;
   }
 
+  if (element.type === "composite_shape") {
+    const primitive = getCompositeShapeGeometry(element).primitive;
+    if (primitive?.kind === "ellipse") {
+      const center = pointFrom<GlobalPoint>(
+        element.x + primitive.center[0],
+        element.y + primitive.center[1],
+      );
+      const [px, py] = pointRotateRads(
+        point,
+        center,
+        -element.angle as Radians,
+      );
+      const dx = (px - center[0]) / primitive.radiusX;
+      const dy = (py - center[1]) / primitive.radiusY;
+      return dx * dx + dy * dy <= 1;
+    }
+    return polygonIncludesPoint(
+      point,
+      polygonFromPoints(getCompositeShapeGlobalPoints(element)),
+    );
+  }
+
   const center = pointFrom<GlobalPoint>((x1 + x2) / 2, (y1 + y2) / 2);
   const otherPoint = pointFromVector(
     vectorScale(
@@ -910,6 +985,19 @@ export const isBindableElementInsideOtherBindable = (
     const { x, y, width, height, angle } = element;
     const center = elementCenterPoint(element, elementsMap);
 
+    if (element.type === "composite_shape") {
+      if (isCompositeShapeOpen(element.shape.id)) {
+        return [];
+      }
+      const paths = getCompositeShapeOffsetPaths(element, offset);
+      if (paths.length > 0) {
+        return paths.flatMap((path) =>
+          path.map(([px, py]) => pointFrom<GlobalPoint>(px, py)),
+        );
+      }
+      return getCompositeShapeGlobalPoints(element);
+    }
+
     if (isCompositeShapeId(element, "diamond")) {
       // Diamond has 4 corner points at the middle of each side
       const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
@@ -924,10 +1012,14 @@ export const isBindableElementInsideOtherBindable = (
     }
     if (isCompositeShapeId(element, "ellipse")) {
       // For ellipse, test points at the extremes (top, right, bottom, left)
-      const cx = x + width / 2;
-      const cy = y + height / 2;
-      const rx = width / 2;
-      const ry = height / 2;
+      const primitive = getCompositeShapeGeometry(element).primitive;
+      if (primitive?.kind !== "ellipse") {
+        throw new Error("Missing ellipse geometry");
+      }
+      const cx = x + primitive.center[0];
+      const cy = y + primitive.center[1];
+      const rx = primitive.radiusX;
+      const ry = primitive.radiusY;
       const corners: GlobalPoint[] = [
         pointFrom(cx, cy - ry - offset), // top
         pointFrom(cx + rx + offset, cy), // right
@@ -948,6 +1040,10 @@ export const isBindableElementInsideOtherBindable = (
 
   const offset = (-1 * Math.max(innerElement.width, innerElement.height)) / 20; // 5% offset
   const innerCorners = getCornerPoints(innerElement, offset);
+
+  if (innerCorners.length === 0) {
+    return false;
+  }
 
   // Check if all corner points of the inner element are inside the outer element
   return innerCorners.every((corner) =>

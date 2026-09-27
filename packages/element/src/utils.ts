@@ -7,7 +7,6 @@ import {
 } from "@excalidraw/common";
 
 import {
-  bezierEquation,
   curve,
   curveCatmullRomCubicApproxPoints,
   curveOffsetPoints,
@@ -34,8 +33,14 @@ import type {
   Zoom,
 } from "@excalidraw/excalidraw/types";
 
-import { elementCenterPoint, getDiamondPoints } from "./bounds";
-import { isCompositeShapeId } from "./compositeShape";
+import { elementCenterPoint } from "./bounds";
+import {
+  getCompositeShapeAnchors,
+  getCompositeShapeCornerRadius,
+  getCompositeShapeGeometry,
+  isCompositeShapeElement,
+  isCompositeShapeId,
+} from "./compositeShape";
 import { getMindmapShapeId } from "./mindmap";
 
 import { generateLinearCollisionShape } from "./shape";
@@ -377,74 +382,41 @@ export function deconstructRectanguloidElement(
 
 export function getDiamondBaseCorners(
   element: ExcalidrawDiamondElement,
-  offset: number = 0,
 ): Curve<GlobalPoint>[] {
-  const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
-    getDiamondPoints(element);
-  const verticalRadius = element.roundness
-    ? getCornerRadius(Math.abs(topX - leftX), element)
-    : (topX - leftX) * 0.01;
-  const horizontalRadius = element.roundness
-    ? getCornerRadius(Math.abs(rightY - topY), element)
-    : (rightY - topY) * 0.01;
-
-  const [top, right, bottom, left]: GlobalPoint[] = [
-    pointFrom(element.x + topX, element.y + topY),
-    pointFrom(element.x + rightX, element.y + rightY),
-    pointFrom(element.x + bottomX, element.y + bottomY),
-    pointFrom(element.x + leftX, element.y + leftY),
-  ];
-
+  const geometry = getCompositeShapeGeometry(element);
+  const primitive = geometry.primitive;
+  if (primitive?.kind !== "diamond") {
+    throw new Error("Missing diamond geometry");
+  }
+  const toGlobal = ([x, y]: [number, number]) =>
+    pointFrom<GlobalPoint>(element.x + x, element.y + y);
+  const corners: Curve<GlobalPoint>[] = [];
+  let previous = geometry.outline.start;
+  for (const command of geometry.outline.commands) {
+    if (command.type === "cubic") {
+      corners.push(
+        curve(
+          toGlobal(previous),
+          toGlobal(command.control1),
+          toGlobal(command.control2),
+          toGlobal(command.to),
+        ),
+      );
+    }
+    previous = command.to;
+  }
+  if (corners.length) {
+    return corners;
+  }
   return [
-    curve(
-      pointFrom<GlobalPoint>(
-        right[0] - verticalRadius,
-        right[1] - horizontalRadius,
-      ),
-      right,
-      right,
-      pointFrom<GlobalPoint>(
-        right[0] - verticalRadius,
-        right[1] + horizontalRadius,
-      ),
-    ), // RIGHT
-    curve(
-      pointFrom<GlobalPoint>(
-        bottom[0] + verticalRadius,
-        bottom[1] - horizontalRadius,
-      ),
-      bottom,
-      bottom,
-      pointFrom<GlobalPoint>(
-        bottom[0] - verticalRadius,
-        bottom[1] - horizontalRadius,
-      ),
-    ), // BOTTOM
-    curve(
-      pointFrom<GlobalPoint>(
-        left[0] + verticalRadius,
-        left[1] + horizontalRadius,
-      ),
-      left,
-      left,
-      pointFrom<GlobalPoint>(
-        left[0] + verticalRadius,
-        left[1] - horizontalRadius,
-      ),
-    ), // LEFT
-    curve(
-      pointFrom<GlobalPoint>(
-        top[0] - verticalRadius,
-        top[1] + horizontalRadius,
-      ),
-      top,
-      top,
-      pointFrom<GlobalPoint>(
-        top[0] + verticalRadius,
-        top[1] + horizontalRadius,
-      ),
-    ), // TOP
-  ];
+    primitive.points[1],
+    primitive.points[2],
+    primitive.points[3],
+    primitive.points[0],
+  ].map((point) => {
+    const vertex = toGlobal(point);
+    return curve(vertex, vertex, vertex, vertex);
+  });
 }
 
 /**
@@ -465,7 +437,7 @@ export function deconstructDiamondElement(
     return cachedShape;
   }
 
-  const baseCorners = getDiamondBaseCorners(element, offset);
+  const baseCorners = getDiamondBaseCorners(element);
 
   const corners =
     offset > 0
@@ -532,6 +504,9 @@ export const getCornerRadius = (x: number, element: ExcalidrawElement) => {
     getMindmapShapeId(element) === "pill"
   ) {
     return Math.min(element.width, element.height) / 2;
+  }
+  if (element.type === "composite_shape") {
+    return getCompositeShapeCornerRadius(x, element.roundness);
   }
   if (
     element.roundness?.type === ROUNDNESS.PROPORTIONAL_RADIUS ||
@@ -646,13 +621,8 @@ export const getSnapOutlineMidPoint = (
   zoom: AppState["zoom"],
 ) => {
   const center = elementCenterPoint(element, elementsMap);
-  const sideMidpoints = isCompositeShapeId(element, "diamond")
-    ? getDiamondBaseCorners(element).map((curve) => {
-        const point = bezierEquation(curve, 0.5);
-        const rotatedPoint = pointRotateRads(point, center, element.angle);
-
-        return pointFrom<GlobalPoint>(rotatedPoint[0], rotatedPoint[1]);
-      })
+  const sideMidpoints = isCompositeShapeElement(element)
+    ? getCompositeShapeAnchors(element)
     : [
         // RIGHT midpoint
         pointRotateRads(
