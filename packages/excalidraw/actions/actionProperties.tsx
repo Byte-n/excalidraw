@@ -66,6 +66,7 @@ import {
 import {
   getColorTargetElement,
   getColorUpdate,
+  hasBackground,
   hasFillStyle,
   hasStrokeColor,
 } from "@excalidraw/element";
@@ -476,7 +477,8 @@ export const actionChangeBackgroundColor = register<
     } else {
       nextElements = changeProperty(elements, appState, (el) =>
         // a note's label passes the pick on to the note (below)
-        getColorTargetElement(el, "backgroundColor", elementsMap) === el
+        getColorTargetElement(el, "backgroundColor", elementsMap) === el &&
+        hasBackground(el)
           ? newElementWith(
               el,
               getColorUpdate(el, "backgroundColor", color, elementsMap),
@@ -491,7 +493,11 @@ export const actionChangeBackgroundColor = register<
       const editingTarget =
         editingText &&
         getColorTargetElement(editingText, "backgroundColor", elementsMap);
-      if (editingTarget && editingTarget !== editingText) {
+      if (
+        editingTarget &&
+        editingTarget !== editingText &&
+        hasBackground(editingTarget)
+      ) {
         nextElements = nextElements.map((el) =>
           el.id === editingTarget.id
             ? newElementWith(
@@ -537,7 +543,10 @@ export const actionChangeBackgroundColor = register<
             (element) =>
               getColorTargetElement(element, "backgroundColor", elementsMap)
                 .backgroundColor,
-            true,
+            (element) =>
+              hasBackground(
+                getColorTargetElement(element, "backgroundColor", elementsMap),
+              ),
             (hasSelection) => (!hasSelection ? target.currentValue : null),
           )}
           onChange={(color) => updateData({ color })}
@@ -617,7 +626,7 @@ export const actionChangeFillStyle = register<ExcalidrawElement["fillStyle"]>({
     );
     return {
       elements: changeProperty(elements, appState, (el) =>
-        hasFillStyle(el.type) ? newElementWith(el, { fillStyle: value }) : el,
+        hasFillStyle(el) ? newElementWith(el, { fillStyle: value }) : el,
       ),
       appState: { ...appState, currentItemFillStyle: value },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
@@ -626,7 +635,7 @@ export const actionChangeFillStyle = register<ExcalidrawElement["fillStyle"]>({
   PanelComponent: ({ elements, appState, updateData, app }) => {
     const selectedElements = getSelectedElements(elements, appState);
     const selectedFillStyleElements = selectedElements.filter((element) =>
-      hasFillStyle(element.type),
+      hasFillStyle(element),
     );
     const allElementsZigZag =
       selectedFillStyleElements.length > 0 &&
@@ -665,7 +674,7 @@ export const actionChangeFillStyle = register<ExcalidrawElement["fillStyle"]>({
               elements,
               app,
               (element) => element.fillStyle,
-              (element) => hasFillStyle(element.type),
+              (element) => hasFillStyle(element),
               (hasSelection) =>
                 hasSelection ? null : appState.currentItemFillStyle,
             )}

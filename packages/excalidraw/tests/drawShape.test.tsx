@@ -7,6 +7,11 @@ import type { ExcalidrawTextElement } from "@excalidraw/element/types";
 import { Excalidraw } from "../index";
 
 import { actionFinalize } from "../actions";
+import {
+  actionChangeBackgroundColor,
+  actionChangeFillStyle,
+} from "../actions/actionProperties";
+import { actionCopyStyles, actionPasteStyles } from "../actions/actionStyles";
 import { getShapeActionPredicates } from "../components/shapeActionPredicates";
 
 import { API } from "./helpers/api";
@@ -17,6 +22,75 @@ import { GlobalTestState, act, fireEvent, render, waitFor } from "./test-utils";
 const { h } = window;
 
 const mouse = new Pointer("mouse");
+
+describe("open composite shape fill controls", () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    await render(<Excalidraw handleKeyboardGlobally={true} />);
+  });
+
+  it("hides fill controls for a brace and skips background and fill actions", () => {
+    const brace = API.createElement({
+      type: "brace",
+      x: 100,
+      y: 100,
+      width: 100,
+      height: 100,
+      backgroundColor: "transparent",
+      fillStyle: "solid",
+    });
+    API.setElements([brace]);
+    API.setSelectedElements([brace]);
+
+    const predicates = getShapeActionPredicates(
+      h.state,
+      [brace],
+      h.app.scene.getNonDeletedElementsMap(),
+      h.app,
+    );
+    expect(predicates.backgroundColor).toBe(false);
+    expect(predicates.fill).toBe(false);
+
+    act(() => {
+      h.app.actionManager.executeAction(actionChangeBackgroundColor, "ui", {
+        color: "#ff0000",
+      });
+      h.app.actionManager.executeAction(actionChangeFillStyle, "ui", "hachure");
+    });
+    expect(h.elements[0].backgroundColor).toBe("transparent");
+    expect(h.elements[0].fillStyle).toBe("solid");
+
+    const rectangle = API.createElement({
+      type: "rectangle",
+      x: 300,
+      y: 100,
+      width: 100,
+      height: 100,
+      backgroundColor: "#ff0000",
+      fillStyle: "hachure",
+    });
+    API.setElements([brace, rectangle]);
+    API.setSelectedElements([rectangle]);
+    API.executeAction(actionCopyStyles);
+    API.setSelectedElements([brace]);
+    API.executeAction(actionPasteStyles);
+    expect(h.elements[0].backgroundColor).toBe("transparent");
+    expect(h.elements[0].fillStyle).toBe("solid");
+
+    act(() => {
+      h.setState({ preferredGenericShape: "brace" });
+      h.app.setActiveTool({ type: "rectangle" });
+    });
+    const toolPredicates = getShapeActionPredicates(
+      h.state,
+      [],
+      h.app.scene.getNonDeletedElementsMap(),
+      h.app,
+    );
+    expect(toolPredicates.backgroundColor).toBe(false);
+    expect(toolPredicates.fill).toBe(false);
+  });
+});
 
 const sketch = (points: [number, number][]) => {
   const [startX, startY] = points[0];

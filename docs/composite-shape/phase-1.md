@@ -6,7 +6,7 @@
 
 本期结束后，Scene、公开元素数组和新保存的数据中，普通矩形、菱形、椭圆都使用 `type: "composite_shape"`。工具栏仍显示三种原工具，`ToolType` 可继续使用 `rectangle`、`diamond`、`ellipse` 作为创建命令；工具类型不等于持久化元素类型。
 
-`mindmap-node` 及其 `shape: "rectangle" | "diamond" | "ellipse" | "pill"` 保持当前语义和存储结构；便签、箭头、线条、文字、图片、画框也不迁入复合图形。第一期不导入 `examples-data.json`，不增加第四种形状，不预声明未来形状 ID、专属参数、控制点或翻转字段。
+`mindmap-node` 及其 `shape: "rectangle" | "diamond" | "ellipse" | "pill"` 保持当前语义和存储结构；便签、箭头、线条、文字、图片、画框也不迁入复合图形。第一期不导入 `lark-examples-data.json`，不增加第四种形状，不预声明未来形状 ID、专属参数、控制点或翻转字段。
 
 ## 唯一允许的新形状类型
 
@@ -43,7 +43,7 @@ type ExcalidrawCompositeShapeElement = _ExcalidrawElementBase &
 4. 新保存的 `.excalidraw` 文件和 `.excalidrawlib` 库文件版本均为 `3`，读取器只接受版本 `3`。剪贴板目前没有对应的文件版本字段，须校验元素结构并拒绝旧格式。
 5. 旧文件和旧客户端均不受支持；协作使用当前大版本的数据结构，不增加旧客户端兼容逻辑。
 
-文件格式版本的变更需要同步更新开发文档、加载校验和样本。`examples-data.json` 仍是独立的外部平台格式，不在本期导入或重写。
+文件格式版本的变更需要同步更新开发文档、加载校验和样本。`lark-examples-data.json` 仍是独立的外部平台格式，不在本期导入或重写。
 
 ## 代码改动边界
 

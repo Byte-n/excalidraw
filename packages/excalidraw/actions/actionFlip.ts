@@ -1,10 +1,15 @@
 import { getNonDeletedElements } from "@excalidraw/element";
 import { bindOrUnbindBindingElements } from "@excalidraw/element";
+import { updateBoundElements } from "@excalidraw/element";
 import { getCommonBoundingBox } from "@excalidraw/element";
 import { newElementWith } from "@excalidraw/element";
 import { deepCopyElement } from "@excalidraw/element";
 import { resizeMultipleElements } from "@excalidraw/element";
-import { isArrowElement, isElbowArrow } from "@excalidraw/element";
+import {
+  isArrowElement,
+  isCompositeShapeId,
+  isElbowArrow,
+} from "@excalidraw/element";
 import { updateFrameMembershipOfSelectedElements } from "@excalidraw/element";
 import { CODES, KEYS, arrayToMap } from "@excalidraw/common";
 
@@ -148,6 +153,37 @@ const flipElements = (
       shouldMaintainAspectRatio: true,
     },
   );
+
+  for (const element of selectedElements) {
+    if (
+      flipDirection === "vertical" &&
+      isCompositeShapeId(element, "trapezoid")
+    ) {
+      const shape = element.shape;
+      app.scene.mutateElement(element, {
+        shape: {
+          ...shape,
+          trapezoid: {
+            ...shape.trapezoid,
+            narrowEdge: shape.trapezoid.narrowEdge === "top" ? "bottom" : "top",
+          },
+        },
+      });
+      updateBoundElements(element, app.scene);
+    } else if (
+      flipDirection === "horizontal" &&
+      isCompositeShapeId(element, "triangle")
+    ) {
+      const shape = element.shape;
+      app.scene.mutateElement(element, {
+        shape: {
+          ...shape,
+          triangle: { apexX: 1 - shape.triangle.apexX },
+        },
+      });
+      updateBoundElements(element, app.scene);
+    }
+  }
 
   bindOrUnbindBindingElements(
     selectedElements.filter(isArrowElement),

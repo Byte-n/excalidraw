@@ -551,7 +551,7 @@ class NodeStore {
  */
 export const rendersOpaqueFill = (element: ExcalidrawElement): boolean => {
   if (
-    !hasBackground(element.type) ||
+    !hasBackground(element) ||
     element.fillStyle !== "solid" ||
     element.opacity < 100 ||
     !isOpaqueColor(element.backgroundColor)
@@ -594,7 +594,7 @@ const rendersAnyMark = (element: ExcalidrawElement): boolean =>
   !isInvisible(element) &&
   (element.type === "image" ||
     !isTransparent(element.strokeColor) ||
-    (hasBackground(element.type) && !isTransparent(element.backgroundColor)));
+    (hasBackground(element) && !isTransparent(element.backgroundColor)));
 
 /**
  * Whether the element renders as pure paint the bucket tool could have

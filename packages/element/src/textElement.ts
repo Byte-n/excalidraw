@@ -20,11 +20,17 @@ import {
   resetOriginalContainerCache,
   updateOriginalContainerCache,
 } from "./containerCache";
+import {
+  getCompositeShapeDimensionsForText,
+  getCompositeShapePaddedTextBounds,
+  getCompositeShapeTextBounds,
+  getCompositeShapeTextFitMode,
+} from "./compositeShape";
 import { LinearElementEditor } from "./linearElementEditor";
 import { getPositionAfterHeightChange } from "./sizeHelpers";
 
 import { updateStickyNoteLayout } from "./stickyNote";
-import { measureText } from "./textMeasurements";
+import { getLineWidth, measureText } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
 import {
   isBoundToContainer,
@@ -58,6 +64,47 @@ const getTextContainerShape = (container: ExcalidrawElement) =>
     : container.type === "composite_shape"
     ? container.shape.id
     : container.type;
+
+const getCompositePaddedTextBounds = (
+  container: Extract<ExcalidrawElement, { type: "composite_shape" }>,
+) => getCompositeShapePaddedTextBounds(container);
+
+const getCompositeTextDimensions = (
+  container: Extract<ExcalidrawElement, { type: "composite_shape" }>,
+  width: number,
+  height: number,
+) => getCompositeShapeDimensionsForText(container, width, height);
+
+export const truncateTextToBounds = (
+  text: string,
+  font: ReturnType<typeof getFontString>,
+  lineHeight: ExcalidrawTextElement["lineHeight"],
+  maxWidth: number,
+  maxHeight: number,
+) => {
+  if (!text || maxWidth <= 0 || maxHeight <= 0) {
+    return "";
+  }
+  const lines = wrapText(text, font, maxWidth).split("\n");
+  const maxLines = Math.max(
+    1,
+    Math.floor(maxHeight / (lineHeight * parseFloat(font))),
+  );
+  if (lines.length <= maxLines) {
+    return lines.join("\n");
+  }
+  const visible = lines.slice(0, maxLines);
+  let last = visible[visible.length - 1] || "";
+  const ellipsis = "…";
+  if (getLineWidth(ellipsis, font) > maxWidth) {
+    return visible.slice(0, -1).join("\n");
+  }
+  while (last && getLineWidth(`${last}${ellipsis}`, font) > maxWidth) {
+    last = Array.from(last).slice(0, -1).join("");
+  }
+  visible[visible.length - 1] = `${last}${ellipsis}`;
+  return visible.join("\n");
+};
 
 export const redrawTextBoundingBox = (
   textElement: ExcalidrawTextElement,
@@ -96,9 +143,22 @@ export const redrawTextBoundingBox = (
       : textElement.angle) as Radians,
   };
 
+  // A programmatic label without dimensions starts on a zero-sized composite
+  // shape. Measure its original text before wrapping so the adaptive layout
+  // can derive the container size from the text instead of wrapping it into a
+  // single narrow column.
+  const isAutoSizedComposite =
+    container?.type === "composite_shape" &&
+    getCompositeShapeTextFitMode(container) === "auto" &&
+    (container.width <= 0 || container.height <= 0);
+  const shouldMeasureBeforeWrap =
+    container?.type === "composite_shape" &&
+    getCompositeShapeTextFitMode(container) === "auto" &&
+    container.width <= 0;
+
   boundTextUpdates.text = textElement.text;
 
-  if (container || !textElement.autoResize) {
+  if ((container && !shouldMeasureBeforeWrap) || !textElement.autoResize) {
     maxWidth = container
       ? getBoundTextMaxWidth(container, textElement)
       : textElement.width;
@@ -109,7 +169,7 @@ export const redrawTextBoundingBox = (
     );
   }
 
-  const metrics = measureText(
+  let metrics = measureText(
     boundTextUpdates.text,
     getFontString(textElement),
     textElement.lineHeight,
@@ -128,21 +188,74 @@ export const redrawTextBoundingBox = (
     );
     const maxContainerWidth = getBoundTextMaxWidth(container, textElement);
 
-    if (!isArrowElement(container) && metrics.height > maxContainerHeight) {
-      const nextHeight = computeContainerDimensionForBoundText(
-        metrics.height,
-        getTextContainerShape(container),
+    const isComposite = container.type === "composite_shape";
+    if (isComposite && getCompositeShapeTextFitMode(container) === "fixed") {
+      boundTextUpdates.text = truncateTextToBounds(
+        textElement.originalText,
+        getFontString(textElement),
+        textElement.lineHeight,
+        maxContainerWidth,
+        maxContainerHeight,
       );
-      scene.mutateElement(container, { height: nextHeight });
-      updateOriginalContainerCache(container.id, nextHeight);
+      metrics = measureText(
+        boundTextUpdates.text,
+        getFontString(textElement),
+        textElement.lineHeight,
+      );
+      boundTextUpdates.height = metrics.height;
+      if (textElement.autoResize) {
+        boundTextUpdates.width = metrics.width;
+      }
     }
-
-    if (metrics.width > maxContainerWidth) {
-      const nextWidth = computeContainerDimensionForBoundText(
-        metrics.width,
-        getTextContainerShape(container),
-      );
-      scene.mutateElement(container, { width: nextWidth });
+    const isAdaptive =
+      !isComposite || getCompositeShapeTextFitMode(container) === "auto";
+    let layoutContainer = container;
+    if (isAdaptive && !isArrowElement(container)) {
+      const nextDimensions = isComposite
+        ? getBoundTextContainerDimensions(
+            container,
+            metrics.width,
+            metrics.height,
+          )
+        : {
+            width: container.width,
+            height:
+              metrics.height > maxContainerHeight + 1e-6
+                ? computeContainerDimensionForBoundText(
+                    metrics.height,
+                    getTextContainerShape(container) as ExtractSetType<
+                      typeof VALID_CONTAINER_TYPES
+                    >,
+                  )
+                : container.height,
+          };
+      const shouldResize =
+        nextDimensions.width !== container.width ||
+        nextDimensions.height !== container.height;
+      if (shouldResize) {
+        const shouldPersistTextFitMinimum =
+          !isAutoSizedComposite ||
+          container.textFitMinWidth !== undefined ||
+          container.textFitMinHeight !== undefined;
+        const updates = {
+          ...(isComposite && { width: nextDimensions.width }),
+          height: nextDimensions.height,
+          ...(isComposite &&
+            shouldPersistTextFitMinimum && {
+              textFitMinWidth:
+                container.textFitMinWidth ??
+                (container.width > 0 ? container.width : nextDimensions.width),
+              textFitMinHeight:
+                container.textFitMinHeight ??
+                (container.height > 0
+                  ? container.height
+                  : nextDimensions.height),
+            }),
+        };
+        scene.mutateElement(container, updates);
+        updateOriginalContainerCache(container.id, nextDimensions.height);
+        layoutContainer = { ...container, ...updates };
+      }
     }
 
     const updatedTextElement = {
@@ -151,7 +264,7 @@ export const redrawTextBoundingBox = (
     } as ExcalidrawTextElementWithContainer;
 
     const { x, y } = computeBoundTextPosition(
-      container,
+      layoutContainer,
       updatedTextElement,
       elementsMap,
     );
@@ -215,11 +328,41 @@ export const handleBindTextResize = (
       nextWidth = metrics.width;
     }
     // increase height in case text element height exceeds
-    if (nextHeight > maxHeight) {
-      containerHeight = computeContainerDimensionForBoundText(
-        nextHeight,
-        getTextContainerShape(container),
+    if (
+      container.type === "composite_shape" &&
+      getCompositeShapeTextFitMode(container) === "fixed"
+    ) {
+      text = truncateTextToBounds(
+        textElement.originalText,
+        getFontString(textElement),
+        textElement.lineHeight,
+        maxWidth,
+        maxHeight,
       );
+      const fixedMetrics = measureText(
+        text,
+        getFontString(textElement),
+        textElement.lineHeight,
+      );
+      nextWidth = fixedMetrics.width;
+      nextHeight = fixedMetrics.height;
+    } else if (
+      nextHeight > maxHeight + 1e-6 ||
+      (container.type === "composite_shape" && nextWidth > maxWidth + 1e-6)
+    ) {
+      const nextDimensions =
+        container.type === "composite_shape"
+          ? getBoundTextContainerDimensions(container, nextWidth, nextHeight)
+          : {
+              width: container.width,
+              height: computeContainerDimensionForBoundText(
+                nextHeight,
+                getTextContainerShape(container) as ExtractSetType<
+                  typeof VALID_CONTAINER_TYPES
+                >,
+              ),
+            };
+      containerHeight = nextDimensions.height;
 
       // Crossing the opposite edge swaps the anchor for text-driven growth.
       const shouldResizeFromTop =
@@ -228,6 +371,9 @@ export const handleBindTextResize = (
           transformHandleType === "nw") !== flipByY;
 
       scene.mutateElement(container, {
+        ...(container.type === "composite_shape" && {
+          width: nextDimensions.width,
+        }),
         height: containerHeight,
         ...(!isArrowElement(container) &&
           getPositionAfterHeightChange(
@@ -309,15 +455,16 @@ export const computeBoundTextPosition = (
   if (angle !== 0) {
     // A sticky's footer makes its body asymmetric. The body still rotates
     // about the note's center, rather than about its own (higher) center.
-    const contentCenter = isStickyNoteElement(container)
-      ? pointFrom(
-          container.x + container.width / 2,
-          container.y + container.height / 2,
-        )
-      : pointFrom(
-          containerCoords.x + maxContainerWidth / 2,
-          containerCoords.y + maxContainerHeight / 2,
-        );
+    const contentCenter =
+      isStickyNoteElement(container) || container.type === "composite_shape"
+        ? pointFrom(
+            container.x + container.width / 2,
+            container.y + container.height / 2,
+          )
+        : pointFrom(
+            containerCoords.x + maxContainerWidth / 2,
+            containerCoords.y + maxContainerHeight / 2,
+          );
     const textCenter = pointFrom(
       x + boundTextElement.width / 2,
       y + boundTextElement.height / 2,
@@ -389,6 +536,22 @@ export const getContainerCenter = (
   container: ExcalidrawElement,
   elementsMap: ElementsMap,
 ) => {
+  if (container.type === "composite_shape") {
+    const bounds = getCompositeShapeTextBounds(container);
+    const center = pointFrom(
+      container.x + container.width / 2,
+      container.y + container.height / 2,
+    );
+    const safeCenter = pointRotateRads(
+      pointFrom(
+        container.x + bounds.x + bounds.width / 2,
+        container.y + bounds.y + bounds.height / 2,
+      ),
+      center,
+      container.angle,
+    );
+    return { x: safeCenter[0], y: safeCenter[1] };
+  }
   if (!isArrowElement(container)) {
     return {
       x: container.x + container.width / 2,
@@ -405,6 +568,13 @@ export const getContainerCenter = (
 };
 
 export const getContainerCoords = (container: ExcalidrawElement) => {
+  if (container.type === "composite_shape") {
+    const bounds = getCompositePaddedTextBounds(container);
+    return {
+      x: container.x + bounds.x,
+      y: container.y + bounds.y,
+    };
+  }
   const padding = isStickyNoteElement(container)
     ? STICKY_NOTE_PADDING
     : BOUND_TEXT_PADDING;
@@ -420,6 +590,13 @@ export const getContainerCoords = (container: ExcalidrawElement) => {
   if (getTextContainerShape(container) === "diamond") {
     offsetX += container.width / 4;
     offsetY += container.height / 4;
+  }
+  const shape = getTextContainerShape(container);
+  if (shape === "bubble" || shape === "rectangle-bubble") {
+    offsetY += container.height * 0.08;
+  }
+  if (shape === "brace" || shape === "brace-reverse") {
+    offsetX += container.width * 0.2;
   }
   return {
     x: container.x + offsetX,
@@ -497,10 +674,14 @@ const VALID_CONTAINER_TYPES = new Set([
   "arrow",
 ]);
 
-export const isValidTextContainer = (element: {
-  type: ExcalidrawElementType;
-}): element is ExcalidrawTextContainer =>
-  VALID_CONTAINER_TYPES.has(element.type);
+export const isValidTextContainer = (
+  element: ExcalidrawElement,
+): element is ExcalidrawTextContainer =>
+  VALID_CONTAINER_TYPES.has(element.type) &&
+  !(
+    element.type === "composite_shape" &&
+    (element.shape.id === "pie" || element.shape.id === "circular-ring")
+  );
 
 export const computeContainerDimensionForBoundText = (
   dimension: number,
@@ -521,6 +702,30 @@ export const computeContainerDimensionForBoundText = (
   return dimension + padding;
 };
 
+export const getBoundTextContainerDimensions = (
+  container: ExcalidrawElement,
+  textWidth: number,
+  textHeight: number,
+) => {
+  if (container.type === "composite_shape") {
+    return getCompositeTextDimensions(container, textWidth, textHeight);
+  }
+  return {
+    width: computeContainerDimensionForBoundText(
+      textWidth,
+      getTextContainerShape(container) as ExtractSetType<
+        typeof VALID_CONTAINER_TYPES
+      >,
+    ),
+    height: computeContainerDimensionForBoundText(
+      textHeight,
+      getTextContainerShape(container) as ExtractSetType<
+        typeof VALID_CONTAINER_TYPES
+      >,
+    ),
+  };
+};
+
 export const getBoundTextMaxWidth = (
   container: ExcalidrawElement,
   boundTextElement: ExcalidrawTextElement | null,
@@ -532,6 +737,9 @@ export const getBoundTextMaxWidth = (
       ARROW_LABEL_FONT_SIZE_TO_MIN_WIDTH_RATIO;
     return Math.max(ARROW_LABEL_WIDTH_FRACTION * width, minWidth);
   }
+  if (container.type === "composite_shape") {
+    return getCompositePaddedTextBounds(container).width;
+  }
   if (getTextContainerShape(container) === "ellipse") {
     // The width of the largest rectangle inscribed inside an ellipse is
     // Math.round((ellipse.width / 2) * Math.sqrt(2)) which is derived from
@@ -542,6 +750,16 @@ export const getBoundTextMaxWidth = (
     // The width of the largest rectangle inscribed inside a rhombus is
     // Math.round(width / 2) - https://github.com/excalidraw/excalidraw/pull/6265
     return Math.round(width / 2) - BOUND_TEXT_PADDING * 2;
+  }
+  const shape = getTextContainerShape(container);
+  if (shape === "triangle" || shape === "star" || shape === "step") {
+    return Math.round(width * 0.6) - BOUND_TEXT_PADDING * 2;
+  }
+  if (shape === "bubble") {
+    return Math.round(width * 0.72) - BOUND_TEXT_PADDING * 2;
+  }
+  if (shape === "brace" || shape === "brace-reverse") {
+    return Math.round(width * 0.55) - BOUND_TEXT_PADDING * 2;
   }
   return (
     width -
@@ -568,6 +786,9 @@ export const getBoundTextMaxHeight = (
     }
     return height;
   }
+  if (container.type === "composite_shape") {
+    return getCompositePaddedTextBounds(container).height;
+  }
   if (getTextContainerShape(container) === "ellipse") {
     // The height of the largest rectangle inscribed inside an ellipse is
     // Math.round((ellipse.height / 2) * Math.sqrt(2)) which is derived from
@@ -578,6 +799,10 @@ export const getBoundTextMaxHeight = (
     // The height of the largest rectangle inscribed inside a rhombus is
     // Math.round(height / 2) - https://github.com/excalidraw/excalidraw/pull/6265
     return Math.round(height / 2) - BOUND_TEXT_PADDING * 2;
+  }
+  const shape = getTextContainerShape(container);
+  if (shape === "bubble" || shape === "rectangle-bubble") {
+    return Math.round(height * 0.72) - BOUND_TEXT_PADDING * 2;
   }
   return height - BOUND_TEXT_PADDING * 2;
 };

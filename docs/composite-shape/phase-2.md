@@ -27,10 +27,10 @@ type ExcalidrawMindmapNodeElement = _ExcalidrawElementBase &
 本期结束后，生产代码遵循以下规则：
 
 ```ts
-element.type       // 元素类别、数据协议和行为归属
-element.shape.id   // 复合图形或思维导图节点的离散视觉形状
-element.points     // 线条、自由笔迹或思维导图边的实际路径
-element.routing    // 连接线或思维导图边的路径路由策略
+element.type; // 元素类别、数据协议和行为归属
+element.shape.id; // 复合图形或思维导图节点的离散视觉形状
+element.points; // 线条、自由笔迹或思维导图边的实际路径
+element.routing; // 连接线或思维导图边的路径路由策略
 ```
 
 `getElementShapeType()` 不再作为生产代码的统一入口。需要普通复合图形时使用严格的 `type` 判断和 `shape.id` 判断；需要思维导图节点时使用独立的 `MindmapShapeData` 工具函数。
@@ -46,9 +46,9 @@ type MindmapShapeData = Readonly<{
   schemaVersion: 1;
 }>;
 
-mindmapShapeData(id)
-assertMindmapShapeData(value)
-getMindmapShapeId(node)
+mindmapShapeData(id);
+assertMindmapShapeData(value);
+getMindmapShapeId(node);
 ```
 
 校验要求：

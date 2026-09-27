@@ -404,6 +404,26 @@ exports[`contextMenu element > right-clicking on a group should select whole gro
         },
       },
       {
+        "checked": [Function],
+        "label": "labels.compositeShapeTextFitAuto",
+        "name": "setCompositeShapeTextFitAuto",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+      },
+      {
+        "checked": [Function],
+        "label": "labels.compositeShapeTextFitFixed",
+        "name": "setCompositeShapeTextFitFixed",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+      },
+      {
         "label": "labels.unbindText",
         "name": "unbindText",
         "perform": [Function],
@@ -5399,6 +5419,26 @@ exports[`contextMenu element > shows 'Group selection' in context menu for multi
         },
       },
       {
+        "checked": [Function],
+        "label": "labels.compositeShapeTextFitAuto",
+        "name": "setCompositeShapeTextFitAuto",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+      },
+      {
+        "checked": [Function],
+        "label": "labels.compositeShapeTextFitFixed",
+        "name": "setCompositeShapeTextFitFixed",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+      },
+      {
         "label": "labels.unbindText",
         "name": "unbindText",
         "perform": [Function],
@@ -6641,6 +6681,26 @@ exports[`contextMenu element > shows 'Ungroup selection' in context menu for gro
         "icon": null,
         "label": "labels.autoResize",
         "name": "autoResize",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+      },
+      {
+        "checked": [Function],
+        "label": "labels.compositeShapeTextFitAuto",
+        "name": "setCompositeShapeTextFitAuto",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+      },
+      {
+        "checked": [Function],
+        "label": "labels.compositeShapeTextFitFixed",
+        "name": "setCompositeShapeTextFitFixed",
         "perform": [Function],
         "predicate": [Function],
         "trackEvent": {
@@ -8649,6 +8709,26 @@ exports[`contextMenu element > shows context menu for element > [end of test] ap
         },
       },
       {
+        "checked": [Function],
+        "label": "labels.compositeShapeTextFitAuto",
+        "name": "setCompositeShapeTextFitAuto",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+      },
+      {
+        "checked": [Function],
+        "label": "labels.compositeShapeTextFitFixed",
+        "name": "setCompositeShapeTextFitFixed",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+      },
+      {
         "label": "labels.unbindText",
         "name": "unbindText",
         "perform": [Function],
@@ -9645,6 +9725,26 @@ exports[`contextMenu element > shows context menu for element > [end of test] ap
         "icon": null,
         "label": "labels.autoResize",
         "name": "autoResize",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+      },
+      {
+        "checked": [Function],
+        "label": "labels.compositeShapeTextFitAuto",
+        "name": "setCompositeShapeTextFitAuto",
+        "perform": [Function],
+        "predicate": [Function],
+        "trackEvent": {
+          "category": "element",
+        },
+      },
+      {
+        "checked": [Function],
+        "label": "labels.compositeShapeTextFitFixed",
+        "name": "setCompositeShapeTextFitFixed",
         "perform": [Function],
         "predicate": [Function],
         "trackEvent": {

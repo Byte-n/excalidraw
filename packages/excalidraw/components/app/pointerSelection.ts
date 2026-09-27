@@ -75,6 +75,7 @@ import {
   isLinearElement,
   isMindmapEdgeElement,
   isMindmapNodeElement,
+  isCompositeShapeElement,
   LinearElementEditor,
   selectGroupsForSelectedElements,
 } from "@excalidraw/element";
@@ -86,6 +87,7 @@ import type {
   ExcalidrawLinearElement,
   NonDeleted,
   ExcalidrawTextContainer,
+  BaseShapeId,
 } from "@excalidraw/element/types";
 import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
 
@@ -101,6 +103,11 @@ import { snapNewElement } from "../../snapping";
 
 import { getSelectedElements } from "../../scene";
 import { snapResizingElements } from "../../snapping";
+
+import {
+  getCompositeControlPointGlobal,
+  hitCompositeControlPoint,
+} from "./compositeShapeControls";
 
 import type { ToolType } from "../../types";
 
@@ -408,6 +415,41 @@ export const handleSelectionOnPointerDown = (
     const elements = app.scene.getNonDeletedElements();
     const elementsMap = app.scene.getNonDeletedElementsMap();
     const selectedElements: any[] = app.scene.getSelectedElements(app.state);
+
+    if (
+      selectedElements.length === 1 &&
+      isCompositeShapeElement(selectedElements[0]) &&
+      !selectedElements[0].locked &&
+      !app.state.viewModeEnabled &&
+      !app.state.editingTextElement &&
+      !app.state.croppingElementId &&
+      !event.shiftKey &&
+      !event[KEYS.CTRL_OR_CMD]
+    ) {
+      const element = selectedElements[0];
+      const point = hitCompositeControlPoint(
+        element,
+        pointerDownState.origin.x,
+        pointerDownState.origin.y,
+        app.state.zoom.value,
+        event.pointerType,
+      );
+      if (point) {
+        const [x, y] = getCompositeControlPointGlobal(element, point);
+        pointerDownState.compositeControl.active = {
+          elementId: element.id,
+          kind: point.kind,
+          offset: {
+            x: pointerDownState.origin.x - x,
+            y: pointerDownState.origin.y - y,
+          },
+          hasChanged: false,
+        };
+        pointerDownState.hit.element = element;
+        pointerDownState.hit.allHitElements = [element];
+        return false;
+      }
+    }
 
     if (
       selectedElements.length === 1 &&
@@ -1516,11 +1558,40 @@ export const createGenericElementOnPointerDown = (
       type: "stickynote",
       ...baseElementAttributes,
     });
-  } else {
+  } else if (elementType === "selection") {
     element = newElement({
-      type: elementType,
+      type: "selection",
       ...baseElementAttributes,
     });
+  } else {
+    const preferredShape = app.state.preferredGenericShape;
+    const genericShapeId: BaseShapeId =
+      preferredShape === "right-triangle" || preferredShape === "left-triangle"
+        ? "triangle"
+        : elementType === "rectangle"
+        ? preferredShape
+        : elementType;
+    if (
+      preferredShape === "right-triangle" ||
+      preferredShape === "left-triangle"
+    ) {
+      element = newElement({
+        type: "composite_shape",
+        shape: {
+          id: "triangle",
+          schemaVersion: 1,
+          triangle: {
+            apexX: preferredShape === "right-triangle" ? 0 : 1,
+          },
+        },
+        ...baseElementAttributes,
+      });
+    } else {
+      element = newElement({
+        type: genericShapeId,
+        ...baseElementAttributes,
+      });
+    }
   }
 
   if (element.type === "selection") {

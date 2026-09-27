@@ -2,13 +2,15 @@ import clsx from "clsx";
 import { useEffect, useState } from "react";
 
 import { KEYS, capitalizeString } from "@excalidraw/common";
+import { supportsFill } from "@excalidraw/element";
 
-import type { PointerType } from "@excalidraw/element/types";
+import type { BaseShapeId, PointerType } from "@excalidraw/element/types";
 
 import { trackEvent } from "../analytics";
 import { t } from "../i18n";
 import { getShortcutKey } from "../shortcut";
 
+import { getCompositeShapeIcon } from "./CompositeShapeIcon";
 import { IconButton } from "./IconButton";
 import { ToolPopover } from "./ToolPopover";
 import {
@@ -221,7 +223,10 @@ export const findShapeByKey = (
       // R/2 activates whichever generic shape the user selected in the
       // grouped toolbar button.
       if (type === "rectangle") {
-        return app.state.preferredGenericShape;
+        return app.state.preferredGenericShape === "diamond" ||
+          app.state.preferredGenericShape === "ellipse"
+          ? app.state.preferredGenericShape
+          : "rectangle";
       }
       return type;
     }
@@ -426,10 +431,87 @@ export const SelectionToolPopover = ({
   );
 };
 
-type GenericShapeType = "rectangle" | "diamond" | "ellipse";
+type GenericShapeType = BaseShapeId | "right-triangle" | "left-triangle";
 
 const isGenericShapeType = (type: string): type is GenericShapeType =>
-  type === "rectangle" || type === "diamond" || type === "ellipse";
+  [
+    "rectangle",
+    "diamond",
+    "ellipse",
+    "cross",
+    "brace-reverse",
+    "brace",
+    "cloud",
+    "double-arrow",
+    "forward-arrow",
+    "backward-arrow",
+    "octagon",
+    "pentagon",
+    "hexagon",
+    "star",
+    "triangle",
+    "right-triangle",
+    "left-triangle",
+    "round-rect",
+    "rectangle-bubble",
+    "pill",
+    "bubble",
+    "trapezoid",
+    "parallelogram",
+    "right-pentagon",
+    "step",
+    "cube",
+    "cylinder",
+    "pie",
+    "circular-ring",
+  ].includes(type);
+
+const SHAPE_TOOLS = (
+  Object.freeze([
+    "rectangle",
+    "diamond",
+    "ellipse",
+    "cross",
+    "brace-reverse",
+    "brace",
+    "cloud",
+    "double-arrow",
+    "forward-arrow",
+    "backward-arrow",
+    "octagon",
+    "pentagon",
+    "hexagon",
+    "star",
+    "triangle",
+    "right-triangle",
+    "left-triangle",
+    "round-rect",
+    "rectangle-bubble",
+    "pill",
+    "bubble",
+    "trapezoid",
+    "parallelogram",
+    "right-pentagon",
+    "step",
+    "cube",
+    "cylinder",
+    "pie",
+    "circular-ring",
+  ]) as readonly GenericShapeType[]
+).map((type) => ({
+  type,
+  icon:
+    type === "diamond"
+      ? DiamondIcon
+      : type === "ellipse"
+      ? EllipseIcon
+      : type === "rectangle"
+      ? RectangleIcon
+      : getCompositeShapeIcon(type),
+  fillable:
+    type === "right-triangle" || type === "left-triangle" || supportsFill(type),
+  title: capitalizeString(type.replaceAll("-", " ")),
+}));
 
 /**
  * The rectangle/diamond/ellipse popover used by the desktop and mobile
@@ -444,27 +526,31 @@ export const GenericShapeToolPopover = ({
   activeTool: UIAppState["activeTool"];
   hideShortcut?: boolean;
 }) => {
-  const SHAPE_TOOLS = (["rectangle", "diamond", "ellipse"] as const).map(
-    (type) => ({
-      type,
-      icon: TOOLS[type].icon,
-      fillable: TOOLS[type].fillable,
-      title: capitalizeString(t(`toolBar.${type}`)),
-    }),
-  );
-
   useEffect(() => {
+    const activeType = activeTool.type as string;
+    const preferredIsExtended =
+      app.state.preferredGenericShape !== "rectangle" &&
+      app.state.preferredGenericShape !== "diamond" &&
+      app.state.preferredGenericShape !== "ellipse";
     if (
-      isGenericShapeType(activeTool.type) &&
-      app.state.preferredGenericShape !== activeTool.type
+      isGenericShapeType(activeType) &&
+      !(activeType === "rectangle" && preferredIsExtended) &&
+      !(
+        activeType === "triangle" &&
+        (app.state.preferredGenericShape === "right-triangle" ||
+          app.state.preferredGenericShape === "left-triangle")
+      ) &&
+      app.state.preferredGenericShape !== activeType
     ) {
-      app.setAppState({ preferredGenericShape: activeTool.type });
+      app.setAppState({ preferredGenericShape: activeType });
     }
   }, [activeTool.type, app]);
 
-  const preferredGenericShape = isGenericShapeType(activeTool.type)
-    ? activeTool.type
-    : app.state.preferredGenericShape;
+  const preferredGenericShape =
+    isGenericShapeType(activeTool.type) &&
+    app.state.preferredGenericShape === activeTool.type
+      ? activeTool.type
+      : app.state.preferredGenericShape;
 
   const displayedOption =
     SHAPE_TOOLS.find((tool) => tool.type === preferredGenericShape) ||
@@ -475,12 +561,19 @@ export const GenericShapeToolPopover = ({
       app={app}
       options={SHAPE_TOOLS}
       activeTool={activeTool}
+      activeOptionType={
+        activeTool.type === "rectangle"
+          ? preferredGenericShape
+          : activeTool.type
+      }
       defaultOption={preferredGenericShape}
       data-testid="toolbar-rectangle"
       onToolChange={(type: string) => {
         if (isGenericShapeType(type)) {
           app.setAppState({ preferredGenericShape: type });
-          app.setActiveTool({ type });
+          app.setActiveTool({
+            type: type === "diamond" || type === "ellipse" ? type : "rectangle",
+          });
         }
       }}
       displayedOption={displayedOption}

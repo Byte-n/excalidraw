@@ -28,7 +28,12 @@ import type { AppState } from "@excalidraw/excalidraw/types";
 import type { Mutable } from "@excalidraw/common/utility-types";
 
 import { generateRoughOptions } from "./shape";
-import { isCompositeShapeId } from "./compositeShape";
+import {
+  getCompositeShapeGeometry,
+  getCompositeShapeGlobalPoints,
+  isCompositeShapeOpen,
+  isCompositeShapeId,
+} from "./compositeShape";
 import { getMindmapShapeId } from "./mindmap";
 import { ShapeCache } from "./shape";
 import { LinearElementEditor } from "./linearElementEditor";
@@ -44,10 +49,7 @@ import {
   isExcalidrawElement,
 } from "./typeChecks";
 import { getElementShape } from "./shape";
-import {
-  deconstructDiamondElement,
-  deconstructRectanguloidElement,
-} from "./utils";
+import { deconstructRectanguloidElement } from "./utils";
 import { intersectElementWithLineSegment } from "./collision";
 import { elementOverlapsWithFrame, getContainingFrame } from "./frame";
 
@@ -58,7 +60,6 @@ import type {
   ElementsMap,
   ElementsMapOrArray,
   ExcalidrawElement,
-  ExcalidrawEllipseElement,
   ExcalidrawCompositeShapeElement,
   ExcalidrawRectangleElement,
   ExcalidrawFreeDrawElement,
@@ -177,10 +178,26 @@ export class ElementBounds {
       ];
     } else if (isLinearElement(element)) {
       bounds = getLinearElementRotatedBounds(element, cx, cy, elementsMap);
+    } else if (element.type === "composite_shape") {
+      const primitive = getCompositeShapeGeometry(element).primitive;
+      if (primitive?.kind === "ellipse") {
+        const cos = Math.cos(element.angle);
+        const sin = Math.sin(element.angle);
+        const ww = Math.hypot(primitive.radiusX * cos, primitive.radiusY * sin);
+        const hh = Math.hypot(primitive.radiusY * cos, primitive.radiusX * sin);
+        bounds = [cx - ww, cy - hh, cx + ww, cy + hh];
+      } else {
+        const points = getCompositeShapeGlobalPoints(element);
+        bounds = [
+          Math.min(...points.map(([x]) => x)),
+          Math.min(...points.map(([, y]) => y)),
+          Math.max(...points.map(([x]) => x)),
+          Math.max(...points.map(([, y]) => y)),
+        ];
+      }
     } else if (
-      isCompositeShapeId(element, "diamond") ||
-      (element.type === "mindmap-node" &&
-        getMindmapShapeId(element) === "diamond")
+      element.type === "mindmap-node" &&
+      getMindmapShapeId(element) === "diamond"
     ) {
       const [x11, y11] = pointRotateRads(
         pointFrom(cx, y1),
@@ -208,9 +225,8 @@ export class ElementBounds {
       const maxY = Math.max(y11, y12, y22, y21);
       bounds = [minX, minY, maxX, maxY];
     } else if (
-      isCompositeShapeId(element, "ellipse") ||
-      (element.type === "mindmap-node" &&
-        getMindmapShapeId(element) === "ellipse")
+      element.type === "mindmap-node" &&
+      getMindmapShapeId(element) === "ellipse"
     ) {
       const w = (x2 - x1) / 2;
       const h = (y2 - y1) / 2;
@@ -312,6 +328,15 @@ export const getElementLineSegments = (
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
 ): LineSegment<GlobalPoint>[] => {
+  if (element.type === "composite_shape") {
+    const points = getCompositeShapeGlobalPoints(element);
+    const count = isCompositeShapeOpen(element.shape.id)
+      ? points.length - 1
+      : points.length;
+    return Array.from({ length: count }, (_, index) =>
+      lineSegment(points[index], points[(index + 1) % points.length]),
+    );
+  }
   const shape = getElementShape(element, elementsMap);
   const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(
     element,
@@ -369,14 +394,6 @@ export const getElementLineSegments = (
       .flat();
     const rotatedSides = getRotatedSides(sides, center, element.angle);
     return [...rotatedSides, ...cornerSegments];
-  } else if (isCompositeShapeId(element, "diamond")) {
-    const [sides, corners] = deconstructDiamondElement(element);
-    const cornerSegments = corners
-      .map((corner) => getSegmentsOnCurve(corner, center, element.angle))
-      .flat();
-    const rotatedSides = getRotatedSides(sides, center, element.angle);
-
-    return [...rotatedSides, ...cornerSegments];
   } else if (shape.type === "polygon") {
     if (isTextElement(element)) {
       const container = getContainerElement(element, elementsMap);
@@ -393,12 +410,10 @@ export const getElementLineSegments = (
 
     const points = shape.data as GlobalPoint[];
     const segments: LineSegment<GlobalPoint>[] = [];
-    for (let i = 0; i < points.length - 1; i++) {
-      segments.push(lineSegment(points[i], points[i + 1]));
+    for (let i = 0; i < points.length; i++) {
+      segments.push(lineSegment(points[i], points[(i + 1) % points.length]));
     }
     return segments;
-  } else if (isCompositeShapeId(element, "ellipse")) {
-    return getSegmentsOnEllipse(element);
   }
 
   const [nw, ne, sw, se, , , w, e] = (
@@ -433,8 +448,7 @@ const _isRectanguloidElement = (
   | ExcalidrawRectangleElement => {
   return (
     element != null &&
-    (isCompositeShapeId(element, "rectangle") ||
-      element.type === "stickynote" ||
+    (element.type === "stickynote" ||
       element.type === "image" ||
       element.type === "iframe" ||
       element.type === "embeddable" ||
@@ -486,37 +500,6 @@ const getSegmentsOnCurve = (
   return segments;
 };
 
-const getSegmentsOnEllipse = (
-  ellipse: ExcalidrawEllipseElement,
-): LineSegment<GlobalPoint>[] => {
-  const center = pointFrom<GlobalPoint>(
-    ellipse.x + ellipse.width / 2,
-    ellipse.y + ellipse.height / 2,
-  );
-
-  const a = ellipse.width / 2;
-  const b = ellipse.height / 2;
-
-  const segments: LineSegment<GlobalPoint>[] = [];
-  const points: GlobalPoint[] = [];
-  const n = 90;
-  const deltaT = (Math.PI * 2) / n;
-
-  for (let i = 0; i < n; i++) {
-    const t = i * deltaT;
-    const x = center[0] + a * Math.cos(t);
-    const y = center[1] + b * Math.sin(t);
-    points.push(pointRotateRads(pointFrom(x, y), center, ellipse.angle));
-  }
-
-  for (let i = 0; i < points.length - 1; i++) {
-    segments.push(lineSegment(points[i], points[i + 1]));
-  }
-
-  segments.push(lineSegment(points[points.length - 1], points[0]));
-  return segments;
-};
-
 /**
  * Scene -> Scene coords, but in x1,x2,y1,y2 format.
  *
@@ -534,6 +517,13 @@ export const getRectangleBoxAbsoluteCoords = (boxSceneCoords: RectangleBox) => {
 };
 
 export const getDiamondPoints = (element: ExcalidrawElement) => {
+  if (isCompositeShapeId(element, "diamond")) {
+    const primitive = getCompositeShapeGeometry(element).primitive;
+    if (primitive?.kind !== "diamond") {
+      throw new Error("Missing diamond geometry");
+    }
+    return primitive.points.flat();
+  }
   // Here we add +1 to avoid these numbers to be 0
   // otherwise rough.js will throw an error complaining about it
   const topX = Math.floor(element.width / 2) + 1;

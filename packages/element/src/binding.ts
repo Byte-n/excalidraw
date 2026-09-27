@@ -1,4 +1,5 @@
 import {
+  assertNever,
   arrayToMap,
   getFeatureFlag,
   getGridPoint,
@@ -29,7 +30,13 @@ import type { MapEntry, Mutable } from "@excalidraw/common/utility-types";
 import type { Bounds } from "@excalidraw/common";
 
 import { getCenterForBounds } from "./bounds";
-import { isCompositeShapeId } from "./compositeShape";
+import {
+  getCompositeShapeAnchors,
+  getCompositeShapeGeometry,
+  isCompositeShapeElement,
+  isCompositeShapeId,
+  isCompositeShapeIdIn,
+} from "./compositeShape";
 import {
   getAllHoveredElementAtPoint,
   getHoveredElementForBinding,
@@ -87,6 +94,7 @@ import type {
   NonDeletedSceneElementsMap,
   Ordered,
   PointsPositionUpdates,
+  BaseShapeId,
 } from "./types";
 
 export type BindingStrategy =
@@ -1208,7 +1216,19 @@ export const reanchorBindingsToOutline = (
   scene: Scene,
 ) => {
   const elementsMap = scene.getNonDeletedElementsMap();
-  const center = elementCenterPoint(changedElement, elementsMap);
+  const isBrace = isCompositeShapeIdIn(changedElement, [
+    "brace",
+    "brace-reverse",
+  ]);
+  // Open composite shapes such as braces occupy only one side of their
+  // element bounds. Use the element's transform center for the reanchor ray;
+  // the visual bounds center may sit outside the open path.
+  const center = isBrace
+    ? pointFrom<GlobalPoint>(
+        changedElement.x + changedElement.width / 2,
+        changedElement.y + changedElement.height / 2,
+      )
+    : elementCenterPoint(changedElement, elementsMap);
   const reach = Math.max(changedElement.width, changedElement.height) * 2;
 
   boundElementsVisitor(elementsMap, changedElement, (element) => {
@@ -1264,17 +1284,23 @@ export const reanchorBindingsToOutline = (
       if (direction[0] === 0 && direction[1] === 0) {
         continue;
       }
-      const outlinePoint = intersectElementWithLineSegment(
-        changedElement,
-        elementsMap,
-        lineSegment(
-          center,
-          pointFromVector(
-            vectorScale(vectorNormalize(direction), reach),
+      const rayToOutline = (sign: number) =>
+        intersectElementWithLineSegment(
+          changedElement,
+          elementsMap,
+          lineSegment(
             center,
+            pointFromVector(
+              vectorScale(vectorNormalize(direction), reach * sign),
+              center,
+            ),
           ),
-        ),
-      ).sort(
+        );
+      const intersections = rayToOutline(1);
+      if (intersections.length === 0 && isBrace) {
+        intersections.push(...rayToOutline(-1));
+      }
+      const outlinePoint = intersections.sort(
         (a, b) =>
           pointDistanceSq(a, focusPoint) - pointDistanceSq(b, focusPoint),
       )[0];
@@ -1827,6 +1853,63 @@ export const snapToMid = (
   }
 
   if (
+    isCompositeShapeElement(bindTarget) &&
+    !isCompositeShapeIdIn(bindTarget, ["rectangle", "diamond", "ellipse"])
+  ) {
+    let index: number | undefined;
+    if (
+      nonRotated[0] <= x + width / 2 &&
+      Math.abs(nonRotated[1] - center[1]) < verticalThreshold
+    ) {
+      index = 2;
+    } else if (
+      nonRotated[1] <= y + height / 2 &&
+      Math.abs(nonRotated[0] - center[0]) < horizontalThreshold
+    ) {
+      index = 3;
+    } else if (
+      nonRotated[0] >= x + width / 2 &&
+      Math.abs(nonRotated[1] - center[1]) < verticalThreshold
+    ) {
+      index = 0;
+    } else if (
+      nonRotated[1] >= y + height / 2 &&
+      Math.abs(nonRotated[0] - center[0]) < horizontalThreshold
+    ) {
+      index = 1;
+    }
+    if (index === undefined) {
+      return undefined;
+    }
+    const anchor = getCompositeShapeAnchors(bindTarget)[index];
+    if (bindingGap === 0) {
+      return anchor;
+    }
+    const dx = anchor[0] - center[0];
+    const dy = anchor[1] - center[1];
+    const length = Math.hypot(dx, dy);
+    if (length === 0) {
+      return anchor;
+    }
+    const extent = Math.max(width, height) + bindingGap * 2;
+    const outside = pointFrom<GlobalPoint>(
+      anchor[0] + (dx / length) * extent,
+      anchor[1] + (dy / length) * extent,
+    );
+    const hits = intersectElementWithLineSegment(
+      bindTarget,
+      elementsMap,
+      lineSegment(center, outside),
+      bindingGap,
+    );
+    return (
+      hits.sort(
+        (a, b) => pointDistanceSq(a, anchor) - pointDistanceSq(b, anchor),
+      )[0] ?? anchor
+    );
+  }
+
+  if (
     nonRotated[0] <= x + width / 2 &&
     nonRotated[1] > center[1] - verticalThreshold &&
     nonRotated[1] < center[1] + verticalThreshold
@@ -1976,8 +2059,7 @@ const snapBoundPointToGrid = (
   // outline point is near a cardinal zone or an angled diamond face.
   const heading =
     adjacentPoint &&
-    (isCompositeShapeId(bindableElement, "ellipse") ||
-      isCompositeShapeId(bindableElement, "diamond"))
+    isCompositeShapeIdIn(bindableElement, ["ellipse", "diamond"])
       ? vectorToHeading(vectorFromPoint(adjacentPoint, outlinePoint))
       : headingForPointFromElement(bindableElement, aabb, outlinePoint);
 
@@ -2849,7 +2931,7 @@ type Side =
   | "bottom-left"
   | "left"
   | "top-left";
-type ShapeType = "rectangle" | "ellipse" | "diamond";
+type ShapeType = BaseShapeId;
 const getShapeType = (element: ExcalidrawBindableElement): ShapeType => {
   if (element.type === "composite_shape") {
     return element.shape.id;
@@ -2866,7 +2948,7 @@ interface SectorConfig {
 }
 
 // Define sector configurations for different shape types
-const SHAPE_CONFIGS: Record<ShapeType, SectorConfig[]> = {
+const SHAPE_CONFIGS: Partial<Record<ShapeType, SectorConfig[]>> = {
   // rectangle: 15° corners, 75° edges
   rectangle: [
     { centerAngle: 0, sectorWidth: 75, side: "right" },
@@ -2939,7 +3021,42 @@ const getShapeSideAdaptive = (
   const degrees = (angle * 180) / Math.PI;
 
   // get sector configuration for this shape type
-  const config = SHAPE_CONFIGS[shapeType];
+  let config: SectorConfig[];
+  switch (shapeType) {
+    case "rectangle":
+    case "diamond":
+    case "ellipse":
+      config = SHAPE_CONFIGS[shapeType]!;
+      break;
+    case "cross":
+    case "brace-reverse":
+    case "brace":
+    case "cloud":
+    case "double-arrow":
+    case "forward-arrow":
+    case "backward-arrow":
+    case "octagon":
+    case "pentagon":
+    case "hexagon":
+    case "star":
+    case "triangle":
+    case "round-rect":
+    case "rectangle-bubble":
+    case "pill":
+    case "bubble":
+    case "trapezoid":
+    case "parallelogram":
+    case "right-pentagon":
+    case "step":
+    case "cube":
+    case "cylinder":
+    case "pie":
+    case "circular-ring":
+      config = SHAPE_CONFIGS.rectangle!;
+      break;
+    default:
+      return assertNever(shapeType, "Unsupported composite shape");
+  }
   const boundaries = getSectorBoundaries(config);
 
   // find which sector the angle falls into
@@ -2989,10 +3106,8 @@ export const getBindingSideMidPoint = (
 
   const center = elementCenterPoint(bindableElement, elementsMap);
   const shapeType = getShapeType(bindableElement);
-  const side = getShapeSideAdaptive(
-    normalizeFixedPoint(binding.fixedPoint),
-    shapeType,
-  );
+  const normalizedFixedPoint = normalizeFixedPoint(binding.fixedPoint);
+  const side = getShapeSideAdaptive(normalizedFixedPoint, shapeType);
 
   // small offset to avoid precision issues in elbow
   const OFFSET = 0.01;
@@ -3093,10 +3208,14 @@ export const getBindingSideMidPoint = (
   }
 
   if (isCompositeShapeId(bindableElement, "ellipse")) {
-    const ellipseCenterX = bindableElement.x + bindableElement.width / 2;
-    const ellipseCenterY = bindableElement.y + bindableElement.height / 2;
-    const radiusX = bindableElement.width / 2;
-    const radiusY = bindableElement.height / 2;
+    const primitive = getCompositeShapeGeometry(bindableElement).primitive;
+    if (primitive?.kind !== "ellipse") {
+      throw new Error("Missing ellipse geometry");
+    }
+    const ellipseCenterX = bindableElement.x + primitive.center[0];
+    const ellipseCenterY = bindableElement.y + primitive.center[1];
+    const radiusX = primitive.radiusX;
+    const radiusY = primitive.radiusY;
 
     let x: number;
     let y: number;
@@ -3160,6 +3279,39 @@ export const getBindingSideMidPoint = (
     }
 
     return pointRotateRads(pointFrom(x, y), center, bindableElement.angle);
+  }
+
+  if (
+    isCompositeShapeElement(bindableElement) &&
+    !isCompositeShapeIdIn(bindableElement, ["rectangle", "diamond", "ellipse"])
+  ) {
+    const direction = pointFrom(
+      normalizedFixedPoint[0] - 0.5,
+      normalizedFixedPoint[1] - 0.5,
+    );
+    const length = Math.hypot(direction[0], direction[1]);
+    if (length > 0) {
+      const scale = Math.max(bindableElement.width, bindableElement.height) * 2;
+      const localTarget = pointFrom<GlobalPoint>(
+        center[0] + (direction[0] / length) * scale,
+        center[1] + (direction[1] / length) * scale,
+      );
+      const target = pointRotateRads(
+        localTarget,
+        center,
+        bindableElement.angle,
+      );
+      const intersections = intersectElementWithLineSegment(
+        bindableElement,
+        elementsMap,
+        lineSegment(center, target),
+        0,
+        true,
+      );
+      if (intersections.length > 0) {
+        return intersections[0];
+      }
+    }
   }
 
   if (isRectangularElement(bindableElement)) {

@@ -32,7 +32,7 @@ import { distanceToElement } from "../src/distance";
 import { getLinearElementPathSegments } from "../src/utils";
 import { LinearElementEditor } from "../src/linearElementEditor";
 import { getElementPointsCoords } from "../src/bounds";
-import { computeContainerDimensionForBoundText } from "../src/textElement";
+import { getBoundTextContainerDimensions } from "../src/textElement";
 
 import type {
   ExcalidrawElbowArrowElement,
@@ -83,6 +83,30 @@ beforeEach(async () => {
 
 describe("generic element", () => {
   // = rectangle/diamond/ellipse
+
+  it("keeps adaptive mode when a resize handle does not change dimensions", () => {
+    const rectangle = UI.createElement("rectangle", {
+      width: 100,
+      height: 80,
+    });
+    const originalElements = arrayToMap(
+      h.app.scene.getNonDeletedElements().map((element) => ({ ...element })),
+    );
+
+    act(() => {
+      resizeSingleElement(
+        rectangle.width,
+        rectangle.height,
+        h.app.scene.getNonDeletedElement(rectangle.id)!,
+        originalElements.get(rectangle.id)!,
+        originalElements,
+        h.app.scene,
+        "se",
+      );
+    });
+
+    expect(rectangle.textFitMode).toBeUndefined();
+  });
 
   describe("resizes", () => {
     it.each`
@@ -282,7 +306,7 @@ describe("generic element", () => {
     { handle: "n", move: [0, 100] },
     { handle: "s", move: [0, -100] },
   ])(
-    "resizes from center with multi-line label from $handle handle, with respect to min height",
+    "resizes from center with multi-line label from $handle handle",
     async ({ handle, move }) => {
       const rectangle = UI.createElement("rectangle", {
         width: 200,
@@ -294,21 +318,23 @@ describe("generic element", () => {
         "hello\nhello\nhello\nhello\nhello",
       );
       const initCenterY = rectangle.y + rectangle.height / 2;
-      const minContainerHeight = computeContainerDimensionForBoundText(
+      const minContainerHeight = getBoundTextContainerDimensions(
+        rectangle.get(),
+        label.width,
         label.height,
-        rectangle.type,
-      );
+      ).height;
 
       UI.resize(rectangle, handle, move, {
         alt: true,
       });
       const newCenterY = rectangle.y + rectangle.height / 2;
       expect(newCenterY).toBeCloseTo(initCenterY);
-      expect(rectangle.height).toBeCloseTo(minContainerHeight);
+      expect(rectangle.height).toBeLessThan(minContainerHeight);
+      expect(rectangle.textFitMode).toBe("fixed");
     },
   );
 
-  it("keeps the flipped corner anchored while wrapped text sets the minimum height", async () => {
+  it("keeps the flipped corner anchored while fixed text stays within the shape", async () => {
     const rectangle = UI.createElement("rectangle", {
       width: 200,
       height: 200,
@@ -320,8 +346,8 @@ describe("generic element", () => {
     const originalRectangle = originalElements.get(rectangle.id)!;
     let minHeight = 0;
 
-    // One SE drag crosses the top edge, stays below the wrapped text's
-    // minimum height, then grows far enough for the pointer to control it.
+    // One SE drag crosses the top edge. Once the shape is manually resized,
+    // its dimensions remain fixed while the label is truncated.
     for (const nextHeight of [-10, -40, -80, -200]) {
       act(() => {
         resizeSingleElement(
@@ -343,9 +369,9 @@ describe("generic element", () => {
       );
       if (nextHeight === -10) {
         minHeight = rectangle.height;
-        expect(minHeight).toBeGreaterThan(80);
       }
       expect(rectangle.height).toBe(Math.max(minHeight, -nextHeight));
+      expect(rectangle.textFitMode).toBe("fixed");
     }
   });
 });
@@ -1019,13 +1045,12 @@ describe("multiple selection", () => {
     });
     const originalHeight = rectangle.height;
 
-    // Halve the selection and flip vertically. Padding does not scale with
-    // the font, so even a single-line label needs extra container height.
+    // Halve the selection and flip vertically while keeping the label fitted.
     UI.resize([rectangle, other], "se", [-200, -150], { shift: true });
 
     expect(label.fontSize).toBeCloseTo(10);
     expect(label.text).toBe("hello");
-    expect(rectangle.height).toBeGreaterThan(originalHeight / 2);
+    expect(rectangle.height).toBeCloseTo(originalHeight / 2);
     expect(rectangle.y + rectangle.height).toBeCloseTo(0);
   });
 

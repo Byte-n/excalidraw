@@ -87,6 +87,8 @@ import {
 } from "../hyperlink/Hyperlink";
 import { isPointHittingLink } from "../hyperlink/helpers";
 
+import { hitCompositeControlPoint } from "./compositeShapeControls";
+
 import type { AppState, CollaboratorPointer } from "../../types";
 
 import type React from "react";
@@ -1042,6 +1044,26 @@ export const handleCanvasPointerMove = (
     !isOverScrollBar &&
     !app.state.selectedLinearElement?.isEditing
   ) {
+    const selected = selectedElements[0];
+    if (
+      (app.state.activeTool.type === "selection" ||
+        app.state.activeTool.type === "lasso") &&
+      selected.type === "composite_shape" &&
+      !selected.locked &&
+      !app.state.viewModeEnabled &&
+      !app.state.editingTextElement &&
+      !app.state.croppingElementId &&
+      hitCompositeControlPoint(
+        selected,
+        scenePointerX,
+        scenePointerY,
+        app.state.zoom.value,
+        event.pointerType,
+      )
+    ) {
+      app.cursor.set(CURSOR_TYPE.MOVE);
+      return;
+    }
     // for linear elements, we'd like to prioritize point dragging over edge resizing
     // therefore, we update and check hovered point index first
     if (app.state.selectedLinearElement) {

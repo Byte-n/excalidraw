@@ -80,6 +80,7 @@ import type {
   FixedSegment,
   NonDeleted,
   NonDeletedExcalidrawElement,
+  BaseShapeId,
 } from "@excalidraw/element/types";
 
 import type { Scene } from "@excalidraw/element";
@@ -113,7 +114,35 @@ type ExcalidrawConvertibleElement =
   | ExcalidrawLinearElement;
 
 // indicates order of switching
-const GENERIC_TYPES = ["rectangle", "diamond", "ellipse"] as const;
+const GENERIC_TYPES: readonly BaseShapeId[] = [
+  "rectangle",
+  "diamond",
+  "ellipse",
+  "cross",
+  "brace-reverse",
+  "brace",
+  "cloud",
+  "double-arrow",
+  "forward-arrow",
+  "backward-arrow",
+  "octagon",
+  "pentagon",
+  "hexagon",
+  "star",
+  "triangle",
+  "round-rect",
+  "rectangle-bubble",
+  "pill",
+  "bubble",
+  "trapezoid",
+  "parallelogram",
+  "right-pentagon",
+  "step",
+  "cube",
+  "cylinder",
+  "pie",
+  "circular-ring",
+];
 // indicates order of switching
 const LINEAR_TYPES = [
   "line",
@@ -316,11 +345,14 @@ const Panel = ({
           ["elbowArrow", elbowArrowIcon],
         ]
       : conversionType === "generic"
-      ? [
-          ["rectangle", RectangleIcon],
-          ["diamond", DiamondIcon],
-          ["ellipse", EllipseIcon],
-        ]
+      ? GENERIC_TYPES.map((type) => [
+          type,
+          type === "diamond"
+            ? DiamondIcon
+            : type === "ellipse"
+            ? EllipseIcon
+            : RectangleIcon,
+        ])
       : [];
 
   return (
@@ -342,7 +374,8 @@ const Panel = ({
       {SHAPES.map(([type, icon]) => {
         const isSelected =
           sameType &&
-          ((conversionType === "generic" && genericElements[0].type === type) ||
+          ((conversionType === "generic" &&
+            getGenericType(genericElements[0]) === type) ||
             (conversionType === "linear" &&
               getLinearElementSubType(linearElements[0]) === type));
 
@@ -448,10 +481,16 @@ export const convertElementTypes = (
     conversionType === "generic" &&
     selectedElements.some(isMindmapNodeElement)
   ) {
-    const targetType = isConvertibleGenericType(nextType ?? "")
-      ? (nextType as ConvertibleGenericTypes)
-      : "rectangle";
-    return app.mindmap.convertToShape(targetType);
+    const targetType =
+      nextType === "rectangle" ||
+      nextType === "diamond" ||
+      nextType === "ellipse" ||
+      nextType === "pill"
+        ? nextType
+        : "rectangle";
+    return app.mindmap.convertToShape(
+      targetType === "pill" ? "rectangle" : targetType,
+    );
   }
 
   const selectedElementIds = selectedElements.reduce(

@@ -27,6 +27,7 @@ type ToolPopoverProps = {
   app: AppClassProperties;
   options: readonly ToolOption[];
   activeTool: { type: string };
+  activeOptionType?: string;
   defaultOption: string;
   "data-testid": string;
   onToolChange: (type: string) => void;
@@ -40,6 +41,7 @@ export const ToolPopover = ({
   app,
   options,
   activeTool,
+  activeOptionType,
   defaultOption,
   "data-testid": dataTestId,
   onToolChange,
@@ -49,7 +51,7 @@ export const ToolPopover = ({
   shortcut,
 }: ToolPopoverProps) => {
   const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const currentType = activeTool.type;
+  const currentType = activeOptionType ?? activeTool.type;
   const isActive = displayedOption.type === currentType;
   const SIDE_OFFSET = 16;
   const { container } = useExcalidrawContainer();
@@ -110,7 +112,7 @@ export const ToolPopover = ({
             aria-label={capitalizeString(title)}
             data-testid={`toolbar-${type}`}
             onSelect={() => {
-              if (app.state.activeTool.type !== type) {
+              if (currentType !== type) {
                 trackEvent("toolbar", type, "ui");
                 app.setActiveTool({ type: type as any });
                 onToolChange?.(type);

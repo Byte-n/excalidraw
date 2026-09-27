@@ -47,6 +47,7 @@ import {
   isInitializedImageElement,
   isLinearElement,
   isMindmapNodeElement,
+  isCompositeShapeElement,
   isElbowArrow,
   isBindableElement,
   isTextElement,
@@ -77,6 +78,11 @@ import {
   handleFocusPointDrag,
   handleFocusPointPointerUp,
   getUncroppedWidthAndHeight,
+  getBoundTextElement,
+  getCompositeShapeControlPoints,
+  redrawTextBoundingBox,
+  updateBoundElements,
+  updateCompositeShapeControlPoint,
 } from "@excalidraw/element";
 
 import { EVENT } from "@excalidraw/common";
@@ -107,6 +113,8 @@ import {
 } from "../../reactUtils";
 
 import * as gestureController from "./gesture";
+
+import { getCompositeControlPointLocal } from "./compositeShapeControls";
 
 import type { UnsubscribeCallback } from "../../types";
 
@@ -870,6 +878,7 @@ export const initialPointerDownState = (
         acc.set(element.id, deepCopyElement(element));
         return acc;
       }, new Map() as PointerDownState["originalElements"]),
+    compositeControl: { active: null },
     resize: {
       handleType: false,
       isResizing: false,
@@ -1063,6 +1072,85 @@ export const onPointerMoveFromPointerDownHandler = (
       pointerCoords.y,
       event[KEYS.CTRL_OR_CMD] ? null : app.getEffectiveGridSize(),
     );
+
+    if (pointerDownState.compositeControl.active) {
+      const control = pointerDownState.compositeControl.active;
+      const element = app.scene.getNonDeletedElement(control.elementId);
+      if (isCompositeShapeElement(element)) {
+        const local = getCompositeControlPointLocal(
+          element,
+          pointerCoords.x - control.offset.x,
+          pointerCoords.y - control.offset.y,
+        );
+        const shape = updateCompositeShapeControlPoint(
+          element.shape,
+          control.kind,
+          local.x,
+          local.y,
+          element.width,
+          element.height,
+        );
+        if (shape !== element.shape) {
+          const oldPoint = getCompositeShapeControlPoints(element).find(
+            (point) => point.kind === control.kind,
+          );
+          const newPoint = getCompositeShapeControlPoints({
+            width: element.width,
+            height: element.height,
+            shape,
+          }).find((point) => point.kind === control.kind);
+          app.scene.mutateElement(element, { shape });
+          if (oldPoint && newPoint) {
+            const oldFixedPoint = [
+              oldPoint.x / element.width,
+              oldPoint.y / element.height,
+            ];
+            const newFixedPoint = [
+              newPoint.x / element.width,
+              newPoint.y / element.height,
+            ] as [number, number];
+            for (const bound of element.boundElements ?? []) {
+              const arrow = app.scene.getNonDeletedElement(bound.id);
+              if (!isArrowElement(arrow)) {
+                continue;
+              }
+              const bindingUpdates: {
+                startBinding?: typeof arrow.startBinding;
+                endBinding?: typeof arrow.endBinding;
+              } = {};
+              for (const key of ["startBinding", "endBinding"] as const) {
+                const binding = arrow[key];
+                if (
+                  binding?.elementId === element.id &&
+                  Math.hypot(
+                    binding.fixedPoint[0] - oldFixedPoint[0],
+                    binding.fixedPoint[1] - oldFixedPoint[1],
+                  ) < 0.01
+                ) {
+                  bindingUpdates[key] = {
+                    ...binding,
+                    fixedPoint: newFixedPoint,
+                  };
+                }
+              }
+              if (Object.keys(bindingUpdates).length) {
+                app.scene.mutateElement(arrow, bindingUpdates);
+              }
+            }
+          }
+          const boundText = getBoundTextElement(
+            element,
+            app.scene.getNonDeletedElementsMap(),
+          );
+          if (boundText) {
+            redrawTextBoundingBox(boundText, element, app.scene);
+          }
+          updateBoundElements(element, app.scene);
+          control.hasChanged = true;
+        }
+      }
+      return;
+    }
 
     if (pointerDownState.resize.isResizing) {
       pointerDownState.lastCoords.x = pointerCoords.x;
@@ -2013,6 +2101,14 @@ export const onPointerUpFromPointerDownHandler = (
       pointerDownState,
       childEvent,
     );
+
+    if (pointerDownState.compositeControl.active) {
+      if (pointerDownState.compositeControl.active.hasChanged) {
+        app.store.scheduleCapture();
+        app.scene.triggerUpdate();
+      }
+      return;
+    }
 
     if (mindmapHandled) {
       return;

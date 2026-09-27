@@ -20,6 +20,7 @@ const getContainerCoords = (
   appState: AppState,
   elementsMap: ElementsMap,
   layoutDirection?: MindmapLayoutDirection,
+  anchor: "top-right" | "bottom-right" = "top-right",
 ) => {
   const [x1, y1, x2, y2] = getElementAbsoluteCoords(element, elementsMap);
   const isVertical =
@@ -27,7 +28,13 @@ const getContainerCoords = (
   const isReverse =
     layoutDirection === "right-to-left" || layoutDirection === "bottom-to-top";
   const sceneX = isVertical ? x1 : isReverse ? x1 : x2;
-  const sceneY = isVertical ? (isReverse ? y1 : y2) : y1;
+  const sceneY = isVertical
+    ? isReverse
+      ? y1
+      : y2
+    : anchor === "bottom-right"
+    ? y2
+    : y1;
   const { x: viewportX, y: viewportY } = sceneCoordsToViewportCoords(
     { sceneX, sceneY },
     appState,
@@ -42,11 +49,13 @@ export const ElementCanvasButtons = ({
   element,
   elementsMap,
   layoutDirection,
+  anchor,
 }: {
   children: React.ReactNode;
   element: NonDeletedExcalidrawElement;
   elementsMap: ElementsMap;
   layoutDirection?: MindmapLayoutDirection;
+  anchor?: "top-right" | "bottom-right";
 }) => {
   const appState = useExcalidrawAppState();
 
@@ -66,6 +75,7 @@ export const ElementCanvasButtons = ({
     appState,
     elementsMap,
     layoutDirection,
+    anchor,
   );
 
   return (

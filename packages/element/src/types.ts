@@ -90,15 +90,84 @@ export type ExcalidrawSelectionElement = _ExcalidrawElementBase & {
   type: "selection";
 };
 
+/**
+ * Persisted data for a regular composite shape.  The union is deliberately
+ * kept explicit: shape parameters are part of the file contract and must not
+ * be accepted as an untyped record.
+ */
 export type BaseShapeData =
   | Readonly<{ id: "rectangle"; schemaVersion: 1 }>
   | Readonly<{ id: "diamond"; schemaVersion: 1 }>
-  | Readonly<{ id: "ellipse"; schemaVersion: 1 }>;
+  | Readonly<{ id: "ellipse"; schemaVersion: 1 }>
+  | Readonly<{ id: "cross"; schemaVersion: 1 }>
+  | Readonly<{ id: "brace-reverse"; schemaVersion: 1 }>
+  | Readonly<{ id: "brace"; schemaVersion: 1 }>
+  | Readonly<{ id: "cloud"; schemaVersion: 1 }>
+  | Readonly<{ id: "double-arrow"; schemaVersion: 1 }>
+  | Readonly<{ id: "forward-arrow"; schemaVersion: 1 }>
+  | Readonly<{ id: "backward-arrow"; schemaVersion: 1 }>
+  | Readonly<{ id: "octagon"; schemaVersion: 1 }>
+  | Readonly<{ id: "pentagon"; schemaVersion: 1 }>
+  | Readonly<{ id: "hexagon"; schemaVersion: 1 }>
+  | Readonly<{ id: "star"; schemaVersion: 1 }>
+  | Readonly<{
+      id: "triangle";
+      schemaVersion: 1;
+      triangle: Readonly<{ apexX: number }>;
+    }>
+  | Readonly<{ id: "round-rect"; schemaVersion: 1 }>
+  | Readonly<{ id: "rectangle-bubble"; schemaVersion: 1 }>
+  | Readonly<{ id: "pill"; schemaVersion: 1 }>
+  | Readonly<{ id: "bubble"; schemaVersion: 1 }>
+  | Readonly<{
+      id: "trapezoid";
+      schemaVersion: 1;
+      trapezoid: Readonly<{
+        narrowWidthRatio: number;
+        narrowEdge: "top" | "bottom";
+      }>;
+    }>
+  | Readonly<{ id: "parallelogram"; schemaVersion: 1 }>
+  | Readonly<{ id: "right-pentagon"; schemaVersion: 1 }>
+  | Readonly<{ id: "step"; schemaVersion: 1 }>
+  | Readonly<{
+      id: "cube";
+      schemaVersion: 1;
+      cube: Readonly<{ controlPoint: Readonly<{ x: number; y: number }> }>;
+    }>
+  | Readonly<{ id: "cylinder"; schemaVersion: 1 }>
+  | Readonly<{
+      id: "pie";
+      schemaVersion: 1;
+      pie: Readonly<{
+        centralAngle: number;
+        radius: number;
+        sectorRatio: number;
+        startRadialLineAngle: number;
+      }>;
+    }>
+  | Readonly<{
+      id: "circular-ring";
+      schemaVersion: 1;
+      circularRing: Readonly<{
+        centralAngle: number;
+        radius: number;
+        sectorRatio: number;
+        startRadialLineAngle: number;
+      }>;
+    }>;
+
+export type BaseShapeId = BaseShapeData["id"];
 
 export type ExcalidrawCompositeShapeElement = _ExcalidrawElementBase &
   Readonly<{
     type: "composite_shape";
     shape: BaseShapeData;
+    /** Text layout policy. Missing values are treated as the adaptive default. */
+    textFitMode?: "auto" | "fixed";
+    /** Minimum dimensions preserved by adaptive text layout. */
+    textFitMinWidth?: number;
+    textFitMinHeight?: number;
   }>;
 
 export type ExcalidrawRectangleElement = Merge<
@@ -550,6 +619,6 @@ export type ExcalidrawLinearElementSubType =
   | "curvedArrow"
   | "elbowArrow";
 
-export type ConvertibleGenericTypes = "rectangle" | "diamond" | "ellipse";
+export type ConvertibleGenericTypes = BaseShapeData["id"];
 export type ConvertibleLinearTypes = ExcalidrawLinearElementSubType;
 export type ConvertibleTypes = ConvertibleGenericTypes | ConvertibleLinearTypes;
