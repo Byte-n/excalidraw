@@ -1,0 +1,33 @@
+[
+  {
+    "angle": 0,
+    "height": 520,
+    "id": "t10:1",
+    "locked": false,
+    "section": {
+      "title": "分区"
+    },
+    "style": {
+      "border_color_type": 0,
+      "border_opacity": 100,
+      "border_radius": {
+        "bottom_left": 4,
+        "bottom_right": 4,
+        "top_left": 4,
+        "top_right": 4
+      },
+      "border_style": "solid",
+      "border_width": "extra_narrow",
+      "fill_color": "#f5f6f7",
+      "fill_color_type": 0,
+      "fill_opacity": 100,
+      "theme_border_color_code": -1,
+      "theme_fill_color_code": -1
+    },
+    "type": "section",
+    "width": 924,
+    "x": -613.3314819335938,
+    "y": -116.42790985107422,
+    "z_index": 0
+  }
+]
