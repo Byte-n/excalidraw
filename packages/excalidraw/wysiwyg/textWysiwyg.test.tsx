@@ -1363,7 +1363,7 @@ describe("textWysiwyg", () => {
       expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
         [
           12,
-          "68.00000",
+          68,
         ]
       `);
 
@@ -1383,7 +1383,7 @@ describe("textWysiwyg", () => {
       expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
         [
           "378.00000",
-          -538,
+          "-538.00000",
         ]
       `);
     });
@@ -1481,11 +1481,14 @@ describe("textWysiwyg", () => {
       const originalTextX = text.x;
       const originalTextY = text.y;
       UI.resize(rectangle, "nw", [100, 50]);
-      // The NW handle crossed the right edge, so the container flips past it.
+      // The NW handle crossed the right edge. Manual resizing fixes the
+      // container dimensions, so the overflowing label is truncated.
       expect(rectangle.x).toBe(100);
-      expect(rectangle.y).toBe(-34);
+      expect(rectangle.y).toBe(60);
+      expect(rectangle.textFitMode).toBe("fixed");
       expect(text.x).toBe(105);
-      expect(text.y).toBe(-32);
+      expect(text.y).toBe(65);
+      expect(text.text).toBe("…");
 
       Keyboard.withModifierKeys({ ctrl: true }, () => {
         Keyboard.keyPress(KEYS.Z);

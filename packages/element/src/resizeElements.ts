@@ -42,6 +42,7 @@ import {
   handleBindTextResize,
   getBoundTextMaxWidth,
   computeBoundTextPosition,
+  isValidTextContainer,
 } from "./textElement";
 import {
   getMinTextElementWidth,
@@ -79,6 +80,7 @@ import type {
 } from "./transformHandles";
 import type {
   ExcalidrawLinearElement,
+  ExcalidrawCompositeShapeElement,
   ExcalidrawTextElement,
   NonDeletedExcalidrawElement,
   NonDeleted,
@@ -926,6 +928,13 @@ export const resizeSingleElement = (
       width: Math.abs(nextWidth),
       height: Math.abs(nextHeight),
       ...rescaledPoints,
+      ...(latestElement.type === "composite_shape" &&
+        isValidTextContainer(latestElement) &&
+        getCompositeShapeTextFitMode(latestElement) === "auto" &&
+        (Math.abs(nextWidth) !== latestElement.width ||
+          Math.abs(nextHeight) !== latestElement.height) && {
+          textFitMode: "fixed",
+        }),
     };
 
     if (isBindingElement(latestElement)) {
@@ -951,16 +960,6 @@ export const resizeSingleElement = (
       informMutation: shouldInformMutation,
       isDragging: false,
     });
-
-    if (
-      latestElement.type === "composite_shape" &&
-      getCompositeShapeTextFitMode(latestElement) === "auto"
-    ) {
-      scene.mutateElement(latestElement, {
-        textFitMinWidth: Math.abs(nextWidth),
-        textFitMinHeight: Math.abs(nextHeight),
-      });
-    }
 
     if (isStickyNoteElement(latestElement)) {
       updateStickyNoteLayout(latestElement, scene, {
@@ -1414,6 +1413,7 @@ export const resizeMultipleElements = (
         startBinding?: ExcalidrawElbowArrowElement["startBinding"];
         endBinding?: ExcalidrawElbowArrowElement["endBinding"];
         fixedSegments?: ExcalidrawElbowArrowElement["fixedSegments"];
+        textFitMode?: ExcalidrawCompositeShapeElement["textFitMode"];
       };
     }[] = [];
 
@@ -1452,6 +1452,12 @@ export const resizeMultipleElements = (
         height,
         angle,
         ...rescaledPoints,
+        ...(latest.type === "composite_shape" &&
+          isValidTextContainer(latest) &&
+          getCompositeShapeTextFitMode(latest) === "auto" &&
+          (width !== latest.width || height !== latest.height) && {
+            textFitMode: "fixed",
+          }),
       };
 
       if (isElbowArrow(orig)) {
@@ -1543,16 +1549,6 @@ export const resizeMultipleElements = (
       const { angle } = update;
 
       scene.mutateElement(element, update);
-
-      if (
-        element.type === "composite_shape" &&
-        getCompositeShapeTextFitMode(element) === "auto"
-      ) {
-        scene.mutateElement(element, {
-          textFitMinWidth: Math.abs(update.width),
-          textFitMinHeight: Math.abs(update.height),
-        });
-      }
 
       if (isStickyNoteElement(element)) {
         // the content correction runs before the (single) arrow pass, which

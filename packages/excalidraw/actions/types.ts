@@ -146,7 +146,9 @@ export type ActionName =
   | "cropEditor"
   | "wrapSelectionInFrame"
   | "toggleShapeSwitch"
-  | "togglePolygon";
+  | "togglePolygon"
+  | "setCompositeShapeTextFitFixed"
+  | "setCompositeShapeTextFitAuto";
 
 export type PanelComponentProps = {
   elements: readonly ExcalidrawElement[];
@@ -195,7 +197,10 @@ export interface Action<TData = any> {
     appProps: ExcalidrawProps,
     app: AppClassProperties,
   ) => boolean;
-  checked?: (appState: Readonly<UIAppState>) => boolean;
+  checked?: (
+    appState: Readonly<UIAppState>,
+    elements?: readonly ExcalidrawElement[],
+  ) => boolean;
   trackEvent:
     | false
     | {

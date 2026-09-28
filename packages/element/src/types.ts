@@ -165,7 +165,7 @@ export type ExcalidrawCompositeShapeElement = _ExcalidrawElementBase &
     shape: BaseShapeData;
     /** Text layout policy. Missing values are treated as the adaptive default. */
     textFitMode?: "auto" | "fixed";
-    /** Minimum dimensions remembered after a manual resize in adaptive mode. */
+    /** Minimum dimensions preserved by adaptive text layout. */
     textFitMinWidth?: number;
     textFitMinHeight?: number;
   }>;

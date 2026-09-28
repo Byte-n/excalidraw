@@ -4,9 +4,6 @@ import {
   isIframeElement,
   isMagicFrameElement,
   isMindmapNodeElement,
-  getBoundTextElement,
-  getCompositeShapeTextFitMode,
-  redrawTextBoundingBox,
 } from "@excalidraw/element";
 
 import { getLanguage, t } from "../../i18n";
@@ -27,14 +24,7 @@ import { SVGLayer } from "../SVGLayer";
 import { StaticCanvas, InteractiveCanvas } from "../canvases";
 import NewElementCanvas from "../canvases/NewElementCanvas";
 import { CursorHint } from "../CursorHint";
-import {
-  MagicIcon,
-  PlusIcon,
-  TextFitAutoIcon,
-  TextFitFixedIcon,
-  copyIcon,
-  fullscreenIcon,
-} from "../icons";
+import { MagicIcon, PlusIcon, copyIcon, fullscreenIcon } from "../icons";
 import UnlockPopup from "../UnlockPopup";
 
 import {
@@ -106,11 +96,6 @@ export const AppView = ({ app }: { app: App }) => {
           app.state.cursorButton === "down");
 
   const firstSelectedElement = selectedElements[0];
-  const selectedCompositeShape =
-    selectedElements.length === 1 &&
-    firstSelectedElement?.type === "composite_shape"
-      ? firstSelectedElement
-      : null;
   const hoveredMindmapNode = Object.keys(app.state.hoveredElementIds)
     .map((id) => app.scene.getNonDeletedElement(id))
     .find(isMindmapNodeElement);
@@ -123,35 +108,6 @@ export const AppView = ({ app }: { app: App }) => {
 
   const showShapeSwitchPanel =
     editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
-
-  const setCompositeShapeTextFit = (nextMode: "auto" | "fixed") => {
-    if (!selectedCompositeShape) {
-      return;
-    }
-    if (getCompositeShapeTextFitMode(selectedCompositeShape) === nextMode) {
-      return;
-    }
-    app.scene.mutateElement(selectedCompositeShape, {
-      textFitMode: nextMode,
-      ...(nextMode === "auto" && {
-        textFitMinWidth: selectedCompositeShape.width,
-        textFitMinHeight: selectedCompositeShape.height,
-      }),
-    });
-    const latestShape = app.scene.getElement(selectedCompositeShape.id);
-    const boundText = getBoundTextElement(
-      latestShape || selectedCompositeShape,
-      app.scene.getNonDeletedElementsMap(),
-    );
-    if (boundText) {
-      redrawTextBoundingBox(
-        boundText,
-        latestShape || selectedCompositeShape,
-        app.scene,
-      );
-    }
-    app.store.scheduleCapture();
-  };
 
   return (
     <div
@@ -293,40 +249,6 @@ export const AppView = ({ app }: { app: App }) => {
                                 app.updateEmbedValidationStatus
                               }
                             />
-                          )}
-                        {app.isDefaultUIEnabled() &&
-                          selectedCompositeShape &&
-                          !app.state.openDialog && (
-                            <ElementCanvasButtons
-                              element={selectedCompositeShape}
-                              elementsMap={renderableElementsMap}
-                              anchor="bottom-right"
-                            >
-                              <ElementCanvasButton
-                                title="Keep shape size"
-                                icon={TextFitFixedIcon}
-                                checked={
-                                  getCompositeShapeTextFitMode(
-                                    selectedCompositeShape,
-                                  ) === "fixed"
-                                }
-                                onChange={() =>
-                                  setCompositeShapeTextFit("fixed")
-                                }
-                              />
-                              <ElementCanvasButton
-                                title="Fit shape to text"
-                                icon={TextFitAutoIcon}
-                                checked={
-                                  getCompositeShapeTextFitMode(
-                                    selectedCompositeShape,
-                                  ) === "auto"
-                                }
-                                onChange={() =>
-                                  setCompositeShapeTextFit("auto")
-                                }
-                              />
-                            </ElementCanvasButtons>
                           )}
                         {app.isDefaultUIEnabled() &&
                           mindmapNodeForControls &&
