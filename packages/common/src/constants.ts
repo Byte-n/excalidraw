@@ -404,8 +404,8 @@ export const SVG_DOCUMENT_PREAMBLE = `<?xml version="1.0" standalone="no"?>
 export const ENCRYPTION_KEY_BITS = 128;
 
 export const VERSIONS = {
-  excalidraw: 3,
-  excalidrawLibrary: 3,
+  excalidraw: 4,
+  excalidrawLibrary: 4,
 } as const;
 
 export const BOUND_TEXT_PADDING = 5;

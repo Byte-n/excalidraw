@@ -728,7 +728,7 @@ describe("render override geometry", () => {
     const child = API.createElement({
       type: "rectangle",
       id: "child",
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
       x: 20,
       y: 20,
     });
@@ -945,7 +945,7 @@ describe("render override geometry", () => {
         y: 100,
         width: 200,
         height: 100,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
         points:
           type === "arrow"
             ? [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 0)]
@@ -962,7 +962,7 @@ describe("render override geometry", () => {
         height: 25,
         opacity: 70,
         containerId: container.id,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
       const { context, draw } = setup([container, label, frame]);
       draw(new Map());
@@ -1053,7 +1053,7 @@ describe("render override geometry", () => {
       y: 120,
       width: 50,
       height: 50,
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
     });
     const { draw, context } = setup([rect, frame]);
     const clip = vi.spyOn(context, "clip");
@@ -1070,7 +1070,10 @@ describe("render override geometry", () => {
 
   it("multiplies overridden frame and child opacities", () => {
     const frame = API.createElement({ type: "frame", id: "frame" });
-    const rect = API.createElement({ type: "rectangle", frameId: frame.id });
+    const rect = API.createElement({
+      type: "rectangle",
+      containerRef: { kind: "frameLike", elementId: frame.id },
+    });
     expect(
       Element.resolveElementRenderState(
         rect,
@@ -1102,7 +1105,7 @@ describe("render override geometry", () => {
       id: "embed",
       width: 200,
       height: 100,
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
     });
     const { draw } = setup([embed, frame]);
     const renderElement = vi.spyOn(Element, "renderElement");
@@ -1110,7 +1113,10 @@ describe("render override geometry", () => {
     const label = renderElement.mock.calls.find(
       ([element]) => element.type === "text",
     )?.[0];
-    expect(label).toMatchObject({ id: embed.id, frameId: frame.id });
+    expect(label).toMatchObject({
+      id: embed.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
+    });
   });
 
   it.each([
@@ -1199,7 +1205,7 @@ describe("render override geometry", () => {
         type: "rectangle",
         x: 50,
         y: 50,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       }),
       link: "https://example.com",
     };

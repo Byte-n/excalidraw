@@ -50,6 +50,19 @@ describe("element creation time", () => {
     },
   );
 
+  it("clears an optional containerRef when explicitly set to undefined", () => {
+    const frame = API.createElement({ type: "frame" });
+    const element = API.createElement({
+      type: "rectangle",
+      containerRef: { kind: "frameLike", elementId: frame.id },
+    });
+
+    const detached = newElementWith(element, { containerRef: undefined });
+
+    expect(detached).not.toBe(element);
+    expect(detached.containerRef).toBeUndefined();
+  });
+
   it("preserves composite shape text-fit fields", () => {
     const element = newElement({
       type: "cube",

@@ -1,6 +1,7 @@
 import {
   getActiveTextElement,
   getBoundTextElement,
+  frameLikeContainerRef,
   isTextElement,
   isValidTextContainer,
 } from "@excalidraw/element";
@@ -490,7 +491,7 @@ export const startTextEditing = (
     topLayerFrame &&
     (!shouldBindToContainer ||
       !container ||
-      container.frameId === topLayerFrame.id)
+      container.containerRef?.elementId === topLayerFrame.id)
       ? topLayerFrame.id
       : null;
 
@@ -535,7 +536,9 @@ export const startTextEditing = (
           ? (0 as Radians)
           : container.angle
         : (0 as Radians),
-      frameId,
+      containerRef: shouldBindToContainer
+        ? undefined
+        : frameLikeContainerRef(frameId),
     });
 
   if (!existingTextElement && shouldBindToContainer && container) {
@@ -552,7 +555,7 @@ export const startTextEditing = (
     if (container && shouldBindToContainer) {
       const containerIndex = app.scene.getElementIndex(container.id);
       // TODO should use insertNewElement, after we update it to handle
-      // elements with containerId + frameId at the same time (containerId
+      // elements with containerId + containerRef at the same time (containerId
       // should take precedence when it comes to z-index)
       app.scene.insertElementsAtIndex([element], containerIndex + 1);
     } else {

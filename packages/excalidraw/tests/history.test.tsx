@@ -5256,7 +5256,7 @@ describe("history", () => {
         API.updateScene({
           elements: [
             newElementWith(h.elements[0], {
-              frameId: frame.id,
+              containerRef: { kind: "frameLike", elementId: frame.id },
             }),
             h.elements[1],
           ],
@@ -5269,7 +5269,7 @@ describe("history", () => {
         expect(h.elements).toEqual([
           expect.objectContaining({
             id: rect.id,
-            frameId: null,
+            containerRef: undefined,
             isDeleted: false,
           }),
           expect.objectContaining({
@@ -5284,7 +5284,7 @@ describe("history", () => {
         expect(h.elements).toEqual([
           expect.objectContaining({
             id: rect.id,
-            frameId: frame.id, // double check that the element is rebound
+            containerRef: { kind: "frameLike", elementId: frame.id }, // double check that the element is rebound
             isDeleted: false,
           }),
           expect.objectContaining({
@@ -5314,7 +5314,7 @@ describe("history", () => {
         expect(h.elements).toEqual([
           expect.objectContaining({
             id: rect.id,
-            frameId: null, // element is not unbound from
+            containerRef: undefined, // element is not unbound from
             isDeleted: false,
           }),
           expect.objectContaining({

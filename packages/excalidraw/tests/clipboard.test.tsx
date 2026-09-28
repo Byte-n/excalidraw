@@ -333,7 +333,7 @@ describe("pasting & frames", () => {
     await waitFor(() => {
       expect(h.elements.length).toBe(2);
       expect(h.elements[0].type).toBe(rect.type);
-      expect(h.elements[0].frameId).toBe(frame.id);
+      expect(h.elements[0].containerRef?.elementId).toBe(frame.id);
       expect(h.elements[1].id).toBe(frame.id);
       expect(h.elements[0].index! < frame.index!).toBe(true);
     });
@@ -354,7 +354,7 @@ describe("pasting & frames", () => {
       y: 10,
       width: 20,
       height: 20,
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
     });
     const rect = API.createElement({ type: "rectangle" });
 
@@ -372,7 +372,7 @@ describe("pasting & frames", () => {
     await waitFor(() => {
       expect(h.elements.length).toBe(3);
       expect(h.elements[1].type).toBe(rect.type);
-      expect(h.elements[1].frameId).toBe(frame.id);
+      expect(h.elements[1].containerRef?.elementId).toBe(frame.id);
       expect(h.elements.map((element) => element.id)).toEqual([
         frameChild.id,
         h.elements[1].id,
@@ -397,7 +397,7 @@ describe("pasting & frames", () => {
       y: 10,
       width: 20,
       height: 20,
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
     });
 
     const clipboardJSON = await serializeAsClipboardJSON({
@@ -413,7 +413,7 @@ describe("pasting & frames", () => {
       expect(h.elements.length).toBe(2);
       expect(h.elements[0].type).toBe(frame.type);
       expect(h.elements[1].type).toBe(frameChild.type);
-      expect(h.elements[1].frameId).toBe(h.elements[0].id);
+      expect(h.elements[1].containerRef?.elementId).toBe(h.elements[0].id);
     });
   });
 
@@ -427,7 +427,7 @@ describe("pasting & frames", () => {
     });
     const rect = API.createElement({
       type: "rectangle",
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
       x: 10,
       y: 10,
       width: 50,
@@ -448,7 +448,7 @@ describe("pasting & frames", () => {
     await waitFor(() => {
       expect(h.elements.length).toBe(2);
       expect(h.elements[1].type).toBe(rect.type);
-      expect(h.elements[1].frameId).toBe(null);
+      expect(h.elements[1].containerRef).toBeUndefined();
     });
   });
 
@@ -487,10 +487,10 @@ describe("pasting & frames", () => {
     await waitFor(() => {
       expect(h.elements.length).toBe(3);
       expect(h.elements[0].type).toBe(rect.type);
-      expect(h.elements[0].frameId).toBe(frame.id);
+      expect(h.elements[0].containerRef?.elementId).toBe(frame.id);
       expect(h.elements[1].id).toBe(frame.id);
       expect(h.elements[2].type).toBe(rect2.type);
-      expect(h.elements[2].frameId).toBe(null);
+      expect(h.elements[2].containerRef).toBeUndefined();
     });
   });
 
@@ -531,9 +531,9 @@ describe("pasting & frames", () => {
     await waitFor(() => {
       expect(h.elements.length).toBe(3);
       expect(h.elements[0].type).toBe(rect.type);
-      expect(h.elements[0].frameId).toBe(frame.id);
+      expect(h.elements[0].containerRef?.elementId).toBe(frame.id);
       expect(h.elements[1].type).toBe(rect2.type);
-      expect(h.elements[1].frameId).toBe(frame.id);
+      expect(h.elements[1].containerRef?.elementId).toBe(frame.id);
       expect(h.elements[2].id).toBe(frame.id);
     });
   });
@@ -566,7 +566,7 @@ describe("pasting & frames", () => {
       height: 50,
       x: 55,
       y: 55,
-      frameId: frame2.id,
+      containerRef: { kind: "frameLike", elementId: frame2.id },
     });
 
     API.setElements([frame]);
@@ -583,12 +583,12 @@ describe("pasting & frames", () => {
     await waitFor(() => {
       expect(h.elements.length).toBe(4);
       expect(h.elements[0].type).toBe(rect.type);
-      expect(h.elements[0].frameId).toBe(frame.id);
+      expect(h.elements[0].containerRef?.elementId).toBe(frame.id);
       expect(h.elements[1].id).toBe(frame.id);
       expect(h.elements[2].type).toBe(rect2.type);
-      expect(h.elements[2].frameId).toBe(h.elements[3].id);
+      expect(h.elements[2].containerRef?.elementId).toBe(h.elements[3].id);
       expect(h.elements[3].type).toBe(frame2.type);
-      expect(h.elements[3].frameId).toBe(null);
+      expect(h.elements[3].containerRef).toBeUndefined();
     });
   });
 });

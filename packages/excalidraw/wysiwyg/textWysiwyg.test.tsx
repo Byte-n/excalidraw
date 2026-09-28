@@ -844,7 +844,7 @@ describe("textWysiwyg", () => {
       const text = h.elements[2] as ExcalidrawTextElementWithContainer;
       expect(text.type).toBe("text");
       expect(text.containerId).toBe(rectangle.id);
-      expect(text.frameId).toBe(null);
+      expect(text.containerRef?.elementId ?? null).toBe(null);
     });
 
     it("should bind text to a frame child container when single clicking its center", async () => {
@@ -862,7 +862,7 @@ describe("textWysiwyg", () => {
         width: 90,
         height: 75,
         backgroundColor: "red",
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
       API.setElements([rectangle, frame]);
 
@@ -875,7 +875,7 @@ describe("textWysiwyg", () => {
       const text = h.elements[1] as ExcalidrawTextElementWithContainer;
       expect(text.type).toBe("text");
       expect(text.containerId).toBe(rectangle.id);
-      expect(text.frameId).toBe(frame.id);
+      expect(text.containerRef).toBeUndefined();
     });
 
     it("should set the text element angle to same as container angle when binding to rotated container", async () => {

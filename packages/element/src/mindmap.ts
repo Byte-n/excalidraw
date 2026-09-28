@@ -516,7 +516,7 @@ const createDerivedEdge = (
   index: null,
   isDeleted: false,
   groupIds: [],
-  frameId: child.frameId,
+  containerRef: child.containerRef,
   boundElements: [],
   updated: child.updated,
   created: child.created,

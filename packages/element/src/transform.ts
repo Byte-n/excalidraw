@@ -870,7 +870,9 @@ export const convertToExcalidrawElements = (
       if (!elementInFrame) {
         throw new Error(`Frame element with id ${newElementId} doesn't exist`);
       }
-      Object.assign(elementInFrame, { frameId: frame.id });
+      Object.assign(elementInFrame, {
+        containerRef: { kind: "frameLike", elementId: frame.id },
+      });
 
       elementInFrame?.boundElements?.forEach((boundElement) => {
         const ele = elementStore.getElement(boundElement.id);
@@ -879,7 +881,6 @@ export const convertToExcalidrawElements = (
             `Bound element with id ${boundElement.id} doesn't exist`,
           );
         }
-        Object.assign(ele, { frameId: frame.id });
         childrenElements.push(ele);
       });
 

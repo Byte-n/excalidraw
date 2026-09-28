@@ -31,6 +31,7 @@ import {
   isPointInElement,
   getSnapOutlineMidPoint,
   getBindingStrategyForDraggingBindingElementEndpoints,
+  frameLikeContainerRef,
 } from "@excalidraw/element";
 
 import { TOOL_TYPE, distance } from "@excalidraw/common";
@@ -802,10 +803,12 @@ export const handleSelectionOnPointerDown = (
                 ).forEach((element) => {
                   delete nextSelectedElementIds[element.id];
                 });
-              } else if (hitElement.frameId) {
+              } else if (hitElement.containerRef?.elementId) {
                 // if hitElement is in a frame and its frame has been selected
                 // disable selection for the given element
-                if (nextSelectedElementIds[hitElement.frameId]) {
+                if (
+                  nextSelectedElementIds[hitElement.containerRef?.elementId]
+                ) {
                   delete nextSelectedElementIds[hitElement.id];
                 }
               } else {
@@ -832,8 +835,8 @@ export const handleSelectionOnPointerDown = (
                 if (framesInGroups.size > 0) {
                   previouslySelectedElements.forEach((element) => {
                     if (
-                      element.frameId &&
-                      framesInGroups.has(element.frameId)
+                      element.containerRef?.elementId &&
+                      framesInGroups.has(element.containerRef?.elementId)
                     ) {
                       // deselect element and groups containing the element
                       delete nextSelectedElementIds[element.id];
@@ -1169,7 +1172,7 @@ export const handleFreeDrawElementOnPointerDown = (
           : DEFAULT_STROKE_STREAMLINE,
     },
     locked: false,
-    frameId: topLayerFrame ? topLayerFrame.id : null,
+    containerRef: frameLikeContainerRef(topLayerFrame?.id),
     points: [pointFrom<LocalPoint>(0, 0)],
     // pressures are only consumed when rendering a real-pressure stroke, so
     // skip persisting them while pressure is being simulated
@@ -1375,7 +1378,7 @@ export const handleLinearElementOnPointerDown = (
             startArrowhead,
             endArrowhead,
             locked: false,
-            frameId: topLayerFrame ? topLayerFrame.id : null,
+            containerRef: frameLikeContainerRef(topLayerFrame?.id),
             elbowed: app.state.currentItemArrowType === ARROW_TYPE.elbow,
             fixedSegments:
               app.state.currentItemArrowType === ARROW_TYPE.elbow ? [] : null,
@@ -1396,7 +1399,7 @@ export const handleLinearElementOnPointerDown = (
                 ? { type: ROUNDNESS.PROPORTIONAL_RADIUS }
                 : null,
             locked: false,
-            frameId: topLayerFrame ? topLayerFrame.id : null,
+            containerRef: frameLikeContainerRef(topLayerFrame?.id),
           });
 
     const point = pointFrom<GlobalPoint>(
@@ -1544,7 +1547,7 @@ export const createGenericElementOnPointerDown = (
     opacity: app.state.currentItemOpacity,
     roundness: app.getCurrentItemRoundness(elementType),
     locked: false,
-    frameId: topLayerFrame ? topLayerFrame.id : null,
+    containerRef: frameLikeContainerRef(topLayerFrame?.id),
   } as const;
 
   let element;

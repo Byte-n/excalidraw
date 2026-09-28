@@ -24,7 +24,6 @@ import { selectGroupsForSelectedElements } from "../src/groups";
 
 import type {
   ExcalidrawElement,
-  ExcalidrawFrameElement,
   ExcalidrawSelectionElement,
 } from "../src/types";
 
@@ -54,7 +53,7 @@ const populateElements = (
     width?: number;
     height?: number;
     containerId?: string;
-    frameId?: ExcalidrawFrameElement["id"];
+    containerRef?: ExcalidrawElement["containerRef"];
     index?: ExcalidrawElement["index"];
   }[],
   appState?: Partial<AppState>,
@@ -72,7 +71,7 @@ const populateElements = (
       width = 100,
       height = 100,
       containerId = null,
-      frameId = null,
+      containerRef,
       type,
     }) => {
       const element = API.createElement({
@@ -85,7 +84,7 @@ const populateElements = (
         height,
         groupIds,
         containerId,
-        frameId: frameId || null,
+        containerRef,
       });
       if (isSelected) {
         selectedElementIds[element.id] = true;
@@ -145,7 +144,7 @@ const assertZindex = ({
     isSelected?: true;
     groupIds?: string[];
     containerId?: string;
-    frameId?: ExcalidrawFrameElement["id"];
+    containerRef?: ExcalidrawElement["containerRef"];
     type?: ExcalidrawElementType;
   }[];
   appState?: Partial<AppState>;
@@ -1239,12 +1238,48 @@ describe("z-indexing with frames", () => {
   // F#_# ... frame child of F# (rectangle)
   // R#   ... unrelated element (rectangle)
 
+  it("keeps bound text with its host when moving a frame child", () => {
+    assertZindex({
+      elements: [
+        {
+          id: "F1_1",
+          containerRef: { kind: "frameLike", elementId: "F1" },
+          isSelected: true,
+        },
+        { id: "T1", containerId: "F1_1" },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
+        { id: "F1", type: "frame" },
+        { id: "R1" },
+      ],
+      operations: [
+        [actionBringForward, ["F1_2", "F1_1", "T1", "F1", "R1"]],
+        [actionBringToFront, ["F1_2", "F1", "F1_1", "T1", "R1"]],
+        [actionSendToBack, ["F1_1", "T1", "F1_2", "F1", "R1"]],
+      ],
+    });
+  });
+
+  it("moves a frame and its bound text as one layer range", () => {
+    assertZindex({
+      elements: [
+        { id: "F1_1", containerRef: { kind: "frameLike", elementId: "F1" } },
+        { id: "T1", containerId: "F1_1" },
+        { id: "F1", type: "frame", isSelected: true },
+        { id: "R1" },
+      ],
+      operations: [
+        [actionBringForward, ["R1", "F1_1", "T1", "F1"]],
+        [actionSendToBack, ["F1_1", "T1", "F1", "R1"]],
+      ],
+    });
+  });
+
   it("moving whole frame by one (normalized)", () => {
     // normalized frame order
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1" },
-        { id: "F1_2", frameId: "F1" },
+        { id: "F1_1", containerRef: { kind: "frameLike", elementId: "F1" } },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "F1", type: "frame", isSelected: true },
         { id: "R1" },
         { id: "R2" },
@@ -1270,9 +1305,9 @@ describe("z-indexing with frames", () => {
     // DENORMALIZED FRAME ORDER
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1" },
+        { id: "F1_1", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "F1", type: "frame", isSelected: true },
-        { id: "F1_2", frameId: "F1" },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R1" },
         { id: "R2" },
       ],
@@ -1289,10 +1324,10 @@ describe("z-indexing with frames", () => {
     // DENORMALIZED FRAME ORDER
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1" },
+        { id: "F1_1", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "F1", type: "frame", isSelected: true },
         { id: "R1" },
-        { id: "F1_2", frameId: "F1" },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R2" },
       ],
       operations: [
@@ -1308,11 +1343,11 @@ describe("z-indexing with frames", () => {
     // DENORMALIZED FRAME ORDER
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1" },
+        { id: "F1_1", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R1" },
         { id: "F1", type: "frame", isSelected: true },
         { id: "R2" },
-        { id: "F1_2", frameId: "F1" },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R3" },
       ],
       operations: [
@@ -1330,11 +1365,11 @@ describe("z-indexing with frames", () => {
     // DENORMALIZED FRAME ORDER
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1" },
+        { id: "F1_1", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R1" },
         { id: "F1", type: "frame", isSelected: true },
         { id: "R2" },
-        { id: "F1_2", frameId: "F1" },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R3" },
       ],
       operations: [
@@ -1350,8 +1385,12 @@ describe("z-indexing with frames", () => {
     // normalized frame order
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1", isSelected: true },
-        { id: "F1_2", frameId: "F1" },
+        {
+          id: "F1_1",
+          containerRef: { kind: "frameLike", elementId: "F1" },
+          isSelected: true,
+        },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "F1", type: "frame" },
         { id: "R1" },
       ],
@@ -1366,12 +1405,20 @@ describe("z-indexing with frames", () => {
     // normalized frame order, multiple frames
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1", isSelected: true },
-        { id: "F1_2", frameId: "F1" },
+        {
+          id: "F1_1",
+          containerRef: { kind: "frameLike", elementId: "F1" },
+          isSelected: true,
+        },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "F1", type: "frame" },
         { id: "R1" },
-        { id: "F2_1", frameId: "F2", isSelected: true },
-        { id: "F2_2", frameId: "F2" },
+        {
+          id: "F2_1",
+          containerRef: { kind: "frameLike", elementId: "F2" },
+          isSelected: true,
+        },
+        { id: "F2_2", containerRef: { kind: "frameLike", elementId: "F2" } },
         { id: "F2", type: "frame" },
         { id: "R2" },
       ],
@@ -1394,9 +1441,13 @@ describe("z-indexing with frames", () => {
     // DENORMALIZED FRAME ORDER
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1", isSelected: true },
+        {
+          id: "F1_1",
+          containerRef: { kind: "frameLike", elementId: "F1" },
+          isSelected: true,
+        },
         { id: "F1", type: "frame" },
-        { id: "F1_2", frameId: "F1" },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R1" },
       ],
       operations: [
@@ -1415,10 +1466,14 @@ describe("z-indexing with frames", () => {
     // DENORMALIZED FRAME ORDER
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1", isSelected: true },
+        {
+          id: "F1_1",
+          containerRef: { kind: "frameLike", elementId: "F1" },
+          isSelected: true,
+        },
         { id: "R1" },
         { id: "F1", type: "frame" },
-        { id: "F1_2", frameId: "F1" },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R2" },
       ],
       operations: [
@@ -1439,8 +1494,8 @@ describe("z-indexing with frames", () => {
     // normalized frame order
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1" },
-        { id: "F1_2", frameId: "F1" },
+        { id: "F1_1", containerRef: { kind: "frameLike", elementId: "F1" } },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "F1", type: "frame", isSelected: true },
         { id: "R1" },
         { id: "R2" },
@@ -1460,9 +1515,9 @@ describe("z-indexing with frames", () => {
     // DENORMALIZED FRAME ORDER
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1" },
+        { id: "F1_1", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "F1", type: "frame", isSelected: true },
-        { id: "F1_2", frameId: "F1" },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R1" },
         { id: "R2" },
       ],
@@ -1481,10 +1536,10 @@ describe("z-indexing with frames", () => {
     // DENORMALIZED FRAME ORDER
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1" },
+        { id: "F1_1", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "F1", type: "frame", isSelected: true },
         { id: "R1" },
-        { id: "F1_2", frameId: "F1" },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R2" },
       ],
       operations: [
@@ -1496,11 +1551,11 @@ describe("z-indexing with frames", () => {
     // DENORMALIZED FRAME ORDER
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1" },
+        { id: "F1_1", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R1" },
         { id: "F1", type: "frame", isSelected: true },
         { id: "R2" },
-        { id: "F1_2", frameId: "F1" },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "R3" },
       ],
       operations: [
@@ -1513,11 +1568,19 @@ describe("z-indexing with frames", () => {
   it("bringing to front / sending to back children of MULTIPLE frames at once moves all of them", () => {
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1", isSelected: true },
-        { id: "F1_2", frameId: "F1" },
+        {
+          id: "F1_1",
+          containerRef: { kind: "frameLike", elementId: "F1" },
+          isSelected: true,
+        },
+        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
         { id: "F1", type: "frame" },
-        { id: "F2_1", frameId: "F2", isSelected: true },
-        { id: "F2_2", frameId: "F2" },
+        {
+          id: "F2_1",
+          containerRef: { kind: "frameLike", elementId: "F2" },
+          isSelected: true,
+        },
+        { id: "F2_2", containerRef: { kind: "frameLike", elementId: "F2" } },
         { id: "F2", type: "frame" },
       ],
       operations: [
@@ -1532,11 +1595,28 @@ describe("z-indexing with frames", () => {
   it("send to back / bring to front of a grouped frame child (in group-editing mode) must not duplicate elements", () => {
     assertZindex({
       elements: [
-        { id: "F1_1", frameId: "F1", groupIds: ["g1"] },
-        { id: "F1_2", frameId: "F1", groupIds: ["g1"], isSelected: true },
+        {
+          id: "F1_1",
+          containerRef: { kind: "frameLike", elementId: "F1" },
+          groupIds: ["g1"],
+        },
+        {
+          id: "F1_2",
+          containerRef: { kind: "frameLike", elementId: "F1" },
+          groupIds: ["g1"],
+          isSelected: true,
+        },
         { id: "F1", type: "frame" },
-        { id: "F2_1", frameId: "F2", groupIds: ["g2"] },
-        { id: "F2_2", frameId: "F2", groupIds: ["g2"] },
+        {
+          id: "F2_1",
+          containerRef: { kind: "frameLike", elementId: "F2" },
+          groupIds: ["g2"],
+        },
+        {
+          id: "F2_2",
+          containerRef: { kind: "frameLike", elementId: "F2" },
+          groupIds: ["g2"],
+        },
         { id: "F2", type: "frame" },
       ],
       appState: { editingGroupId: "g1" },
@@ -1601,9 +1681,13 @@ describe("z-index reordering with broken contiguity (invariant-violating input)"
     // child sweeps F2_1 along (span-based frame handling) — wrong ordering, but
     // never a duplication/loss, and the op does not throw.
     const elements: Parameters<typeof populateElements>[0] = [
-      { id: "F1_1", frameId: "F1", isSelected: true },
-      { id: "F2_1", frameId: "F2" },
-      { id: "F1_2", frameId: "F1" },
+      {
+        id: "F1_1",
+        containerRef: { kind: "frameLike", elementId: "F1" },
+        isSelected: true,
+      },
+      { id: "F2_1", containerRef: { kind: "frameLike", elementId: "F2" } },
+      { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
       { id: "F1", type: "frame" },
       { id: "F2", type: "frame" },
     ];

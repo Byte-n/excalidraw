@@ -120,7 +120,7 @@ describe("Basic lasso selection tests", () => {
         roughness: 1,
         opacity: 100,
         groupIds: [],
-        frameId: null,
+        containerRef: undefined,
         index: "a8",
         roundness: {
           type: 3,
@@ -150,7 +150,7 @@ describe("Basic lasso selection tests", () => {
         roughness: 1,
         opacity: 100,
         groupIds: [],
-        frameId: null,
+        containerRef: undefined,
         index: "a9",
         roundness: {
           type: 2,
@@ -180,7 +180,7 @@ describe("Basic lasso selection tests", () => {
         roughness: 1,
         opacity: 100,
         groupIds: [],
-        frameId: null,
+        containerRef: undefined,
         index: "aA",
         roundness: {
           type: 2,
@@ -210,7 +210,7 @@ describe("Basic lasso selection tests", () => {
         roughness: 1,
         opacity: 100,
         groupIds: [],
-        frameId: null,
+        containerRef: undefined,
         index: "aB",
         roundness: {
           type: 2,
@@ -249,7 +249,7 @@ describe("Basic lasso selection tests", () => {
         roughness: 1,
         opacity: 100,
         groupIds: [],
-        frameId: null,
+        containerRef: undefined,
         index: "aC",
         roundness: {
           type: 2,
@@ -287,7 +287,7 @@ describe("Basic lasso selection tests", () => {
         roughness: 1,
         opacity: 100,
         groupIds: [],
-        frameId: null,
+        containerRef: undefined,
         index: "aD",
         roundness: null,
         seed: 103578044,
@@ -960,7 +960,10 @@ describe("Special cases", () => {
           roughness: 1,
           opacity: 100,
           groupIds: [],
-          frameId: "85VShCn1P9k81JqSeOg-c",
+          containerRef: {
+            kind: "frameLike",
+            elementId: "85VShCn1P9k81JqSeOg-c",
+          },
           index: "aE",
           roundness: {
             type: 3,
@@ -990,7 +993,10 @@ describe("Special cases", () => {
           roughness: 1,
           opacity: 100,
           groupIds: [],
-          frameId: "85VShCn1P9k81JqSeOg-c",
+          containerRef: {
+            kind: "frameLike",
+            elementId: "85VShCn1P9k81JqSeOg-c",
+          },
           index: "aH",
           roundness: {
             type: 2,
@@ -1020,7 +1026,10 @@ describe("Special cases", () => {
           roughness: 1,
           opacity: 100,
           groupIds: [],
-          frameId: "85VShCn1P9k81JqSeOg-c",
+          containerRef: {
+            kind: "frameLike",
+            elementId: "85VShCn1P9k81JqSeOg-c",
+          },
           index: "aI",
           roundness: {
             type: 2,
@@ -1050,7 +1059,7 @@ describe("Special cases", () => {
           roughness: 0,
           opacity: 100,
           groupIds: [],
-          frameId: null,
+          containerRef: undefined,
           index: "aJ",
           roundness: null,
           seed: 1134892578,
@@ -1241,7 +1250,7 @@ describe("Special cases", () => {
           height: 78.24124358133415,
           seed: 838106785,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1282,7 +1291,7 @@ describe("Special cases", () => {
           height: 192.4489303545334,
           seed: 319685249,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1322,7 +1331,7 @@ describe("Special cases", () => {
           height: 173.62827429793325,
           seed: 1108085345,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1362,7 +1371,7 @@ describe("Special cases", () => {
           height: 137.02921662223056,
           seed: 398333505,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1402,7 +1411,7 @@ describe("Special cases", () => {
           height: 25.723148574685204,
           seed: 654550561,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1432,7 +1441,7 @@ describe("Special cases", () => {
           height: 25.723148574685204,
           seed: 2060204545,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1462,7 +1471,7 @@ describe("Special cases", () => {
           height: 25.723148574685204,
           seed: 337072609,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1492,7 +1501,7 @@ describe("Special cases", () => {
           height: 25.723148574685204,
           seed: 670330305,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1522,7 +1531,7 @@ describe("Special cases", () => {
           height: 25.723148574685204,
           seed: 495127969,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1552,7 +1561,7 @@ describe("Special cases", () => {
           height: 25.723148574685204,
           seed: 1274196353,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1582,7 +1591,7 @@ describe("Special cases", () => {
           height: 25.723148574685204,
           seed: 2021841249,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1612,7 +1621,7 @@ describe("Special cases", () => {
           height: 25.723148574685204,
           seed: 344130881,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1642,7 +1651,7 @@ describe("Special cases", () => {
           height: 25.723148574685204,
           seed: 995276065,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1672,7 +1681,7 @@ describe("Special cases", () => {
           height: 25.723148574685204,
           seed: 1885432065,
           groupIds: ["ts5VcKn3YXMmP8ipg8J5v", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: {
             type: 2,
           },
@@ -1702,7 +1711,7 @@ describe("Special cases", () => {
           height: 84.66090652809709,
           seed: 489595105,
           groupIds: ["uRBC-GT117eEzaf2ehdX_", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: null,
           boundElements: [],
           updated: 1740960278015,
@@ -1753,7 +1762,7 @@ describe("Special cases", () => {
           height: 61.55209370467244,
           seed: 1330240705,
           groupIds: ["uRBC-GT117eEzaf2ehdX_", "-9NzH7Fa5JaHu4ArEFpa_"],
-          frameId: null,
+          containerRef: undefined,
           roundness: null,
           boundElements: [],
           updated: 1740960278015,
@@ -2128,7 +2137,7 @@ describe("Box selection mode (through the lasso tool)", () => {
           y: 50,
           width: 100,
           height: 50,
-          frameId: "frame",
+          containerRef: { kind: "frameLike", elementId: "frame" },
         }),
       ];
     });

@@ -11,6 +11,7 @@ import { pointFrom, type GlobalPoint, type LocalPoint } from "@excalidraw/math";
 
 import {
   computeBucketFillPolygon,
+  frameLikeContainerRef,
   isBucketFillCompatible,
   isFrameLikeElement,
   isRestylableFill,
@@ -227,7 +228,7 @@ export class AppBucketFill {
     const frameId = owner
       ? isFrameLikeElement(owner)
         ? owner.id
-        : owner.frameId
+        : owner.containerRef?.elementId
       : this.app.getTopLayerFrameAtSceneCoords(scenePointer)?.id ?? null;
     const groupIds = owner
       ? owner.groupIds
@@ -258,7 +259,7 @@ export class AppBucketFill {
       roughness: 0,
       roundness: null,
       opacity: this.app.state.currentItemOpacity,
-      frameId,
+      containerRef: frameLikeContainerRef(frameId),
       groupIds,
       // no marker: fills are recognized by shape (`isBucketFillCompatible`),
       // since metadata would go stale the moment the user restyles the fill

@@ -786,7 +786,7 @@ describe("frame resizing behavior", () => {
     API.setElements([frame, rectangle]);
 
     // Initially, rectangle should not be in the frame
-    expect(rectangle.frameId).toBe(null);
+    expect(rectangle.containerRef?.elementId ?? null).toBe(null);
 
     // Select the frame
     API.setAppState({
@@ -809,9 +809,9 @@ describe("frame resizing behavior", () => {
     UI.updateInput(widthInput, "250");
 
     // After resizing, the rectangle should now be part of the frame
-    expect(h.elements.find((el) => el.id === rectangle.id)?.frameId).toBe(
-      frame.id,
-    );
+    expect(
+      h.elements.find((el) => el.id === rectangle.id)?.containerRef?.elementId,
+    ).toBe(frame.id);
   });
 
   it("should add multiple shapes when frame encompasses them through height resize", () => {
@@ -842,8 +842,8 @@ describe("frame resizing behavior", () => {
     API.setElements([frame, rectangle1, rectangle2]);
 
     // Initially, rectangles should not be in the frame
-    expect(rectangle1.frameId).toBe(null);
-    expect(rectangle2.frameId).toBe(null);
+    expect(rectangle1.containerRef?.elementId ?? null).toBe(null);
+    expect(rectangle2.containerRef?.elementId ?? null).toBe(null);
 
     // Select the frame
     API.setAppState({
@@ -863,12 +863,12 @@ describe("frame resizing behavior", () => {
     UI.updateInput(heightInput, "250");
 
     // After resizing, both rectangles should now be part of the frame
-    expect(h.elements.find((el) => el.id === rectangle1.id)?.frameId).toBe(
-      frame.id,
-    );
-    expect(h.elements.find((el) => el.id === rectangle2.id)?.frameId).toBe(
-      frame.id,
-    );
+    expect(
+      h.elements.find((el) => el.id === rectangle1.id)?.containerRef?.elementId,
+    ).toBe(frame.id);
+    expect(
+      h.elements.find((el) => el.id === rectangle2.id)?.containerRef?.elementId,
+    ).toBe(frame.id);
   });
 
   it("should not affect shapes that remain outside frame after resize", () => {
@@ -899,8 +899,8 @@ describe("frame resizing behavior", () => {
     API.setElements([frame, insideRect, outsideRect]);
 
     // Initially, both rectangles should not be in the frame
-    expect(insideRect.frameId).toBe(null);
-    expect(outsideRect.frameId).toBe(null);
+    expect(insideRect.containerRef?.elementId ?? null).toBe(null);
+    expect(outsideRect.containerRef?.elementId ?? null).toBe(null);
 
     // Select the frame
     API.setAppState({
@@ -919,11 +919,12 @@ describe("frame resizing behavior", () => {
     UI.updateInput(widthInput, "200");
 
     // After resizing, only insideRect should be in the frame
-    expect(h.elements.find((el) => el.id === insideRect.id)?.frameId).toBe(
-      frame.id,
-    );
-    expect(h.elements.find((el) => el.id === outsideRect.id)?.frameId).toBe(
-      null,
-    );
+    expect(
+      h.elements.find((el) => el.id === insideRect.id)?.containerRef?.elementId,
+    ).toBe(frame.id);
+    expect(
+      h.elements.find((el) => el.id === outsideRect.id)?.containerRef
+        ?.elementId,
+    ).toBeUndefined();
   });
 });

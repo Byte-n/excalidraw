@@ -5,6 +5,7 @@ import {
 import { arrayToMap } from "@excalidraw/common";
 
 import { API } from "@excalidraw/excalidraw/tests/helpers/api";
+import { actionGroup } from "@excalidraw/excalidraw/actions";
 import { Keyboard, Pointer, UI } from "@excalidraw/excalidraw/tests/helpers/ui";
 import { getTextEditor } from "@excalidraw/excalidraw/tests/queries/dom";
 import {
@@ -14,7 +15,11 @@ import {
 
 import { getSelectedElements } from "@excalidraw/excalidraw/scene";
 
-import { elementOverlapsWithFrame } from "../src/frame";
+import {
+  elementOverlapsWithFrame,
+  getElementsOverlappingFrame,
+  getFrameChildren,
+} from "../src/frame";
 
 import type {
   ExcalidrawElement,
@@ -25,6 +30,74 @@ import type {
 
 const { h } = window;
 const mouse = new Pointer("mouse");
+
+it("excludes bound text hosted by another frame from overlapping contents", () => {
+  const targetFrame = API.createElement({
+    type: "frame",
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+  });
+  const otherFrame = API.createElement({
+    type: "frame",
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+  });
+  const targetHost = API.createElement({
+    type: "rectangle",
+    x: 20,
+    y: 20,
+    width: 20,
+    height: 20,
+    containerRef: { kind: "frameLike", elementId: targetFrame.id },
+  });
+  const targetText = API.createElement({
+    type: "text",
+    x: 20,
+    y: 20,
+    width: 20,
+    height: 20,
+    containerId: targetHost.id,
+  });
+  const otherHost = API.createElement({
+    type: "rectangle",
+    x: 20,
+    y: 20,
+    width: 20,
+    height: 20,
+    containerRef: { kind: "frameLike", elementId: otherFrame.id },
+  });
+  const otherText = API.createElement({
+    type: "text",
+    x: 20,
+    y: 20,
+    width: 20,
+    height: 20,
+    containerId: otherHost.id,
+  });
+  const elements = [
+    targetFrame,
+    otherFrame,
+    targetHost,
+    targetText,
+    otherHost,
+    otherText,
+  ];
+
+  const contents = getElementsOverlappingFrame(
+    elements,
+    targetFrame,
+    arrayToMap(elements),
+  );
+
+  expect(contents).toContain(targetHost);
+  expect(contents).toContain(targetText);
+  expect(contents).not.toContain(otherHost);
+  expect(contents).not.toContain(otherText);
+});
 
 describe("adding elements to frames", () => {
   type ElementType = string;
@@ -136,6 +209,86 @@ describe("adding elements to frames", () => {
     });
   });
 
+  it("keeps grouped hosts with bound text in their frame", () => {
+    const first = API.createElement({
+      type: "rectangle",
+      x: 10,
+      y: 10,
+      width: 20,
+      height: 20,
+      containerRef: { kind: "frameLike", elementId: frame.id },
+      boundElements: [{ type: "text", id: "firstText" }],
+    });
+    const firstText = API.createElement({
+      id: "firstText",
+      type: "text",
+      x: 10,
+      y: 10,
+      width: 20,
+      height: 20,
+      containerId: first.id,
+    });
+    const second = API.createElement({
+      type: "rectangle",
+      x: 50,
+      y: 10,
+      width: 20,
+      height: 20,
+      containerRef: { kind: "frameLike", elementId: frame.id },
+      boundElements: [{ type: "text", id: "secondText" }],
+    });
+    const secondText = API.createElement({
+      id: "secondText",
+      type: "text",
+      x: 50,
+      y: 10,
+      width: 20,
+      height: 20,
+      containerId: second.id,
+    });
+    API.setElements([first, firstText, second, secondText, frame]);
+    API.setSelectedElements([first, second]);
+
+    API.executeAction(actionGroup);
+
+    expect(
+      h.elements.find((element) => element.id === first.id)?.containerRef,
+    ).toEqual({ kind: "frameLike", elementId: frame.id });
+    expect(
+      h.elements.find((element) => element.id === second.id)?.containerRef,
+    ).toEqual({ kind: "frameLike", elementId: frame.id });
+  });
+
+  it("supports direct children in magic frames", () => {
+    const magicFrame = API.createElement({
+      id: "magicFrame",
+      type: "magicframe",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+    });
+    const child = API.createElement({
+      id: "child",
+      type: "rectangle",
+      x: 10,
+      y: 10,
+      width: 20,
+      height: 20,
+      containerRef: { kind: "frameLike", elementId: magicFrame.id },
+    });
+
+    API.setElements([magicFrame, child]);
+
+    expect(child.containerRef).toEqual({
+      kind: "frameLike",
+      elementId: magicFrame.id,
+    });
+    expect(
+      getFrameChildren(h.app.scene.getNonDeletedElementsMap(), magicFrame.id),
+    ).toEqual([child]);
+  });
+
   it("should treat an element fully containing a frame as overlapping the frame", () => {
     const containingRect = API.createElement({
       type: "rectangle",
@@ -178,7 +331,7 @@ describe("adding elements to frames", () => {
       (element) => element.id !== frame.id && element.id !== cover.id,
     );
 
-    expect(createdElement?.frameId).toBe(null);
+    expect(createdElement?.containerRef?.elementId ?? null).toBe(null);
     expect(h.elements.map((element) => element.id)).toEqual([
       frame.id,
       cover.id,
@@ -208,7 +361,7 @@ describe("adding elements to frames", () => {
       (element) => element.id !== frame.id && element.id !== cover.id,
     );
 
-    expect(createdElement?.frameId).toBe(frame.id);
+    expect(createdElement?.containerRef?.elementId ?? null).toBe(frame.id);
   });
 
   it("should highlight the target frame while creating a new element", () => {
@@ -264,7 +417,7 @@ describe("adding elements to frames", () => {
 
     expect(createdText?.x).toBe(0);
     expect(createdText?.y).toBe(0);
-    expect(createdText?.frameId).toBe(null);
+    expect(createdText?.containerRef?.elementId ?? null).toBe(null);
   });
 
   it("should add a newly created element to a frame behind another frame", () => {
@@ -289,7 +442,7 @@ describe("adding elements to frames", () => {
       (element) => element.id !== frame.id && element.id !== lockedFrame.id,
     );
 
-    expect(createdElement?.frameId).toBe(frame.id);
+    expect(createdElement?.containerRef?.elementId ?? null).toBe(frame.id);
   });
 
   it("should insert a newly created frame child just below its frame", () => {
@@ -301,7 +454,7 @@ describe("adding elements to frames", () => {
       width: 80,
       height: 80,
       backgroundColor: "#ffc9c9",
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
     });
     const otherFrameChild = API.createElement({
       id: "otherFrameChild",
@@ -310,7 +463,7 @@ describe("adding elements to frames", () => {
       y: 20,
       width: 20,
       height: 20,
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
     });
 
     API.setElements([frameChildUnderCursor, otherFrameChild, frame]);
@@ -327,7 +480,7 @@ describe("adding elements to frames", () => {
         element.id !== otherFrameChild.id,
     );
 
-    expect(createdElement?.frameId).toBe(frame.id);
+    expect(createdElement?.containerRef?.elementId ?? null).toBe(frame.id);
     expect(h.elements.map((element) => element.id)).toEqual([
       frameChildUnderCursor.id,
       otherFrameChild.id,
@@ -345,7 +498,7 @@ describe("adding elements to frames", () => {
       width: 80,
       height: 80,
       backgroundColor: "#ffc9c9",
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
     });
     const otherFrameChild = API.createElement({
       id: "otherFrameChild",
@@ -354,7 +507,7 @@ describe("adding elements to frames", () => {
       y: 20,
       width: 20,
       height: 20,
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
     });
 
     API.setElements([frame, frameChildUnderCursor, otherFrameChild]);
@@ -371,7 +524,7 @@ describe("adding elements to frames", () => {
         element.id !== otherFrameChild.id,
     );
 
-    expect(createdElement?.frameId).toBe(frame.id);
+    expect(createdElement?.containerRef?.elementId ?? null).toBe(frame.id);
     expect(h.elements.map((element) => element.id)).toEqual([
       frame.id,
       frameChildUnderCursor.id,
@@ -389,7 +542,7 @@ describe("adding elements to frames", () => {
 
         func(frame, rect2);
 
-        expect(h.elements[0].frameId).toBe(frame.id);
+        expect(h.elements[0].containerRef?.elementId).toBe(frame.id);
         expectEqualIds([rect2, frame]);
       });
 
@@ -399,8 +552,8 @@ describe("adding elements to frames", () => {
         func(frame, rect2);
         func(frame, rect3);
 
-        expect(rect2.frameId).toBe(frame.id);
-        expect(rect3.frameId).toBe(frame.id);
+        expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+        expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
         expectEqualIds([rect2, rect3, frame]);
       });
 
@@ -410,8 +563,8 @@ describe("adding elements to frames", () => {
         func(frame, rect2);
         func(frame, rect3);
 
-        expect(rect2.frameId).toBe(frame.id);
-        expect(rect3.frameId).toBe(frame.id);
+        expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+        expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
         expectEqualIds([rect2, rect3, frame, rect1, rect4]);
       });
 
@@ -421,8 +574,8 @@ describe("adding elements to frames", () => {
         func(frame, rect2);
         func(frame, rect3);
 
-        expect(rect2.frameId).toBe(frame.id);
-        expect(rect3.frameId).toBe(frame.id);
+        expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+        expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
         expectEqualIds([rect2, rect3, frame, rect4, rect1]);
       });
     });
@@ -433,7 +586,7 @@ describe("adding elements to frames", () => {
 
         func(frame, rect2);
 
-        expect(h.elements[0].frameId).toBe(frame.id);
+        expect(h.elements[0].containerRef?.elementId).toBe(frame.id);
         expectEqualIds([rect2, frame]);
       });
 
@@ -443,8 +596,8 @@ describe("adding elements to frames", () => {
         func(frame, rect2);
         func(frame, rect3);
 
-        expect(rect2.frameId).toBe(frame.id);
-        expect(rect3.frameId).toBe(frame.id);
+        expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+        expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
         expectEqualIds([rect3, rect2, frame]);
       });
 
@@ -454,8 +607,8 @@ describe("adding elements to frames", () => {
         func(frame, rect2);
         func(frame, rect3);
 
-        expect(rect2.frameId).toBe(frame.id);
-        expect(rect3.frameId).toBe(frame.id);
+        expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+        expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
         expectEqualIds([rect1, rect4, rect3, rect2, frame]);
       });
 
@@ -465,8 +618,8 @@ describe("adding elements to frames", () => {
         func(frame, rect2);
         func(frame, rect3);
 
-        expect(rect2.frameId).toBe(frame.id);
-        expect(rect3.frameId).toBe(frame.id);
+        expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+        expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
         expectEqualIds([rect4, rect1, rect3, rect2, frame]);
       });
     });
@@ -478,8 +631,8 @@ describe("adding elements to frames", () => {
         func(frame, rect2);
         func(frame, rect3);
 
-        expect(rect2.frameId).toBe(frame.id);
-        expect(rect3.frameId).toBe(frame.id);
+        expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+        expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
         expectEqualIds([rect2, rect3, frame]);
       });
 
@@ -489,8 +642,8 @@ describe("adding elements to frames", () => {
         func(frame, rect2);
         func(frame, rect3);
 
-        expect(rect2.frameId).toBe(frame.id);
-        expect(rect3.frameId).toBe(frame.id);
+        expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+        expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
         expectEqualIds([rect1, rect2, rect3, frame, rect4]);
       });
 
@@ -500,8 +653,8 @@ describe("adding elements to frames", () => {
         func(frame, rect2);
         func(frame, rect3);
 
-        expect(rect2.frameId).toBe(frame.id);
-        expect(rect3.frameId).toBe(frame.id);
+        expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+        expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
         expectEqualIds([rect4, rect3, rect2, frame, rect1]);
       });
     });
@@ -536,16 +689,16 @@ describe("adding elements to frames", () => {
 
     assertOrder(h.elements, initialOrder);
 
-    expect(h.elements[1].frameId).toBe(null);
-    expect(h.elements[2].frameId).toBe(null);
+    expect(h.elements[1].containerRef).toBeUndefined();
+    expect(h.elements[2].containerRef).toBeUndefined();
 
     const container = h.elements[1];
 
     resizeFrameOverElement(frame, container);
     assertOrder(h.elements, expectedOrder);
 
-    expect(h.elements[0].frameId).toBe(frame.id);
-    expect(h.elements[1].frameId).toBe(frame.id);
+    expect(h.elements[0].containerRef?.elementId).toBe(frame.id);
+    expect(h.elements[1].containerRef?.elementId).toBe(frame.id);
   };
 
   describe("resizing frame over elements", async () => {
@@ -606,8 +759,8 @@ describe("adding elements to frames", () => {
 
       resizeFrameOverElement(frame, arrow);
 
-      expect(arrow.frameId).toBe(frame.id);
-      expect(text.frameId).toBe(frame.id);
+      expect(arrow.containerRef?.elementId ?? null).toBe(frame.id);
+      expect(text.containerRef?.elementId ?? null).toBe(frame.id);
       expectEqualIds([arrow, text, frame]);
     });
 
@@ -616,8 +769,8 @@ describe("adding elements to frames", () => {
 
       resizeFrameOverElement(frame, arrow);
 
-      expect(arrow.frameId).toBe(frame.id);
-      expect(text.frameId).toBe(frame.id);
+      expect(arrow.containerRef?.elementId ?? null).toBe(frame.id);
+      expect(text.containerRef?.elementId ?? null).toBe(frame.id);
       expectEqualIds([arrow, text, frame]);
     });
 
@@ -626,8 +779,8 @@ describe("adding elements to frames", () => {
 
       resizeFrameOverElement(frame, arrow);
 
-      expect(arrow.frameId).toBe(frame.id);
-      expect(text.frameId).toBe(frame.id);
+      expect(arrow.containerRef?.elementId ?? null).toBe(frame.id);
+      expect(text.containerRef?.elementId ?? null).toBe(frame.id);
       expectEqualIds([arrow, text, frame]);
     });
   });
@@ -639,8 +792,8 @@ describe("adding elements to frames", () => {
       resizeFrameOverElement(frame, rect4);
       resizeFrameOverElement(frame, rect3);
 
-      expect(rect2.frameId).toBe(frame.id);
-      expect(rect3.frameId).toBe(frame.id);
+      expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+      expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
       expectEqualIds([rect2, rect3, frame, rect4, rect1]);
     });
 
@@ -650,8 +803,8 @@ describe("adding elements to frames", () => {
       resizeFrameOverElement(frame, rect4);
       resizeFrameOverElement(frame, rect3);
 
-      expect(rect2.frameId).toBe(frame.id);
-      expect(rect3.frameId).toBe(frame.id);
+      expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+      expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
       expectEqualIds([rect1, rect2, rect3, frame, rect4]);
     });
 
@@ -661,8 +814,8 @@ describe("adding elements to frames", () => {
       resizeFrameOverElement(frame, rect4);
       resizeFrameOverElement(frame, rect3);
 
-      expect(rect2.frameId).toBe(frame.id);
-      expect(rect3.frameId).toBe(frame.id);
+      expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
+      expect(rect3.containerRef?.elementId ?? null).toBe(frame.id);
       expectEqualIds([rect1, rect2, rect3, frame, rect4]);
     });
   });
@@ -683,7 +836,9 @@ describe("adding elements to frames", () => {
 
       dragElementIntoFrame(frame, containingRect);
 
-      expect(API.getElement(containingRect).frameId).toBe(frame.id);
+      expect(API.getElement(containingRect).containerRef?.elementId).toBe(
+        frame.id,
+      );
     });
 
     it("should drag an element into a frame", () => {
@@ -691,7 +846,7 @@ describe("adding elements to frames", () => {
 
       dragElementIntoFrame(frame, rect2);
 
-      expect(rect2.frameId).toBe(frame.id);
+      expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
     });
 
     it("should move an element dragged from one frame into another", () => {
@@ -710,16 +865,16 @@ describe("adding elements to frames", () => {
         y: 50,
         width: 20,
         height: 20,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
       API.setElements([frame, frameChild, otherFrame]);
 
-      expect(frameChild.frameId).toBe(frame.id);
+      expect(frameChild.containerRef?.elementId ?? null).toBe(frame.id);
 
       dragElementIntoFrame(otherFrame, frameChild);
 
-      expect(frameChild.frameId).toBe(otherFrame.id);
+      expect(frameChild.containerRef?.elementId ?? null).toBe(otherFrame.id);
     });
 
     it("should layer a dragged element above the highest frame child", () => {
@@ -730,14 +885,14 @@ describe("adding elements to frames", () => {
         y: 10,
         width: 20,
         height: 20,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
       API.setElements([frame, frameChild, rect2]);
 
       dragElementIntoFrame(frame, rect2);
 
-      expect(rect2.frameId).toBe(frame.id);
+      expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
       expect(h.elements.map((element) => element.id)).toEqual([
         frame.id,
         frameChild.id,
@@ -755,7 +910,7 @@ describe("adding elements to frames", () => {
         y: 10,
         width: 20,
         height: 20,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
       API.setElements([rect2, frame, frameChild]);
@@ -806,7 +961,7 @@ describe("adding elements to frames", () => {
         frame.id,
         frameChild.id,
       ]);
-      expect(rect2.frameId).toBe(null);
+      expect(rect2.containerRef?.elementId ?? null).toBe(null);
     });
 
     it("should not preview reorder dragged elements already in the highlighted frame", () => {
@@ -817,7 +972,7 @@ describe("adding elements to frames", () => {
         y: 10,
         width: 20,
         height: 20,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
       const otherFrameChild = API.createElement({
         id: "otherFrameChild",
@@ -826,7 +981,7 @@ describe("adding elements to frames", () => {
         y: 10,
         width: 20,
         height: 20,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
       API.setElements([frameChild, frame, otherFrameChild]);
@@ -864,7 +1019,7 @@ describe("adding elements to frames", () => {
         y: 10,
         width: 20,
         height: 20,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
         boundElements: [{ id: "boundText", type: "text" }],
       });
       const boundText = API.createElement({
@@ -875,7 +1030,6 @@ describe("adding elements to frames", () => {
         width: 20,
         height: 20,
         containerId: frameChild.id,
-        frameId: frame.id,
       });
       const otherFrameChild = API.createElement({
         id: "otherFrameChild",
@@ -884,7 +1038,7 @@ describe("adding elements to frames", () => {
         y: 10,
         width: 20,
         height: 20,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
       const nonFrameElement = API.createElement({
         id: "nonFrameElement",
@@ -911,9 +1065,9 @@ describe("adding elements to frames", () => {
       mouse.moveTo(frame.x + frame.width - 5, nonFrameElement.y + 10);
       mouse.up();
 
-      expect(frameChild.frameId).toBe(frame.id);
-      expect(boundText.frameId).toBe(frame.id);
-      expect(nonFrameElement.frameId).toBe(frame.id);
+      expect(frameChild.containerRef?.elementId ?? null).toBe(frame.id);
+      expect(boundText.containerRef).toBeUndefined();
+      expect(nonFrameElement.containerRef?.elementId ?? null).toBe(frame.id);
       expect(h.elements.map((element) => element.id)).toEqual([
         frame.id,
         otherFrameChild.id,
@@ -931,7 +1085,7 @@ describe("adding elements to frames", () => {
         y: 10,
         width: 20,
         height: 20,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
       const otherFrameChild = API.createElement({
         id: "otherFrameChild",
@@ -940,7 +1094,7 @@ describe("adding elements to frames", () => {
         y: 10,
         width: 20,
         height: 20,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
       API.setElements([frame, frameChild, otherFrameChild]);
@@ -953,7 +1107,7 @@ describe("adding elements to frames", () => {
       mouse.moveTo(frameChild.x + frameChild.width / 2 + 5, frameChild.y + 10);
       mouse.up();
 
-      expect(frameChild.frameId).toBe(frame.id);
+      expect(frameChild.containerRef?.elementId ?? null).toBe(frame.id);
       expect(h.elements.map((element) => element.id)).toEqual([
         frame.id,
         frameChild.id,
@@ -978,7 +1132,7 @@ describe("adding elements to frames", () => {
       mouse.moveTo(20, 20);
       mouse.upAt(20, 20);
 
-      expect(rect2.frameId).toBe(null);
+      expect(rect2.containerRef?.elementId ?? null).toBe(null);
     });
 
     it("should drag an element into a frame over a non-frame element", () => {
@@ -998,7 +1152,7 @@ describe("adding elements to frames", () => {
       mouse.moveTo(20, 20);
       mouse.upAt(20, 20);
 
-      expect(rect2.frameId).toBe(frame.id);
+      expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
     });
 
     it("should keep dragging a frame child over a non-frame element above its frame", () => {
@@ -1018,7 +1172,7 @@ describe("adding elements to frames", () => {
         y: 20,
         width: 20,
         height: 20,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
       API.setElements([frameChild, frame, cover]);
@@ -1034,7 +1188,7 @@ describe("adding elements to frames", () => {
 
       mouse.upAt(20, 20);
 
-      expect(frameChild.frameId).toBe(frame.id);
+      expect(frameChild.containerRef?.elementId ?? null).toBe(frame.id);
     });
 
     it.skip("should drag element inside, duplicate it and keep it in frame", () => {
@@ -1046,8 +1200,8 @@ describe("adding elements to frames", () => {
 
       const rect2_copy = getCloneByOrigId(rect2.id);
 
-      expect(rect2_copy.frameId).toBe(frame.id);
-      expect(rect2.frameId).toBe(frame.id);
+      expect(rect2_copy.containerRef?.elementId ?? null).toBe(frame.id);
+      expect(rect2.containerRef?.elementId ?? null).toBe(frame.id);
       expectEqualIds([rect2_copy, rect2, frame]);
     });
 
@@ -1061,8 +1215,8 @@ describe("adding elements to frames", () => {
 
       const rect2_copy = getCloneByOrigId(rect2.id);
 
-      expect(rect2_copy.frameId).toBe(frame.id);
-      expect(rect2.frameId).toBe(null);
+      expect(rect2_copy.containerRef?.elementId ?? null).toBe(frame.id);
+      expect(rect2.containerRef?.elementId ?? null).toBe(null);
       expectEqualIds([rect2_copy, frame, rect2]);
     });
 
@@ -1095,7 +1249,7 @@ describe("adding elements to frames", () => {
         y: 25,
         width: 50,
         height: 50,
-        frameId: frame1.id,
+        containerRef: { kind: "frameLike", elementId: frame1.id },
       });
       const rectangle2 = API.createElement({
         type: "rectangle",
@@ -1103,7 +1257,7 @@ describe("adding elements to frames", () => {
         y: 25,
         width: 50,
         height: 50,
-        frameId: frame2.id,
+        containerRef: { kind: "frameLike", elementId: frame2.id },
       });
       const rectangle3 = API.createElement({
         type: "rectangle",
@@ -1111,7 +1265,7 @@ describe("adding elements to frames", () => {
         y: 25,
         width: 50,
         height: 50,
-        frameId: frame3.id,
+        containerRef: { kind: "frameLike", elementId: frame3.id },
       });
       const rectangle4 = API.createElement({
         type: "rectangle",
@@ -1119,7 +1273,7 @@ describe("adding elements to frames", () => {
         y: 25,
         width: 50,
         height: 50,
-        frameId: frame3.id,
+        containerRef: { kind: "frameLike", elementId: frame3.id },
       });
 
       API.setElements([
@@ -1162,7 +1316,7 @@ describe("adding elements to frames", () => {
         y: 25,
         width: 50,
         height: 50,
-        frameId: frame1.id,
+        containerRef: { kind: "frameLike", elementId: frame1.id },
       });
       const rectangle2 = API.createElement({
         type: "rectangle",
@@ -1170,7 +1324,7 @@ describe("adding elements to frames", () => {
         y: 25,
         width: 50,
         height: 50,
-        frameId: frame2.id,
+        containerRef: { kind: "frameLike", elementId: frame2.id },
       });
 
       API.setElements([rectangle1, rectangle2, frame1, frame2]);

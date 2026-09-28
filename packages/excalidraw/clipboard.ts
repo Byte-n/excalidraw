@@ -20,8 +20,6 @@ import {
   isInitializedImageElement,
 } from "@excalidraw/element";
 
-import { getContainingFrame } from "@excalidraw/element";
-
 import type { ValueOf } from "@excalidraw/common/utility-types";
 
 import type { IMAGE_MIME_TYPES, STRING_MIME_TYPES } from "@excalidraw/common";
@@ -158,8 +156,8 @@ export const serializeAsClipboardJSON = ({
   files: BinaryFiles | null;
 }) => {
   const elementsMap = arrayToMap(elements);
-  const framesToCopy = new Set<ExcalidrawFrameLikeElement>(
-    elements.filter((element) => isFrameLikeElement(element)),
+  const frameIdsToCopy = new Set<ExcalidrawFrameLikeElement["id"]>(
+    elements.filter(isFrameLikeElement).map((element) => element.id),
   );
   let foundFile = false;
 
@@ -184,12 +182,12 @@ export const serializeAsClipboardJSON = ({
     type: EXPORT_DATA_TYPES.excalidrawClipboard,
     elements: elements.map((element) => {
       if (
-        getContainingFrame(element, elementsMap) &&
-        !framesToCopy.has(getContainingFrame(element, elementsMap)!)
+        element.containerRef?.elementId &&
+        !frameIdsToCopy.has(element.containerRef.elementId)
       ) {
         const copiedElement = deepCopyElement(element);
         mutateElement(copiedElement, elementsMap, {
-          frameId: null,
+          containerRef: undefined,
         });
         return copiedElement;
       }

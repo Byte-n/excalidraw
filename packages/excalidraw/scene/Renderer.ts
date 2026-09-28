@@ -249,7 +249,9 @@ export class Renderer {
     newElement: AppState["newElement"];
   }) {
     const elementsMap = toBrandedType<RenderableElementsMap>(new Map());
-    const newElementCanvasElement = newElement?.frameId ? null : newElement;
+    const newElementCanvasElement = newElement?.containerRef?.elementId
+      ? null
+      : newElement;
     const hidden = this.scene.getMindmapHiddenElementIds();
 
     for (const element of elements) {
@@ -365,7 +367,7 @@ export class Renderer {
   public getRenderableElements = (opts: GetRenderableElementsOpts) => {
     const { newElement } = opts;
     const canvasNonce = `${this.scene.getSceneNonce()}${
-      newElement?.frameId ? `:${newElement.versionNonce}` : ""
+      newElement?.containerRef?.elementId ? `:${newElement.versionNonce}` : ""
     }`;
 
     const ret = this._getRenderableElements({
@@ -385,7 +387,7 @@ export class Renderer {
     });
 
     // if we're dragging elements over a frame, reorder the selected elements
-    // inside the frame during render (we don't set the `element.frameId` until
+    // inside the frame during render (we don't set `containerRef` until
     // pointerup else we'd have to painstainly restore the orig index if user
     // didn't end up adding elements to the frame)
     if (

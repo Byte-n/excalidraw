@@ -309,7 +309,7 @@ export const getCloneByOrigId = <T extends boolean = false>(
  *
  * If testing cloned elements, you can use { `[ORIG_ID]: origElement.id }
  * If you need to refer to cloned element properties, you can use
- * `getCloneByOrigId()`, e.g.: `{ frameId: getCloneByOrigId(origFrame.id)?.id }`
+ * `getCloneByOrigId()`, e.g.: `{ containerRef: { kind: "frameLike", elementId: getCloneByOrigId(origFrame.id)?.id } }`
  */
 export const assertElements = <T extends AllPossibleKeys<ExcalidrawElement>>(
   actualElements: readonly ExcalidrawElement[],
@@ -329,17 +329,18 @@ export const assertElements = <T extends AllPossibleKeys<ExcalidrawElement>>(
   const expectedElementsWithIds: (typeof expectedElements[number] & {
     id: ExcalidrawElement["id"];
   })[] = expectedElements.map((el) => {
+    const normalizedElement: any = { ...el };
     if ("id" in el) {
-      return el;
+      return normalizedElement;
     }
     const actualElement = actualElements.find(
       (act) => (act as any)[ORIG_ID] === el[ORIG_ID],
     );
     if (actualElement) {
-      return { ...el, id: actualElement.id };
+      return { ...normalizedElement, id: actualElement.id };
     }
     return {
-      ...el,
+      ...normalizedElement,
       id: "UNKNOWN_ID",
     };
   });

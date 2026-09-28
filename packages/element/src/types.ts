@@ -71,7 +71,7 @@ type _ExcalidrawElementBase = Readonly<{
   /** List of groups the element belongs to.
       Ordered from deepest to shallowest. */
   groupIds: readonly GroupId[];
-  frameId: string | null;
+  containerRef?: DirectContainerRef;
   /** other elements that are bound to this element */
   boundElements: readonly BoundElement[] | null;
   /** epoch (ms) timestamp of last element update */
@@ -85,6 +85,14 @@ type _ExcalidrawElementBase = Readonly<{
   locked: boolean;
   customData?: Record<string, any>;
 }>;
+
+export type FrameLikeContainerRef = Readonly<{
+  kind: "frameLike";
+  elementId: string;
+}>;
+
+/** Direct spatial parent. Later container kinds extend this discriminated union. */
+export type DirectContainerRef = FrameLikeContainerRef;
 
 export type ExcalidrawSelectionElement = _ExcalidrawElementBase & {
   type: "selection";

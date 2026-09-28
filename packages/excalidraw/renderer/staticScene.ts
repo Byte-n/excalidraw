@@ -360,7 +360,7 @@ const _renderStaticScene = ({
     renderState: ElementRenderState,
   ) => {
     if (
-      !(element.frameId || appState.frameToHighlight?.id) ||
+      !(element.containerRef?.elementId || appState.frameToHighlight?.id) ||
       !appState.frameRendering.enabled ||
       !appState.frameRendering.clip
     ) {
@@ -378,7 +378,7 @@ const _renderStaticScene = ({
     const isTranslated = (state: ElementRenderState) =>
       state.offset.x !== 0 || state.offset.y !== 0;
     if (
-      (element.frameId === frame.id &&
+      (element.containerRef?.elementId === frame.id &&
         (isTranslated(renderState) || isTranslated(frameState))) ||
       shouldApplyFrameClip(
         getRenderElementWithPositionOverride(element, renderState.offset),
@@ -483,7 +483,7 @@ const _renderStaticScene = ({
             // Synthetic visual: resolve overrides and frame opacity through
             // its owner, without creating another animation target.
             id: element.id,
-            frameId: element.frameId,
+            containerRef: element.containerRef,
           };
           renderElement(
             label,

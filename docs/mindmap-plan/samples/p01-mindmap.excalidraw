@@ -19,7 +19,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -61,7 +60,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -103,7 +101,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -145,7 +142,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -187,7 +183,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -229,7 +224,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -271,7 +265,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -313,7 +306,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -355,7 +347,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -397,7 +388,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -439,7 +429,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -481,7 +470,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -523,7 +511,6 @@
       "roughness": 1,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 3
       },
@@ -558,7 +545,6 @@
       "roughness": 1,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": {
         "type": 2
       },
@@ -607,7 +593,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,
@@ -644,7 +629,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,
@@ -681,7 +665,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,
@@ -718,7 +701,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,
@@ -755,7 +737,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,
@@ -792,7 +773,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,
@@ -829,7 +809,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,
@@ -866,7 +845,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,
@@ -903,7 +881,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,
@@ -940,7 +917,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,
@@ -977,7 +953,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,
@@ -1014,7 +989,6 @@
       "roughness": 0,
       "opacity": 100,
       "groupIds": [],
-      "frameId": null,
       "roundness": null,
       "index": null,
       "isDeleted": false,

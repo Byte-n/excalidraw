@@ -16,6 +16,7 @@ import { getNonDeletedElements } from ".";
 
 import type { Scene } from "./Scene";
 import type {
+  ElementsMap,
   ExcalidrawArrowElement,
   ExcalidrawElement,
   ExcalidrawFrameLikeElement,
@@ -24,9 +25,16 @@ import type {
   OrderedExcalidrawElement,
 } from "./types";
 
-const isOfTargetFrame = (element: ExcalidrawElement, frameId: string) => {
-  return element.frameId === frameId || element.id === frameId;
-};
+const getFrameId = (element: ExcalidrawElement, elementsMap: ElementsMap) =>
+  isTextElement(element) && element.containerId
+    ? elementsMap.get(element.containerId)?.containerRef?.elementId
+    : element.containerRef?.elementId;
+
+const isOfTargetFrame = (
+  element: ExcalidrawElement,
+  frameId: string,
+  elementsMap: ElementsMap,
+) => getFrameId(element, elementsMap) === frameId || element.id === frameId;
 
 /**
  * Returns indices of elements to move based on selected elements.
@@ -133,10 +141,11 @@ const getContiguousFrameRangeElements = (
   allElements: readonly ExcalidrawElement[],
   frameId: ExcalidrawFrameLikeElement["id"],
 ) => {
+  const elementsMap = arrayToMap(allElements);
   let rangeStart = -1;
   let rangeEnd = -1;
   allElements.forEach((element, index) => {
-    if (isOfTargetFrame(element, frameId)) {
+    if (isOfTargetFrame(element, frameId, elementsMap)) {
       if (rangeStart === -1) {
         rangeStart = index;
       }
@@ -215,13 +224,14 @@ const getTargetIndex = (
   scene: Scene,
 ) => {
   const sourceElement = elements[boundaryIndex];
+  const elementsMap = arrayToMap(elements);
 
   const indexFilter = (element: ExcalidrawElement) => {
     if (element.isDeleted) {
       return false;
     }
     if (containingFrame) {
-      return element.frameId === containingFrame;
+      return getFrameId(element, elementsMap) === containingFrame;
     }
     // if we're editing group, find closest sibling irrespective of whether
     // there's a different-group element between them (for legacy reasons)
@@ -267,11 +277,11 @@ const getTargetIndex = (
 
   if (
     !containingFrame &&
-    (nextElement.frameId || isFrameLikeElement(nextElement))
+    (getFrameId(nextElement, elementsMap) || isFrameLikeElement(nextElement))
   ) {
     const frameElements = getContiguousFrameRangeElements(
       elements,
-      nextElement.frameId || nextElement.id,
+      getFrameId(nextElement, elementsMap) || nextElement.id,
     );
     return direction === "left"
       ? elements.indexOf(frameElements[0])
@@ -375,6 +385,7 @@ const shiftElementsByOne = (
       .filter((idx) => isFrameLikeElement(elements[idx]))
       .map((idx) => elements[idx].id),
   );
+  const elementsMap = arrayToMap(elements);
 
   groupedIndices.forEach((indices, i) => {
     const leadingIndex = indices[0];
@@ -383,17 +394,18 @@ const shiftElementsByOne = (
 
     const containingFrame = indices.some((idx) => {
       const el = elements[idx];
-      return el.frameId && selectedFrames.has(el.frameId);
+      const frameId = getFrameId(el, elementsMap);
+      return frameId && selectedFrames.has(frameId);
     })
       ? null
-      : elements[boundaryIndex]?.frameId;
+      : getFrameId(elements[boundaryIndex], elementsMap) ?? null;
 
     const targetIndex = getTargetIndex(
       appState,
       elements,
       boundaryIndex,
       direction,
-      containingFrame,
+      containingFrame ?? null,
       scene,
     );
 
@@ -458,6 +470,7 @@ const shiftElementsToEnd = (
   }
 
   const targetElementsMap = getTargetElementsMap(elements, indicesToMove);
+  const elementsMap = arrayToMap(elements);
   const displacedElements: ExcalidrawElement[] = [];
 
   let leadingIndex: number | undefined;
@@ -465,7 +478,7 @@ const shiftElementsToEnd = (
   if (direction === "left") {
     if (containingFrame) {
       leadingIndex = findIndex(elements, (el) =>
-        isOfTargetFrame(el, containingFrame),
+        isOfTargetFrame(el, containingFrame, elementsMap),
       );
     } else if (appState.editingGroupId) {
       const groupElements = getElementsInGroup(
@@ -484,7 +497,7 @@ const shiftElementsToEnd = (
   } else {
     if (containingFrame) {
       trailingIndex = findLastIndex(elements, (el) =>
-        isOfTargetFrame(el, containingFrame),
+        isOfTargetFrame(el, containingFrame, elementsMap),
       );
     } else if (appState.editingGroupId) {
       const groupElements = getElementsInGroup(
@@ -570,6 +583,7 @@ function shiftElementsAccountingForFrames(
       includeElementsInFrames: true,
     }),
   );
+  const allElementsMap = arrayToMap(allElements);
 
   const frameAwareContiguousElementsToMove: {
     regularElements: ExcalidrawElement[];
@@ -586,21 +600,20 @@ function shiftElementsAccountingForFrames(
 
   for (const element of allElements) {
     if (elementsToMove.has(element.id)) {
+      const frameId = getFrameId(element, allElementsMap);
       if (
         isFrameLikeElement(element) ||
-        (element.frameId && fullySelectedFrames.has(element.frameId))
+        (frameId && fullySelectedFrames.has(frameId))
       ) {
         frameAwareContiguousElementsToMove.regularElements.push(element);
-      } else if (!element.frameId) {
+      } else if (!frameId) {
         frameAwareContiguousElementsToMove.regularElements.push(element);
       } else {
         const frameChildren =
-          frameAwareContiguousElementsToMove.frameChildren.get(
-            element.frameId,
-          ) || [];
+          frameAwareContiguousElementsToMove.frameChildren.get(frameId) || [];
         frameChildren.push(element);
         frameAwareContiguousElementsToMove.frameChildren.set(
-          element.frameId,
+          frameId,
           frameChildren,
         );
       }

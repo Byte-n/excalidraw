@@ -56,7 +56,8 @@ const _renderNewElementScene = ({
         return;
       }
 
-      const frameId = newElement.frameId || appState.frameToHighlight?.id;
+      const frameId =
+        newElement.containerRef?.elementId || appState.frameToHighlight?.id;
 
       if (
         frameId &&

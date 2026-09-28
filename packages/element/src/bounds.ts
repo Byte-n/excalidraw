@@ -1521,7 +1521,10 @@ export const elementsOverlappingBBox = <T extends ExcalidrawElement>({
 
   if (framesInSelection) {
     elementsInSelection.forEach((element) => {
-      if (element.frameId && framesInSelection.has(element.frameId)) {
+      if (
+        element.containerRef?.elementId &&
+        framesInSelection.has(element.containerRef?.elementId)
+      ) {
         elementsInSelection.delete(element);
       }
     });

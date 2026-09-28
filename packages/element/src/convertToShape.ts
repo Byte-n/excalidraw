@@ -50,6 +50,7 @@ import {
   isLinearElement,
   isLineElement,
   isUsingAdaptiveRadius,
+  frameLikeContainerRef,
 } from "./typeChecks";
 import { LinearElementEditor } from "./linearElementEditor";
 
@@ -579,7 +580,7 @@ export const convertToShape = (
         height: recognizedShape.boundingBox[3] - recognizedShape.boundingBox[1],
         groupIds: [],
         angle: 0 as Radians,
-        frameId,
+        containerRef: frameLikeContainerRef(frameId),
         roundness,
         roughness: appState.currentItemRoughness,
         backgroundColor: appState.currentItemBackgroundColor,
@@ -622,7 +623,7 @@ export const convertToShape = (
             endPoint,
           ],
           groupIds: [],
-          frameId,
+          containerRef: frameLikeContainerRef(frameId),
           locked: false,
           angle: 0 as Radians,
           roundness,
@@ -660,7 +661,7 @@ export const convertToShape = (
           endPoint,
         ],
         groupIds: [],
-        frameId,
+        containerRef: frameLikeContainerRef(frameId),
         locked: false,
         angle: 0 as Radians,
         roundness,
@@ -700,7 +701,7 @@ export const convertToShape = (
           pointFrom<LocalPoint>(endPoint[0] - lineX, endPoint[1] - lineY),
         ],
         groupIds: [],
-        frameId,
+        containerRef: frameLikeContainerRef(frameId),
         locked: false,
         angle: 0 as Radians,
         roundness,

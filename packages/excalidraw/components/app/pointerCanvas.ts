@@ -1312,7 +1312,7 @@ export const getTopLayerFrameAtSceneCoords = (
   opts?: {
     /** to exclude selected elements when dragging, etc. */
     excludeElementIds?: AppState["selectedElementIds"];
-    currentFrameId?: ExcalidrawElement["frameId"];
+    currentFrameId?: string | null;
   },
 ) => {
   const elementsMap = app.scene.getNonDeletedElementsMap();
@@ -1367,9 +1367,10 @@ export const getTopLayerFrameAtSceneCoords = (
       return currentFrame;
     }
 
-    return hitElement.frameId
-      ? framesUnderCursor.find((frame) => frame.id === hitElement.frameId) ??
-          null
+    return hitElement.containerRef?.elementId
+      ? framesUnderCursor.find(
+          (frame) => frame.id === hitElement.containerRef?.elementId,
+        ) ?? null
       : null;
   }
 

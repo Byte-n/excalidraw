@@ -203,7 +203,9 @@ export const onMagicframeToolSelect = (app: App) => {
     // (unless the only selected element is a magic frame which we reuse)
     if (
       !selectedMagicFrame &&
-      selectedElements.some((el) => isFrameLikeElement(el) || el.frameId)
+      selectedElements.some(
+        (el) => isFrameLikeElement(el) || el.containerRef?.elementId,
+      )
     ) {
       app.setActiveTool({ type: TOOL_TYPE.magicframe });
       return;
@@ -234,7 +236,9 @@ export const onMagicframeToolSelect = (app: App) => {
       app.insertNewElement(frame);
 
       for (const child of selectedElements) {
-        app.scene.mutateElement(child, { frameId: frame.id });
+        app.scene.mutateElement(child, {
+          containerRef: { kind: "frameLike", elementId: frame.id },
+        });
       }
 
       app.setState({

@@ -208,13 +208,14 @@ export class AppDuplicate {
       idsOfElementsToDuplicate,
       overrides: ({ duplicateElement, origElement }) => {
         return {
-          // reset to the original element's frameId (unless we've
+          // Reset to the original parent (unless we've
           // duplicated alongside a frame in which case we need to
           // keep the duplicate frame's id) so that the element
-          // frame membership is refreshed on pointerup
+          // parent relationship is refreshed on pointerup
           // NOTE this is a hacky solution and should be done
           // differently
-          frameId: duplicateElement.frameId ?? origElement.frameId,
+          containerRef:
+            duplicateElement.containerRef ?? origElement.containerRef,
           seed: randomInteger(),
         };
       },

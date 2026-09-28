@@ -349,8 +349,8 @@ const renderBindingHighlightForBindableElement_simple = (
   angleLocked = false,
 ) => {
   const enclosingFrame =
-    suggestedBinding.element.frameId &&
-    elementsMap.get(suggestedBinding.element.frameId);
+    suggestedBinding.element.containerRef?.elementId &&
+    elementsMap.get(suggestedBinding.element.containerRef?.elementId);
   if (enclosingFrame && isFrameLikeElement(enclosingFrame)) {
     context.translate(enclosingFrame.x, enclosingFrame.y);
 
@@ -617,7 +617,9 @@ const renderBindingHighlightForBindableElement_complex = (
   const opacity = clamp((1 / BIND_MODE_TIMEOUT) * remainingTime, 0.0001, 1);
   const offset = element.strokeWidth / 2;
 
-  const enclosingFrame = element.frameId && allElementsMap.get(element.frameId);
+  const enclosingFrame =
+    element.containerRef?.elementId &&
+    allElementsMap.get(element.containerRef?.elementId);
   if (enclosingFrame && isFrameLikeElement(enclosingFrame)) {
     context.translate(enclosingFrame.x, enclosingFrame.y);
 

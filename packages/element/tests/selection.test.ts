@@ -1,4 +1,37 @@
-import { makeNextSelectedElementIds } from "../src/selection";
+import { API } from "@excalidraw/excalidraw/tests/helpers/api";
+
+import {
+  getSelectedElements,
+  makeNextSelectedElementIds,
+} from "../src/selection";
+
+describe("frame selection", () => {
+  it("includes bound text through its selected frame child", () => {
+    const frame = API.createElement({ type: "frame" });
+    const owner = API.createElement({
+      type: "rectangle",
+      containerRef: { kind: "frameLike", elementId: frame.id },
+      boundElements: [{ type: "text", id: "label" }],
+    });
+    const label = API.createElement({
+      id: "label",
+      type: "text",
+      containerId: owner.id,
+    });
+
+    const selected = getSelectedElements(
+      [frame, owner, label],
+      { selectedElementIds: { [frame.id]: true } },
+      { includeBoundTextElement: true, includeElementsInFrames: true },
+    );
+
+    expect(selected.map((element) => element.id)).toEqual([
+      owner.id,
+      label.id,
+      frame.id,
+    ]);
+  });
+});
 
 describe("makeNextSelectedElementIds", () => {
   const _makeNextSelectedElementIds = (

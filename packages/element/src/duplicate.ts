@@ -21,6 +21,7 @@ import {
 
 import {
   bindElementsToFramesAfterDuplication,
+  getContainingFrame,
   getFrameChildren,
 } from "./frame";
 
@@ -233,6 +234,12 @@ export const duplicateElements = (
 
   elements = normalizeElementOrder(elements);
 
+  const getChildrenWithBoundText = (frameId: string) =>
+    getFrameChildren(elements, frameId).flatMap((child) => {
+      const boundText = getBoundTextElement(child, elementsMap);
+      return boundText ? [child, boundText] : [child];
+    });
+
   const elementsWithDuplicates: ExcalidrawElement[] = elements.slice();
 
   // helper functions
@@ -338,7 +345,7 @@ export const duplicateElements = (
       const groupElements = getElementsInGroup(elements, groupId).flatMap(
         (element) =>
           isFrameLikeElement(element) && !preserveFrameChildrenOrder
-            ? [...getFrameChildren(elements, element.id), element]
+            ? [...getChildrenWithBoundText(element.id), element]
             : [element],
       );
 
@@ -353,10 +360,11 @@ export const duplicateElements = (
     // frame duplication
     // -------------------------------------------------------------------------
 
+    const parentFrameId = getContainingFrame(element, elementsMap)?.id;
     if (
       !preserveFrameChildrenOrder &&
-      element.frameId &&
-      frameIdsToDuplicate.has(element.frameId)
+      parentFrameId &&
+      frameIdsToDuplicate.has(parentFrameId)
     ) {
       continue;
     }
@@ -372,10 +380,16 @@ export const duplicateElements = (
         continue;
       }
 
-      const frameChildren = getFrameChildren(elements, frameId);
+      const frameChildren = getChildrenWithBoundText(frameId);
 
       const targetIndex = findLastIndex(elementsWithDuplicates, (el) => {
-        return el.frameId === frameId || el.id === frameId;
+        return (
+          el.containerRef?.elementId === frameId ||
+          el.id === frameId ||
+          (isBoundToContainer(el) &&
+            elementsMap.get(el.containerId)?.containerRef?.elementId ===
+              frameId)
+        );
       });
 
       insertBeforeOrAfterIndex(
@@ -668,8 +682,11 @@ export const reconcileDuplicatedElements = <
         (binding) => !isVetoed(binding.id),
       );
     }
-    if (duplicate.frameId && isVetoed(duplicate.frameId)) {
-      updates.frameId = null;
+    if (
+      duplicate.containerRef?.elementId &&
+      isVetoed(duplicate.containerRef.elementId)
+    ) {
+      updates.containerRef = undefined;
     }
     if (isArrowElement(duplicate)) {
       if (

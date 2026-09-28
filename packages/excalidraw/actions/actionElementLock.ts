@@ -61,7 +61,9 @@ export const actionToggleElementLock = register({
     const selectedElements = getElementsToLock(app, appState);
     return (
       selectedElements.length > 0 &&
-      !selectedElements.some((element) => element.locked && element.frameId)
+      !selectedElements.some(
+        (element) => element.locked && element.containerRef?.elementId,
+      )
     );
   },
   perform: (elements, appState, _, app) => {

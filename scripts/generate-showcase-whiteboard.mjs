@@ -52,7 +52,6 @@ function base(id, type, x, y, width, height, extra = {}) {
     index: null,
     isDeleted: false,
     groupIds: [],
-    frameId: null,
     boundElements: null,
     updated: 1,
     created: 1,
@@ -69,13 +68,13 @@ function text(id, value, x, y, width, height, options = {}) {
     color = colors.ink,
     align = "left",
     verticalAlign = "middle",
-    frameId = null,
+    containerRef,
   } = options;
   return add({
     ...base(id, "text", x, y, width, height, {
       strokeColor: color,
       strokeWidth: 1,
-      frameId,
+      containerRef: containerId ? undefined : containerRef,
     }),
     text: value,
     originalText: value,
@@ -97,7 +96,7 @@ function shape(id, shapeId, label, x, y, width, height, color, options = {}) {
       backgroundColor: color,
       roundness: shapeId === "rectangle" ? { type: 3 } : null,
       boundElements: [{ type: "text", id: labelId }],
-      frameId: options.frameId ?? null,
+      containerRef: options.containerRef,
     }),
     shape: { id: shapeId, schemaVersion: 1 },
   });
@@ -105,7 +104,6 @@ function shape(id, shapeId, label, x, y, width, height, color, options = {}) {
     containerId: id,
     fontSize: options.fontSize ?? 19,
     align: "center",
-    frameId: options.frameId ?? null,
   });
   return element;
 }
@@ -653,7 +651,7 @@ shape(
   70,
   colors.blue,
   {
-    frameId: "gallery-frame",
+    containerRef: { kind: "frameLike", elementId: "gallery-frame" },
     fontSize: 17,
   },
 );
@@ -673,7 +671,7 @@ shape(
   70,
   colors.violet,
   {
-    frameId: "gallery-magicframe",
+    containerRef: { kind: "frameLike", elementId: "gallery-magicframe" },
     fontSize: 17,
   },
 );
@@ -723,7 +721,7 @@ const png = readFileSync(
 );
 const scene = {
   type: "excalidraw",
-  version: 3,
+  version: 4,
   source: "https://github.com/excalidraw/excalidraw",
   elements,
   appState: {

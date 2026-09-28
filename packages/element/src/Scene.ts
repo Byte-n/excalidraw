@@ -9,10 +9,13 @@ import {
   toArray,
 } from "@excalidraw/common";
 import { isNonDeletedElement } from "@excalidraw/element";
-import { isFrameLikeElement } from "@excalidraw/element";
+import {
+  assertValidFrameLikeContainerRefs,
+  isFrameLikeElement,
+  isTextElement,
+} from "@excalidraw/element";
 import { isExcalidrawElement } from "@excalidraw/element";
 import { getElementsInGroup } from "@excalidraw/element";
-
 import {
   syncInvalidIndices,
   syncMovedIndices,
@@ -41,6 +44,10 @@ import type {
   SameType,
 } from "@excalidraw/common/utility-types";
 
+import {
+  registerFrameChildrenIndex,
+  unregisterFrameChildrenIndex,
+} from "./frameChildrenIndex";
 import { getMindmapHiddenElementIds } from "./mindmap";
 
 import type { AppState } from "../../excalidraw/types";
@@ -301,7 +308,15 @@ export class Scene {
 
     if (!options?.skipValidation) {
       validateIndicesThrottled(_nextElements);
+      assertValidFrameLikeContainerRefs(_nextElements);
     }
+
+    unregisterFrameChildrenIndex(
+      this.elements,
+      this.elementsMap,
+      this.nonDeletedElements,
+      this.nonDeletedElementsMap,
+    );
 
     this.elements = syncInvalidIndices(_nextElements);
     this.elementsMap.clear();
@@ -317,6 +332,12 @@ export class Scene {
 
     this.frames = nextFrameLikes;
     this.nonDeletedFramesLikes = getNonDeletedElements(this.frames).elements;
+    registerFrameChildrenIndex(
+      this.elements,
+      this.elementsMap,
+      this.nonDeletedElements,
+      this.nonDeletedElementsMap,
+    );
 
     this.triggerUpdate();
   }
@@ -346,6 +367,12 @@ export class Scene {
   }
 
   destroy() {
+    unregisterFrameChildrenIndex(
+      this.elements,
+      this.elementsMap,
+      this.nonDeletedElements,
+      this.nonDeletedElementsMap,
+    );
     this.elements = [];
     this.nonDeletedElements = [];
     this.nonDeletedFramesLikes = [];
@@ -445,6 +472,59 @@ export class Scene {
     },
   ) {
     const elementsMap = this.getNonDeletedElementsMap();
+
+    if ("frameId" in updates) {
+      throw new Error(`Unsupported frameId field on ${element.id}`);
+    }
+
+    if (isTextElement(element)) {
+      const containerId =
+        "containerId" in updates ? updates.containerId : element.containerId;
+      const containerRef =
+        "containerRef" in updates ? updates.containerRef : element.containerRef;
+      if (containerId && containerRef) {
+        throw new Error(`Bound text ${element.id} cannot have a containerRef`);
+      }
+    }
+
+    if ("containerRef" in updates && updates.containerRef !== undefined) {
+      const containerRef = updates.containerRef;
+      if (!containerRef || typeof containerRef !== "object") {
+        throw new Error(`Invalid container reference on ${element.id}`);
+      }
+      if (
+        typeof containerRef.elementId !== "string" ||
+        containerRef.elementId.length === 0
+      ) {
+        throw new Error(`Invalid container reference on ${element.id}`);
+      }
+      const parent = elementsMap.get(containerRef.elementId);
+      if (
+        containerRef.kind !== "frameLike" ||
+        isFrameLikeElement(element) ||
+        !parent ||
+        parent.isDeleted ||
+        !isFrameLikeElement(parent)
+      ) {
+        throw new Error(
+          `Invalid container reference on ${element.id}: ${containerRef.elementId}`,
+        );
+      }
+    }
+
+    if (
+      isFrameLikeElement(element) &&
+      updates.isDeleted === true &&
+      !element.isDeleted &&
+      this.nonDeletedElements.some(
+        (child) =>
+          !child.isDeleted && child.containerRef?.elementId === element.id,
+      )
+    ) {
+      throw new Error(
+        `Cannot delete frame-like element ${element.id} with children`,
+      );
+    }
 
     const { version: prevVersion } = element;
     const { version: nextVersion } = mutateElement(

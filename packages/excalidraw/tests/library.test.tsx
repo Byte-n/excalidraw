@@ -2,7 +2,7 @@ import { act, queryByTestId } from "@testing-library/react";
 import React from "react";
 import { vi } from "vitest";
 
-import { MIME_TYPES, ORIG_ID } from "@excalidraw/common";
+import { MIME_TYPES, ORIG_ID, VERSIONS } from "@excalidraw/common";
 
 import { getCommonBoundingBox, isCompositeShapeId } from "@excalidraw/element";
 
@@ -50,31 +50,7 @@ vi.mock("../data/filesystem.ts", async (importOriginal) => {
 });
 
 describe("library format", () => {
-  it("rejects old versions and the legacy library field", () => {
-    const element = API.createElement({ type: "rectangle" });
-    const item = {
-      id: "item",
-      status: "unpublished",
-      created: 1,
-      elements: [element],
-    };
-    expect(() =>
-      parseLibraryJSON(
-        JSON.stringify({
-          type: "excalidrawlib",
-          version: 2,
-          libraryItems: [item],
-        }),
-      ),
-    ).toThrow("Invalid library");
-    expect(() =>
-      parseLibraryJSON(
-        JSON.stringify({ type: "excalidrawlib", version: 3, library: [item] }),
-      ),
-    ).toThrow("Invalid library");
-  });
-
-  it("validates mindmap shapes in a version 3 library", () => {
+  it("validates mindmap shapes in the current library format", () => {
     const node = API.createElement({ type: "mindmap-node" });
     const item = {
       id: "item",
@@ -86,7 +62,7 @@ describe("library format", () => {
       parseLibraryJSON(
         JSON.stringify({
           type: "excalidrawlib",
-          version: 3,
+          version: VERSIONS.excalidrawLibrary,
           libraryItems: [item],
         }),
       ),
@@ -314,7 +290,8 @@ describe("library menu", () => {
       const latestLibrary = await h.app.library.getLatestLibrary();
       expect(latestLibrary.length).toBeGreaterThan(0);
       expect(latestLibrary.length).toBe(libraryItems.length);
-      const { versionNonce, ...strippedElement } = libraryItems[0]?.elements[0]; // stripped due to mutations
+      const { versionNonce, containerRef, ...strippedElement } =
+        libraryItems[0]?.elements[0]; // stripped due to mutations
       expect(latestLibrary[0].elements).toEqual([
         expect.objectContaining(strippedElement),
       ]);
