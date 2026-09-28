@@ -81,15 +81,18 @@ const deleteSelectedElements = (
         ? getContainerElement(el, elementsMap)
         : null;
 
-      if (el.frameId && framesToBeDeleted.has(el.frameId)) {
+      if (
+        el.containerRef?.elementId &&
+        framesToBeDeleted.has(el.containerRef?.elementId)
+      ) {
         shouldSelectEditingGroup = false;
         selectedElementIds[el.id] = true;
-        return el;
+        return newElementWith(el, { containerRef: undefined });
       }
 
       if (
-        boundElement?.frameId &&
-        framesToBeDeleted.has(boundElement?.frameId)
+        boundElement?.containerRef?.elementId &&
+        framesToBeDeleted.has(boundElement?.containerRef?.elementId)
       ) {
         return el;
       }
@@ -113,12 +116,15 @@ const deleteSelectedElements = (
     }
 
     // if deleting a frame, remove the children from it and select them
-    if (el.frameId && framesToBeDeleted.has(el.frameId)) {
+    if (
+      el.containerRef?.elementId &&
+      framesToBeDeleted.has(el.containerRef?.elementId)
+    ) {
       shouldSelectEditingGroup = false;
       if (!isBoundToContainer(el)) {
         selectedElementIds[el.id] = true;
       }
-      return newElementWith(el, { frameId: null });
+      return newElementWith(el, { containerRef: undefined });
     }
 
     if (isBoundToContainer(el) && appState.selectedElementIds[el.containerId]) {

@@ -88,6 +88,7 @@ export const actionUnbindText = register({
         );
         app.scene.mutateElement(boundTextElement as ExcalidrawTextElement, {
           containerId: null,
+          containerRef: element.containerRef,
           width,
           height,
           text: boundTextElement.originalText,
@@ -177,6 +178,7 @@ export const actionBindText = register({
       : null;
     app.scene.mutateElement(textElement, {
       containerId: container.id,
+      containerRef: undefined,
       verticalAlign: VERTICAL_ALIGN.MIDDLE,
       textAlign: TEXT_ALIGN.CENTER,
       autoResize: true,
@@ -310,7 +312,7 @@ export const actionWrapTextInContainer = register({
             "rectangle",
           ),
           groupIds: textElement.groupIds,
-          frameId: textElement.frameId,
+          containerRef: textElement.containerRef,
         });
 
         // update bindings
@@ -347,6 +349,7 @@ export const actionWrapTextInContainer = register({
 
         app.scene.mutateElement(textElement, {
           containerId: container.id,
+          containerRef: undefined,
           verticalAlign: VERTICAL_ALIGN.MIDDLE,
           boundElements: null,
           textAlign: TEXT_ALIGN.CENTER,

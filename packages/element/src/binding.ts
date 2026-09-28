@@ -2507,7 +2507,7 @@ const newBoundElements = (
 
 export const bindingProperties: Set<BindableProp | BindingProp> = new Set([
   "boundElements",
-  "frameId",
+  "containerRef",
   "containerId",
   "startBinding",
   "endBinding",
@@ -2516,7 +2516,7 @@ export const bindingProperties: Set<BindableProp | BindingProp> = new Set([
 export type BindableProp = "boundElements";
 
 export type BindingProp =
-  | "frameId"
+  | "containerRef"
   | "containerId"
   | "startBinding"
   | "endBinding";
@@ -2562,9 +2562,9 @@ const bindableElementsVisitor = <T>(
 ): T[] => {
   const result: T[] = [];
 
-  if (element.frameId) {
-    const id = element.frameId;
-    result.push(visit(elements.get(id), "frameId", id));
+  if (element.containerRef?.elementId) {
+    const id = element.containerRef?.elementId;
+    result.push(visit(elements.get(id), "containerRef", id));
   }
 
   if (isBoundToContainer(element)) {
@@ -2588,7 +2588,7 @@ const bindableElementsVisitor = <T>(
 };
 
 /**
- * Bound element containing bindings to `frameId`, `containerId`, `startBinding` or `endBinding`.
+ * Bound element containing bindings to `containerRef`, `containerId`, `startBinding` or `endBinding`.
  */
 export class BoundElement {
   /**
@@ -2657,12 +2657,17 @@ export class BoundElement {
       (bindableElement, bindingProp) => {
         // unbind from bindable elements, as bindings from non deleted elements into deleted elements are incorrect
         if (!bindableElement || bindableElement.isDeleted) {
-          updateElementWith(boundElement, { [bindingProp]: null });
+          updateElementWith(
+            boundElement,
+            bindingProp === "containerRef"
+              ? { containerRef: undefined }
+              : { [bindingProp]: null },
+          );
           return;
         }
 
         // frame bindings are unidirectional, there is nothing to rebind
-        if (bindingProp === "frameId") {
+        if (bindingProp === "containerRef") {
           return;
         }
 
@@ -2695,7 +2700,10 @@ export class BoundElement {
             });
           } else {
             // unbind otherwise
-            updateElementWith(boundElement, { [bindingProp]: null });
+            updateElementWith(boundElement, {
+              containerId: null,
+              containerRef: bindableElement.containerRef,
+            } as ElementUpdate<ExcalidrawTextElement>);
           }
         }
       },
@@ -2736,7 +2744,19 @@ export class BindableElement {
         (_, bindingProp, bindableElementId) => {
           // making sure there is an element to be unbound
           if (bindableElementId === bindableElement.id) {
-            updateElementWith(boundElement, { [bindingProp]: null });
+            const updates =
+              bindingProp === "containerRef"
+                ? { containerRef: undefined }
+                : bindingProp === "containerId"
+                ? {
+                    containerId: null,
+                    containerRef: bindableElement.containerRef,
+                  }
+                : { [bindingProp]: null };
+            updateElementWith(
+              boundElement,
+              updates as ElementUpdate<ExcalidrawElement>,
+            );
           }
         },
       );
@@ -2789,6 +2809,7 @@ export class BindableElement {
               // rebind if not bound already!
               updateElementWith(boundElement, {
                 containerId: bindableElement.id,
+                containerRef: undefined,
               } as ElementUpdate<ExcalidrawTextElement>);
             }
           } else {
@@ -2796,6 +2817,8 @@ export class BindableElement {
               // unbind if not unbound already
               updateElementWith(boundElement, {
                 containerId: null,
+                containerRef: elements.get(boundElement.containerId)
+                  ?.containerRef,
               } as ElementUpdate<ExcalidrawTextElement>);
             }
 

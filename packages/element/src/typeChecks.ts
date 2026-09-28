@@ -112,6 +112,58 @@ export const isFrameLikeElement = <T extends ExcalidrawElement>(
   );
 };
 
+export const frameLikeContainerRef = (elementId: string | null | undefined) => {
+  if (elementId == null) {
+    return undefined;
+  }
+  if (typeof elementId !== "string" || elementId.length === 0) {
+    throw new Error("Invalid frame-like container ID");
+  }
+  return { kind: "frameLike", elementId } as const;
+};
+
+export const assertValidFrameLikeContainerRefs = (
+  elements: readonly ExcalidrawElement[],
+) => {
+  const elementsById = new Map(
+    elements.map((element) => [element.id, element]),
+  );
+
+  for (const element of elements) {
+    if ("frameId" in element) {
+      throw new Error(`Unsupported frameId field on ${element.id}`);
+    }
+    const containerRef = element.containerRef;
+    if (isTextElement(element) && element.containerId && containerRef) {
+      throw new Error(`Bound text ${element.id} cannot have a containerRef`);
+    }
+    if (containerRef === undefined) {
+      continue;
+    }
+    if (!containerRef || typeof containerRef !== "object") {
+      throw new Error(`Invalid container reference on ${element.id}`);
+    }
+    if (containerRef.kind !== "frameLike") {
+      throw new Error(`Unsupported container kind: ${containerRef.kind}`);
+    }
+    if (
+      typeof containerRef.elementId !== "string" ||
+      containerRef.elementId.length === 0
+    ) {
+      throw new Error(`Invalid container reference on ${element.id}`);
+    }
+    if (isFrameLikeElement(element)) {
+      throw new Error(`Frame-like element ${element.id} cannot have a parent`);
+    }
+    const parent = elementsById.get(containerRef.elementId);
+    if (!parent || parent.isDeleted || !isFrameLikeElement(parent)) {
+      throw new Error(
+        `Invalid frame-like container reference on ${element.id}: ${containerRef.elementId}`,
+      );
+    }
+  }
+};
+
 export const isFreeDrawElement = <T extends ExcalidrawElement>(
   element?: T | null,
 ): element is T & ExcalidrawFreeDrawElement => {

@@ -70,7 +70,10 @@ const stampDuplicates: OnDuplicate = (nextElements, prevElements) =>
   nextElements.map((element) =>
     isDuplicate(element, prevElements)
       ? newElementWith(element, {
-          customData: { stamped: true, frameId: element.frameId },
+          customData: {
+            stamped: true,
+            stampParent: element.containerRef?.elementId ?? null,
+          },
         })
       : element,
   );
@@ -157,7 +160,7 @@ describe("props.onDuplicate returning new objects for duplicates", () => {
       {
         [ORIG_ID]: rectangle.id,
         selected: true,
-        customData: { stamped: true, frameId: null },
+        customData: { stamped: true, stampParent: null },
       },
     ]);
   });
@@ -182,7 +185,7 @@ describe("props.onDuplicate returning new objects for duplicates", () => {
         selected: true,
         x: 50,
         y: 50,
-        customData: { stamped: true, frameId: null },
+        customData: { stamped: true, stampParent: null },
       },
     ]);
   });
@@ -208,14 +211,14 @@ describe("props.onDuplicate returning new objects for duplicates", () => {
         x: 50,
         y: 50,
         boundElements: [{ type: "text", id: textDuplicate.id }],
-        customData: { stamped: true, frameId: null },
+        customData: { stamped: true, stampParent: null },
       },
       {
         [ORIG_ID]: text.id,
         x: 50,
         y: 50,
         containerId: containerDuplicate.id,
-        customData: { stamped: true, frameId: null },
+        customData: { stamped: true, stampParent: null },
       },
     ]);
   });
@@ -240,15 +243,15 @@ describe("props.onDuplicate returning new objects for duplicates", () => {
       {
         [ORIG_ID]: container.id,
         selected: true,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
         // host sees the duplicates already assigned to the frame
-        customData: { stamped: true, frameId: frame.id },
+        customData: { stamped: true, stampParent: frame.id },
       },
       {
         [ORIG_ID]: text.id,
-        frameId: frame.id,
+        containerRef: undefined,
         containerId: containerDuplicate.id,
-        customData: { stamped: true, frameId: frame.id },
+        customData: { stamped: true, stampParent: null },
       },
       { id: frame.id },
     ]);
@@ -318,7 +321,7 @@ describe("props.onDuplicate changing already measured duplicates", () => {
     const arrowDuplicate = getCloneByOrigId(arrow.id);
     const rectangleDuplicate = getCloneByOrigId(rectangle.id);
 
-    expect(arrowDuplicate.frameId).toBe(frame.id);
+    expect(arrowDuplicate.containerRef?.elementId ?? null).toBe(frame.id);
     expect(getWidth(arrowDuplicate)).toBe(200);
     expect(getWidth(rectangleDuplicate)).toBe(50);
   });
@@ -393,7 +396,11 @@ describe("props.onDuplicate vetoing duplicates", () => {
       });
 
       assertElements(h.elements, [
-        { [ORIG_ID]: rectangle2.id, selected: true, frameId: frame.id },
+        {
+          [ORIG_ID]: rectangle2.id,
+          selected: true,
+          containerRef: { kind: "frameLike", elementId: frame.id },
+        },
         { id: frame.id },
       ]);
     });
@@ -743,7 +750,7 @@ describe("reconcileDuplicatedElements()", () => {
     const rectangle = API.createElement({
       id: "rectangle",
       type: "rectangle",
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
       boundElements: [
         { type: "text", id: "text" },
         { type: "arrow", id: "arrow" },
@@ -752,7 +759,7 @@ describe("reconcileDuplicatedElements()", () => {
     const text = API.createElement({
       id: "text",
       type: "text",
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
       containerId: rectangle.id,
     });
     const ellipse = API.createElement({
@@ -779,7 +786,9 @@ describe("reconcileDuplicatedElements()", () => {
     const nextElements = [...elements, ...duplicatedElements];
 
     // sanity check
-    expect(byOrigId(rectangle.id).frameId).toBe(byOrigId(frame.id).id);
+    expect(byOrigId(rectangle.id).containerRef?.elementId).toBe(
+      byOrigId(frame.id).id,
+    );
 
     const vetoed = [
       byOrigId(frame.id),
@@ -806,7 +815,7 @@ describe("reconcileDuplicatedElements()", () => {
       arrowDuplicate,
     ]);
 
-    expect(rectangleDuplicate.frameId).toBe(null);
+    expect(rectangleDuplicate.containerRef?.elementId ?? null).toBe(null);
     expect(rectangleDuplicate.boundElements).toEqual([
       { type: "arrow", id: arrowDuplicate.id },
     ]);

@@ -112,7 +112,7 @@ import type {
   StrokeRoundness,
 } from "@excalidraw/element/types";
 
-import type { Mutable } from "@excalidraw/common/utility-types";
+import type { Merge, Mutable } from "@excalidraw/common/utility-types";
 
 import { getDefaultAppState } from "../appState";
 
@@ -442,13 +442,16 @@ const repairBinding = <T extends ExcalidrawArrowElement>(
 };
 
 const restoreElementWithProperties = <
-  T extends Required<Omit<ExcalidrawElement, "customData">> & {
-    customData?: ExcalidrawElement["customData"];
-    /** @deprecated */
-    boundElementIds?: readonly ExcalidrawElement["id"][];
-    /** @deprecated */
-    strokeSharpness?: StrokeRoundness;
-  },
+  T extends Merge<
+    Required<ExcalidrawElement>,
+    Pick<ExcalidrawElement, "containerRef"> & {
+      customData?: ExcalidrawElement["customData"];
+      /** @deprecated */
+      boundElementIds?: readonly ExcalidrawElement["id"][];
+      /** @deprecated */
+      strokeSharpness?: StrokeRoundness;
+    }
+  >,
   K extends Pick<T, keyof Omit<Required<T>, keyof ExcalidrawElement>>,
 >(
   element: T,
@@ -485,7 +488,7 @@ const restoreElementWithProperties = <
     height: element.height || 0,
     seed: element.seed ?? 1,
     groupIds: element.groupIds ?? [],
-    frameId: element.frameId ?? null,
+    containerRef: element.containerRef,
     roundness: element.roundness
       ? element.roundness
       : element.strokeSharpness === "round"
@@ -931,21 +934,14 @@ const repairBoundTextElementOrder = (
     : normalizedElements;
 };
 
-/**
- * Remove an element's frameId if its containing frame is non-existent
- *
- * NOTE mutates elements.
- */
+/** Preserve the preexisting recovery for a parent absent from restored input. */
 const repairFrameMembership = (
   element: Mutable<ExcalidrawElement>,
   elementsMap: Map<string, Mutable<ExcalidrawElement>>,
 ) => {
-  if (element.frameId) {
-    const containingFrame = elementsMap.get(element.frameId);
-
-    if (!containingFrame) {
-      element.frameId = null;
-    }
+  const frameId = element.containerRef?.elementId;
+  if (frameId && !elementsMap.has(frameId)) {
+    element.containerRef = undefined;
   }
 };
 
@@ -1130,9 +1126,7 @@ export const restoreElements = <T extends ExcalidrawElement>(
   // repair binding. Mutates elements.
   const restoredElementsMap = arrayToMap(restoredElements);
   for (const element of restoredElements) {
-    if (element.frameId) {
-      repairFrameMembership(element, restoredElementsMap);
-    }
+    repairFrameMembership(element, restoredElementsMap);
 
     if (isTextElement(element) && element.containerId) {
       repairBoundElement(element, restoredElementsMap);

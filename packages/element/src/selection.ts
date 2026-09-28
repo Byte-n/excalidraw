@@ -16,6 +16,7 @@ import {
   isTextElement,
 } from "./typeChecks";
 import { getFrameChildren } from "./frame";
+import { getBoundTextElement } from "./textElement";
 
 import { LinearElementEditor } from "./linearElementEditor";
 import { selectGroupsForSelectedElements } from "./groups";
@@ -39,7 +40,10 @@ const excludeElementsFromFrames = <T extends ExcalidrawElement>(
   framesInSelection: Set<ExcalidrawFrameLikeElement["id"]>,
 ) => {
   return selectedElements.filter((element) => {
-    if (element.frameId && framesInSelection.has(element.frameId)) {
+    if (
+      element.containerRef?.elementId &&
+      framesInSelection.has(element.containerRef?.elementId)
+    ) {
       return false;
     }
     return true;
@@ -197,13 +201,26 @@ export const getSelectedElements = (
 
   if (opts?.includeElementsInFrames) {
     const elementsToInclude: NonDeletedExcalidrawElement[] = [];
+    const elementsMap = arrayToMap(elements);
     selectedElements.forEach((element) => {
       if (isFrameLikeElement(element)) {
-        getFrameChildren(elements, element.id).forEach(
-          (e) =>
-            !addedElements.has(e.id) &&
-            elementsToInclude.push(e as NonDeletedExcalidrawElement),
-        );
+        getFrameChildren(elements, element.id).forEach((child) => {
+          if (!child.isDeleted && !addedElements.has(child.id)) {
+            elementsToInclude.push(child as NonDeletedExcalidrawElement);
+            addedElements.add(child.id);
+          }
+          if (opts.includeBoundTextElement) {
+            const boundText = getBoundTextElement(child, elementsMap);
+            if (
+              boundText &&
+              !boundText.isDeleted &&
+              !addedElements.has(boundText.id)
+            ) {
+              elementsToInclude.push(boundText as NonDeletedExcalidrawElement);
+              addedElements.add(boundText.id);
+            }
+          }
+        });
       }
       elementsToInclude.push(element);
     });

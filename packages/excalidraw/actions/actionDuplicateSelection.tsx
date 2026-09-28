@@ -80,11 +80,15 @@ export const actionDuplicateSelection = register({
       randomizeSeed: true,
       overrides: ({ origElement, origIdToDuplicateId }) => {
         const duplicateFrameId =
-          origElement.frameId && origIdToDuplicateId.get(origElement.frameId);
+          origElement.containerRef?.elementId &&
+          origIdToDuplicateId.get(origElement.containerRef?.elementId);
         return {
           x: origElement.x + DEFAULT_GRID_SIZE / 2,
           y: origElement.y + DEFAULT_GRID_SIZE / 2,
-          frameId: duplicateFrameId ?? origElement.frameId,
+          containerRef:
+            duplicateFrameId !== undefined
+              ? { kind: "frameLike", elementId: duplicateFrameId }
+              : origElement.containerRef,
         };
       },
     });

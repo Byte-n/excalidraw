@@ -78,7 +78,10 @@ export const dragSelectedElements = (
 
   if (frames.length > 0) {
     for (const element of scene.getNonDeletedElements()) {
-      if (element.frameId !== null && frames.includes(element.frameId)) {
+      if (
+        element.containerRef?.elementId &&
+        frames.includes(element.containerRef.elementId)
+      ) {
         elementsToUpdate.add(element);
       }
     }

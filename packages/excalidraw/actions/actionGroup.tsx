@@ -6,6 +6,7 @@ import { isBoundToContainer } from "@excalidraw/element";
 
 import {
   frameAndChildrenSelectedTogether,
+  getContainingFrame,
   getElementsInResizingFrame,
   getFrameLikeElements,
   getRootElements,
@@ -137,8 +138,13 @@ export const actionGroup = register({
 
     // this includes the case where we are grouping elements inside a frame
     // and elements outside that frame
+    const elementsMap = arrayToMap(elements);
     const groupingElementsFromDifferentFrames =
-      new Set(selectedElements.map((element) => element.frameId)).size > 1;
+      new Set(
+        selectedElements.map(
+          (element) => getContainingFrame(element, elementsMap)?.id,
+        ),
+      ).size > 1;
     // when it happens, we want to remove elements that are in the frame
     // and are going to be grouped from the frame (mouthful, I know)
     if (groupingElementsFromDifferentFrames) {
@@ -261,8 +267,8 @@ export const actionUngroup = register({
 
     const selectedElementFrameIds = new Set(
       selectedElements
-        .filter((element) => element.frameId)
-        .map((element) => element.frameId!),
+        .filter((element) => element.containerRef?.elementId)
+        .map((element) => element.containerRef?.elementId!),
     );
 
     const targetFrames = getFrameLikeElements(elements).filter((frame) =>

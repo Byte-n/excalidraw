@@ -27,7 +27,10 @@ import {
 import { mutateElement } from "./mutateElement";
 import { getBoundTextElement, getContainerElement } from "./textElement";
 import { syncMovedIndices } from "./fractionalIndex";
+import { getIndexedFrameChildren } from "./frameChildrenIndex";
 import {
+  frameLikeContainerRef,
+  isBoundToContainer,
   isFrameElement,
   isFrameLikeElement,
   isTextElement,
@@ -58,14 +61,16 @@ export const bindElementsToFramesAfterDuplication = (
   >;
 
   for (const element of origElements) {
-    if (element.frameId) {
-      // use its frameId to get the new frameId
+    if (element.containerRef?.elementId && !isBoundToContainer(element)) {
+      // Preserve the parent relationship when the containing frame is cloned.
       const nextElementId = origIdToDuplicateId.get(element.id);
-      const nextFrameId = origIdToDuplicateId.get(element.frameId);
+      const nextFrameId = origIdToDuplicateId.get(
+        element.containerRef?.elementId,
+      );
       const nextElement = nextElementId && nextElementMap.get(nextElementId);
       if (nextElement) {
         mutateElement(nextElement, nextElementMap, {
-          frameId: nextFrameId ?? null,
+          containerRef: frameLikeContainerRef(nextFrameId),
         });
       }
     }
@@ -99,8 +104,8 @@ export const getElementsCompletelyInFrame = (
     getElementsWithinSelection(elements, frame, elementsMap, false),
   ).filter(
     (element) =>
-      (!isFrameLikeElement(element) && !element.frameId) ||
-      element.frameId === frame.id,
+      (!isFrameLikeElement(element) && !element.containerRef?.elementId) ||
+      element.containerRef?.elementId === frame.id,
   );
 
 export const isElementContainingFrame = (
@@ -220,9 +225,7 @@ export const groupsAreCompletelyOutOfFrame = (
 
 // --------------------------- Frame Utils ------------------------------------
 
-/**
- * Returns a map of frameId to frame elements. Includes empty frames.
- */
+/** Returns frame-like element IDs mapped to direct children, including empty frames. */
 export const groupByFrameLikes = (elements: readonly ExcalidrawElement[]) => {
   const frameElementsMap = new Map<
     ExcalidrawElement["id"],
@@ -230,7 +233,9 @@ export const groupByFrameLikes = (elements: readonly ExcalidrawElement[]) => {
   >();
 
   for (const element of elements) {
-    const frameId = isFrameLikeElement(element) ? element.id : element.frameId;
+    const frameId = isFrameLikeElement(element)
+      ? element.id
+      : element.containerRef?.elementId;
     if (frameId && !frameElementsMap.has(frameId)) {
       frameElementsMap.set(frameId, getFrameChildren(elements, frameId));
     }
@@ -243,9 +248,14 @@ export const getFrameChildren = (
   allElements: ElementsMapOrArray,
   frameId: string,
 ) => {
+  const indexedChildren = getIndexedFrameChildren(allElements, frameId);
+  if (indexedChildren) {
+    return indexedChildren;
+  }
+
   const frameChildren: ExcalidrawElement[] = [];
   for (const element of allElements.values()) {
-    if (element.frameId === frameId) {
+    if (element.containerRef?.elementId === frameId) {
       frameChildren.push(element);
     }
   }
@@ -275,8 +285,8 @@ export const getRootElements = <T extends ExcalidrawElement>(
   return allElements.filter(
     (element) =>
       frameElements.has(element.id) ||
-      !element.frameId ||
-      !frameElements.has(element.frameId),
+      !element.containerRef?.elementId ||
+      !frameElements.has(element.containerRef?.elementId),
   );
 };
 
@@ -437,10 +447,13 @@ export const getContainingFrame = (
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
 ) => {
-  if (!element.frameId) {
+  const owner = isBoundToContainer(element)
+    ? elementsMap.get(element.containerId)
+    : element;
+  if (!owner?.containerRef?.elementId) {
     return null;
   }
-  return (elementsMap.get(element.frameId) ||
+  return (elementsMap.get(owner.containerRef.elementId) ||
     null) as null | ExcalidrawFrameLikeElement;
 };
 
@@ -469,7 +482,8 @@ export const filterElementsEligibleAsFrameChildren = (
     // don't add frames or their children
     if (
       isFrameLikeElement(element) ||
-      (element.frameId && otherFrames.has(element.frameId))
+      (element.containerRef?.elementId &&
+        otherFrames.has(element.containerRef?.elementId))
     ) {
       continue;
     }
@@ -501,16 +515,16 @@ export const filterElementsEligibleAsFrameChildren = (
 };
 
 export const getCommonFrameId = (elements: readonly ExcalidrawElement[]) => {
-  let commonFrameId: ExcalidrawElement["frameId"] | undefined;
+  let commonFrameId: string | undefined;
 
   for (const element of elements) {
-    if (isFrameLikeElement(element) || !element.frameId) {
+    if (isFrameLikeElement(element) || !element.containerRef?.elementId) {
       return null;
     }
 
     if (commonFrameId === undefined) {
-      commonFrameId = element.frameId;
-    } else if (commonFrameId !== element.frameId) {
+      commonFrameId = element.containerRef?.elementId;
+    } else if (commonFrameId !== element.containerRef?.elementId) {
       return null;
     }
   }
@@ -522,12 +536,13 @@ export const getFrameChildrenInsertionIndex = (
   elements: readonly ExcalidrawElement[],
   frameId: ExcalidrawFrameLikeElement["id"],
 ): number | null => {
+  const elementsMap = arrayToMap(elements);
   for (let index = elements.length - 1; index >= 0; index--) {
     const element = elements[index];
 
     if (element.id === frameId) {
       return index;
-    } else if (element.frameId === frameId) {
+    } else if (getContainingFrame(element, elementsMap)?.id === frameId) {
       return index + 1;
     }
   }
@@ -569,7 +584,8 @@ export const addElementsToFrame = <T extends ElementsMapOrArray>(
     // don't add frames or their children
     if (
       isFrameLikeElement(element) ||
-      (element.frameId && otherFrames.has(element.frameId))
+      (element.containerRef?.elementId &&
+        otherFrames.has(element.containerRef?.elementId))
     ) {
       continue;
     }
@@ -583,12 +599,15 @@ export const addElementsToFrame = <T extends ElementsMapOrArray>(
   }
 
   for (const element of finalElementsToAdd) {
+    if (isBoundToContainer(element)) {
+      continue;
+    }
     // we don't always need to update the element if it's already in the frame,
     // but we still need to accumulate in finalElementsToAdd so we potentially
     // reorder them if added together
-    if (element.frameId !== frame.id) {
+    if (element.containerRef?.elementId !== frame.id) {
       mutateElement(element, elementsMap, {
-        frameId: frame.id,
+        containerRef: frameLikeContainerRef(frame.id),
       });
     }
   }
@@ -649,10 +668,11 @@ export const removeElementsFromFrame = (
   >();
 
   for (const element of elementsToRemove) {
-    if (element.frameId) {
+    if (element.containerRef?.elementId) {
       _elementsToRemove.set(element.id, element);
 
-      const arr = toRemoveElementsByFrame.get(element.frameId) || [];
+      const arr =
+        toRemoveElementsByFrame.get(element.containerRef?.elementId) || [];
       arr.push(element);
 
       const boundTextElement = getBoundTextElement(element, elementsMap);
@@ -661,13 +681,16 @@ export const removeElementsFromFrame = (
         arr.push(boundTextElement);
       }
 
-      toRemoveElementsByFrame.set(element.frameId, arr);
+      toRemoveElementsByFrame.set(element.containerRef?.elementId, arr);
     }
   }
 
   for (const [, element] of _elementsToRemove) {
+    if (isBoundToContainer(element)) {
+      continue;
+    }
     mutateElement(element, elementsMap, {
-      frameId: null,
+      containerRef: undefined,
     });
   }
 };
@@ -726,7 +749,7 @@ export const updateFrameMembershipOfSelectedElements = <
 
   elementsToFilter.forEach((element) => {
     if (
-      element.frameId &&
+      element.containerRef?.elementId &&
       !isFrameLikeElement(element) &&
       !isElementInFrame(element, elementsMap, appState)
     ) {
@@ -799,9 +822,9 @@ export const getTargetFrame = (
   // if the element and its containing frame are both selected, then
   // the containing frame is the target frame
   if (
-    _element.frameId &&
+    _element.containerRef?.elementId &&
     appState.selectedElementIds[_element.id] &&
-    appState.selectedElementIds[_element.frameId]
+    appState.selectedElementIds[_element.containerRef?.elementId]
   ) {
     return getContainingFrame(_element, elementsMap);
   }
@@ -947,7 +970,7 @@ export const shouldApplyFrameClip = (
     // if no elements are being dragged, we can skip the geometry check
     // because we know if the element is in the given frame or not
     if (!appState.selectedElementsAreBeingDragged) {
-      shouldClip = element.frameId === frame.id;
+      shouldClip = element.containerRef?.elementId === frame.id;
       for (const groupId of element.groupIds) {
         checkedGroups?.set(groupId, shouldClip);
       }
@@ -985,16 +1008,15 @@ export const getElementsOverlappingFrame = <T extends ExcalidrawElement>(
   frame: ExcalidrawFrameLikeElement,
   elementsMap: ElementsMap,
 ) => {
-  return elements.filter(
-    (el) =>
-      // exclude elements which are overlapping, but are in a different frame,
-      // and thus invisible in target frame
-      (!el.frameId || el.frameId === frame.id) &&
-      doBoundsIntersect(
-        getElementBounds(el, elementsMap),
-        getElementBounds(frame, elementsMap),
-      ),
-  );
+  const frameBounds = getElementBounds(frame, elementsMap);
+  return elements.filter((element) => {
+    // An overlapping label inherits its host's frame even without its own ref.
+    const containingFrame = getContainingFrame(element, elementsMap);
+    return (
+      (!containingFrame || containingFrame.id === frame.id) &&
+      doBoundsIntersect(getElementBounds(element, elementsMap), frameBounds)
+    );
+  });
 };
 
 export const frameAndChildrenSelectedTogether = (
@@ -1005,7 +1027,9 @@ export const frameAndChildrenSelectedTogether = (
   return (
     selectedElements.length > 1 &&
     selectedElements.some(
-      (element) => element.frameId && selectedElementsMap.has(element.frameId),
+      (element) =>
+        element.containerRef?.elementId &&
+        selectedElementsMap.has(element.containerRef?.elementId),
     )
   );
 };

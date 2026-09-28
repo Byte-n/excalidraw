@@ -881,7 +881,7 @@ export interface ExcalidrawProps {
    *
    * The duplicates are the elements in `nextElements` which are not in
    * `prevElements` (see also `data.duplicateElements`). When pasting or
-   * inserting onto a frame, their `frameId` is already set. To change a
+   * inserting onto a frame, their `containerRef` is already set. To change a
    * duplicate, return a new object with the same `id`. It is shallow-merged
    * into the duplicate (omitted properties are kept), and your changes are
    * part of the duplication itself (same undo entry, same durable increment).

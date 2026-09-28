@@ -785,7 +785,7 @@ describe("box-selection overlap mode", () => {
       y: 10,
       width: 100,
       height: 80,
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
       backgroundColor: "transparent",
       fillStyle: "solid",
     });
@@ -811,7 +811,7 @@ describe("box-selection overlap mode", () => {
       y: 50,
       width: 200,
       height: 200,
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
       backgroundColor: "red",
       fillStyle: "solid",
     });

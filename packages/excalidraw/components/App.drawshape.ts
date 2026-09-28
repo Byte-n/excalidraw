@@ -203,7 +203,7 @@ export class AppDrawShape {
       endArrowhead: app.state.currentItemEndArrowhead,
       points: line.points,
       groupIds: line.groupIds,
-      frameId: line.frameId,
+      containerRef: line.containerRef,
       locked: false,
       angle: line.angle,
       strokeColor: line.strokeColor,

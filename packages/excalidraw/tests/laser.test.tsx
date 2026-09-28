@@ -224,7 +224,7 @@ describe("iframe-like element hit testing outside frame bounds", () => {
       y: 40,
       width: 300,
       height: 180,
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
     });
     API.setElements([frame, iframeLikeElement]);
     if (type === "embeddable") {

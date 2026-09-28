@@ -9,6 +9,7 @@ import type { Radians } from "@excalidraw/math";
 import type { Mutable } from "@excalidraw/common/utility-types";
 
 import { ShapeCache } from "./shape";
+import { updateFrameChildrenIndex } from "./frameChildrenIndex";
 
 import { updateElbowArrowPoints } from "./elbowArrow";
 
@@ -52,6 +53,7 @@ export const mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
   // casting to any because can't use `in` operator
   // (see https://github.com/microsoft/TypeScript/issues/21732)
   const { points, fixedSegments, fileId, shape } = updates as any;
+  const previousFrameId = element.containerRef?.elementId;
 
   if (
     isElbowArrow(element) &&
@@ -79,7 +81,7 @@ export const mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
 
   for (const key in updates) {
     const value = (updates as any)[key];
-    if (typeof value !== "undefined") {
+    if (typeof value !== "undefined" || key === "containerRef") {
       if (
         (element as any)[key] === value &&
         // if object, always update because its attrs could have changed
@@ -130,6 +132,14 @@ export const mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
     return element;
   }
 
+  if ("containerRef" in updates) {
+    updateFrameChildrenIndex(
+      element,
+      previousFrameId,
+      element.containerRef?.elementId,
+    );
+  }
+
   if (
     typeof updates.height !== "undefined" ||
     typeof updates.width !== "undefined" ||
@@ -156,7 +166,7 @@ export const newElementWith = <TElement extends ExcalidrawElement>(
   let didChange = false;
   for (const key in updates) {
     const value = (updates as any)[key];
-    if (typeof value !== "undefined") {
+    if (typeof value !== "undefined" || key === "containerRef") {
       if (
         (element as any)[key] === value &&
         // if object, always update because its attrs could have changed

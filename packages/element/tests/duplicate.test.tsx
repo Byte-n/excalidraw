@@ -521,7 +521,7 @@ describe("group-related duplication", () => {
       width: 50,
       height: 50,
       groupIds: ["group1"],
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
     });
     const rectangle2 = API.createElement({
       type: "rectangle",
@@ -530,7 +530,7 @@ describe("group-related duplication", () => {
       width: 50,
       height: 50,
       groupIds: ["group1"],
-      frameId: frame.id,
+      containerRef: { kind: "frameLike", elementId: frame.id },
     });
 
     API.setElements([frame, rectangle1, rectangle2]);
@@ -543,9 +543,20 @@ describe("group-related duplication", () => {
 
     assertElements(h.elements, [
       { id: frame.id },
-      { id: rectangle1.id, frameId: frame.id },
-      { id: rectangle2.id, frameId: frame.id },
-      { [ORIG_ID]: rectangle2.id, selected: true, groupIds: [], frameId: null },
+      {
+        id: rectangle1.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
+      },
+      {
+        id: rectangle2.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
+      },
+      {
+        [ORIG_ID]: rectangle2.id,
+        selected: true,
+        groupIds: [],
+        containerRef: undefined,
+      },
     ]);
     expect(h.state.editingGroupId).toBe(null);
   });

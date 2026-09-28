@@ -550,7 +550,9 @@ export const addTextFromPaste = (
           originalText,
           lineHeight,
           autoResize: !isTextUnwrapped,
-          frameId: topLayerFrame ? topLayerFrame.id : null,
+          containerRef: topLayerFrame
+            ? { kind: "frameLike", elementId: topLayerFrame.id }
+            : undefined,
         });
         acc.push(element);
         currentY += element.height + LINE_GAP;

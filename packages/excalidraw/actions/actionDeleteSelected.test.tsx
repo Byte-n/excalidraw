@@ -20,7 +20,7 @@ describe("deleting selected elements when frame selected should keep children + 
 
     const r1 = API.createElement({
       type: "rectangle",
-      frameId: f1.id,
+      containerRef: { kind: "frameLike", elementId: f1.id },
     });
 
     API.setElements([f1, r1]);
@@ -33,18 +33,27 @@ describe("deleting selected elements when frame selected should keep children + 
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
-      { id: r1.id, isDeleted: false, selected: true },
+      {
+        id: r1.id,
+        isDeleted: false,
+        containerRef: undefined,
+        selected: true,
+      },
     ]);
+
+    expect(
+      h.elements.find((element) => element.id === r1.id)?.containerRef,
+    ).toBeUndefined();
   });
 
-  it("frame + text container (text's frameId set)", async () => {
+  it("frame + text container", async () => {
     const f1 = API.createElement({
       type: "frame",
     });
 
     const r1 = API.createElement({
       type: "rectangle",
-      frameId: f1.id,
+      containerRef: { kind: "frameLike", elementId: f1.id },
     });
 
     const t1 = API.createElement({
@@ -53,45 +62,7 @@ describe("deleting selected elements when frame selected should keep children + 
       height: 100,
       fontSize: 20,
       containerId: r1.id,
-      frameId: f1.id,
-    });
-
-    h.app.scene.mutateElement(r1, {
-      boundElements: [{ type: "text", id: t1.id }],
-    });
-
-    API.setElements([f1, r1, t1]);
-
-    API.setSelectedElements([f1]);
-
-    act(() => {
-      h.app.actionManager.executeAction(actionDeleteSelected);
-    });
-
-    assertElements(h.elements, [
-      { id: f1.id, isDeleted: true },
-      { id: r1.id, isDeleted: false, selected: true },
-      { id: t1.id, isDeleted: false },
-    ]);
-  });
-
-  it("frame + text container (text's frameId not set)", async () => {
-    const f1 = API.createElement({
-      type: "frame",
-    });
-
-    const r1 = API.createElement({
-      type: "rectangle",
-      frameId: f1.id,
-    });
-
-    const t1 = API.createElement({
-      type: "text",
-      width: 200,
-      height: 100,
-      fontSize: 20,
-      containerId: r1.id,
-      frameId: null,
+      containerRef: undefined,
     });
 
     h.app.scene.mutateElement(r1, {
@@ -120,7 +91,7 @@ describe("deleting selected elements when frame selected should keep children + 
 
     const r1 = API.createElement({
       type: "rectangle",
-      frameId: f1.id,
+      containerRef: { kind: "frameLike", elementId: f1.id },
     });
 
     const t1 = API.createElement({
@@ -129,7 +100,7 @@ describe("deleting selected elements when frame selected should keep children + 
       height: 100,
       fontSize: 20,
       containerId: r1.id,
-      frameId: null,
+      containerRef: undefined,
     });
 
     h.app.scene.mutateElement(r1, {
@@ -158,7 +129,7 @@ describe("deleting selected elements when frame selected should keep children + 
 
     const a1 = API.createElement({
       type: "arrow",
-      frameId: f1.id,
+      containerRef: { kind: "frameLike", elementId: f1.id },
     });
 
     const t1 = API.createElement({
@@ -167,7 +138,7 @@ describe("deleting selected elements when frame selected should keep children + 
       height: 100,
       fontSize: 20,
       containerId: a1.id,
-      frameId: null,
+      containerRef: undefined,
     });
 
     h.app.scene.mutateElement(a1, {
@@ -195,7 +166,7 @@ describe("deleting selected elements when frame selected should keep children + 
     });
     const r1 = API.createElement({
       type: "rectangle",
-      frameId: f1.id,
+      containerRef: { kind: "frameLike", elementId: f1.id },
     });
     API.setElements([f1, r1]);
 
@@ -207,7 +178,12 @@ describe("deleting selected elements when frame selected should keep children + 
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
-      { id: r1.id, isDeleted: false, selected: true },
+      {
+        id: r1.id,
+        isDeleted: false,
+        containerRef: undefined,
+        selected: true,
+      },
     ]);
   });
 });

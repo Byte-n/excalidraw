@@ -712,8 +712,8 @@ export class FlowChartCreator {
 
     // add pending nodes to the same frame as the start node
     // if every pending node is at least intersecting with the frame
-    if (startNode.frameId) {
-      const frame = elementsMap.get(startNode.frameId);
+    if (startNode.containerRef?.elementId) {
+      const frame = elementsMap.get(startNode.containerRef?.elementId);
 
       invariant(
         frame && isFrameElement(frame),
@@ -730,7 +730,7 @@ export class FlowChartCreator {
       ) {
         this.pendingNodes = this.pendingNodes.map((node) =>
           mutateElement(node, elementsMap, {
-            frameId: startNode.frameId,
+            containerRef: startNode.containerRef,
           }),
         );
       }

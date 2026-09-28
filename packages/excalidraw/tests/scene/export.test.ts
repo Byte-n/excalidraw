@@ -502,7 +502,7 @@ describe("exporting frames", () => {
         height: 100,
         x: 0,
         y: 50,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
       const rectOverlapping = API.createElement({
         type: "rectangle",
@@ -546,7 +546,7 @@ describe("exporting frames", () => {
         height: 100,
         x: 0,
         y: 50,
-        frameId: frame.id,
+        containerRef: { kind: "frameLike", elementId: frame.id },
       });
       const elementOutside = API.createElement({
         type: "rectangle",
@@ -596,7 +596,7 @@ describe("exporting frames", () => {
         height: 100,
         x: 0,
         y: 50,
-        frameId: frame1.id,
+        containerRef: { kind: "frameLike", elementId: frame1.id },
       });
       const frame2Child = API.createElement({
         type: "rectangle",
@@ -604,7 +604,7 @@ describe("exporting frames", () => {
         height: 100,
         x: 200,
         y: 0,
-        frameId: frame2.id,
+        containerRef: { kind: "frameLike", elementId: frame2.id },
       });
       const frame2Overlapping = API.createElement({
         type: "rectangle",
@@ -707,7 +707,7 @@ describe("exporting frames", () => {
         height: 100,
         x: 0,
         y: 50,
-        frameId: frame1.id,
+        containerRef: { kind: "frameLike", elementId: frame1.id },
       });
       const frame2Child = API.createElement({
         type: "rectangle",
@@ -715,7 +715,7 @@ describe("exporting frames", () => {
         height: 100,
         x: 50,
         y: 0,
-        frameId: frame2.id,
+        containerRef: { kind: "frameLike", elementId: frame2.id },
       });
 
       // low-level exportToSvg api expects elements to be pre-filtered, so let's

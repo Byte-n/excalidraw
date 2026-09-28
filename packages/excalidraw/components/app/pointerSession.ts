@@ -669,10 +669,10 @@ export const handleCanvasPointerDown = (
               delete nextSelectedElementIds[element.id];
             },
           );
-        } else if (hitElement.frameId) {
+        } else if (hitElement.containerRef?.elementId) {
           // if hitElement is in a frame and its frame has been selected
           // disable selection for the given element
-          if (nextSelectedElementIds[hitElement.frameId]) {
+          if (nextSelectedElementIds[hitElement.containerRef?.elementId]) {
             delete nextSelectedElementIds[hitElement.id];
           }
         } else {
@@ -695,7 +695,10 @@ export const handleCanvasPointerDown = (
 
           if (framesInGroups.size > 0) {
             previouslySelectedElements.forEach((element) => {
-              if (element.frameId && framesInGroups.has(element.frameId)) {
+              if (
+                element.containerRef?.elementId &&
+                framesInGroups.has(element.containerRef?.elementId)
+              ) {
                 // deselect element and groups containing the element
                 delete nextSelectedElementIds[element.id];
                 element.groupIds
@@ -2397,7 +2400,7 @@ export const onPointerUpFromPointerDownHandler = (
           app.state.selectedLinearElement.elementId,
         );
 
-        if (linearElement?.frameId) {
+        if (linearElement?.containerRef?.elementId) {
           const frame = getContainingFrame(linearElement, elementsMap);
 
           if (frame && linearElement) {
@@ -2490,7 +2493,7 @@ export const onPointerUpFromPointerDownHandler = (
           if (app.state.editingGroupId) {
             const elementsToRemove = selectedElements.filter(
               (element) =>
-                element.frameId &&
+                element.containerRef?.elementId &&
                 !isElementInFrame(element, nextElements, app.state),
             );
 
@@ -2702,8 +2705,8 @@ export const onPointerUpFromPointerDownHandler = (
             });
           }
         } else if (
-          hitElement.frameId &&
-          app.state.selectedElementIds[hitElement.frameId]
+          hitElement.containerRef?.elementId &&
+          app.state.selectedElementIds[hitElement.containerRef?.elementId]
         ) {
           // when hitElement is part of a selected frame, deselect the frame
           // to avoid frame and containing elements selected simultaneously
@@ -2715,10 +2718,13 @@ export const onPointerUpFromPointerDownHandler = (
               [hitElement.id]: true,
             };
             // deselect the frame
-            delete nextSelectedElementIds[hitElement.frameId!];
+            delete nextSelectedElementIds[hitElement.containerRef?.elementId!];
 
             // deselect groups containing the frame
-            (app.scene.getElement(hitElement.frameId!)?.groupIds ?? [])
+            (
+              app.scene.getElement(hitElement.containerRef?.elementId!)
+                ?.groupIds ?? []
+            )
               .flatMap((gid) =>
                 getElementsInGroup(app.scene.getNonDeletedElements(), gid),
               )

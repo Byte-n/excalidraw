@@ -115,7 +115,8 @@ export const eraseElements = (app: PointerEraseApp) => {
   const elements = app.scene.getElementsIncludingDeleted().map((element) => {
     if (
       app.elementsPendingErasure.has(element.id) ||
-      (element.frameId && app.elementsPendingErasure.has(element.frameId)) ||
+      (element.containerRef?.elementId &&
+        app.elementsPendingErasure.has(element.containerRef?.elementId)) ||
       (isBoundToContainer(element) &&
         app.elementsPendingErasure.has(element.containerId))
     ) {

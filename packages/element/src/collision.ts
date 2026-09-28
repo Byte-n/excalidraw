@@ -316,8 +316,8 @@ const bindingBorderTest = (
   }
 
   // If the element is inside a frame, we should clip the element
-  if (element.frameId) {
-    const enclosingFrame = elementsMap.get(element.frameId);
+  if (element.containerRef?.elementId) {
+    const enclosingFrame = elementsMap.get(element.containerRef?.elementId);
     if (enclosingFrame && isFrameLikeElement(enclosingFrame)) {
       const enclosingFrameBounds = getElementBounds(
         enclosingFrame,

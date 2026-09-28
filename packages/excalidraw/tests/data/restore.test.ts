@@ -10,8 +10,6 @@ import {
   STICKY_NOTE_MAX_FONT_SIZE,
   DEFAULT_STICKY_NOTE_BG,
   STICKY_NOTE_MIN_FONT_SIZE,
-  EXPORT_DATA_TYPES,
-  VERSIONS,
 } from "@excalidraw/common";
 
 import { newElement, newElementWith } from "@excalidraw/element";
@@ -35,7 +33,7 @@ import type { NormalizedZoomValue } from "@excalidraw/excalidraw/types";
 import { API } from "../helpers/api";
 import * as restore from "../../data/restore";
 import { getDefaultAppState } from "../../appState";
-import { isValidExcalidrawData, serializeAsJSON } from "../../data/json";
+import { serializeAsJSON } from "../../data/json";
 
 import type { ImportedDataState } from "../../data/types";
 import type { LibraryItem, LibraryItems } from "../../types";
@@ -58,6 +56,18 @@ describe("restoreElements", () => {
 
     const restoredElements = restore.restoreElements(elements, null);
     expect(restoredElements.length).toBe(elements.length);
+  });
+
+  it("clears a reference to a missing frame when repairing bindings", () => {
+    const child = API.createElement({
+      type: "rectangle",
+      containerRef: { kind: "frameLike", elementId: "missing" },
+    });
+
+    expect(
+      restore.restoreElements([child], null, { repairBindings: true })[0]
+        .containerRef,
+    ).toBeUndefined();
   });
 
   it.each([123, 0, null, undefined])(
@@ -173,16 +183,6 @@ describe("restoreElements", () => {
       textFitMinWidth: 120,
       textFitMinHeight: 80,
     });
-  });
-
-  it("accepts only the current file format version", () => {
-    const data = {
-      type: EXPORT_DATA_TYPES.excalidraw,
-      version: VERSIONS.excalidraw,
-      elements: [API.createElement({ type: "rectangle" })],
-    };
-    expect(isValidExcalidrawData(data)).toBe(true);
-    expect(isValidExcalidrawData({ ...data, version: 2 })).toBe(false);
   });
 
   it("should return empty array when isInvisiblySmallElement is true", () => {

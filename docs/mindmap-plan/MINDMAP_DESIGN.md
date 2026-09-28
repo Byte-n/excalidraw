@@ -66,7 +66,7 @@ type ExcalidrawMindmapNodeElement = {
 
 - `id`、`x`、`y`、`width`、`height`；
 - `strokeColor`、`backgroundColor`、`strokeWidth`、`roundness`；
-- `boundElements`、`frameId`、`groupIds`、`locked`；
+- `boundElements`、`containerRef`、`groupIds`、`locked`；
 - `version`、`versionNonce`、`index`、`isDeleted`。
 
 ### 3.2 根节点和普通节点

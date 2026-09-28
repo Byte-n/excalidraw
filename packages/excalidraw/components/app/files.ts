@@ -721,7 +721,9 @@ export const newImagePlaceholder = (
     roundness: null,
     opacity: app.state.currentItemOpacity,
     locked: false,
-    frameId: topLayerFrame ? topLayerFrame.id : null,
+    containerRef: topLayerFrame
+      ? { kind: "frameLike", elementId: topLayerFrame.id }
+      : undefined,
     x: gridX - placeholderSize / 2,
     y: gridY - placeholderSize / 2,
     width: placeholderSize,

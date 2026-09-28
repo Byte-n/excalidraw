@@ -191,7 +191,7 @@ export class API {
     angle?: number;
     id?: string;
     isDeleted?: boolean;
-    frameId?: ExcalidrawElement["id"] | null;
+    containerRef?: ExcalidrawElement["containerRef"];
     index?: ExcalidrawElement["index"];
     groupIds?: ExcalidrawElement["groupIds"];
     created?: ExcalidrawElement["created"];
@@ -292,7 +292,7 @@ export class API {
       y,
       width,
       height,
-      frameId: rest.frameId ?? null,
+      containerRef: rest.containerRef,
       index: rest.index ?? null,
       angle: (rest.angle ?? 0) as Radians,
       strokeColor:
@@ -512,17 +512,16 @@ export class API {
   };
 
   static createTextContainer = (opts?: {
-    frameId?: ExcalidrawElement["id"];
+    containerRef?: ExcalidrawElement["containerRef"];
     groupIds?: ExcalidrawElement["groupIds"];
     label?: {
       text?: string;
-      frameId?: ExcalidrawElement["id"] | null;
       groupIds?: ExcalidrawElement["groupIds"];
     };
   }) => {
     const rectangle = API.createElement({
       type: "rectangle",
-      frameId: opts?.frameId || null,
+      containerRef: opts?.containerRef,
       groupIds: opts?.groupIds,
     });
 
@@ -533,14 +532,10 @@ export class API {
       height: 20,
       fontSize: FONT_SIZES.sm,
       containerId: rectangle.id,
-      frameId:
-        opts?.label?.frameId === undefined
-          ? opts?.frameId ?? null
-          : opts?.label?.frameId ?? null,
-      groupIds: opts?.label?.groupIds === undefined
-      ? opts?.groupIds
-      : opts?.label?.groupIds ,
-
+      groupIds:
+        opts?.label?.groupIds === undefined
+          ? opts?.groupIds
+          : opts.label.groupIds,
     });
 
     h.app.scene.mutateElement(
@@ -554,15 +549,14 @@ export class API {
   };
 
   static createLabeledArrow = (opts?: {
-    frameId?: ExcalidrawElement["id"];
+    containerRef?: ExcalidrawElement["containerRef"];
     label?: {
       text?: string;
-      frameId?: ExcalidrawElement["id"] | null;
     };
   }) => {
     const arrow = API.createElement({
       type: "arrow",
-      frameId: opts?.frameId || null,
+      containerRef: opts?.containerRef,
     });
 
     const text = API.createElement({
@@ -570,10 +564,6 @@ export class API {
       width: 50,
       height: 20,
       containerId: arrow.id,
-      frameId:
-        opts?.label?.frameId === undefined
-          ? opts?.frameId ?? null
-          : opts?.label?.frameId ?? null,
     });
 
     h.app.scene.mutateElement(

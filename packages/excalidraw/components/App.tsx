@@ -1709,7 +1709,7 @@ class App extends React.Component<AppProps, AppState> {
     opts?: {
       /** to exclude selected elements when dragging, etc. */
       excludeElementIds?: AppState["selectedElementIds"];
-      currentFrameId?: ExcalidrawElement["frameId"];
+      currentFrameId?: string | null;
     },
   ) => {
     return pointerCanvasController.getTopLayerFrameAtSceneCoords(
@@ -1751,7 +1751,11 @@ class App extends React.Component<AppProps, AppState> {
     for (const element of elements) {
       const currentChunk = chunkedElements[chunkedElements.length - 1];
 
-      if (currentChunk?.[0].frameId === element.frameId) {
+      if (
+        currentChunk &&
+        currentChunk[0].containerRef?.elementId ===
+          element.containerRef?.elementId
+      ) {
         currentChunk.push(element);
       } else {
         chunkedElements.push([element]);
@@ -1759,7 +1763,7 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     for (const chunk of chunkedElements) {
-      const frameId = chunk[0].frameId;
+      const frameId = chunk[0].containerRef?.elementId;
 
       const insertionIndex = frameId
         ? getFrameChildrenInsertionIndex(
@@ -1774,8 +1778,8 @@ class App extends React.Component<AppProps, AppState> {
   public insertNewElement = (element: ExcalidrawElement) => {
     this.insertNewElements([element]);
 
-    const frame = element.frameId
-      ? this.scene.getNonDeletedElement(element.frameId)
+    const frame = element.containerRef?.elementId
+      ? this.scene.getNonDeletedElement(element.containerRef?.elementId)
       : null;
 
     this.updateFrameToHighlight(

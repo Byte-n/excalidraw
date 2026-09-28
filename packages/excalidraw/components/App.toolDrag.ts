@@ -51,6 +51,7 @@ export const DRAGGABLE_TOOLS: Partial<Record<ToolType, DraggableTool>> = {
     createElement: (app, center) => {
       const size = DEFAULT_STICKY_NOTE_SIZE;
       const { state } = app;
+      const frame = app.getTopLayerFrameAtSceneCoords(center);
       return newStickyNoteElement({
         type: "stickynote",
         ...centered(center, size, size),
@@ -64,7 +65,9 @@ export const DRAGGABLE_TOOLS: Partial<Record<ToolType, DraggableTool>> = {
         opacity: state.currentItemOpacity,
         roundness: app.getCurrentItemRoundness("stickynote"),
         locked: false,
-        frameId: app.getTopLayerFrameAtSceneCoords(center)?.id ?? null,
+        containerRef: frame
+          ? { kind: "frameLike", elementId: frame.id }
+          : undefined,
       });
     },
     onDrop: (app, element) => {
