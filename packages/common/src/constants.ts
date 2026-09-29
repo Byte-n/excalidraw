@@ -216,6 +216,23 @@ export const FRAME_STYLE = {
   nameLineHeight: 1.25,
 };
 
+/**
+ * Static grid chrome of a table element. Values are light-theme colors —
+ * renderers pass them through `applyDarkModeFilter` for the dark theme, the
+ * same way `FRAME_STYLE` consumers do.
+ */
+export const TABLE_STYLE = {
+  /** Outer border, kept low-contrast: the grid is content chrome, not an
+      interaction affordance. */
+  strokeColor: "#b3b3b3" as ExcalidrawElement["strokeColor"],
+  /** Interior grid lines, lighter than the border. */
+  gridColor: "#d6d6d6" as ExcalidrawElement["strokeColor"],
+  strokeWidth: 1 as ExcalidrawElement["strokeWidth"],
+  gridStrokeWidth: 1 as ExcalidrawElement["strokeWidth"],
+  /** Cells without a `style.backgroundColor` override stay unpainted. */
+  backgroundColor: "transparent" as ExcalidrawElement["backgroundColor"],
+};
+
 export const MIN_FONT_SIZE = 1;
 export const DEFAULT_FONT_SIZE = 20;
 export const STICKY_NOTE_MIN_FONT_SIZE = 16;
@@ -267,6 +284,11 @@ export const DEFAULT_TEXT_ALIGN = "left";
 export const DEFAULT_VERTICAL_ALIGN = "top";
 export const DEFAULT_VERSION = "{version}";
 export const DEFAULT_TRANSFORM_HANDLE_SPACING = 2;
+
+export const TABLE_STRUCTURE_RAIL_OFFSET =
+  2 + DEFAULT_TRANSFORM_HANDLE_SPACING * 2;
+export const TABLE_STRUCTURE_INSERTION_OFFSET =
+  TABLE_STRUCTURE_RAIL_OFFSET + 12;
 
 export const SIDE_RESIZING_THRESHOLD = 2 * DEFAULT_TRANSFORM_HANDLE_SPACING;
 // a small epsilon to make side resizing always take precedence
@@ -558,6 +580,7 @@ export const TOOL_TYPE = {
   autoshape: "autoshape",
   bucketfill: "bucketfill",
   mindmap: "mindmap",
+  table: "table",
 } as const;
 
 export const EDITOR_LS_KEYS = {

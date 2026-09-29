@@ -28,6 +28,12 @@ import type {
 
 const opts = { regenerateIds: false };
 
+/** First element of the given type (test helper shared across suites). */
+const find = <T extends { type: string }>(
+  elements: readonly { type: string }[],
+  type: T["type"],
+) => elements.find((element) => element.type === type) as T;
+
 describe("Test Transform", () => {
   it("should generate id unless opts.regenerateIds is set to false explicitly", () => {
     const elements = [
@@ -1071,13 +1077,6 @@ describe("Test Transform", () => {
   });
 
   describe("sticky notes", () => {
-    const find = <
-      T extends ExcalidrawStickyNoteElement | ExcalidrawTextElement,
-    >(
-      elements: readonly { type: string }[],
-      type: T["type"],
-    ) => elements.find((element) => element.type === type) as T;
-
     it("creates a finalized note with the sticky defaults", () => {
       const elements = convertToExcalidrawElements(
         [{ type: "stickynote", x: 100, y: 100 }],
@@ -1188,5 +1187,436 @@ describe("Test Transform", () => {
       expect(note.baseHeight).toBe(DEFAULT_STICKY_NOTE_SIZE);
       expect(note.height).toBeGreaterThan(DEFAULT_STICKY_NOTE_SIZE);
     });
+  });
+});
+
+
+describe("table skeletons", () => {
+  const tableOpts = { regenerateIds: false };
+
+  const cellAt = (table: any, row: number, column: number) => {
+    const cell = table.table.cells.find(
+      (candidate: any) =>
+        candidate.rowId === table.table.rows[row].id &&
+        candidate.columnId === table.table.columns[column].id,
+    );
+    expect(cell).toBeTruthy();
+    return cell;
+  };
+
+  /** Base shapes convert to composite_shape elements; find by shape id. */
+  const findShape = (elements: any[], shapeId: string) =>
+    elements.find(
+      (element) =>
+        element.type === "composite_shape" && element.shape?.id === shapeId,
+    );
+
+  it("builds a default 3x3 grid and binds members to their cells", () => {
+    const elements = convertToExcalidrawElements(
+      [
+        {
+          type: "table",
+          id: "table-1",
+          x: 0,
+          y: 0,
+          children: [
+            {
+              element: { type: "rectangle", id: "rect-1", x: 10, y: 10 },
+              cell: { row: 0, column: 0 },
+            },
+            {
+              element: {
+                type: "text",
+                id: "bg-1",
+                text: "background",
+                x: 170,
+                y: 60,
+              },
+              cell: { row: 0, column: 1 },
+              role: "backgroundText",
+            },
+            {
+              element: { type: "diamond", id: "gem-1", x: 300, y: 150 },
+              cell: { row: 1, column: 2 },
+            },
+            {
+              // a cell holds any number of content members
+              element: { type: "rectangle", id: "rect-2", x: 20, y: 20 },
+              cell: { row: 0, column: 0 },
+            },
+          ],
+        } as unknown as ExcalidrawElementSkeleton,
+      ],
+      tableOpts,
+    );
+
+    expect(elements).toHaveLength(5);
+    const table = find<any>(elements, "table");
+    expect(table.id).toBe("table-1");
+    expect(table.table.rows).toHaveLength(3);
+    expect(table.table.columns).toHaveLength(3);
+    expect(table.table.cells).toHaveLength(9);
+    expect(table.width).toBe(3 * 160);
+    expect(table.height).toBe(3 * 56);
+
+    const topLeftCellId = cellAt(table, 0, 0).id;
+    for (const id of ["rect-1", "rect-2"]) {
+      const member = elements.find((element) => element.id === id) as any;
+      expect(member.containerRef).toEqual({
+        kind: "tableCell",
+        elementId: "table-1",
+        cellId: topLeftCellId,
+        role: "content",
+      });
+    }
+
+    const bgText = find<ExcalidrawTextElement>(elements, "text");
+    expect(bgText.id).toBe("bg-1");
+    expect(bgText.containerRef).toEqual({
+      kind: "tableCell",
+      elementId: "table-1",
+      cellId: cellAt(table, 0, 1).id,
+      role: "backgroundText",
+    });
+    expect(bgText.containerId).toBe(null);
+
+    const diamond = findShape(elements, "diamond");
+    expect(diamond.containerRef).toEqual({
+      kind: "tableCell",
+      elementId: "table-1",
+      cellId: cellAt(table, 1, 2).id,
+      role: "content",
+    });
+
+    // members follow their table in the scene order
+    const order = elements.map((element) => element.id);
+    expect(order.indexOf("table-1")).toBeLessThan(order.indexOf("rect-1"));
+    expect(order.indexOf("table-1")).toBeLessThan(order.indexOf("bg-1"));
+  });
+
+  it("honors requested counts and per-row/per-column sizes", () => {
+    const elements = convertToExcalidrawElements(
+      [
+        {
+          type: "table",
+          id: "table-1",
+          rowCount: 2,
+          columnCount: 2,
+          rowHeights: [100, 50],
+          columnWidths: [80, 120],
+        } as unknown as ExcalidrawElementSkeleton,
+      ],
+      tableOpts,
+    );
+
+    const table = find<any>(elements, "table");
+    expect(table.table.rows.map((row: any) => row.height)).toEqual([100, 50]);
+    expect(table.table.columns.map((column: any) => column.width)).toEqual([
+      80, 120,
+    ]);
+    expect(table.table.cells).toHaveLength(4);
+    expect(table.width).toBe(200);
+    expect(table.height).toBe(150);
+  });
+
+  it("derives counts from size arrays when counts are omitted", () => {
+    const elements = convertToExcalidrawElements(
+      [
+        {
+          type: "table",
+          id: "table-1",
+          rowHeights: [30, 40, 50],
+          columnWidths: [70],
+        } as unknown as ExcalidrawElementSkeleton,
+      ],
+      tableOpts,
+    );
+
+    const table = find<any>(elements, "table");
+    expect(table.table.rows).toHaveLength(3);
+    expect(table.table.columns).toHaveLength(1);
+    expect(table.width).toBe(70);
+    expect(table.height).toBe(120);
+  });
+
+  it("converts nested table members recursively", () => {
+    const elements = convertToExcalidrawElements(
+      [
+        {
+          type: "table",
+          id: "outer",
+          children: [
+            {
+              element: {
+                type: "table",
+                id: "inner",
+                x: 5,
+                y: 5,
+                children: [
+                  {
+                    element: {
+                      type: "text",
+                      id: "bg-inner",
+                      text: "nested",
+                      x: 6,
+                      y: 6,
+                    },
+                    cell: { row: 0, column: 0 },
+                    role: "backgroundText",
+                  },
+                ],
+              },
+              cell: { row: 1, column: 1 },
+            },
+          ],
+        } as unknown as ExcalidrawElementSkeleton,
+      ],
+      tableOpts,
+    );
+
+    const outer = elements.find((element) => element.id === "outer") as any;
+    const inner = elements.find((element) => element.id === "inner") as any;
+    const bgInner = find<ExcalidrawTextElement>(elements, "text");
+
+    expect(inner.containerRef).toEqual({
+      kind: "tableCell",
+      elementId: "outer",
+      cellId: cellAt(outer, 1, 1).id,
+      role: "content",
+    });
+    expect(bgInner.containerRef).toEqual({
+      kind: "tableCell",
+      elementId: "inner",
+      cellId: cellAt(inner, 0, 0).id,
+      role: "backgroundText",
+    });
+  });
+
+  it("keeps bound text free of tableCell refs", () => {
+    const elements = convertToExcalidrawElements(
+      [
+        {
+          type: "table",
+          id: "table-1",
+          children: [
+            {
+              element: {
+                type: "rectangle",
+                id: "owner",
+                x: 10,
+                y: 10,
+                label: { text: "label" },
+              },
+              cell: { row: 0, column: 0 },
+            },
+          ],
+        } as unknown as ExcalidrawElementSkeleton,
+      ],
+      tableOpts,
+    );
+
+    const owner = findShape(elements, "rectangle");
+    const label = find<ExcalidrawTextElement>(elements, "text");
+    expect(owner.containerRef?.kind).toBe("tableCell");
+    expect(label.containerId).toBe("owner");
+    expect(label.containerRef).toBeUndefined();
+  });
+
+  it("passes a full table element through after validation", () => {
+    const [table] = convertToExcalidrawElements(
+      [
+        {
+          type: "table",
+          id: "table-1",
+          x: 12,
+          y: 34,
+          rowCount: 2,
+          columnCount: 2,
+          rowHeights: [40, 60],
+          columnWidths: [90, 110],
+        } as unknown as ExcalidrawElementSkeleton,
+      ],
+      tableOpts,
+    );
+
+    const [passthrough] = convertToExcalidrawElements(
+      [table as ExcalidrawElementSkeleton],
+      tableOpts,
+    );
+
+    expect(passthrough.id).toBe("table-1");
+    expect(passthrough.x).toBe(12);
+    expect(passthrough.y).toBe(34);
+    expect((passthrough as any).table).toEqual((table as any).table);
+    expect(passthrough.width).toBe(table.width);
+    expect(passthrough.height).toBe(table.height);
+  });
+
+  it("rejects out-of-bounds child positions", () => {
+    expect(() =>
+      convertToExcalidrawElements(
+        [
+          {
+            type: "table",
+            id: "table-1",
+            children: [
+              {
+                element: { type: "rectangle", x: 0, y: 0 },
+                cell: { row: 3, column: 0 },
+              },
+            ],
+          } as unknown as ExcalidrawElementSkeleton,
+        ],
+        tableOpts,
+      ),
+    ).toThrow("out of bounds");
+  });
+
+  it("rejects invalid background text declarations", () => {
+    expect(() =>
+      convertToExcalidrawElements(
+        [
+          {
+            type: "table",
+            id: "table-1",
+            children: [
+              {
+                element: { type: "rectangle", x: 0, y: 0 },
+                cell: { row: 0, column: 0 },
+                role: "backgroundText",
+              },
+            ],
+          } as unknown as ExcalidrawElementSkeleton,
+        ],
+        tableOpts,
+      ),
+    ).toThrow("must be a text element");
+
+    const backgroundText = {
+      element: { type: "text", text: "a", x: 0, y: 0 },
+      cell: { row: 0, column: 0 },
+      role: "backgroundText",
+    };
+    expect(() =>
+      convertToExcalidrawElements(
+        [
+          {
+            type: "table",
+            id: "table-1",
+            children: [backgroundText, { ...backgroundText }],
+          } as unknown as ExcalidrawElementSkeleton,
+        ],
+        tableOpts,
+      ),
+    ).toThrow("already has background text");
+  });
+
+  it("rejects frame-like members and conflicting declarations", () => {
+    expect(() =>
+      convertToExcalidrawElements(
+        [
+          {
+            type: "table",
+            id: "table-1",
+            children: [
+              {
+                element: { type: "frame", children: [], x: 0, y: 0 },
+                cell: { row: 0, column: 0 },
+              },
+            ],
+          } as unknown as ExcalidrawElementSkeleton,
+        ],
+        tableOpts,
+      ),
+    ).toThrow("cannot be a table cell member");
+
+    expect(() =>
+      convertToExcalidrawElements(
+        [
+          {
+            type: "table",
+            id: "table-1",
+            table: {
+              schemaVersion: 1,
+              rows: [{ id: "r1", height: 56 }],
+              columns: [{ id: "c1", width: 160 }],
+              cells: [{ id: "cell-1", rowId: "r1", columnId: "c1", style: {} }],
+            },
+            children: [],
+          } as unknown as ExcalidrawElementSkeleton,
+        ],
+        tableOpts,
+      ),
+    ).toThrow("both `table` data and `children`");
+  });
+
+  it("rejects invalid per-row/per-column sizes", () => {
+    expect(() =>
+      convertToExcalidrawElements(
+        [
+          {
+            type: "table",
+            rowCount: 2,
+            rowHeights: [100],
+          } as unknown as ExcalidrawElementSkeleton,
+        ],
+        tableOpts,
+      ),
+    ).toThrow("does not match rowCount");
+
+    expect(() =>
+      convertToExcalidrawElements(
+        [
+          {
+            type: "table",
+            columnWidths: [160, -1],
+          } as unknown as ExcalidrawElementSkeleton,
+        ],
+        tableOpts,
+      ),
+    ).toThrow("Invalid table column width");
+  });
+
+  it("rejects invalid table data on the passthrough path", () => {
+    expect(() =>
+      convertToExcalidrawElements(
+        [
+          {
+            type: "table",
+            table: {
+              schemaVersion: 1,
+              rows: [],
+              columns: [],
+              cells: [],
+            },
+          } as unknown as ExcalidrawElementSkeleton,
+        ],
+        tableOpts,
+      ),
+    ).toThrow("at least one row and one column");
+
+    const [table] = convertToExcalidrawElements(
+      [
+        {
+          type: "table",
+          id: "table-1",
+          rowCount: 2,
+          columnCount: 2,
+        } as unknown as ExcalidrawElementSkeleton,
+      ],
+      tableOpts,
+    );
+
+    expect(() =>
+      convertToExcalidrawElements(
+        [
+          {
+            ...(table as any),
+            width: 100,
+          } as unknown as ExcalidrawElementSkeleton,
+        ],
+        tableOpts,
+      ),
+    ).toThrow("does not match its column sum");
   });
 });

@@ -8,7 +8,7 @@ import { actionDeleteSelected } from "./actionDeleteSelected";
 
 const { h } = window;
 
-describe("deleting selected elements when frame selected should keep children + select them", () => {
+describe("deleting a selected frame deletes its descendants", () => {
   beforeEach(async () => {
     await render(<Excalidraw />);
   });
@@ -33,17 +33,9 @@ describe("deleting selected elements when frame selected should keep children + 
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
-      {
-        id: r1.id,
-        isDeleted: false,
-        containerRef: undefined,
-        selected: true,
-      },
+      { id: r1.id, isDeleted: true },
     ]);
-
-    expect(
-      h.elements.find((element) => element.id === r1.id)?.containerRef,
-    ).toBeUndefined();
+    expect(h.app.state.selectedElementIds).toEqual({});
   });
 
   it("frame + text container", async () => {
@@ -79,9 +71,10 @@ describe("deleting selected elements when frame selected should keep children + 
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
-      { id: r1.id, isDeleted: false, selected: true },
-      { id: t1.id, isDeleted: false },
+      { id: r1.id, isDeleted: true },
+      { id: t1.id, isDeleted: true },
     ]);
+    expect(h.app.state.selectedElementIds).toEqual({});
   });
 
   it("frame + text container (text selected too)", async () => {
@@ -117,9 +110,10 @@ describe("deleting selected elements when frame selected should keep children + 
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
-      { id: r1.id, isDeleted: false, selected: true },
-      { id: t1.id, isDeleted: false },
+      { id: r1.id, isDeleted: true },
+      { id: t1.id, isDeleted: true },
     ]);
+    expect(h.app.state.selectedElementIds).toEqual({});
   });
 
   it("frame + labeled arrow", async () => {
@@ -155,9 +149,10 @@ describe("deleting selected elements when frame selected should keep children + 
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
-      { id: a1.id, isDeleted: false, selected: true },
-      { id: t1.id, isDeleted: false },
+      { id: a1.id, isDeleted: true },
+      { id: t1.id, isDeleted: true },
     ]);
+    expect(h.app.state.selectedElementIds).toEqual({});
   });
 
   it("frame + children selected", async () => {
@@ -178,12 +173,30 @@ describe("deleting selected elements when frame selected should keep children + 
 
     assertElements(h.elements, [
       { id: f1.id, isDeleted: true },
-      {
-        id: r1.id,
-        isDeleted: false,
-        containerRef: undefined,
-        selected: true,
-      },
+      { id: r1.id, isDeleted: true },
     ]);
+    expect(h.app.state.selectedElementIds).toEqual({});
+  });
+
+  it("preserves elements outside the frame", async () => {
+    const frame = API.createElement({ type: "frame" });
+    const child = API.createElement({
+      type: "rectangle",
+      containerRef: { kind: "frameLike", elementId: frame.id },
+    });
+    const unrelated = API.createElement({ type: "rectangle" });
+    API.setElements([frame, child, unrelated]);
+    API.setSelectedElements([frame]);
+
+    act(() => {
+      h.app.actionManager.executeAction(actionDeleteSelected);
+    });
+
+    assertElements(h.elements, [
+      { id: frame.id, isDeleted: true },
+      { id: child.id, isDeleted: true },
+      { id: unrelated.id, isDeleted: false },
+    ]);
+    expect(h.app.state.selectedElementIds).toEqual({});
   });
 });

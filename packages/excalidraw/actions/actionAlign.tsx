@@ -93,7 +93,8 @@ export const actionAlignTop = register({
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
   },
-  keyTest: (event) =>
+  keyTest: (event, appState) =>
+    !appState.tableRowColSelection &&
     event[KEYS.CTRL_OR_CMD] && event.shiftKey && event.key === KEYS.ARROW_UP,
   PanelComponent: ({ elements, appState, updateData, app }) => (
     <IconButton
@@ -127,7 +128,8 @@ export const actionAlignBottom = register({
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
   },
-  keyTest: (event) =>
+  keyTest: (event, appState) =>
+    !appState.tableRowColSelection &&
     event[KEYS.CTRL_OR_CMD] && event.shiftKey && event.key === KEYS.ARROW_DOWN,
   PanelComponent: ({ elements, appState, updateData, app }) => (
     <IconButton

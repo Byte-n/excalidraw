@@ -21,6 +21,7 @@ import {
   getBoundTextElement,
   handleBindTextResize,
   isMindmapEdgeElement,
+  isMindmapLayoutFrozen,
   isMindmapNodeElement,
   getMindmapSubtreeIds,
   getMindmapEdgeGeometry,
@@ -2539,20 +2540,25 @@ export class AppMindmap {
           const shape =
             getMindmapShapeId(node) === "pill" ? "ellipse" : node.shape.id;
           const maxHeight = getBoundTextMaxHeight(node, text);
-          const nextNode = newElementWith(node, {
-            ...(metrics.width > maxWidth && {
-              width: computeContainerDimensionForBoundText(
-                metrics.width,
-                shape,
-              ),
-            }),
-            ...(metrics.height > maxHeight && {
-              height: computeContainerDimensionForBoundText(
-                metrics.height,
-                shape,
-              ),
-            }),
-          });
+          // A table-scaled node keeps its frozen geometry (phase-1:113): its
+          // text wraps to the unchanged bounds above and the node never grows
+          // back here.
+          const nextNode = isMindmapLayoutFrozen(node)
+            ? node
+            : newElementWith(node, {
+                ...(metrics.width > maxWidth && {
+                  width: computeContainerDimensionForBoundText(
+                    metrics.width,
+                    shape,
+                  ),
+                }),
+                ...(metrics.height > maxHeight && {
+                  height: computeContainerDimensionForBoundText(
+                    metrics.height,
+                    shape,
+                  ),
+                }),
+              });
           resized ||=
             nextNode.width !== node.width || nextNode.height !== node.height;
           updated.set(node.id, nextNode);

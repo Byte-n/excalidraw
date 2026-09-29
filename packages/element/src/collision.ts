@@ -61,6 +61,7 @@ import {
   isIframeLikeElement,
   isImageElement,
   isLinearElement,
+  isTableElement,
   isTextElement,
 } from "./typeChecks";
 import {
@@ -102,6 +103,10 @@ export const shouldTestInside = (element: ExcalidrawElement) => {
 
   const isDraggableFromInside =
     (hasBackground(element) && !isTransparent(element.backgroundColor)) ||
+    // the table body is content chrome: clicking a cell's blank area (or the
+    // low-contrast border) selects and moves the table, mirroring filled
+    // shapes. Children hit-tested above the table keep their priority.
+    isTableElement(element) ||
     hasBoundTextElement(element) ||
     isIframeLikeElement(element) ||
     isTextElement(element);
@@ -519,6 +524,8 @@ export const intersectElementWithLineSegment = (
     case "frame":
     case "selection":
     case "magicframe":
+    case "table":
+      // TODO(table): P1 grid-aware intersection; the table body is a rectangle
       return intersectRectanguloidWithLineSegment(
         element,
         elementsMap,

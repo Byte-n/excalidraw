@@ -30,6 +30,7 @@ import {
   duplicateElement,
   duplicateElements,
 } from "../src/duplicate";
+import { assertValidContainerRefs } from "../src/typeChecks";
 import { newMindmapNodeElement } from "../src/newElement";
 import { isCompositeShapeId } from "../src/compositeShape";
 import { mindmapShapeData } from "../src/mindmap";
@@ -892,5 +893,125 @@ describe("duplication z-order", () => {
         endBinding: expect.objectContaining({ elementId: rect.id }),
       },
     ]);
+  });
+});
+
+describe("duplicating tables with an in-cell frame (phase-1.md:60, :69)", () => {
+  const buildTableWithCellFrame = () => {
+    const table = API.createElement({ type: "table", id: "table-1" });
+    const cellRef = (cellIndex: number) => ({
+      kind: "tableCell" as const,
+      elementId: table.id,
+      cellId: table.table.cells[cellIndex].id,
+      role: "content" as const,
+    });
+    const plain = API.createElement({
+      type: "rectangle",
+      id: "plain-1",
+      containerRef: cellRef(0),
+    });
+    // a frame placed in another cell, carrying its own member
+    const frame = API.createElement({
+      type: "frame",
+      id: "frame-1",
+      containerRef: cellRef(1),
+    });
+    const frameMember = API.createElement({
+      type: "rectangle",
+      id: "frame-member-1",
+      containerRef: { kind: "frameLike" as const, elementId: frame.id },
+    });
+    return { table, plain, frame, frameMember };
+  };
+
+  it("copies the whole subtree and remaps all three id layers", () => {
+    const { table, plain, frame, frameMember } = buildTableWithCellFrame();
+    const originalCells = table.table.cells;
+    const originals = [table, plain, frame, frameMember];
+
+    const { duplicatedElements, origIdToDuplicateId } = duplicateElements({
+      type: "everything",
+      elements: originals,
+    });
+
+    expect(duplicatedElements).toHaveLength(4);
+    const byOrig = (id: string) =>
+      duplicatedElements.find(
+        (element) => element.id === origIdToDuplicateId.get(id),
+      )!;
+    const tableCopy = byOrig(table.id);
+    const plainCopy = byOrig(plain.id);
+    const frameCopy = byOrig(frame.id);
+    const frameMemberCopy = byOrig(frameMember.id);
+
+    // layer 1: the table structure ids are regenerated
+    expect((tableCopy as typeof table).table.cells.map((cell) => cell.id)).not.toEqual(
+      originalCells.map((cell) => cell.id),
+    );
+    const cellIdMap = new Map(
+      originalCells.map((cell, index) => [
+        cell.id,
+        (tableCopy as typeof table).table.cells[index].id,
+      ]),
+    );
+
+    // layer 2: the frame's own cell ref remaps to the copied table + cell
+    expect(frameCopy.containerRef).toEqual({
+      kind: "tableCell",
+      elementId: tableCopy.id,
+      cellId: cellIdMap.get(
+        frame.containerRef?.kind === "tableCell"
+          ? frame.containerRef.cellId
+          : "",
+      ),
+      role: "content",
+    });
+    expect(plainCopy.containerRef).toEqual({
+      kind: "tableCell",
+      elementId: tableCopy.id,
+      cellId: cellIdMap.get(
+        plain.containerRef?.kind === "tableCell"
+          ? plain.containerRef.cellId
+          : "",
+      ),
+      role: "content",
+    });
+
+    // layer 3: the frame's member remaps to the copied frame
+    expect(frameMemberCopy.containerRef).toEqual({
+      kind: "frameLike",
+      elementId: frameCopy.id,
+    });
+
+    // originals and copies coexist as one valid scene
+    expect(() =>
+      assertValidContainerRefs([...originals, ...duplicatedElements]),
+    ).not.toThrow();
+  });
+
+  it("duplicates an in-cell frame alone and leaves membership to the target", () => {
+    const { table, frame, frameMember } = buildTableWithCellFrame();
+    // the table stays behind: only the frame subtree is duplicated
+    const { duplicatedElements, origIdToDuplicateId } = duplicateElements({
+      type: "everything",
+      elements: [frame, frameMember],
+    });
+
+    expect(duplicatedElements).toHaveLength(2);
+    const frameCopy = duplicatedElements.find(
+      (element) => element.id === origIdToDuplicateId.get(frame.id),
+    )!;
+    const frameMemberCopy = duplicatedElements.find(
+      (element) => element.id === origIdToDuplicateId.get(frameMember.id),
+    )!;
+
+    // the copied frame does not carry the source table along — its cell
+    // membership is re-judged at the paste position
+    expect(frameCopy.containerRef).toBeUndefined();
+    expect(frameMemberCopy.containerRef).toEqual({
+      kind: "frameLike",
+      elementId: frameCopy.id,
+    });
+    expect(table.containerRef).toBeUndefined();
   });
 });

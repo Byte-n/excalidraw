@@ -180,6 +180,31 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
             <Shortcut label={t("toolBar.frame")} shortcuts={[KEYS.F]} />
             <Shortcut label={t("toolBar.laser")} shortcuts={[KEYS.K]} />
             <Shortcut label={t("toolBar.bucketfill")} shortcuts={[KEYS.B]} />
+            <Shortcut label={t("toolBar.table")} shortcuts={[KEYS.J]} />
+            <Shortcut
+              label={t("labels.tableInsertRow")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+R")]}
+            />
+            <Shortcut
+              label={t("labels.tableInsertColumn")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+C")]}
+            />
+            <Shortcut
+              label={t("labels.tableMoveRowUp")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowUp")]}
+            />
+            <Shortcut
+              label={t("labels.tableMoveRowDown")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowDown")]}
+            />
+            <Shortcut
+              label={t("labels.tableMoveColumnLeft")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowLeft")]}
+            />
+            <Shortcut
+              label={t("labels.tableMoveColumnRight")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowRight")]}
+            />
             <Shortcut
               label={t("labels.eyeDropper")}
               shortcuts={[KEYS.I, "Shift+S", "Shift+G"]}

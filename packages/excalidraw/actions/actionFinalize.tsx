@@ -403,6 +403,10 @@ export const actionFinalize = register<FormData>({
         suggestedBinding: null,
         hoveredArrowTextAnchor: null,
         frameToHighlight: null,
+        highlightedTableCell: null,
+        tableRowColSelection: null,
+        tableStructureHover: null,
+        tableStructurePreview: null,
         selectedElementIds: isDrawShapeTool
           ? {}
           : element && !isToolLocked && appState.activeTool.type !== "freedraw"

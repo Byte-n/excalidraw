@@ -13,6 +13,8 @@ import {
   arrayToMap,
   BIND_MODE_TIMEOUT,
   DEFAULT_TRANSFORM_HANDLE_SPACING,
+  TABLE_STRUCTURE_RAIL_OFFSET,
+  TABLE_STRUCTURE_INSERTION_OFFSET,
   FRAME_STYLE,
   getFeatureFlag,
   invariant,
@@ -44,8 +46,11 @@ import {
   isLineElement,
   isMindmapEdgeElement,
   isMindmapNodeElement,
+  isTableElement,
+  getTableCellBounds,
   maxBindingDistance_simple,
   isTextElement,
+  getContainingFrame,
   LinearElementEditor,
   getActiveTextElement,
   getElementsInGroup,
@@ -79,6 +84,7 @@ import type {
   ExcalidrawImageElement,
   ExcalidrawLinearElement,
   ExcalidrawMindmapEdgeElement,
+  ExcalidrawTableElement,
   ExcalidrawTextElement,
   GroupId,
   NonDeleted,
@@ -348,9 +354,12 @@ const renderBindingHighlightForBindableElement_simple = (
   pointerCoords: GlobalPoint | null,
   angleLocked = false,
 ) => {
-  const enclosingFrame =
-    suggestedBinding.element.containerRef?.elementId &&
-    elementsMap.get(suggestedBinding.element.containerRef?.elementId);
+  // resolved through the parent chain, so cell members of a table inside a
+  // frame highlight against the frame like other frame descendants
+  const enclosingFrame = getContainingFrame(
+    suggestedBinding.element,
+    elementsMap,
+  );
   if (enclosingFrame && isFrameLikeElement(enclosingFrame)) {
     context.translate(enclosingFrame.x, enclosingFrame.y);
 
@@ -617,9 +626,9 @@ const renderBindingHighlightForBindableElement_complex = (
   const opacity = clamp((1 / BIND_MODE_TIMEOUT) * remainingTime, 0.0001, 1);
   const offset = element.strokeWidth / 2;
 
-  const enclosingFrame =
-    element.containerRef?.elementId &&
-    allElementsMap.get(element.containerRef?.elementId);
+  // resolved through the parent chain, so cell members of a table inside a
+  // frame highlight against the frame like other frame descendants
+  const enclosingFrame = getContainingFrame(element, allElementsMap);
   if (enclosingFrame && isFrameLikeElement(enclosingFrame)) {
     context.translate(enclosingFrame.x, enclosingFrame.y);
 
@@ -1057,6 +1066,501 @@ const renderFrameHighlight = (
     FRAME_STYLE.radius / appState.zoom.value,
   );
   context.restore();
+};
+
+/**
+ * Light-blue fill of the hovered table cell (phase-1.md:78). The cell bounds
+ * are table-local, so they render through the table's rotation around its
+ * center — the same pivot the grid draws with.
+ */
+const renderTableCellHighlight = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  highlightedTableCell: NonNullable<
+    InteractiveCanvasAppState["highlightedTableCell"]
+  >,
+  elementsMap: ElementsMap,
+) => {
+  const table = elementsMap.get(highlightedTableCell.tableId);
+  if (!table || !isTableElement(table) || table.isDeleted) {
+    return;
+  }
+  const bounds = getTableCellBounds(table.table, highlightedTableCell.cellId);
+  if (!bounds) {
+    return;
+  }
+
+  const cx = table.x + appState.scrollX + table.width / 2;
+  const cy = table.y + appState.scrollY + table.height / 2;
+
+  context.save();
+  context.translate(appState.scrollX, appState.scrollY);
+  context.translate(cx, cy);
+  context.rotate(table.angle);
+  context.translate(-cx, -cy);
+  context.fillStyle = getThemedColor("rgba(0,118,255,0.12)", appState.theme);
+  context.fillRect(
+    table.x + bounds.x,
+    table.y + bounds.y,
+    bounds.width,
+    bounds.height,
+  );
+  context.restore();
+};
+
+/** Shared pivot setup for the table structure overlays. */
+const withTableLocalTransform = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  table: NonDeleted<ExcalidrawTableElement>,
+  draw: () => void,
+) => {
+  const cx = table.x + appState.scrollX + table.width / 2;
+  const cy = table.y + appState.scrollY + table.height / 2;
+  context.save();
+  context.translate(appState.scrollX, appState.scrollY);
+  context.translate(cx, cy);
+  context.rotate(table.angle);
+  context.translate(-cx, -cy);
+  draw();
+  context.restore();
+};
+
+const TABLE_STRUCTURE_ACCENT = "rgb(0,118,255)";
+
+// Keep structure indicators outside the selection border while leaving room
+// for the insertion plus mark.
+const getTableStructureIndicatorOffset = (zoom: number) =>
+  TABLE_STRUCTURE_RAIL_OFFSET / zoom;
+const getTableStructureInsertionOffset = (zoom: number) =>
+  TABLE_STRUCTURE_INSERTION_OFFSET / zoom;
+
+/** A plus mark on an insertion boundary (phase-1.md:82), in local coords. */
+const drawInsertPlusMark = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  x: number,
+  y: number,
+  orientation: "row" | "column",
+) => {
+  const radius = 11 / appState.zoom.value;
+  context.save();
+  context.beginPath();
+  context.arc(x, y, radius, 0, Math.PI * 2);
+  context.fillStyle = getThemedColor(TABLE_STRUCTURE_ACCENT, appState.theme);
+  context.fill();
+  context.strokeStyle = "#ffffff";
+  const arm = radius * 0.55;
+  context.beginPath();
+  if (orientation === "row") {
+    context.moveTo(x - arm, y);
+    context.lineTo(x + arm, y);
+    context.moveTo(x, y - arm);
+    context.lineTo(x, y + arm);
+  } else {
+    // a column boundary's line runs vertically, so the plus rotates
+    context.moveTo(x - arm, y);
+    context.lineTo(x + arm, y);
+    context.moveTo(x, y - arm);
+    context.lineTo(x, y + arm);
+  }
+  context.lineWidth = 2 / appState.zoom.value;
+  context.stroke();
+  context.restore();
+};
+
+const drawStructureRail = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  x: number,
+  y: number,
+  length: number,
+  orientation: "row" | "column",
+  state: "idle" | "hover" | "selected" = "idle",
+) => {
+  const thickness = 9 / appState.zoom.value;
+  const dot = 1 / appState.zoom.value;
+  context.save();
+  context.fillStyle = getThemedColor(
+    state === "selected"
+      ? TABLE_STRUCTURE_ACCENT
+      : state === "hover"
+      ? "#91caff"
+      : "#b3b3b3",
+    appState.theme,
+  );
+  if (orientation === "column") {
+    context.fillRect(x, y - thickness, length, thickness);
+  } else {
+    context.fillRect(x - thickness, y, thickness, length);
+  }
+  context.fillStyle = getThemedColor(
+    state === "idle" ? "#6b6f76" : "#ffffff",
+    appState.theme,
+  );
+  for (let row = 0; row < 2; row++) {
+    for (let column = 0; column < 3; column++) {
+      const dx = ((column - 1) * 4) / appState.zoom.value;
+      const dy = ((row - 0.5) * 4) / appState.zoom.value;
+      context.beginPath();
+      context.arc(
+        orientation === "column" ? x + length / 2 + dx : x - thickness / 2 + dy,
+        orientation === "column" ? y - thickness / 2 + dy : y + length / 2 + dx,
+        dot,
+        0,
+        Math.PI * 2,
+      );
+      context.fill();
+    }
+  }
+  context.restore();
+};
+
+const renderTableStructureAffordances = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  table: NonDeleted<ExcalidrawTableElement>,
+  hover: InteractiveCanvasAppState["tableStructureHover"] = null,
+) => {
+  withTableLocalTransform(context, appState, table, () => {
+    const railOffset = getTableStructureIndicatorOffset(appState.zoom.value);
+    const rowSelection =
+      appState.tableRowColSelection?.tableId === table.id &&
+      appState.tableRowColSelection.kind === "row"
+        ? appState.tableRowColSelection.id
+        : null;
+    const columnSelection =
+      appState.tableRowColSelection?.tableId === table.id &&
+      appState.tableRowColSelection.kind === "column"
+        ? appState.tableRowColSelection.id
+        : null;
+    const hoveredRow =
+      hover?.tableId === table.id && hover.kind === "rowGrip"
+        ? hover.rowId
+        : null;
+    const hoveredColumn =
+      hover?.tableId === table.id && hover.kind === "columnGrip"
+        ? hover.columnId
+        : null;
+
+    let offset = 0;
+    for (const column of table.table.columns) {
+      drawStructureRail(
+        context,
+        appState,
+        table.x + offset,
+        table.y - railOffset,
+        column.width,
+        "column",
+        hoveredColumn === column.id
+          ? "hover"
+          : columnSelection === column.id
+          ? "selected"
+          : "idle",
+      );
+      offset += column.width;
+    }
+
+    offset = 0;
+    for (const row of table.table.rows) {
+      drawStructureRail(
+        context,
+        appState,
+        table.x - railOffset,
+        table.y + offset,
+        row.height,
+        "row",
+        hoveredRow === row.id
+          ? "hover"
+          : rowSelection === row.id
+          ? "selected"
+          : "idle",
+      );
+      offset += row.height;
+    }
+
+    const insertionOffset = getTableStructureInsertionOffset(
+      appState.zoom.value,
+    );
+    context.fillStyle = getThemedColor("#6b6f76", appState.theme);
+    const drawInsertionPoint = (x: number, y: number) => {
+      context.beginPath();
+      context.arc(x, y, 2 / appState.zoom.value, 0, Math.PI * 2);
+      context.fill();
+    };
+    offset = 0;
+    drawInsertionPoint(table.x, table.y - insertionOffset);
+    for (const column of table.table.columns) {
+      offset += column.width;
+      drawInsertionPoint(table.x + offset, table.y - insertionOffset);
+    }
+    offset = 0;
+    drawInsertionPoint(table.x - insertionOffset, table.y);
+    for (const row of table.table.rows) {
+      offset += row.height;
+      drawInsertionPoint(table.x - insertionOffset, table.y + offset);
+    }
+  });
+};
+
+/** Selected row/column fill. */
+const renderTableRowColSelection = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  selection: NonNullable<InteractiveCanvasAppState["tableRowColSelection"]>,
+  elementsMap: ElementsMap,
+) => {
+  const table = elementsMap.get(selection.tableId);
+  if (!table || !isTableElement(table) || table.isDeleted) {
+    return;
+  }
+
+  const localTable = table as NonDeleted<ExcalidrawTableElement>;
+  withTableLocalTransform(context, appState, localTable, () => {
+    if (selection.kind === "row") {
+      let offset = 0;
+      for (const row of table.table.rows) {
+        if (row.id === selection.id) {
+          context.fillStyle = getThemedColor(
+            "rgba(0,118,255,0.14)",
+            appState.theme,
+          );
+          context.fillRect(table.x, table.y + offset, table.width, row.height);
+          context.strokeStyle = getThemedColor(
+            TABLE_STRUCTURE_ACCENT,
+            appState.theme,
+          );
+          context.lineWidth = 2 / appState.zoom.value;
+          context.strokeRect(
+            table.x,
+            table.y + offset,
+            table.width,
+            row.height,
+          );
+          break;
+        }
+        offset += row.height;
+      }
+    } else {
+      let offset = 0;
+      for (const column of table.table.columns) {
+        if (column.id === selection.id) {
+          context.fillStyle = getThemedColor(
+            "rgba(0,118,255,0.14)",
+            appState.theme,
+          );
+          context.fillRect(
+            table.x + offset,
+            table.y,
+            column.width,
+            table.height,
+          );
+          context.strokeStyle = getThemedColor(
+            TABLE_STRUCTURE_ACCENT,
+            appState.theme,
+          );
+          context.lineWidth = 2 / appState.zoom.value;
+          context.strokeRect(
+            table.x + offset,
+            table.y,
+            column.width,
+            table.height,
+          );
+          break;
+        }
+        offset += column.width;
+      }
+    }
+  });
+};
+
+/**
+ * The affordance under the pointer: separator highlight, insert boundary
+ * with its plus, select-strip tint, or grip emphasis (phase-1.md:80-83).
+ */
+const renderTableStructureHover = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  hover: NonNullable<InteractiveCanvasAppState["tableStructureHover"]>,
+  elementsMap: ElementsMap,
+) => {
+  const table = elementsMap.get(hover.tableId);
+  if (!table || !isTableElement(table) || table.isDeleted) {
+    return;
+  }
+  const accent = getThemedColor(TABLE_STRUCTURE_ACCENT, appState.theme);
+  const lineWidth = 2 / appState.zoom.value;
+  const indicatorOffset = getTableStructureInsertionOffset(appState.zoom.value);
+
+  const localTable = table as NonDeleted<ExcalidrawTableElement>;
+  withTableLocalTransform(context, appState, localTable, () => {
+    switch (hover.kind) {
+      case "table": {
+        break;
+      }
+      case "rowResize": {
+        const offset = table.table.rows
+          .slice(
+            0,
+            table.table.rows.findIndex((row) => row.id === hover.rowId) + 1,
+          )
+          .reduce((acc, row) => acc + row.height, 0);
+        context.beginPath();
+        context.moveTo(table.x, table.y + offset);
+        context.lineTo(table.x + table.width, table.y + offset);
+        context.lineWidth = lineWidth;
+        context.strokeStyle = accent;
+        context.stroke();
+        break;
+      }
+      case "columnResize": {
+        const offset = table.table.columns
+          .slice(
+            0,
+            table.table.columns.findIndex(
+              (column) => column.id === hover.columnId,
+            ) + 1,
+          )
+          .reduce((acc, column) => acc + column.width, 0);
+        context.beginPath();
+        context.moveTo(table.x + offset, table.y);
+        context.lineTo(table.x + offset, table.y + table.height);
+        context.lineWidth = lineWidth;
+        context.strokeStyle = accent;
+        context.stroke();
+        break;
+      }
+      case "rowInsert": {
+        const boundaryY =
+          table.y +
+          table.table.rows
+            .slice(0, hover.boundaryIndex)
+            .reduce((sum, row) => sum + row.height, 0);
+        context.save();
+        context.beginPath();
+        context.moveTo(table.x, boundaryY);
+        context.lineTo(table.x + table.width, boundaryY);
+        context.lineWidth = lineWidth;
+        context.strokeStyle = accent;
+        context.stroke();
+        context.restore();
+        drawInsertPlusMark(
+          context,
+          appState,
+          table.x - indicatorOffset,
+          boundaryY,
+          "row",
+        );
+        break;
+      }
+      case "columnInsert": {
+        const boundaryX =
+          table.x +
+          table.table.columns
+            .slice(0, hover.boundaryIndex)
+            .reduce((sum, column) => sum + column.width, 0);
+        context.save();
+        context.beginPath();
+        context.moveTo(boundaryX, table.y);
+        context.lineTo(boundaryX, table.y + table.height);
+        context.lineWidth = lineWidth;
+        context.strokeStyle = accent;
+        context.stroke();
+        context.restore();
+        drawInsertPlusMark(
+          context,
+          appState,
+          boundaryX,
+          table.y - indicatorOffset,
+          "column",
+        );
+        break;
+      }
+      case "rowSelect":
+      case "columnSelect": {
+        break;
+      }
+      case "rowGrip": {
+        let offset = 0;
+        for (const row of table.table.rows) {
+          if (row.id === hover.rowId) {
+            context.fillStyle = getThemedColor(
+              "rgba(0,118,255,0.08)",
+              appState.theme,
+            );
+            context.fillRect(
+              table.x,
+              table.y + offset,
+              table.width,
+              row.height,
+            );
+            break;
+          }
+          offset += row.height;
+        }
+        break;
+      }
+      case "columnGrip": {
+        let offset = 0;
+        for (const column of table.table.columns) {
+          if (column.id === hover.columnId) {
+            context.fillStyle = getThemedColor(
+              "rgba(0,118,255,0.08)",
+              appState.theme,
+            );
+            context.fillRect(
+              table.x + offset,
+              table.y,
+              column.width,
+              table.height,
+            );
+            break;
+          }
+          offset += column.width;
+        }
+        break;
+      }
+    }
+  });
+};
+
+/**
+ * The blue boundary line of an in-flight insertion or row/column reorder —
+ * the exact spot the commit will land on (phase-1.md:82, :87).
+ */
+const renderTableStructurePreview = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  preview: NonNullable<InteractiveCanvasAppState["tableStructurePreview"]>,
+  elementsMap: ElementsMap,
+) => {
+  const table = elementsMap.get(preview.tableId);
+  if (!table || !isTableElement(table) || table.isDeleted) {
+    return;
+  }
+  const accent = getThemedColor(TABLE_STRUCTURE_ACCENT, appState.theme);
+  const lineWidth = 2 / appState.zoom.value;
+
+  const localTable = table as NonDeleted<ExcalidrawTableElement>;
+  withTableLocalTransform(context, appState, localTable, () => {
+    if (preview.kind === "row") {
+      const y = table.y + preview.offset;
+      context.beginPath();
+      context.moveTo(table.x, y);
+      context.lineTo(table.x + table.width, y);
+      context.lineWidth = lineWidth;
+      context.strokeStyle = accent;
+      context.stroke();
+    } else {
+      const x = table.x + preview.offset;
+      context.beginPath();
+      context.moveTo(x, table.y);
+      context.lineTo(x, table.y + table.height);
+      context.lineWidth = lineWidth;
+      context.strokeStyle = accent;
+      context.stroke();
+    }
+  });
 };
 
 const renderElementsBoxHighlight = (
@@ -1734,6 +2238,33 @@ const _renderInteractiveScene = ({
     );
   }
 
+  if (appState.highlightedTableCell) {
+    renderTableCellHighlight(
+      context,
+      appState,
+      appState.highlightedTableCell,
+      elementsMap,
+    );
+  }
+
+  if (appState.tableRowColSelection) {
+    renderTableRowColSelection(
+      context,
+      appState,
+      appState.tableRowColSelection,
+      elementsMap,
+    );
+  }
+
+  if (appState.tableStructurePreview) {
+    renderTableStructurePreview(
+      context,
+      appState,
+      appState.tableStructurePreview,
+      elementsMap,
+    );
+  }
+
   if (appState.elementsToHighlight) {
     renderElementsBoxHighlight(context, appState, appState.elementsToHighlight);
   }
@@ -1812,6 +2343,52 @@ const _renderInteractiveScene = ({
         type: "end",
       });
     }
+  }
+
+  // Keep table hover affordances below the selected table's bounding box and
+  // transform handles. This is intentionally adjacent to selected-element
+  // rendering so future hover additions cannot cover the resize indicator.
+  const structureTables = new Map<string, NonDeleted<ExcalidrawTableElement>>();
+  for (const selectedTable of selectedElements) {
+    if (isTableElement(selectedTable) && !selectedTable.isDeleted) {
+      structureTables.set(selectedTable.id, selectedTable);
+    }
+  }
+
+  if (appState.tableRowColSelection) {
+    const table = elementsMap.get(appState.tableRowColSelection.tableId);
+    if (table && isTableElement(table) && !table.isDeleted) {
+      structureTables.set(table.id, table);
+    }
+  }
+
+  if (appState.tableStructureHover) {
+    const hoveredTable = elementsMap.get(appState.tableStructureHover.tableId);
+    if (
+      hoveredTable &&
+      isTableElement(hoveredTable) &&
+      !hoveredTable.isDeleted
+    ) {
+      structureTables.set(hoveredTable.id, hoveredTable);
+    }
+  }
+
+  for (const table of structureTables.values()) {
+    renderTableStructureAffordances(
+      context,
+      appState,
+      table,
+      appState.tableStructureHover,
+    );
+  }
+
+  if (appState.tableStructureHover) {
+    renderTableStructureHover(
+      context,
+      appState,
+      appState.tableStructureHover,
+      elementsMap,
+    );
   }
 
   // Paint selected elements

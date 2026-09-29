@@ -176,4 +176,6 @@ export type ElementShapes = {
   image: null;
   frame: null;
   magicframe: null;
+  /** painted directly from `drawTableGridOnCanvas`, never through roughjs */
+  table: null;
 };

@@ -107,14 +107,46 @@ describe("contextMenu element", () => {
 
   it("shows context menu for element", () => {
     UI.clickTool("rectangle");
+    // eslint-disable-next-line no-console
+    console.info(
+      "ZZDEBUG_TOOL_AFTER_CLICK",
+      h.state.activeTool.type,
+      "popover:",
+      !!document.querySelector(".tool-popover-content"),
+      "rectOption:",
+      !!document.querySelector(
+        '.tool-popover-content [data-testid="toolbar-rectangle"]',
+      ),
+    );
     mouse.down(0, 0);
     mouse.up(10, 10);
+
+    // eslint-disable-next-line no-console
+    console.info(
+      "ZZDEBUG",
+      JSON.stringify({
+        elements: h.elements.map((e) => ({ id: e.id, type: e.type })),
+        selected: h.state.selectedElementIds,
+        tool: h.state.activeTool.type,
+      }),
+    );
 
     fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
       button: 2,
       clientX: 3,
       clientY: 3,
     });
+    // eslint-disable-next-line no-console
+    console.info(
+      "ZZDEBUG2",
+      JSON.stringify({
+        selected: h.state.selectedElementIds,
+        pos: h.state.contextMenu,
+        names: h.state.contextMenu?.items.map((item: any) =>
+          item === "separator" ? "sep" : item.name,
+        ),
+      }),
+    );
     const contextMenu = UI.queryContextMenu();
     const contextMenuOptions =
       contextMenu?.querySelectorAll(".context-menu li");

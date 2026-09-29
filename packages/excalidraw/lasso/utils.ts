@@ -21,6 +21,7 @@ import {
   getElementBounds,
   intersectElementWithLineSegment,
   isBoundToContainer,
+  isTableCellBackgroundText,
   pointInsideBoundsInclusive,
 } from "@excalidraw/element";
 
@@ -61,9 +62,12 @@ export const getLassoSelectedElementIds = (input: {
   if (simplifyDistance) {
     path = simplify(lassoPath, simplifyDistance) as GlobalPoint[];
   }
-  // bound text is never selected on its own, it's covered by its container
+  // bound text is never selected on its own, it's covered by its container;
+  // a cell's background text is chrome the same way — the lasso must cross
+  // cells without picking it up (phase-1.md:141)
   const selectableElements = elements.filter(
-    (el) => !el.locked && !isBoundToContainer(el),
+    (el) =>
+      !el.locked && !isBoundToContainer(el) && !isTableCellBackgroundText(el),
   );
   // as the path might not enclose a shape anymore, clear before checking
   enclosedElements.clear();

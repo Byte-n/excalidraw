@@ -3,6 +3,7 @@ import {
   FRAME_STYLE,
   MAX_DECIMALS_FOR_SVG_EXPORT,
   SVG_NS,
+  TABLE_STYLE,
   THEME,
   DARK_THEME_FILTER,
   getFontFamilyString,
@@ -34,6 +35,15 @@ import {
 } from "@excalidraw/element";
 
 import { getContainingFrame } from "@excalidraw/element";
+
+import {
+  getTableCellBounds,
+  getTableCellFillColor,
+  getTableHeight,
+  getTableHorizontalGridOffsets,
+  getTableVerticalGridOffsets,
+  getTableWidth,
+} from "@excalidraw/element";
 
 import { getCornerRadius, isPathALoop } from "@excalidraw/element";
 
@@ -775,6 +785,96 @@ const renderElementToSvg = (
 
         addToRoot(rect, element);
       }
+      break;
+    }
+    // the table grid exports as plain vector rects and lines, themed like
+    // the canvas renderer
+    case "table": {
+      const { table } = element;
+      const isDark = renderConfig.theme === THEME.DARK;
+      const width = getTableWidth(table);
+      const height = getTableHeight(table);
+
+      const group = svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
+      group.setAttribute(
+        "transform",
+        `translate(${offsetX || 0} ${
+          offsetY || 0
+        }) rotate(${degree} ${cx} ${cy})`,
+      );
+      if (opacity !== 1) {
+        group.setAttribute("opacity", `${opacity}`);
+      }
+
+      // (1) cell backgrounds, so grid lines stay visible above them
+      for (const cell of table.cells) {
+        const fill = getTableCellFillColor(cell, isDark);
+        if (!fill) {
+          continue;
+        }
+        const bounds = getTableCellBounds(table, cell.id);
+        if (!bounds) {
+          continue;
+        }
+        const rect = document.createElementNS(SVG_NS, "rect");
+        rect.setAttribute("x", `${bounds.x}`);
+        rect.setAttribute("y", `${bounds.y}`);
+        rect.setAttribute("width", `${bounds.width}`);
+        rect.setAttribute("height", `${bounds.height}`);
+        rect.setAttribute("fill", fill);
+        rect.setAttribute("stroke", "none");
+        group.appendChild(rect);
+      }
+
+      // (2) interior grid lines
+      const createGridLine = (
+        x1: number,
+        y1: number,
+        x2: number,
+        y2: number,
+      ) => {
+        const line = document.createElementNS(SVG_NS, "line");
+        line.setAttribute("x1", `${x1}`);
+        line.setAttribute("y1", `${y1}`);
+        line.setAttribute("x2", `${x2}`);
+        line.setAttribute("y2", `${y2}`);
+        line.setAttribute(
+          "stroke",
+          applyDarkModeFilter(TABLE_STYLE.gridColor, isDark),
+        );
+        line.setAttribute("stroke-width", `${TABLE_STYLE.gridStrokeWidth}`);
+        group.appendChild(line);
+      };
+      for (const x of getTableVerticalGridOffsets(table)) {
+        createGridLine(x, 0, x, height);
+      }
+      for (const y of getTableHorizontalGridOffsets(table)) {
+        createGridLine(0, y, width, y);
+      }
+
+      // (3) outer border
+      const border = document.createElementNS(SVG_NS, "rect");
+      border.setAttribute("x", "0");
+      border.setAttribute("y", "0");
+      border.setAttribute("width", `${width}`);
+      border.setAttribute("height", `${height}`);
+      border.setAttribute("fill", "none");
+      border.setAttribute(
+        "stroke",
+        applyDarkModeFilter(TABLE_STYLE.strokeColor, isDark),
+      );
+      border.setAttribute("stroke-width", `${TABLE_STYLE.strokeWidth}`);
+      group.appendChild(border);
+
+      const g = maybeWrapNodesInFrameClipPath(
+        element,
+        root,
+        [group],
+        renderConfig.frameRendering,
+        elementsMap,
+      );
+
+      addToRoot(g || group, element);
       break;
     }
     default: {

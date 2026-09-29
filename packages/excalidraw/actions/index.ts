@@ -42,6 +42,14 @@ export {
 
 export { actionFinalize } from "./actionFinalize";
 export { actionDeselect } from "./actionDeselect";
+export {
+  actionTableInsertRow,
+  actionTableInsertColumn,
+  actionTableMoveRowUp,
+  actionTableMoveRowDown,
+  actionTableMoveColumnLeft,
+  actionTableMoveColumnRight,
+} from "./actionTableStructure";
 
 export {
   actionChangeProjectName,

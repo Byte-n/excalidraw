@@ -148,7 +148,13 @@ export type ActionName =
   | "toggleShapeSwitch"
   | "togglePolygon"
   | "setCompositeShapeTextFitFixed"
-  | "setCompositeShapeTextFitAuto";
+  | "setCompositeShapeTextFitAuto"
+  | "tableInsertRow"
+  | "tableInsertColumn"
+  | "tableMoveRowUp"
+  | "tableMoveRowDown"
+  | "tableMoveColumnLeft"
+  | "tableMoveColumnRight";
 
 export type PanelComponentProps = {
   elements: readonly ExcalidrawElement[];

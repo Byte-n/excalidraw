@@ -523,7 +523,7 @@ export const addTextFromPaste = (
     (acc: ExcalidrawTextElement[], line, idx) => {
       const originalText = normalizeText(line).trim();
       if (originalText.length) {
-        const topLayerFrame = app.getTopLayerFrameAtSceneCoords({
+        const containerRef = app.getContainerRefForDropAt({
           x,
           y: currentY,
         });
@@ -550,9 +550,7 @@ export const addTextFromPaste = (
           originalText,
           lineHeight,
           autoResize: !isTextUnwrapped,
-          containerRef: topLayerFrame
-            ? { kind: "frameLike", elementId: topLayerFrame.id }
-            : undefined,
+          containerRef,
         });
         acc.push(element);
         currentY += element.height + LINE_GAP;

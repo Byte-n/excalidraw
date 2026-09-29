@@ -21,6 +21,9 @@ import { getMaximumGroups } from "@excalidraw/element";
 import {
   getSelectedElements,
   getVisibleAndNonSelectedElements,
+  getIndexedTableCellChildren,
+  getTableCellSnapPoints,
+  getTableCellSnapScope,
 } from "@excalidraw/element";
 
 import type { InclusiveRange } from "@excalidraw/math";
@@ -620,6 +623,39 @@ export const getReferenceSnapPoints = (
   appState: AppState,
   elementsMap: ElementsMap,
 ) => {
+  // cell-scoped alignment (phase-1.md:79, :87): dragging one table cell's
+  // direct members references only that cell's other members plus the cell's
+  // own geometry — its edges and center — instead of the whole scene. The
+  // dashed lines read as alignment, never as cell splits.
+  const cellScope = getTableCellSnapScope(
+    elements,
+    selectedElements,
+    elementsMap,
+  );
+  if (cellScope) {
+    const cellMembers = (
+      (getIndexedTableCellChildren(
+        elementsMap,
+        cellScope.table.id,
+        cellScope.cellId,
+      ) ?? []) as readonly NonDeletedExcalidrawElement[]
+    ).filter(
+      (element) =>
+        !isBoundToContainer(element) &&
+        !selectedElements.some(
+          (selectedElement) => selectedElement.id === element.id,
+        ),
+    );
+    return [
+      ...getMaximumGroups(cellMembers, elementsMap).flatMap((elementGroup) =>
+        getElementsCorners(elementGroup, elementsMap),
+      ),
+      ...getTableCellSnapPoints(cellScope.table, cellScope.cellId).map(
+        ([x, y]) => pointFrom<GlobalPoint>(x, y),
+      ),
+    ];
+  }
+
   const referenceElements = getReferenceElements(
     elements,
     selectedElements,

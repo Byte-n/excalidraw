@@ -31,11 +31,10 @@ import {
   isPointInElement,
   getSnapOutlineMidPoint,
   getBindingStrategyForDraggingBindingElementEndpoints,
-  frameLikeContainerRef,
 } from "@excalidraw/element";
 
 import { TOOL_TYPE, distance } from "@excalidraw/common";
-import { dragNewElement } from "@excalidraw/element";
+import { dragNewElement, isTableElement } from "@excalidraw/element";
 
 import {
   getGridPoint,
@@ -50,6 +49,8 @@ import {
   cropElement,
   getElementsInResizingFrame,
   getFrameChildren,
+  getElementAbsoluteCoords,
+  prepareTableUniformScale,
   isElbowArrow,
   isFrameLikeElement,
   isImageElement,
@@ -86,6 +87,7 @@ import { tupleToCoors } from "@excalidraw/common";
 import type {
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
+  ExcalidrawTableElement,
   NonDeleted,
   ExcalidrawTextContainer,
   BaseShapeId,
@@ -104,6 +106,8 @@ import { snapNewElement } from "../../snapping";
 
 import { getSelectedElements } from "../../scene";
 import { snapResizingElements } from "../../snapping";
+
+import * as tableController from "./table";
 
 import {
   getCompositeControlPointGlobal,
@@ -270,6 +274,13 @@ export const maybeHandleResize = (
     (selectedFrames.length > 0 && transformHandleType === "rotation") ||
     // Elbow arrows cannot be transformed (resized or rotated).
     (selectedElements.length === 1 && isElbowArrow(selectedElements[0])) ||
+    // A single selected table scales through the corner-tableGesture path
+    // (`tableGesture.active`), so the generic resize never runs for it.
+    // Multi-selections containing a table are still temporarily barred from
+    // resizing: the generic path would desync the table's `width`/`height`
+    // from its row/column sums (P1 tradeoff, see the implementation report).
+    (transformHandleType !== "rotation" &&
+      selectedElements.some(isTableElement)) ||
     // Do not resize when in crop mode
     app.state.croppingElementId
   ) {
@@ -518,28 +529,68 @@ export const handleSelectionOnPointerDown = (
         pointerDownState.resize.handleType = false;
       }
     }
+    let tableScaleGestureArmed = false;
     if (pointerDownState.resize.handleType) {
-      pointerDownState.resize.isResizing = true;
-      pointerDownState.resize.offset = tupleToCoors(
-        getResizeOffsetXY(
-          pointerDownState.resize.handleType,
-          selectedElements,
-          elementsMap,
-          pointerDownState.origin.x,
-          pointerDownState.origin.y,
-        ),
-      );
+      const handleType = pointerDownState.resize.handleType;
       if (
         selectedElements.length === 1 &&
-        isLinearElement(selectedElements[0]) &&
-        selectedElements[0].points.length === 2
+        isTableElement(selectedElements[0])
       ) {
-        pointerDownState.resize.arrowDirection = getResizeArrowDirection(
-          pointerDownState.resize.handleType,
-          selectedElements[0],
+        if (handleType === "se") {
+          // 接管为整表等比缩放手势（phase-1.md:99）：
+          // 每帧从 originalElements 快照 × 指针倍率重算预览，释放时一次性
+          // 持久化文字模式并捕获一次
+          const table =
+            selectedElements[0] as NonDeleted<ExcalidrawTableElement>;
+          const [x1, y1, x2, y2] = getElementAbsoluteCoords(table, elementsMap);
+          const anchor = { x: x1, y: y1 };
+          const preparedScale = prepareTableUniformScale(
+            pointerDownState.originalElements,
+            table.id,
+            anchor,
+          );
+          if (preparedScale) {
+            pointerDownState.tableGesture.active = {
+              kind: "scale",
+              tableId: table.id,
+              handleType,
+              startBounds: [x1, y1, x2, y2],
+              anchor,
+              subtreeIds: preparedScale.subtree.ordered.map(
+                (element) => element.id,
+              ),
+              snapshotElements: pointerDownState.originalElements,
+              preparedScale,
+              previewScale: 1,
+            };
+            tableScaleGestureArmed = true;
+          }
+        }
+        // Table side resizing belongs to the row/column gesture.
+        pointerDownState.resize.handleType = false;
+      } else {
+        pointerDownState.resize.isResizing = true;
+        pointerDownState.resize.offset = tupleToCoors(
+          getResizeOffsetXY(
+            pointerDownState.resize.handleType,
+            selectedElements,
+            elementsMap,
+            pointerDownState.origin.x,
+            pointerDownState.origin.y,
+          ),
         );
+        if (
+          selectedElements.length === 1 &&
+          isLinearElement(selectedElements[0]) &&
+          selectedElements[0].points.length === 2
+        ) {
+          pointerDownState.resize.arrowDirection = getResizeArrowDirection(
+            pointerDownState.resize.handleType,
+            selectedElements[0],
+          );
+        }
       }
-    } else {
+    } else if (!tableScaleGestureArmed) {
       if (app.state.selectedLinearElement) {
         const linearElementEditor = app.state.selectedLinearElement;
         const ret = LinearElementEditor.handlePointerDown(
@@ -937,6 +988,19 @@ export const maybeDragNewGenericElement = (
     return;
   }
 
+  // tables split the drag evenly across rows/columns and must keep the
+  // size invariant (`width`/`height` = row/column sums), so they cannot go
+  // through the generic `dragNewElement`
+  if (isTableElement(newElement)) {
+    tableController.maybeDragNewTableElement(
+      app,
+      pointerDownState,
+      event,
+      informMutation,
+    );
+    return;
+  }
+
   if (app.arrowText.maybeDragNewText(newElement, pointerCoords)) {
     return;
   }
@@ -1142,10 +1206,7 @@ export const handleFreeDrawElementOnPointerDown = (
     null,
   );
 
-  const topLayerFrame = app.getTopLayerFrameAtSceneCoords({
-    x: gridX,
-    y: gridY,
-  });
+  const containerRef = app.getContainerRefForDropAt({ x: gridX, y: gridY });
 
   const simulatePressure = event.pressure === 0.5;
 
@@ -1172,7 +1233,7 @@ export const handleFreeDrawElementOnPointerDown = (
           : DEFAULT_STROKE_STREAMLINE,
     },
     locked: false,
-    containerRef: frameLikeContainerRef(topLayerFrame?.id),
+    containerRef,
     points: [pointFrom<LocalPoint>(0, 0)],
     // pressures are only consumed when rendering a real-pressure stroke, so
     // skip persisting them while pressure is being simulated
@@ -1340,10 +1401,7 @@ export const handleLinearElementOnPointerDown = (
       event[KEYS.CTRL_OR_CMD] ? null : app.getEffectiveGridSize(),
     );
 
-    const topLayerFrame = app.getTopLayerFrameAtSceneCoords({
-      x: gridX,
-      y: gridY,
-    });
+    const containerRef = app.getContainerRefForDropAt({ x: gridX, y: gridY });
 
     /* If arrow is pre-arrowheads, it will have undefined for both start and end arrowheads.
       If so, we want it to be null for start and "arrow" for end. If the linear item is not
@@ -1378,7 +1436,7 @@ export const handleLinearElementOnPointerDown = (
             startArrowhead,
             endArrowhead,
             locked: false,
-            containerRef: frameLikeContainerRef(topLayerFrame?.id),
+            containerRef,
             elbowed: app.state.currentItemArrowType === ARROW_TYPE.elbow,
             fixedSegments:
               app.state.currentItemArrowType === ARROW_TYPE.elbow ? [] : null,
@@ -1399,7 +1457,7 @@ export const handleLinearElementOnPointerDown = (
                 ? { type: ROUNDNESS.PROPORTIONAL_RADIUS }
                 : null,
             locked: false,
-            containerRef: frameLikeContainerRef(topLayerFrame?.id),
+            containerRef,
           });
 
     const point = pointFrom<GlobalPoint>(
@@ -1524,10 +1582,7 @@ export const createGenericElementOnPointerDown = (
       : app.getEffectiveGridSize(),
   );
 
-  const topLayerFrame = app.getTopLayerFrameAtSceneCoords({
-    x: gridX,
-    y: gridY,
-  });
+  const containerRef = app.getContainerRefForDropAt({ x: gridX, y: gridY });
 
   const baseElementAttributes = {
     x: gridX,
@@ -1547,7 +1602,7 @@ export const createGenericElementOnPointerDown = (
     opacity: app.state.currentItemOpacity,
     roundness: app.getCurrentItemRoundness(elementType),
     locked: false,
-    containerRef: frameLikeContainerRef(topLayerFrame?.id),
+    containerRef,
   } as const;
 
   let element;

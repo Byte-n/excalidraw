@@ -31,6 +31,7 @@ import {
   getInitializedImageElements,
   isElementCompletelyInViewport,
   isFrameLikeElement,
+  isTableElement,
   isUsingAdaptiveRadius,
   makeNextSelectedElementIds,
   newElementWith,
@@ -38,6 +39,9 @@ import {
   Scene,
   Store,
   syncInvalidIndices,
+  tableCellContainerRef,
+  getTableCellInsertionIndex,
+  frameLikeContainerRef,
   type ApplyToOptions,
   type ElementUpdate,
 } from "@excalidraw/element";
@@ -53,6 +57,7 @@ import type {
   ExcalidrawImageElement,
   ExcalidrawLinearElement,
   ExcalidrawMagicFrameElement,
+  ExcalidrawTableElement,
   ExcalidrawTextContainer,
   ExcalidrawTextElement,
   FileId,
@@ -140,6 +145,7 @@ import {
 } from "./app/pointerSession";
 import { AppView } from "./app/render";
 import * as sceneController from "./app/scene";
+import * as tableController from "./app/table";
 import * as textController from "./app/text";
 import { activeEyeDropperAtom } from "./EyeDropper";
 
@@ -1741,6 +1747,158 @@ class App extends React.Component<AppProps, AppState> {
     );
   };
 
+  public updateTableCellHighlight = (
+    highlightedTableCell: AppState["highlightedTableCell"],
+  ) => {
+    tableController.updateTableCellHighlight(this, highlightedTableCell);
+  };
+
+  public maybeUpdateTableCellHighlightOnPointerMove = (
+    sceneCoords: { x: number; y: number },
+    isOverScrollBar: boolean,
+  ) => {
+    tableController.maybeUpdateTableCellHighlightOnPointerMove(
+      this,
+      sceneCoords,
+      isOverScrollBar,
+    );
+  };
+
+  /**
+   * The cell a drop lands in — shared by the drag preview and the pointer-up
+   * commit (phase-1.md:87), so both always judge by the same rule.
+   */
+  public getTableCellDropTargetAtSceneCoords = (
+    sceneCoords: { x: number; y: number },
+    opts?: {
+      excludeElementIds?: AppState["selectedElementIds"];
+      currentTableId?: string | null;
+    },
+  ) => {
+    return tableController.getTableCellDropTargetAtSceneCoords(
+      this,
+      sceneCoords,
+      opts,
+    );
+  };
+
+  /**
+   * What container a new element created at `sceneCoords` belongs to: the
+   * deepest visible table cell wins, then the top-layer frame, then the
+   * canvas (phase-1.md:87).
+   */
+  public getContainerRefForDropAt = (sceneCoords: { x: number; y: number }) => {
+    const cellTarget = tableController.getTableCellDropTargetAtSceneCoords(
+      this,
+      sceneCoords,
+    );
+    if (cellTarget) {
+      return tableCellContainerRef(
+        cellTarget.table.id,
+        cellTarget.cellId,
+        "content",
+      );
+    }
+    const frame = this.getTopLayerFrameAtSceneCoords(sceneCoords);
+    return frameLikeContainerRef(frame?.id);
+  };
+
+  public handleTableCellDoubleClick = (sceneX: number, sceneY: number) => {
+    return tableController.handleTableCellDoubleClick(this, sceneX, sceneY);
+  };
+
+  /**
+   * Pointer down on a table structure zone (grip/separator/insert/select):
+   * arms the gesture, or performs the select click; returns consumption.
+   */
+  public armTableStructureGestureOnPointerDown = (
+    pointerDownState: PointerDownState,
+  ): boolean => {
+    return tableController.armTableStructureGestureOnPointerDown(
+      this,
+      pointerDownState,
+    );
+  };
+
+  /** Per-frame progress of an armed table structure/scale gesture. */
+  public handleTableGestureMove = (
+    pointerDownState: PointerDownState,
+    pointerCoords: { x: number; y: number },
+  ): boolean => {
+    return tableController.handleTableGestureMove(
+      this,
+      pointerDownState,
+      pointerCoords,
+    );
+  };
+
+  /** Esc during an armed gesture: restore the arm-time scene, no history. */
+  public cancelTableGesture = (
+    pointerDownState: PointerDownState,
+  ): boolean => {
+    return tableController.cancelTableGesture(this, pointerDownState);
+  };
+
+  /** Pointer up of an armed gesture: commit what the preview showed. */
+  public finalizeTableGestureOnPointerUp = (
+    pointerDownState: PointerDownState,
+    sceneCoords: { x: number; y: number },
+  ): boolean => {
+    return tableController.finalizeTableGestureOnPointerUp(
+      this,
+      pointerDownState,
+      sceneCoords,
+    );
+  };
+
+  public maybeUpdateTableStructureHoverOnPointerMove = (
+    sceneCoords: { x: number; y: number },
+    isOverScrollBar: boolean,
+  ): void => {
+    tableController.maybeUpdateTableStructureHoverOnPointerMove(
+      this,
+      sceneCoords,
+      isOverScrollBar,
+    );
+  };
+
+  public deleteSelectedTableRowCol = (): boolean => {
+    return tableController.deleteSelectedTableRowCol(this);
+  };
+
+  public moveSelectedTableRowCol = (direction: -1 | 1): boolean => {
+    return tableController.moveSelectedTableRowCol(this, direction);
+  };
+
+  /**
+   * Keyboard insert entry: a row/column selection receives the new row right
+   * below (new column right next to) it; without a matching selection the
+   * row/column appends at the table's end (phase-1.md:89).
+   */
+  public insertTableRowCol = (
+    kind: "insertRow" | "insertColumn",
+  ): boolean => {
+    const selection = this.state.tableRowColSelection;
+    if (!selection) {
+      return false;
+    }
+    const table = this.scene.getNonDeletedElement(selection.tableId);
+    if (!table || !isTableElement(table)) {
+      return false;
+    }
+    const wantsRow = kind === "insertRow";
+    const entries = wantsRow ? table.table.rows : table.table.columns;
+    const selectedIndex = entries.findIndex(
+      (entry) => entry.id === selection.id,
+    );
+    const boundaryIndex =
+      selection.kind === (wantsRow ? "row" : "column") && selectedIndex !== -1
+        ? selectedIndex + 1
+        : entries.length;
+    tableController.commitTableInsert(this, table, kind, boundaryIndex);
+    return true;
+  };
+
   public insertNewElements = (elements: readonly ExcalidrawElement[]) => {
     if (!elements.length) {
       return;
@@ -1763,9 +1921,17 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     for (const chunk of chunkedElements) {
-      const frameId = chunk[0].containerRef?.elementId;
+      const containerRef = chunk[0].containerRef;
+      const frameId = containerRef?.elementId;
 
-      const insertionIndex = frameId
+      const insertionIndex =
+        frameId && containerRef?.kind === "tableCell"
+          ? getTableCellInsertionIndex(
+              this.scene.getElementsIncludingDeleted(),
+              frameId,
+              containerRef.cellId,
+            )
+          : frameId
         ? getFrameChildrenInsertionIndex(
             this.scene.getElementsIncludingDeleted(),
             frameId,
@@ -1778,8 +1944,17 @@ class App extends React.Component<AppProps, AppState> {
   public insertNewElement = (element: ExcalidrawElement) => {
     this.insertNewElements([element]);
 
-    const frame = element.containerRef?.elementId
-      ? this.scene.getNonDeletedElement(element.containerRef?.elementId)
+    const containerRef = element.containerRef;
+    if (containerRef?.kind === "tableCell") {
+      this.updateTableCellHighlight({
+        tableId: containerRef.elementId,
+        cellId: containerRef.cellId,
+      });
+      return;
+    }
+
+    const frame = containerRef?.elementId
+      ? this.scene.getNonDeletedElement(containerRef.elementId)
       : null;
 
     this.updateFrameToHighlight(
@@ -2055,6 +2230,21 @@ class App extends React.Component<AppProps, AppState> {
       pointerDownState,
       type,
     );
+  };
+
+  private createTableElementOnPointerDown = (
+    pointerDownState: PointerDownState,
+  ): void => {
+    return tableController.createTableElementOnPointerDown(
+      this,
+      pointerDownState,
+    );
+  };
+
+  private finalizeNewTableElementOnPointerUp = (
+    newElement: NonDeleted<ExcalidrawTableElement>,
+  ): void => {
+    return tableController.finalizeNewTableElementOnPointerUp(this, newElement);
   };
 
   public maybeCacheReferenceSnapPoints(

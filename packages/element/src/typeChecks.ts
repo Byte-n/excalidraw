@@ -8,8 +8,10 @@ import type { MarkNonNullable } from "@excalidraw/common/utility-types";
 
 import { assertBaseShapeData } from "./compositeShape";
 import { assertMindmapShapeData } from "./mindmap";
+import { assertValidTableData } from "./tableStruct";
 
 import type {
+  ElementsMap,
   ExcalidrawElement,
   ExcalidrawTextElement,
   ExcalidrawEmbeddableElement,
@@ -35,6 +37,9 @@ import type {
   ExcalidrawStickyNoteElement,
   ExcalidrawMindmapNodeElement,
   ExcalidrawMindmapEdgeElement,
+  DirectContainerRef,
+  TableCellContainerRef,
+  ExcalidrawTableElement,
 } from "./types";
 
 export const isInitializedImageElement = <T extends ExcalidrawElement>(
@@ -112,6 +117,23 @@ export const isFrameLikeElement = <T extends ExcalidrawElement>(
   );
 };
 
+export const isTableElement = <T extends ExcalidrawElement>(
+  element: T | null | undefined,
+): element is T & ExcalidrawTableElement => {
+  return element?.type === "table";
+};
+
+/**
+ * A cell's background text. Outside of its editor it is chrome, not a canvas
+ * object: hit-testing, box/lasso selection and dragging pass through it so it
+ * never blocks the cell's other content (phase-1.md:67, :141).
+ */
+export const isTableCellBackgroundText = <T extends ExcalidrawElement>(
+  element: T | null | undefined,
+): boolean =>
+  element?.containerRef?.kind === "tableCell" &&
+  element.containerRef.role === "backgroundText";
+
 export const frameLikeContainerRef = (elementId: string | null | undefined) => {
   if (elementId == null) {
     return undefined;
@@ -122,7 +144,150 @@ export const frameLikeContainerRef = (elementId: string | null | undefined) => {
   return { kind: "frameLike", elementId } as const;
 };
 
-export const assertValidFrameLikeContainerRefs = (
+const assertValidTableCellRef = (
+  element: ExcalidrawElement,
+  containerRef: TableCellContainerRef,
+  parent: ExcalidrawElement,
+): void => {
+  if (!isTableElement(parent)) {
+    throw new Error(
+      `Invalid table cell container reference on ${element.id}: ${containerRef.elementId}`,
+    );
+  }
+  if (
+    typeof containerRef.cellId !== "string" ||
+    containerRef.cellId.length === 0 ||
+    !parent.table.cells.some((cell) => cell.id === containerRef.cellId)
+  ) {
+    throw new Error(
+      `Invalid table cell container reference on ${element.id}: ${containerRef.cellId}`,
+    );
+  }
+  if (containerRef.role === "backgroundText") {
+    if (!isTextElement(element)) {
+      throw new Error(
+        `Table cell background text ${element.id} must be a text element`,
+      );
+    }
+    if (element.containerId) {
+      throw new Error(`Bound text ${element.id} cannot have a containerRef`);
+    }
+    return;
+  }
+  if (containerRef.role !== "content") {
+    throw new Error(
+      `Unsupported table cell role: ${String(containerRef.role)}`,
+    );
+  }
+};
+
+/**
+ * Single-element container reference check against a scene snapshot.
+ * The scene-wide counterpart is `assertValidContainerRefs`.
+ */
+export const validateContainerRef = (
+  element: ExcalidrawElement,
+  containerRef: DirectContainerRef | null | undefined,
+  elementsMap: ElementsMap,
+): void => {
+  if (!containerRef || typeof containerRef !== "object") {
+    throw new Error(`Invalid container reference on ${element.id}`);
+  }
+  if (
+    typeof containerRef.elementId !== "string" ||
+    containerRef.elementId.length === 0
+  ) {
+    throw new Error(`Invalid container reference on ${element.id}`);
+  }
+  if (isTextElement(element) && element.containerId) {
+    throw new Error(`Bound text ${element.id} cannot have a containerRef`);
+  }
+  // A frame-like may sit in a table cell (a `tableCell` ref names its direct
+  // parent, phase-1.md:60); what stays forbidden is a frame-like nesting in
+  // another frame-like (P0 semantics).
+  if (isFrameLikeElement(element) && containerRef.kind === "frameLike") {
+    throw new Error(
+      `Frame-like element ${element.id} cannot have a frame-like parent`,
+    );
+  }
+  const parent = elementsMap.get(containerRef.elementId);
+  if (containerRef.kind === "frameLike") {
+    if (!parent || parent.isDeleted || !isFrameLikeElement(parent)) {
+      throw new Error(
+        `Invalid frame-like container reference on ${element.id}: ${containerRef.elementId}`,
+      );
+    }
+    return;
+  }
+  if (containerRef.kind === "tableCell") {
+    if (!parent || parent.isDeleted) {
+      throw new Error(
+        `Invalid container reference on ${element.id}: ${containerRef.elementId}`,
+      );
+    }
+    assertValidTableCellRef(element, containerRef, parent);
+    return;
+  }
+  // untrusted data can carry any kind; the known ones are handled above
+  throw new Error(
+    `Unsupported container kind: ${String(
+      (containerRef as { kind: unknown }).kind,
+    )}`,
+  );
+};
+
+const assertSingleBackgroundTextPerCell = (
+  elements: readonly ExcalidrawElement[],
+) => {
+  const seen = new Set<string>();
+  for (const element of elements) {
+    const containerRef = element.containerRef;
+    if (
+      element.isDeleted ||
+      containerRef?.kind !== "tableCell" ||
+      containerRef.role !== "backgroundText"
+    ) {
+      continue;
+    }
+    const key = `${containerRef.elementId}\u0000${containerRef.cellId}`;
+    if (seen.has(key)) {
+      throw new Error(
+        `Cell ${containerRef.cellId} of table ${containerRef.elementId} already has background text`,
+      );
+    }
+    seen.add(key);
+  }
+};
+
+/**
+ * The parent chain must stay acyclic. Every `containerRef` edge participates,
+ * including a frame-like's `tableCell` edge (a frame may sit in a cell);
+ * tableCell and frameLike edges alike are followed until a parentless
+ * element closes the walk. Cycles are only detectable scene-wide, which is
+ * why this stays a scene-level assertion.
+ */
+const assertAcyclicContainerRefs = (
+  elementsById: Map<string, ExcalidrawElement>,
+) => {
+  for (const element of elementsById.values()) {
+    if (!element.containerRef) {
+      continue;
+    }
+    const visited = new Set<string>([element.id]);
+    let current = elementsById.get(element.containerRef.elementId);
+    while (current) {
+      if (visited.has(current.id)) {
+        throw new Error(`Container reference cycle detected at ${element.id}`);
+      }
+      visited.add(current.id);
+      current = current.containerRef
+        ? elementsById.get(current.containerRef.elementId)
+        : undefined;
+    }
+  }
+};
+
+export const assertValidContainerRefs = (
   elements: readonly ExcalidrawElement[],
 ) => {
   const elementsById = new Map(
@@ -130,38 +295,14 @@ export const assertValidFrameLikeContainerRefs = (
   );
 
   for (const element of elements) {
-    if ("frameId" in element) {
-      throw new Error(`Unsupported frameId field on ${element.id}`);
-    }
-    const containerRef = element.containerRef;
-    if (isTextElement(element) && element.containerId && containerRef) {
-      throw new Error(`Bound text ${element.id} cannot have a containerRef`);
-    }
-    if (containerRef === undefined) {
+    if (element.isDeleted || element.containerRef === undefined) {
       continue;
     }
-    if (!containerRef || typeof containerRef !== "object") {
-      throw new Error(`Invalid container reference on ${element.id}`);
-    }
-    if (containerRef.kind !== "frameLike") {
-      throw new Error(`Unsupported container kind: ${containerRef.kind}`);
-    }
-    if (
-      typeof containerRef.elementId !== "string" ||
-      containerRef.elementId.length === 0
-    ) {
-      throw new Error(`Invalid container reference on ${element.id}`);
-    }
-    if (isFrameLikeElement(element)) {
-      throw new Error(`Frame-like element ${element.id} cannot have a parent`);
-    }
-    const parent = elementsById.get(containerRef.elementId);
-    if (!parent || parent.isDeleted || !isFrameLikeElement(parent)) {
-      throw new Error(
-        `Invalid frame-like container reference on ${element.id}: ${containerRef.elementId}`,
-      );
-    }
+    validateContainerRef(element, element.containerRef, elementsById);
   }
+
+  assertSingleBackgroundTextPerCell(elements);
+  assertAcyclicContainerRefs(elementsById);
 };
 
 export const isFreeDrawElement = <T extends ExcalidrawElement>(
@@ -329,6 +470,9 @@ export const isExcalidrawElement = (
       return true;
     case "mindmap-node":
       assertMindmapShapeData(element.shape);
+      return true;
+    case "table":
+      assertValidTableData(element.table);
       return true;
     case "text":
     case "stickynote":

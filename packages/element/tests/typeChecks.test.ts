@@ -4,7 +4,7 @@ import { newElementWith } from "../src/mutateElement";
 import { Scene } from "../src/Scene";
 import { getFrameChildren, getFrameChildrenInsertionIndex } from "../src/frame";
 import {
-  assertValidFrameLikeContainerRefs,
+  assertValidContainerRefs,
   frameLikeContainerRef,
   hasBoundTextElement,
   isLinearElement,
@@ -14,6 +14,7 @@ import {
 import type {
   ExcalidrawElement,
   ExcalidrawLinearElement,
+  ExcalidrawTableElement,
   ExcalidrawTextElement,
   NonDeleted,
   NonDeletedExcalidrawElement,
@@ -36,29 +37,29 @@ describe("Test TypeChecks", () => {
     });
 
     expect(() =>
-      assertValidFrameLikeContainerRefs([frame, child]),
+      assertValidContainerRefs([frame, child]),
     ).not.toThrow();
     expect(() =>
-      assertValidFrameLikeContainerRefs([
+      assertValidContainerRefs([
         frame,
         { ...child, containerRef: { kind: "frameLike", elementId: "missing" } },
       ]),
     ).toThrow("Invalid frame-like container reference");
     expect(() =>
-      assertValidFrameLikeContainerRefs([
+      assertValidContainerRefs([
         frame,
         { ...child, containerRef: null } as unknown as ExcalidrawElement,
       ]),
     ).toThrow("Invalid container reference");
     expect(() =>
-      assertValidFrameLikeContainerRefs([
+      assertValidContainerRefs([
         frame,
         { ...child, containerRef: "" } as unknown as ExcalidrawElement,
       ]),
     ).toThrow("Invalid container reference");
     for (const elementId of [0, null, undefined, "", false]) {
       expect(() =>
-        assertValidFrameLikeContainerRefs([
+        assertValidContainerRefs([
           frame,
           {
             ...child,
@@ -94,7 +95,7 @@ describe("Test TypeChecks", () => {
       scene.mutateElement(child, {
         containerRef: { kind: "frameLike", elementId: "missing" },
       }),
-    ).toThrow("Invalid container reference");
+    ).toThrow("Invalid frame-like container reference");
 
     expect(() =>
       scene.replaceAllElements([
@@ -128,7 +129,7 @@ describe("Test TypeChecks", () => {
       scene.mutateElement(child, {
         containerRef: { kind: "frameLike", elementId: deletedFrame.id },
       }),
-    ).toThrow("Invalid container reference");
+    ).toThrow("Invalid frame-like container reference");
 
     const frame = API.createElement({ type: "frame" });
     const owner = API.createElement({
@@ -141,8 +142,292 @@ describe("Test TypeChecks", () => {
       containerRef: { kind: "frameLike", elementId: frame.id },
     });
     expect(() =>
-      assertValidFrameLikeContainerRefs([frame, owner, label]),
+      assertValidContainerRefs([frame, owner, label]),
     ).toThrow("cannot have a containerRef");
+  });
+
+  describe("tableCell container refs", () => {
+    const setupTableCell = () => {
+      const table = API.createElement({ type: "table" });
+      const cellId = table.table.cells[0].id;
+      const content = API.createElement({
+        type: "rectangle",
+        containerRef: {
+          kind: "tableCell",
+          elementId: table.id,
+          cellId,
+          role: "content",
+        },
+      });
+      return { table, cellId, content };
+    };
+
+    it("accepts content and background text members", () => {
+      const { table, content } = setupTableCell();
+      const backgroundText = API.createElement({
+        type: "text",
+        containerRef: {
+          kind: "tableCell",
+          elementId: table.id,
+          cellId: table.table.cells[1].id,
+          role: "backgroundText",
+        },
+      });
+
+      expect(() =>
+        assertValidContainerRefs([table, content, backgroundText]),
+      ).not.toThrow();
+    });
+
+    it("rejects background text on non-text elements and dangling cells", () => {
+      const { table, content } = setupTableCell();
+
+      expect(() =>
+        assertValidContainerRefs([
+          table,
+          {
+            ...content,
+            containerRef: {
+              kind: "tableCell",
+              elementId: table.id,
+              cellId: "missing-cell",
+              role: "content",
+            },
+          },
+        ]),
+      ).toThrow("Invalid table cell container reference");
+
+      expect(() =>
+        assertValidContainerRefs([
+          table,
+          {
+            ...content,
+            containerRef: {
+              kind: "tableCell",
+              elementId: table.id,
+              cellId: table.table.cells[0].id,
+              role: "backgroundText",
+            },
+          },
+        ]),
+      ).toThrow("must be a text element");
+    });
+
+    it("rejects a parent that is not a table", () => {
+      const { content } = setupTableCell();
+      const frame = API.createElement({ type: "frame" });
+
+      expect(() =>
+        assertValidContainerRefs([
+          frame,
+          {
+            ...content,
+            containerRef: {
+              kind: "tableCell",
+              elementId: frame.id,
+              cellId: "any",
+              role: "content",
+            },
+          },
+        ]),
+      ).toThrow("Invalid table cell container reference");
+    });
+
+    it("rejects a second background text in one cell", () => {
+      const { table, cellId } = setupTableCell();
+      const first = API.createElement({
+        type: "text",
+        containerRef: {
+          kind: "tableCell",
+          elementId: table.id,
+          cellId,
+          role: "backgroundText",
+        },
+      });
+      const second = API.createElement({
+        type: "text",
+        containerRef: {
+          kind: "tableCell",
+          elementId: table.id,
+          cellId,
+          role: "backgroundText",
+        },
+      });
+
+      expect(() => assertValidContainerRefs([table, first, second])).toThrow(
+        "already has background text",
+      );
+    });
+
+    it("rejects cycles through nested tables", () => {
+      const tableA = API.createElement({ type: "table" });
+      const tableB = API.createElement({ type: "table" });
+
+      expect(() =>
+        assertValidContainerRefs([
+          {
+            ...tableA,
+            containerRef: {
+              kind: "tableCell",
+              elementId: tableB.id,
+              cellId: tableB.table.cells[0].id,
+              role: "content",
+            },
+          },
+          {
+            ...tableB,
+            containerRef: {
+              kind: "tableCell",
+              elementId: tableA.id,
+              cellId: tableA.table.cells[0].id,
+              role: "content",
+            },
+          },
+        ]),
+      ).toThrow("cycle detected");
+    });
+
+    it("enforces tableCell refs when mutating through the scene", () => {
+      const { table, content } = setupTableCell();
+      const scene = new Scene([table, content]);
+
+      expect(() =>
+        scene.mutateElement(content, {
+          containerRef: {
+            kind: "tableCell",
+            elementId: table.id,
+            cellId: "missing-cell",
+            role: "content",
+          },
+        }),
+      ).toThrow("Invalid table cell container reference");
+
+      expect(() =>
+        scene.replaceAllElements([
+          table,
+          {
+            ...content,
+            containerRef: {
+              kind: "tableCell",
+              elementId: "gone",
+              cellId: table.table.cells[0].id,
+              role: "content",
+            },
+          },
+        ]),
+      ).toThrow("Invalid container reference");
+    });
+  });
+
+  describe("frame-like in table cells (phase-1.md:60)", () => {
+    const tableCellRef = (
+      table: ExcalidrawTableElement,
+      cellIndex = 0,
+      role: "content" | "backgroundText" = "content",
+    ) => ({
+      kind: "tableCell" as const,
+      elementId: table.id,
+      cellId: table.table.cells[cellIndex].id,
+      role,
+    });
+
+    it("accepts a frame holding a tableCell ref at both entrances", () => {
+      const table = API.createElement({ type: "table" });
+      const frame = API.createElement({
+        type: "frame",
+        containerRef: tableCellRef(table),
+      });
+
+      expect(() =>
+        assertValidContainerRefs([table, frame]),
+      ).not.toThrow();
+
+      const scene = new Scene([table, frame]);
+      const newcomer = API.createElement({ type: "frame" });
+      expect(() =>
+        scene.mutateElement(newcomer, { containerRef: tableCellRef(table, 1) }),
+      ).not.toThrow();
+    });
+
+    it("still rejects a frame-like parent on a frame-like element", () => {
+      const outer = API.createElement({ type: "frame" });
+      const inner = API.createElement({
+        type: "frame",
+        containerRef: { kind: "frameLike", elementId: outer.id },
+      });
+
+      expect(() => assertValidContainerRefs([outer, inner])).toThrow(
+        "cannot have a frame-like parent",
+      );
+
+      const scene = new Scene([outer]);
+      expect(() =>
+        scene.mutateElement(inner, {
+          containerRef: { kind: "frameLike", elementId: outer.id },
+        }),
+      ).toThrow("cannot have a frame-like parent");
+    });
+
+    it("accepts the legal nesting shapes without a cycle", () => {
+      // a frame wrapping a table
+      const wrapper = API.createElement({ type: "frame" });
+      const framedTable = API.createElement({
+        type: "table",
+        containerRef: { kind: "frameLike", elementId: wrapper.id },
+      });
+      // the wrapped table holding a frame in one of its cells, and that
+      // inner frame carrying its own member
+      const cellFrame = API.createElement({
+        type: "frame",
+        containerRef: tableCellRef(framedTable),
+      });
+      const cellFrameMember = API.createElement({
+        type: "rectangle",
+        containerRef: { kind: "frameLike", elementId: cellFrame.id },
+      });
+
+      expect(() =>
+        assertValidContainerRefs([
+          wrapper,
+          framedTable,
+          cellFrame,
+          cellFrameMember,
+        ]),
+      ).not.toThrow();
+    });
+
+    it("detects a true cycle: frame in a cell of the table it wraps", () => {
+      const table = API.createElement({ type: "table" });
+      const frame = API.createElement({
+        type: "magicframe",
+        containerRef: tableCellRef(table),
+      });
+      const cyclicTable = newElementWith(table, {
+        containerRef: { kind: "frameLike", elementId: frame.id },
+      });
+
+      expect(() =>
+        assertValidContainerRefs([cyclicTable, frame]),
+      ).toThrow("cycle detected");
+    });
+
+    it("keeps the frame-delete guard for an in-cell frame with members", () => {
+      const table = API.createElement({ type: "table" });
+      const frame = API.createElement({
+        type: "frame",
+        containerRef: tableCellRef(table),
+      });
+      const member = API.createElement({
+        type: "rectangle",
+        containerRef: { kind: "frameLike", elementId: frame.id },
+      });
+      const scene = new Scene([table, frame, member]);
+
+      expect(() =>
+        scene.mutateElement(frame as ExcalidrawElement, { isDeleted: true }),
+      ).toThrow("with children");
+      expect(frame.isDeleted).toBe(false);
+    });
   });
 
   it("keeps frame children in scene order after changing a parent", () => {

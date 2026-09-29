@@ -46,6 +46,7 @@ import { getWrappedTextLines } from "@excalidraw/element";
 import {
   isArrowElement,
   isBoundToContainer,
+  isMindmapLayoutFrozen,
   isStickyNoteElement,
   isTextElement,
 } from "@excalidraw/element";
@@ -348,8 +349,15 @@ export const textWysiwyg = ({
           }
 
           const isComposite = container.type === "composite_shape";
+          // a table-scaled mindmap node keeps its frozen geometry
+          // (phase-1:113): the editor never grows or shrinks it back
           const isAdaptive =
-            !isComposite || getCompositeShapeTextFitMode(container) === "auto";
+            (!isComposite ||
+              getCompositeShapeTextFitMode(container) === "auto") &&
+            !(
+              container.type === "mindmap-node" &&
+              isMindmapLayoutFrozen(container)
+            );
           let layoutContainer = container;
 
           // Composite shapes use the same forward safe-area calculation as

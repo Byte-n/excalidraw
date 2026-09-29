@@ -49,6 +49,8 @@ import {
   computeBoundTextPosition,
   assertBaseShapeData,
   assertMindmapShapeData,
+  assertValidTableData,
+  normalizeTableDimensions,
 } from "@excalidraw/element";
 import { normalizeFixedPoint } from "@excalidraw/element";
 import {
@@ -255,6 +257,7 @@ export const AllowedExcalidrawActiveTools: Record<
   magicframe: false,
   bucketfill: true,
   mindmap: true,
+  table: true,
 };
 
 export type RestoredDataState = {
@@ -792,6 +795,14 @@ export const restoreElement = (
     case "composite_shape":
       assertBaseShapeData(element.shape);
       return restoreElementWithProperties(element, { shape: element.shape });
+    case "table": {
+      assertValidTableData(element.table);
+      // only bounded float drift between the element size and its rows and
+      // columns is normalized here; gross inconsistencies throw
+      return normalizeTableDimensions(
+        restoreElementWithProperties(element, { table: element.table }),
+      );
+    }
     case "iframe":
     case "embeddable":
       return restoreElementWithProperties(element, {});
@@ -1075,6 +1086,10 @@ export const restoreElements = <T extends ExcalidrawElement>(
         assertBaseShapeData(element.shape);
       } else if (element.type === "mindmap-node") {
         assertMindmapShapeData(element.shape);
+      } else if (element.type === "table") {
+        // fail loudly on invalid structure or grossly inconsistent sizes
+        assertValidTableData(element.table);
+        normalizeTableDimensions(element);
       }
       let migratedElement: ExcalidrawElement | null;
       try {

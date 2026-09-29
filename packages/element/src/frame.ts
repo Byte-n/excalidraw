@@ -28,11 +28,13 @@ import { mutateElement } from "./mutateElement";
 import { getBoundTextElement, getContainerElement } from "./textElement";
 import { syncMovedIndices } from "./fractionalIndex";
 import { getIndexedFrameChildren } from "./frameChildrenIndex";
+import { tableCellContainerRef } from "./tableContainer";
 import {
   frameLikeContainerRef,
   isBoundToContainer,
   isFrameElement,
   isFrameLikeElement,
+  isTableElement,
   isTextElement,
 } from "./typeChecks";
 
@@ -54,6 +56,8 @@ export const bindElementsToFramesAfterDuplication = (
   nextElements: readonly ExcalidrawElement[],
   origElements: readonly ExcalidrawElement[],
   origIdToDuplicateId: Map<ExcalidrawElement["id"], ExcalidrawElement["id"]>,
+  /** original table cell id -> duplicated table cell id */
+  tableCellIdMap?: ReadonlyMap<string, string>,
 ) => {
   const nextElementMap = arrayToMap(nextElements) as Map<
     ExcalidrawElement["id"],
@@ -64,14 +68,33 @@ export const bindElementsToFramesAfterDuplication = (
     if (element.containerRef?.elementId && !isBoundToContainer(element)) {
       // Preserve the parent relationship when the containing frame is cloned.
       const nextElementId = origIdToDuplicateId.get(element.id);
-      const nextFrameId = origIdToDuplicateId.get(
+      const nextParentId = origIdToDuplicateId.get(
         element.containerRef?.elementId,
       );
       const nextElement = nextElementId && nextElementMap.get(nextElementId);
       if (nextElement) {
-        mutateElement(nextElement, nextElementMap, {
-          containerRef: frameLikeContainerRef(nextFrameId),
-        });
+        const containerRef = element.containerRef;
+        if (!nextParentId) {
+          // the direct parent was not part of the duplication: the duplicate
+          // is placed at a new position and gets its membership re-judged
+          // there (a copied cell graphic does not carry its source table)
+          mutateElement(nextElement, nextElementMap, {
+            containerRef: undefined,
+          });
+        } else if (containerRef.kind === "tableCell") {
+          mutateElement(nextElement, nextElementMap, {
+            containerRef: tableCellContainerRef(
+              nextParentId,
+              (tableCellIdMap?.get(containerRef.cellId) ??
+                containerRef.cellId) as string,
+              containerRef.role,
+            ),
+          });
+        } else {
+          mutateElement(nextElement, nextElementMap, {
+            containerRef: frameLikeContainerRef(nextParentId),
+          });
+        }
       }
     }
   }
@@ -450,11 +473,21 @@ export const getContainingFrame = (
   const owner = isBoundToContainer(element)
     ? elementsMap.get(element.containerId)
     : element;
-  if (!owner?.containerRef?.elementId) {
-    return null;
+  let parent = owner?.containerRef?.elementId
+    ? elementsMap.get(owner.containerRef.elementId)
+    : null;
+  // Cells don't clip their descendants, so a tableCell parent resolves
+  // through to the frame-like ancestor owning the chain: the walk ascends
+  // through tableCell edges (a frame placed in a cell keeps its own
+  // frameLike children below it) and stops at the first frame-like.
+  // Container refs are asserted acyclic at the scene boundaries, so plain
+  // ascent is safe.
+  while (parent && !isFrameLikeElement(parent)) {
+    parent = parent.containerRef?.elementId
+      ? elementsMap.get(parent.containerRef.elementId)
+      : null;
   }
-  return (elementsMap.get(owner.containerRef.elementId) ||
-    null) as null | ExcalidrawFrameLikeElement;
+  return (parent as ExcalidrawFrameLikeElement) || null;
 };
 
 // --------------------------- Frame Operations -------------------------------
@@ -748,6 +781,15 @@ export const updateFrameMembershipOfSelectedElements = <
   const elementsMap = arrayToMap(allElements);
 
   elementsToFilter.forEach((element) => {
+    if (
+      // a tableCell ref names the direct parent cell: membership is
+      // re-judged only by an explicit drop, handled by the cell commit in
+      // the caller (`updateTableCellMembershipOfSelectedElements`). Frames
+      // must not absorb tableCell chains via `getContainingFrame` ascent.
+      element.containerRef?.kind === "tableCell"
+    ) {
+      return;
+    }
     if (
       element.containerRef?.elementId &&
       !isFrameLikeElement(element) &&

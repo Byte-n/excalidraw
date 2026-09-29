@@ -17,6 +17,7 @@ import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 
 import { unbindBindingElement, updateBoundElements } from "./binding";
 import { getCommonBounds } from "./bounds";
+import { getIndexedFrameChildren } from "./frameChildrenIndex";
 import { getPerfectElementSize } from "./sizeHelpers";
 import { getBoundTextElement } from "./textElement";
 import { getMinTextElementWidth } from "./textMeasurements";
@@ -25,6 +26,7 @@ import {
   isElbowArrow,
   isFrameLikeElement,
   isImageElement,
+  isTableElement,
   isTextElement,
 } from "./typeChecks";
 
@@ -72,18 +74,40 @@ export const dragSelectedElements = (
   const elementsToUpdate = new Set<NonDeletedExcalidrawElement>(
     selectedElements,
   );
-  const frames = selectedElements
-    .filter((e) => isFrameLikeElement(e))
-    .map((f) => f.id);
-
-  if (frames.length > 0) {
-    for (const element of scene.getNonDeletedElements()) {
-      if (
-        element.containerRef?.elementId &&
-        frames.includes(element.containerRef.elementId)
-      ) {
-        elementsToUpdate.add(element);
+  // frame-like containers and tables move their direct members with them;
+  // tables and frames nest (a frame may sit in a table cell), so keep
+  // descending until the subtree is closed — every element is still
+  // transformed exactly once (phase-1.md:60)
+  const containers = new Set(
+    selectedElements
+      .filter(
+        (element) => isFrameLikeElement(element) || isTableElement(element),
+      )
+      .map((element) => element.id),
+  );
+  if (containers.size > 0) {
+    const elementsMap = scene.getNonDeletedElementsMap();
+    let frontier = [...containers];
+    while (frontier.length > 0) {
+      const nextFrontier: string[] = [];
+      for (const containerId of frontier) {
+        // the map is non-deleted, so the indexed members are non-deleted too
+        const members = getIndexedFrameChildren(
+          elementsMap,
+          containerId,
+        ) as NonDeletedExcalidrawElement[];
+        for (const member of members) {
+          if (elementsToUpdate.has(member)) {
+            continue;
+          }
+          elementsToUpdate.add(member);
+          if (isTableElement(member) || isFrameLikeElement(member)) {
+            containers.add(member.id);
+            nextFrontier.push(member.id);
+          }
+        }
       }
+      frontier = nextFrontier;
     }
   }
 

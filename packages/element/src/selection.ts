@@ -13,9 +13,11 @@ import {
   isBoundToContainer,
   isFrameLikeElement,
   isLinearElement,
+  isTableCellBackgroundText,
+  isTableElement,
   isTextElement,
 } from "./typeChecks";
-import { getFrameChildren } from "./frame";
+import { getContainerSubtreeElements } from "./tableContainer";
 import { getBoundTextElement } from "./textElement";
 
 import { LinearElementEditor } from "./linearElementEditor";
@@ -33,7 +35,12 @@ import type {
 } from "./types";
 
 const shouldIgnoreElementFromSelection = (element: ExcalidrawElement) =>
-  element.locked || isBoundToContainer(element);
+  element.locked ||
+  isBoundToContainer(element) ||
+  // a cell's background text is lowest-layer chrome: box selection must not
+  // pick it up, or it would block marquee selections across the table
+  // (phase-1.md:141) — it is reached through its cell's editor instead
+  isTableCellBackgroundText(element);
 
 const excludeElementsFromFrames = <T extends ExcalidrawElement>(
   selectedElements: readonly T[],
@@ -201,10 +208,15 @@ export const getSelectedElements = (
 
   if (opts?.includeElementsInFrames) {
     const elementsToInclude: NonDeletedExcalidrawElement[] = [];
+    const sceneElements = Array.from(elements.values());
     const elementsMap = arrayToMap(elements);
     selectedElements.forEach((element) => {
-      if (isFrameLikeElement(element)) {
-        getFrameChildren(elements, element.id).forEach((child) => {
+      if (isFrameLikeElement(element) || isTableElement(element)) {
+        getContainerSubtreeElements(
+          sceneElements,
+          element.id,
+          elementsMap,
+        ).forEach((child) => {
           if (!child.isDeleted && !addedElements.has(child.id)) {
             elementsToInclude.push(child as NonDeletedExcalidrawElement);
             addedElements.add(child.id);

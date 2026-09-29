@@ -11,6 +11,7 @@ import {
   LINE_CONFIRM_THRESHOLD,
   POINTER_BUTTON,
   isTransparent,
+  isSelectionLikeTool,
   updateStable,
   DOUBLE_TAP_POSITION_THRESHOLD,
   invariant,
@@ -86,6 +87,8 @@ import {
   showHyperlinkTooltip,
 } from "../hyperlink/Hyperlink";
 import { isPointHittingLink } from "../hyperlink/helpers";
+
+import { getTableStructureHoverAtSceneCoords } from "./table";
 
 import { hitCompositeControlPoint } from "./compositeShapeControls";
 
@@ -517,6 +520,13 @@ export const handleCanvasDoubleClick = (
     }
   }
 
+  // double-clicking a cell's blank area (or its background text) edits that
+  // cell's background text; hits above the table fall through to the generic
+  // text handling below
+  if (app.handleTableCellDoubleClick(sceneX, sceneY)) {
+    return;
+  }
+
   app.cursor.reset();
   if (!app.state.viewModeEnabled) {
     const hitElement = app.getElementAtPosition(sceneX, sceneY);
@@ -714,9 +724,13 @@ export const handleCanvasPointerMove = (
     y: scenePointerY,
   };
 
-  app.mindmap.handlePointerMove(scenePointerX, scenePointerY);
-
   app.updateMultiTouchGesture(event);
+
+  if (app.interactionState.isTableGestureActive) {
+    return;
+  }
+
+  app.mindmap.handlePointerMove(scenePointerX, scenePointerY);
 
   if (
     app.pan.isSpaceHeld() ||
@@ -753,6 +767,55 @@ export const handleCanvasPointerMove = (
     },
     isOverScrollBar,
   );
+
+  app.maybeUpdateTableCellHighlightOnPointerMove(
+    {
+      x: scenePointerX,
+      y: scenePointerY,
+    },
+    isOverScrollBar,
+  );
+
+  app.maybeUpdateTableStructureHoverOnPointerMove(
+    {
+      x: scenePointerX,
+      y: scenePointerY,
+    },
+    isOverScrollBar,
+  );
+
+  if (
+    !event.buttons &&
+    !isOverScrollBar &&
+    !app.state.viewModeEnabled &&
+    !app.state.editingTextElement &&
+    !app.state.newElement &&
+    !app.state.selectionElement &&
+    !app.state.multiElement &&
+    !app.state.selectedElementsAreBeingDragged &&
+    isSelectionLikeTool(app.state.activeTool.type)
+  ) {
+    if (getTableStructureHoverAtSceneCoords(app, scenePointer)) {
+      return;
+    }
+    const selected = app.scene.getSelectedElements(app.state);
+    if (selected.length === 1 && selected[0].type === "table") {
+      const handle = getElementWithTransformHandleType(
+        selected,
+        app.state,
+        scenePointerX,
+        scenePointerY,
+        app.state.zoom,
+        event.pointerType || "mouse",
+        app.scene.getNonDeletedElementsMap(),
+        app.editorInterface,
+      );
+      if (handle?.transformHandleType) {
+        app.cursor.set(getCursorForResizingElement(handle));
+        return;
+      }
+    }
+  }
 
   if (
     !app.state.newElement &&

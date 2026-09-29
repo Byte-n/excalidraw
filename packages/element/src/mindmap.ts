@@ -86,6 +86,16 @@ export const assertMindmapShapeData = (shape: unknown): MindmapShapeData => {
 export const getMindmapShapeId = (node: ExcalidrawMindmapNodeElement) =>
   node.shape.id;
 
+/**
+ * Whether the node's geometry is pinned by a table uniform-scale commit
+ * (phase-1:113): relayouts keep its position, and its bound text follows the
+ * fixed-fit pipeline (wrap/truncate to the current bounds) instead of growing
+ * the node back. Unfrozen nodes keep the adaptive behavior unchanged.
+ */
+export const isMindmapLayoutFrozen = (
+  node: Pick<ExcalidrawMindmapNodeElement, "layoutFrozen">,
+): boolean => node.layoutFrozen === true;
+
 const isMindmapEdgeRouting = (value: unknown): value is MindmapEdgeRouting =>
   value === "orthogonal" || value === "curved";
 
@@ -844,11 +854,17 @@ export const layoutMindmap = (
         (mainSign > 0
           ? parentMainSize + MINDMAP_LEVEL_DISTANCE
           : -MINDMAP_LEVEL_DISTANCE - mainSizes.get(childId)!);
-      const next = withUpdates(child, {
-        x: isVertical ? childCross : childMain,
-        y: isVertical ? childMain : childCross,
-        angle: 0 as Radians,
-      });
+      // A frozen node (table uniform-scale commit, phase-1:113) keeps its
+      // persisted position and angle: the layout still reserves its slot via
+      // `subtreeCrossSizes` and lays out its descendants relative to the
+      // pinned position, so a scaled graph never re-arranges itself back.
+      const next = isMindmapLayoutFrozen(child)
+        ? child
+        : withUpdates(child, {
+            x: isVertical ? childCross : childMain,
+            y: isVertical ? childMain : childCross,
+            angle: 0 as Radians,
+          });
       positions.set(childId, next);
       bounds[0] = Math.min(bounds[0], next.x);
       bounds[1] = Math.min(bounds[1], next.y);

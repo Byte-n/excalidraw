@@ -2029,6 +2029,18 @@ export const stickyNoteToolIcon = createIcon(
   tablerIconProps,
 );
 
+export const tableToolIcon = createIcon(
+  <g strokeWidth={1.5}>
+    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+    <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+    <path d="M4 9.5h16"></path>
+    <path d="M4 15h16"></path>
+    <path d="M9.5 4v16"></path>
+    <path d="M15 4v16"></path>
+  </g>,
+  tablerIconProps,
+);
+
 export const mermaidLogoIcon = createIcon(
   <path
     fill="currentColor"
