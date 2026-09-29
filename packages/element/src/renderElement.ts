@@ -121,6 +121,38 @@ export type RenderPositionOffset = Readonly<{ x: number; y: number }>;
 
 const ZERO_RENDER_OFFSET: RenderPositionOffset = { x: 0, y: 0 };
 
+const renderDebugTextElementBounds = (
+  element: NonDeletedExcalidrawElement,
+  context: CanvasRenderingContext2D,
+  appState: StaticCanvasAppState | InteractiveCanvasAppState,
+  elementsMap: RenderableElementsMap,
+) => {
+  if (
+    !isTextElement(element) ||
+    context.canvas.ownerDocument.defaultView?.EXCALIDRAW_DEBUG_TEXT_ELEMENT !==
+      true
+  ) {
+    return;
+  }
+
+  const [x1, y1, x2, y2] = getElementAbsoluteCoords(element, elementsMap);
+  const centerX = (x1 + x2) / 2 + appState.scrollX;
+  const centerY = (y1 + y2) / 2 + appState.scrollY;
+
+  context.save();
+  context.translate(centerX, centerY);
+  context.rotate(element.angle);
+  context.strokeStyle = "#f5a3a3";
+  context.lineWidth = 1 / appState.zoom.value;
+  context.strokeRect(
+    -element.width / 2,
+    -element.height / 2,
+    element.width,
+    element.height,
+  );
+  context.restore();
+};
+
 /** Bound labels follow their container; a label's own offset is ignored. */
 export const getElementRenderOffset = (
   element: ExcalidrawElement,
@@ -1016,6 +1048,9 @@ export const renderElement = (
       appState,
       renderState,
     );
+    if (!renderConfig.isExporting) {
+      renderDebugTextElementBounds(element, context, appState, elementsMap);
+    }
   } finally {
     context.restore();
   }
