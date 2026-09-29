@@ -1151,10 +1151,13 @@ const _generateElementShape = (
       return shapes;
     }
     // sticky notes are painted directly (canvas + SVG) from
-    // `getStickyNoteRenderPoints`, never through roughjs
+    // `getStickyNoteRenderPoints`, never through roughjs.
+    // tables paint themselves from `drawTableGridOnCanvas` for the same
+    // reason — caching `null` keeps `element.canvas` from regenerating
     case "stickynote":
     case "frame":
     case "magicframe":
+    case "table":
     case "text":
     case "image": {
       const shape: ElementShapes[typeof element.type] = null;
@@ -1267,6 +1270,9 @@ export const getElementShape = <Point extends GlobalPoint | LocalPoint>(
     case "iframe":
     case "text":
     case "selection":
+    case "table":
+      // the table body hits as a plain rectangle; per-cell hit-testing lands
+      // with cell selection in a later phase
       if (element.type === "composite_shape") {
         if (!isBaseShapeId(element.shape.id)) {
           throw new Error(

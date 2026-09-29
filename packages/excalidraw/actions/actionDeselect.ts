@@ -106,6 +106,10 @@ export const actionDeselect = register({
           suggestedBinding: null,
           hoveredArrowTextAnchor: null,
           frameToHighlight: null,
+          highlightedTableCell: null,
+          tableRowColSelection: null,
+          tableStructureHover: null,
+          tableStructurePreview: null,
         },
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       };
@@ -125,6 +129,10 @@ export const actionDeselect = register({
         suggestedBinding: null,
         hoveredArrowTextAnchor: null,
         frameToHighlight: null,
+        highlightedTableCell: null,
+        tableRowColSelection: null,
+        tableStructureHover: null,
+        tableStructurePreview: null,
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
@@ -146,6 +154,9 @@ export const actionDeselect = register({
         appState.activeTool.type !== app.state.preferredSelectionTool.type ||
         !!appState.editingGroupId ||
         !!appState.selectedLinearElement ||
+        // a selected table row/column is its own selection channel — Esc
+        // leaves it first (phase-1.md:85)
+        !!appState.tableRowColSelection ||
         isSomeElementSelected(app.scene.getNonDeletedElements(), appState))
     );
   },

@@ -1,7 +1,7 @@
-import { arrayToMap } from "@excalidraw/common";
+import { arrayToMap, BOUND_TEXT_PADDING } from "@excalidraw/common";
 import { bezierEquation, curve, pointFrom } from "@excalidraw/math";
 
-import type { GlobalPoint } from "@excalidraw/math";
+import type { GlobalPoint, Radians } from "@excalidraw/math";
 
 import {
   applyMindmapTreeCommand,
@@ -44,12 +44,15 @@ import { getCornerRadius } from "../src/utils";
 import {
   getBoundTextMaxHeight,
   getBoundTextMaxWidth,
+  handleBindTextResize,
+  redrawTextBoundingBox,
 } from "../src/textElement";
 
 import type {
   ExcalidrawElement,
   ExcalidrawRectangleElement,
   ExcalidrawMindmapNodeElement,
+  ExcalidrawTextElement,
   FractionalIndex,
   MindmapNodeShape,
 } from "../src/types";
@@ -940,5 +943,112 @@ describe("mindmap 纯布局与影子树", () => {
         (element) => element.id,
       ),
     ).toEqual(["root", "a", "b"]);
+  });
+});
+
+describe("mindmap 表格缩放冻结（phase-1 固定布局适配）", () => {
+  it("冻结节点保持钉住的位置与角度，未冻结节点照常重排", () => {
+    const elements = [
+      node("root"),
+      node("a", "root", { layoutFrozen: true }),
+      node("b", "root", { order: "a1" as FractionalIndex }),
+    ];
+    const pinned = elements.map((element) =>
+      element.id === "a"
+        ? { ...element, x: 500, y: 700, angle: 0.3 as Radians }
+        : element,
+    );
+    const layout = layoutMindmap(indexOf(pinned));
+    const map = arrayToMap(layout.elements);
+    // 钉住节点的几何原样保留（引用不变，布局不重排）
+    expect(map.get("a")).toBe(pinned.find((element) => element.id === "a"));
+    // 未冻结的兄弟仍按常规布局定位
+    expect(map.get("b")!.x).toBe(280);
+    // 连接线端点跟随钉住位置
+    const edge = layout.edges.find((candidate) => candidate.childId === "a")!;
+    expect(edge.x + edge.points[3][0]).toBe(500);
+    expect(edge.y + edge.points[3][1]).toBe(720);
+  });
+
+  it("整图冻结后重复布局保持节点与连接线几何不变", () => {
+    const first = layoutMindmap(indexOf(repairMindmapElements(graph())));
+    const frozen = [...first.elements, ...first.edges].map((element) =>
+      isMindmapNodeElement(element)
+        ? { ...element, layoutFrozen: true }
+        : element,
+    );
+    const second = layoutMindmap(indexOf(frozen));
+    for (const element of second.elements) {
+      expect(element).toBe(frozen.find((c) => c.id === element.id));
+    }
+    expect(second.edges).toEqual(first.edges);
+  });
+
+  describe("冻结节点的文字固定管线", () => {
+    const FROZEN_MAX_HEIGHT = 56 - 2 * BOUND_TEXT_PADDING;
+    const SOURCE_TEXT = "first line\nsecond line\nthird line";
+
+    const makeScene = (layoutFrozen: boolean) => {
+      const container = {
+        ...node("root"),
+        width: 240,
+        height: 56,
+        ...(layoutFrozen && { layoutFrozen: true }),
+        boundElements: [{ type: "text" as const, id: "label" }],
+        index: "a0" as ExcalidrawElement["index"],
+      } as ExcalidrawMindmapNodeElement;
+      const label = {
+        ...newTextElement({
+          x: container.x + 20,
+          y: container.y + 10,
+          text: SOURCE_TEXT,
+          containerId: "root",
+        }),
+        id: "label",
+        // 绑定文字必须紧跟其宿主
+        index: "a1" as ExcalidrawElement["index"],
+      } as ExcalidrawTextElement;
+      const scene = new Scene([container, label]);
+      return { container, label, scene };
+    };
+
+    it("redraw 截断显示并保留原文，节点尺寸不变", () => {
+      const { container, label, scene } = makeScene(true);
+
+      redrawTextBoundingBox(label, container, scene);
+
+      const after = arrayToMap(scene.getElementsIncludingDeleted());
+      const nextContainer = after.get("root")!;
+      expect(nextContainer.width).toBe(240);
+      expect(nextContainer.height).toBe(56);
+      const nextLabel = after.get("label") as ExcalidrawTextElement;
+      expect(nextLabel.text).toBe("first line…");
+      expect(nextLabel.originalText).toBe(SOURCE_TEXT);
+      expect(nextLabel.height).toBeLessThanOrEqual(FROZEN_MAX_HEIGHT);
+    });
+
+    it("bind-resize 提交同样不回撑节点", () => {
+      const { container, scene } = makeScene(true);
+
+      handleBindTextResize(container, scene, "se");
+
+      const after = arrayToMap(scene.getElementsIncludingDeleted());
+      expect(after.get("root")!.height).toBe(56);
+      expect((after.get("label") as ExcalidrawTextElement).text).toBe(
+        "first line…",
+      );
+    });
+
+    it("未冻结节点的文字提交仍按内容撑高（默认自适应不回归）", () => {
+      const { container, label, scene } = makeScene(false);
+
+      redrawTextBoundingBox(label, container, scene);
+
+      const after = arrayToMap(scene.getElementsIncludingDeleted());
+      expect(after.get("root")!.height).toBeGreaterThan(56);
+      const nextLabel = after.get("label") as ExcalidrawTextElement;
+      // 自适应管线按宽度换行，不截断
+      expect(nextLabel.text).toBe(SOURCE_TEXT);
+    });
   });
 });

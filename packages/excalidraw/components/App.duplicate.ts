@@ -9,10 +9,12 @@ import {
 } from "@excalidraw/common";
 
 import {
+  addElementsToTableCell,
   addElementsToFrame,
   deepCopyElement,
   duplicateElements,
   filterElementsEligibleAsFrameChildren,
+  filterElementsEligibleAsTableCellChildren,
   getCommonBounds,
   getSelectionStateForElements,
   isBindableElement,
@@ -124,18 +126,38 @@ export class AppDuplicate {
 
     // resolved ahead of `onDuplicate` so that the host sees the duplicates
     // the way they end up in the scene
-    const topLayerFrame = this.app.getTopLayerFrameAtSceneCoords({ x, y });
+    // deepest container wins: a cell, then a frame, then the canvas
+    // (phase-1.md:87)
+    const cellDropTarget = this.app.getTableCellDropTargetAtSceneCoords({
+      x,
+      y,
+    });
 
-    if (topLayerFrame) {
-      const eligibleElements = filterElementsEligibleAsFrameChildren(
+    if (cellDropTarget) {
+      const eligibleElements = filterElementsEligibleAsTableCellChildren(
         duplicatedElements,
-        topLayerFrame,
+        cellDropTarget.table,
       );
-      nextElements = addElementsToFrame(
+      nextElements = addElementsToTableCell(
         nextElements,
         eligibleElements,
-        topLayerFrame,
+        cellDropTarget.table,
+        cellDropTarget.cellId,
       );
+    } else {
+      const topLayerFrame = this.app.getTopLayerFrameAtSceneCoords({ x, y });
+
+      if (topLayerFrame) {
+        const eligibleElements = filterElementsEligibleAsFrameChildren(
+          duplicatedElements,
+          topLayerFrame,
+        );
+        nextElements = addElementsToFrame(
+          nextElements,
+          eligibleElements,
+          topLayerFrame,
+        );
+      }
     }
 
     if (this.app.props.onDuplicate) {

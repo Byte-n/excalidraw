@@ -32,6 +32,7 @@ import {
   newImageElement,
   newLinearElement,
   newMagicFrameElement,
+  newTableElement,
   newTextElement,
   type ElementConstructorOpts,
   newStickyNoteElement,
@@ -39,7 +40,18 @@ import {
 } from "./newElement";
 import { normalizeStickyNoteStrokeColor } from "./stickyNote";
 import { measureText, normalizeText } from "./textMeasurements";
-import { isArrowElement, isStickyNoteElement } from "./typeChecks";
+import {
+  isArrowElement,
+  isFrameLikeElement,
+  isStickyNoteElement,
+  isTextElement,
+} from "./typeChecks";
+import {
+  assertValidTableData,
+  getTableHeight,
+  getTableWidth,
+  normalizeTableDimensions,
+} from "./tableStruct";
 
 import { syncInvalidIndices } from "./fractionalIndex";
 
@@ -64,6 +76,8 @@ import type {
   ExcalidrawElement,
   ExcalidrawFrameElement,
   ExcalidrawFreeDrawElement,
+  ExcalidrawTableElement,
+  TableDataV1,
   ExcalidrawGenericElement,
   ExcalidrawIframeLikeElement,
   ExcalidrawImageElement,
@@ -185,6 +199,44 @@ export type ValidStickyNote = {
 } & ElementConstructorOpts &
   Partial<Pick<ExcalidrawStickyNoteElement, "baseHeight">>;
 
+/**
+ * A member declared inside a table skeleton, positioned by cell indices —
+ * cell ids do not exist before the table is created.
+ */
+export type ValidTableCellChild = {
+  element: ExcalidrawElementSkeleton;
+  /** Zero-based (row, column) position within the parent table. */
+  cell: { row: number; column: number };
+  role?: "content" | "backgroundText";
+};
+
+/**
+ * A table container. Without `table` data the grid is built from the
+ * creation presets (`rowCount`/`columnCount`/`rowHeight`/`columnWidth` or
+ * the per-row/per-column size arrays); with `table` data the persisted
+ * structure is validated and passed through as-is.
+ */
+export type ValidTable = {
+  type: "table";
+  id?: ExcalidrawTableElement["id"];
+  /** Full persisted structure: validated and kept instead of rebuilt. */
+  table?: TableDataV1;
+  /** Cell members; nested table skeletons convert recursively. */
+  children?: readonly ValidTableCellChild[];
+  rowCount?: number;
+  columnCount?: number;
+  rowHeight?: number;
+  columnWidth?: number;
+  /** Per-row heights; length must match the resulting row count. */
+  rowHeights?: readonly number[];
+  /** Per-column widths; length must match the resulting column count. */
+  columnWidths?: readonly number[];
+} & Omit<ElementConstructorOpts, "x" | "y"> & {
+    /** Defaults to 0 like frame skeletons. */
+    x?: number;
+    y?: number;
+  };
+
 export type ExcalidrawElementSkeleton =
   | Extract<
       Exclude<ExcalidrawElement, ExcalidrawSelectionElement>,
@@ -220,7 +272,8 @@ export type ExcalidrawElementSkeleton =
       type: "magicframe";
       children: readonly ExcalidrawElement["id"][];
       name?: string;
-    } & Partial<ExcalidrawMagicFrameElement>);
+    } & Partial<ExcalidrawMagicFrameElement>)
+  | ValidTable;
 
 const DEFAULT_LINEAR_ELEMENT_PROPS = {
   width: 100,
@@ -531,6 +584,68 @@ class ElementStore {
   };
 }
 
+/**
+ * Validates skeleton-provided per-row/per-column sizes: lengths must match
+ * the requested counts (when given) and every size must be a finite positive
+ * number — mirroring `createTableData`'s preset checks.
+ */
+const assertTableSkeletonSizes = (
+  rowHeights: readonly number[] | undefined,
+  columnWidths: readonly number[] | undefined,
+  rowCount: number | undefined,
+  columnCount: number | undefined,
+): void => {
+  if (rowHeights) {
+    if (rowCount !== undefined && rowHeights.length !== rowCount) {
+      throw new Error(
+        `Table skeleton rowHeights length ${rowHeights.length} does not match rowCount ${rowCount}`,
+      );
+    }
+    for (const height of rowHeights) {
+      if (!Number.isFinite(height) || height <= 0) {
+        throw new Error(`Invalid table row height: ${height}`);
+      }
+    }
+  }
+  if (columnWidths) {
+    if (columnCount !== undefined && columnWidths.length !== columnCount) {
+      throw new Error(
+        `Table skeleton columnWidths length ${columnWidths.length} does not match columnCount ${columnCount}`,
+      );
+    }
+    for (const width of columnWidths) {
+      if (!Number.isFinite(width) || width <= 0) {
+        throw new Error(`Invalid table column width: ${width}`);
+      }
+    }
+  }
+};
+
+/** Applies per-row/per-column sizes onto the created grid, keeping every id. */
+const applyTableSkeletonSizes = (
+  tableElement: ExcalidrawTableElement,
+  rowHeights: readonly number[] | undefined,
+  columnWidths: readonly number[] | undefined,
+): void => {
+  const table = tableElement.table;
+  const rows = rowHeights
+    ? table.rows.map((row, i) => ({ ...row, height: rowHeights[i] }))
+    : table.rows;
+  const columns = columnWidths
+    ? table.columns.map((column, i) => ({ ...column, width: columnWidths[i] }))
+    : table.columns;
+  if (rows.length !== table.rows.length || columns.length !== table.columns.length) {
+    throw new Error(
+      `Table skeleton rowHeights/columnWidths length does not match the created grid`,
+    );
+  }
+  Object.assign(tableElement, {
+    table: { ...table, rows, columns },
+    width: getTableWidth({ columns }),
+    height: getTableHeight({ rows }),
+  });
+};
+
 export const convertToExcalidrawElements = (
   elementsSkeleton: ExcalidrawElementSkeleton[] | null,
   opts?: { regenerateIds: boolean },
@@ -547,7 +662,18 @@ export const convertToExcalidrawElements = (
   // regenerated ids mean new instances, hence a fresh creation time as well
   const created = getUpdatedTimestamp();
 
-  for (const element of elements) {
+  // Table cell members declared inside a table skeleton are converted in the
+  // same pass (pushed onto `elements`); their direct parent references are
+  // written once every element exists — see `pendingTableCellRefs` below.
+  const pendingTableCellRefs: {
+    skeleton: ExcalidrawElementSkeleton;
+    tableId: ExcalidrawTableElement["id"];
+    cellId: string;
+    role: "content" | "backgroundText";
+  }[] = [];
+
+  for (let i = 0; i < elements.length; i++) {
+    const element = elements[i];
     let excalidrawElement: ExcalidrawElement;
     const originalId = element.id;
     if (opts?.regenerateIds !== false) {
@@ -685,6 +811,128 @@ export const convertToExcalidrawElements = (
         });
         break;
       }
+      case "table": {
+        if (element.table != null) {
+          if (element.children) {
+            throw new Error(
+              "Table skeleton cannot declare both `table` data and `children`",
+            );
+          }
+          // full element passthrough: validate the persisted structure and
+          // keep it instead of rebuilding from the creation presets
+          const tableData = assertValidTableData(element.table);
+          const tableElement = newTableElement({
+            x: 0,
+            y: 0,
+            ...element,
+            type: "table",
+          });
+          const { width, height } = normalizeTableDimensions({
+            id: tableElement.id,
+            width: element.width ?? getTableWidth(tableData),
+            height: element.height ?? getTableHeight(tableData),
+            table: tableData,
+          });
+          Object.assign(tableElement, { table: tableData, width, height });
+          excalidrawElement = tableElement;
+          break;
+        }
+
+        const rowCount = element.rowCount ?? element.rowHeights?.length;
+        const columnCount = element.columnCount ?? element.columnWidths?.length;
+        assertTableSkeletonSizes(
+          element.rowHeights,
+          element.columnWidths,
+          element.rowCount,
+          element.columnCount,
+        );
+
+        const tableElement = newTableElement({
+          x: 0,
+          y: 0,
+          ...element,
+          type: "table",
+          rowCount,
+          columnCount,
+        });
+        if (element.rowHeights || element.columnWidths) {
+          applyTableSkeletonSizes(
+            tableElement,
+            element.rowHeights,
+            element.columnWidths,
+          );
+        }
+        excalidrawElement = tableElement;
+
+        if (element.children?.length) {
+          // a cell holds any number of content members (phase-1.md:20); only
+          // the background text is unique per cell
+          const seenBackgroundText = new Set<string>();
+          for (const child of element.children) {
+            const cell = child?.cell;
+            if (
+              !cell ||
+              !Number.isInteger(cell.row) ||
+              !Number.isInteger(cell.column)
+            ) {
+              throw new Error(
+                `Invalid table child cell position: ${JSON.stringify(cell)}`,
+              );
+            }
+            const { row, column } = cell;
+            if (
+              row < 0 ||
+              column < 0 ||
+              row >= tableElement.table.rows.length ||
+              column >= tableElement.table.columns.length
+            ) {
+              throw new Error(
+                `Table child cell (${row}, ${column}) is out of bounds for a ${tableElement.table.rows.length}x${tableElement.table.columns.length} table`,
+              );
+            }
+
+            const tableCell = tableElement.table.cells.find(
+              (candidate) =>
+                candidate.rowId === tableElement.table.rows[row].id &&
+                candidate.columnId === tableElement.table.columns[column].id,
+            );
+            if (!tableCell) {
+              throw new Error(
+                `Table has no cell for position (${row}, ${column})`,
+              );
+            }
+
+            if (child.role === "backgroundText") {
+              if (child.element.type !== "text") {
+                throw new Error(
+                  "Table cell background text must be a text element",
+                );
+              }
+              if ((child.element as { containerId?: string }).containerId) {
+                throw new Error(
+                  "Bound text cannot be table cell background text",
+                );
+              }
+              if (seenBackgroundText.has(tableCell.id)) {
+                throw new Error(
+                  `Table cell ${tableCell.id} already has background text`,
+                );
+              }
+              seenBackgroundText.add(tableCell.id);
+            }
+
+            pendingTableCellRefs.push({
+              skeleton: child.element,
+              tableId: tableElement.id,
+              cellId: tableCell.id,
+              role: child.role ?? "content",
+            });
+            // convert the member in the same pass, right after its table
+            elements.push(child.element);
+          }
+        }
+        break;
+      }
       case "freedraw": {
         excalidrawElement = newFreeDrawElement({ ...element });
         break;
@@ -732,6 +980,46 @@ export const convertToExcalidrawElements = (
       if (originalId) {
         oldToNewElementIdMap.set(originalId, excalidrawElement.id);
       }
+    }
+  }
+
+  // Once every element exists, write the table cell memberships declared by
+  // table skeletons (mirroring the frame-like pass below). Bound text keeps
+  // inheriting its host's membership through `containerId` instead.
+  if (pendingTableCellRefs.length) {
+    const skeletonToElement = new Map<
+      ExcalidrawElementSkeleton,
+      ExcalidrawElement
+    >();
+    for (const [createdId, skeleton] of elementsWithIds) {
+      const member = elementStore.getElement(createdId);
+      if (member) {
+        skeletonToElement.set(skeleton, member);
+      }
+    }
+    for (const { skeleton, tableId, cellId, role } of pendingTableCellRefs) {
+      const member = skeletonToElement.get(skeleton);
+      if (!member) {
+        throw new Error(
+          `Table cell member with id ${skeleton.id ?? "(unspecified)"} wasn't mapped correctly`,
+        );
+      }
+      if (isFrameLikeElement(member)) {
+        throw new Error(
+          `Frame-like element ${member.id} cannot be a table cell member`,
+        );
+      }
+      if (isTextElement(member) && member.containerId) {
+        continue;
+      }
+      Object.assign(member, {
+        containerRef: {
+          kind: "tableCell",
+          elementId: tableId,
+          cellId,
+          role,
+        },
+      });
     }
   }
 

@@ -18,6 +18,7 @@ import { deepCopyElement } from "@excalidraw/element";
 import {
   isFrameLikeElement,
   isInitializedImageElement,
+  isTableElement,
 } from "@excalidraw/element";
 
 import type { ValueOf } from "@excalidraw/common/utility-types";
@@ -25,7 +26,6 @@ import type { ValueOf } from "@excalidraw/common/utility-types";
 import type { IMAGE_MIME_TYPES, STRING_MIME_TYPES } from "@excalidraw/common";
 import type {
   ExcalidrawElement,
-  ExcalidrawFrameLikeElement,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
 
@@ -156,8 +156,13 @@ export const serializeAsClipboardJSON = ({
   files: BinaryFiles | null;
 }) => {
   const elementsMap = arrayToMap(elements);
-  const frameIdsToCopy = new Set<ExcalidrawFrameLikeElement["id"]>(
-    elements.filter(isFrameLikeElement).map((element) => element.id),
+  // members keep their containerRef only when the container itself is part of
+  // the copy — frame-like containers and tables (whose cell members reference
+  // the table element) both qualify
+  const copiedContainerIds = new Set<string>(
+    elements
+      .filter((element) => isFrameLikeElement(element) || isTableElement(element))
+      .map((element) => element.id),
   );
   let foundFile = false;
 
@@ -183,7 +188,7 @@ export const serializeAsClipboardJSON = ({
     elements: elements.map((element) => {
       if (
         element.containerRef?.elementId &&
-        !frameIdsToCopy.has(element.containerRef.elementId)
+        !copiedContainerIds.has(element.containerRef.elementId)
       ) {
         const copiedElement = deepCopyElement(element);
         mutateElement(copiedElement, elementsMap, {

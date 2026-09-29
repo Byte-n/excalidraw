@@ -45,6 +45,11 @@ import {
   isCompositeShapeOpen,
 } from "./compositeShape";
 import { mindmapShapeData } from "./mindmap";
+import {
+  createTableData,
+  getTableHeight,
+  getTableWidth,
+} from "./tableStruct";
 
 import type {
   ExcalidrawElement,
@@ -77,6 +82,7 @@ import type {
   BaseShapeData,
   ExcalidrawCompositeShapeElement,
   ExcalidrawSelectionElement,
+  ExcalidrawTableElement,
 } from "./types";
 
 export type ElementConstructorOpts = MarkOptional<
@@ -416,6 +422,42 @@ export const newMagicFrameElement = (
   );
 
   return frameElement;
+};
+
+/**
+ * Row/column counts and sizes are creation presets, not format constraints —
+ * callers adjust them through the row/column structure commands afterwards.
+ * The element size always follows the sums (`width` = column widths,
+ * `height` = row heights), see `normalizeTableDimensions`.
+ */
+export const newTableElement = (
+  opts: {
+    type: "table";
+    rowCount?: number;
+    columnCount?: number;
+    rowHeight?: number;
+    columnWidth?: number;
+  } & ElementConstructorOpts,
+): NonDeleted<ExcalidrawTableElement> => {
+  const table = createTableData({
+    rowCount: opts.rowCount,
+    columnCount: opts.columnCount,
+    rowHeight: opts.rowHeight,
+    columnWidth: opts.columnWidth,
+  });
+
+  const tableElement = newElementWith(
+    {
+      ..._newElementBase<ExcalidrawTableElement>("table", opts),
+      type: "table",
+      width: getTableWidth(table),
+      height: getTableHeight(table),
+      table,
+    },
+    {},
+  );
+
+  return tableElement;
 };
 
 /**

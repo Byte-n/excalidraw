@@ -78,6 +78,8 @@ export const distanceToElement = (
     case "embeddable":
     case "frame":
     case "magicframe":
+    // TODO(table): P1 grid-aware distance; the table body is a rectangle
+    case "table":
       return distanceToRectanguloidElement(element, elementsMap, p);
     case "composite_shape":
       return element.shape.id === "ellipse"

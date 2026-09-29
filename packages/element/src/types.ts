@@ -91,8 +91,41 @@ export type FrameLikeContainerRef = Readonly<{
   elementId: string;
 }>;
 
+export type TableCellContainerRef = Readonly<{
+  kind: "tableCell";
+  /** Direct parent container element id (the table element). */
+  elementId: string;
+  /** Cell of the parent table the element belongs to. */
+  cellId: string;
+  role: "content" | "backgroundText";
+}>;
+
 /** Direct spatial parent. Later container kinds extend this discriminated union. */
-export type DirectContainerRef = FrameLikeContainerRef;
+export type DirectContainerRef = FrameLikeContainerRef | TableCellContainerRef;
+
+export type TableRowData = Readonly<{ id: string; height: number }>;
+
+export type TableColumnData = Readonly<{ id: string; width: number }>;
+
+export type TableCellData = Readonly<{
+  id: string;
+  rowId: string;
+  columnId: string;
+  /** `style: {}` means no cell-level override (table defaults apply). */
+  style: Readonly<{ backgroundColor?: string }>;
+}>;
+
+/**
+ * Persisted grid structure of a table element. Row/column sizes are formal
+ * structure fields (not `customData`); cell geometry is derived from the
+ * ordered row/column sizes and never persisted.
+ */
+export type TableDataV1 = Readonly<{
+  schemaVersion: 1;
+  rows: readonly TableRowData[];
+  columns: readonly TableColumnData[];
+  cells: readonly TableCellData[];
+}>;
 
 export type ExcalidrawSelectionElement = _ExcalidrawElementBase & {
   type: "selection";
@@ -220,6 +253,13 @@ export type ExcalidrawMindmapNodeElement = _ExcalidrawElementBase &
     graphId: string;
     collapsed: boolean;
     shape: MindmapShapeData;
+    /**
+     * Fixed-layout marker set by the table uniform-scale commit (phase-1:113):
+     * a frozen node keeps its scaled geometry — text edits wrap/truncate to
+     * the current bounds instead of re-measuring the node, and relayouts pin
+     * its position. Missing values keep the adaptive default behavior.
+     */
+    layoutFrozen?: boolean;
     /** Graph configuration is meaningful on the root and omitted on children. */
     layoutDirection?: MindmapLayoutDirection;
     defaultNodeShape?: MindmapNodeShape;
@@ -323,6 +363,12 @@ export type ExcalidrawMagicFrameElement = _ExcalidrawElementBase & {
   name: string | null;
 };
 
+export type ExcalidrawTableElement = _ExcalidrawElementBase &
+  Readonly<{
+    type: "table";
+    table: TableDataV1;
+  }>;
+
 export type ExcalidrawFrameLikeElement =
   | ExcalidrawFrameElement
   | ExcalidrawMagicFrameElement;
@@ -348,6 +394,7 @@ export type ExcalidrawRectanguloidElement =
   | ExcalidrawFreeDrawElement
   | ExcalidrawIframeLikeElement
   | ExcalidrawFrameLikeElement
+  | ExcalidrawTableElement
   | ExcalidrawEmbeddableElement
   | ExcalidrawSelectionElement;
 
@@ -368,6 +415,7 @@ export type ExcalidrawElement =
   | ExcalidrawImageElement
   | ExcalidrawFrameElement
   | ExcalidrawMagicFrameElement
+  | ExcalidrawTableElement
   | ExcalidrawIframeElement
   | ExcalidrawEmbeddableElement;
 

@@ -26,6 +26,7 @@ import {
   mermaidLogoIcon,
   DotsIcon,
   mindmapIcon,
+  tableToolIcon,
 } from "./icons";
 import {
   ArrowToolButton,
@@ -74,6 +75,7 @@ const ExtraToolsDropdown = ({
   const drawShapeToolSelected = activeTool.type === "autoshape";
   const laserToolSelected = activeTool.type === "laser";
   const bucketFillToolSelected = activeTool.type === "bucketfill";
+  const tableToolSelected = activeTool.type === "table";
   const lassoToolSelected =
     isFullStylesPanel &&
     activeTool.type === "lasso" &&
@@ -91,6 +93,7 @@ const ExtraToolsDropdown = ({
             (isFullStylesPanel && drawShapeToolSelected) ||
             lassoToolSelected ||
             bucketFillToolSelected ||
+            tableToolSelected ||
             // in collab we're already highlighting the laser button
             // outside toolbar, so let's not highlight extra-tools button
             // on top of it
@@ -116,6 +119,8 @@ const ExtraToolsDropdown = ({
           ? LassoIcon
           : bucketFillToolSelected
           ? bucketFillIcon
+          : tableToolSelected
+          ? tableToolIcon
           : DotsIcon}
       </DropdownMenu.Trigger>
       <DropdownMenu.Content
@@ -194,6 +199,18 @@ const ExtraToolsDropdown = ({
             disabled={isToolButtonDisabled(app, "mindmap")}
           >
             {t("toolBar.mindmap")}
+          </DropdownMenu.Item>
+        )}
+        {UIOptions.tools?.table !== false && (
+          <DropdownMenu.Item
+            onSelect={() => app.setActiveTool({ type: "table" })}
+            icon={tableToolIcon}
+            shortcut={getToolShortcut("table")}
+            data-testid="toolbar-table"
+            selected={tableToolSelected}
+            disabled={isToolButtonDisabled(app, "table")}
+          >
+            {t("toolBar.table")}
           </DropdownMenu.Item>
         )}
         {isFullStylesPanel && (

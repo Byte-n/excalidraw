@@ -288,6 +288,29 @@ export const getTransformHandles = (
     return {};
   }
 
+  // Table resizing is handled by the table gesture, which keeps its grid
+  // dimensions in sync with its element bounds.
+  if (element.type === "table") {
+    return getTransformHandlesFromCoords(
+      getElementAbsoluteCoords(element, elementsMap, true),
+      element.angle,
+      zoom,
+      pointerType,
+      {
+        ...omitSides,
+        n: true,
+        w: true,
+        nw: true,
+        ne: true,
+        sw: true,
+        e: true,
+        s: true,
+        rotation: true,
+      },
+      DEFAULT_TRANSFORM_HANDLE_SPACING,
+    );
+  }
+
   if (element.type === "freedraw" || isLinearElement(element)) {
     if (element.points.length === 2) {
       // only check the last point because starting point is always (0,0)

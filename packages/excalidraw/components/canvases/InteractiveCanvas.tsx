@@ -268,6 +268,10 @@ const getRelevantAppStateProps = (
   hoveredArrowTextAnchor: appState.hoveredArrowTextAnchor,
   isRotating: appState.isRotating,
   elementsToHighlight: appState.elementsToHighlight,
+  highlightedTableCell: appState.highlightedTableCell,
+  tableRowColSelection: appState.tableRowColSelection,
+  tableStructureHover: appState.tableStructureHover,
+  tableStructurePreview: appState.tableStructurePreview,
   collaborators: appState.collaborators, // Necessary for collab. sessions
   activeEmbeddable: appState.activeEmbeddable,
   snapLines: appState.snapLines,

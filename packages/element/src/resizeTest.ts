@@ -89,6 +89,10 @@ export const resizeTest = <Point extends GlobalPoint | LocalPoint>(
     return filter[0] as TransformHandleType;
   }
 
+  if (element.type === "table") {
+    return false;
+  }
+
   if (canResizeFromSides(editorInterface)) {
     const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(
       element,

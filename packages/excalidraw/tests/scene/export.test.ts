@@ -1,5 +1,6 @@
 import { exportToCanvas, exportToSvg } from "@excalidraw/utils";
 
+import { newElementWith, type ElementUpdate } from "@excalidraw/element";
 import { newElement } from "@excalidraw/element";
 
 import {
@@ -7,11 +8,13 @@ import {
   BOUND_TEXT_PADDING,
   FONT_FAMILY,
   FRAME_STYLE,
+  TABLE_STYLE,
 } from "@excalidraw/common";
 
 import { pointFrom } from "@excalidraw/math";
 
 import type {
+  ExcalidrawTableElement,
   ExcalidrawTextElement,
   FractionalIndex,
   NonDeleted,
@@ -746,5 +749,189 @@ describe("exporting frames", () => {
       expect(svg.getAttribute("width")).toBe(frame1.width.toString());
       expect(svg.getAttribute("height")).toBe(frame1.height.toString());
     });
+  });
+});
+
+describe("exporting tables", () => {
+  const withCellColors = <T extends ExcalidrawTableElement>(
+    table: T,
+    colors: Record<number, string>,
+  ) => {
+    const cells = table.table.cells.map((cell, index) =>
+      colors[index]
+        ? { ...cell, style: { backgroundColor: colors[index] } }
+        : cell,
+    );
+    const updates = {
+      table: { ...table.table, cells },
+    } as ElementUpdate<ExcalidrawTableElement>;
+    return newElementWith(table, updates as ElementUpdate<T>);
+  };
+
+  it("exports the grid as vector lines and a border rect", async () => {
+    const table = API.createElement({ type: "table" });
+
+    const svg = await exportToSvg({
+      elements: [table],
+      files: null,
+      exportPadding: 0,
+    });
+
+    const group = svg.querySelector(`g[data-id="${table.id}"]`);
+    expect(group).not.toBeNull();
+
+    // a 3x3 grid has 2 interior vertical + 2 interior horizontal lines
+    const lines = group!.querySelectorAll("line");
+    expect(lines.length).toBe(4);
+
+    // the border is the only rect with fill=none (cells with no color
+    // override stay unpainted)
+    const border = Array.from(group!.querySelectorAll("rect")).find(
+      (rect) => rect.getAttribute("fill") === "none",
+    );
+    expect(border).not.toBeUndefined();
+    expect(border!.getAttribute("width")).toBe(`${table.width}`);
+    expect(border!.getAttribute("height")).toBe(`${table.height}`);
+    expect(border!.getAttribute("stroke")).toBe(TABLE_STYLE.strokeColor);
+    expect(border!.getAttribute("stroke-width")).toBe(
+      `${TABLE_STYLE.strokeWidth}`,
+    );
+  });
+
+  it("exports cell background colors above the grid", async () => {
+    const table = withCellColors(API.createElement({ type: "table" }), {
+      0: "#ffc9c9",
+    });
+
+    const svg = await exportToSvg({
+      elements: [table],
+      files: null,
+      exportPadding: 0,
+    });
+
+    const group = svg.querySelector(`g[data-id="${table.id}"]`)!;
+    const fill = group.querySelector('rect[fill]:not([fill="none"])')!;
+    expect(fill.getAttribute("fill")).toBe("#ffc9c9");
+    // exactly one painted cell
+    expect(group.querySelectorAll('rect[fill]:not([fill="none"])').length).toBe(
+      1,
+    );
+  });
+
+  it("themes the grid for dark mode like the canvas", async () => {
+    const table = withCellColors(API.createElement({ type: "table" }), {
+      0: "#ffc9c9",
+    });
+
+    const svg = await exportToSvg({
+      elements: [table],
+      files: null,
+      exportPadding: 0,
+      appState: { exportWithDarkMode: true },
+    });
+
+    const group = svg.querySelector(`g[data-id="${table.id}"]`)!;
+    const border = Array.from(group.querySelectorAll("rect")).find(
+      (rect) => rect.getAttribute("fill") === "none",
+    )!;
+    expect(border.getAttribute("stroke")).toBe(
+      applyDarkModeFilter(TABLE_STYLE.strokeColor, true),
+    );
+    const line = group.querySelector("line")!;
+    expect(line.getAttribute("stroke")).toBe(
+      applyDarkModeFilter(TABLE_STYLE.gridColor, true),
+    );
+    const fill = group.querySelector('rect[fill]:not([fill="none"])')!;
+    expect(fill.getAttribute("fill")).toBe(
+      applyDarkModeFilter("#ffc9c9", true),
+    );
+  });
+
+  it("rotates the grid around the element center", async () => {
+    const table = API.createElement({
+      type: "table",
+      angle: Math.PI / 4,
+    });
+
+    const svg = await exportToSvg({
+      elements: [table],
+      files: null,
+      exportPadding: 0,
+    });
+
+    const group = svg.querySelector(`g[data-id="${table.id}"]`)!;
+    expect(group.getAttribute("transform")).toContain("rotate(45");
+  });
+
+  it("clips the grid and its cell members to the containing frame", async () => {
+    const frame = API.createElement({
+      type: "frame",
+      width: 400,
+      height: 300,
+      x: 0,
+      y: 0,
+    });
+    const table = API.createElement({
+      type: "table",
+      containerRef: { kind: "frameLike", elementId: frame.id },
+    });
+    const content = API.createElement({
+      type: "rectangle",
+      containerRef: {
+        kind: "tableCell",
+        elementId: table.id,
+        cellId: table.table.cells[0].id,
+        role: "content",
+      },
+    });
+
+    const svg = await exportToSvg({
+      elements: [frame, table, content],
+      files: null,
+      exportPadding: 0,
+    });
+
+    // the export pipeline defines a clipPath per frame; both the table grid
+    // and its cell member hang off it
+    expect(svg.querySelector(`clipPath[id="${frame.id}"]`)).not.toBeNull();
+    const tableGroup = svg.querySelector(`g[data-id="${table.id}"]`)!;
+    expect(tableGroup.getAttribute("clip-path")).toBe(`url(#${frame.id})`);
+    const contentGroup = svg.querySelector(`g[data-id="${content.id}"]`);
+    expect(contentGroup?.getAttribute("clip-path")).toBe(`url(#${frame.id})`);
+  });
+
+  it("re-renders the grid after a row height change", async () => {
+    const table = API.createElement({ type: "table" });
+
+    const exportOnce = async (element: NonDeletedExcalidrawElement) => {
+      const svg = await exportToSvg({
+        elements: [element],
+        files: null,
+        exportPadding: 0,
+      });
+      return svg.querySelector(`g[data-id="${element.id}"]`)!;
+    };
+
+    const before = await exportOnce(table);
+
+    const [row0, ...restRows] = table.table.rows;
+    const grown = newElementWith(table, {
+      table: {
+        ...table.table,
+        rows: [{ ...row0, height: row0.height + 40 }, ...restRows],
+      },
+      height: table.height + 40,
+    } as ElementUpdate<typeof table>);
+
+    const after = await exportOnce(grown);
+
+    // the first interior horizontal line moved with the new row height
+    const horizontalLineYs = (group: Element) =>
+      Array.from(group.querySelectorAll("line"))
+        .filter((line) => line.getAttribute("x1") === "0")
+        .map((line) => Number(line.getAttribute("y1")));
+
+    expect(horizontalLineYs(after)[0]).toBe(horizontalLineYs(before)[0] + 40);
+    expect(after.outerHTML).not.toBe(before.outerHTML);
   });
 });

@@ -67,6 +67,7 @@ import {
   isMagicFrameElement,
   isFrameLikeElement,
   isImageElement,
+  isTableElement,
 } from "./typeChecks";
 import { getContainingFrame } from "./frame";
 import { getCornerRadius } from "./utils";
@@ -77,6 +78,7 @@ import {
   getStickyNotePathCommands,
   type StickyNotePathCommand,
 } from "./stickyNote";
+import { drawTableGridOnCanvas } from "./tableRender";
 
 import type {
   ExcalidrawElement,
@@ -996,7 +998,9 @@ export const renderElement = (
   // Cached bitmaps apply the offset before pixel snapping. Moving it into
   // the canvas transform first loses precision at half-device-pixel ties.
   if (
-    (renderConfig.isExporting || isFrameLikeElement(element)) &&
+    (renderConfig.isExporting ||
+      isFrameLikeElement(element) ||
+      isTableElement(element)) &&
     (renderState.offset.x || renderState.offset.y)
   ) {
     context.translate(renderState.offset.x, renderState.offset.y);
@@ -1069,6 +1073,24 @@ const drawElement = (
 
         context.restore();
       }
+      break;
+    }
+    // tables draw themselves (cell backgrounds, grid lines, border) in the
+    // element's rotated local frame — nothing to hand to roughjs
+    case "table": {
+      context.save();
+      const cx = element.x + appState.scrollX + element.width / 2;
+      const cy = element.y + appState.scrollY + element.height / 2;
+      // rotation originates from the element center, matching hit-testing
+      context.translate(cx, cy);
+      context.rotate(element.angle);
+      context.translate(-cx, -cy);
+      context.translate(
+        element.x + appState.scrollX,
+        element.y + appState.scrollY,
+      );
+      drawTableGridOnCanvas(element, context, appState);
+      context.restore();
       break;
     }
     case "freedraw": {

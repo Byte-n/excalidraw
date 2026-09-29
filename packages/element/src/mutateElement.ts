@@ -10,6 +10,10 @@ import type { Mutable } from "@excalidraw/common/utility-types";
 
 import { ShapeCache } from "./shape";
 import { updateFrameChildrenIndex } from "./frameChildrenIndex";
+import {
+  getTableCellRef,
+  updateTableChildrenIndex,
+} from "./tableChildrenIndex";
 
 import { updateElbowArrowPoints } from "./elbowArrow";
 
@@ -54,6 +58,7 @@ export const mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
   // (see https://github.com/microsoft/TypeScript/issues/21732)
   const { points, fixedSegments, fileId, shape } = updates as any;
   const previousFrameId = element.containerRef?.elementId;
+  const previousCellRef = getTableCellRef(element);
 
   if (
     isElbowArrow(element) &&
@@ -137,6 +142,11 @@ export const mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
       element,
       previousFrameId,
       element.containerRef?.elementId,
+    );
+    updateTableChildrenIndex(
+      element,
+      previousCellRef,
+      getTableCellRef(element),
     );
   }
 

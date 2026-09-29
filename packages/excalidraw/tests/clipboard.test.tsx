@@ -10,6 +10,7 @@ import { getElementBounds } from "@excalidraw/element";
 import { createPasteEvent, serializeAsClipboardJSON } from "../clipboard";
 import * as clipboard from "../clipboard";
 import { actionCut } from "../actions";
+import { createRedoAction, createUndoAction } from "../actions/actionHistory";
 
 import { Excalidraw } from "../index";
 
@@ -309,6 +310,46 @@ describe("Paste bound text container", () => {
 });
 
 describe("pasting & frames", () => {
+  it("undoes and redoes a pasted frame together with its child", async () => {
+    const frame = API.createElement({
+      type: "frame",
+      width: 100,
+      height: 100,
+      x: 0,
+      y: 0,
+    });
+    const child = API.createElement({
+      type: "rectangle",
+      x: 10,
+      y: 10,
+      width: 20,
+      height: 20,
+      containerRef: { kind: "frameLike", elementId: frame.id },
+    });
+    const clipboardJSON = serializeAsClipboardJSON({
+      elements: [child, frame],
+      files: null,
+    });
+
+    mouse.moveTo(200, 200);
+    pasteWithCtrlCmdV(clipboardJSON);
+    await waitFor(() =>
+      expect(h.elements.filter((el) => !el.isDeleted)).toHaveLength(2),
+    );
+
+    API.executeAction(createUndoAction(h.history as never) as never);
+
+    expect(h.elements.filter((el) => !el.isDeleted)).toHaveLength(0);
+
+    API.executeAction(createRedoAction(h.history as never) as never);
+
+    const restored = h.elements.filter((el) => !el.isDeleted);
+    expect(restored).toHaveLength(2);
+    const restoredFrame = restored.find((el) => el.type === "frame")!;
+    const restoredChild = restored.find((el) => el.type !== "frame")!;
+    expect(restoredChild.containerRef?.elementId).toBe(restoredFrame.id);
+  });
+
   it("should add pasted elements to frame under cursor", async () => {
     const frame = API.createElement({
       type: "frame",

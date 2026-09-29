@@ -25,6 +25,7 @@ import {
   newMindmapNodeElement,
   newMindmapEdgeElement,
   newStickyNoteElement,
+  newTableElement,
   newTextElement,
 } from "@excalidraw/element";
 
@@ -50,6 +51,7 @@ import type {
   ExcalidrawStickyNoteElement,
   ExcalidrawMindmapNodeElement,
   ExcalidrawMindmapEdgeElement,
+  ExcalidrawTableElement,
   FixedSegment,
   NonDeleted,
   NonDeletedExcalidrawElement,
@@ -224,6 +226,8 @@ export class API {
       : T extends "mindmap-edge"
       ? Pick<ExcalidrawMindmapEdgeElement, "graphId" | "parentId" | "childId" | "routing">
       : never;
+    rowCount?: T extends "table" ? number : never;
+    columnCount?: T extends "table" ? number : never;
     containerId?: T extends "text"
       ? ExcalidrawTextElement["containerId"]
       : never;
@@ -269,6 +273,8 @@ export class API {
       ? ExcalidrawMindmapNodeElement
       : T extends "mindmap-edge"
       ? ExcalidrawMindmapEdgeElement
+      : T extends "table"
+      ? ExcalidrawTableElement
       : ExcalidrawGenericElement
   > => {
     let element: Mutable<ExcalidrawElement> = null!;
@@ -485,6 +491,14 @@ export class API {
         break;
       case "magicframe":
         element = newMagicFrameElement({ ...base, width, height });
+        break;
+      case "table":
+        element = newTableElement({
+          ...base,
+          type: "table",
+          rowCount: rest.rowCount,
+          columnCount: rest.columnCount,
+        });
         break;
       default:
         assertNever(

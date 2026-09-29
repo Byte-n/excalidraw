@@ -21,6 +21,7 @@ import {
 import type { AppState } from "@excalidraw/excalidraw/types";
 
 import { selectGroupsForSelectedElements } from "../src/groups";
+import { moveAllLeft, moveAllRight } from "../src/zindex";
 
 import type {
   ExcalidrawElement,
@@ -1778,5 +1779,93 @@ describe("z-index reordering with inconsistent group-editing state", () => {
       appState: { editingGroupId: "g1" },
       operations: [[actionBringToFront, ["A", "C", "X", "Y", "R"]]],
     });
+  });
+});
+
+describe("z-indexing a table subtree with an in-cell frame (phase-1.md:60, :68)", () => {
+  const withIndex = (
+    element: ExcalidrawElement,
+    index: string,
+  ): ExcalidrawElement => ({
+    ...element,
+    index,
+  } as ExcalidrawElement);
+
+  // [table, cellMember, frame(in cell), frameMember(of frame), unrelated]
+  const buildElements = () => {
+    const table = API.createElement({ type: "table", id: "table-1" });
+    const cellRef = (cellIndex: number) => ({
+      kind: "tableCell" as const,
+      elementId: table.id,
+      cellId: table.table.cells[cellIndex].id,
+      role: "content" as const,
+    });
+    const cellMember = API.createElement({
+      type: "rectangle",
+      id: "cell-member-1",
+      containerRef: cellRef(0),
+    });
+    const frame = API.createElement({
+      type: "frame",
+      id: "frame-1",
+      containerRef: cellRef(1),
+    });
+    const frameMember = API.createElement({
+      type: "rectangle",
+      id: "frame-member-1",
+      containerRef: { kind: "frameLike" as const, elementId: frame.id },
+    });
+    const unrelated = API.createElement({
+      type: "rectangle",
+      id: "unrelated-1",
+    });
+
+    return [
+      withIndex(table, "a0"),
+      withIndex(cellMember, "a1"),
+      withIndex(frame, "a2"),
+      withIndex(frameMember, "a3"),
+      withIndex(unrelated, "a4"),
+    ];
+  };
+
+  const appStateFor = (tableId: string) =>
+    ({
+      selectedElementIds: { [tableId]: true },
+      selectedGroupIds: {},
+      editingGroupId: null,
+    }) as unknown as AppState;
+
+  it("brings the table's whole subtree, cell frame included, to the front", () => {
+    const elements = buildElements();
+
+    const next = moveAllRight(elements, appStateFor("table-1"));
+
+    // one contiguous unit, internal relative order kept
+    expect(next.map((element) => element.id)).toEqual([
+      "unrelated-1",
+      "table-1",
+      "cell-member-1",
+      "frame-1",
+      "frame-member-1",
+    ]);
+  });
+
+  it("sends the table's whole subtree, cell frame included, to the back", () => {
+    // 场景数组恒按分数索引有序（数组即场景顺序）：整体反转子树与表格的
+    // 场景次序后，索引须按新数组顺序重排，再把子树整体移到最底层
+    const elements = [...buildElements()]
+      .reverse()
+      .map((element, position) => withIndex(element, `a${position}`));
+
+    const next = moveAllLeft(elements, appStateFor("table-1"));
+
+    expect(next.map((element) => element.id)).toEqual([
+      "frame-member-1",
+      "frame-1",
+      "cell-member-1",
+      "table-1",
+      "unrelated-1",
+    ]);
   });
 });

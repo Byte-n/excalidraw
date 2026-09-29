@@ -33,6 +33,7 @@ import {
   EmbedIcon,
   stickyNoteToolIcon,
   mindmapIcon,
+  tableToolIcon,
 } from "./icons";
 
 import type {
@@ -155,6 +156,12 @@ export const TOOLS = defineTools({
   mindmap: {
     icon: mindmapIcon,
     letterKey: "m",
+  },
+  table: {
+    icon: tableToolIcon,
+    // J is the first unclaimed plain letter — "table" has no free initial
+    // (T is the text tool)
+    letterKey: KEYS.J,
   },
   lasso: {
     icon: LassoIcon,

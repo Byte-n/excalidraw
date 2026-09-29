@@ -8,13 +8,13 @@ import { getNonDeletedElements } from "@excalidraw/element";
 import { fixBindingsAfterDeletion } from "@excalidraw/element";
 import { LinearElementEditor } from "@excalidraw/element";
 import { newElementWith } from "@excalidraw/element";
-import { getContainerElement } from "@excalidraw/element";
+import { getContainerSubtreeElements } from "@excalidraw/element";
 import {
   isBoundToContainer,
   isElbowArrow,
   isFrameLikeElement,
+  isTableElement,
 } from "@excalidraw/element";
-import { getFrameChildren } from "@excalidraw/element";
 
 import {
   getElementsInGroup,
@@ -41,62 +41,47 @@ const deleteSelectedElements = (
   appState: AppState,
   app: AppClassProperties,
 ) => {
-  const framesToBeDeleted = new Set(
-    getSelectedElements(
-      elements.filter((el) => isFrameLikeElement(el)),
-      appState,
-    ).map((el) => el.id),
+  const selectedContainers = getSelectedElements(elements, appState).filter(
+    (el) => isFrameLikeElement(el) || isTableElement(el),
   );
-
-  const selectedElementIds: Record<ExcalidrawElement["id"], true> = {};
-
+  const containerSubtreeIds = new Set<ExcalidrawElement["id"]>();
   const elementsMap = app.scene.getNonDeletedElementsMap();
-
-  const processedElements = new Set<ExcalidrawElement["id"]>();
-
-  for (const frameId of framesToBeDeleted) {
-    const frameChildren = getFrameChildren(elements, frameId);
-    for (const el of frameChildren) {
-      if (processedElements.has(el.id)) {
-        continue;
-      }
-
-      if (isBoundToContainer(el)) {
-        const containerElement = getContainerElement(el, elementsMap);
-        if (containerElement) {
-          selectedElementIds[containerElement.id] = true;
-        }
-      } else {
-        selectedElementIds[el.id] = true;
-      }
-      processedElements.add(el.id);
+  for (const container of selectedContainers) {
+    for (const member of getContainerSubtreeElements(
+      elements,
+      container.id,
+      elementsMap,
+    )) {
+      containerSubtreeIds.add(member.id);
     }
   }
 
-  let shouldSelectEditingGroup = true;
+  const selectedElementIds: Record<ExcalidrawElement["id"], true> = {};
 
   const nextElements = elements.map((el) => {
+    if (containerSubtreeIds.has(el.id)) {
+      if (el.boundElements) {
+        el.boundElements.forEach((candidate) => {
+          const bound = app.scene.getNonDeletedElementsMap().get(candidate.id);
+          if (bound && isElbowArrow(bound)) {
+            app.scene.mutateElement(bound, {
+              startBinding:
+                el.id === bound.startBinding?.elementId
+                  ? null
+                  : bound.startBinding,
+              endBinding:
+                el.id === bound.endBinding?.elementId ? null : bound.endBinding,
+            });
+          }
+        });
+      }
+      return newElementWith(el, {
+        isDeleted: true,
+        containerRef: el.containerRef ? undefined : el.containerRef,
+      });
+    }
+
     if (appState.selectedElementIds[el.id]) {
-      const boundElement = isBoundToContainer(el)
-        ? getContainerElement(el, elementsMap)
-        : null;
-
-      if (
-        el.containerRef?.elementId &&
-        framesToBeDeleted.has(el.containerRef?.elementId)
-      ) {
-        shouldSelectEditingGroup = false;
-        selectedElementIds[el.id] = true;
-        return newElementWith(el, { containerRef: undefined });
-      }
-
-      if (
-        boundElement?.containerRef?.elementId &&
-        framesToBeDeleted.has(boundElement?.containerRef?.elementId)
-      ) {
-        return el;
-      }
-
       if (el.boundElements) {
         el.boundElements.forEach((candidate) => {
           const bound = app.scene.getNonDeletedElementsMap().get(candidate.id);
@@ -115,18 +100,6 @@ const deleteSelectedElements = (
       return newElementWith(el, { isDeleted: true });
     }
 
-    // if deleting a frame, remove the children from it and select them
-    if (
-      el.containerRef?.elementId &&
-      framesToBeDeleted.has(el.containerRef?.elementId)
-    ) {
-      shouldSelectEditingGroup = false;
-      if (!isBoundToContainer(el)) {
-        selectedElementIds[el.id] = true;
-      }
-      return newElementWith(el, { containerRef: undefined });
-    }
-
     if (isBoundToContainer(el) && appState.selectedElementIds[el.containerId]) {
       return newElementWith(el, { isDeleted: true });
     }
@@ -136,7 +109,7 @@ const deleteSelectedElements = (
   let nextEditingGroupId = appState.editingGroupId;
 
   // select next eligible element in currently editing group or supergroup
-  if (shouldSelectEditingGroup && appState.editingGroupId) {
+  if (appState.editingGroupId) {
     const elems = getElementsInGroup(
       nextElements,
       appState.editingGroupId,
@@ -217,6 +190,21 @@ export const actionDeleteSelected = register({
   icon: TrashIcon,
   trackEvent: { category: "element", action: "delete" },
   perform: (elements, appState, formData, app) => {
+    // a selected table row/column claims Delete before the element
+    // selection: the removal (cells + members, recursively) is one undo
+    // entry (phase-1.md:96)
+    if (appState.tableRowColSelection) {
+      if (app.deleteSelectedTableRowCol()) {
+        return {
+          elements: app.scene.getElementsIncludingDeleted(),
+          appState: {
+            ...appState,
+            tableRowColSelection: null,
+          },
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        };
+      }
+    }
     if (app.mindmap.hasSelectedMindmapElement()) {
       if (app.mindmap.getSelectedNode()) {
         return app.mindmap.getDeleteActionResult();
@@ -345,10 +333,17 @@ export const actionDeleteSelected = register({
         activeEmbeddable: null,
         selectedLinearElement: null,
       },
-      captureUpdate: isSomeElementSelected(
-        getNonDeletedElements(elements),
-        appState,
+      // deleting a table removes its complete subtree — a structural
+      // operation that must be committed atomically, not lazily
+      // (phase-1.md:68, :126)
+      captureUpdate: getSelectedElements(elements, appState).some((element) =>
+        isTableElement(element),
       )
+        ? CaptureUpdateAction.IMMEDIATELY
+        : isSomeElementSelected(
+            getNonDeletedElements(elements),
+            appState,
+          )
         ? CaptureUpdateAction.IMMEDIATELY
         : CaptureUpdateAction.EVENTUALLY,
     };

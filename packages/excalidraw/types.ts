@@ -10,6 +10,7 @@ import type {
 import type { LinearElementEditor } from "@excalidraw/element";
 
 import type { MaybeTransformHandleType } from "@excalidraw/element";
+import type { PreparedTableUniformScale } from "@excalidraw/element";
 
 import type {
   PointerType,
@@ -35,8 +36,10 @@ import type {
   ExcalidrawNonSelectionElement,
   BindMode,
   ExcalidrawTextElement,
+  ExcalidrawTableElement,
   StrokeVariability,
   BaseShapeId,
+  TableDataV1,
 } from "@excalidraw/element/types";
 
 import type {
@@ -166,7 +169,8 @@ export type ToolType =
   | "laser"
   | "autoshape"
   | "bucketfill"
-  | "mindmap";
+  | "mindmap"
+  | "table";
 
 export type ElementOrToolType = ExcalidrawElementType | ToolType | "custom";
 
@@ -239,6 +243,10 @@ export type InteractiveCanvasAppState = Readonly<
     hoveredArrowTextAnchor: AppState["hoveredArrowTextAnchor"];
     isRotating: AppState["isRotating"];
     elementsToHighlight: AppState["elementsToHighlight"];
+    highlightedTableCell: AppState["highlightedTableCell"];
+    tableRowColSelection: AppState["tableRowColSelection"];
+    tableStructureHover: AppState["tableStructureHover"];
+    tableStructurePreview: AppState["tableStructurePreview"];
     // Collaborators
     collaborators: AppState["collaborators"];
     // SnapLines
@@ -282,6 +290,128 @@ export type ObservedElementsAppState = {
 };
 
 export type BoxSelectionMode = "contain" | "overlap";
+
+/** The selected row/column of a table (phase-1.md:78). */
+export type TableRowColSelection = {
+  tableId: ExcalidrawTableElement["id"];
+  kind: "row" | "column";
+  /** the row id or the column id, per `kind` */
+  id: string;
+};
+
+/**
+ * The structure affordance the pointer rests on: the outer reorder grip of a
+ * row/column, one of its inner resize separators, an insertion boundary, or
+ * the outer strip that selects a row/column (phase-1.md:78-83). Zones are at
+ * least 24 CSS px wide (phase-1.md:89); `id` names the resized row/column
+ * (the one above/left of the separator).
+ */
+export type TableRowColStructureHover =
+  | {
+      tableId: ExcalidrawTableElement["id"];
+      kind: "table";
+    }
+  | {
+      tableId: ExcalidrawTableElement["id"];
+      kind: "rowGrip";
+      rowId: string;
+    }
+  | {
+      tableId: ExcalidrawTableElement["id"];
+      kind: "columnGrip";
+      columnId: string;
+    }
+  | {
+      tableId: ExcalidrawTableElement["id"];
+      kind: "rowResize";
+      rowId: string;
+    }
+  | {
+      tableId: ExcalidrawTableElement["id"];
+      kind: "columnResize";
+      columnId: string;
+    }
+  | {
+      tableId: ExcalidrawTableElement["id"];
+      kind: "rowInsert";
+      boundaryIndex: number;
+    }
+  | {
+      tableId: ExcalidrawTableElement["id"];
+      kind: "columnInsert";
+      boundaryIndex: number;
+    }
+  | {
+      tableId: ExcalidrawTableElement["id"];
+      kind: "rowSelect";
+      rowId: string;
+    }
+  | {
+      tableId: ExcalidrawTableElement["id"];
+      kind: "columnSelect";
+      columnId: string;
+    };
+
+/**
+ * One in-flight table structure gesture (phase-1.md:80-83, :91-97, :99-119),
+ * armed on pointer down and living on `PointerDownState`. Everything is
+ * judged against the snapshots taken at arm time, so previews never
+ * accumulate rounding drift, and Esc restores the arm-time scene verbatim.
+ */
+export type TablePointerGesture =
+  | {
+      kind: "scale";
+      tableId: string;
+      handleType: "se";
+      /** the table's bounds at pointer down: [x1, y1, x2, y2] */
+      startBounds: [number, number, number, number];
+      /** the corner that stays fixed while the subtree scales */
+      anchor: { x: number; y: number };
+      /** subtree ids the scale preview may touch (exact restore on cancel) */
+      subtreeIds: readonly string[];
+      /** scene snapshot at pointer down (source of every per-frame preview) */
+      snapshotElements: Map<string, ExcalidrawElement>;
+      preparedScale: PreparedTableUniformScale;
+      /** Last factor applied to the scene; the initial scene is at scale 1. */
+      previewScale: number;
+    }
+  | {
+      kind: "moveRow";
+      tableId: string;
+      rowId: string;
+    }
+  | {
+      kind: "moveColumn";
+      tableId: string;
+      columnId: string;
+    }
+  | {
+      kind: "resizeRow" | "resizeColumn";
+      tableId: string;
+      /** the row/column whose bottom/right edge is dragged */
+      id: string;
+      /** the grid at pointer down */
+      startTable: TableDataV1;
+      /** subtree member positions (and owning rows) at pointer down */
+      startMembers: Map<string, { x: number; y: number; ownerId: string }>;
+      /** members after the resized boundary, resolved once at pointer down */
+      affectedMembers: readonly string[];
+      resizedCellIds: readonly string[];
+      startIndex: number;
+      startSize: number;
+      startOffset: number;
+      /** the pointer, in table-local coordinates, at pointer down */
+      startLocal: { x: number; y: number };
+      /** scene snapshot at pointer down for the traceless Esc restore */
+      startElements: readonly ExcalidrawElement[];
+    }
+  | {
+      kind: "insertRow" | "insertColumn";
+      tableId: string;
+      boundaryIndex: number;
+      /** scene coords at pointer down, for the click-vs-drag check */
+      origin: { x: number; y: number };
+    };
 
 /**
  * The pointing device the wheel mappings are tuned for. `auto` is reserved
@@ -395,6 +525,44 @@ export interface AppState {
     anchor: "start" | "end" | "label";
   } | null;
   frameToHighlight: NonDeleted<ExcalidrawFrameLikeElement> | null;
+  /**
+   * The table cell under the pointer — the shared table-hover channel. The
+   * cell highlight this phase; element drop-target highlighting reuses it in
+   * the next phase. Paired with the tool-gated update in
+   * `maybeUpdateTableCellHighlightOnPointerMove`.
+   */
+  highlightedTableCell: {
+    tableId: ExcalidrawTableElement["id"];
+    cellId: string;
+  } | null;
+  /**
+   * The selected table row or column (phase-1.md:78): highlight + the outer
+   * reorder grip. Its own selection channel — selecting a row/column does not
+   * select the table element, so Delete reaches the row/column command
+   * instead of deleting the whole table.
+   */
+  tableRowColSelection: TableRowColSelection | null;
+  /**
+   * The structure affordance under the pointer: a row/column grip, a resize
+   * separator or an insertion boundary (phase-1.md:80, :82). Hover-only; the
+   * gesture itself lives in `PointerDownState["tableGesture"]`.
+   */
+  tableStructureHover: TableRowColStructureHover | null;
+  /**
+   * The blue insertion/move-target boundary line plus its plus mark
+   * (phase-1.md:82): shown while hovering an insertion zone and while a
+   * row/column reorder drag is in flight. The offset is the same value the
+   * commit judges against — preview and commit share one computation.
+   */
+  tableStructurePreview: {
+    tableId: ExcalidrawTableElement["id"];
+    kind: "row" | "column";
+    /** boundary position in table-local coordinates */
+    offset: number;
+    /** insertion array index, or the final index for a reorder */
+    boundaryIndex: number;
+    source: "insert" | "move";
+  } | null;
   frameRendering: {
     enabled: boolean;
     name: boolean;
@@ -1126,6 +1294,7 @@ export type UIOptions = Partial<{
   tools: {
     image: boolean;
     mindmap?: boolean;
+    table?: boolean;
   };
   /**
    * Optionally control the editor form factor and desktop UI mode from the host app.
@@ -1230,6 +1399,11 @@ export type AppClassProperties = {
 
   setAppState: App["setAppState"];
 
+  /** table row/column structure commands (P1-5b, phase-1.md:91-97) */
+  deleteSelectedTableRowCol: App["deleteSelectedTableRowCol"];
+  moveSelectedTableRowCol: App["moveSelectedTableRowCol"];
+  insertTableRowCol: App["insertTableRowCol"];
+
   isInteractionEnabled: App["isInteractionEnabled"];
   isNavigationEnabled: App["isNavigationEnabled"];
 };
@@ -1271,6 +1445,13 @@ export type PointerDownState = Readonly<{
       hasChanged: boolean;
     } | null;
   };
+  /**
+   * The in-flight table structure gesture, if any (row/column reorder,
+   * separator resize, insertion click, whole-table uniform scale). Armed on
+   * pointer down; nested object so handlers can mutate it (the outer type is
+   * readonly).
+   */
+  tableGesture: { active: TablePointerGesture | null };
   resize: {
     // Handle when resizing, might change during the pointer interaction
     handleType: MaybeTransformHandleType;

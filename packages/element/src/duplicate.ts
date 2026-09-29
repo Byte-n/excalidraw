@@ -22,8 +22,13 @@ import {
 import {
   bindElementsToFramesAfterDuplication,
   getContainingFrame,
-  getFrameChildren,
 } from "./frame";
+
+import {
+  getContainerSubtreeElements,
+  getTableSubtreeElements,
+  regenerateTableIds,
+} from "./tableContainer";
 
 import { normalizeElementOrder } from "./sortElements";
 
@@ -36,6 +41,7 @@ import {
   isFrameLikeElement,
   isMindmapEdgeElement,
   isMindmapNodeElement,
+  isTableElement,
 } from "./typeChecks";
 
 import { getBoundTextElement, getContainerElement } from "./textElement";
@@ -234,12 +240,6 @@ export const duplicateElements = (
 
   elements = normalizeElementOrder(elements);
 
-  const getChildrenWithBoundText = (frameId: string) =>
-    getFrameChildren(elements, frameId).flatMap((child) => {
-      const boundText = getBoundTextElement(child, elementsMap);
-      return boundText ? [child, boundText] : [child];
-    });
-
   const elementsWithDuplicates: ExcalidrawElement[] = elements.slice();
 
   // helper functions
@@ -328,6 +328,14 @@ export const duplicateElements = (
       .map((el) => el.id),
   );
 
+  // the complete subtree of a duplicated table rides as one contiguous
+  // operation unit (phase-1.md:68)
+  const tableIdsToDuplicate = new Set(
+    elements
+      .filter((el) => _idsOfElementsToDuplicate.has(el.id) && isTableElement(el))
+      .map((el) => el.id),
+  );
+
   for (const element of elements) {
     if (processedIds.has(element.id)) {
       continue;
@@ -345,7 +353,14 @@ export const duplicateElements = (
       const groupElements = getElementsInGroup(elements, groupId).flatMap(
         (element) =>
           isFrameLikeElement(element) && !preserveFrameChildrenOrder
-            ? [...getChildrenWithBoundText(element.id), element]
+            ? [
+                ...getContainerSubtreeElements(
+                  elements,
+                  element.id,
+                  elementsMap,
+                ),
+                element,
+              ]
             : [element],
       );
 
@@ -369,6 +384,44 @@ export const duplicateElements = (
       continue;
     }
 
+    // table duplication
+    // -------------------------------------------------------------------------
+
+    // cell members are copied together with their table, never on their own
+    if (
+      element.containerRef?.kind === "tableCell" &&
+      tableIdsToDuplicate.has(element.containerRef.elementId)
+    ) {
+      continue;
+    }
+
+    if (isTableElement(element)) {
+      const tableId = element.id;
+
+      const tableSubtree = getTableSubtreeElements(
+        elements,
+        tableId,
+        elementsMap,
+      );
+
+      const targetIndex = findLastIndex(elementsWithDuplicates, (el) => {
+        return (
+          el.id === tableId ||
+          (el.containerRef?.kind === "tableCell" &&
+            el.containerRef.elementId === tableId) ||
+          (isBoundToContainer(el) &&
+            elementsMap.get(el.containerId)?.containerRef?.elementId ===
+              tableId)
+        );
+      });
+
+      insertBeforeOrAfterIndex(
+        targetIndex,
+        copyElements([...tableSubtree, element]),
+      );
+      continue;
+    }
+
     if (isFrameLikeElement(element)) {
       const frameId = element.id;
 
@@ -380,7 +433,11 @@ export const duplicateElements = (
         continue;
       }
 
-      const frameChildren = getChildrenWithBoundText(frameId);
+      const frameChildren = getContainerSubtreeElements(
+        elements,
+        frameId,
+        elementsMap,
+      );
 
       const targetIndex = findLastIndex(elementsWithDuplicates, (el) => {
         return (
@@ -460,10 +517,27 @@ export const duplicateElements = (
     duplicateElementsMap as NonDeletedSceneElementsMap,
   );
 
+  // regenerate table structure ids (phase-1.md:69): every row, column and
+  // cell of a duplicated table is fresh, so descendants' `tableCell` refs
+  // can be remapped to the copied structure
+  const tableCellIdMap = new Map<string, string>();
+  for (let i = 0; i < duplicatedElements.length; i++) {
+    const original = origElements[i];
+    const duplicate = duplicatedElements[i];
+    if (isTableElement(original) && isTableElement(duplicate)) {
+      const { table, cellIdMap } = regenerateTableIds(duplicate.table);
+      Object.assign(duplicate, { table });
+      for (const [origCellId, nextCellId] of cellIdMap) {
+        tableCellIdMap.set(origCellId, nextCellId);
+      }
+    }
+  }
+
   bindElementsToFramesAfterDuplication(
     elementsWithDuplicates,
     origElements,
     origIdToDuplicateId,
+    tableCellIdMap,
   );
 
   if (opts.overrides) {

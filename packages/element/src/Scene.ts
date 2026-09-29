@@ -10,21 +10,25 @@ import {
 } from "@excalidraw/common";
 import { isNonDeletedElement } from "@excalidraw/element";
 import {
-  assertValidFrameLikeContainerRefs,
+  assertValidContainerRefs,
+  isExcalidrawElement,
   isFrameLikeElement,
+  isTableElement,
   isTextElement,
-} from "@excalidraw/element";
-import { isExcalidrawElement } from "@excalidraw/element";
-import { getElementsInGroup } from "@excalidraw/element";
+  validateContainerRef,
+} from "./typeChecks";
+import { getElementsInGroup } from "./groups";
+// 场景在包 barrel 完成初始化前就可能被加载（循环导入），
+// 运行时依赖与 transform.ts 一致改为直接从兄弟模块导入。
 import {
   syncInvalidIndices,
   syncMovedIndices,
   validateFractionalIndices,
-} from "@excalidraw/element";
+} from "./fractionalIndex";
 
-import { getSelectedElements } from "@excalidraw/element";
+import { getSelectedElements } from "./selection";
 
-import { mutateElement, type ElementUpdate } from "@excalidraw/element";
+import { mutateElement, type ElementUpdate } from "./mutateElement";
 
 import type {
   ExcalidrawElement,
@@ -48,6 +52,10 @@ import {
   registerFrameChildrenIndex,
   unregisterFrameChildrenIndex,
 } from "./frameChildrenIndex";
+import {
+  registerTableChildrenIndex,
+  unregisterTableChildrenIndex,
+} from "./tableChildrenIndex";
 import { getMindmapHiddenElementIds } from "./mindmap";
 
 import type { AppState } from "../../excalidraw/types";
@@ -308,10 +316,16 @@ export class Scene {
 
     if (!options?.skipValidation) {
       validateIndicesThrottled(_nextElements);
-      assertValidFrameLikeContainerRefs(_nextElements);
+      assertValidContainerRefs(_nextElements);
     }
 
     unregisterFrameChildrenIndex(
+      this.elements,
+      this.elementsMap,
+      this.nonDeletedElements,
+      this.nonDeletedElementsMap,
+    );
+    unregisterTableChildrenIndex(
       this.elements,
       this.elementsMap,
       this.nonDeletedElements,
@@ -333,6 +347,12 @@ export class Scene {
     this.frames = nextFrameLikes;
     this.nonDeletedFramesLikes = getNonDeletedElements(this.frames).elements;
     registerFrameChildrenIndex(
+      this.elements,
+      this.elementsMap,
+      this.nonDeletedElements,
+      this.nonDeletedElementsMap,
+    );
+    registerTableChildrenIndex(
       this.elements,
       this.elementsMap,
       this.nonDeletedElements,
@@ -368,6 +388,12 @@ export class Scene {
 
   destroy() {
     unregisterFrameChildrenIndex(
+      this.elements,
+      this.elementsMap,
+      this.nonDeletedElements,
+      this.nonDeletedElementsMap,
+    );
+    unregisterTableChildrenIndex(
       this.elements,
       this.elementsMap,
       this.nonDeletedElements,
@@ -473,10 +499,6 @@ export class Scene {
   ) {
     const elementsMap = this.getNonDeletedElementsMap();
 
-    if ("frameId" in updates) {
-      throw new Error(`Unsupported frameId field on ${element.id}`);
-    }
-
     if (isTextElement(element)) {
       const containerId =
         "containerId" in updates ? updates.containerId : element.containerId;
@@ -488,28 +510,7 @@ export class Scene {
     }
 
     if ("containerRef" in updates && updates.containerRef !== undefined) {
-      const containerRef = updates.containerRef;
-      if (!containerRef || typeof containerRef !== "object") {
-        throw new Error(`Invalid container reference on ${element.id}`);
-      }
-      if (
-        typeof containerRef.elementId !== "string" ||
-        containerRef.elementId.length === 0
-      ) {
-        throw new Error(`Invalid container reference on ${element.id}`);
-      }
-      const parent = elementsMap.get(containerRef.elementId);
-      if (
-        containerRef.kind !== "frameLike" ||
-        isFrameLikeElement(element) ||
-        !parent ||
-        parent.isDeleted ||
-        !isFrameLikeElement(parent)
-      ) {
-        throw new Error(
-          `Invalid container reference on ${element.id}: ${containerRef.elementId}`,
-        );
-      }
+      validateContainerRef(element, updates.containerRef, elementsMap);
     }
 
     if (

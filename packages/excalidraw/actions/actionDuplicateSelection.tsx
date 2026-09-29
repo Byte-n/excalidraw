@@ -78,16 +78,22 @@ export const actionDuplicateSelection = register({
       idsOfElementsToDuplicate: arrayToMap(elementsToDuplicate),
       appState,
       randomizeSeed: true,
-      overrides: ({ origElement, origIdToDuplicateId }) => {
-        const duplicateFrameId =
+      overrides: ({ duplicateElement, origElement, origIdToDuplicateId }) => {
+        const duplicateParentId =
           origElement.containerRef?.elementId &&
           origIdToDuplicateId.get(origElement.containerRef?.elementId);
         return {
           x: origElement.x + DEFAULT_GRID_SIZE / 2,
           y: origElement.y + DEFAULT_GRID_SIZE / 2,
           containerRef:
-            duplicateFrameId !== undefined
-              ? { kind: "frameLike", elementId: duplicateFrameId }
+            // a copied table member keeps the ref already remapped to the
+            // copied table's structure (regenerated ids); a graphic copied
+            // without its table gets re-judged at the new position instead
+            // of dangling toward the source table (phase-1.md:69)
+            origElement.containerRef?.kind === "tableCell"
+              ? duplicateElement.containerRef
+              : duplicateParentId !== undefined
+              ? { kind: "frameLike", elementId: duplicateParentId }
               : origElement.containerRef,
         };
       },

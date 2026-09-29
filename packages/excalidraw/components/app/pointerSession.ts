@@ -52,12 +52,16 @@ import {
   isBindableElement,
   isTextElement,
   isStickyNoteElement,
+  isTableElement,
   getNormalizedDimensions,
   isInvisiblySmallElement,
   getStickyNoteMinSize,
   getCommonFrameId,
+  getCommonTableCellId,
   getFrameChildren,
   addElementsToFrame,
+  addElementsToTableCell,
+  updateTableCellMembershipOfSelectedElements,
   replaceAllElementsInFrame,
   removeElementsFromFrame,
   getElementsInResizingFrame,
@@ -115,6 +119,7 @@ import {
 import * as gestureController from "./gesture";
 
 import { getCompositeControlPointLocal } from "./compositeShapeControls";
+import * as tableController from "./table";
 
 import type { UnsubscribeCallback } from "../../types";
 
@@ -141,6 +146,7 @@ export type InteractionState = {
   plainPasteToastShown: boolean;
   lastPointerUp: (() => void) | null;
   eraserButtonCleanup: (() => void) | null;
+  isTableGestureActive: boolean;
 };
 
 export const createInteractionState = (): InteractionState => ({
@@ -156,6 +162,7 @@ export const createInteractionState = (): InteractionState => ({
   plainPasteToastShown: false,
   lastPointerUp: null,
   eraserButtonCleanup: null,
+  isTableGestureActive: false,
 });
 
 export const resetTapTwice = gestureController.resetTapTwice;
@@ -168,6 +175,7 @@ export const resetInteractionState = (app: {
   state.isDraggingScrollBar = false;
   state.lastPointerUp = null;
   state.eraserButtonCleanup = null;
+  state.isTableGestureActive = false;
   if (state.tappedTwiceTimer) {
     app.ownerWindow.clearTimeout(state.tappedTwiceTimer);
   }
@@ -279,7 +287,10 @@ export const attachPointerSessionListeners = (
     app.ownerWindow.addEventListener(EVENT.POINTER_MOVE, onPointerMove);
     app.ownerWindow.addEventListener(EVENT.POINTER_UP, onPointerUp);
     app.ownerWindow.addEventListener(EVENT.POINTER_CANCEL, onPointerUp);
-    app.ownerWindow.addEventListener(EVENT.KEYDOWN, onKeyDown);
+    // keydown runs in the capture phase so the gesture's Esc-cancel (and the
+    // mindmap/resize session handlers) see the key before the App-level
+    // actionManager, whose matched actions stop propagation on the way back
+    app.ownerWindow.addEventListener(EVENT.KEYDOWN, onKeyDown, true);
     app.ownerWindow.addEventListener(EVENT.KEYUP, onKeyUp);
     pointerDownState.eventListeners.onMove = onPointerMove;
     pointerDownState.eventListeners.onUp = onPointerUp;
@@ -290,6 +301,28 @@ export const attachPointerSessionListeners = (
 
 export type PointerSessionApp = {
   state: AppState;
+};
+
+const suspendHoverForTableGesture = (
+  app: PointerApp,
+  pointerDownState: PointerDownState,
+) => {
+  if (!pointerDownState.tableGesture.active) {
+    return;
+  }
+  app.interactionState.isTableGestureActive = true;
+  app.mindmap.clearHover();
+  if (
+    app.state.highlightedTableCell ||
+    app.state.tableStructureHover ||
+    Object.keys(app.state.hoveredElementIds).length
+  ) {
+    app.setState({
+      highlightedTableCell: null,
+      tableStructureHover: null,
+      hoveredElementIds: {},
+    });
+  }
 };
 
 export const handleCanvasPointerDown = (
@@ -589,7 +622,21 @@ export const handleCanvasPointerDown = (
 
   app.clearSelectionIfNotUsingSelection();
 
-  if (app.handleSelectionOnPointerDown(event, pointerDownState)) {
+  if (app.armTableStructureGestureOnPointerDown(pointerDownState)) {
+    // a structure zone owns this gesture: outer-frame affordances beat cells
+    // and element selection (phase-1.md:85); the shared pointer session
+    // listeners still attach so move/up/Esc all flow through
+    suspendHoverForTableGesture(app, pointerDownState);
+    attachPointerSessionListeners(app, event, pointerDownState);
+    return;
+  }
+
+  const selectionHandled = app.handleSelectionOnPointerDown(
+    event,
+    pointerDownState,
+  );
+  suspendHoverForTableGesture(app, pointerDownState);
+  if (selectionHandled) {
     return;
   }
 
@@ -756,6 +803,8 @@ export const handleCanvasPointerDown = (
       pointerDownState,
       app.state.activeTool.type,
     );
+  } else if (app.state.activeTool.type === TOOL_TYPE.table) {
+    app.createTableElementOnPointerDown(pointerDownState);
   } else if (app.state.activeTool.type === "laser") {
     app.laserTrails.startPath(
       pointerDownState.lastCoords.x,
@@ -839,7 +888,29 @@ export const maybeOpenContextMenuAfterPointerDownOnTouchDevices = (
       // if the touch is not moving
       app.interactionState.touchTimeout = app.ownerWindow.setTimeout(() => {
         app.interactionState.touchTimeout = 0;
-        if (!app.interactionState.invalidateContextMenu && canOpenMindmapMenu) {
+        if (app.interactionState.invalidateContextMenu) {
+          return;
+        }
+        const structureHover =
+          tableController.getTableStructureHoverAtSceneCoords(app, scenePoint);
+        if (
+          structureHover?.kind === "rowSelect" ||
+          structureHover?.kind === "columnSelect"
+        ) {
+          app.setState({
+            tableRowColSelection: {
+              tableId: structureHover.tableId,
+              kind: structureHover.kind === "rowSelect" ? "row" : "column",
+              id:
+                structureHover.kind === "rowSelect"
+                  ? structureHover.rowId
+                  : structureHover.columnId,
+            },
+            tableStructureHover: null,
+          });
+          return;
+        }
+        if (canOpenMindmapMenu) {
           app.handleCanvasContextMenu(event);
         }
       }, TOUCH_CTX_MENU_TIMEOUT);
@@ -882,6 +953,7 @@ export const initialPointerDownState = (
         return acc;
       }, new Map() as PointerDownState["originalElements"]),
     compositeControl: { active: null },
+    tableGesture: { active: null },
     resize: {
       handleType: false,
       isResizing: false,
@@ -928,6 +1000,19 @@ export const onKeyDownFromPointerDownHandler = (
     if (app.mindmap.handlePointerKeyDown(pointerDownState, event)) {
       return;
     }
+    if (event.key === KEYS.ESCAPE && app.cancelTableGesture(pointerDownState)) {
+      app.interactionState.isTableGestureActive = false;
+      // Esc tears the gesture down from its arm-time snapshots, tracelessly;
+      // consume the key so the App-level deselection does not also fire
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (pointerDownState.tableGesture.active) {
+      // a table gesture owns the pointer: modifier keys just shape the next
+      // preview frame, they must not start a generic drag/resize
+      return;
+    }
     if (app.maybeHandleResize(pointerDownState, event)) {
       return;
     }
@@ -942,6 +1027,9 @@ export const onKeyUpFromPointerDownHandler = (
   return withBatchedUpdates((event: KeyboardEvent) => {
     // Prevents focus from escaping excalidraw tab
     event.key === KEYS.ALT && event.preventDefault();
+    if (pointerDownState.tableGesture.active) {
+      return;
+    }
     if (app.maybeHandleResize(pointerDownState, event)) {
       return;
     }
@@ -970,6 +1058,10 @@ export const onPointerMoveFromPointerDownHandler = (
     }
 
     if (app.mindmap.shouldBlockNativePointer(pointerDownState)) {
+      return;
+    }
+
+    if (app.handleTableGestureMove(pointerDownState, pointerCoords)) {
       return;
     }
 
@@ -1851,6 +1943,7 @@ export const onPointerUpFromPointerDownHandler = (
     if (pointerDownState.eventListeners.onMove) {
       pointerDownState.eventListeners.onMove.flush();
     }
+    app.interactionState.isTableGestureActive = false;
 
     // an armed bucket fill commits only on a GENUINE pointer up. The
     // missing-pointer-up cleanup replays app handler with the pointer
@@ -1884,6 +1977,7 @@ export const onPointerUpFromPointerDownHandler = (
       resizingElement: null,
       selectionElement: null,
       frameToHighlight: null,
+      highlightedTableCell: null,
       elementsToHighlight: null,
       cursorButton: "up",
       snapLines: updateStable(prevState.snapLines, []),
@@ -2092,6 +2186,7 @@ export const onPointerUpFromPointerDownHandler = (
     app.ownerWindow.removeEventListener(
       EVENT.KEYDOWN,
       pointerDownState.eventListeners.onKeyDown!,
+      true,
     );
     app.ownerWindow.removeEventListener(
       EVENT.KEYUP,
@@ -2114,6 +2209,10 @@ export const onPointerUpFromPointerDownHandler = (
     }
 
     if (mindmapHandled) {
+      return;
+    }
+
+    if (app.finalizeTableGestureOnPointerUp(pointerDownState, sceneCoords)) {
       return;
     }
 
@@ -2341,6 +2440,10 @@ export const onPointerUpFromPointerDownHandler = (
       return;
     }
 
+    if (newElement && isTableElement(newElement)) {
+      app.finalizeNewTableElementOnPointerUp(newElement);
+    }
+
     if (
       activeTool.type !== "selection" &&
       newElement &&
@@ -2429,10 +2532,18 @@ export const onPointerUpFromPointerDownHandler = (
       } else {
         // update the relationships between selected elements and frames
         const selectedElements = app.scene.getSelectedElements(app.state);
-        const topLayerFrame = app.getTopLayerFrameAtSceneCoords(sceneCoords, {
-          currentFrameId: getCommonFrameId(selectedElements),
-          excludeElementIds: app.state.selectedElementIds,
-        });
+
+        // Table cells are judged first (phase-1.md:87): the drop lands in a
+        // cell, else in a frame, else on the canvas. The preview and this
+        // commit resolve through the very same function.
+        const commonTableId = getCommonTableCellId(selectedElements);
+        const cellDropTarget = app.getTableCellDropTargetAtSceneCoords(
+          sceneCoords,
+          {
+            excludeElementIds: app.state.selectedElementIds,
+            currentTableId: commonTableId,
+          },
+        );
         let nextElements = app.scene.getElementsMapIncludingDeleted();
 
         const updateGroupIdsAfterEditingGroup = (
@@ -2474,6 +2585,52 @@ export const onPointerUpFromPointerDownHandler = (
             });
           }
         };
+
+        if (cellDropTarget) {
+          // a group's direct members each record the same cell; mindmap
+          // subtrees ride with their root (expanded inside the write)
+          const elementsForCell = app.state.editingGroupId
+            ? [
+                ...new Set(
+                  selectedElements.flatMap((element) =>
+                    element.groupIds.length
+                      ? getElementsInGroup(
+                          nextElements,
+                          element.groupIds[element.groupIds.length - 1],
+                        )
+                      : [element],
+                  ),
+                ),
+              ]
+            : selectedElements;
+
+          nextElements = addElementsToTableCell(
+            nextElements,
+            elementsForCell,
+            cellDropTarget.table,
+            cellDropTarget.cellId,
+          );
+        }
+
+        // drag-out: a cell ref names the direct parent, so it clears when
+        // the drop did not land in its own table (frames must not absorb
+        // tableCell chains via `getContainingFrame` ascent)
+        nextElements = updateTableCellMembershipOfSelectedElements(
+          nextElements,
+          selectedElements,
+          sceneCoords,
+          cellDropTarget
+            ? {
+                tableId: cellDropTarget.table.id,
+                cellId: cellDropTarget.cellId,
+              }
+            : null,
+        );
+
+        const topLayerFrame = app.getTopLayerFrameAtSceneCoords(sceneCoords, {
+          currentFrameId: getCommonFrameId(selectedElements),
+          excludeElementIds: app.state.selectedElementIds,
+        });
 
         if (topLayerFrame && !app.state.selectedElementIds[topLayerFrame.id]) {
           const elementsToAdd = selectedElements.filter((element) =>

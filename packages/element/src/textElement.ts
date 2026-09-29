@@ -39,7 +39,7 @@ import {
   isTextElement,
 } from "./typeChecks";
 
-import { getMindmapShapeId } from "./mindmap";
+import { getMindmapShapeId, isMindmapLayoutFrozen } from "./mindmap";
 
 import { isNonDeletedElement } from ".";
 
@@ -189,7 +189,14 @@ export const redrawTextBoundingBox = (
     const maxContainerWidth = getBoundTextMaxWidth(container, textElement);
 
     const isComposite = container.type === "composite_shape";
-    if (isComposite && getCompositeShapeTextFitMode(container) === "fixed") {
+    // a table-scaled mindmap node keeps its frozen geometry (phase-1:113) and
+    // follows the same fixed-fit pipeline as a fixed composite shape: the
+    // displayed text wraps/truncates to the current bounds while
+    // `originalText` keeps every character
+    const isFixedFit =
+      (isComposite && getCompositeShapeTextFitMode(container) === "fixed") ||
+      (container.type === "mindmap-node" && isMindmapLayoutFrozen(container));
+    if (isFixedFit) {
       boundTextUpdates.text = truncateTextToBounds(
         textElement.originalText,
         getFontString(textElement),
@@ -207,8 +214,7 @@ export const redrawTextBoundingBox = (
         boundTextUpdates.width = metrics.width;
       }
     }
-    const isAdaptive =
-      !isComposite || getCompositeShapeTextFitMode(container) === "auto";
+    const isAdaptive = !isFixedFit;
     let layoutContainer = container;
     if (isAdaptive && !isArrowElement(container)) {
       const nextDimensions = isComposite
@@ -328,9 +334,15 @@ export const handleBindTextResize = (
       nextWidth = metrics.width;
     }
     // increase height in case text element height exceeds
+    // a table-scaled mindmap node keeps its frozen geometry (phase-1:113):
+    // like a fixed composite shape it never grows back and only truncates
+    // the displayed text, keeping `originalText` intact
+    const isFrozenMindmapNode =
+      container.type === "mindmap-node" && isMindmapLayoutFrozen(container);
     if (
-      container.type === "composite_shape" &&
-      getCompositeShapeTextFitMode(container) === "fixed"
+      (container.type === "composite_shape" &&
+        getCompositeShapeTextFitMode(container) === "fixed") ||
+      isFrozenMindmapNode
     ) {
       text = truncateTextToBounds(
         textElement.originalText,

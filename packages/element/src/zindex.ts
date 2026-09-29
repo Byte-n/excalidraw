@@ -5,10 +5,11 @@ import { isFiniteNumber } from "@excalidraw/math";
 import type { AppState } from "@excalidraw/excalidraw/types";
 import type { GlobalPoint } from "@excalidraw/math";
 
-import { isFrameLikeElement, isTextElement } from "./typeChecks";
+import { isFrameLikeElement, isTableElement, isTextElement } from "./typeChecks";
 import { getElementsInGroup } from "./groups";
 import { syncMovedIndices } from "./fractionalIndex";
 import { getSelectedElements } from "./selection";
+import { getTableSubtreeElements } from "./tableContainer";
 import { getBoundTextElement, getContainerElement } from "./textElement";
 import { getHoveredElementForBinding } from "./collision";
 
@@ -585,6 +586,32 @@ function shiftElementsAccountingForFrames(
   );
   const allElementsMap = arrayToMap(allElements);
 
+  // a table whose subtree moves as one contiguous unit: every cell member,
+  // background text and nested table rides with it (phase-1.md:68)
+  const fullySelectedTables = new Set<string>();
+  for (const element of allElements) {
+    if (elementsToMove.has(element.id) && isTableElement(element)) {
+      fullySelectedTables.add(element.id);
+    }
+  }
+  if (fullySelectedTables.size > 0) {
+    for (const tableId of fullySelectedTables) {
+      for (const member of getTableSubtreeElements(
+        allElements,
+        tableId,
+        allElementsMap,
+      )) {
+        const existing = elementsToMove.get(member.id);
+        if (!existing) {
+          elementsToMove.set(
+            member.id,
+            member as NonDeletedExcalidrawElement,
+          );
+        }
+      }
+    }
+  }
+
   const frameAwareContiguousElementsToMove: {
     regularElements: ExcalidrawElement[];
     frameChildren: Map<ExcalidrawFrameLikeElement["id"], ExcalidrawElement[]>;
@@ -603,7 +630,9 @@ function shiftElementsAccountingForFrames(
       const frameId = getFrameId(element, allElementsMap);
       if (
         isFrameLikeElement(element) ||
-        (frameId && fullySelectedFrames.has(frameId))
+        isTableElement(element) ||
+        (frameId && fullySelectedFrames.has(frameId)) ||
+        (frameId && fullySelectedTables.has(frameId))
       ) {
         frameAwareContiguousElementsToMove.regularElements.push(element);
       } else if (!frameId) {
