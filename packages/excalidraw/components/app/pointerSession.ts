@@ -2672,6 +2672,18 @@ export const onPointerUpFromPointerDownHandler = (
       app.store.scheduleCapture();
     }
 
+    // P01.1 (phase-1.1.md): fitContent tables regrow with the committed
+    // content change — drag in/out or across cells, member move, resize and
+    // rotate land here. Expansion joins the triggering edit's capture.
+    const fitRefitElementIds = resizingElement
+      ? [...Object.keys(app.state.selectedElementIds), resizingElement.id]
+      : Object.keys(app.state.selectedElementIds);
+    if (
+      tableController.refitFitContentTablesForElements(app, fitRefitElementIds)
+    ) {
+      app.store.scheduleCapture();
+    }
+
     if (resizingElement && isInvisiblySmallElement(resizingElement)) {
       // update the store snapshot, so that invisible elements are not captured by the store
       app.updateScene({

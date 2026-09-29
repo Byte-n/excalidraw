@@ -55,6 +55,8 @@ import { getShortcutKey } from "../../shortcut";
 import { tryParseSpreadsheet } from "../../charts";
 import { isSidebarDockedAtom } from "../Sidebar/Sidebar";
 
+import * as tableController from "./table";
+
 import type App from "../App";
 import type { ClipboardData, PastedMixedContent } from "../../clipboard";
 import type { BinaryFiles } from "../../types";
@@ -377,6 +379,17 @@ export const addElementsFromPasteOrLibrary = (
 
   if (opts.files) {
     app["addMissingFiles"](opts.files);
+  }
+
+  // P01.1 (phase-1.1.md): fitContent tables regrow with the pasted content —
+  // one expansion inside the paste's single capture
+  if (
+    tableController.refitFitContentTablesForElements(
+      app,
+      duplicatedElements.map((element) => element.id),
+    )
+  ) {
+    app.store.scheduleCapture();
   }
 
   const nextElementsToSelect =

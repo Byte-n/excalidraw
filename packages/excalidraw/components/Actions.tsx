@@ -449,6 +449,10 @@ export const SelectedShapeActions = ({
 
       {predicates.opacity && renderAction("changeOpacity")}
 
+      {/* table sizing (P01.1): both panels return null for non-table selections */}
+      {renderAction("tableSizingMode")}
+      {renderAction("tableResetMinSizes")}
+
       {predicates.layers && <LayersFieldset renderAction={renderAction} />}
 
       {predicates.align && (

@@ -5,10 +5,7 @@ import { syncMovedIndices } from "./fractionalIndex";
 import { getBoundTextElement } from "./textElement";
 import { mutateElement } from "./mutateElement";
 import { getMindmapElementsForSelection } from "./mindmap";
-import {
-  getTableCellAtPoint,
-  getTableCellBounds,
-} from "./tableStruct";
+import { getTableCellAtPoint, getTableCellBounds } from "./tableStruct";
 import { getIndexedFrameChildren } from "./frameChildrenIndex";
 
 import {
@@ -338,7 +335,8 @@ export const getTableSubtreeElements = getContainerSubtreeElements;
 
 /**
  * Copy-time regeneration of a table's structure ids (phase-1.md:69): rows,
- * columns and cells all get fresh ids while keeping sizes and the
+ * columns and cells all get fresh ids while keeping sizes, the sizing mode
+ * and minima (phase-1.1: copies preserve mode and floors), and the
  * (rowId, columnId) intersection structure. The returned map remaps each
  * original cell id to its duplicate, for the `tableCell` refs of copied
  * descendants.
@@ -356,13 +354,16 @@ export const regenerateTableIds = (
   return {
     table: {
       schemaVersion: table.schemaVersion,
+      ...(table.sizingMode !== undefined
+        ? { sizingMode: table.sizingMode }
+        : {}),
       rows: table.rows.map((row) => ({
+        ...row,
         id: rowIdMap.get(row.id)!,
-        height: row.height,
       })),
       columns: table.columns.map((column) => ({
+        ...column,
         id: columnIdMap.get(column.id)!,
-        width: column.width,
       })),
       cells: table.cells.map((cell) => ({
         id: cellIdMap.get(cell.id)!,
@@ -434,10 +435,7 @@ export const getTableCellSnapScope = (
     }
     if (!scope) {
       scope = { tableId: ref.elementId, cellId: ref.cellId };
-    } else if (
-      scope.tableId !== ref.elementId ||
-      scope.cellId !== ref.cellId
-    ) {
+    } else if (scope.tableId !== ref.elementId || scope.cellId !== ref.cellId) {
       return null;
     }
   }
@@ -452,7 +450,13 @@ export const getTableCellSnapScope = (
   if (!table || table.isDeleted || !isTableElement(table)) {
     return null;
   }
-  if (!getTableCellAtPoint(table, table.x + table.width / 2, table.y + table.height / 2)) {
+  if (
+    !getTableCellAtPoint(
+      table,
+      table.x + table.width / 2,
+      table.y + table.height / 2,
+    )
+  ) {
     return null;
   }
   return { table, cellId: scope.cellId };

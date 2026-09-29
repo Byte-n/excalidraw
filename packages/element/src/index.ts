@@ -104,6 +104,7 @@ export * from "./store";
 export * from "./stickyNote";
 export * from "./tableChildrenIndex";
 export * from "./tableContainer";
+export * from "./tableFitContent";
 export * from "./tableOps";
 export * from "./tableRender";
 export * from "./tableScale";
