@@ -53,6 +53,8 @@ import { isPointHittingTextAutoResizeHandle } from "../../textAutoResizeHandle";
 import { textWysiwyg } from "../../wysiwyg/textWysiwyg";
 import { withBatchedUpdates } from "../../reactUtils";
 
+import * as tableController from "./table";
+
 import type App from "../App";
 
 import type { AppState } from "../../types";
@@ -197,6 +199,9 @@ export const handleTextWysiwyg = (
       if (isDeleted) {
         fixBindingsAfterDeletion(app.scene.getNonDeletedElements(), [element]);
       }
+      // P01.1 (phase-1.1.md): fitContent tables regrow with the submitted
+      // text — one expansion inside the text edit's single capture
+      tableController.refitFitContentTablesForElements(app, [element.id]);
       if (!isDeleted || isExistingElement || didCreateMindmapNode) {
         app.store.scheduleCapture();
       }

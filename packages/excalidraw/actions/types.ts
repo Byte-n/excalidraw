@@ -154,7 +154,9 @@ export type ActionName =
   | "tableMoveRowUp"
   | "tableMoveRowDown"
   | "tableMoveColumnLeft"
-  | "tableMoveColumnRight";
+  | "tableMoveColumnRight"
+  | "tableSizingMode"
+  | "tableResetMinSizes";
 
 export type PanelComponentProps = {
   elements: readonly ExcalidrawElement[];

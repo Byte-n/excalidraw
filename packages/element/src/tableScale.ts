@@ -320,12 +320,27 @@ const getSubtreeMinScale = (subtree: TableSubtree): number => {
   return minScale;
 };
 
+/**
+ * Uniform scale of the persisted grid: sizes and `fitContent` manual minima
+ * scale by the same factor (phase-1.1), so the minima keep bounding later
+ * content edits at the scaled geometry. The mode field rides along untouched.
+ */
 const scaleTableData = (table: TableDataV1, scale: number): TableDataV1 => ({
   schemaVersion: 1,
-  rows: table.rows.map((row) => ({ id: row.id, height: row.height * scale })),
+  ...(table.sizingMode !== undefined ? { sizingMode: table.sizingMode } : {}),
+  rows: table.rows.map((row) => ({
+    ...row,
+    height: row.height * scale,
+    ...(row.minHeight !== undefined
+      ? { minHeight: row.minHeight * scale }
+      : {}),
+  })),
   columns: table.columns.map((column) => ({
-    id: column.id,
+    ...column,
     width: column.width * scale,
+    ...(column.minWidth !== undefined
+      ? { minWidth: column.minWidth * scale }
+      : {}),
   })),
   // cells keep their ids and styles; their geometry derives from the grid
   cells: table.cells,

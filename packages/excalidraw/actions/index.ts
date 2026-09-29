@@ -49,6 +49,8 @@ export {
   actionTableMoveRowDown,
   actionTableMoveColumnLeft,
   actionTableMoveColumnRight,
+  actionTableSizingMode,
+  actionTableResetMinSizes,
 } from "./actionTableStructure";
 
 export {
