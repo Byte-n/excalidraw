@@ -10,12 +10,7 @@ import {
   isSelectionLikeTool,
   TABLE_STRUCTURE_INSERTION_OFFSET,
 } from "@excalidraw/common";
-import {
-  pointDistance,
-  pointFrom,
-  pointRotateRads,
-  type Radians,
-} from "@excalidraw/math";
+import { pointDistance, pointFrom } from "@excalidraw/math";
 import {
   MIN_TABLE_COLUMN_WIDTH,
   MIN_TABLE_ROW_HEIGHT,
@@ -522,7 +517,6 @@ const createTableCellBackgroundText = (
     verticalAlign: VERTICAL_ALIGN.MIDDLE,
     containerId: null,
     autoResize: false,
-    angle: table.angle,
     locked: false,
     containerRef: {
       kind: "tableCell",
@@ -532,23 +526,15 @@ const createTableCellBackgroundText = (
     },
   });
 
-  // Scene geometry from the cell's local bounds: rotate the cell center
-  // around the table center — the same pivot the grid renders and
-  // hit-testing uses — then center the fixed-size box on it, so the box
-  // covers the rotated cell exactly.
-  const cellCenter = pointRotateRads(
-    pointFrom(
-      table.x + bounds.x + bounds.width / 2,
-      table.y + bounds.y + bounds.height / 2,
-    ),
-    pointFrom(table.x + table.width / 2, table.y + table.height / 2),
-    table.angle,
-  );
+  // Center the fixed-size box on the cell in scene coordinates, so the box
+  // covers the cell exactly.
+  const cellCenterX = table.x + bounds.x + bounds.width / 2;
+  const cellCenterY = table.y + bounds.y + bounds.height / 2;
   text = newElementWith(text, {
     width: bounds.width,
     height: bounds.height,
-    x: cellCenter[0] - bounds.width / 2,
-    y: cellCenter[1] - bounds.height / 2,
+    x: cellCenterX - bounds.width / 2,
+    y: cellCenterY - bounds.height / 2,
   });
 
   app.scene.insertElementsAtIndex(
@@ -610,25 +596,16 @@ export const TABLE_STRUCTURE_ZONE_SIZE = 24;
 
 type TableLocalPoint = { x: number; y: number };
 
-/** Scene point -> table-local point (inverse rotation around the center). */
+/** Scene point -> table-local point. */
 const getTableLocalPoint = (
   table: NonDeleted<ExcalidrawTableElement>,
   sceneX: number,
   sceneY: number,
 ): TableLocalPoint => {
-  const center = pointFrom(
-    table.x + table.width / 2,
-    table.y + table.height / 2,
-  );
-  const local = pointRotateRads(
-    pointFrom(sceneX, sceneY),
-    center,
-    -table.angle as Radians,
-  );
-  return { x: local[0] - table.x, y: local[1] - table.y };
+  return { x: sceneX - table.x, y: sceneY - table.y };
 };
 
-/** Table-local cell bounds in scene geometry (accounts for the rotation). */
+/** Cell center in scene geometry. */
 const getTableCellSceneCenter = (
   table: NonDeleted<ExcalidrawTableElement>,
   cellId: string,
@@ -637,15 +614,10 @@ const getTableCellSceneCenter = (
   if (!bounds) {
     return null;
   }
-  const center = pointRotateRads(
-    pointFrom(
-      table.x + bounds.x + bounds.width / 2,
-      table.y + bounds.y + bounds.height / 2,
-    ),
-    pointFrom(table.x + table.width / 2, table.y + table.height / 2),
-    table.angle,
-  );
-  return { x: center[0], y: center[1] };
+  return {
+    x: table.x + bounds.x + bounds.width / 2,
+    y: table.y + bounds.y + bounds.height / 2,
+  };
 };
 
 /**

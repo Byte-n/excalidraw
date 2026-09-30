@@ -42,6 +42,7 @@ import {
   getTransformHandleTypeFromCoords,
   isLineElement,
   isSimpleArrow,
+  isTableElement,
   isPointInElement,
   maxBindingDistance_simple,
   getSnapOutlineMidPoint,
@@ -1197,7 +1198,9 @@ export const handleCanvasPointerMove = (
         transformHandleType === "rotation" &&
         selectedElements.some(
           (element) =>
-            isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+            isMindmapNodeElement(element) ||
+            isMindmapEdgeElement(element) ||
+            isTableElement(element),
         )
       )
     ) {

@@ -1,4 +1,4 @@
-import { pointFrom, pointRotateRads, type Radians } from "@excalidraw/math";
+import type { Radians } from "@excalidraw/math";
 
 import { API } from "@excalidraw/excalidraw/tests/helpers/api";
 import { THEME } from "@excalidraw/common";
@@ -32,14 +32,13 @@ const tableCellRef = (
 ) => ({ kind: "tableCell" as const, elementId: table.id, cellId, role });
 
 /** 2x2 table (200 x 150): row heights [100, 50], column widths [80, 120]. */
-const createNonUniformTable = (extra: { angle?: Radians } = {}) => {
+const createNonUniformTable = () => {
   const element = newTableElement({
     type: "table",
     x: 0,
     y: 0,
     rowCount: 2,
     columnCount: 2,
-    angle: extra.angle,
   });
   const [row0, row1] = element.table.rows;
   const [column0, column1] = element.table.columns;
@@ -84,37 +83,19 @@ describe("getTableCellAtPoint", () => {
     expect(getTableCellAtPoint(table, 300, 300)).toBe(null);
   });
 
-  it("accounts for a 90° rotation", () => {
-    const table = createNonUniformTable({ angle: (Math.PI / 2) as Radians });
-    // local (0, 0) rotates to scene (175, -25) around the center (100, 75)
-    expect(getTableCellAtPoint(table, 175, -25)).toBe(table.table.cells[0].id);
-    // local center of the bottom-right cell maps into the top quadrant
-    expect(getTableCellAtPoint(table, 50, 75)).toBe(table.table.cells[3].id);
-    // the unrotated top-left corner no longer hits the rotated grid
-    expect(getTableCellAtPoint(table, 0, 0)).toBe(null);
-  });
+  it("ignores the angle: tables never rotate", () => {
+    const table = newTableElement({
+      type: "table",
+      x: 0,
+      y: 0,
+      angle: (Math.PI / 4) as Radians,
+    });
 
-  it("accounts for a 45° rotation", () => {
-    const angle = (Math.PI / 4) as Radians;
-    const table = createNonUniformTable({ angle });
-    const center = pointFrom(100, 75);
-
-    // round-trip: rotate known local points into scene space and expect the
-    // inverse transform to land back on the same cell
-    for (const [index, localX, localY] of [
-      [0, 40, 50],
-      [1, 100, 50],
-      [2, 40, 120],
-      [3, 100, 120],
-    ] as const) {
-      const scene = pointRotateRads(pointFrom(localX, localY), center, angle);
-      expect(getTableCellAtPoint(table, scene[0], scene[1])).toBe(
-        table.table.cells[index].id,
-      );
-    }
-
-    // inside the bounding box, outside the rotated grid
-    expect(getTableCellAtPoint(table, 100, -40)).toBe(null);
+    expect(table.angle).toBe(0);
+    // hit-testing maps scene points straight onto the grid, whatever an
+    // incoming angle claimed
+    expect(getTableCellAtPoint(table, 0, 0)).not.toBe(null);
+    expect(getTableCellAtPoint(table, table.width, table.height)).toBe(null);
   });
 });
 

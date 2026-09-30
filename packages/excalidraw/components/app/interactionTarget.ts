@@ -4,6 +4,7 @@ import {
   getElementWithTransformHandleType,
   getTransformHandleTypeFromCoords,
   isLinearElement,
+  isTableElement,
   LinearElementEditor,
   type TransformHandleType,
 } from "@excalidraw/element";
@@ -214,7 +215,7 @@ export const resolveInteractionTarget = (
       (event?.pointerType || "mouse") as any,
       app.editorInterface,
     );
-    if (handle) {
+    if (handle && !(handle === "rotation" && selected.some(isTableElement))) {
       return { kind: "transformHandle", elementId: selected[0].id, handle };
     }
   } else if (selected.length === 1) {

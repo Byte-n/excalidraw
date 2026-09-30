@@ -217,24 +217,14 @@ describe("table canvas rendering", () => {
     expect(JSON.stringify(after)).not.toBe(before);
   });
 
-  it("draws a rotated table's grid in its local frame", () => {
-    const table = API.createElement({ type: "table", angle: Math.PI / 4 });
+  it("draws the grid without any rotation", () => {
+    const table = API.createElement({ type: "table" });
     const { draw } = setup([table]);
     const calls = draw();
 
-    // rotation originates from the element center (240, 84)
-    expect(callsOf(calls, "translate")).toEqual(
-      expect.arrayContaining([
-        [240, 84],
-        [-240, -84],
-        [0, 0],
-      ]),
-    );
-    expect(
-      callsOf(calls, "rotate").some(
-        (args) => Math.abs((args[0] as number) - Math.PI / 4) < 1e-9,
-      ),
-    ).toBe(true);
+    // tables never rotate (00-overview.md invariant #10): no context.rotate
+    // call may appear on the static render path
+    expect(callsOf(calls, "rotate")).toEqual([]);
   });
 
   it("clips the table and its cell members to the containing frame", () => {
