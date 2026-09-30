@@ -26,9 +26,14 @@ import type {
 } from "./types";
 
 /**
- * Uniform-scale command for a table subtree (phase-1:99-119). Everything
- * scales by one factor `s`: row heights, column widths, the table's
- * width/height, and every descendant element's geometry and font sizes.
+ * Scale command for a table subtree (phase-1:99-119). Two factor shapes:
+ *
+ * - uniform (`computeTableUniformScale`): everything scales by one factor
+ *   `s` — row heights, column widths, the table's width/height, and every
+ *   descendant element's geometry and font sizes;
+ * - single-axis (`computeTableAxisScale`): one factor per axis — a side
+ *   stretch scales one grid dimension and the matching geometry axis while
+ *   fonts stay untouched (the same rule as row/column resizing).
  *
  * The result is a pure update bag per element id — applying it to the scene,
  * keeping the undo entry atomic, and re-laying out bound text inside its
@@ -81,6 +86,14 @@ export type TableUniformScaleResult = {
    * individually stops shrinking while the rest keeps going (phase-1:117).
    */
   clampedScale: number;
+};
+
+export type TableAxisScaleResult = {
+  /** One update per subtree element, every id exactly once. */
+  updates: Map<string, ElementUpdate<NonDeletedExcalidrawElement>>;
+  /** The factor actually applied per axis, each clamped at its own floor. */
+  clampedScaleX: number;
+  clampedScaleY: number;
 };
 
 /**
@@ -180,7 +193,16 @@ type TableSubtree = {
 
 export type PreparedTableUniformScale = {
   subtree: TableSubtree;
+  /**
+   * The uniform floor: every geometric floor of both axes plus the font
+   * floor (fonts follow only a uniform factor), so a uniform scale keeps
+   * one factor for the whole subtree (phase-1:117).
+   */
   minScale: number;
+  /** Largest X-axis floor: widths only (columns, element widths). */
+  minScaleX: number;
+  /** Largest Y-axis floor: heights only (rows, element heights). */
+  minScaleY: number;
   anchor: { x: number; y: number };
 };
 
@@ -257,48 +279,63 @@ const collectTableSubtree = (
 };
 
 /**
- * Smallest scale the whole subtree can shrink to, as the largest per-element
- * floor (a floor is the scale at which that element reaches its minimum).
- * Floors, in order of relevance:
+ * Smallest scale the whole subtree can shrink to, per axis. Floors, in order
+ * of relevance:
  *
  * - tables: every row/column at `MIN_TABLE_ROW_HEIGHT`/`MIN_TABLE_COLUMN_WIDTH`
  *   (per row/column, so non-uniform grids clamp on their thinnest line);
- * - texts: `MIN_FONT_SIZE` per font size — sizes scale by `s` directly;
  * - sticky notes: one line at the label's font ceiling plus padding
  *   (`getStickyNoteScaleFloor`, mirroring `getStickyNoteMinSize`);
  * - composite shapes with an explicit adaptive-text minimum
  *   (`textFitMinWidth`/`textFitMinHeight`): those preserved dimensions;
- * - everything: `MIN_WIDTH_OR_HEIGHT` so no element degenerates to zero.
+ * - everything: `MIN_WIDTH_OR_HEIGHT` so no element degenerates to zero;
+ * - texts: `MIN_FONT_SIZE` per font size — a uniform-only floor, since
+ *   single-axis stretches keep fonts untouched.
+ *
+ * `minScale` (uniform) is the largest floor of both axes plus the font
+ * floor; the per-axis values gate a single-axis stretch on its own axis.
  */
-const getSubtreeMinScale = (subtree: TableSubtree): number => {
-  let minScale = 0;
-  const consider = (floor: number) => {
-    if (Number.isFinite(floor) && floor > minScale) {
-      minScale = floor;
+const getSubtreeMinScales = (
+  subtree: TableSubtree,
+): { minScale: number; minScaleX: number; minScaleY: number } => {
+  let minScaleX = 0;
+  let minScaleY = 0;
+  let fontFloor = 0;
+  const considerWidth = (floor: number) => {
+    if (Number.isFinite(floor) && floor > minScaleX) {
+      minScaleX = floor;
+    }
+  };
+  const considerHeight = (floor: number) => {
+    if (Number.isFinite(floor) && floor > minScaleY) {
+      minScaleY = floor;
     }
   };
 
   for (const element of subtree.ordered) {
     if (element.width > 0) {
-      consider(MIN_WIDTH_OR_HEIGHT / element.width);
+      considerWidth(MIN_WIDTH_OR_HEIGHT / element.width);
     }
     if (element.height > 0) {
-      consider(MIN_WIDTH_OR_HEIGHT / element.height);
+      considerHeight(MIN_WIDTH_OR_HEIGHT / element.height);
     }
 
     if (element.type === "table") {
-      for (const row of element.table.rows) {
-        consider(MIN_TABLE_ROW_HEIGHT / row.height);
-      }
       for (const column of element.table.columns) {
-        consider(MIN_TABLE_COLUMN_WIDTH / column.width);
+        considerWidth(MIN_TABLE_COLUMN_WIDTH / column.width);
+      }
+      for (const row of element.table.rows) {
+        considerHeight(MIN_TABLE_ROW_HEIGHT / row.height);
       }
     } else if (element.type === "text") {
-      consider(MIN_FONT_SIZE / element.fontSize);
+      const floor = MIN_FONT_SIZE / element.fontSize;
+      if (Number.isFinite(floor) && floor > fontFloor) {
+        fontFloor = floor;
+      }
     } else if (element.type === "stickynote") {
       const floor = getStickyNoteScaleFloor(subtree.boundTexts.get(element.id));
-      consider(floor.width / element.width);
-      consider(floor.height / element.height);
+      considerWidth(floor.width / element.width);
+      considerHeight(floor.height / element.height);
     } else if (element.type === "composite_shape") {
       // `getCompositeShapeTextFitMinSize` falls back to the live size, which
       // would freeze every shape against shrinking; only explicit minima count
@@ -306,26 +343,34 @@ const getSubtreeMinScale = (subtree: TableSubtree): number => {
         element.textFitMinWidth !== undefined &&
         element.textFitMinWidth > 0
       ) {
-        consider(element.textFitMinWidth / element.width);
+        considerWidth(element.textFitMinWidth / element.width);
       }
       if (
         element.textFitMinHeight !== undefined &&
         element.textFitMinHeight > 0
       ) {
-        consider(element.textFitMinHeight / element.height);
+        considerHeight(element.textFitMinHeight / element.height);
       }
     }
   }
 
-  return minScale;
+  return {
+    minScaleX,
+    minScaleY,
+    minScale: Math.max(minScaleX, minScaleY, fontFloor),
+  };
 };
 
-const scaleTableData = (table: TableDataV1, scale: number): TableDataV1 => ({
+const scaleTableData = (
+  table: TableDataV1,
+  scaleX: number,
+  scaleY: number,
+): TableDataV1 => ({
   schemaVersion: 1,
-  rows: table.rows.map((row) => ({ id: row.id, height: row.height * scale })),
+  rows: table.rows.map((row) => ({ id: row.id, height: row.height * scaleY })),
   columns: table.columns.map((column) => ({
     id: column.id,
-    width: column.width * scale,
+    width: column.width * scaleX,
   })),
   // cells keep their ids and styles; their geometry derives from the grid
   cells: table.cells,
@@ -356,35 +401,41 @@ type TableElementUpdate = {
 };
 
 /**
- * Scales one subtree element by `scale` around `anchor`. Font sizes scale by
- * the factor directly: `measureFontSizeFromWidth` derives a font from a width
- * ratio for non-uniform handles, which under a single uniform factor
- * degenerates to `fontSize × s` — without its measurement passes and
- * container lookups, which a pure data pass cannot afford.
+ * Scales one subtree element by one factor per axis around `anchor`. Under a
+ * uniform factor (`scaleFonts`) font sizes scale by the factor directly:
+ * `measureFontSizeFromWidth` derives a font from a width ratio for
+ * non-uniform handles, which under a single uniform factor degenerates to
+ * `fontSize × s` — without its measurement passes and container lookups,
+ * which a pure data pass cannot afford. A single-axis stretch keeps every
+ * font size (the row/column-resize rule: geometry distorts, text does not).
  */
 const computeElementScaleUpdate = (
   element: ExcalidrawElement,
-  scale: number,
+  scaleX: number,
+  scaleY: number,
   anchor: { x: number; y: number },
   {
     persistTextModes,
     hostsById,
+    scaleFonts,
   }: {
     persistTextModes: boolean;
     hostsById: Map<string, ExcalidrawElement>;
+    /** fonts follow the factor only under a uniform scale */
+    scaleFonts: boolean;
   },
 ): ElementUpdate<NonDeletedExcalidrawElement> => {
-  const nextWidth = element.width * scale;
-  const nextHeight = element.height * scale;
+  const nextWidth = element.width * scaleX;
+  const nextHeight = element.height * scaleY;
   const update: TableElementUpdate = {
-    x: anchor.x + (element.x - anchor.x) * scale,
-    y: anchor.y + (element.y - anchor.y) * scale,
+    x: anchor.x + (element.x - anchor.x) * scaleX,
+    y: anchor.y + (element.y - anchor.y) * scaleY,
     width: nextWidth,
     height: nextHeight,
   };
 
   if (element.type === "table") {
-    const nextTable = scaleTableData(element.table, scale);
+    const nextTable = scaleTableData(element.table, scaleX, scaleY);
     update.table = nextTable;
     // keep the element invariant exact: the size is the scaled grid's sums,
     // not an independently scaled float drifting from them
@@ -393,7 +444,9 @@ const computeElementScaleUpdate = (
   }
 
   if (element.type === "text") {
-    update.fontSize = element.fontSize * scale;
+    if (scaleFonts) {
+      update.fontSize = element.fontSize * scaleX;
+    }
     // standalone texts (and cell background texts, which are unbound too)
     // freeze their box so the scaled text does not grow the cell back;
     // bound texts keep their `autoResize` and their container
@@ -402,17 +455,18 @@ const computeElementScaleUpdate = (
     }
     if (
       persistTextModes &&
+      scaleFonts &&
       typeof element.baseFontSize === "number" &&
       hostsById.get(element.containerId ?? "")?.type === "stickynote"
     ) {
       // frozen sticky-note layout: the label's font ceiling scales with the
       // note so later edits do not relayout it back to the old size
-      update.baseFontSize = element.baseFontSize * scale;
+      update.baseFontSize = element.baseFontSize * scaleX;
     }
   }
 
   if (element.type === "stickynote" && persistTextModes) {
-    update.baseHeight = element.baseHeight * scale;
+    update.baseHeight = element.baseHeight * scaleY;
   }
 
   if (
@@ -468,15 +522,63 @@ const computeElementScaleUpdate = (
 };
 
 /**
- * Computes the uniform-scale updates for `tableId`'s whole subtree. Returns
- * `null` when the id does not resolve to a (non-deleted) table element.
+ * Computes the scale updates for `tableId`'s whole subtree under one factor
+ * per axis. Returns `null` when the id does not resolve to a (non-deleted)
+ * table element.
  *
  * Nested tables are enumerated once through their parent's cell children and
  * scale exactly once; their rows, columns and descendants are computed under
- * the same single factor. Updates are keyed by element id with every id
- * appearing at most once, so applying them cannot double-transform a bound
- * text reached through both its host and a scan.
+ * the same factors. Updates are keyed by element id with every id appearing
+ * at most once, so applying them cannot double-transform a bound text
+ * reached through both its host and a scan.
+ *
+ * Each axis clamps independently at its own floor, so a single-axis stretch
+ * never stops on the other axis's floors. Fonts stay untouched: the factor
+ * distorts geometry, not text.
  */
+export const computeTableAxisScale = (
+  elements: ElementsMapOrArray,
+  tableId: string,
+  scaleX: number,
+  scaleY: number,
+  { anchor, persistTextModes = false }: TableUniformScaleOptions = {},
+  prepared?: PreparedTableUniformScale,
+): TableAxisScaleResult | null => {
+  if (
+    !Number.isFinite(scaleX) ||
+    scaleX <= 0 ||
+    !Number.isFinite(scaleY) ||
+    scaleY <= 0
+  ) {
+    throw new Error(`Invalid table scale: ${scaleX} x ${scaleY}`);
+  }
+
+  const context =
+    prepared ?? prepareTableUniformScale(elements, tableId, anchor);
+  if (!context) {
+    return null;
+  }
+
+  const { subtree } = context;
+  const clampedScaleX = Math.max(scaleX, context.minScaleX);
+  const clampedScaleY = Math.max(scaleY, context.minScaleY);
+  const base = anchor ?? context.anchor;
+
+  const updates = new Map<string, ElementUpdate<NonDeletedExcalidrawElement>>();
+  for (const element of subtree.ordered) {
+    updates.set(
+      element.id,
+      computeElementScaleUpdate(element, clampedScaleX, clampedScaleY, base, {
+        persistTextModes,
+        hostsById: subtree.byId,
+        scaleFonts: false,
+      }),
+    );
+  }
+
+  return { updates, clampedScaleX, clampedScaleY };
+};
+
 export const computeTableUniformScale = (
   elements: ElementsMapOrArray,
   tableId: string,
@@ -495,6 +597,8 @@ export const computeTableUniformScale = (
   }
 
   const { subtree } = context;
+  // one factor for the whole subtree: clamping up to the largest floor of
+  // both axes (plus the font floor) keeps every ratio intact (phase-1:117)
   const clampedScale = Math.max(scale, context.minScale);
   const base = anchor ?? context.anchor;
 
@@ -502,9 +606,10 @@ export const computeTableUniformScale = (
   for (const element of subtree.ordered) {
     updates.set(
       element.id,
-      computeElementScaleUpdate(element, clampedScale, base, {
+      computeElementScaleUpdate(element, clampedScale, clampedScale, base, {
         persistTextModes,
         hostsById: subtree.byId,
+        scaleFonts: true,
       }),
     );
   }
@@ -525,7 +630,7 @@ export const prepareTableUniformScale = (
   const subtree = collectTableSubtree(elements, table);
   return {
     subtree,
-    minScale: getSubtreeMinScale(subtree),
+    ...getSubtreeMinScales(subtree),
     anchor: anchor ?? { x: table.x, y: table.y },
   };
 };

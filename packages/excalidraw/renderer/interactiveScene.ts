@@ -1385,12 +1385,17 @@ const renderTableStructureHover = (
         break;
       }
       case "rowResize": {
-        const offset = table.table.rows
-          .slice(
-            0,
-            table.table.rows.findIndex((row) => row.id === hover.rowId) + 1,
-          )
+        const rowIndex = table.table.rows.findIndex(
+          (row) => row.id === hover.rowId,
+        );
+        const offsetAfter = table.table.rows
+          .slice(0, rowIndex + 1)
           .reduce((acc, row) => acc + row.height, 0);
+        // a start border drags the row's top edge, an end border the bottom
+        const offset =
+          hover.edge === "start"
+            ? offsetAfter - table.table.rows[rowIndex].height
+            : offsetAfter;
         context.beginPath();
         context.moveTo(table.x, table.y + offset);
         context.lineTo(table.x + table.width, table.y + offset);
@@ -1400,14 +1405,17 @@ const renderTableStructureHover = (
         break;
       }
       case "columnResize": {
-        const offset = table.table.columns
-          .slice(
-            0,
-            table.table.columns.findIndex(
-              (column) => column.id === hover.columnId,
-            ) + 1,
-          )
+        const columnIndex = table.table.columns.findIndex(
+          (column) => column.id === hover.columnId,
+        );
+        const offsetAfter = table.table.columns
+          .slice(0, columnIndex + 1)
           .reduce((acc, column) => acc + column.width, 0);
+        // a start border drags the column's left edge, an end border the right
+        const offset =
+          hover.edge === "start"
+            ? offsetAfter - table.table.columns[columnIndex].width
+            : offsetAfter;
         context.beginPath();
         context.moveTo(table.x + offset, table.y);
         context.lineTo(table.x + offset, table.y + table.height);
@@ -1460,10 +1468,6 @@ const renderTableStructureHover = (
           table.y - indicatorOffset,
           "column",
         );
-        break;
-      }
-      case "rowSelect":
-      case "columnSelect": {
         break;
       }
       case "rowGrip": {

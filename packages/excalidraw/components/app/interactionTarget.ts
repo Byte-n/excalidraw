@@ -25,7 +25,6 @@ export type ContainerControl =
   | "resize"
   | "insert"
   | "reorder"
-  | "select"
   | "border"
   | "body";
 
@@ -106,8 +105,6 @@ const tableProvider: ContainerInteractionProvider = {
         ? "reorder"
         : hover.kind === "rowInsert" || hover.kind === "columnInsert"
         ? "insert"
-        : hover.kind === "rowSelect" || hover.kind === "columnSelect"
-        ? "select"
         : hover.kind === "rowResize" || hover.kind === "columnResize"
         ? "resize"
         : "body";
