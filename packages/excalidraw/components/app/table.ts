@@ -1366,18 +1366,8 @@ export const maybeArmTableScaleGesture = (
       : undefined;
   // side anchors: the opposite side's midpoint stays fixed on the dragged axis
   const anchor = cornerAnchors[handleType as "nw" | "ne" | "sw" | "se"] ?? {
-    x:
-      handleType === "e"
-        ? x1
-        : handleType === "w"
-        ? x2
-        : (x1 + x2) / 2,
-    y:
-      handleType === "s"
-        ? y1
-        : handleType === "n"
-        ? y2
-        : (y1 + y2) / 2,
+    x: handleType === "e" ? x1 : handleType === "w" ? x2 : (x1 + x2) / 2,
+    y: handleType === "s" ? y1 : handleType === "n" ? y2 : (y1 + y2) / 2,
   };
 
   const preparedScale = prepareTableUniformScale(
@@ -2251,4 +2241,157 @@ export const moveSelectedTableRowCol = (
   app.store.scheduleCapture();
   app.scene.triggerUpdate();
   return true;
+};
+
+/**
+ * Selection merge (P01.2): a selected table stands for its whole semantic
+ * subtree — cell members, nested tables, bound texts and mindmap edges are
+ * removed from the selection, so a box-select over "table + members" never
+ * highlights or transforms a member twice. The membership walk is the very
+ * subtree the scale command transforms, so the merged selection transforms
+ * exactly the members the table's update bag owns.
+ */
+export const normalizeTableSelection = (
+  app: TableApp,
+  selectedElementIds: Readonly<Record<string, true>>,
+): Record<string, true> => {
+  const elementsMap = app.scene.getNonDeletedElementsMap();
+  const tableIds = Object.keys(selectedElementIds).filter((id) => {
+    const element = elementsMap.get(id);
+    return element && isTableElement(element);
+  });
+  if (!tableIds.length) {
+    return selectedElementIds as Record<string, true>;
+  }
+
+  const elements = app.scene.getNonDeletedElements();
+  const nextSelectedElementIds = { ...selectedElementIds };
+  for (const tableId of tableIds) {
+    const prepared = prepareTableUniformScale(elements, tableId);
+    if (!prepared) {
+      continue;
+    }
+    for (const member of prepared.subtree.ordered) {
+      if (member.id !== tableId) {
+        delete nextSelectedElementIds[member.id];
+      }
+    }
+  }
+  return nextSelectedElementIds;
+};
+
+/**
+ * Esc during a multi-selection resize that contains a table (P01.2): restore
+ * the arm-time scene verbatim — `originalElements` snapshots every element,
+ * unselected subtree members included — and disarm the resize so later moves
+ * or modifier keys cannot restart it. No history, no text-mode residue
+ * (phase-1.2.md 行为规格: 取消）.
+ */
+export const cancelTableResize = (
+  app: TableApp,
+  pointerDownState: PointerDownState,
+): boolean => {
+  if (!pointerDownState.resize.isResizing) {
+    return false;
+  }
+  const selectedElements = app.scene.getSelectedElements(app.state);
+  if (!selectedElements.some(isTableElement)) {
+    return false;
+  }
+
+  const restored = app.scene
+    .getElementsIncludingDeleted()
+    .map(
+      (element) => pointerDownState.originalElements.get(element.id) ?? element,
+    );
+  app.scene.replaceAllElements(restored);
+  app.scene.triggerUpdate();
+  // disarm: the remaining key/move handlers must not restart the resize
+  pointerDownState.resize.isResizing = false;
+  pointerDownState.resize.handleType = false;
+  app.setState({ isResizing: false });
+  return true;
+};
+
+/**
+ * Pointer up of a multi-selection resize (P01.2): every preview frame ran
+ * with `persistTextModes: false`, so the text-mode switches (frozen text
+ * boxes, fixed composite shapes, frozen mindmap layouts, sticky layout
+ * fields) persist here — once, and only when the gesture actually changed
+ * the table's size, mirroring the single-table gesture's release semantics
+ * (phase-1.md:115). The applied factors read back from the committed
+ * geometry: the preview's clamped scale is exactly what landed. Only the
+ * mode fields are written — the geometry is already in the scene, and
+ * re-writing it would needlessly evict render caches.
+ */
+export const persistTableTextModesAfterResize = (
+  app: TableApp,
+  pointerDownState: PointerDownState,
+): void => {
+  const selectedElements = app.scene.getSelectedElements(app.state);
+  const coveredIds = new Set<string>();
+  for (const element of selectedElements) {
+    if (!isTableElement(element)) {
+      continue;
+    }
+    const orig = pointerDownState.originalElements.get(element.id);
+    if (!orig || orig.type !== "table" || coveredIds.has(element.id)) {
+      continue;
+    }
+    const scaleX = orig.width > 0 ? element.width / orig.width : 1;
+    const scaleY = orig.height > 0 ? element.height / orig.height : 1;
+    if (scaleX === 1 && scaleY === 1) {
+      // 无实际尺寸变化：模式不切换，也不产生历史记录
+      continue;
+    }
+
+    const uniform = Math.abs(scaleX - scaleY) < 1e-9 * Math.max(scaleX, scaleY);
+    const result = uniform
+      ? computeTableUniformScale(
+          pointerDownState.originalElements,
+          element.id,
+          (scaleX + scaleY) / 2,
+          { persistTextModes: true },
+        )
+      : computeTableAxisScale(
+          pointerDownState.originalElements,
+          element.id,
+          scaleX,
+          scaleY,
+          { persistTextModes: true },
+        );
+    if (!result) {
+      continue;
+    }
+
+    const modeFields = [
+      "autoResize",
+      "baseFontSize",
+      "baseHeight",
+      "textFitMode",
+      "layoutFrozen",
+    ] as const;
+    for (const [id, update] of result.updates) {
+      coveredIds.add(id);
+      const bag = update as Record<string, unknown>;
+      const modeUpdate: Record<string, unknown> = {};
+      for (const field of modeFields) {
+        if (field in bag) {
+          modeUpdate[field] = bag[field];
+        }
+      }
+      if (!Object.keys(modeUpdate).length) {
+        continue;
+      }
+      const member = app.scene.getNonDeletedElement(id);
+      if (member) {
+        app.scene.mutateElement(
+          member as ExcalidrawElement,
+          modeUpdate as ElementUpdate<NonDeletedExcalidrawElement>,
+          { informMutation: false, isDragging: false },
+        );
+      }
+    }
+  }
+  app.scene.triggerUpdate();
 };
