@@ -16,6 +16,13 @@ import type {
 
 import { Excalidraw } from "../index";
 import * as StaticScene from "../renderer/staticScene";
+import {
+  cleanAppStateForExport,
+  clearAppStateForDatabase,
+  clearAppStateForLocalStorage,
+} from "../appState";
+import { actionFinalize } from "../actions/actionFinalize";
+import { actionDeselect } from "../actions/actionDeselect";
 import { getTableStructureHoverAtSceneCoords } from "../components/app/table";
 
 import { API } from "./helpers/api";
@@ -173,6 +180,7 @@ describe("table row/column structure", () => {
     mouseMove(grip.x, grip.y);
     mouseDown(grip.x, grip.y);
 
+    expect(h.state.containerGestureVisual).toBeNull();
     expect(h.app.interactionState.isTableGestureActive).toBe(true);
     const mindmapHover = vi.spyOn(h.app.mindmap, "handlePointerMove");
     const cellHover = vi.spyOn(
@@ -403,6 +411,223 @@ describe("table row/column structure", () => {
 
   describe("row height / column width", () => {
     it.each([
+      { axis: "row", index: 0, edge: "start", x: 280, y: 210 },
+      { axis: "column", index: 0, edge: "start", x: 210, y: 228 },
+      { axis: "row", index: 1, edge: "end", x: 300, y: 312 },
+      { axis: "column", index: 1, edge: "end", x: 520, y: 228 },
+    ] as const)(
+      "keeps the $axis $edge visual stable and paints live boundaries",
+      async ({ axis, index, edge, x, y }) => {
+        const { table } = createFixture();
+        const context = GlobalTestState.interactiveCanvas.getContext("2d")!;
+        const moveTo = vi.spyOn(context, "moveTo");
+        const lineTo = vi.spyOn(context, "lineTo");
+        const fillRect = vi.spyOn(context, "fillRect");
+        const lines: unknown[][] = [];
+        const stroke = vi.spyOn(context, "stroke").mockImplementation(() => {
+          if (context.strokeStyle === "#0076ff" && context.lineWidth === 2) {
+            lines.push([
+              moveTo.mock.calls[moveTo.mock.calls.length - 1],
+              lineTo.mock.calls[lineTo.mock.calls.length - 1],
+            ]);
+          }
+        });
+        mouseDown(x, y);
+        const visual = h.state.containerGestureVisual;
+        expect(visual).toEqual({
+          container: "table",
+          tableId: table.id,
+          axis,
+          id:
+            axis === "row"
+              ? table.table.rows[index].id
+              : table.table.columns[index].id,
+          edge,
+        });
+        expect(h.state.selectedElementIds).toEqual({});
+        expect(h.state.tableStructureHover).toBeNull();
+        await nextFrame();
+        expect(fillRect).toHaveBeenCalledWith(
+          table.x,
+          table.y - TABLE_STRUCTURE_RAIL_OFFSET - 9,
+          COLUMN_WIDTH,
+          9,
+        );
+
+        // An unexpected hover must not override the active resize visual.
+        act(() =>
+          h.app.setState({
+            tableStructureHover:
+              axis === "row"
+                ? {
+                    tableId: table.id,
+                    kind: "columnResize",
+                    columnId: table.table.columns[0].id,
+                    edge: "end",
+                  }
+                : {
+                    tableId: table.id,
+                    kind: "rowResize",
+                    rowId: table.table.rows[0].id,
+                    edge: "end",
+                  },
+          }),
+        );
+        for (const distance of [16, 2000]) {
+          lines.length = 0;
+          mouseMove(
+            axis === "column" ? x + distance : -100,
+            axis === "row" ? y + distance : -100,
+          );
+          await nextFrame();
+          expect(h.state.containerGestureVisual).toBe(visual);
+          const current = getTable();
+          const entries =
+            axis === "row" ? current.table.rows : current.table.columns;
+          const offset = entries
+            .slice(0, index + (edge === "end" ? 1 : 0))
+            .reduce(
+              (sum, entry) =>
+                sum + ("height" in entry ? entry.height : entry.width),
+              0,
+            );
+          const expected =
+            axis === "row"
+              ? [
+                  [current.x, current.y + offset],
+                  [current.x + current.width, current.y + offset],
+                ]
+              : [
+                  [current.x + offset, current.y],
+                  [current.x + offset, current.y + current.height],
+                ];
+          expect(lines).toContainEqual(expected);
+          expect(
+            lines.every(
+              (line) => JSON.stringify(line) === JSON.stringify(expected),
+            ),
+          ).toBe(true);
+        }
+        mouseUp(-100, -100);
+        expect(h.state.containerGestureVisual).toBeNull();
+        stroke.mockRestore();
+        moveTo.mockRestore();
+        lineTo.mockRestore();
+        fillRect.mockRestore();
+      },
+    );
+
+    it.each(["escape", "pointercancel", "missing up", "tool switch"])(
+      "clears resize visual and restores geometry on %s",
+      async (completion) => {
+        const { snapshot } = createFixture();
+        act(() => {
+          h.app.store.scheduleCapture();
+          h.scene.triggerUpdate();
+        });
+        const undoCount = h.history.undoStack.length;
+        mouseDown(300, 256);
+        mouseMove(300, 280);
+        await nextFrame();
+        expect(getTable().table.rows[0].height).toBe(80);
+        expect(h.state.containerGestureVisual).not.toBeNull();
+        if (completion === "escape") {
+          Keyboard.keyPress(KEYS.ESCAPE);
+        } else if (completion === "pointercancel") {
+          fireEvent.pointerCancel(GlobalTestState.interactiveCanvas, {
+            clientX: 300,
+            clientY: 280,
+          });
+        } else if (completion === "missing up") {
+          act(() => h.app.maybeCleanupAfterMissingPointerUp(null));
+        } else {
+          act(() => h.app.setActiveTool({ type: "rectangle" }));
+        }
+        expect(h.state.containerGestureVisual).toBeNull();
+        expect(getTable().table.rows.map(({ height }) => height)).toEqual(
+          snapshot.rowHeights,
+        );
+        expect(h.history.undoStack.length).toBe(undoCount);
+        expect(h.app.interactionState.isTableGestureActive).toBe(false);
+        mouseUp(300, 280);
+      },
+    );
+
+    it("clears visual after deletion invalidates the active gesture", async () => {
+      const { table } = createFixture();
+      mouseDown(300, 256);
+      act(() =>
+        h.scene.mutateElement(table as ExcalidrawTableElement, {
+          isDeleted: true,
+        }),
+      );
+      mouseMove(300, 280);
+      await nextFrame();
+      mouseUp(300, 280);
+      expect(h.state.containerGestureVisual).toBeNull();
+      expect(h.app.interactionState.isTableGestureActive).toBe(false);
+    });
+
+    it.each(["row", "column"] as const)(
+      "ignores an invalid %s resize identity",
+      async (axis) => {
+        const { table } = createFixture();
+        act(() =>
+          h.app.setState({
+            containerGestureVisual: {
+              container: "table",
+              tableId: table.id,
+              axis,
+              id: "missing",
+              edge: "start",
+            },
+          }),
+        );
+        await nextFrame();
+        expect(h.state.containerGestureVisual?.id).toBe("missing");
+      },
+    );
+
+    it.each([actionFinalize, actionDeselect])(
+      "clears visual through $name",
+      (action) => {
+        createFixture();
+        mouseDown(300, 256);
+        act(() => h.app.actionManager.executeAction(action));
+        expect(h.state.containerGestureVisual).toBeNull();
+        mouseUp(300, 256);
+      },
+    );
+
+    it("excludes resize visuals from all storage projections", () => {
+      createFixture();
+      mouseDown(300, 256);
+      expect(h.state.containerGestureVisual).not.toBeNull();
+      for (const project of [
+        cleanAppStateForExport,
+        clearAppStateForDatabase,
+        clearAppStateForLocalStorage,
+      ]) {
+        expect(project(h.state)).not.toHaveProperty("containerGestureVisual");
+      }
+      mouseUp(300, 256);
+    });
+
+    it("writes no history when a resize is released in place", () => {
+      createFixture();
+      act(() => {
+        h.app.store.scheduleCapture();
+        h.scene.triggerUpdate();
+      });
+      const undoCount = h.history.undoStack.length;
+      mouseDown(300, 256);
+      expect(h.state.containerGestureVisual).not.toBeNull();
+      mouseUp(300, 256);
+      expect(h.state.containerGestureVisual).toBeNull();
+      expect(h.history.undoStack.length).toBe(undoCount);
+    });
+
+    it.each([
       { kind: "row", x: 300, y: 256, dx: 0, dy: 24 },
       { kind: "column", x: 360, y: 228, dx: 40, dy: 0 },
     ] as const)(
@@ -416,6 +641,8 @@ describe("table row/column structure", () => {
         const renderSpy = vi.spyOn(StaticScene, "renderStaticScene");
         const undoCount = h.history.undoStack.length;
         mouseDown(x, y);
+        const visual = h.state.containerGestureVisual;
+        expect(visual?.axis).toBe(kind);
 
         for (const factor of [0.5, 1]) {
           const nonce = h.scene.getSceneNonce();
@@ -425,9 +652,11 @@ describe("table row/column structure", () => {
           expect(h.scene.getSceneNonce()).not.toBe(nonce);
           expect(renderSpy.mock.calls.length).toBeGreaterThan(renders);
           expect(h.history.undoStack.length).toBe(undoCount);
+          expect(h.state.containerGestureVisual).toBe(visual);
         }
 
         mouseUp(x + dx, y + dy);
+        expect(h.state.containerGestureVisual).toBeNull();
         expect(h.history.undoStack.length).toBe(undoCount + 1);
         expect(
           kind === "row"
@@ -668,6 +897,25 @@ describe("table row/column structure", () => {
   });
 
   describe("insert and delete", () => {
+    it("clears a stale resize visual when arming insertion", () => {
+      const { table } = createFixture();
+      API.setAppState({
+        containerGestureVisual: {
+          container: "table",
+          tableId: table.id,
+          axis: "row",
+          id: table.table.rows[0].id,
+          edge: "end",
+        },
+      });
+      mouseDown(
+        table.x - TABLE_STRUCTURE_INSERTION_OFFSET,
+        table.y + ROW_HEIGHT,
+      );
+      expect(h.state.containerGestureVisual).toBeNull();
+      mouseUp(table.x - TABLE_STRUCTURE_INSERTION_OFFSET, table.y + ROW_HEIGHT);
+    });
+
     it.each(["row", "column"] as const)(
       "keeps the %s rails visible after clicking an unselected table's grip",
       async (kind) => {
@@ -1037,6 +1285,7 @@ describe("table row/column structure", () => {
         y: nwHandle[1] + nwHandle[3] / 2,
       };
       mouseDown(start.x, start.y);
+      expect(h.state.containerGestureVisual).toBeNull();
       // drag the top-left corner inward: the subtree shrinks
       const target = { x: table.x + 20, y: table.y + 20 };
       mouseMove(target.x, target.y);
@@ -1059,10 +1308,7 @@ describe("table row/column structure", () => {
         snapshot.tableY + snapshot.tableHeight,
         5,
       );
-      expect(committed.table.columns[0].width).toBeCloseTo(
-        COLUMN_WIDTH * s,
-        5,
-      );
+      expect(committed.table.columns[0].width).toBeCloseTo(COLUMN_WIDTH * s, 5);
       expect((live(text) as ExcalidrawTextElement).fontSize).toBeCloseTo(
         snapshot.textFontSize * s,
         5,
@@ -1087,10 +1333,7 @@ describe("table row/column structure", () => {
       const committed = getTable();
       expect(committed.width).toBeCloseTo(snapshot.tableWidth * s, 5);
       expect(committed.height).toBe(snapshot.tableHeight);
-      expect(committed.table.columns[0].width).toBeCloseTo(
-        COLUMN_WIDTH * s,
-        5,
-      );
+      expect(committed.table.columns[0].width).toBeCloseTo(COLUMN_WIDTH * s, 5);
       expect(committed.table.rows[0].height).toBe(ROW_HEIGHT);
       // the right frame stays fixed
       expect(committed.x + committed.width).toBeCloseTo(

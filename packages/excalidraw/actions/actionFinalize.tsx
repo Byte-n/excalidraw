@@ -406,6 +406,7 @@ export const actionFinalize = register<FormData>({
         highlightedTableCell: null,
         tableRowColSelection: null,
         tableStructureHover: null,
+        containerGestureVisual: null,
         tableStructurePreview: null,
         selectedElementIds: isDrawShapeTool
           ? {}

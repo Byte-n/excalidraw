@@ -31,6 +31,7 @@ import {
   MINIMUM_ARROW_SIZE,
   invariant,
   getFeatureFlag,
+  isSelectionLikeTool,
 } from "@excalidraw/common";
 import {
   getCommonBounds,
@@ -1968,6 +1969,10 @@ export const onPointerUpFromPointerDownHandler = (
       pointerDownState.eventListeners.onMove.flush();
     }
     app.interactionState.isTableGestureActive = false;
+    const tableGestureCancelled =
+      (childEvent.type !== "pointerup" ||
+        !isSelectionLikeTool(app.state.activeTool.type)) &&
+      app.cancelTableGesture(pointerDownState);
 
     // an armed bucket fill commits only on a GENUINE pointer up. The
     // missing-pointer-up cleanup replays app handler with the pointer
@@ -2236,7 +2241,10 @@ export const onPointerUpFromPointerDownHandler = (
       return;
     }
 
-    if (app.finalizeTableGestureOnPointerUp(pointerDownState, sceneCoords)) {
+    if (
+      tableGestureCancelled ||
+      app.finalizeTableGestureOnPointerUp(pointerDownState, sceneCoords)
+    ) {
       return;
     }
 

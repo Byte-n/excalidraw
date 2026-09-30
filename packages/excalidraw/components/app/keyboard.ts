@@ -1144,6 +1144,9 @@ export const setActiveTool = (
         })
       : updateActiveTool(app.state, tool);
   if (nextActiveTool.type !== app.state.activeTool.type) {
+    if (app.interactionState.isTableGestureActive) {
+      app.maybeCleanupAfterMissingPointerUp(null);
+    }
     app.mindmap.cancelDrag();
   }
   if (nextActiveTool.type !== "mindmap") {
