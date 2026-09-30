@@ -61,8 +61,14 @@ import {
   isImageElement,
   isLinearElement,
   isStickyNoteElement,
+  isTableElement,
   isTextElement,
 } from "./typeChecks";
+import {
+  computeTableAxisScale,
+  computeTableUniformScale,
+  prepareTableUniformScale,
+} from "./tableScale";
 
 import { isInGroup } from "./groups";
 import {
@@ -72,6 +78,12 @@ import {
 } from "./stickyNote";
 
 import type { Scene } from "./Scene";
+
+import type {
+  PreparedTableUniformScale,
+  TableAxisScaleResult,
+  TableUniformScaleResult,
+} from "./tableScale";
 
 import type { BoundingBox } from "./bounds";
 import type {
@@ -1383,12 +1395,121 @@ export const resizeMultipleElements = (
         (item) =>
           item.latest.angle !== 0 ||
           isTextElement(item.latest) ||
-          isInGroup(item.latest),
+          isInGroup(item.latest) ||
+          // a table has no two-axis different-factor mode (P1 invariant 4):
+          // a selection containing one scales uniformly from any corner,
+          // while its side handles stay single-axis (P01.2)
+          (isTableElement(item.latest) && handleDirection.length === 2),
       );
 
     if (keepAspectRatio) {
       scaleX = scale;
       scaleY = scale;
+    }
+
+    // P01.2: selected tables scale through the table-scale command instead of
+    // the generic `{x, y, width, height}` mutation, which knows nothing of the
+    // grid invariants (`width`/`height` = row/column sums), of the semantic
+    // subtree, or of the text-mode rules. The subtree members are excluded
+    // from the generic loop below — the table's update bag owns their
+    // geometry — and nested selected tables scale once through their parent.
+    const preparedTables = new Map<string, PreparedTableUniformScale>();
+    for (const { orig } of targetElements) {
+      if (orig.type !== "table" || preparedTables.has(orig.id)) {
+        continue;
+      }
+      const prepared = prepareTableUniformScale(originalElementsMap, orig.id);
+      if (prepared) {
+        preparedTables.set(orig.id, prepared);
+      }
+    }
+    const nestedTableIds = new Set<string>();
+    for (const [tableId, prepared] of preparedTables) {
+      for (const member of prepared.subtree.ordered) {
+        if (
+          member.type === "table" &&
+          member.id !== tableId &&
+          preparedTables.has(member.id)
+        ) {
+          nestedTableIds.add(member.id);
+        }
+      }
+    }
+    for (const id of nestedTableIds) {
+      preparedTables.delete(id);
+    }
+
+    const tableSubtreeIds = new Set<string>();
+    let minTableScale = 0;
+    let minTableScaleX = 0;
+    let minTableScaleY = 0;
+    for (const prepared of preparedTables.values()) {
+      for (const member of prepared.subtree.ordered) {
+        tableSubtreeIds.add(member.id);
+      }
+      minTableScale = Math.max(minTableScale, prepared.minScale);
+      minTableScaleX = Math.max(minTableScaleX, prepared.minScaleX);
+      minTableScaleY = Math.max(minTableScaleY, prepared.minScaleY);
+    }
+
+    if (preparedTables.size > 0) {
+      // the floor feeds back into the selection scale: the whole selection
+      // stops together when a table reaches its subtree floor, keeping the
+      // elements aligned with the table (P01.2)
+      if (keepAspectRatio) {
+        scale = Math.max(scale, minTableScale);
+        scaleX = scale;
+        scaleY = scale;
+      } else {
+        if (handleDirection.includes("e") || handleDirection.includes("w")) {
+          scaleX = Math.max(scaleX, minTableScaleX);
+        }
+        if (handleDirection.includes("n") || handleDirection.includes("s")) {
+          scaleY = Math.max(scaleY, minTableScaleY);
+        }
+      }
+      // tables never flip (a mirror would reverse rows/columns and member
+      // geometry): the pointer crossing the anchor just parks the selection
+      // at the minimum size
+      flipByX = false;
+      flipByY = false;
+    }
+
+    // the command clamps to the same floors internally, so the selection
+    // scale above stays authoritative; degenerate factors skip the tables
+    // instead of throwing mid-gesture
+    const tableScaleReady = keepAspectRatio
+      ? Number.isFinite(scale) && scale > 0
+      : Number.isFinite(scaleX) &&
+        scaleX > 0 &&
+        Number.isFinite(scaleY) &&
+        scaleY > 0;
+    const tableResults: (TableUniformScaleResult | TableAxisScaleResult)[] = [];
+    if (tableScaleReady) {
+      for (const [tableId, prepared] of preparedTables) {
+        // the anchor is the selection's anchor (opposite corner, side midpoint
+        // or center), so the subtree moves in lockstep with the rest of the
+        // selection
+        const result = keepAspectRatio
+          ? computeTableUniformScale(
+              originalElementsMap,
+              tableId,
+              scale,
+              { anchor: { x: anchorX, y: anchorY } },
+              prepared,
+            )
+          : computeTableAxisScale(
+              originalElementsMap,
+              tableId,
+              scaleX,
+              scaleY,
+              { anchor: { x: anchorX, y: anchorY } },
+              prepared,
+            );
+        if (result) {
+          tableResults.push(result);
+        }
+      }
     }
 
     /**
@@ -1420,6 +1541,12 @@ export const resizeMultipleElements = (
     for (const { orig, latest } of targetElements) {
       // bounded text elements are updated along with their container elements
       if (isTextElement(orig) && isBoundToContainer(orig)) {
+        continue;
+      }
+
+      // subtree members are transformed by their table's update bag, never
+      // by the generic loop (P01.2)
+      if (tableSubtreeIds.has(orig.id)) {
         continue;
       }
 
@@ -1541,6 +1668,50 @@ export const resizeMultipleElements = (
       ExcalidrawElement["id"],
       NonDeletedExcalidrawElement
     >(elementsAndUpdates.map(({ element }) => [element.id, element]));
+
+    // apply the table update bags first, then repair bindings and bound-text
+    // layout inside the subtree — the pure command leaves those to its caller
+    // (tableScale.ts header). Subtree members join the simultaneously-updated
+    // set so arrows bound to them survive the gesture (P01.2).
+    for (const result of tableResults) {
+      for (const [id, update] of result.updates) {
+        const element = elementsMap.get(id);
+        if (!element || element.isDeleted) {
+          continue;
+        }
+        const latest = element as NonDeletedExcalidrawElement;
+        scene.mutateElement(latest, update);
+        if (!resizedElementsMap.has(id)) {
+          resizedElementsMap.set(id, latest);
+          elementsToUpdate.push(latest);
+        }
+      }
+      for (const id of result.updates.keys()) {
+        const element = elementsMap.get(id);
+        if (!element || element.isDeleted) {
+          continue;
+        }
+        updateBoundElements(element as NonDeletedExcalidrawElement, scene, {
+          simultaneouslyUpdated: elementsToUpdate,
+        });
+        // sticky notes relayout from their mode fields, which stay
+        // unpublished until pointer up — their label follows the scaled
+        // geometry instead, as in the single-table gesture
+        if (
+          !isStickyNoteElement(element) &&
+          getBoundTextElement(element, elementsMap)
+        ) {
+          handleBindTextResize(
+            element as NonDeletedExcalidrawElement,
+            scene,
+            handleDirection,
+            keepAspectRatio,
+            shouldResizeFromCenter,
+            false,
+          );
+        }
+      }
+    }
 
     for (const {
       element,

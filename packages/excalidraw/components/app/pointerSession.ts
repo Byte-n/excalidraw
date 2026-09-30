@@ -1023,6 +1023,17 @@ export const onKeyDownFromPointerDownHandler = (
       // preview frame, they must not start a generic drag/resize
       return;
     }
+    if (
+      event.key === KEYS.ESCAPE &&
+      tableController.cancelTableResize(app, pointerDownState)
+    ) {
+      // a multi-selection resize containing a table cancels from the arm-time
+      // snapshot, tracelessly; consume the key so the App-level deselection
+      // does not also fire (P01.2)
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (app.maybeHandleResize(pointerDownState, event)) {
       return;
     }
@@ -1866,7 +1877,10 @@ export const onPointerMoveFromPointerDownHandler = (
           }
 
           const normalizedSelectedElementIds =
-            app.mindmap.normalizeMindmapSelection(nextSelectedElementIds);
+            tableController.normalizeTableSelection(
+              app,
+              app.mindmap.normalizeMindmapSelection(nextSelectedElementIds),
+            );
 
           prevState = !shouldReuseSelection
             ? { ...prevState, selectedGroupIds: {}, editingGroupId: null }
@@ -3041,6 +3055,14 @@ export const onPointerUpFromPointerDownHandler = (
             ? "editor"
             : prevState.showHyperlinkPopup,
       }));
+    }
+
+    if (isResizing) {
+      // P01.2: a multi-selection resize previewed with text modes
+      // unpublished; persist them now for every table the gesture actually
+      // resized, before the release capture turns it all into one history
+      // entry
+      tableController.persistTableTextModesAfterResize(app, pointerDownState);
     }
 
     if (

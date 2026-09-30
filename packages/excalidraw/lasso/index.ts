@@ -26,6 +26,7 @@ import type {
 
 import { AnimatedTrail } from "../animatedTrail";
 import { getSelectionColor } from "../renderer/helpers";
+import * as tableController from "../components/app/table";
 
 import { getLassoSelectedElementIds } from "./utils";
 
@@ -117,7 +118,10 @@ export class LassoTrail extends AnimatedTrail {
       }
 
       const normalizedSelectedElementIds =
-        this.app.mindmap.normalizeMindmapSelection(nextSelectedElementIds);
+        tableController.normalizeTableSelection(
+          this.app,
+          this.app.mindmap.normalizeMindmapSelection(nextSelectedElementIds),
+        );
 
       const nextSelection = selectGroupsForSelectedElements(
         {

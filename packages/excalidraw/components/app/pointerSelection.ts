@@ -272,13 +272,6 @@ export const maybeHandleResize = (
     (selectedFrames.length > 0 && transformHandleType === "rotation") ||
     // Elbow arrows cannot be transformed (resized or rotated).
     (selectedElements.length === 1 && isElbowArrow(selectedElements[0])) ||
-    // A single selected table scales through the corner-tableGesture path
-    // (`tableGesture.active`), so the generic resize never runs for it.
-    // Multi-selections containing a table are still temporarily barred from
-    // resizing: the generic path would desync the table's `width`/`height`
-    // from its row/column sums (P1 tradeoff, see the implementation report).
-    (transformHandleType !== "rotation" &&
-      selectedElements.some(isTableElement)) ||
     // Do not resize when in crop mode
     app.state.croppingElementId
   ) {
@@ -538,7 +531,8 @@ export const handleSelectionOnPointerDown = (
       ) {
         // 接管为整表缩放手势：四角等比缩放、四边单轴拉伸（phase-1.md:99）。
         // 每帧从 originalElements 快照 × 指针倍率重算预览，释放时一次性
-        // 持久化文字模式并捕获一次
+        // 持久化文字模式并捕获一次。多选含表格不走这里：通用 resize 的
+        // table 分支已能保持网格不变量与语义子树同步（phase-1.2.md）。
         tableScaleGestureArmed = tableController.maybeArmTableScaleGesture(
           app,
           pointerDownState,
@@ -907,7 +901,12 @@ export const handleSelectionOnPointerDown = (
                 ...selectGroupsForSelectedElements(
                   {
                     editingGroupId: prevState.editingGroupId,
-                    selectedElementIds: nextSelectedElementIds,
+                    // a selected table stands for its subtree: members
+                    // shift-clicked alongside it merge away (P01.2)
+                    selectedElementIds: tableController.normalizeTableSelection(
+                      app,
+                      nextSelectedElementIds,
+                    ),
                   },
                   app.scene.getNonDeletedElements(),
                   prevState,
