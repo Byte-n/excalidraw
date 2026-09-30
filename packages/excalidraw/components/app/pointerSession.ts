@@ -920,25 +920,6 @@ export const maybeOpenContextMenuAfterPointerDownOnTouchDevices = (
         if (app.interactionState.invalidateContextMenu) {
           return;
         }
-        const structureHover =
-          tableController.getTableStructureHoverAtSceneCoords(app, scenePoint);
-        if (
-          structureHover?.kind === "rowSelect" ||
-          structureHover?.kind === "columnSelect"
-        ) {
-          app.setState({
-            tableRowColSelection: {
-              tableId: structureHover.tableId,
-              kind: structureHover.kind === "rowSelect" ? "row" : "column",
-              id:
-                structureHover.kind === "rowSelect"
-                  ? structureHover.rowId
-                  : structureHover.columnId,
-            },
-            tableStructureHover: null,
-          });
-          return;
-        }
         if (canOpenMindmapMenu) {
           app.handleCanvasContextMenu(event);
         }

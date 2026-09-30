@@ -5,6 +5,7 @@ import { API } from "@excalidraw/excalidraw/tests/helpers/api";
 import { newElementWith, type ElementUpdate } from "../src/mutateElement";
 import { Scene } from "../src/Scene";
 import {
+  computeTableAxisScale,
   computeTableUniformScale,
   MIN_TABLE_COLUMN_WIDTH,
   MIN_TABLE_ROW_HEIGHT,
@@ -851,5 +852,111 @@ describe("computeTableUniformScale: inputs", () => {
     expect(update.width).toBe(720);
     expect(update.height).toBe(525);
     expect(isTableElement(table)).toBe(true);
+  });
+});
+
+describe("computeTableAxisScale", () => {
+  type AxisScaleResult = NonNullable<
+    ReturnType<typeof computeTableAxisScale>
+  >;
+
+  const axisUpdateOf = (result: AxisScaleResult, elementId: string): UpdateBag =>
+    result.updates.get(elementId) as UpdateBag;
+
+  it("scales one grid axis and the matching geometry axis only", () => {
+    const table = makeNonUniformTable();
+    const content = API.createElement({
+      type: "rectangle",
+      x: 110,
+      y: 60,
+      width: 40,
+      height: 30,
+      containerRef: tableCellRef(table, cellIdAt(table, 0, 0), "content"),
+    });
+    const text = API.createElement({
+      type: "text",
+      x: 120,
+      y: 70,
+      fontSize: 20,
+      containerRef: tableCellRef(table, cellIdAt(table, 0, 1), "content"),
+    });
+
+    const result = computeTableAxisScale(
+      [table, content, text],
+      table.id,
+      2,
+      1,
+    )!;
+    const tableUpdate = axisUpdateOf(result, table.id);
+    expect(tableUpdate.table!.columns.map((column) => column.width)).toEqual([
+      160, 240, 80,
+    ]);
+    expect(tableUpdate.table!.rows.map((row) => row.height)).toEqual([
+      100, 50, 25,
+    ]);
+    expect(tableUpdate.width).toBe(480);
+    expect(tableUpdate.height).toBe(175);
+
+    // x-anchored geometry: widths and x double, heights and y stay
+    const contentUpdate = axisUpdateOf(result, content.id);
+    expect(contentUpdate.x).toBe(120);
+    expect(contentUpdate.y).toBe(60);
+    expect(contentUpdate.width).toBe(80);
+    expect(contentUpdate.height).toBe(30);
+
+    // a single-axis stretch keeps every font size
+    const textUpdate = axisUpdateOf(result, text.id);
+    expect(textUpdate.fontSize).toBeUndefined();
+    expect(textUpdate.width).toBe(text.width * 2);
+    expect(textUpdate.height).toBe(text.height);
+
+    // the untouched axis stays exactly at its floor-free factor 1
+    expect(result.clampedScaleX).toBe(2);
+    expect(result.clampedScaleY).toBe(1);
+  });
+
+  it("clamps each axis independently at its own floors", () => {
+    const table = makeNonUniformTable();
+    // x floor: MIN_TABLE_COLUMN_WIDTH / 40 (the thinnest column);
+    // y floor: MIN_TABLE_ROW_HEIGHT / 25 — larger, but only gates the y axis
+    const result = computeTableAxisScale([table], table.id, 0.1, 0.1)!;
+    expect(result.clampedScaleX).toBeCloseTo(
+      MIN_TABLE_COLUMN_WIDTH / 40,
+      10,
+    );
+    // the x clamp does not leak into the y axis: y clamps at its own floor
+    expect(result.clampedScaleY).toBeCloseTo(MIN_TABLE_ROW_HEIGHT / 25, 10);
+  });
+
+  it("rejects non-positive factors", () => {
+    const table = makeNonUniformTable();
+    expect(() => computeTableAxisScale([table], table.id, 0, 1)).toThrow(
+      "Invalid table scale",
+    );
+    expect(() => computeTableAxisScale([table], table.id, 1, -1)).toThrow(
+      "Invalid table scale",
+    );
+  });
+
+  it("returns null for a non-table id", () => {
+    const table = makeNonUniformTable();
+    expect(computeTableAxisScale([table], "missing", 2, 1)).toBeNull();
+  });
+
+  it("scales a nested subtree once under the per-axis factors", () => {
+    const { parent, child } = makeNestedTables();
+    // the anchor defaults to the parent's top-left corner (0, 0)
+    const result = computeTableAxisScale([parent, child], parent.id, 2, 1)!;
+
+    const childUpdate = axisUpdateOf(result, child.id);
+    expect(childUpdate.x).toBe(20); // (10 - 0) * 2 around the anchor
+    expect(childUpdate.y).toBe(10); // (10 - 0) * 1
+    expect(childUpdate.width).toBe(200);
+    expect(childUpdate.height).toBe(30);
+    const childTable = childUpdate.table!;
+    expect(childTable.columns.map((column) => column.width)).toEqual([
+      80, 120,
+    ]);
+    expect(childTable.rows.map((row) => row.height)).toEqual([30]);
   });
 });

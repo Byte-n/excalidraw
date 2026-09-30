@@ -288,8 +288,10 @@ export const getTransformHandles = (
     return {};
   }
 
-  // Table resizing is handled by the table gesture, which keeps its grid
-  // dimensions in sync with its element bounds.
+  // Table geometry keeps its grid dimensions in sync with its element
+  // bounds, so every handle routes through the table gesture: corners scale
+  // the whole subtree uniformly, sides stretch one axis, and rotation is
+  // not supported at all.
   if (element.type === "table") {
     return getTransformHandlesFromCoords(
       getElementAbsoluteCoords(element, elementsMap, true),
@@ -298,13 +300,6 @@ export const getTransformHandles = (
       pointerType,
       {
         ...omitSides,
-        n: true,
-        w: true,
-        nw: true,
-        ne: true,
-        sw: true,
-        e: true,
-        s: true,
         rotation: true,
       },
       DEFAULT_TRANSFORM_HANDLE_SPACING,

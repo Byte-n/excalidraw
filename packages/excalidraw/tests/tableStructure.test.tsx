@@ -128,12 +128,15 @@ const createFixture = () => {
   // the API elements are live proxies: pin the pristine values before any
   // gesture touches the scene
   const snapshot = {
+    tableX: table.x,
+    tableY: table.y,
     tableWidth: table.width,
     rowIds: table.table.rows.map((row) => row.id),
     rowHeights: table.table.rows.map((row) => row.height),
     columnIds: table.table.columns.map((column) => column.id),
     columnWidths: table.table.columns.map((column) => column.width),
     cellIds: table.table.cells.map((cell) => cell.id),
+    content0X: content0.x,
     content0Y: content0.y,
     content2Y: content2.y,
     backgroundText0Y: backgroundText0.y,
@@ -142,9 +145,9 @@ const createFixture = () => {
 };
 
 const selectRow = (row: number, table = getTable()) => {
-  // the select strip runs just inside the left frame edge
+  // clicking a row's outer grip selects it (releasing in place is a no-op)
   const point = {
-    x: table.x + 10,
+    x: table.x - 12,
     y: table.y + row * ROW_HEIGHT + ROW_HEIGHT / 2,
   };
   mouseDown(point.x, point.y);
@@ -205,13 +208,13 @@ describe("table row/column structure", () => {
   });
 
   describe("row/column selection", () => {
-    it("selects a row from the outer strip and clears it with escape", () => {
+    it("selects a row by clicking its outer grip and clears it with escape", () => {
       const { table } = createFixture();
 
-      mouseMove(table.x + 10, table.y + ROW_HEIGHT / 2);
+      mouseMove(table.x - 12, table.y + ROW_HEIGHT / 2);
       expect(h.state.tableStructureHover).toMatchObject({
         tableId: table.id,
-        kind: "rowSelect",
+        kind: "rowGrip",
         rowId: table.table.rows[0].id,
       });
 
@@ -225,11 +228,11 @@ describe("table row/column structure", () => {
       Keyboard.keyPress(KEYS.ESCAPE);
     });
 
-    it("selects a column from the top strip", () => {
+    it("selects a column by clicking its outer grip", () => {
       const { table } = createFixture();
 
-      mouseDown(table.x + COLUMN_WIDTH + COLUMN_WIDTH / 2, table.y + 10);
-      mouseUp(table.x + COLUMN_WIDTH + COLUMN_WIDTH / 2, table.y + 10);
+      mouseDown(table.x + COLUMN_WIDTH + COLUMN_WIDTH / 2, table.y - 12);
+      mouseUp(table.x + COLUMN_WIDTH + COLUMN_WIDTH / 2, table.y - 12);
 
       expect(h.state.tableRowColSelection).toEqual({
         tableId: table.id,
@@ -352,19 +355,20 @@ describe("table row/column structure", () => {
     it("keeps the reorder preview line on the visible grid boundaries after a resize", async () => {
       const { table, snapshot } = createFixture();
 
-      // grow the first row so the grid is no longer uniform
+      // grow the first row (the second compensates) so the grid is uneven
       const separator = { x: table.x + 100, y: table.y + ROW_HEIGHT };
       mouseDown(separator.x, separator.y);
       mouseMove(separator.x, separator.y + 24);
       mouseUp(separator.x, separator.y + 24);
       expect(getTable().table.rows[0].height).toBe(ROW_HEIGHT + 24);
 
+      // row0's grip: row0 is 80px tall after the squeeze-style resize
       const grip = { x: table.x - 12, y: table.y + (ROW_HEIGHT + 24) / 2 };
       mouseDown(grip.x, grip.y);
 
-      // pointer in the second row's upper half: no center crossed yet, the
-      // line waits at the top edge
-      mouseMove(grip.x, table.y + ROW_HEIGHT + 24 + ROW_HEIGHT / 2 - 10);
+      // rows are now [80, 32, 56]; pointer in the second row's upper half:
+      // no center crossed yet, the line waits at the top edge
+      mouseMove(grip.x, table.y + ROW_HEIGHT + 24 + 16 - 10);
       await nextFrame();
       expect(h.state.tableStructurePreview).toMatchObject({
         boundaryIndex: 0,
@@ -373,22 +377,22 @@ describe("table row/column structure", () => {
 
       // pointer past the second row's center: the line rides the current
       // grid — the second | third row boundary, not a uniform-row offset
-      mouseMove(grip.x, table.y + ROW_HEIGHT + 24 + ROW_HEIGHT + 10);
+      mouseMove(grip.x, table.y + ROW_HEIGHT + 24 + 32 + 10);
       await nextFrame();
       expect(h.state.tableStructurePreview).toMatchObject({
         boundaryIndex: 1,
-        offset: ROW_HEIGHT + 24 + ROW_HEIGHT,
+        offset: ROW_HEIGHT + 24 + ROW_HEIGHT - 24,
       });
 
       // pointer past the third row's center: the line reaches the bottom edge
-      mouseMove(grip.x, table.y + ROW_HEIGHT + 24 + 2 * ROW_HEIGHT + 10);
+      mouseMove(grip.x, table.y + ROW_HEIGHT + 24 + 32 + 56 + 10);
       await nextFrame();
       expect(h.state.tableStructurePreview).toMatchObject({
         boundaryIndex: 2,
-        offset: ROW_HEIGHT + 24 + 2 * ROW_HEIGHT,
+        offset: ROW_HEIGHT + 24 + ROW_HEIGHT - 24 + ROW_HEIGHT,
       });
 
-      mouseUp(grip.x, table.y + ROW_HEIGHT + 24 + 2 * ROW_HEIGHT + 10);
+      mouseUp(grip.x, table.y + ROW_HEIGHT + 24 + 32 + 56 + 10);
       expect(getTable().table.rows.map((row) => row.id)).toEqual([
         snapshot.rowIds[1],
         snapshot.rowIds[2],
@@ -440,9 +444,25 @@ describe("table row/column structure", () => {
       },
     );
 
-    it("resizes the row, shifts later rows and keeps the resized members in place", async () => {
+    it("squeezes the adjacent row when dragging an inner separator", async () => {
       const { table, content0, backgroundText0, content2, snapshot } =
         createFixture();
+      // a member of the squeezed row follows its cell's top edge
+      const squeezed = API.createElement({
+        type: "rectangle",
+        x: table.x + 10,
+        y: table.y + ROW_HEIGHT + 10,
+        width: 40,
+        height: 40,
+        backgroundColor: "#ff0000",
+        containerRef: {
+          kind: "tableCell",
+          elementId: table.id,
+          cellId: table.table.cells[3].id,
+          role: "content",
+        },
+      });
+      API.setElements([...h.elements, squeezed] as any);
 
       // the separator between the first and the second row
       const separator = { x: table.x + 100, y: table.y + ROW_HEIGHT };
@@ -451,6 +471,7 @@ describe("table row/column structure", () => {
         tableId: table.id,
         kind: "rowResize",
         rowId: table.table.rows[0].id,
+        edge: "end",
       });
 
       mouseDown(separator.x, separator.y);
@@ -460,10 +481,10 @@ describe("table row/column structure", () => {
 
       const resized = getTable();
       expect(resized.table.rows[0].height).toBe(ROW_HEIGHT + 24);
-      expect(resized.height).toBe(
-        resized.table.rows.reduce((acc, row) => acc + row.height, 0),
-      );
-      // members of the resized row do not move and do not scale
+      expect(resized.table.rows[1].height).toBe(ROW_HEIGHT - 24);
+      // the squeeze keeps the grid's total height
+      expect(resized.height).toBe(3 * ROW_HEIGHT);
+      // members of the grown row do not move and do not scale
       expect(live(content0).y).toBe(snapshot.content0Y);
       const text = live(backgroundText0 as unknown as ExcalidrawTextElement);
       expect(text.fontSize).toBe(20);
@@ -472,8 +493,10 @@ describe("table row/column structure", () => {
         Element.measureText(text.text, getFontString(text), text.lineHeight)
           .height,
       );
-      // later rows translate by the height delta
-      expect(live(content2).y).toBe(snapshot.content2Y + 24);
+      // the squeezed row's members follow their cell's top edge
+      expect(live(squeezed).y).toBe(table.y + ROW_HEIGHT + 10 + 24);
+      // rows after the squeezed one stay put
+      expect(live(content2).y).toBe(snapshot.content2Y);
 
       mouseUp(target.x, target.y);
     });
@@ -534,7 +557,7 @@ describe("table row/column structure", () => {
       expect(getTable().table.columns[0].width).toBe(COLUMN_WIDTH);
     });
 
-    it("keeps the background text following the cell width when resizing a column", async () => {
+    it("squeezes the adjacent column and keeps the background text following the cell width", async () => {
       const { table, backgroundText0, snapshot } = createFixture();
       const originalText =
         "A longer background label that needs to wrap when its column changes width";
@@ -564,10 +587,83 @@ describe("table row/column structure", () => {
           .height,
       );
       expect(text.fontSize).toBe(20);
-      // later columns translate by the width delta; the sums hold
-      expect(getTable().table.columns[1].width).toBe(COLUMN_WIDTH);
-      expect(getTable().width).toBe(3 * COLUMN_WIDTH + 40);
+      // the squeezed neighbor compensates: the table's total width holds
+      expect(getTable().table.columns[1].width).toBe(COLUMN_WIDTH - 40);
+      expect(getTable().width).toBe(3 * COLUMN_WIDTH);
       expect(snapshot.columnWidths[0]).toBe(COLUMN_WIDTH);
+    });
+
+    it("drags the left frame border to resize the first column", async () => {
+      const { table, content0, snapshot } = createFixture();
+
+      // the strip just inside the left frame edge drags the first column's
+      // outer border
+      const border = { x: table.x + 10, y: table.y + ROW_HEIGHT / 2 };
+      mouseMove(border.x, border.y);
+      expect(h.state.tableStructureHover).toMatchObject({
+        kind: "columnResize",
+        columnId: table.table.columns[0].id,
+        edge: "start",
+      });
+
+      mouseDown(border.x, border.y);
+      // the border lands at the pointer: 20px past the original frame edge
+      mouseMove(table.x - 20, border.y);
+      await nextFrame();
+      mouseUp(table.x - 20, border.y);
+
+      const resized = getTable();
+      expect(resized.table.columns[0].width).toBe(COLUMN_WIDTH + 20);
+      // the frame edge follows the dragged border
+      expect(resized.x).toBe(snapshot.tableX - 20);
+      expect(resized.width).toBe(3 * COLUMN_WIDTH + 20);
+      // the grown column's members follow the moved border
+      expect(live(content0).x).toBe(snapshot.content0X - 20);
+      // the other columns and their members stay put
+      expect(resized.table.columns[1].width).toBe(COLUMN_WIDTH);
+    });
+
+    it("drags the top frame border to resize the first row", async () => {
+      const { table, content0, snapshot } = createFixture();
+
+      const border = { x: table.x + COLUMN_WIDTH / 2, y: table.y + 10 };
+      mouseMove(border.x, border.y);
+      expect(h.state.tableStructureHover).toMatchObject({
+        kind: "rowResize",
+        rowId: table.table.rows[0].id,
+        edge: "start",
+      });
+
+      mouseDown(border.x, border.y);
+      // the border lands at the pointer: 24px past the original frame edge
+      mouseMove(border.x, table.y - 24);
+      await nextFrame();
+      mouseUp(border.x, table.y - 24);
+
+      const resized = getTable();
+      expect(resized.table.rows[0].height).toBe(ROW_HEIGHT + 24);
+      expect(resized.y).toBe(snapshot.tableY - 24);
+      expect(resized.height).toBe(3 * ROW_HEIGHT + 24);
+      expect(live(content0).y).toBe(snapshot.content0Y - 24);
+      expect(resized.table.rows[1].height).toBe(ROW_HEIGHT);
+    });
+
+    it("stops the squeeze at the neighbor's minimum width", async () => {
+      const { table } = createFixture();
+
+      const separator = {
+        x: table.x + COLUMN_WIDTH,
+        y: table.y + ROW_HEIGHT / 2,
+      };
+      mouseDown(separator.x, separator.y);
+      mouseMove(separator.x + 200, separator.y);
+      await nextFrame();
+      mouseUp(separator.x + 200, separator.y);
+
+      const resized = getTable();
+      expect(resized.table.columns[1].width).toBe(24);
+      expect(resized.table.columns[0].width).toBe(2 * COLUMN_WIDTH - 24);
+      expect(resized.width).toBe(3 * COLUMN_WIDTH);
     });
   });
 
@@ -836,6 +932,8 @@ describe("table row/column structure", () => {
         table,
         text,
         snapshot: {
+          tableX: table.x,
+          tableY: table.y,
           tableWidth: table.width,
           tableHeight: table.height,
           textFontSize: text.fontSize,
@@ -865,7 +963,7 @@ describe("table row/column structure", () => {
       expect(h.state.selectedElementIds[table.id]).toBe(true);
     };
 
-    it("offers only the lower-right resize handle", () => {
+    it("offers the four corner handles for scaling and keeps rotation off", () => {
       const { table } = scaleFixture();
       selectTable(table);
       const handles = getTransformHandles(
@@ -874,14 +972,16 @@ describe("table row/column structure", () => {
         h.scene.getNonDeletedElementsMap(),
         "mouse",
       );
-      expect(handles.e).toBeUndefined();
-      expect(handles.s).toBeUndefined();
       expect(handles.se).toBeDefined();
+      expect(handles.nw).toBeDefined();
+      expect(handles.ne).toBeDefined();
+      expect(handles.sw).toBeDefined();
+      // the desktop omits side handles for every element: the table's frame
+      // edge itself drags-scales one axis (side-band fallback)
+      expect(handles.e).toBeUndefined();
       expect(handles.w).toBeUndefined();
       expect(handles.n).toBeUndefined();
-      expect(handles.nw).toBeUndefined();
-      expect(handles.ne).toBeUndefined();
-      expect(handles.sw).toBeUndefined();
+      expect(handles.s).toBeUndefined();
       expect(handles.rotation).toBeUndefined();
     });
 
@@ -895,29 +995,112 @@ describe("table row/column structure", () => {
       );
     });
 
-    it("does not treat the left and top borders as structure controls", () => {
+    it("scales from the whole frame: the left and top borders beat structure zones", () => {
       const { table } = scaleFixture();
       selectTable(table);
+      // the side band hugs the frame from the outside, so probe 2px off it
       for (const point of [
-        { x: table.x, y: table.y + ROW_HEIGHT / 2 },
-        { x: table.x + COLUMN_WIDTH / 2, y: table.y },
-        { x: table.x, y: table.y + ROW_HEIGHT },
-        { x: table.x + COLUMN_WIDTH, y: table.y },
+        { x: table.x - 2, y: table.y + ROW_HEIGHT / 2 },
+        { x: table.x + COLUMN_WIDTH / 2, y: table.y - 2 },
+        { x: table.x - 2, y: table.y + ROW_HEIGHT },
+        { x: table.x + COLUMN_WIDTH, y: table.y - 2 },
       ]) {
+        // the frame band yields no structure zone — it scales instead
         expect(getTableStructureHoverAtSceneCoords(h.app, point)).toBeNull();
-        expect(
-          Element.resizeTest(
-            table,
-            h.scene.getNonDeletedElementsMap(),
-            h.state,
-            point.x,
-            point.y,
-            h.state.zoom,
-            "mouse",
-            h.app.editorInterface,
-          ),
-        ).toBe(false);
+        const handle = Element.resizeTest(
+          table,
+          h.scene.getNonDeletedElementsMap(),
+          h.state,
+          point.x,
+          point.y,
+          h.state.zoom,
+          "mouse",
+          h.app.editorInterface,
+        );
+        expect(["w", "n"]).toContain(handle);
       }
+    });
+
+    it("scales uniformly from any corner around its opposite corner", async () => {
+      const { table, text, snapshot } = scaleFixture();
+      selectTable(table);
+
+      const handles = getTransformHandles(
+        table,
+        h.state.zoom,
+        h.scene.getNonDeletedElementsMap(),
+        "mouse",
+      );
+      const nwHandle = handles.nw!;
+      const start = {
+        x: nwHandle[0] + nwHandle[2] / 2,
+        y: nwHandle[1] + nwHandle[3] / 2,
+      };
+      mouseDown(start.x, start.y);
+      // drag the top-left corner inward: the subtree shrinks
+      const target = { x: table.x + 20, y: table.y + 20 };
+      mouseMove(target.x, target.y);
+      await nextFrame();
+      mouseUp(target.x, target.y);
+
+      // the bottom-right corner stays fixed while everything scales by s
+      const s =
+        ((snapshot.tableWidth - 20) / snapshot.tableWidth +
+          (snapshot.tableHeight - 20) / snapshot.tableHeight) /
+        2;
+      const committed = getTable();
+      expect(committed.width).toBeCloseTo(snapshot.tableWidth * s, 5);
+      expect(committed.height).toBeCloseTo(snapshot.tableHeight * s, 5);
+      expect(committed.x + committed.width).toBeCloseTo(
+        snapshot.tableX + snapshot.tableWidth,
+        5,
+      );
+      expect(committed.y + committed.height).toBeCloseTo(
+        snapshot.tableY + snapshot.tableHeight,
+        5,
+      );
+      expect(committed.table.columns[0].width).toBeCloseTo(
+        COLUMN_WIDTH * s,
+        5,
+      );
+      expect((live(text) as ExcalidrawTextElement).fontSize).toBeCloseTo(
+        snapshot.textFontSize * s,
+        5,
+      );
+    });
+
+    it("stretches one axis from a side frame and keeps every font size", async () => {
+      const { table, text, snapshot } = scaleFixture();
+      selectTable(table);
+
+      // the side band hugs the frame from the outside: grab it 2px off the
+      // left border at mid-height (no handle — the frame edge itself)
+      const start = { x: table.x - 2, y: table.y + snapshot.tableHeight / 2 };
+      mouseDown(start.x, start.y);
+      // drag the left frame outward: the subtree stretches horizontally
+      const target = { x: table.x - 96, y: start.y };
+      mouseMove(target.x, target.y);
+      await nextFrame();
+      mouseUp(target.x, target.y);
+
+      const s = (snapshot.tableWidth + 96) / snapshot.tableWidth;
+      const committed = getTable();
+      expect(committed.width).toBeCloseTo(snapshot.tableWidth * s, 5);
+      expect(committed.height).toBe(snapshot.tableHeight);
+      expect(committed.table.columns[0].width).toBeCloseTo(
+        COLUMN_WIDTH * s,
+        5,
+      );
+      expect(committed.table.rows[0].height).toBe(ROW_HEIGHT);
+      // the right frame stays fixed
+      expect(committed.x + committed.width).toBeCloseTo(
+        snapshot.tableX + snapshot.tableWidth,
+        5,
+      );
+      const committedText = live(text) as ExcalidrawTextElement;
+      expect(committedText.fontSize).toBe(snapshot.textFontSize);
+      // geometry changed, so the commit still freezes the text mode
+      expect(committedText.autoResize).toBe(false);
     });
 
     it.each([0.5, 1, 2])(

@@ -89,9 +89,9 @@ export const resizeTest = <Point extends GlobalPoint | LocalPoint>(
     return filter[0] as TransformHandleType;
   }
 
-  if (element.type === "table") {
-    return false;
-  }
+  // Tables intentionally fall through to the side-band check below: their
+  // whole selection frame scales (sides stretch one axis, via the table
+  // gesture), so the frame line itself is the drag affordance.
 
   if (canResizeFromSides(editorInterface)) {
     const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(

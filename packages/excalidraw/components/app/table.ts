@@ -14,6 +14,7 @@ import { pointDistance, pointFrom } from "@excalidraw/math";
 import {
   MIN_TABLE_COLUMN_WIDTH,
   MIN_TABLE_ROW_HEIGHT,
+  computeTableAxisScale,
   computeTableUniformScale,
   prepareTableUniformScale,
   evenlySplitTableSize,
@@ -60,6 +61,11 @@ import type {
   NonDeletedExcalidrawElement,
   TableDataV1,
 } from "@excalidraw/element/types";
+
+import type {
+  ElementUpdate,
+  MaybeTransformHandleType,
+} from "@excalidraw/element";
 
 import { snapNewElement } from "../../snapping";
 
@@ -923,8 +929,11 @@ export const refitTableCellBackgroundText = (
 /**
  * The structure zones of one table, judged in table-local coordinates
  * (phase-1.md:80-83). Priority: insertion point > reorder grip > resize
- * separator > row/column select strip (outer frame affordances beat cells).
- * Every zone is at least `TABLE_STRUCTURE_ZONE_SIZE` CSS px wide.
+ * line > first row/column border strip (outer frame affordances beat
+ * cells). Every zone is at least `TABLE_STRUCTURE_ZONE_SIZE` CSS px wide.
+ * Resize lines carry the dragged `edge`: an `end` border squeezes the two
+ * adjacent entries, a `start` border (the outer left/top frame) grows the
+ * first entry and moves the frame edge.
  */
 const resolveStructureHover = (
   app: TableApp,
@@ -995,6 +1004,7 @@ const resolveStructureHover = (
       tableId: table.id,
       kind: "columnResize",
       columnId: table.table.columns[table.table.columns.length - 1].id,
+      edge: "end",
     };
   }
   if (inBottomBand && insideColumns) {
@@ -1002,40 +1012,55 @@ const resolveStructureHover = (
       tableId: table.id,
       kind: "rowResize",
       rowId: table.table.rows[table.table.rows.length - 1].id,
+      edge: "end",
     };
   }
 
-  // The interior grid lines resize the row above / column left of them.
+  // The interior grid lines drag the boundary between the two adjacent
+  // rows/columns: the entry above/left grows or shrinks, its neighbor
+  // compensates, and the table's total size stays put.
   if (insideRows && insideColumns) {
     let offset = 0;
     for (const row of table.table.rows.slice(0, -1)) {
       offset += row.height;
       if (Math.abs(ly - offset) <= band / 2) {
-        return { tableId: table.id, kind: "rowResize", rowId: row.id };
+        return {
+          tableId: table.id,
+          kind: "rowResize",
+          rowId: row.id,
+          edge: "end",
+        };
       }
     }
     offset = 0;
     for (const column of table.table.columns.slice(0, -1)) {
       offset += column.width;
       if (Math.abs(lx - offset) <= band / 2) {
-        return { tableId: table.id, kind: "columnResize", columnId: column.id };
+        return {
+          tableId: table.id,
+          kind: "columnResize",
+          columnId: column.id,
+          edge: "end",
+        };
       }
     }
   }
 
-  // The strip just inside the frame selects the row/column under it.
+  // The strips just inside the left/top frame drag the first column's/row's
+  // outer border: the entry grows or shrinks and the frame edge follows it.
   if (insideRows && insideColumns) {
     if (lx < band) {
-      const rowId = rowOrColumnIdAt(table, "row", ly);
-      if (rowId) {
-        return { tableId: table.id, kind: "rowSelect", rowId };
-      }
+      const columnId = table.table.columns[0].id;
+      return {
+        tableId: table.id,
+        kind: "columnResize",
+        columnId,
+        edge: "start",
+      };
     }
     if (ly < band) {
-      const columnId = rowOrColumnIdAt(table, "column", lx);
-      if (columnId) {
-        return { tableId: table.id, kind: "columnSelect", columnId };
-      }
+      const rowId = table.table.rows[0].id;
+      return { tableId: table.id, kind: "rowResize", rowId, edge: "start" };
     }
   }
 
@@ -1110,7 +1135,8 @@ export const getTableStructureHoverAtSceneCoords = (
     return null;
   }
 
-  // Only the lower-right handle scales the entire table.
+  // The selected table's whole frame scales (corners uniformly, sides one
+  // axis) — its frame band wins over every structure zone around it.
   const selectedElements = app.scene.getSelectedElements(app.state);
   if (
     selectedElements.length === 1 &&
@@ -1127,7 +1153,7 @@ export const getTableStructureHoverAtSceneCoords = (
       "mouse",
       app.editorInterface,
     );
-    if (handleType === "se") {
+    if (handleType) {
       return null;
     }
   }
@@ -1149,8 +1175,6 @@ const STRUCTURE_CURSORS: {
   columnResize: getCursorForResizingElement({ transformHandleType: "e" }),
   rowInsert: CURSOR_TYPE.POINTER,
   columnInsert: CURSOR_TYPE.POINTER,
-  rowSelect: CURSOR_TYPE.POINTER,
-  columnSelect: CURSOR_TYPE.POINTER,
 };
 
 export const getTableStructureCursor = (
@@ -1295,11 +1319,96 @@ const resolveTableMoveTarget = (
 };
 
 /**
+ * Arms the whole-table scale gesture for a selected table's frame handle:
+ * any corner scales the subtree uniformly from the opposite corner, any
+ * side stretches one axis from the opposite side (that axis's fonts stay
+ * untouched). Returns false for other handle types or when the table's
+ * subtree cannot be prepared.
+ */
+export const maybeArmTableScaleGesture = (
+  app: TableApp,
+  pointerDownState: PointerDownState,
+  table: NonDeleted<ExcalidrawTableElement>,
+  handleType: MaybeTransformHandleType,
+): boolean => {
+  if (
+    handleType !== "nw" &&
+    handleType !== "ne" &&
+    handleType !== "sw" &&
+    handleType !== "se" &&
+    handleType !== "n" &&
+    handleType !== "s" &&
+    handleType !== "e" &&
+    handleType !== "w"
+  ) {
+    return false;
+  }
+
+  const [x1, y1, x2, y2] = getElementAbsoluteCoords(
+    table,
+    app.scene.getNonDeletedElementsMap(),
+  );
+  // the opposite corner stays fixed while the subtree scales
+  const cornerAnchors: Record<
+    "nw" | "ne" | "sw" | "se",
+    { x: number; y: number }
+  > = {
+    se: { x: x1, y: y1 },
+    nw: { x: x2, y: y2 },
+    ne: { x: x1, y: y2 },
+    sw: { x: x2, y: y1 },
+  };
+  const axis =
+    handleType === "n" || handleType === "s"
+      ? ("y" as const)
+      : handleType === "e" || handleType === "w"
+      ? ("x" as const)
+      : undefined;
+  // side anchors: the opposite side's midpoint stays fixed on the dragged axis
+  const anchor = cornerAnchors[handleType as "nw" | "ne" | "sw" | "se"] ?? {
+    x:
+      handleType === "e"
+        ? x1
+        : handleType === "w"
+        ? x2
+        : (x1 + x2) / 2,
+    y:
+      handleType === "s"
+        ? y1
+        : handleType === "n"
+        ? y2
+        : (y1 + y2) / 2,
+  };
+
+  const preparedScale = prepareTableUniformScale(
+    pointerDownState.originalElements,
+    table.id,
+    anchor,
+  );
+  if (!preparedScale) {
+    return false;
+  }
+  pointerDownState.tableGesture.active = {
+    kind: "scale",
+    tableId: table.id,
+    handleType,
+    ...(axis ? { axis } : {}),
+    startBounds: [x1, y1, x2, y2],
+    anchor,
+    subtreeIds: preparedScale.subtree.ordered.map((element) => element.id),
+    snapshotElements: pointerDownState.originalElements,
+    preparedScale,
+    previewScale: 1,
+  };
+  return true;
+};
+
+/**
  * Pointer down on a structure zone: arms the matching gesture on
  * `pointerDownState.tableGesture` (snapshots taken now), performs the
- * row/column select click immediately, and reports whether the event was
- * consumed. Consumed pointer downs skip element selection entirely — outer
- * frame affordances beat cells (phase-1.md:85).
+ * row/column select click of a grip immediately, and reports whether the
+ * event was consumed. Consumed pointer downs skip element selection
+ * entirely — outer frame affordances beat cells (phase-1.md:85).
  */
 export const armTableStructureGestureOnPointerDown = (
   app: TableApp,
@@ -1314,14 +1423,11 @@ export const armTableStructureGestureOnPointerDown = (
   }
 
   const sceneCoords = pointerDownState.origin;
-  // The lower-right scale handle takes priority over the side resize zones.
+  // The selected table's whole frame scales (corners uniformly, sides one
+  // axis) and beats every structure zone around it.
   const selectedElements = app.scene.getSelectedElements(app.state);
   if (selectedElements.length === 1 && isTableElement(selectedElements[0])) {
     const table = selectedElements[0];
-    const [x1, y1, x2, y2] = getElementAbsoluteCoords(
-      table,
-      app.scene.getNonDeletedElementsMap(),
-    );
     const handleType = resizeTest(
       table,
       app.scene.getNonDeletedElementsMap(),
@@ -1332,30 +1438,10 @@ export const armTableStructureGestureOnPointerDown = (
       "mouse",
       app.editorInterface,
     );
-    if (handleType === "se") {
-      const anchor = {
-        x: x1,
-        y: y1,
-      };
-      const preparedScale = prepareTableUniformScale(
-        pointerDownState.originalElements,
-        table.id,
-        anchor,
-      );
-      if (!preparedScale) {
-        return false;
-      }
-      pointerDownState.tableGesture.active = {
-        kind: "scale",
-        tableId: table.id,
-        handleType,
-        startBounds: [x1, y1, x2, y2],
-        anchor,
-        subtreeIds: preparedScale.subtree.ordered.map((element) => element.id),
-        snapshotElements: pointerDownState.originalElements,
-        preparedScale,
-        previewScale: 1,
-      };
+    if (
+      handleType &&
+      maybeArmTableScaleGesture(app, pointerDownState, table, handleType)
+    ) {
       return true;
     }
   }
@@ -1372,24 +1458,6 @@ export const armTableStructureGestureOnPointerDown = (
   switch (hover.kind) {
     case "table": {
       return false;
-    }
-    case "rowSelect":
-    case "columnSelect": {
-      const id = hover.kind === "rowSelect" ? hover.rowId : hover.columnId;
-      const kind = hover.kind === "rowSelect" ? "row" : "column";
-      const previous = app.state.tableRowColSelection;
-      const isSame =
-        previous &&
-        previous.tableId === hover.tableId &&
-        previous.kind === kind &&
-        previous.id === id;
-      app.setState({
-        tableRowColSelection: isSame
-          ? null
-          : { tableId: hover.tableId, kind, id },
-        tableStructureHover: null,
-      });
-      return true;
     }
     case "rowGrip":
     case "columnGrip":
@@ -1450,29 +1518,49 @@ export const armTableStructureGestureOnPointerDown = (
         table,
         isRow ? "row" : "column",
       );
-      const affectedOwnerIds = new Set(
-        entries.slice(startIndex + 1).map((entry) => entry.id),
-      );
+      // the members whose cell geometry the drag changes: an `end` border
+      // moves the boundary into the adjacent next entry (squeeze), while a
+      // `start` border drags the first entry's outer frame edge
+      const affectedOwnerIds =
+        hover.edge === "start"
+          ? new Set([entries[0].id])
+          : new Set(
+              entries
+                .slice(startIndex + 1, startIndex + 2)
+                .map((entry) => entry.id),
+            );
       const startOffset = isRow
         ? getTableRowOffset(table.table, id)
         : getTableColumnOffset(table.table, id);
       if (startOffset === null) {
         return false;
       }
+      const resizedCellIds = getRowOrColumnCellIds(
+        table,
+        isRow ? "row" : "column",
+        id,
+      ).concat(
+        hover.edge === "end" && entries[startIndex + 1]
+          ? getRowOrColumnCellIds(
+              table,
+              isRow ? "row" : "column",
+              entries[startIndex + 1].id,
+            )
+          : [],
+      );
       pointerDownState.tableGesture.active = {
         kind: isRow ? "resizeRow" : "resizeColumn",
         tableId: hover.tableId,
         id,
+        edge: hover.edge,
         startTable: table.table,
+        startX: table.x,
+        startY: table.y,
         startMembers,
         affectedMembers: [...startMembers]
           .filter(([, member]) => affectedOwnerIds.has(member.ownerId))
           .map(([memberId]) => memberId),
-        resizedCellIds: getRowOrColumnCellIds(
-          table,
-          isRow ? "row" : "column",
-          id,
-        ),
+        resizedCellIds,
         startIndex,
         startSize: isRow
           ? table.table.rows[startIndex].height
@@ -1578,11 +1666,28 @@ export const handleTableGestureMove = (
     case "resizeColumn": {
       const isRow = gesture.kind === "resizeRow";
       const local = getTableLocalPoint(table, pointerCoords.x, pointerCoords.y);
+      const minSize = isRow ? MIN_TABLE_ROW_HEIGHT : MIN_TABLE_COLUMN_WIDTH;
+      const nextEntrySize = isRow
+        ? gesture.startTable.rows[gesture.startIndex + 1]?.height
+        : gesture.startTable.columns[gesture.startIndex + 1]?.width;
       // 判定一律以按下时的快照为基准，随后整帧重设
-      const requestedSize = (isRow ? local.y : local.x) - gesture.startOffset;
-      const size = Math.max(
-        requestedSize,
-        isRow ? MIN_TABLE_ROW_HEIGHT : MIN_TABLE_COLUMN_WIDTH,
+      const pointerAxis = isRow ? local.y : local.x;
+      const requestedSize =
+        gesture.edge === "start"
+          ? // dragging the first entry's outer border: the pointer's
+            // distance to the entry's far edge
+            gesture.startOffset + gesture.startSize - pointerAxis
+          : pointerAxis - gesture.startOffset;
+      // an `end` border squeezes the two adjacent entries, so the delta
+      // clamps on both minima; a `start` border (and the outermost `end`
+      // border) only respects the dragged entry's own minimum
+      const maxDelta =
+        gesture.edge === "end" && nextEntrySize !== undefined
+          ? nextEntrySize - minSize
+          : Number.POSITIVE_INFINITY;
+      const size = Math.min(
+        Math.max(requestedSize, minSize),
+        gesture.startSize + maxDelta,
       );
       if (
         size ===
@@ -1593,11 +1698,17 @@ export const handleTableGestureMove = (
         return true;
       }
       const delta = size - gesture.startSize;
+      const memberDelta = gesture.edge === "start" ? -delta : delta;
       const newTable: TableDataV1 = isRow
         ? {
             ...gesture.startTable,
             rows: gesture.startTable.rows.map((row, index) =>
-              index === gesture.startIndex ? { ...row, height: size } : row,
+              index === gesture.startIndex
+                ? { ...row, height: size }
+                : // the squeezed neighbor compensates the boundary move
+                gesture.edge === "end" && index === gesture.startIndex + 1
+                ? { ...row, height: nextEntrySize! - delta }
+                : row,
             ),
           }
         : {
@@ -1605,6 +1716,8 @@ export const handleTableGestureMove = (
             columns: gesture.startTable.columns.map((column, index) =>
               index === gesture.startIndex
                 ? { ...column, width: size }
+                : gesture.edge === "end" && index === gesture.startIndex + 1
+                ? { ...column, width: nextEntrySize! - delta }
                 : column,
             ),
           };
@@ -1615,8 +1728,8 @@ export const handleTableGestureMove = (
           app.scene.mutateElement(
             member as ExcalidrawElement,
             {
-              x: start.x + (isRow ? 0 : delta),
-              y: start.y + (isRow ? delta : 0),
+              x: start.x + (isRow ? 0 : memberDelta),
+              y: start.y + (isRow ? memberDelta : 0),
             },
             { informMutation: false, isDragging: true },
           );
@@ -1626,14 +1739,20 @@ export const handleTableGestureMove = (
       app.scene.mutateElement(
         table,
         {
+          // a start border drags the table's own frame edge with it
+          ...(gesture.edge === "start"
+            ? isRow
+              ? { y: gesture.startY - delta }
+              : { x: gesture.startX - delta }
+            : {}),
           table: newTable,
           width: isRow ? table.width : getTableWidth(newTable),
           height: isRow ? getTableHeight(newTable) : table.height,
         },
         { informMutation: false, isDragging: true },
       );
-      // 被调行列的背景文本跟随新格几何（字号不变）；必须在表格数据
-      // 落地之后按新 bounds 计算
+      // 被调行列及被挤压邻格的背景文本跟随新格几何（字号不变）；
+      // 必须在表格数据落地之后按新 bounds 计算
       if (updatedTable && isTableElement(updatedTable)) {
         refitCellBackgroundTexts(app, updatedTable, gesture.resizedCellIds);
       }
@@ -1654,9 +1773,10 @@ export const handleTableGestureMove = (
 };
 
 /**
- * Uniform scale preview: every frame recomputes the whole subtree from the
- * arm-time snapshot times the pointer's factor (`persistTextModes: false` —
- * the mode switch only persists with the real commit, phase-1.md:115).
+ * Scale preview: every frame recomputes the whole subtree from the arm-time
+ * snapshot times the pointer's factor (`persistTextModes: false` — the mode
+ * switch only persists with the real commit, phase-1.md:115). Corners apply
+ * one uniform factor; sides apply it to their single axis.
  */
 const applyTableScalePreview = (
   app: TableApp,
@@ -1664,6 +1784,30 @@ const applyTableScalePreview = (
   pointerCoords: { x: number; y: number },
 ): void => {
   const scale = resolveTableScaleFromPointer(gesture, pointerCoords);
+  if (gesture.axis) {
+    const minScale =
+      gesture.axis === "x"
+        ? gesture.preparedScale.minScaleX
+        : gesture.preparedScale.minScaleY;
+    if (Math.max(scale, minScale) === gesture.previewScale) {
+      return;
+    }
+    const result = computeTableAxisScale(
+      gesture.snapshotElements,
+      gesture.tableId,
+      gesture.axis === "x" ? scale : 1,
+      gesture.axis === "y" ? scale : 1,
+      { anchor: gesture.anchor, persistTextModes: false },
+      gesture.preparedScale,
+    );
+    if (!result) {
+      return;
+    }
+    gesture.previewScale =
+      gesture.axis === "x" ? result.clampedScaleX : result.clampedScaleY;
+    applyTableScaleUpdates(app, result.updates);
+    return;
+  }
   if (
     Math.max(scale, gesture.preparedScale.minScale) === gesture.previewScale
   ) {
@@ -1680,7 +1824,15 @@ const applyTableScalePreview = (
     return;
   }
   gesture.previewScale = result.clampedScale;
-  for (const [id, update] of result.updates) {
+  applyTableScaleUpdates(app, result.updates);
+};
+
+/** Applies one computed scale update bag to the scene as drag frames. */
+const applyTableScaleUpdates = (
+  app: TableApp,
+  updates: Map<string, ElementUpdate<NonDeletedExcalidrawElement>>,
+): void => {
+  for (const [id, update] of updates) {
     const element = app.scene.getNonDeletedElement(id);
     if (element) {
       app.scene.mutateElement(element as ExcalidrawElement, update as any, {
@@ -1692,7 +1844,7 @@ const applyTableScalePreview = (
   app.scene.triggerUpdate();
 };
 
-/** The uniform factor the pointer implies against the arm-time bounds. */
+/** The scale factor the pointer implies against the arm-time bounds. */
 const resolveTableScaleFromPointer = (
   gesture: Extract<TablePointerGesture, { kind: "scale" }>,
   pointerCoords: { x: number; y: number },
@@ -1701,6 +1853,12 @@ const resolveTableScaleFromPointer = (
   const { anchor } = gesture;
   const startWidth = Math.abs(x2 - x1);
   const startHeight = Math.abs(y2 - y1);
+  if (gesture.axis === "x") {
+    return Math.max(Math.abs(pointerCoords.x - anchor.x) / startWidth, 0.01);
+  }
+  if (gesture.axis === "y") {
+    return Math.max(Math.abs(pointerCoords.y - anchor.y) / startHeight, 0.01);
+  }
   const factorX = Math.abs(pointerCoords.x - anchor.x) / startWidth;
   const factorY = Math.abs(pointerCoords.y - anchor.y) / startHeight;
   // 四角拖动保持等比：两轴比值的均值；提交仍以快照 × 最终倍率整体计算
@@ -1831,14 +1989,43 @@ export const finalizeTableGestureOnPointerUp = (
     case "scale": {
       // 释放：以快照 × 最终倍率（persistTextModes: true）一次提交
       const scale = resolveTableScaleFromPointer(gesture, sceneCoords);
-      const result = computeTableUniformScale(
-        gesture.snapshotElements,
-        gesture.tableId,
-        scale,
-        { anchor: gesture.anchor, persistTextModes: true },
-        gesture.preparedScale,
-      );
-      if (result?.clampedScale === 1 && gesture.previewScale !== 1) {
+      let updates: Map<string, ElementUpdate<NonDeletedExcalidrawElement>>;
+      let changed: boolean;
+      let geometryAlreadyPreviewed: boolean;
+      if (gesture.axis) {
+        const result = computeTableAxisScale(
+          gesture.snapshotElements,
+          gesture.tableId,
+          gesture.axis === "x" ? scale : 1,
+          gesture.axis === "y" ? scale : 1,
+          { anchor: gesture.anchor, persistTextModes: true },
+          gesture.preparedScale,
+        );
+        if (!result) {
+          return true;
+        }
+        updates = result.updates;
+        changed = result.clampedScaleX !== 1 || result.clampedScaleY !== 1;
+        geometryAlreadyPreviewed =
+          (gesture.axis === "x"
+            ? result.clampedScaleX
+            : result.clampedScaleY) === gesture.previewScale;
+      } else {
+        const result = computeTableUniformScale(
+          gesture.snapshotElements,
+          gesture.tableId,
+          scale,
+          { anchor: gesture.anchor, persistTextModes: true },
+          gesture.preparedScale,
+        );
+        if (!result) {
+          return true;
+        }
+        updates = result.updates;
+        changed = result.clampedScale !== 1;
+        geometryAlreadyPreviewed = result.clampedScale === gesture.previewScale;
+      }
+      if (!changed && gesture.previewScale !== 1) {
         const restored = app.scene
           .getElementsIncludingDeleted()
           .map(
@@ -1848,11 +2035,9 @@ export const finalizeTableGestureOnPointerUp = (
         app.scene.triggerUpdate();
         return true;
       }
-      if (result && result.clampedScale !== 1) {
+      if (changed) {
         app.store.scheduleCapture();
-        const geometryAlreadyPreviewed =
-          result.clampedScale === gesture.previewScale;
-        for (const [id, update] of result.updates) {
+        for (const [id, update] of updates) {
           const element = app.scene.getNonDeletedElement(id);
           if (element) {
             // The snapshot calculation is deterministic. When pointerup lands

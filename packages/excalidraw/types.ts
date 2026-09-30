@@ -301,10 +301,14 @@ export type TableRowColSelection = {
 
 /**
  * The structure affordance the pointer rests on: the outer reorder grip of a
- * row/column, one of its inner resize separators, an insertion boundary, or
- * the outer strip that selects a row/column (phase-1.md:78-83). Zones are at
- * least 24 CSS px wide (phase-1.md:89); `id` names the resized row/column
- * (the one above/left of the separator).
+ * row/column, one of its resize lines, or an insertion boundary
+ * (phase-1.md:78-83). Zones are at least 24 CSS px wide (phase-1.md:89);
+ * `id` names the resized row/column (the one above/left of the separator)
+ * and `edge` says which of its borders the pointer drags: the `start` border
+ * of the first row/column (the table's outer left/top frame) or the `end`
+ * border (an inner separator or the outer right/bottom frame). Dragging an
+ * `end` border squeezes the two adjacent rows/columns; dragging a `start`
+ * border grows the first one and moves the table's frame edge.
  */
 export type TableRowColStructureHover =
   | {
@@ -325,11 +329,13 @@ export type TableRowColStructureHover =
       tableId: ExcalidrawTableElement["id"];
       kind: "rowResize";
       rowId: string;
+      edge: "start" | "end";
     }
   | {
       tableId: ExcalidrawTableElement["id"];
       kind: "columnResize";
       columnId: string;
+      edge: "start" | "end";
     }
   | {
       tableId: ExcalidrawTableElement["id"];
@@ -340,16 +346,6 @@ export type TableRowColStructureHover =
       tableId: ExcalidrawTableElement["id"];
       kind: "columnInsert";
       boundaryIndex: number;
-    }
-  | {
-      tableId: ExcalidrawTableElement["id"];
-      kind: "rowSelect";
-      rowId: string;
-    }
-  | {
-      tableId: ExcalidrawTableElement["id"];
-      kind: "columnSelect";
-      columnId: string;
     };
 
 /**
@@ -362,10 +358,19 @@ export type TablePointerGesture =
   | {
       kind: "scale";
       tableId: string;
-      handleType: "se";
+      /**
+       * The dragged frame handle: any corner scales both axes uniformly,
+       * any side scales one axis (`axis`) while the other stays fixed.
+       */
+      handleType: "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w";
+      /** set for side handles: the single axis the drag scales */
+      axis?: "x" | "y";
       /** the table's bounds at pointer down: [x1, y1, x2, y2] */
       startBounds: [number, number, number, number];
-      /** the corner that stays fixed while the subtree scales */
+      /**
+       * The point that stays fixed while the subtree scales: the opposite
+       * corner for corner handles, the opposite side's midpoint for sides.
+       */
       anchor: { x: number; y: number };
       /** subtree ids the scale preview may touch (exact restore on cancel) */
       subtreeIds: readonly string[];
@@ -388,13 +393,22 @@ export type TablePointerGesture =
   | {
       kind: "resizeRow" | "resizeColumn";
       tableId: string;
-      /** the row/column whose bottom/right edge is dragged */
+      /** the row/column whose border is dragged */
       id: string;
+      /**
+       * Which border of `id` the pointer drags: `start` is the outer left
+       * (rows: top) frame of the first entry, `end` is an inner separator
+       * or the outer right (rows: bottom) frame.
+       */
+      edge: "start" | "end";
       /** the grid at pointer down */
       startTable: TableDataV1;
+      /** the table element's scene origin at pointer down (start-edge shifts) */
+      startX: number;
+      startY: number;
       /** subtree member positions (and owning rows) at pointer down */
       startMembers: Map<string, { x: number; y: number; ownerId: string }>;
-      /** members after the resized boundary, resolved once at pointer down */
+      /** members whose cell geometry the drag changes, resolved at arm time */
       affectedMembers: readonly string[];
       resizedCellIds: readonly string[];
       startIndex: number;

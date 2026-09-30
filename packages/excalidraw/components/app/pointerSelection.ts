@@ -49,8 +49,6 @@ import {
   cropElement,
   getElementsInResizingFrame,
   getFrameChildren,
-  getElementAbsoluteCoords,
-  prepareTableUniformScale,
   isElbowArrow,
   isFrameLikeElement,
   isImageElement,
@@ -538,37 +536,17 @@ export const handleSelectionOnPointerDown = (
         selectedElements.length === 1 &&
         isTableElement(selectedElements[0])
       ) {
-        if (handleType === "se") {
-          // 接管为整表等比缩放手势（phase-1.md:99）：
-          // 每帧从 originalElements 快照 × 指针倍率重算预览，释放时一次性
-          // 持久化文字模式并捕获一次
-          const table =
-            selectedElements[0] as NonDeleted<ExcalidrawTableElement>;
-          const [x1, y1, x2, y2] = getElementAbsoluteCoords(table, elementsMap);
-          const anchor = { x: x1, y: y1 };
-          const preparedScale = prepareTableUniformScale(
-            pointerDownState.originalElements,
-            table.id,
-            anchor,
-          );
-          if (preparedScale) {
-            pointerDownState.tableGesture.active = {
-              kind: "scale",
-              tableId: table.id,
-              handleType,
-              startBounds: [x1, y1, x2, y2],
-              anchor,
-              subtreeIds: preparedScale.subtree.ordered.map(
-                (element) => element.id,
-              ),
-              snapshotElements: pointerDownState.originalElements,
-              preparedScale,
-              previewScale: 1,
-            };
-            tableScaleGestureArmed = true;
-          }
-        }
-        // Table side resizing belongs to the row/column gesture.
+        // 接管为整表缩放手势：四角等比缩放、四边单轴拉伸（phase-1.md:99）。
+        // 每帧从 originalElements 快照 × 指针倍率重算预览，释放时一次性
+        // 持久化文字模式并捕获一次
+        tableScaleGestureArmed = tableController.maybeArmTableScaleGesture(
+          app,
+          pointerDownState,
+          selectedElements[0] as NonDeleted<ExcalidrawTableElement>,
+          handleType,
+        );
+        // The table's frame scaling owns every handle; its side borders
+        // belong to the row/column gesture.
         pointerDownState.resize.handleType = false;
       } else {
         pointerDownState.resize.isResizing = true;
