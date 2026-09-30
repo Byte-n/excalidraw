@@ -271,6 +271,7 @@ const getRelevantAppStateProps = (
   highlightedTableCell: appState.highlightedTableCell,
   tableRowColSelection: appState.tableRowColSelection,
   tableStructureHover: appState.tableStructureHover,
+  containerGestureVisual: appState.containerGestureVisual,
   tableStructurePreview: appState.tableStructurePreview,
   collaborators: appState.collaborators, // Necessary for collab. sessions
   activeEmbeddable: appState.activeEmbeddable,

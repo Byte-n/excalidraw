@@ -1,6 +1,6 @@
 # P01.3：表格 resize 手势 in-flight 视觉
 
-- 状态：设计重构版，待实施。
+- 状态：已实施，自动化测试与真实浏览器验收通过（2026-09-30）。
 - 目标：修复行列线 resize 拖动期间 accent 高亮消失的问题。
 - 本期范围：只实现表格 `rowResize` / `columnResize` 的 in-flight 视觉；不在本期扩展画框、mindmap 或其它容器的 provider 生命周期。
 - 后续方向：保留 `containerGestureVisual` 作为渲染通道，但等第二个真实容器消费者出现后再抽象 provider 写入/清理契约。
@@ -361,15 +361,25 @@ interface ContainerInteractionProvider {
 
 ## 十一、验收标准
 
-- [ ] resize 按下后 accent 线不消失，拖动期间持续可见。
-- [ ] 高亮线跟随 live table 边界，包含首行/首列外框和最小值钳停。
-- [ ] 指针移出表格后高亮仍位于真实边界。
-- [ ] 正常释放清除 visual，并按现有规则产生至多一条 resize history。
-- [ ] 无变化释放不产生 history。
-- [ ] Esc 恢复 arm-time 几何，清除 visual，无残留。
-- [ ] pointercancel 和 missing pointer-up 不留下 visual。
-- [ ] hover 扫描在 gesture 期间保持暂停。
-- [ ] move、insert、scale 行为不改变。
-- [ ] `containerGestureVisual` 不进入保存文件、协作广播或导出数据。
-- [ ] 拖动帧不写 AppState visual，不执行逐帧结构命中检测。
-- [ ] 第二个容器出现前，不增加 provider gesture 生命周期 API。
+- [x] resize 按下后 accent 线不消失，拖动期间持续可见。
+- [x] 高亮线跟随 live table 边界，包含首行/首列外框和最小值钳停。
+- [x] 指针移出表格后高亮仍位于真实边界。
+- [x] 正常释放清除 visual，并按现有规则产生至多一条 resize history。
+- [x] 无变化释放不产生 history。
+- [x] Esc 恢复 arm-time 几何，清除 visual，无残留。
+- [x] pointercancel 和 missing pointer-up 不留下 visual。
+- [x] hover 扫描在 gesture 期间保持暂停。
+- [x] move、insert、scale 行为不改变。
+- [x] `containerGestureVisual` 不进入保存文件、协作广播或导出数据。
+- [x] 拖动帧不写 AppState visual，不执行逐帧结构命中检测。
+- [x] 第二个容器出现前，不增加 provider gesture 生命周期 API。
+
+## 十二、实施与验证记录
+
+- table controller 统一产生 resize visual，渲染优先于 hover，并从实时几何派生边界。
+- resize 取消快照改为复用 pointer session 的元素副本；live 元素会原地 mutate，不能作为恢复快照。
+- pointercancel、missing pointer-up 和工具切换通过 table cancel 恢复几何并清理 visual。
+- 7 个相关测试文件共 134 项通过；history、contextmenu、regressionTests 共 133 项通过、1 项既有跳过，更新 128 个状态快照。
+- 本次修改文件的 ESLint 和 `git diff --check` 通过。
+- 真实 Chrome 完成桌面与移动视口截图和 canvas 像素检查，覆盖 row/column 按下、移出表格后的钳制边界、首行/首列外框、释放和 Esc 清理。
+- 全量 `yarn test:typecheck` 仍有既存错误：`packages/element/tests/tableSelectionResize.test.ts` 第 250、423、478 行对 `ExcalidrawElement` 访问 `fontSize`；本期新增代码无类型错误。

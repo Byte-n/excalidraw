@@ -246,6 +246,7 @@ export type InteractiveCanvasAppState = Readonly<
     highlightedTableCell: AppState["highlightedTableCell"];
     tableRowColSelection: AppState["tableRowColSelection"];
     tableStructureHover: AppState["tableStructureHover"];
+    containerGestureVisual: AppState["containerGestureVisual"];
     tableStructurePreview: AppState["tableStructurePreview"];
     // Collaborators
     collaborators: AppState["collaborators"];
@@ -347,6 +348,17 @@ export type TableRowColStructureHover =
       kind: "columnInsert";
       boundaryIndex: number;
     };
+
+/** Stable render identity; geometry is derived from the live scene. */
+export type TableResizeGestureVisual = {
+  container: "table";
+  tableId: ExcalidrawTableElement["id"];
+  axis: "row" | "column";
+  id: string;
+  edge: "start" | "end";
+};
+
+export type ContainerGestureVisual = TableResizeGestureVisual;
 
 /**
  * One in-flight table structure gesture (phase-1.md:80-83, :91-97, :99-119),
@@ -562,6 +574,7 @@ export interface AppState {
    * gesture itself lives in `PointerDownState["tableGesture"]`.
    */
   tableStructureHover: TableRowColStructureHover | null;
+  containerGestureVisual: ContainerGestureVisual | null;
   /**
    * The blue insertion/move-target boundary line plus its plus mark
    * (phase-1.md:82): shown while hovering an insertion zone and while a

@@ -76,6 +76,7 @@ import type {
   PointerDownState,
   TablePointerGesture,
   TableRowColStructureHover,
+  TableResizeGestureVisual,
 } from "../../types";
 
 /**
@@ -1390,7 +1391,23 @@ export const maybeArmTableScaleGesture = (
     preparedScale,
     previewScale: 1,
   };
+  app.setState({ containerGestureVisual: null });
   return true;
+};
+
+const getTableGestureVisual = (
+  gesture: TablePointerGesture | null,
+): TableResizeGestureVisual | null => {
+  if (gesture?.kind === "resizeRow" || gesture?.kind === "resizeColumn") {
+    return {
+      container: "table",
+      tableId: gesture.tableId,
+      axis: gesture.kind === "resizeRow" ? "row" : "column",
+      id: gesture.id,
+      edge: gesture.edge,
+    };
+  }
+  return null;
 };
 
 /**
@@ -1557,7 +1574,12 @@ export const armTableStructureGestureOnPointerDown = (
           : table.table.columns[startIndex].width,
         startOffset,
         startLocal: getTableLocalPoint(table, sceneCoords.x, sceneCoords.y),
-        startElements: app.scene.getElementsIncludingDeleted(),
+        startElements: app.scene
+          .getElementsIncludingDeleted()
+          .map(
+            (element) =>
+              pointerDownState.originalElements.get(element.id) ?? element,
+          ),
       };
       break;
     }
@@ -1581,7 +1603,13 @@ export const armTableStructureGestureOnPointerDown = (
     }
   }
 
-  app.setState({ tableStructureHover: null, tableStructurePreview: null });
+  app.setState({
+    tableStructureHover: null,
+    tableStructurePreview: null,
+    containerGestureVisual: getTableGestureVisual(
+      pointerDownState.tableGesture.active,
+    ),
+  });
   return true;
 };
 
@@ -1865,14 +1893,22 @@ export const cancelTableGesture = (
 ): boolean => {
   const gesture = pointerDownState.tableGesture.active;
   if (!gesture) {
+    if (app.state.containerGestureVisual) {
+      app.setState({ containerGestureVisual: null });
+      return true;
+    }
     return false;
   }
   pointerDownState.tableGesture.active = null;
-  app.setState({ tableStructureHover: null, tableStructurePreview: null });
+  app.setState({
+    tableStructureHover: null,
+    tableStructurePreview: null,
+    containerGestureVisual: null,
+  });
 
   if (gesture.kind === "resizeRow" || gesture.kind === "resizeColumn") {
-    // elements are immutable: the arm-time array still references the
-    // pre-gesture versions, so replacing the scene with it restores exactly
+    // Live elements mutate during preview; restore the pointer session's
+    // copied elements rather than references to the live scene.
     app.scene.replaceAllElements([...gesture.startElements]);
     app.scene.triggerUpdate();
   } else if (gesture.kind === "scale") {
@@ -1898,10 +1934,18 @@ export const finalizeTableGestureOnPointerUp = (
 ): boolean => {
   const gesture = pointerDownState.tableGesture.active;
   if (!gesture) {
+    if (app.state.containerGestureVisual) {
+      app.setState({ containerGestureVisual: null });
+      return true;
+    }
     return false;
   }
   pointerDownState.tableGesture.active = null;
-  app.setState({ tableStructureHover: null, tableStructurePreview: null });
+  app.setState({
+    tableStructureHover: null,
+    tableStructurePreview: null,
+    containerGestureVisual: null,
+  });
 
   const table = app.scene.getNonDeletedElement(gesture.tableId);
   if (!table || !isTableElement(table)) {

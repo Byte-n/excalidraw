@@ -1361,10 +1361,29 @@ const renderTableRowColSelection = (
   });
 };
 
-/**
- * The affordance under the pointer: separator highlight, insert boundary
- * with its plus, select-strip tint, or grip emphasis (phase-1.md:80-83).
- */
+const getTableStructureVisual = (
+  appState: InteractiveCanvasAppState,
+): InteractiveCanvasAppState["tableStructureHover"] => {
+  const gesture = appState.containerGestureVisual;
+  if (gesture?.container === "table") {
+    return gesture.axis === "row"
+      ? {
+          tableId: gesture.tableId,
+          kind: "rowResize",
+          rowId: gesture.id,
+          edge: gesture.edge,
+        }
+      : {
+          tableId: gesture.tableId,
+          kind: "columnResize",
+          columnId: gesture.id,
+          edge: gesture.edge,
+        };
+  }
+  return appState.tableStructureHover;
+};
+
+/** Paint hover or active resize using the current table geometry. */
 const renderTableStructureHover = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
@@ -1388,6 +1407,9 @@ const renderTableStructureHover = (
         const rowIndex = table.table.rows.findIndex(
           (row) => row.id === hover.rowId,
         );
+        if (rowIndex < 0) {
+          break;
+        }
         const offsetAfter = table.table.rows
           .slice(0, rowIndex + 1)
           .reduce((acc, row) => acc + row.height, 0);
@@ -1408,6 +1430,9 @@ const renderTableStructureHover = (
         const columnIndex = table.table.columns.findIndex(
           (column) => column.id === hover.columnId,
         );
+        if (columnIndex < 0) {
+          break;
+        }
         const offsetAfter = table.table.columns
           .slice(0, columnIndex + 1)
           .reduce((acc, column) => acc + column.width, 0);
@@ -2349,6 +2374,7 @@ const _renderInteractiveScene = ({
   // transform handles. This is intentionally adjacent to selected-element
   // rendering so future hover additions cannot cover the resize indicator.
   const structureTables = new Map<string, NonDeleted<ExcalidrawTableElement>>();
+  const tableVisual = getTableStructureVisual(appState);
   for (const selectedTable of selectedElements) {
     if (isTableElement(selectedTable) && !selectedTable.isDeleted) {
       structureTables.set(selectedTable.id, selectedTable);
@@ -2373,24 +2399,21 @@ const _renderInteractiveScene = ({
     }
   }
 
-  if (!editingTableBackgroundText) {
-    for (const table of structureTables.values()) {
-      renderTableStructureAffordances(
-        context,
-        appState,
-        table,
-        appState.tableStructureHover,
-      );
+  if (appState.containerGestureVisual?.container === "table") {
+    const table = elementsMap.get(appState.containerGestureVisual.tableId);
+    if (table && isTableElement(table) && !table.isDeleted) {
+      structureTables.set(table.id, table);
     }
   }
 
-  if (appState.tableStructureHover && !editingTableBackgroundText) {
-    renderTableStructureHover(
-      context,
-      appState,
-      appState.tableStructureHover,
-      elementsMap,
-    );
+  if (!editingTableBackgroundText) {
+    for (const table of structureTables.values()) {
+      renderTableStructureAffordances(context, appState, table, tableVisual);
+    }
+  }
+
+  if (tableVisual && !editingTableBackgroundText) {
+    renderTableStructureHover(context, appState, tableVisual, elementsMap);
   }
 
   // Paint selected elements
