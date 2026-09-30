@@ -2,6 +2,7 @@ import {
   KEYS,
   TABLE_STRUCTURE_INSERTION_OFFSET,
   TABLE_STRUCTURE_RAIL_OFFSET,
+  getFontString,
 } from "@excalidraw/common";
 import { getTransformHandles } from "@excalidraw/element";
 import * as Element from "@excalidraw/element";
@@ -410,14 +411,20 @@ describe("table row/column structure", () => {
       const text = live(backgroundText0 as unknown as ExcalidrawTextElement);
       expect(text.fontSize).toBe(20);
       expect(text.width).toBe(COLUMN_WIDTH);
-      expect(text.height).toBe(ROW_HEIGHT + 24);
+      expect(text.height).toBe(
+        Element.measureText(
+          text.text,
+          getFontString(text),
+          text.lineHeight,
+        ).height,
+      );
       // later rows translate by the height delta
       expect(live(content2).y).toBe(snapshot.content2Y + 24);
 
       mouseUp(target.x, target.y);
     });
 
-    it("clamps the row height at the 24px minimum", () => {
+    it("keeps background text visible when shrinking a row", () => {
       createFixture();
 
       const separator = { x: 300, y: 256 };
@@ -425,7 +432,8 @@ describe("table row/column structure", () => {
       mouseMove(separator.x, 205);
       mouseUp(separator.x, 205);
 
-      expect(getTable().table.rows[0].height).toBe(24);
+      expect(getTable().table.rows[0].height).toBeGreaterThan(24);
+      expect(getTable().table.rows[0].height).toBeLessThan(ROW_HEIGHT);
     });
 
     it("resizes only the outermost column from the right edge", async () => {
@@ -474,6 +482,12 @@ describe("table row/column structure", () => {
 
     it("keeps the background text following the cell width when resizing a column", async () => {
       const { table, backgroundText0, snapshot } = createFixture();
+      const originalText =
+        "A longer background label that needs to wrap when its column changes width";
+      API.updateElement(backgroundText0 as unknown as ExcalidrawTextElement, {
+        originalText,
+        text: originalText,
+      });
 
       // the separator between the first and the second column
       const separator = {
@@ -487,6 +501,21 @@ describe("table row/column structure", () => {
 
       const text = live(backgroundText0 as unknown as ExcalidrawTextElement);
       expect(text.width).toBe(COLUMN_WIDTH + 40);
+      expect(text.originalText).toBe(originalText);
+      expect(text.text).toBe(
+        Element.wrapText(
+          originalText,
+          getFontString(text),
+          COLUMN_WIDTH + 40,
+        ),
+      );
+      expect(text.height).toBe(
+        Element.measureText(
+          text.text,
+          getFontString(text),
+          text.lineHeight,
+        ).height,
+      );
       expect(text.fontSize).toBe(20);
       // later columns translate by the width delta; the sums hold
       expect(getTable().table.columns[1].width).toBe(COLUMN_WIDTH);

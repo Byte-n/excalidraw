@@ -1,11 +1,7 @@
 import { pointFrom, pointRotateRads, type Radians } from "@excalidraw/math";
 import { randomId } from "@excalidraw/common";
 
-import type {
-  ExcalidrawTableElement,
-  TableDataV1,
-  TableSizingMode,
-} from "./types";
+import type { ExcalidrawTableElement, TableDataV1 } from "./types";
 
 /**
  * Creation presets, not format constraints — row/column counts and sizes are
@@ -174,71 +170,6 @@ const assertDimensions = (
   }
 };
 
-/** Resolves the effective sizing mode: absent `sizingMode` is `fixed`. */
-export const getTableSizingMode = (
-  table: Pick<TableDataV1, "sizingMode">,
-): TableSizingMode => table.sizingMode ?? "fixed";
-
-const assertSizingMode = (mode: unknown): void => {
-  if (mode !== undefined && mode !== "fixed" && mode !== "fitContent") {
-    throw new Error(`Invalid table sizing mode: ${JSON.stringify(mode)}`);
-  }
-};
-
-/**
- * Manual minima only exist in `fitContent` mode: complete and finite positive
- * there, absent in `fixed` mode. Actual sizes never fall below the minima
- * (phase-1.1 data contract).
- */
-const assertRowSizingMinima = (
-  rows: TableDataV1["rows"],
-  fitContent: boolean,
-): void => {
-  for (const row of rows) {
-    const min = row.minHeight;
-    if (!fitContent) {
-      if (min !== undefined) {
-        throw new Error(`Table row minHeight is only valid in fitContent mode`);
-      }
-      continue;
-    }
-    if (typeof min !== "number" || !Number.isFinite(min) || min <= 0) {
-      throw new Error(`Invalid table row minHeight: ${JSON.stringify(min)}`);
-    }
-    if (row.height < min) {
-      throw new Error(
-        `Table row height ${row.height} is below its minHeight ${min}`,
-      );
-    }
-  }
-};
-
-/** Column counterpart of `assertRowSizingMinima`. */
-const assertColumnSizingMinima = (
-  columns: TableDataV1["columns"],
-  fitContent: boolean,
-): void => {
-  for (const column of columns) {
-    const min = column.minWidth;
-    if (!fitContent) {
-      if (min !== undefined) {
-        throw new Error(
-          `Table column minWidth is only valid in fitContent mode`,
-        );
-      }
-      continue;
-    }
-    if (typeof min !== "number" || !Number.isFinite(min) || min <= 0) {
-      throw new Error(`Invalid table column minWidth: ${JSON.stringify(min)}`);
-    }
-    if (column.width < min) {
-      throw new Error(
-        `Table column width ${column.width} is below its minWidth ${min}`,
-      );
-    }
-  }
-};
-
 const assertValidCell = (
   cell: unknown,
   rowIds: ReadonlySet<string>,
@@ -303,15 +234,10 @@ export const assertValidTableData = (table: unknown): TableDataV1 => {
     throw new Error("Table must have at least one row and one column");
   }
 
-  assertSizingMode(value.sizingMode);
-
-  const fitContent = getTableSizingMode(value) === "fitContent";
   assertUniqueIds(rows, "row");
   assertUniqueIds(columns, "column");
   assertDimensions(rows, "height", "row");
   assertDimensions(columns, "width", "column");
-  assertRowSizingMinima(rows, fitContent);
-  assertColumnSizingMinima(columns, fitContent);
 
   const rowIds = new Set(rows.map((row) => row.id));
   const columnIds = new Set(columns.map((column) => column.id));

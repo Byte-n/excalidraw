@@ -103,22 +103,9 @@ export type TableCellContainerRef = Readonly<{
 /** Direct spatial parent. Later container kinds extend this discriminated union. */
 export type DirectContainerRef = FrameLikeContainerRef | TableCellContainerRef;
 
-export type TableRowData = Readonly<{
-  id: string;
-  height: number;
-  /**
-   * Manual size floor in `fitContent` mode (phase-1.1); absent in `fixed`
-   * mode. Actual size must never fall below it.
-   */
-  minHeight?: number;
-}>;
+export type TableRowData = Readonly<{ id: string; height: number }>;
 
-export type TableColumnData = Readonly<{
-  id: string;
-  width: number;
-  /** Width counterpart of `TableRowData.minHeight`. */
-  minWidth?: number;
-}>;
+export type TableColumnData = Readonly<{ id: string; width: number }>;
 
 export type TableCellData = Readonly<{
   id: string;
@@ -129,25 +116,12 @@ export type TableCellData = Readonly<{
 }>;
 
 /**
- * Content-driven sizing of a table (phase-1.1). `fixed` (the default, also
- * when the field is absent on persisted data) keeps P01 behaviour: rows and
- * columns only change through explicit structure operations. `fitContent`
- * grows rows/columns to fit their cell content on content edits, bounded by
- * the per-row/column manual minima.
- */
-export type TableSizingMode = "fixed" | "fitContent";
-
-/**
  * Persisted grid structure of a table element. Row/column sizes are formal
  * structure fields (not `customData`); cell geometry is derived from the
- * ordered row/column sizes and never persisted. Content measurements are
- * derived values and are never persisted either — only the explicit editing
- * operations listed in phase-1.1 commit new sizes.
+ * ordered row/column sizes and never persisted.
  */
 export type TableDataV1 = Readonly<{
   schemaVersion: 1;
-  /** Absent means `fixed` — existing v1 tables keep loading unchanged. */
-  sizingMode?: TableSizingMode;
   rows: readonly TableRowData[];
   columns: readonly TableColumnData[];
   cells: readonly TableCellData[];

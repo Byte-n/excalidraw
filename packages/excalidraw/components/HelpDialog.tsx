@@ -206,14 +206,6 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
               shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowRight")]}
             />
             <Shortcut
-              label={t("labels.tableSizingMode")}
-              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+M")]}
-            />
-            <Shortcut
-              label={t("labels.tableResetMinSizes")}
-              shortcuts={[getShortcutKey("CtrlOrCmd+Alt+M")]}
-            />
-            <Shortcut
               label={t("labels.eyeDropper")}
               shortcuts={[KEYS.I, "Shift+S", "Shift+G"]}
             />

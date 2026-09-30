@@ -47,6 +47,7 @@ import {
   isMindmapEdgeElement,
   isMindmapNodeElement,
   isTableElement,
+  isTableCellBackgroundText,
   getTableCellBounds,
   maxBindingDistance_simple,
   isTextElement,
@@ -1560,45 +1561,6 @@ const renderTableStructurePreview = (
       context.strokeStyle = accent;
       context.stroke();
     }
-
-    // fit-content size feedback (phase-1.1): the separator shows the
-    // content-limited size against the user's requested one
-    if (preview.source === "resize" && preview.sizeHint) {
-      const { requested, applied } = preview.sizeHint;
-      const label = `${Math.round(applied)} px · content ≥ ${Math.round(
-        requested,
-      )}`;
-      const fontSize = 11 / appState.zoom.value;
-      context.font = `${fontSize}px Excalifont, "Noto Sans", sans-serif`;
-      const metrics = context.measureText(label);
-      const padX = 5 / appState.zoom.value;
-      const padY = 3 / appState.zoom.value;
-      const boxWidth = metrics.width + padX * 2;
-      const boxHeight = fontSize + padY * 2;
-      const margin = 8 / appState.zoom.value;
-      const x =
-        preview.kind === "row"
-          ? table.x + table.width - boxWidth - margin
-          : table.x + preview.offset + margin;
-      const y =
-        preview.kind === "row"
-          ? table.y + preview.offset + margin
-          : table.y + margin;
-
-      context.save();
-      context.globalAlpha = 0.92;
-      context.fillStyle = getThemedColor("#e0dfff", appState.theme);
-      context.strokeStyle = accent;
-      context.lineWidth = 1 / appState.zoom.value;
-      context.beginPath();
-      context.rect(x, y, boxWidth, boxHeight);
-      context.fill();
-      context.stroke();
-      context.fillStyle = getThemedColor("#1b1b1f", appState.theme);
-      context.textBaseline = "middle";
-      context.fillText(label, x + padX, y + boxHeight / 2);
-      context.restore();
-    }
   });
 };
 
@@ -2218,9 +2180,16 @@ const _renderInteractiveScene = ({
     }
   }
 
+  const editingTableBackgroundText = isTableCellBackgroundText(
+    appState.editingTextElement,
+  );
   const activeTextElement = getActiveTextElement(selectedElements, appState);
 
-  if (activeTextElement && !activeTextElement.autoResize) {
+  if (
+    activeTextElement &&
+    !activeTextElement.autoResize &&
+    !isTableCellBackgroundText(activeTextElement)
+  ) {
     renderResetAutoResizeHandle(
       activeTextElement,
       context,
@@ -2234,7 +2203,11 @@ const _renderInteractiveScene = ({
     const textElement = allElementsMap.get(appState.editingTextElement.id) as
       | ExcalidrawTextElement
       | undefined;
-    if (textElement && !textElement.autoResize) {
+    if (
+      textElement &&
+      !textElement.autoResize &&
+      !isTableCellBackgroundText(textElement)
+    ) {
       renderTextBox(
         textElement,
         context,
@@ -2277,7 +2250,7 @@ const _renderInteractiveScene = ({
     );
   }
 
-  if (appState.highlightedTableCell) {
+  if (appState.highlightedTableCell && !editingTableBackgroundText) {
     renderTableCellHighlight(
       context,
       appState,
@@ -2286,7 +2259,7 @@ const _renderInteractiveScene = ({
     );
   }
 
-  if (appState.tableRowColSelection) {
+  if (appState.tableRowColSelection && !editingTableBackgroundText) {
     renderTableRowColSelection(
       context,
       appState,
@@ -2295,7 +2268,7 @@ const _renderInteractiveScene = ({
     );
   }
 
-  if (appState.tableStructurePreview) {
+  if (appState.tableStructurePreview && !editingTableBackgroundText) {
     renderTableStructurePreview(
       context,
       appState,
@@ -2412,16 +2385,18 @@ const _renderInteractiveScene = ({
     }
   }
 
-  for (const table of structureTables.values()) {
-    renderTableStructureAffordances(
-      context,
-      appState,
-      table,
-      appState.tableStructureHover,
-    );
+  if (!editingTableBackgroundText) {
+    for (const table of structureTables.values()) {
+      renderTableStructureAffordances(
+        context,
+        appState,
+        table,
+        appState.tableStructureHover,
+      );
+    }
   }
 
-  if (appState.tableStructureHover) {
+  if (appState.tableStructureHover && !editingTableBackgroundText) {
     renderTableStructureHover(
       context,
       appState,
@@ -2432,6 +2407,7 @@ const _renderInteractiveScene = ({
 
   // Paint selected elements
   if (
+    !editingTableBackgroundText &&
     !appState.multiElement &&
     !appState.newElement &&
     !appState.selectedLinearElement?.isEditing &&
