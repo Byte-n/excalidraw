@@ -273,12 +273,14 @@ describe("table row/column structure", () => {
       const target = { x: grip.x, y: table.y + 2 * ROW_HEIGHT + 10 };
       mouseMove(target.x, target.y);
       await nextFrame();
-      // the preview line is exactly where the commit will land
+      // the preview line marks the landing slot's boundary in the current
+      // grid — here the second | third row line, since the pointer crossed
+      // the second row's center
       expect(h.state.tableStructurePreview).toMatchObject({
         tableId: table.id,
         kind: "row",
         boundaryIndex: 1,
-        offset: ROW_HEIGHT,
+        offset: 2 * ROW_HEIGHT,
         source: "move",
       });
 
@@ -345,6 +347,53 @@ describe("table row/column structure", () => {
         snapshot.rowIds,
       );
       expect(h.history.undoStack.length).toBe(undoCount);
+    });
+
+    it("keeps the reorder preview line on the visible grid boundaries after a resize", async () => {
+      const { table, snapshot } = createFixture();
+
+      // grow the first row so the grid is no longer uniform
+      const separator = { x: table.x + 100, y: table.y + ROW_HEIGHT };
+      mouseDown(separator.x, separator.y);
+      mouseMove(separator.x, separator.y + 24);
+      mouseUp(separator.x, separator.y + 24);
+      expect(getTable().table.rows[0].height).toBe(ROW_HEIGHT + 24);
+
+      const grip = { x: table.x - 12, y: table.y + (ROW_HEIGHT + 24) / 2 };
+      mouseDown(grip.x, grip.y);
+
+      // pointer in the second row's upper half: no center crossed yet, the
+      // line waits at the top edge
+      mouseMove(grip.x, table.y + ROW_HEIGHT + 24 + ROW_HEIGHT / 2 - 10);
+      await nextFrame();
+      expect(h.state.tableStructurePreview).toMatchObject({
+        boundaryIndex: 0,
+        offset: 0,
+      });
+
+      // pointer past the second row's center: the line rides the current
+      // grid — the second | third row boundary, not a uniform-row offset
+      mouseMove(grip.x, table.y + ROW_HEIGHT + 24 + ROW_HEIGHT + 10);
+      await nextFrame();
+      expect(h.state.tableStructurePreview).toMatchObject({
+        boundaryIndex: 1,
+        offset: ROW_HEIGHT + 24 + ROW_HEIGHT,
+      });
+
+      // pointer past the third row's center: the line reaches the bottom edge
+      mouseMove(grip.x, table.y + ROW_HEIGHT + 24 + 2 * ROW_HEIGHT + 10);
+      await nextFrame();
+      expect(h.state.tableStructurePreview).toMatchObject({
+        boundaryIndex: 2,
+        offset: ROW_HEIGHT + 24 + 2 * ROW_HEIGHT,
+      });
+
+      mouseUp(grip.x, table.y + ROW_HEIGHT + 24 + 2 * ROW_HEIGHT + 10);
+      expect(getTable().table.rows.map((row) => row.id)).toEqual([
+        snapshot.rowIds[1],
+        snapshot.rowIds[2],
+        snapshot.rowIds[0],
+      ]);
     });
   });
 

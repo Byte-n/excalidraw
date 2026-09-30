@@ -1243,9 +1243,11 @@ export const maybeUpdateTableStructureHoverOnPointerMove = (
  * Where a dragged row/column would land: the boundary between the remaining
  * rows/columns the pointer hovers, as the final array index
  * `moveRowInTable`/`moveColumnInTable` expects, plus the table-local offset
- * of the preview line. The drag preview and the pointer-up commit both call
- * this, so the line the user sees is exactly the landing spot
- * (phase-1.md:87, :94).
+ * of the preview line. The offset lives in the current grid — the source
+ * row/column still occupies its band while dragged — so the line always
+ * sits on a visible grid boundary no matter the row heights / column widths.
+ * The drag preview and the pointer-up commit both call this, so the line
+ * the user sees is exactly the landing spot (phase-1.md:87, :94).
  */
 const resolveTableMoveTarget = (
   table: NonDeleted<ExcalidrawTableElement>,
@@ -1275,18 +1277,19 @@ const resolveTableMoveTarget = (
     offset += entry.size;
   }
 
-  // 预览线画在当前网格中前 boundaryIndex 个非源行/列的尺寸之和处
+  // 预览线画在当前网格的可见边界上：源行/列在拖动期间仍占着原位置，所以
+  // 按当前数组的完整累加和取落点边界——源行/列计入累计和，只是不计入落点
+  // 计数。行高/列宽不等时指示器也不会漂移出可见网格线
   let lineOffset = 0;
   let seen = 0;
   for (const entry of entries) {
-    if (entry.id === id) {
-      continue;
-    }
     if (seen === boundaryIndex) {
       break;
     }
     lineOffset += entry.size;
-    seen += 1;
+    if (entry.id !== id) {
+      seen += 1;
+    }
   }
   return { offset: lineOffset, boundaryIndex };
 };
