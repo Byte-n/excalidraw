@@ -65,7 +65,6 @@ import type {
   MagicGenerationData,
   NonDeleted,
   NonDeletedExcalidrawElement,
-  TableSizingMode,
 } from "@excalidraw/element/types";
 
 import type {
@@ -1834,7 +1833,9 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   /** Esc during an armed gesture: restore the arm-time scene, no history. */
-  public cancelTableGesture = (pointerDownState: PointerDownState): boolean => {
+  public cancelTableGesture = (
+    pointerDownState: PointerDownState,
+  ): boolean => {
     return tableController.cancelTableGesture(this, pointerDownState);
   };
 
@@ -1869,22 +1870,14 @@ class App extends React.Component<AppProps, AppState> {
     return tableController.moveSelectedTableRowCol(this, direction);
   };
 
-  /** Sizing-mode switch of the selected table (phase-1.1). */
-  public setTableSizingMode = (mode: TableSizingMode): boolean => {
-    return tableController.setSelectedTableSizingMode(this, mode);
-  };
-
-  /** Reset command for the manual row/column minima (phase-1.1). */
-  public resetTableManualMinSizes = (): boolean => {
-    return tableController.resetSelectedTableManualMinSizes(this);
-  };
-
   /**
    * Keyboard insert entry: a row/column selection receives the new row right
    * below (new column right next to) it; without a matching selection the
    * row/column appends at the table's end (phase-1.md:89).
    */
-  public insertTableRowCol = (kind: "insertRow" | "insertColumn"): boolean => {
+  public insertTableRowCol = (
+    kind: "insertRow" | "insertColumn",
+  ): boolean => {
     const selection = this.state.tableRowColSelection;
     if (!selection) {
       return false;
@@ -1939,11 +1932,11 @@ class App extends React.Component<AppProps, AppState> {
               containerRef.cellId,
             )
           : frameId
-          ? getFrameChildrenInsertionIndex(
-              this.scene.getElementsIncludingDeleted(),
-              frameId,
-            )
-          : null;
+        ? getFrameChildrenInsertionIndex(
+            this.scene.getElementsIncludingDeleted(),
+            frameId,
+          )
+        : null;
       this.scene.insertElementsAtIndex(chunk, insertionIndex);
     }
   };

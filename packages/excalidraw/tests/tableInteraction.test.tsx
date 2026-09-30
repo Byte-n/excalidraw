@@ -275,6 +275,7 @@ describe("table tool", () => {
       doubleClickAt(center.x, center.y);
 
       const editor = await getTextEditor();
+      expect(editor.style.whiteSpace).toBe("pre-wrap");
       const texts = getBackgroundTexts();
       expect(texts).toHaveLength(1);
       const text = texts[0];
@@ -307,6 +308,45 @@ describe("table tool", () => {
       expect(committed.autoResize).toBe(false);
       expect(committed.width).toBe(160);
       expect(committed.x + committed.width / 2).toBe(80);
+    });
+
+    it("keeps the background editor as wide as its cell near the viewport edge", async () => {
+      const edgeTable = API.createElement({
+        type: "table",
+        x: h.state.width - 130,
+        y: 0,
+      });
+      API.setElements([edgeTable]);
+
+      const center = cellCenter(edgeTable, 0, 0);
+      doubleClickAt(center.x, center.y);
+
+      const editor = await getTextEditor();
+      const text = getBackgroundTexts()[0];
+      expect(text.width).toBe(edgeTable.table.columns[0].width);
+      expect(editor.style.width).toBe(`${text.width}px`);
+    });
+
+    it("grows the table row while typing and keeps the text box inside it", async () => {
+      const initialHeight = table.table.rows[0].height;
+      const center = cellCenter(table, 0, 0);
+      doubleClickAt(center.x, center.y);
+      const editor = await getTextEditor();
+      updateTextEditor(
+        editor,
+        "A long cell label that wraps onto several lines and must stay visible while it is being edited.",
+      );
+
+      const duringEdit = getTable();
+      expect(duringEdit.table.rows[0].height).toBeGreaterThan(initialHeight);
+      const text = getBackgroundTexts()[0];
+      expect(text.height).toBe(duringEdit.table.rows[0].height);
+      expect(text.width).toBe(duringEdit.table.columns[0].width);
+
+      Keyboard.exitTextEditor(editor);
+      expect(getTable().table.rows[0].height).toBe(
+        duringEdit.table.rows[0].height,
+      );
     });
 
     it("re-opens the same element instead of creating a second background text", async () => {

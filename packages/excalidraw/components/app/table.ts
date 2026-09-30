@@ -5,6 +5,7 @@ import {
   distance,
   DRAGGING_THRESHOLD,
   getGridPoint,
+  getFontString,
   getLineHeight,
   isSelectionLikeTool,
   TABLE_STRUCTURE_INSERTION_OFFSET,
@@ -18,7 +19,6 @@ import {
 import {
   MIN_TABLE_COLUMN_WIDTH,
   MIN_TABLE_ROW_HEIGHT,
-  computeTableFitContentUpdates,
   computeTableUniformScale,
   prepareTableUniformScale,
   evenlySplitTableSize,
@@ -34,17 +34,18 @@ import {
   getTableColumnOffset,
   getTableHeight,
   getTableRowOffset,
-  getTableSizingMode,
   getTableSubtreeElements,
   getTableWidth,
+  measureText,
   resizeTest,
   insertColumnInTable,
   insertRowInTable,
   isBelowTableMinimumPreset,
   isBoundToContainer,
   isFrameLikeElement,
+  isTableCellBackgroundText,
   isTableElement,
-  measureTableCellContentRequirements,
+  isTextElement,
   moveColumnInTable,
   moveRowInTable,
   newElementWith,
@@ -52,9 +53,8 @@ import {
   newTableElement,
   removeColumnFromTable,
   removeRowFromTable,
-  resetTableManualMinSizes,
-  setTableSizingMode,
   tableDefaultSizes,
+  wrapText,
 } from "@excalidraw/element";
 
 import type {
@@ -64,7 +64,6 @@ import type {
   NonDeleted,
   NonDeletedExcalidrawElement,
   TableDataV1,
-  TableSizingMode,
 } from "@excalidraw/element/types";
 
 import { snapNewElement } from "../../snapping";
@@ -517,8 +516,8 @@ const createTableCellBackgroundText = (
     fontSize: app.state.currentItemFontSize,
     fontFamily,
     lineHeight: getLineHeight(fontFamily),
-    // the fixed box covers the cell and wraps: editing it never resizes the
-    // cell, and it never grows into a drag-in target's way
+    // The text box covers the cell; wrapped background text can expand the
+    // owning row, while the column width remains controlled by the table.
     textAlign: "center",
     verticalAlign: VERTICAL_ALIGN.MIDDLE,
     containerId: null,
@@ -781,9 +780,8 @@ const applyMemberTranslations = (
 
 /**
  * Re-fits the background text boxes of the given cells to their (new) cell
- * geometry — same pivot math as `createTableCellBackgroundText`. The font
- * size never changes here: the box follows the cell, not the other way
- * around (phase-1.md:95).
+ * geometry. Background text uses the current column width for wrapping and
+ * its measured height is allowed to grow the owning row.
  */
 const refitCellBackgroundTexts = (
   app: TableApp,
@@ -791,6 +789,8 @@ const refitCellBackgroundTexts = (
   cellIds: readonly string[],
 ): void => {
   const elementsMap = app.scene.getNonDeletedElementsMap();
+  const textsByCell = new Map<string, ExcalidrawTextElement[]>();
+  const requiredHeights = new Map<string, number>();
   for (const cellId of cellIds) {
     const texts = getIndexedTableCellChildren(
       elementsMap,
@@ -805,23 +805,147 @@ const refitCellBackgroundTexts = (
     if (!bounds) {
       continue;
     }
-    const center = getTableCellSceneCenter(table, cellId);
-    if (!center) {
+    const cell = table.table.cells.find((candidate) => candidate.id === cellId);
+    if (!cell) {
       continue;
     }
-    for (const text of texts) {
+    const row = table.table.rows.find(
+      (candidate) => candidate.id === cell.rowId,
+    );
+    if (!row) {
+      continue;
+    }
+    const backgroundTexts = texts as ExcalidrawTextElement[];
+    textsByCell.set(cellId, backgroundTexts);
+    for (const backgroundText of backgroundTexts) {
+      const wrapped = wrapText(
+        backgroundText.originalText,
+        getFontString(backgroundText),
+        Math.max(bounds.width, 1),
+      );
+      const height = measureText(
+        wrapped,
+        getFontString(backgroundText),
+        backgroundText.lineHeight,
+      ).height;
+      requiredHeights.set(
+        row.id,
+        Math.max(requiredHeights.get(row.id) ?? 0, height),
+      );
+    }
+  }
+
+  const rowsNeedGrowth = table.table.rows.some((row) => {
+    const requiredHeight = requiredHeights.get(row.id);
+    return requiredHeight !== undefined && requiredHeight > row.height;
+  });
+  if (rowsNeedGrowth) {
+    const nextTable: TableDataV1 = {
+      ...table.table,
+      rows: table.table.rows.map((row) => {
+        const requiredHeight = requiredHeights.get(row.id);
+        return requiredHeight !== undefined && requiredHeight > row.height
+          ? { ...row, height: requiredHeight }
+          : row;
+      }),
+    };
+    const translations = getMemberTranslationsForRows(table.table, nextTable);
+    applyMemberTranslations(app, table, "row", translations);
+    app.scene.mutateElement(
+      table,
+      {
+        table: nextTable,
+        height: getTableHeight(nextTable),
+      },
+      { informMutation: false, isDragging: true },
+    );
+  }
+
+  const currentTable = app.scene.getNonDeletedElement(table.id);
+  if (!currentTable || !isTableElement(currentTable)) {
+    return;
+  }
+  const currentElementsMap = app.scene.getNonDeletedElementsMap();
+  for (const [cellId, backgroundTexts] of textsByCell) {
+    const bounds = getTableCellBounds(currentTable.table, cellId);
+    const center = getTableCellSceneCenter(currentTable, cellId);
+    if (!bounds || !center) {
+      continue;
+    }
+    for (const backgroundText of backgroundTexts) {
+      const liveText = currentElementsMap.get(backgroundText.id);
+      if (!liveText || !isTextElement(liveText)) {
+        continue;
+      }
+      const wrapped = wrapText(
+        liveText.originalText,
+        getFontString(liveText),
+        Math.max(bounds.width, 1),
+      );
+      const height = measureText(
+        wrapped,
+        getFontString(liveText),
+        liveText.lineHeight,
+      ).height;
       app.scene.mutateElement(
-        text as ExcalidrawTextElement,
+        liveText,
         {
           x: center.x - bounds.width / 2,
-          y: center.y - bounds.height / 2,
+          y: center.y - height / 2,
           width: bounds.width,
-          height: bounds.height,
+          height,
+          text: wrapped,
         },
         { informMutation: false, isDragging: true },
       );
     }
   }
+};
+
+/**
+ * Background text is a row-sizing input regardless of the table's sizing
+ * mode. The text box keeps the cell width, while its wrapped height grows the
+ * row and translates members in later rows.
+ */
+export const refitTableCellBackgroundText = (
+  app: TableApp,
+  elementId: string,
+): boolean => {
+  const elementsMap = app.scene.getNonDeletedElementsMap();
+  const text = elementsMap.get(elementId);
+  const ref = text?.containerRef;
+  if (!text || !isTableCellBackgroundText(text) || ref?.kind !== "tableCell") {
+    return false;
+  }
+
+  const table = elementsMap.get(ref.elementId);
+  if (!table || !isTableElement(table)) {
+    return false;
+  }
+  const cell = table.table.cells.find(
+    (candidate) => candidate.id === ref.cellId,
+  );
+  if (!cell) {
+    return false;
+  }
+  const bounds = getTableCellBounds(table.table, cell.id);
+  if (!bounds) {
+    return false;
+  }
+
+  const row = table.table.rows.find((candidate) => candidate.id === cell.rowId);
+  if (!row) {
+    return false;
+  }
+  refitCellBackgroundTexts(app, table, [cell.id]);
+  const updatedTable = app.scene.getNonDeletedElement(table.id);
+  app.scene.triggerUpdate();
+  return Boolean(
+    updatedTable &&
+      isTableElement(updatedTable) &&
+      updatedTable.table.rows.find((candidate) => candidate.id === row.id)
+        ?.height !== row.height,
+  );
 };
 
 /**
@@ -1336,15 +1460,6 @@ export const armTableStructureGestureOnPointerDown = (
       if (startOffset === null) {
         return false;
       }
-      // fitContent mode: the content requirement is measured once at arm
-      // time (one snapshot per operation, phase-1.1) and floors the preview
-      const fitContent = getTableSizingMode(table.table) === "fitContent";
-      const requirements = fitContent
-        ? measureTableCellContentRequirements(
-            app.scene.getElementsIncludingDeleted(),
-            table,
-          )
-        : null;
       pointerDownState.tableGesture.active = {
         kind: isRow ? "resizeRow" : "resizeColumn",
         tableId: hover.tableId,
@@ -1364,9 +1479,6 @@ export const armTableStructureGestureOnPointerDown = (
           ? table.table.rows[startIndex].height
           : table.table.columns[startIndex].width,
         startOffset,
-        contentMinSize: requirements
-          ? (isRow ? requirements.rows : requirements.columns).get(id) ?? 0
-          : 0,
         startLocal: getTableLocalPoint(table, sceneCoords.x, sceneCoords.y),
         startElements: app.scene.getElementsIncludingDeleted(),
       };
@@ -1466,8 +1578,6 @@ export const handleTableGestureMove = (
     case "resizeRow":
     case "resizeColumn": {
       const isRow = gesture.kind === "resizeRow";
-      const fitContent =
-        getTableSizingMode(gesture.startTable) === "fitContent";
       const local = getTableLocalPoint(table, pointerCoords.x, pointerCoords.y);
       // 判定一律以按下时的快照为基准，随后整帧重设
       const requestedSize = (isRow ? local.y : local.x) - gesture.startOffset;
@@ -1475,45 +1585,28 @@ export const handleTableGestureMove = (
         requestedSize,
         isRow ? MIN_TABLE_ROW_HEIGHT : MIN_TABLE_COLUMN_WIDTH,
       );
-      // fitContent：内容把实际尺寸顶在需求之上，用户请求值成为新的下限
-      const previewSize = fitContent
-        ? Math.max(size, gesture.contentMinSize)
-        : size;
       if (
-        previewSize ===
-          (isRow
-            ? gesture.startTable.rows[gesture.startIndex].height
-            : gesture.startTable.columns[gesture.startIndex].width) &&
-        !fitContent
+        size ===
+        (isRow
+          ? table.table.rows[gesture.startIndex].height
+          : table.table.columns[gesture.startIndex].width)
       ) {
         return true;
       }
-      const delta = previewSize - gesture.startSize;
-      const growEntry = <T extends { height?: number; width?: number }>(
-        entry: T,
-      ) =>
-        isRow
-          ? {
-              ...entry,
-              height: previewSize,
-              ...(fitContent ? { minHeight: size } : {}),
-            }
-          : {
-              ...entry,
-              width: previewSize,
-              ...(fitContent ? { minWidth: size } : {}),
-            };
+      const delta = size - gesture.startSize;
       const newTable: TableDataV1 = isRow
         ? {
             ...gesture.startTable,
             rows: gesture.startTable.rows.map((row, index) =>
-              index === gesture.startIndex ? growEntry(row) : row,
+              index === gesture.startIndex ? { ...row, height: size } : row,
             ),
           }
         : {
             ...gesture.startTable,
             columns: gesture.startTable.columns.map((column, index) =>
-              index === gesture.startIndex ? growEntry(column) : column,
+              index === gesture.startIndex
+                ? { ...column, width: size }
+                : column,
             ),
           };
       for (const memberId of gesture.affectedMembers) {
@@ -1544,24 +1637,6 @@ export const handleTableGestureMove = (
       // 落地之后按新 bounds 计算
       if (updatedTable && isTableElement(updatedTable)) {
         refitCellBackgroundTexts(app, updatedTable, gesture.resizedCellIds);
-      }
-      // fitContent：请求值被内容顶住时提示限制来源（phase-1.1）
-      if (fitContent && gesture.contentMinSize > size + 0.001) {
-        app.setState({
-          tableStructurePreview: {
-            tableId: gesture.tableId,
-            kind: isRow ? "row" : "column",
-            offset: gesture.startOffset + previewSize,
-            boundaryIndex: gesture.startIndex,
-            source: "resize",
-            sizeHint: {
-              requested: size,
-              applied: previewSize,
-            },
-          },
-        });
-      } else if (app.state.tableStructurePreview?.source === "resize") {
-        app.setState({ tableStructurePreview: null });
       }
       app.scene.triggerUpdate();
       return true;
@@ -1723,29 +1798,17 @@ export const finalizeTableGestureOnPointerUp = (
     case "resizeColumn": {
       // the drag frames already mutated the scene; the release only closes
       // the single history entry. A drag back to the start size leaves the
-      // grid untouched — capture nothing (无变化不进历史). fitContent minima
-      // count as change: lowering a floor below the content requirement is a
-      // real user edit even when the size itself never moved.
+      // grid untouched — capture nothing (无变化不进历史)
       const rowsUnchanged =
         gesture.kind === "resizeRow" &&
-        gesture.startTable.rows.every((row, index) => {
-          const next = table.table.rows[index];
-          return (
-            next &&
-            row.height === next.height &&
-            row.minHeight === next.minHeight
-          );
-        });
+        gesture.startTable.rows.every(
+          (row, index) => row.height === table.table.rows[index]?.height,
+        );
       const columnsUnchanged =
         gesture.kind === "resizeColumn" &&
-        gesture.startTable.columns.every((column, index) => {
-          const next = table.table.columns[index];
-          return (
-            next &&
-            column.width === next.width &&
-            column.minWidth === next.minWidth
-          );
-        });
+        gesture.startTable.columns.every(
+          (column, index) => column.width === table.table.columns[index]?.width,
+        );
       if (rowsUnchanged || columnsUnchanged) {
         return true;
       }
@@ -1863,9 +1926,6 @@ export const commitTableInsert = (
     width: getTableWidth(newTable),
     height: getTableHeight(newTable),
   });
-  // P01.1: the child's structure change moves its own geometry — enclosing
-  // fitContent tables re-fit with the same commit
-  refitFitContentTablesForElements(app, [table.id]);
   app.scene.triggerUpdate();
 };
 
@@ -1950,8 +2010,6 @@ export const deleteSelectedTableRowCol = (app: TableApp): boolean => {
   });
   app.setState({ tableRowColSelection: null });
   app.store.scheduleCapture();
-  // P01.1: enclosing fitContent tables re-fit after a structural change
-  refitFitContentTablesForElements(app, [table.id]);
   app.scene.triggerUpdate();
   return true;
 };
@@ -2007,187 +2065,6 @@ export const moveSelectedTableRowCol = (
     height: getTableHeight(newTable),
   });
   app.store.scheduleCapture();
-  // P01.1: enclosing fitContent tables re-fit after a structural change
-  refitFitContentTablesForElements(app, [table.id]);
-  app.scene.triggerUpdate();
-  return true;
-};
-
-// ---------------------------------------------------------------------------
-// Fit-content sizing (P01.1, phase-1.1.md): one optional per-table mode.
-// Fixed tables keep the P01 behaviour untouched; `fitContent` tables grow
-// their rows/columns on content edits through `computeTableFitContentUpdates`
-// (the element-package command is the only source of the geometry), and the
-// expansion lands inside the triggering edit's single history entry.
-// ---------------------------------------------------------------------------
-
-/**
- * The fitContent tables affected by the given elements: each element's direct
- * container chain is walked upward (cell -> table -> enclosing cell ...), the
- * fitContent tables collected, and the nested ones dropped — one computation
- * on the outermost table already covers its whole subtree inside-out.
- */
-const collectFitContentTableIds = (
-  app: TableApp,
-  elementIds: readonly string[],
-): string[] => {
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  const tables = new Map<string, NonDeleted<ExcalidrawTableElement>>();
-  for (const id of elementIds) {
-    let element = elementsMap.get(id);
-    while (element) {
-      const ownerId = element.containerRef?.elementId;
-      if (!ownerId) {
-        break;
-      }
-      const owner = elementsMap.get(ownerId);
-      if (!owner) {
-        break;
-      }
-      if (
-        isTableElement(owner) &&
-        getTableSizingMode(owner.table) === "fitContent"
-      ) {
-        tables.set(owner.id, owner as NonDeleted<ExcalidrawTableElement>);
-      }
-      element = owner;
-    }
-  }
-  // keep only the outermost tables of the collected set
-  const outermost: string[] = [];
-  for (const table of tables.values()) {
-    let ancestor = elementsMap.get(table.containerRef?.elementId ?? "");
-    let covered = false;
-    while (ancestor) {
-      if (tables.has(ancestor.id)) {
-        covered = true;
-        break;
-      }
-      ancestor = elementsMap.get(ancestor.containerRef?.elementId ?? "");
-    }
-    if (!covered) {
-      outermost.push(table.id);
-    }
-  }
-  return outermost;
-};
-
-/**
- * Applies one table's fit-content updates to the scene: the grid and the
- * anchor-preserving position, the per-cell member translations and the
- * background text boxes re-fit to their new cell geometry. Captures nothing
- * — the caller's operation owns the single history entry.
- */
-const applyTableFitContentUpdates = (
-  app: TableApp,
-  tableId: string,
-): boolean => {
-  const fit = computeTableFitContentUpdates(
-    app.scene.getElementsIncludingDeleted(),
-    tableId,
-  );
-  if (!fit?.changed) {
-    return false;
-  }
-  for (const [id, update] of fit.updates) {
-    const element = app.scene.getNonDeletedElement(id);
-    if (element) {
-      app.scene.mutateElement(element as ExcalidrawElement, update as any);
-    }
-  }
-  for (const changedTableId of fit.changedTableIds) {
-    const changedTable = app.scene.getNonDeletedElement(changedTableId);
-    if (changedTable && isTableElement(changedTable)) {
-      refitCellBackgroundTexts(
-        app,
-        changedTable,
-        changedTable.table.cells.map((cell) => cell.id),
-      );
-    }
-  }
-  return true;
-};
-
-/**
- * Content-edit commit entry (phase-1.1 触发与交互): called after an edit
- * landed — text submit, drag in/out or across cells, member move/resize/
- * rotate, paste, clone — it recomputes every affected fitContent table
- * (expansion only) and reports whether the scene changed so the caller can
- * include the growth in its capture.
- */
-export const refitFitContentTablesForElements = (
-  app: TableApp,
-  elementIds: readonly string[],
-): boolean => {
-  if (!elementIds.length) {
-    return false;
-  }
-  let changedAny = false;
-  for (const tableId of collectFitContentTableIds(app, elementIds)) {
-    changedAny = applyTableFitContentUpdates(app, tableId) || changedAny;
-  }
-  if (changedAny) {
-    app.scene.triggerUpdate();
-  }
-  return changedAny;
-};
-
-/**
- * Mode switch of the selected table (phase-1.1 数据契约): to `fitContent`
- * the current sizes initialize the manual minima and one content-driven
- * expansion follows in the same commit; back to `fixed` the minima drop and
- * the geometry is kept verbatim. One undo entry per switch.
- */
-export const setSelectedTableSizingMode = (
-  app: TableApp,
-  mode: TableSizingMode,
-): boolean => {
-  const selectedElements = app.scene.getSelectedElements(app.state);
-  if (selectedElements.length !== 1 || !isTableElement(selectedElements[0])) {
-    return false;
-  }
-  const table = selectedElements[0] as NonDeleted<ExcalidrawTableElement>;
-  const nextTable = setTableSizingMode(table.table, mode);
-  if (nextTable === table.table) {
-    return false;
-  }
-
-  app.store.scheduleCapture();
-  app.scene.mutateElement(table, {
-    table: nextTable,
-    width: getTableWidth(nextTable),
-    height: getTableHeight(nextTable),
-  });
-  if (mode === "fitContent") {
-    // switching in measures the current content once and grows what it needs
-    applyTableFitContentUpdates(app, table.id);
-  }
-  app.scene.triggerUpdate();
-  return true;
-};
-
-/**
- * Reset command (phase-1.1 触发与交互): every manual minimum returns to the
- * product's minimum row/column size, then one re-evaluation grows the rows/
- * columns back only as far as the content requires. One undo entry.
- */
-export const resetSelectedTableManualMinSizes = (app: TableApp): boolean => {
-  const selectedElements = app.scene.getSelectedElements(app.state);
-  if (selectedElements.length !== 1 || !isTableElement(selectedElements[0])) {
-    return false;
-  }
-  const table = selectedElements[0] as NonDeleted<ExcalidrawTableElement>;
-  if (getTableSizingMode(table.table) !== "fitContent") {
-    return false;
-  }
-
-  const nextTable = resetTableManualMinSizes(table.table, {
-    minHeight: MIN_TABLE_ROW_HEIGHT,
-    minWidth: MIN_TABLE_COLUMN_WIDTH,
-  });
-  app.store.scheduleCapture();
-  app.scene.mutateElement(table, { table: nextTable });
-  applyTableFitContentUpdates(app, table.id);
   app.scene.triggerUpdate();
   return true;
 };

@@ -101,6 +101,13 @@ export const shouldTestInside = (element: ExcalidrawElement) => {
     return false;
   }
 
+  // Composite shapes are selectable from their full range regardless of
+  // background or bound text. Open shapes use their rectangular text area;
+  // closed shapes are further constrained by their actual outline below.
+  if (element.type === "composite_shape") {
+    return true;
+  }
+
   const isDraggableFromInside =
     (hasBackground(element) && !isTransparent(element.backgroundColor)) ||
     // the table body is content chrome: clicking a cell's blank area (or the
@@ -196,7 +203,15 @@ export const hitElementItself = ({
     : false;
 
   // Hit test against the extended, rotated bounding box of the element first
-  const bounds = getElementBounds(element, elementsMap, true);
+  const bounds =
+    element.type === "composite_shape" && isCompositeShapeOpen(element.shape.id)
+      ? ([
+          element.x,
+          element.y,
+          element.x + element.width,
+          element.y + element.height,
+        ] as Bounds)
+      : getElementBounds(element, elementsMap, true);
   const hitBounds = isPointInRotatedBounds(
     point,
     bounds,
@@ -893,7 +908,20 @@ export const isPointInElement = (
     element.type === "composite_shape" &&
     isCompositeShapeOpen(element.shape.id)
   ) {
-    return false;
+    const center = pointFrom<GlobalPoint>(
+      element.x + element.width / 2,
+      element.y + element.height / 2,
+    );
+    const localPoint = pointRotateRads(
+      point,
+      center,
+      -element.angle as Radians,
+    );
+    return isPointWithinBounds(
+      pointFrom(element.x, element.y),
+      localPoint,
+      pointFrom(element.x + element.width, element.y + element.height),
+    );
   }
   if (
     element.type === "mindmap-node" &&

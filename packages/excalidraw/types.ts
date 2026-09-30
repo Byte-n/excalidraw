@@ -400,12 +400,6 @@ export type TablePointerGesture =
       startIndex: number;
       startSize: number;
       startOffset: number;
-      /**
-       * Content requirement of the resized row/column, measured once at
-       * pointer down (fitContent mode only; 0 in fixed mode): the preview
-       * never renders the row/column below it (phase-1.1).
-       */
-      contentMinSize: number;
       /** the pointer, in table-local coordinates, at pointer down */
       startLocal: { x: number; y: number };
       /** scene snapshot at pointer down for the traceless Esc restore */
@@ -567,13 +561,7 @@ export interface AppState {
     offset: number;
     /** insertion array index, or the final index for a reorder */
     boundaryIndex: number;
-    source: "insert" | "move" | "resize";
-    /**
-     * Fit-content size feedback (phase-1.1): the user's requested size and
-     * the content-limited size actually applied, shown while a fitContent
-     * separator drag is held below the content requirement.
-     */
-    sizeHint?: { requested: number; applied: number };
+    source: "insert" | "move";
   } | null;
   frameRendering: {
     enabled: boolean;
@@ -1415,10 +1403,6 @@ export type AppClassProperties = {
   deleteSelectedTableRowCol: App["deleteSelectedTableRowCol"];
   moveSelectedTableRowCol: App["moveSelectedTableRowCol"];
   insertTableRowCol: App["insertTableRowCol"];
-
-  /** table sizing mode (P01.1, phase-1.1.md) */
-  setTableSizingMode: App["setTableSizingMode"];
-  resetTableManualMinSizes: App["resetTableManualMinSizes"];
 
   isInteractionEnabled: App["isInteractionEnabled"];
   isNavigationEnabled: App["isNavigationEnabled"];

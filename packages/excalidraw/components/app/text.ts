@@ -2,6 +2,7 @@ import {
   getActiveTextElement,
   getBoundTextElement,
   frameLikeContainerRef,
+  isTableCellBackgroundText,
   isTextElement,
   isValidTextContainer,
 } from "@excalidraw/element";
@@ -171,10 +172,18 @@ export const handleTextWysiwyg = (
         updateBoundElements(element, app.scene);
       }
     }),
+    onTextLayoutReady: withBatchedUpdates(() => {
+      if (isTableCellBackgroundText(element)) {
+        tableController.refitTableCellBackgroundText(app, element.id);
+      }
+    }),
     onSubmit: withBatchedUpdates(({ viaKeyboard, nextOriginalText }) => {
       app.textWysiwygSubmitHandler = null;
       const isDeleted = !nextOriginalText.trim();
       updateElement(nextOriginalText, isDeleted);
+      if (isTableCellBackgroundText(element)) {
+        tableController.refitTableCellBackgroundText(app, element.id);
+      }
       const didCreateMindmapNode = app.mindmap.handleTextSubmit(element);
       const elementIdToSelect =
         viaKeyboard &&
@@ -199,9 +208,6 @@ export const handleTextWysiwyg = (
       if (isDeleted) {
         fixBindingsAfterDeletion(app.scene.getNonDeletedElements(), [element]);
       }
-      // P01.1 (phase-1.1.md): fitContent tables regrow with the submitted
-      // text — one expansion inside the text edit's single capture
-      tableController.refitFitContentTablesForElements(app, [element.id]);
       if (!isDeleted || isExistingElement || didCreateMindmapNode) {
         app.store.scheduleCapture();
       }

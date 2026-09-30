@@ -1,13 +1,11 @@
 import { randomId } from "@excalidraw/common";
 
+import type { TableDataV1 } from "./types";
 import {
   assertValidTableData,
   getTableColumnOffset,
-  getTableSizingMode,
   getTableRowOffset,
 } from "./tableStruct";
-
-import type { TableDataV1, TableSizingMode } from "./types";
 
 /**
  * Pure row/column structure commands over `TableDataV1`. Every command takes
@@ -24,27 +22,6 @@ export type TableStructureOptions = {
   /** ID source, injectable for deterministic tests; defaults to `randomId`. */
   randomizer?: () => string;
 };
-
-/**
- * Rebuilds the persisted payload with `sizingMode` and the sizing minima
- * carried over (phase-1.1: every structure command passes the mode and the
- * minima through), then re-validates. Row/column entries keep their
- * `minHeight`/`minWidth` through the caller's mapping spreads.
- */
-const buildTableData = (
-  table: TableDataV1,
-  overrides: Partial<
-    Pick<TableDataV1, "rows" | "columns" | "cells" | "sizingMode">
-  >,
-): TableDataV1 =>
-  assertValidTableData({
-    schemaVersion: 1,
-    sizingMode: table.sizingMode,
-    rows: table.rows,
-    columns: table.columns,
-    cells: table.cells,
-    ...overrides,
-  });
 
 export type TableRowResizeOptions = {
   /**
@@ -112,9 +89,6 @@ const assertColumnExists = (
  * bottom one), matching the dragged preview line's geometry. Every column
  * gets one fresh empty cell (`style: {}`, new id); existing cells keep their
  * ids, so member elements stay attached to their cell.
- *
- * In `fitContent` mode the new row's initial size becomes its manual minimum
- * (phase-1.1); it has no content yet, so no requirement pushes it beyond that.
  */
 export const insertRowInTable = (
   table: TableDataV1,
@@ -123,12 +97,7 @@ export const insertRowInTable = (
 ): TableDataV1 => {
   assertBoundaryIndex(boundaryIndex, table.rows.length, "row");
   const neighbour = table.rows[boundaryIndex - 1] ?? table.rows[boundaryIndex];
-  const fitContent = getTableSizingMode(table) === "fitContent";
-  const newRow = {
-    id: randomizer(),
-    height: neighbour.height,
-    ...(fitContent ? { minHeight: neighbour.height } : {}),
-  };
+  const newRow = { id: randomizer(), height: neighbour.height };
   const rows = [
     ...table.rows.slice(0, boundaryIndex),
     newRow,
@@ -141,16 +110,15 @@ export const insertRowInTable = (
     style: {},
   }));
 
-  return buildTableData(table, {
+  return assertValidTableData({
+    schemaVersion: 1,
     rows,
+    columns: table.columns,
     cells: [...table.cells, ...newCells],
   });
 };
 
-/**
- * Column counterpart of `insertRowInTable` (see it for the semantics,
- * including the `fitContent` minimum from the initial size).
- */
+/** Column counterpart of `insertRowInTable` (see it for the semantics). */
 export const insertColumnInTable = (
   table: TableDataV1,
   boundaryIndex: number,
@@ -159,12 +127,7 @@ export const insertColumnInTable = (
   assertBoundaryIndex(boundaryIndex, table.columns.length, "column");
   const neighbour =
     table.columns[boundaryIndex - 1] ?? table.columns[boundaryIndex];
-  const fitContent = getTableSizingMode(table) === "fitContent";
-  const newColumn = {
-    id: randomizer(),
-    width: neighbour.width,
-    ...(fitContent ? { minWidth: neighbour.width } : {}),
-  };
+  const newColumn = { id: randomizer(), width: neighbour.width };
   const columns = [
     ...table.columns.slice(0, boundaryIndex),
     newColumn,
@@ -177,7 +140,9 @@ export const insertColumnInTable = (
     style: {},
   }));
 
-  return buildTableData(table, {
+  return assertValidTableData({
+    schemaVersion: 1,
+    rows: table.rows,
     columns,
     cells: [...table.cells, ...newCells],
   });
@@ -210,8 +175,10 @@ export const removeRowFromTable = (
   });
 
   return {
-    table: buildTableData(table, {
+    table: assertValidTableData({
+      schemaVersion: 1,
       rows: table.rows.filter((row) => row.id !== rowId),
+      columns: table.columns,
       cells,
     }),
     removedCellIds,
@@ -240,7 +207,9 @@ export const removeColumnFromTable = (
   });
 
   return {
-    table: buildTableData(table, {
+    table: assertValidTableData({
+      schemaVersion: 1,
+      rows: table.rows,
       columns: table.columns.filter((column) => column.id !== columnId),
       cells,
     }),
@@ -272,7 +241,12 @@ export const moveRowInTable = (
   const rows = table.rows.filter((row) => row.id !== fromRowId);
   rows.splice(toIndex, 0, table.rows[fromIndex]);
 
-  return buildTableData(table, { rows });
+  return assertValidTableData({
+    schemaVersion: 1,
+    rows,
+    columns: table.columns,
+    cells: table.cells,
+  });
 };
 
 /** Column counterpart of `moveRowInTable` (see it for the semantics). */
@@ -295,7 +269,12 @@ export const moveColumnInTable = (
   const columns = table.columns.filter((column) => column.id !== fromColumnId);
   columns.splice(toIndex, 0, table.columns[fromIndex]);
 
-  return buildTableData(table, { columns });
+  return assertValidTableData({
+    schemaVersion: 1,
+    rows: table.rows,
+    columns,
+    cells: table.cells,
+  });
 };
 
 const assertValidNewSize = (size: number, label: string): void => {
@@ -317,11 +296,6 @@ const assertValidMinSize = (size: number | undefined, label: string): void => {
  * members of the resized row at their offsets from the cell's top-left corner
  * (no shift, no scale, overflow allowed) and translate later rows with
  * `getMemberTranslationsForRows`.
- *
- * In `fitContent` mode the drag also rewrites the row's manual minimum to the
- * clamped size (phase-1.1: dragging a separator edits the lower bound in the
- * same operation). The content-driven expansion on top of the minima is the
- * caller's fit-content computation, not this command.
  */
 export const resizeRowInTable = (
   table: TableDataV1,
@@ -333,26 +307,21 @@ export const resizeRowInTable = (
   assertValidMinSize(minHeight, "row height");
   assertRowExists(table.rows, rowId);
 
-  const fitContent = getTableSizingMode(table) === "fitContent";
   const height =
     minHeight !== undefined ? Math.max(newHeight, minHeight) : newHeight;
   const rows = table.rows.map((row) =>
-    row.id === rowId
-      ? {
-          ...row,
-          height,
-          ...(fitContent ? { minHeight: height } : {}),
-        }
-      : row,
+    row.id === rowId ? { ...row, height } : row,
   );
 
-  return buildTableData(table, { rows });
+  return assertValidTableData({
+    schemaVersion: 1,
+    rows,
+    columns: table.columns,
+    cells: table.cells,
+  });
 };
 
-/**
- * Column counterpart of `resizeRowInTable` (see it for the semantics,
- * including the `fitContent` minimum rewrite).
- */
+/** Column counterpart of `resizeRowInTable` (see it for the semantics). */
 export const resizeColumnInTable = (
   table: TableDataV1,
   columnId: string,
@@ -363,76 +332,17 @@ export const resizeColumnInTable = (
   assertValidMinSize(minWidth, "column width");
   assertColumnExists(table.columns, columnId);
 
-  const fitContent = getTableSizingMode(table) === "fitContent";
   const width =
     minWidth !== undefined ? Math.max(newWidth, minWidth) : newWidth;
   const columns = table.columns.map((column) =>
-    column.id === columnId
-      ? {
-          ...column,
-          width,
-          ...(fitContent ? { minWidth: width } : {}),
-        }
-      : column,
+    column.id === columnId ? { ...column, width } : column,
   );
 
-  return buildTableData(table, { columns });
-};
-
-/**
- * Switches the whole table's sizing mode (phase-1.1 data contract):
- * to `fitContent`, every row/column's current size initializes its manual
- * minimum; back to `fixed`, the minima fields are dropped and the sizes are
- * kept. Content is never re-measured here — switching in runs one expansion
- * through the fit-content computation on top, switching out preserves the
- * geometry verbatim. No-op returns the input unchanged.
- */
-export const setTableSizingMode = (
-  table: TableDataV1,
-  mode: TableSizingMode,
-): TableDataV1 => {
-  if (getTableSizingMode(table) === mode) {
-    return table;
-  }
-
-  if (mode === "fitContent") {
-    return buildTableData(table, {
-      sizingMode: "fitContent",
-      rows: table.rows.map((row) => ({ ...row, minHeight: row.height })),
-      columns: table.columns.map((column) => ({
-        ...column,
-        minWidth: column.width,
-      })),
-    });
-  }
-
-  return buildTableData(table, {
-    sizingMode: undefined,
-    rows: table.rows.map(({ minHeight: _, ...row }) => row),
-    columns: table.columns.map(({ minWidth: _, ...column }) => column),
-  });
-};
-
-/**
- * Resets every manual minimum to the product's minimum row/column size
- * (phase-1.1: the reset command sets the floors, it never writes computed
- * content requirements back into the minima). Fixed-mode tables reject the
- * command. Re-expanding from the new floors is the caller's fit-content
- * computation.
- */
-export const resetTableManualMinSizes = (
-  table: TableDataV1,
-  { minHeight, minWidth }: { minHeight: number; minWidth: number },
-): TableDataV1 => {
-  if (getTableSizingMode(table) !== "fitContent") {
-    throw new Error("Table manual minima can only be reset in fitContent mode");
-  }
-  assertValidMinSize(minHeight, "row height");
-  assertValidMinSize(minWidth, "column width");
-
-  return buildTableData(table, {
-    rows: table.rows.map((row) => ({ ...row, minHeight })),
-    columns: table.columns.map((column) => ({ ...column, minWidth })),
+  return assertValidTableData({
+    schemaVersion: 1,
+    rows: table.rows,
+    columns,
+    cells: table.cells,
   });
 };
 

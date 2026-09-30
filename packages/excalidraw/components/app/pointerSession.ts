@@ -622,7 +622,24 @@ export const handleCanvasPointerDown = (
 
   app.clearSelectionIfNotUsingSelection();
 
-  if (app.armTableStructureGestureOnPointerDown(pointerDownState)) {
+  // Selected elements are the most specific interaction target. Resolve this
+  // before container structure gestures so a selected child that overlaps a
+  // table rail or insertion boundary can still be dragged/transformed. The
+  // table element itself remains eligible for its own structure controls.
+  const selectedHitElement = app.getElementAtPosition(
+    pointerDownState.origin.x,
+    pointerDownState.origin.y,
+    { preferSelected: true },
+  );
+  const selectedChildHasPriority =
+    selectedHitElement &&
+    app.state.selectedElementIds[selectedHitElement.id] &&
+    !isTableElement(selectedHitElement);
+
+  if (
+    !selectedChildHasPriority &&
+    app.armTableStructureGestureOnPointerDown(pointerDownState)
+  ) {
     // a structure zone owns this gesture: outer-frame affordances beat cells
     // and element selection (phase-1.md:85); the shared pointer session
     // listeners still attach so move/up/Esc all flow through
@@ -2669,18 +2686,6 @@ export const onPointerUpFromPointerDownHandler = (
     }
 
     if (resizingElement) {
-      app.store.scheduleCapture();
-    }
-
-    // P01.1 (phase-1.1.md): fitContent tables regrow with the committed
-    // content change — drag in/out or across cells, member move, resize and
-    // rotate land here. Expansion joins the triggering edit's capture.
-    const fitRefitElementIds = resizingElement
-      ? [...Object.keys(app.state.selectedElementIds), resizingElement.id]
-      : Object.keys(app.state.selectedElementIds);
-    if (
-      tableController.refitFitContentTablesForElements(app, fitRefitElementIds)
-    ) {
       app.store.scheduleCapture();
     }
 

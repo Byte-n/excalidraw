@@ -48,6 +48,7 @@ import {
   isBoundToContainer,
   isMindmapLayoutFrozen,
   isStickyNoteElement,
+  isTableCellBackgroundText,
   isTextElement,
 } from "@excalidraw/element";
 
@@ -209,6 +210,7 @@ type SubmitHandler = () => void;
 
 export const textWysiwyg = ({
   onChange,
+  onTextLayoutReady,
   onSubmit,
   getViewportCoords,
   element,
@@ -225,6 +227,11 @@ export const textWysiwyg = ({
    *       is derived from `originalText`
    */
   onChange?: (nextOriginalText: string) => void;
+  /**
+   * Fired after `onChange` when background text layout may have changed its
+   * owning row. Suppressed mid-IME-composition and re-run on compositionend.
+   */
+  onTextLayoutReady?: () => void;
   onSubmit: (data: { viaKeyboard: boolean; nextOriginalText: string }) => void;
   getViewportCoords: (x: number, y: number) => [number, number];
   element: ExcalidrawTextElement;
@@ -236,6 +243,9 @@ export const textWysiwyg = ({
 }): SubmitHandler => {
   const ownerDocument = excalidrawContainer?.ownerDocument ?? document;
   const ownerWindow = ownerDocument.defaultView ?? window;
+  // `onChange` still fires each input, but background-row layout is suppressed
+  // mid-composition and re-run on compositionend to avoid layout thrash.
+  let isComposing = false;
   let currentTextLayout: {
     angle: Radians;
     font: ReturnType<typeof getFontString>;
@@ -485,15 +495,19 @@ export const textWysiwyg = ({
       }
       const [viewportX, viewportY] = getViewportCoords(coordX, coordY);
 
-      if (!container) {
+      if (!container && !isTableCellBackgroundText(updatedTextElement)) {
         maxWidth = (appState.width - 8 - viewportX) / appState.zoom.value;
         width = Math.min(width, maxWidth);
-      } else {
+      } else if (container) {
         width += 0.5;
       }
 
-      // add 5% buffer otherwise it causes wysiwyg to jump
-      height *= 1.05;
+      // The table background text box is the cell itself. A buffer would make
+      // the editor visibly larger than the table while editing.
+      if (!isTableCellBackgroundText(updatedTextElement)) {
+        // add 5% buffer otherwise it causes wysiwyg to jump
+        height *= 1.05;
+      }
 
       const font = getFontString(updatedTextElement);
       const angle = getTextElementAngle(updatedTextElement, container);
@@ -568,7 +582,11 @@ export const textWysiwyg = ({
   let whiteSpace = "pre";
   let wordBreak = "normal";
 
-  if (isBoundToContainer(element) || !element.autoResize) {
+  if (
+    isBoundToContainer(element) ||
+    isTableCellBackgroundText(element) ||
+    !element.autoResize
+  ) {
     whiteSpace = "pre-wrap";
     wordBreak = "break-word";
   }
@@ -763,7 +781,22 @@ export const textWysiwyg = ({
         editable.selectionEnd = selectionStart;
       }
       onChange(editable.value);
+      // Refit background text after input; suppress intermediate IME layout
+      // passes and run once with the final composed text.
+      if (!isComposing) {
+        onTextLayoutReady?.();
+      }
     };
+
+    // IME composition: defer the background-row layout until the final text.
+    editable.addEventListener("compositionstart", () => {
+      isComposing = true;
+    });
+    editable.addEventListener("compositionend", () => {
+      isComposing = false;
+      onChange(editable.value);
+      onTextLayoutReady?.();
+    });
   }
 
   editable.onkeydown = (event) => {
