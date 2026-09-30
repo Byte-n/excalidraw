@@ -1,6 +1,9 @@
-import { KEYS } from "@excalidraw/common";
-import { pointFrom, pointRotateRads, type Radians } from "@excalidraw/math";
-import { getTableCellAtPoint, getTableCellBounds } from "@excalidraw/element";
+import { CURSOR_TYPE, KEYS } from "@excalidraw/common";
+import type { Radians } from "@excalidraw/math";
+import {
+  getCommonBounds,
+  getTransformHandlesFromCoords,
+} from "@excalidraw/element";
 
 import type {
   ExcalidrawTableElement,
@@ -10,7 +13,7 @@ import type {
 import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
-import { Keyboard, UI } from "./helpers/ui";
+import { Keyboard, Pointer, UI } from "./helpers/ui";
 
 import { getTextEditor, updateTextEditor } from "./queries/dom";
 
@@ -55,6 +58,8 @@ const getTable = () =>
     (element): element is ExcalidrawTableElement =>
       element.type === "table" && !element.isDeleted,
   )!;
+
+const mouse = new Pointer("mouse");
 
 const getBackgroundTexts = () =>
   h.elements.filter(
@@ -458,44 +463,44 @@ describe("table tool", () => {
       mouseUp(blank.x, blank.y);
       expect(h.state.selectedElementIds).toEqual({ [table.id]: true });
     });
+  });
 
-    it("positions the box over the rotated cell", async () => {
-      const angle = Math.PI / 4;
-      const rotated = API.createElement({
-        type: "table",
-        x: 0,
-        y: 0,
-        angle,
+  describe("selection rotation", () => {
+    it("shows no rotation cursor when the selection contains a table", () => {
+      const table = API.createElement({ type: "table", x: 100, y: 100 });
+      const rect = API.createElement({
+        type: "rectangle",
+        x: table.x,
+        y: table.y + table.height + 60,
+        width: 80,
+        height: 50,
       });
-      API.setElements([rotated]);
+      API.setElements([table, rect]);
 
-      // a scene point inside the rotated grid; resolve the cell the same way
-      // the interaction does
-      const probe = pointFrom(80, 28);
-      const cellId = getTableCellAtPoint(rotated, probe[0], probe[1])!;
-      const bounds = getTableCellBounds(rotated.table, cellId)!;
-      const expectedCenter = pointRotateRads(
-        pointFrom(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2),
-        pointFrom(rotated.width / 2, rotated.height / 2),
-        angle as Radians,
+      // box-select both elements
+      mouse.downAt(table.x - 30, table.y - 30);
+      mouse.moveTo(-1000, -1000);
+      mouse.moveTo(table.x + table.width + 30, rect.y + rect.height + 30);
+      mouse.up();
+      expect(h.state.selectedElementIds).toEqual({
+        [table.id]: true,
+        [rect.id]: true,
+      });
+
+      // the selection's rotation handle sits above the common bounds; hovering
+      // it must not offer rotation (00-overview.md invariant #10)
+      const [x1, y1, x2, y2] = getCommonBounds([table, rect]);
+      const handles = getTransformHandlesFromCoords(
+        [x1, y1, x2, y2, (x1 + x2) / 2, (y1 + y2) / 2],
+        0 as Radians,
+        h.state.zoom,
+        "mouse",
       );
-
-      doubleClickAt(probe[0], probe[1]);
-      await getTextEditor();
-
-      const texts = getBackgroundTexts();
-      expect(texts).toHaveLength(1);
-      const text = texts[0];
-      expect(text.containerRef).toMatchObject({
-        kind: "tableCell",
-        elementId: rotated.id,
-        cellId,
-        role: "backgroundText",
-      });
-      expect(text.angle).toBe(angle);
-      // the box covers the rotated cell: same center as the rotated bounds
-      expect(text.x + text.width / 2).toBeCloseTo(expectedCenter[0], 5);
-      expect(text.y + text.height / 2).toBeCloseTo(expectedCenter[1], 5);
+      const rotation = handles.rotation!;
+      mouseMove(rotation[0] + rotation[2] / 2, rotation[1] + rotation[3] / 2);
+      expect(GlobalTestState.interactiveCanvas.style.cursor).not.toBe(
+        CURSOR_TYPE.GRAB,
+      );
     });
   });
 });

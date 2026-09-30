@@ -1110,16 +1110,10 @@ const drawElement = (
       }
       break;
     }
-    // tables draw themselves (cell backgrounds, grid lines, border) in the
-    // element's rotated local frame — nothing to hand to roughjs
+    // tables draw themselves (cell backgrounds, grid lines, border) —
+    // nothing to hand to roughjs
     case "table": {
       context.save();
-      const cx = element.x + appState.scrollX + element.width / 2;
-      const cy = element.y + appState.scrollY + element.height / 2;
-      // rotation originates from the element center, matching hit-testing
-      context.translate(cx, cy);
-      context.rotate(element.angle);
-      context.translate(-cx, -cy);
       context.translate(
         element.x + appState.scrollX,
         element.y + appState.scrollY,

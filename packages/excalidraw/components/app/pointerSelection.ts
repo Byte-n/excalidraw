@@ -523,7 +523,9 @@ export const handleSelectionOnPointerDown = (
         pointerDownState.resize.handleType === "rotation" &&
         selectedElements.some(
           (element: any) =>
-            isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+            isMindmapNodeElement(element) ||
+            isMindmapEdgeElement(element) ||
+            isTableElement(element),
         )
       ) {
         pointerDownState.resize.handleType = false;

@@ -1,5 +1,4 @@
 import { arrayToMap, randomId } from "@excalidraw/common";
-import { pointFrom, pointRotateRads, type Radians } from "@excalidraw/math";
 
 import { syncMovedIndices } from "./fractionalIndex";
 import { getBoundTextElement } from "./textElement";
@@ -471,18 +470,10 @@ export const getTableCellSnapPoints = (
   if (!bounds) {
     return [];
   }
-  const center = pointFrom(
-    table.x + table.width / 2,
-    table.y + table.height / 2,
-  );
-  const toScene = (localX: number, localY: number): [number, number] => {
-    const rotated = pointRotateRads(
-      pointFrom(table.x + localX, table.y + localY),
-      center,
-      table.angle as Radians,
-    );
-    return [rotated[0], rotated[1]];
-  };
+  const toScene = (localX: number, localY: number): [number, number] => [
+    table.x + localX,
+    table.y + localY,
+  ];
 
   return [
     toScene(bounds.x, bounds.y),

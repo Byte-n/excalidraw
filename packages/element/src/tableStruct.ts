@@ -1,4 +1,3 @@
-import { pointFrom, pointRotateRads, type Radians } from "@excalidraw/math";
 import { randomId } from "@excalidraw/common";
 
 import type { ExcalidrawTableElement, TableDataV1 } from "./types";
@@ -279,28 +278,17 @@ const isBoundedSizeDrift = (value: number, expected: number): boolean =>
 
 /**
  * Resolves the scene-space `sceneX`/`sceneY` to the id of the table cell
- * containing it, or `null` when the point lies outside the table. The point
- * is rotated into the table's unrotated local frame (around the element
- * center, matching how the grid renders) before the row/column offsets
- * locate the cell. Points exactly on the right or bottom outer edge are
- * outside, mirroring the half-open grid geometry.
+ * containing it, or `null` when the point lies outside the table. Points
+ * exactly on the right or bottom outer edge are outside, mirroring the
+ * half-open grid geometry.
  */
 export const getTableCellAtPoint = (
   element: ExcalidrawTableElement,
   sceneX: number,
   sceneY: number,
 ): string | null => {
-  const center = pointFrom(
-    element.x + element.width / 2,
-    element.y + element.height / 2,
-  );
-  const local = pointRotateRads(
-    pointFrom(sceneX, sceneY),
-    center,
-    -element.angle as Radians,
-  );
-  const x = local[0] - element.x;
-  const y = local[1] - element.y;
+  const x = sceneX - element.x;
+  const y = sceneY - element.y;
   if (x < 0 || y < 0 || x > element.width || y > element.height) {
     return null;
   }

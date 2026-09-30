@@ -1071,8 +1071,7 @@ const renderFrameHighlight = (
 
 /**
  * Light-blue fill of the hovered table cell (phase-1.md:78). The cell bounds
- * are table-local, so they render through the table's rotation around its
- * center — the same pivot the grid draws with.
+ * are table-local offsets applied directly in scene space.
  */
 const renderTableCellHighlight = (
   context: CanvasRenderingContext2D,
@@ -1091,14 +1090,8 @@ const renderTableCellHighlight = (
     return;
   }
 
-  const cx = table.x + appState.scrollX + table.width / 2;
-  const cy = table.y + appState.scrollY + table.height / 2;
-
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
-  context.translate(cx, cy);
-  context.rotate(table.angle);
-  context.translate(-cx, -cy);
   context.fillStyle = getThemedColor("rgba(0,118,255,0.12)", appState.theme);
   context.fillRect(
     table.x + bounds.x,
@@ -1109,20 +1102,14 @@ const renderTableCellHighlight = (
   context.restore();
 };
 
-/** Shared pivot setup for the table structure overlays. */
+/** Shared setup for the table structure overlays (scene-space translation). */
 const withTableLocalTransform = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
-  table: NonDeleted<ExcalidrawTableElement>,
   draw: () => void,
 ) => {
-  const cx = table.x + appState.scrollX + table.width / 2;
-  const cy = table.y + appState.scrollY + table.height / 2;
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
-  context.translate(cx, cy);
-  context.rotate(table.angle);
-  context.translate(-cx, -cy);
   draw();
   context.restore();
 };
@@ -1223,7 +1210,7 @@ const renderTableStructureAffordances = (
   table: NonDeleted<ExcalidrawTableElement>,
   hover: InteractiveCanvasAppState["tableStructureHover"] = null,
 ) => {
-  withTableLocalTransform(context, appState, table, () => {
+  withTableLocalTransform(context, appState, () => {
     const railOffset = getTableStructureIndicatorOffset(appState.zoom.value);
     const rowSelection =
       appState.tableRowColSelection?.tableId === table.id &&
@@ -1316,8 +1303,7 @@ const renderTableRowColSelection = (
     return;
   }
 
-  const localTable = table as NonDeleted<ExcalidrawTableElement>;
-  withTableLocalTransform(context, appState, localTable, () => {
+  withTableLocalTransform(context, appState, () => {
     if (selection.kind === "row") {
       let offset = 0;
       for (const row of table.table.rows) {
@@ -1393,8 +1379,7 @@ const renderTableStructureHover = (
   const lineWidth = 2 / appState.zoom.value;
   const indicatorOffset = getTableStructureInsertionOffset(appState.zoom.value);
 
-  const localTable = table as NonDeleted<ExcalidrawTableElement>;
-  withTableLocalTransform(context, appState, localTable, () => {
+  withTableLocalTransform(context, appState, () => {
     switch (hover.kind) {
       case "table": {
         break;
@@ -1542,8 +1527,7 @@ const renderTableStructurePreview = (
   const accent = getThemedColor(TABLE_STRUCTURE_ACCENT, appState.theme);
   const lineWidth = 2 / appState.zoom.value;
 
-  const localTable = table as NonDeleted<ExcalidrawTableElement>;
-  withTableLocalTransform(context, appState, localTable, () => {
+  withTableLocalTransform(context, appState, () => {
     if (preview.kind === "row") {
       const y = table.y + preview.offset;
       context.beginPath();
@@ -2667,7 +2651,9 @@ const _renderInteractiveScene = ({
         isFrameSelected ||
           visibleSelectedElements.some(
             (element) =>
-              isMindmapNodeElement(element) || isMindmapEdgeElement(element),
+              isMindmapNodeElement(element) ||
+              isMindmapEdgeElement(element) ||
+              isTableElement(element),
           )
           ? {
               ...getOmitSidesForEditorInterface(editorInterface),

@@ -450,6 +450,8 @@ export const newTableElement = (
     {
       ..._newElementBase<ExcalidrawTableElement>("table", opts),
       type: "table",
+      // tables never rotate; any incoming angle is ignored
+      angle: 0 as Radians,
       width: getTableWidth(table),
       height: getTableHeight(table),
       table,

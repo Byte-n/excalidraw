@@ -64,8 +64,8 @@ export const getTableCellFillColor = (
 
 /**
  * Paints the table grid in table-local coordinates — the caller positions the
- * context at the element (translate + rotate) beforehand. Like frames, tables
- * bypass the roughjs shape cache and draw themselves directly.
+ * context at the element beforehand. Like frames, tables bypass the roughjs
+ * shape cache and draw themselves directly.
  */
 export const drawTableGridOnCanvas = (
   element: ExcalidrawTableElement,
