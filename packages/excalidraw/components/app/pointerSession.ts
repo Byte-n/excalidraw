@@ -120,6 +120,7 @@ import * as gestureController from "./gesture";
 
 import { getCompositeControlPointLocal } from "./compositeShapeControls";
 import * as tableController from "./table";
+import { resolveInteractionTarget } from "./interactionTarget";
 
 import type { UnsubscribeCallback } from "../../types";
 
@@ -626,18 +627,29 @@ export const handleCanvasPointerDown = (
   // before container structure gestures so a selected child that overlaps a
   // table rail or insertion boundary can still be dragged/transformed. The
   // table element itself remains eligible for its own structure controls.
-  const selectedHitElement = app.getElementAtPosition(
-    pointerDownState.origin.x,
-    pointerDownState.origin.y,
-    { preferSelected: true },
+  const interactionTarget = resolveInteractionTarget(
+    app,
+    pointerDownState.origin,
+    event.nativeEvent,
   );
-  const selectedChildHasPriority =
-    selectedHitElement &&
-    app.state.selectedElementIds[selectedHitElement.id] &&
-    !isTableElement(selectedHitElement);
-
   if (
-    !selectedChildHasPriority &&
+    interactionTarget.kind !== "containerControl" &&
+    app.state.tableRowColSelection
+  ) {
+    app.setState({ tableRowColSelection: null });
+  }
+  // Unified dispatch (interaction-target-resolution.md §pointer-down): only a
+  // container control zone — or the selected table's own body, whose zones
+  // the arm call still resolves — starts a structure gesture. Text, linear
+  // and transform handles as well as selected normal elements keep their
+  // priority over the structure zones.
+  const targetIsSelectedTableBody =
+    interactionTarget.kind === "selectedElement" &&
+    selectedElements.length === 1 &&
+    isTableElement(selectedElements[0]);
+  if (
+    (interactionTarget.kind === "containerControl" ||
+      targetIsSelectedTableBody) &&
     app.armTableStructureGestureOnPointerDown(pointerDownState)
   ) {
     // a structure zone owns this gesture: outer-frame affordances beat cells

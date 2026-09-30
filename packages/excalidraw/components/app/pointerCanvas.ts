@@ -88,7 +88,11 @@ import {
 } from "../hyperlink/Hyperlink";
 import { isPointHittingLink } from "../hyperlink/helpers";
 
-import { getTableStructureHoverAtSceneCoords } from "./table";
+import {
+  clearContainerInteractionHover,
+  dispatchContainerInteraction,
+  resolveInteractionTarget,
+} from "./interactionTarget";
 
 import { hitCompositeControlPoint } from "./compositeShapeControls";
 
@@ -776,15 +780,7 @@ export const handleCanvasPointerMove = (
     isOverScrollBar,
   );
 
-  app.maybeUpdateTableStructureHoverOnPointerMove(
-    {
-      x: scenePointerX,
-      y: scenePointerY,
-    },
-    isOverScrollBar,
-  );
-
-  if (
+  const canDispatchInteraction =
     !event.buttons &&
     !isOverScrollBar &&
     !app.state.viewModeEnabled &&
@@ -793,28 +789,36 @@ export const handleCanvasPointerMove = (
     !app.state.selectionElement &&
     !app.state.multiElement &&
     !app.state.selectedElementsAreBeingDragged &&
-    isSelectionLikeTool(app.state.activeTool.type)
-  ) {
-    if (getTableStructureHoverAtSceneCoords(app, scenePointer)) {
+    isSelectionLikeTool(app.state.activeTool.type);
+
+  if (canDispatchInteraction) {
+    // Unified interaction target (interaction-target-resolution.md): container
+    // providers own their hover state and cursor; every other target keeps
+    // the generic flow below.
+    const interactionTarget = resolveInteractionTarget(
+      app,
+      scenePointer,
+      event,
+    );
+    if (
+      interactionTarget.kind === "containerControl" ||
+      interactionTarget.kind === "containerBody"
+    ) {
+      dispatchContainerInteraction(app, interactionTarget.candidate);
       return;
     }
-    const selected = app.scene.getSelectedElements(app.state);
-    if (selected.length === 1 && selected[0].type === "table") {
-      const handle = getElementWithTransformHandleType(
-        selected,
-        app.state,
-        scenePointerX,
-        scenePointerY,
-        app.state.zoom,
-        event.pointerType || "mouse",
-        app.scene.getNonDeletedElementsMap(),
-        app.editorInterface,
-      );
-      if (handle?.transformHandleType) {
-        app.cursor.set(getCursorForResizingElement(handle));
-        return;
-      }
-    }
+    // moving onto a non-container target must not leave container hover behind
+    clearContainerInteractionHover(app);
+  } else {
+    // dispatch ineligible (dragging, creating, gesturing): the legacy
+    // structure-hover channel keeps its behavior for those flows
+    app.maybeUpdateTableStructureHoverOnPointerMove(
+      {
+        x: scenePointerX,
+        y: scenePointerY,
+      },
+      isOverScrollBar,
+    );
   }
 
   if (

@@ -1181,10 +1181,67 @@ const STRUCTURE_CURSORS: {
   columnSelect: CURSOR_TYPE.POINTER,
 };
 
+export const getTableStructureCursor = (
+  hover: TableRowColStructureHover,
+): string => STRUCTURE_CURSORS[hover.kind];
+
 /**
- * Hover channel for the structure zones. Sharing the cell-highlight gate
- * keeps the two table affordances mutually exclusive in one synchronous
- * pass: a zone under the pointer suppresses the cell highlight.
+ * Writes the shared structure-hover channel, no-op when the value is
+ * unchanged. The unified interaction dispatch derives this legacy state
+ * field from the resolved target (interaction-target-resolution.md), so
+ * callers must not set it around the pointer-move flow themselves.
+ */
+export const setTableStructureHover = (
+  app: TableApp,
+  hover: TableRowColStructureHover | null,
+): void => {
+  const previous = app.state.tableStructureHover;
+  if (
+    previous?.kind === hover?.kind &&
+    previous?.tableId === hover?.tableId &&
+    (previous as any)?.id === (hover as any)?.id &&
+    (previous as any)?.rowId === (hover as any)?.rowId &&
+    (previous as any)?.columnId === (hover as any)?.columnId &&
+    (previous as any)?.boundaryIndex === (hover as any)?.boundaryIndex
+  ) {
+    return;
+  }
+  app.setState({ tableStructureHover: hover });
+};
+
+/**
+ * The grid-region hover used to reveal a table's structure affordances when
+ * the pointer rests on its body with no zone under it. Unlike the zone
+ * hover, this never wins over cell highlight or element hits.
+ */
+export const getTableBodyHoverAtSceneCoords = (
+  app: TableApp,
+  sceneCoords: { x: number; y: number },
+): TableRowColStructureHover | null => {
+  const table = getStructureZoneTableAtSceneCoords(
+    app,
+    sceneCoords.x,
+    sceneCoords.y,
+  );
+  if (!table) {
+    return null;
+  }
+  const local = getTableLocalPoint(table, sceneCoords.x, sceneCoords.y);
+  if (
+    local.x >= 0 &&
+    local.x <= table.width &&
+    local.y >= 0 &&
+    local.y <= table.height
+  ) {
+    return { tableId: table.id, kind: "table" };
+  }
+  return null;
+};
+
+/**
+ * Legacy structure-hover channel, kept for flows where the unified
+ * interaction dispatch is ineligible (dragging, creating, gesturing). When
+ * the dispatch runs, it owns this state through the table provider instead.
  */
 export const maybeUpdateTableStructureHoverOnPointerMove = (
   app: TableApp,
@@ -1204,43 +1261,10 @@ export const maybeUpdateTableStructureHoverOnPointerMove = (
     return;
   }
 
-  let hover = getTableStructureHoverAtSceneCoords(app, sceneCoords);
-  if (!hover) {
-    const table = getStructureZoneTableAtSceneCoords(
-      app,
-      sceneCoords.x,
-      sceneCoords.y,
-    );
-    if (table) {
-      const local = getTableLocalPoint(table, sceneCoords.x, sceneCoords.y);
-      if (
-        local.x >= 0 &&
-        local.x <= table.width &&
-        local.y >= 0 &&
-        local.y <= table.height
-      ) {
-        hover = { tableId: table.id, kind: "table" };
-      }
-    }
-  }
-  const previous = app.state.tableStructureHover;
-  if (
-    previous?.kind === hover?.kind &&
-    previous?.tableId === hover?.tableId &&
-    (previous as any)?.id === (hover as any)?.id &&
-    (previous as any)?.rowId === (hover as any)?.rowId &&
-    (previous as any)?.columnId === (hover as any)?.columnId &&
-    (previous as any)?.boundaryIndex === (hover as any)?.boundaryIndex
-  ) {
-    if (hover) {
-      app.cursor.set(STRUCTURE_CURSORS[hover.kind]);
-    }
-    return;
-  }
-  app.setState({ tableStructureHover: hover });
-  if (hover) {
-    app.cursor.set(STRUCTURE_CURSORS[hover.kind]);
-  }
+  const hover =
+    getTableStructureHoverAtSceneCoords(app, sceneCoords) ??
+    getTableBodyHoverAtSceneCoords(app, sceneCoords);
+  setTableStructureHover(app, hover);
 };
 
 /**

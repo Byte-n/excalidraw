@@ -38,18 +38,21 @@ const mouseDown = (clientX: number, clientY: number) => {
   fireEvent.pointerDown(GlobalTestState.interactiveCanvas, {
     clientX,
     clientY,
+    pointerType: "mouse",
   });
 };
 const mouseMove = (clientX: number, clientY: number) => {
   fireEvent.pointerMove(GlobalTestState.interactiveCanvas, {
     clientX,
     clientY,
+    pointerType: "mouse",
   });
 };
 const mouseUp = (clientX: number, clientY: number) => {
   fireEvent.pointerUp(GlobalTestState.interactiveCanvas, {
     clientX,
     clientY,
+    pointerType: "mouse",
   });
 };
 
@@ -187,7 +190,12 @@ describe("table row/column structure", () => {
     mouseMove(grip.x, grip.y);
     expect(mindmapHover).toHaveBeenCalled();
     expect(cellHover).toHaveBeenCalled();
-    expect(structureHover).toHaveBeenCalled();
+    // the unified dispatch derives the structure hover again (through the
+    // table provider rather than the legacy channel)
+    expect(h.state.tableStructureHover).toMatchObject({
+      tableId: table.id,
+      kind: "rowGrip",
+    });
 
     mouseDown(grip.x, grip.y);
     expect(h.app.interactionState.isTableGestureActive).toBe(true);
@@ -412,11 +420,8 @@ describe("table row/column structure", () => {
       expect(text.fontSize).toBe(20);
       expect(text.width).toBe(COLUMN_WIDTH);
       expect(text.height).toBe(
-        Element.measureText(
-          text.text,
-          getFontString(text),
-          text.lineHeight,
-        ).height,
+        Element.measureText(text.text, getFontString(text), text.lineHeight)
+          .height,
       );
       // later rows translate by the height delta
       expect(live(content2).y).toBe(snapshot.content2Y + 24);
@@ -503,18 +508,11 @@ describe("table row/column structure", () => {
       expect(text.width).toBe(COLUMN_WIDTH + 40);
       expect(text.originalText).toBe(originalText);
       expect(text.text).toBe(
-        Element.wrapText(
-          originalText,
-          getFontString(text),
-          COLUMN_WIDTH + 40,
-        ),
+        Element.wrapText(originalText, getFontString(text), COLUMN_WIDTH + 40),
       );
       expect(text.height).toBe(
-        Element.measureText(
-          text.text,
-          getFontString(text),
-          text.lineHeight,
-        ).height,
+        Element.measureText(text.text, getFontString(text), text.lineHeight)
+          .height,
       );
       expect(text.fontSize).toBe(20);
       // later columns translate by the width delta; the sums hold
