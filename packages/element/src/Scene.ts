@@ -9,26 +9,6 @@ import {
   toArray,
 } from "@excalidraw/common";
 import { isNonDeletedElement } from "@excalidraw/element";
-import {
-  assertValidContainerRefs,
-  isExcalidrawElement,
-  isFrameLikeElement,
-  isTableElement,
-  isTextElement,
-  validateContainerRef,
-} from "./typeChecks";
-import { getElementsInGroup } from "./groups";
-// 场景在包 barrel 完成初始化前就可能被加载（循环导入），
-// 运行时依赖与 transform.ts 一致改为直接从兄弟模块导入。
-import {
-  syncInvalidIndices,
-  syncMovedIndices,
-  validateFractionalIndices,
-} from "./fractionalIndex";
-
-import { getSelectedElements } from "./selection";
-
-import { mutateElement, type ElementUpdate } from "./mutateElement";
 
 import type {
   ExcalidrawElement,
@@ -47,6 +27,26 @@ import type {
   Mutable,
   SameType,
 } from "@excalidraw/common/utility-types";
+
+import {
+  assertValidContainerRefs,
+  isExcalidrawElement,
+  isFrameLikeElement,
+  isTextElement,
+  validateContainerRef,
+} from "./typeChecks";
+import { getElementsInGroup } from "./groups";
+// 场景在包 barrel 完成初始化前就可能被加载（循环导入），
+// 运行时依赖与 transform.ts 一致改为直接从兄弟模块导入。
+import {
+  syncInvalidIndices,
+  syncMovedIndices,
+  validateFractionalIndices,
+} from "./fractionalIndex";
+
+import { getSelectedElements } from "./selection";
+
+import { mutateElement, type ElementUpdate } from "./mutateElement";
 
 import {
   registerFrameChildrenIndex,
@@ -510,7 +510,11 @@ export class Scene {
     }
 
     if ("containerRef" in updates && updates.containerRef !== undefined) {
-      validateContainerRef(element, updates.containerRef, elementsMap);
+      validateContainerRef(
+        { ...element, ...updates } as ExcalidrawElement,
+        updates.containerRef,
+        elementsMap,
+      );
     }
 
     if (

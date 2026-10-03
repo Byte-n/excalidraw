@@ -1268,14 +1268,18 @@ export const reanchorBindingsToOutline = (
         elementsMap,
       );
 
+      const bindingGap = getBindingGap(changedElement, element);
       if (
-        hitElementItself({
-          element: changedElement,
-          point: focusPoint,
-          elementsMap,
-          threshold: getBindingGap(changedElement, element),
-          overrideShouldTestInside: true,
-        })
+        isBrace
+          ? distanceToElement(changedElement, elementsMap, focusPoint) <=
+            bindingGap
+          : hitElementItself({
+              element: changedElement,
+              point: focusPoint,
+              elementsMap,
+              threshold: bindingGap,
+              overrideShouldTestInside: true,
+            })
       ) {
         continue;
       }

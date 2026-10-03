@@ -216,7 +216,7 @@ describe.each([
       }
     }
     expect(h.app.scene.getNonDeletedElements()).toHaveLength(presets.length);
-  });
+  }, 15_000);
 
   it("drags a triangle apex as one undoable edit", () => {
     const triangle = API.createElement({

@@ -304,7 +304,7 @@ describe("assertValidTableData", () => {
           ...base.cells.slice(1),
         ],
       }),
-    ).toThrow("Unsupported table cell style key");
+    ).toThrow(/Unsupported table cell .* style key: fontSize/);
 
     expect(() =>
       assertValidTableData({
@@ -314,7 +314,7 @@ describe("assertValidTableData", () => {
           ...base.cells.slice(1),
         ],
       }),
-    ).toThrow("Invalid table cell backgroundColor");
+    ).toThrow(/Invalid table cell .* backgroundColor/);
   });
 });
 

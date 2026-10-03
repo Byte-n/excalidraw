@@ -95,7 +95,7 @@ describe("composite shape line intersections", () => {
     { type: "brace", stroke: [13.5, 30], empty: [80, 60] },
     { type: "brace-reverse", stroke: [150.5, 30], empty: [80, 60] },
   ] as const)(
-    "does not fill the open side of $type",
+    "uses the rectangular interaction area for $type without changing binding targets",
     ({ type, stroke, empty }) => {
       const element = {
         ...newElement({
@@ -111,8 +111,8 @@ describe("composite shape line intersections", () => {
       const elementsMap = arrayToMap([element]) as NonDeletedSceneElementsMap;
       const point = ([x, y]: readonly number[]) => pointFrom<GlobalPoint>(x, y);
 
-      expect(isPointInElement(point(stroke), element, elementsMap)).toBe(false);
-      expect(isPointInElement(point(empty), element, elementsMap)).toBe(false);
+      expect(isPointInElement(point(stroke), element, elementsMap)).toBe(true);
+      expect(isPointInElement(point(empty), element, elementsMap)).toBe(true);
       expect(
         getHoveredElementForBinding(point(empty), [element], elementsMap, 2),
       ).toBeNull();

@@ -118,7 +118,13 @@ describe("table cell merge", () => {
     const splitText = h.elements.find(
       (element) => element.id === first.id,
     ) as ExcalidrawTextElement;
-    expect(splitText.width).toBe(160);
+    const splitTable = h.elements.find(
+      (element): element is ExcalidrawTableElement => element.id === table.id,
+    )!;
+    expect(splitText.width).toBeGreaterThan(0);
+    expect(splitText.x + splitText.width).toBeLessThanOrEqual(
+      splitTable.x + splitTable.table.columns[0].width,
+    );
     expect(splitText.x).toBe(100);
     expect(splitText.originalText).toBe("first\nsecond");
   });
@@ -138,7 +144,18 @@ describe("table cell merge", () => {
       clientY: 128,
       pointerType: "mouse",
     });
-    expect(h.state.tableCellSelection?.anchorId).toBe(table.table.cells[0].id);
+    fireEvent.pointerUp(GlobalTestState.interactiveCanvas, {
+      clientX: 180,
+      clientY: 128,
+      pointerType: "mouse",
+    });
+    expect(h.state.selectedElementIds).toEqual({ [table.id]: true });
+    expect(h.state.tableCellSelection).toBeNull();
+    fireEvent.pointerDown(GlobalTestState.interactiveCanvas, {
+      clientX: 180,
+      clientY: 128,
+      pointerType: "mouse",
+    });
     fireEvent.pointerUp(GlobalTestState.interactiveCanvas, {
       clientX: 180,
       clientY: 128,

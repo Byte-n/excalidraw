@@ -653,8 +653,8 @@ describe("binding text to an arrow endpoint", () => {
       });
     });
 
-    it("is not occluded by a transparent element above it", () => {
-      // transparent shapes are only hit on their stroke, so they don't cover
+    it("is occluded by a transparent element above it", () => {
+      // A transparent shape is still hit within its enclosed path.
       API.setElements([
         createArrow("arrow", [100, 300], [100, 100]),
         coveringRect({ backgroundColor: "transparent" }),
@@ -663,10 +663,7 @@ describe("binding text to an arrow endpoint", () => {
       UI.clickTool("text");
       mouse.moveTo(100, 100);
 
-      expect(h.state.hoveredArrowTextAnchor).toEqual({
-        elementId: "arrow",
-        anchor: "end",
-      });
+      expect(h.state.hoveredArrowTextAnchor).toBeNull();
     });
   });
 

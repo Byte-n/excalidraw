@@ -415,24 +415,6 @@ describe("box-selection overlap mode", () => {
     ).toEqual([outerNested1.id, outerOnly.id, outerNested2.id]);
   });
 
-  it("should not select a transparent rectangle when the selection box stays inside it", () => {
-    const rect1 = API.createElement({
-      type: "rectangle",
-      x: 0,
-      y: 0,
-      width: 100,
-      height: 100,
-      backgroundColor: "transparent",
-      fillStyle: "solid",
-    });
-
-    API.setElements([rect1]);
-
-    boxSelect(25, 25, 75, 75);
-
-    assertSelectedElements([]);
-  });
-
   it("should select a transparent rectangle when the selection box crosses its outline", () => {
     const rect1 = API.createElement({
       type: "rectangle",
@@ -449,25 +431,6 @@ describe("box-selection overlap mode", () => {
     boxSelect(25, 25, 125, 75);
 
     assertSelectedElements([rect1.id]);
-  });
-
-  it("should not select a rotated transparent rectangle when the selection box stays inside it", () => {
-    const rect1 = API.createElement({
-      type: "rectangle",
-      x: 0,
-      y: 0,
-      width: 100,
-      height: 100,
-      angle: Math.PI / 4,
-      backgroundColor: "transparent",
-      fillStyle: "solid",
-    });
-
-    API.setElements([rect1]);
-
-    boxSelect(40, 40, 60, 60);
-
-    assertSelectedElements([]);
   });
 
   it("should select a rotated rounded rectangle when the selection box contains its outline but not its bounds", () => {
@@ -769,34 +732,6 @@ describe("box-selection overlap mode", () => {
     assertSelectedElements([]);
   });
 
-  it("should not select a transparent framed element when the selection box stays inside its clipped bounds", () => {
-    const frame = API.createElement({
-      type: "frame",
-      x: 0,
-      y: 0,
-      width: 100,
-      height: 100,
-      backgroundColor: "transparent",
-      fillStyle: "solid",
-    });
-    const rect1 = API.createElement({
-      type: "rectangle",
-      x: 50,
-      y: 10,
-      width: 100,
-      height: 80,
-      containerRef: { kind: "frameLike", elementId: frame.id },
-      backgroundColor: "transparent",
-      fillStyle: "solid",
-    });
-
-    API.setElements([frame, rect1]);
-
-    boxSelect(60, 20, 90, 60);
-
-    assertSelectedElements([]);
-  });
-
   it("should not select a framed element when selection only overlaps its clipped-out outline", () => {
     const frame = API.createElement({
       type: "frame",
@@ -820,6 +755,32 @@ describe("box-selection overlap mode", () => {
 
     boxSelect(40, 170, 70, 220);
 
+    assertSelectedElements([]);
+  });
+
+  it("only hits the visible part of a transparent framed element", () => {
+    const frame = API.createElement({
+      type: "frame",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+    });
+    const rect = API.createElement({
+      type: "rectangle",
+      x: 50,
+      y: 10,
+      width: 100,
+      height: 80,
+      containerRef: { kind: "frameLike", elementId: frame.id },
+      backgroundColor: "transparent",
+    });
+    API.setElements([frame, rect]);
+
+    mouse.clickAt(80, 40);
+    assertSelectedElements([rect.id]);
+
+    mouse.clickAt(120, 40);
     assertSelectedElements([]);
   });
 });
