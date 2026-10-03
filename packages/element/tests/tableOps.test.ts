@@ -400,6 +400,63 @@ describe("resizeColumnInTable", () => {
   });
 });
 
+describe("table structure commands preserve table styles", () => {
+  const commands: readonly {
+    name: string;
+    apply: (table: TableDataV1) => TableDataV1;
+  }[] = [
+    {
+      name: "insert row",
+      apply: (table) =>
+        insertRowInTable(table, 1, { randomizer: makeRandomizer("new") }),
+    },
+    {
+      name: "insert column",
+      apply: (table) =>
+        insertColumnInTable(table, 1, { randomizer: makeRandomizer("new") }),
+    },
+    {
+      name: "move row",
+      apply: (table) => moveRowInTable(table, table.rows[0].id, 2),
+    },
+    {
+      name: "move column",
+      apply: (table) => moveColumnInTable(table, table.columns[0].id, 2),
+    },
+    {
+      name: "resize row",
+      apply: (table) => resizeRowInTable(table, table.rows[0].id, 150),
+    },
+    {
+      name: "resize column",
+      apply: (table) => resizeColumnInTable(table, table.columns[0].id, 130),
+    },
+  ];
+
+  for (const { name, apply } of commands) {
+    it(`keeps background, border, and grid styles after ${name}`, () => {
+      const table: TableDataV1 = {
+        ...makeThreeByThree(),
+        style: {
+          backgroundColor: "#ff0000",
+          borderColor: "#00ff00",
+          borderWidth: 4,
+          borderStyle: "dashed",
+          gridColor: "#0000ff",
+          gridWidth: 2,
+          gridStyle: "dotted",
+          opacity: 75,
+        },
+      };
+
+      const result = apply(table);
+
+      expect(result.style).toBe(table.style);
+      expect(assertValidTableData(result)).toBe(result);
+    });
+  }
+});
+
 describe("getMemberTranslationsForRows", () => {
   it("shifts later rows up when the first row is removed", () => {
     const table = makeThreeByThree();
