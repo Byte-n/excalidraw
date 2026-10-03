@@ -14,6 +14,7 @@ import {
   frameLikeContainerRef,
   isBucketFillCompatible,
   isFrameLikeElement,
+  isPointInElement,
   isRestylableFill,
   newLinearElement,
   ShapeCache,
@@ -202,15 +203,28 @@ export class AppBucketFill {
     // re-clicking an already-filled region shouldn't stack a duplicate:
     // restyle the existing fill with the current settings, or no-op when
     // nothing would change
-    if (
-      hitElement &&
+    const matchesExistingFill = (element: NonDeletedExcalidrawElement) =>
       isRestylableFill({
-        hitElement,
+        hitElement: element,
         scenePoints: result.scenePoints,
         elementsMap,
-      })
-    ) {
-      this.restyle(hitElement);
+      });
+    const existingFill =
+      hitElement && matchesExistingFill(hitElement)
+        ? hitElement
+        : hitElement?.id === result.ownerId &&
+          isTransparent(hitElement.backgroundColor)
+        ? [...elements]
+            .reverse()
+            .find(
+              (element) =>
+                isBucketFillCompatible(element) &&
+                isPointInElement(point, element, elementsMap) &&
+                matchesExistingFill(element),
+            )
+        : null;
+    if (existingFill) {
+      this.restyle(existingFill);
       return;
     }
 

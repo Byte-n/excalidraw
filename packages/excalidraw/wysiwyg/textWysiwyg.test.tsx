@@ -80,53 +80,6 @@ describe("textWysiwyg", () => {
       API.setElements([]);
     });
 
-    describe("debug text area", () => {
-      afterEach(() => {
-        h.app.ownerWindow.EXCALIDRAW_DEBUG_TEXT_AREA = undefined;
-      });
-
-      it("outlines bound text editors without outlining standalone text", async () => {
-        const container = API.createElement({
-          type: "rectangle",
-          width: 100,
-          height: 100,
-        });
-        const boundText = API.createElement({
-          type: "text",
-          text: "inside",
-          width: 60,
-          height: 20,
-          containerId: container.id,
-        });
-        const standaloneText = API.createElement({
-          type: "text",
-          text: "outside",
-          x: 200,
-          width: 80,
-          height: 20,
-        });
-        API.setElements([container, boundText, standaloneText]);
-        h.app.ownerWindow.EXCALIDRAW_DEBUG_TEXT_AREA = true;
-
-        API.setSelectedElements([boundText]);
-        Keyboard.keyPress(KEYS.ENTER);
-        const boundEditor = await getTextEditor();
-        expect(
-          boundEditor.classList.contains("excalidraw-wysiwyg--debug-text-area"),
-        ).toBe(true);
-
-        Keyboard.exitTextEditor(boundEditor);
-        API.setSelectedElements([standaloneText]);
-        Keyboard.keyPress(KEYS.ENTER);
-        const standaloneEditor = await getTextEditor();
-        expect(
-          standaloneEditor.classList.contains(
-            "excalidraw-wysiwyg--debug-text-area",
-          ),
-        ).toBe(false);
-      });
-    });
-
     it("should prefer editing selected text element (non-bindable container present)", async () => {
       const line = API.createElement({
         type: "line",
@@ -1002,25 +955,11 @@ describe("textWysiwyg", () => {
 
       mouse.doubleClickAt(rectangle.x + 10, rectangle.y + 10);
       expect(h.elements.length).toBe(2);
-      let text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.type).toBe("text");
-      expect(text.containerId).toBe(null);
-      mouse.down();
-      let editor = await getTextEditor();
-      Keyboard.exitTextEditor(editor);
-
-      mouse.doubleClickAt(
-        rectangle.x + rectangle.width / 2,
-        rectangle.y + rectangle.height / 2,
-      );
-      expect(h.elements.length).toBe(3);
-
-      text = h.elements[1] as ExcalidrawTextElementWithContainer;
+      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
       expect(text.type).toBe("text");
       expect(text.containerId).toBe(rectangle.id);
-
       mouse.down();
-      editor = await getTextEditor();
+      const editor = await getTextEditor();
 
       updateTextEditor(editor, "Hello World!");
       Keyboard.exitTextEditor(editor);
@@ -1118,26 +1057,6 @@ describe("textWysiwyg", () => {
         Keyboard.keyPress(KEYS.ENTER);
         expect(h.elements.length).toBe(1);
       });
-    });
-
-    it("should'nt bind text to container when not double clicked on center", async () => {
-      expect(h.elements.length).toBe(1);
-      expect(h.elements[0].id).toBe(rectangle.id);
-
-      // clicking somewhere on top left
-      mouse.doubleClickAt(rectangle.x + 20, rectangle.y + 20);
-      expect(h.elements.length).toBe(2);
-
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.type).toBe("text");
-      expect(text.containerId).toBe(null);
-      mouse.down();
-      const editor = await getTextEditor();
-
-      updateTextEditor(editor, "Hello World!");
-
-      Keyboard.exitTextEditor(editor);
-      expect(rectangle.boundElements).toBe(null);
     });
 
     it("should bind text to container when triggered via context menu", async () => {

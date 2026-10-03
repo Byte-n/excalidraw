@@ -1,9 +1,11 @@
 import { CURSOR_TYPE, KEYS } from "@excalidraw/common";
-import type { Radians } from "@excalidraw/math";
+
 import {
   getCommonBounds,
   getTransformHandlesFromCoords,
 } from "@excalidraw/element";
+
+import type { Radians } from "@excalidraw/math";
 
 import type {
   ExcalidrawTableElement,
@@ -45,6 +47,11 @@ const mouseUp = (clientX: number, clientY: number) => {
     clientX,
     clientY,
   });
+};
+const clickAt = (clientX: number, clientY: number, shiftKey = false) => {
+  const event = { clientX, clientY, pointerType: "mouse", shiftKey };
+  fireEvent.pointerDown(GlobalTestState.interactiveCanvas, event);
+  fireEvent.pointerUp(GlobalTestState.interactiveCanvas, event);
 };
 const doubleClickAt = (clientX: number, clientY: number) => {
   fireEvent.doubleClick(GlobalTestState.interactiveCanvas, {
@@ -198,20 +205,54 @@ describe("table tool", () => {
       API.setElements([table, content]);
     });
 
-    it("selects the table from a cell's blank area", () => {
-      const center = cellCenter(table, 1, 1);
-      mouseDown(center.x, center.y);
-      mouseUp(center.x, center.y);
+    it.each([false, true])(
+      "selects an unselected table from a blank cell with shift=%s",
+      (shiftKey) => {
+        const center = cellCenter(table, 1, 1);
+        clickAt(center.x, center.y, shiftKey);
 
-      expect(h.state.selectedElementIds).toEqual({ [table.id]: true });
-    });
+        expect(h.state.selectedElementIds).toEqual({ [table.id]: true });
+        expect(h.state.tableCellSelection).toBeNull();
+      },
+    );
 
-    it("keeps the priority with a child hit above the cell", () => {
-      mouseDown(130, 130);
-      mouseUp(130, 130);
+    it.each([false, true])(
+      "selects a child in an unselected table with shift=%s",
+      (shiftKey) => {
+        clickAt(130, 130, shiftKey);
 
-      expect(h.state.selectedElementIds).toEqual({ [content.id]: true });
-    });
+        expect(h.state.selectedElementIds[content.id]).toBe(true);
+        expect(h.state.tableCellSelection).toBeNull();
+      },
+    );
+
+    it.each([false, true])(
+      "selects a child in a selected table with shift=%s",
+      (shiftKey) => {
+        const blank = cellCenter(table, 1, 1);
+        clickAt(blank.x, blank.y);
+        clickAt(130, 130, shiftKey);
+
+        expect(h.state.selectedElementIds[content.id]).toBe(true);
+        expect(h.state.tableCellSelection).toBeNull();
+      },
+    );
+
+    it.each([false, true])(
+      "enters a blank cell in a selected table with shift=%s",
+      (shiftKey) => {
+        const blank = cellCenter(table, 1, 1);
+        clickAt(blank.x, blank.y);
+        clickAt(blank.x, blank.y, shiftKey);
+
+        expect(h.state.tableCellSelection).toMatchObject({
+          tableId: table.id,
+          anchorId: table.table.cells[4].id,
+          focusId: table.table.cells[4].id,
+        });
+        expect(h.state.selectedElementIds).toEqual({});
+      },
+    );
 
     it("selects the table first, then drills into cell content or the cell", () => {
       const blank = cellCenter(table, 1, 1);

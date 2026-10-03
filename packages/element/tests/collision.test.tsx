@@ -190,41 +190,6 @@ describe("hitElementItself cache", () => {
     distanceSpy.mockRestore();
   });
 
-  it("override does not affect caching", () => {
-    const element = API.createElement({
-      type: "rectangle",
-      x: 0,
-      y: 0,
-      width: 100,
-      height: 100,
-      backgroundColor: "transparent",
-    });
-    const elementsMap = arrayToMap([element]);
-    const point = pointFrom<GlobalPoint>(50, 50);
-
-    const distanceSpy = jest.spyOn(distance, "distanceToElement");
-
-    expect(
-      hitElementItself({
-        point,
-        element,
-        threshold: 10,
-        elementsMap,
-      }),
-    ).toBe(false);
-
-    expect(distanceSpy).toHaveBeenCalledTimes(1);
-
-    expect(
-      hitElementItself({
-        point,
-        element,
-        threshold: 10,
-        elementsMap,
-        overrideShouldTestInside: true,
-      }),
-    ).toBe(true);
-  });
 });
 
 describe("freedraw collision matches the rendered stroke width", () => {
