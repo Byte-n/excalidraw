@@ -12,6 +12,7 @@ import { MIN_TABLE_ROW_HEIGHT } from "../src/tableScale";
 import type {
   ExcalidrawElement,
   ExcalidrawTableElement,
+  ExcalidrawTextElement,
   NonDeletedExcalidrawElement,
   TableDataV1,
 } from "../src/types";
@@ -245,7 +246,7 @@ describe("resizeMultipleElements: selection containing a table", () => {
     expect(scaledTable.height).toBe(175);
     expect(scaledTable.y).toBe(50);
 
-    const scaledText = elementOf(scene, text.id);
+    const scaledText = elementOf(scene, text.id) as ExcalidrawTextElement;
     // single-axis rule: geometry distorts, fonts do not
     expect(scaledText.fontSize).toBe(20);
     expect(scaledText.width).toBe(100);
@@ -419,7 +420,7 @@ describe("resizeMultipleElements: selection containing a table", () => {
     expect(scaledShape.width).toBe(80);
     expect(scaledShape.height).toBe(60);
 
-    const scaledText = elementOf(scene, boundText.id);
+    const scaledText = elementOf(scene, boundText.id) as ExcalidrawTextElement;
     expect(scaledText.fontSize).toBe(16);
     expect(scaledText.width).toBe(60);
   });
@@ -474,7 +475,7 @@ describe("resizeMultipleElements: selection containing a table", () => {
     expect(scaledNote.height).toBe(400);
     expect((scaledNote as any).baseHeight).toBe(200);
 
-    const scaledLabel = elementOf(scene, label.id);
+    const scaledLabel = elementOf(scene, label.id) as ExcalidrawTextElement;
     expect(scaledLabel.fontSize).toBe(80);
     expect((scaledLabel as any).baseFontSize).toBe(40);
   });
