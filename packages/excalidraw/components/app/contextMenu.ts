@@ -48,6 +48,12 @@ import {
   actionMindmapPromote,
   actionSetCompositeShapeTextFitFixed,
   actionSetCompositeShapeTextFitAuto,
+  actionTableClearContent,
+  actionTableClearBackgroundText,
+  actionTableClearStyle,
+  actionTableCopyFormat,
+  actionTablePasteFormat,
+  actionTableCenterContent,
 } from "../../actions";
 import { actionWrapTextInContainer } from "../../actions/actionBoundText";
 import { actionPaste } from "../../actions/actionClipboard";
@@ -262,6 +268,17 @@ export const getContextMenuItems = (
       : [];
 
   return [
+    ...(app.state.tableCellSelection
+      ? ([
+          actionTableClearContent,
+          actionTableClearBackgroundText,
+          actionTableClearStyle,
+          actionTableCopyFormat,
+          actionTablePasteFormat,
+          actionTableCenterContent,
+          CONTEXT_MENU_SEPARATOR,
+        ] as ContextMenuItems)
+      : []),
     CONTEXT_MENU_SEPARATOR,
     actionCut,
     actionCopy,

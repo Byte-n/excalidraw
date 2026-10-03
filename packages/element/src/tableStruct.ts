@@ -1,6 +1,10 @@
 import { randomId } from "@excalidraw/common";
 
-import type { ExcalidrawTableElement, TableDataV1 } from "./types";
+import type {
+  ExcalidrawTableElement,
+  TableCellData,
+  TableDataV1,
+} from "./types";
 
 /**
  * Creation presets, not format constraints — row/column counts and sizes are
@@ -122,7 +126,7 @@ export const getTableCellBounds = (
   table: TableDataV1,
   cellId: string,
 ): { x: number; y: number; width: number; height: number } | null => {
-  const cell = table.cells.find((candidate) => candidate.id === cellId);
+  const cell = getVisibleTableCell(table, cellId);
   if (!cell) {
     return null;
   }
@@ -135,7 +139,113 @@ export const getTableCellBounds = (
   if (x === null || y === null || !column || !row) {
     return null;
   }
-  return { x, y, width: column.width, height: row.height };
+  const rowIndex = table.rows.findIndex(
+    (candidate) => candidate.id === cell.rowId,
+  );
+  const columnIndex = table.columns.findIndex(
+    (candidate) => candidate.id === cell.columnId,
+  );
+  return {
+    x,
+    y,
+    width: table.columns
+      .slice(columnIndex, columnIndex + (cell.columnSpan ?? 1))
+      .reduce((sum, item) => sum + item.width, 0),
+    height: table.rows
+      .slice(rowIndex, rowIndex + (cell.rowSpan ?? 1))
+      .reduce((sum, item) => sum + item.height, 0),
+  };
+};
+
+export const getVisibleTableCell = (
+  table: TableDataV1,
+  cellId: string,
+): TableCellData | null => {
+  const cell = table.cells.find((candidate) => candidate.id === cellId);
+  return cell
+    ? table.cells.find(
+        (candidate) => candidate.id === (cell.mergedInto ?? cell.id),
+      ) ?? null
+    : null;
+};
+
+export type TableCellRange = Readonly<{
+  startRow: number;
+  endRow: number;
+  startColumn: number;
+  endColumn: number;
+}>;
+
+export const getTableCellRange = (
+  table: TableDataV1,
+  firstId: string,
+  lastId: string,
+): TableCellRange => {
+  const byId = new Map(table.cells.map((cell) => [cell.id, cell]));
+  const visible = (id: string) => {
+    const cell = byId.get(id);
+    return cell ? byId.get(cell.mergedInto ?? cell.id) : undefined;
+  };
+  const first = visible(firstId);
+  const last = visible(lastId);
+  if (!first || !last) {
+    throw new Error("Table selection references an unknown cell");
+  }
+  const rowIndex = new Map(table.rows.map((row, index) => [row.id, index]));
+  const columnIndex = new Map(
+    table.columns.map((column, index) => [column.id, index]),
+  );
+  let startRow = Math.min(
+    rowIndex.get(first.rowId)!,
+    rowIndex.get(last.rowId)!,
+  );
+  let endRow = Math.max(
+    rowIndex.get(first.rowId)! + (first.rowSpan ?? 1) - 1,
+    rowIndex.get(last.rowId)! + (last.rowSpan ?? 1) - 1,
+  );
+  let startColumn = Math.min(
+    columnIndex.get(first.columnId)!,
+    columnIndex.get(last.columnId)!,
+  );
+  let endColumn = Math.max(
+    columnIndex.get(first.columnId)! + (first.columnSpan ?? 1) - 1,
+    columnIndex.get(last.columnId)! + (last.columnSpan ?? 1) - 1,
+  );
+  let changed: boolean;
+  do {
+    changed = false;
+    for (const cell of table.cells) {
+      const row = rowIndex.get(cell.rowId)!;
+      const column = columnIndex.get(cell.columnId)!;
+      if (
+        row < startRow ||
+        row > endRow ||
+        column < startColumn ||
+        column > endColumn
+      ) {
+        continue;
+      }
+      const anchor = visible(cell.id)!;
+      const anchorRow = rowIndex.get(anchor.rowId)!;
+      const anchorColumn = columnIndex.get(anchor.columnId)!;
+      const next = {
+        startRow: Math.min(startRow, anchorRow),
+        endRow: Math.max(endRow, anchorRow + (anchor.rowSpan ?? 1) - 1),
+        startColumn: Math.min(startColumn, anchorColumn),
+        endColumn: Math.max(
+          endColumn,
+          anchorColumn + (anchor.columnSpan ?? 1) - 1,
+        ),
+      };
+      changed ||=
+        next.startRow !== startRow ||
+        next.endRow !== endRow ||
+        next.startColumn !== startColumn ||
+        next.endColumn !== endColumn;
+      ({ startRow, endRow, startColumn, endColumn } = next);
+    }
+  } while (changed);
+  return { startRow, endRow, startColumn, endColumn };
 };
 
 const assertUniqueIds = (
@@ -204,6 +314,26 @@ const assertValidCell = (
   if (backgroundColor !== undefined && typeof backgroundColor !== "string") {
     throw new Error(`Invalid table cell backgroundColor on ${value.id}`);
   }
+  for (const key of ["rowSpan", "columnSpan"] as const) {
+    if (
+      value[key] !== undefined &&
+      (!Number.isInteger(value[key]) || (value[key] as number) < 1)
+    ) {
+      throw new Error(`Invalid table cell ${key} on ${value.id}`);
+    }
+  }
+  if (
+    value.mergedInto !== undefined &&
+    (typeof value.mergedInto !== "string" || !value.mergedInto)
+  ) {
+    throw new Error(`Invalid table cell mergedInto on ${value.id}`);
+  }
+  if (
+    value.mergedInto &&
+    (value.rowSpan !== undefined || value.columnSpan !== undefined)
+  ) {
+    throw new Error(`Covered table cell ${value.id} cannot have a span`);
+  }
 };
 
 /**
@@ -268,6 +398,42 @@ export const assertValidTableData = (table: unknown): TableDataV1 => {
     );
   }
 
+  const byIntersection = new Map(
+    cells.map((cell) => [`${cell.rowId}\u0000${cell.columnId}`, cell]),
+  );
+  const ownership = new Map<string, string>();
+  for (const cell of cells) {
+    if (cell.mergedInto) {
+      continue;
+    }
+    const row = rows.findIndex((entry) => entry.id === cell.rowId);
+    const column = columns.findIndex((entry) => entry.id === cell.columnId);
+    const rowSpan = cell.rowSpan ?? 1;
+    const columnSpan = cell.columnSpan ?? 1;
+    if (row + rowSpan > rows.length || column + columnSpan > columns.length) {
+      throw new Error(`Table cell ${cell.id} span exceeds table bounds`);
+    }
+    for (let r = row; r < row + rowSpan; r++) {
+      for (let c = column; c < column + columnSpan; c++) {
+        const covered = byIntersection.get(
+          `${rows[r].id}\u0000${columns[c].id}`,
+        )!;
+        if (
+          ownership.has(covered.id) ||
+          (covered.id !== cell.id && covered.mergedInto !== cell.id)
+        ) {
+          throw new Error(
+            `Overlapping or incomplete table merge at ${covered.id}`,
+          );
+        }
+        ownership.set(covered.id, cell.id);
+      }
+    }
+  }
+  if (ownership.size !== cells.length) {
+    throw new Error("Table has a covered cell without a valid merge anchor");
+  }
+
   return table as TableDataV1;
 };
 
@@ -323,7 +489,7 @@ export const getTableCellAtPoint = (
   const cell = table.cells.find(
     (candidate) => candidate.rowId === rowId && candidate.columnId === columnId,
   );
-  return cell?.id ?? null;
+  return cell ? getVisibleTableCell(table, cell.id)?.id ?? null : null;
 };
 
 /**

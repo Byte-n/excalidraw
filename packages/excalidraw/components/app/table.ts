@@ -27,6 +27,8 @@ import {
   getMemberTranslationsForRows,
   getTableCellAtPoint,
   getTableCellBounds,
+  getTableCellRange,
+  getVisibleTableCell,
   getTableColumnOffset,
   getTableHeight,
   getTableRowOffset,
@@ -42,8 +44,11 @@ import {
   isTableCellBackgroundText,
   isTableElement,
   isTextElement,
-  moveColumnInTable,
-  moveRowInTable,
+  getTableAxisBlockRange,
+  moveTableAxisBlock,
+  mergeTableCells,
+  splitTableCells,
+  getCellsInTableRange,
   newElementWith,
   newTextElement,
   newTableElement,
@@ -60,6 +65,7 @@ import type {
   NonDeleted,
   NonDeletedExcalidrawElement,
   TableDataV1,
+  TableCellData,
 } from "@excalidraw/element/types";
 
 import type {
@@ -257,6 +263,469 @@ export const updateTableCellHighlight = (
   app.setState({ highlightedTableCell });
 };
 
+export const selectTableCellAtPoint = (
+  app: TableApp,
+  sceneCoords: { x: number; y: number },
+  shiftKey: boolean,
+): boolean => {
+  if (
+    !isSelectionLikeTool(app.state.activeTool.type) ||
+    app.state.editingTextElement
+  ) {
+    return false;
+  }
+  const selection = app.state.tableCellSelection;
+  const target = getTableCellDropTargetAtSceneCoords(app, sceneCoords, {
+    currentTableId: selection?.mobileMode ? selection.tableId : null,
+  });
+  if (
+    selection?.mobileMode &&
+    (!target || target.table.id !== selection.tableId)
+  ) {
+    app.setToast({ message: "请先退出单元格多选" });
+    return true;
+  }
+  if (!target) {
+    if (selection && !selection.mobileMode) {
+      app.setState({ tableCellSelection: null });
+    }
+    return false;
+  }
+  const targetCellId =
+    getVisibleTableCell(target.table.table, target.cellId)?.id ?? target.cellId;
+  const extend =
+    !!selection &&
+    selection.tableId === target.table.id &&
+    (shiftKey || selection.mobileMode);
+  app.setState({
+    tableCellSelection: {
+      tableId: target.table.id,
+      anchorId: extend ? selection.anchorId : targetCellId,
+      focusId: targetCellId,
+      mobileMode:
+        (selection?.mobileMode && selection.tableId === target.table.id) ||
+        false,
+    },
+  });
+  return extend;
+};
+
+export const moveTableCellSelectionFocus = (
+  app: TableApp,
+  direction: "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight",
+  extend: boolean,
+): boolean => {
+  const selection = app.state.tableCellSelection;
+  if (!selection || app.state.editingTextElement) {
+    return false;
+  }
+  const table = app.scene.getNonDeletedElement(selection.tableId);
+  if (!table || !isTableElement(table)) {
+    return false;
+  }
+  const cell = getVisibleTableCell(table.table, selection.focusId);
+  if (!cell) {
+    return false;
+  }
+  let row = table.table.rows.findIndex((entry) => entry.id === cell.rowId);
+  let column = table.table.columns.findIndex(
+    (entry) => entry.id === cell.columnId,
+  );
+  if (direction === "ArrowDown") {
+    row += cell.rowSpan ?? 1;
+  }
+  if (direction === "ArrowRight") {
+    column += cell.columnSpan ?? 1;
+  }
+  if (direction === "ArrowUp") {
+    row--;
+  }
+  if (direction === "ArrowLeft") {
+    column--;
+  }
+  row = Math.max(0, Math.min(row, table.table.rows.length - 1));
+  column = Math.max(0, Math.min(column, table.table.columns.length - 1));
+  const target = table.table.cells.find(
+    (candidate) =>
+      candidate.rowId === table.table.rows[row].id &&
+      candidate.columnId === table.table.columns[column].id,
+  )!;
+  const focusId = getVisibleTableCell(table.table, target.id)!.id;
+  app.setState({
+    tableCellSelection: {
+      ...selection,
+      anchorId: extend ? selection.anchorId : focusId,
+      focusId,
+    },
+  });
+  return true;
+};
+
+export const commitTableCellMerge = (app: TableApp): boolean => {
+  const selection = app.state.tableCellSelection;
+  if (!selection) {
+    return false;
+  }
+  const table = app.scene.getNonDeletedElement(selection.tableId);
+  if (!table || !isTableElement(table)) {
+    return false;
+  }
+  if (
+    (table.table as TableDataV1 & { sizingMode?: string }).sizingMode ===
+    "fitContent"
+  ) {
+    app.setToast({
+      message: "Merged cells are unavailable in fit-to-content tables",
+    });
+    return false;
+  }
+  let merged: TableDataV1;
+  let range;
+  try {
+    range = getTableCellRange(
+      table.table,
+      selection.anchorId,
+      selection.focusId,
+    );
+    merged = mergeTableCells(
+      table.table,
+      selection.anchorId,
+      selection.focusId,
+    );
+  } catch (error) {
+    app.setToast({
+      message:
+        error instanceof Error ? error.message : "Cannot merge these cells",
+    });
+    return false;
+  }
+  const selected = getCellsInTableRange(table.table, range).sort(
+    (left, right) =>
+      table.table.rows.findIndex((row) => row.id === left.rowId) -
+        table.table.rows.findIndex((row) => row.id === right.rowId) ||
+      table.table.columns.findIndex((column) => column.id === left.columnId) -
+        table.table.columns.findIndex((column) => column.id === right.columnId),
+  );
+  const anchorId = merged.cells.find(
+    (cell) =>
+      cell.rowId === table.table.rows[range.startRow].id &&
+      cell.columnId === table.table.columns[range.startColumn].id,
+  )!.id;
+  const oldAnchorIds = new Set(
+    selected.filter((cell) => !cell.mergedInto).map((cell) => cell.id),
+  );
+  const elementsMap = app.scene.getNonDeletedElementsMap();
+  const backgrounds = selected.flatMap((cell) =>
+    (
+      getIndexedTableCellChildren(
+        elementsMap,
+        table.id,
+        cell.id,
+        "backgroundText",
+      ) ?? []
+    ).filter(isTextElement),
+  );
+  const content = backgrounds
+    .filter((text) => text.originalText.length > 0)
+    .map((text) => text.originalText)
+    .join("\n");
+  const retained =
+    backgrounds.find(
+      (text) =>
+        text.containerRef?.kind === "tableCell" &&
+        text.containerRef.cellId === anchorId,
+    ) ?? backgrounds.find((text) => text.originalText.length > 0);
+  app.store.scheduleCapture();
+  for (const cellId of oldAnchorIds) {
+    if (cellId === anchorId) {
+      continue;
+    }
+    for (const member of getIndexedTableCellChildren(
+      elementsMap,
+      table.id,
+      cellId,
+    ) ?? []) {
+      if (
+        member.containerRef?.kind === "tableCell" &&
+        member.containerRef.role === "content"
+      ) {
+        app.scene.mutateElement(member as ExcalidrawElement, {
+          containerRef: { ...member.containerRef, cellId: anchorId },
+        });
+      }
+    }
+  }
+  for (const text of backgrounds) {
+    if (text.id === retained?.id) {
+      app.scene.mutateElement(text, {
+        originalText: content,
+        containerRef: {
+          kind: "tableCell",
+          elementId: table.id,
+          cellId: anchorId,
+          role: "backgroundText",
+        },
+      });
+    } else {
+      app.scene.mutateElement(text, {
+        isDeleted: true,
+        containerRef: undefined,
+      });
+    }
+  }
+  app.scene.mutateElement(table, { table: merged });
+  if (retained) {
+    refitCellBackgroundTexts(app, table, [anchorId]);
+  }
+  app.setState({
+    tableCellSelection: { ...selection, anchorId, focusId: anchorId },
+  });
+  app.scene.triggerUpdate();
+  return true;
+};
+
+export const commitTableCellSplit = (app: TableApp): boolean => {
+  const selection = app.state.tableCellSelection;
+  if (!selection) {
+    return false;
+  }
+  const table = app.scene.getNonDeletedElement(selection.tableId);
+  if (!table || !isTableElement(table)) {
+    return false;
+  }
+  let split: TableDataV1;
+  let splitAnchors: string[];
+  try {
+    const range = getTableCellRange(
+      table.table,
+      selection.anchorId,
+      selection.focusId,
+    );
+    const cells = getCellsInTableRange(table.table, range);
+    splitAnchors = cells
+      .filter(
+        (cell) =>
+          !cell.mergedInto &&
+          ((cell.rowSpan ?? 1) > 1 || (cell.columnSpan ?? 1) > 1),
+      )
+      .map((cell) => cell.id);
+    split = splitTableCells(
+      table.table,
+      cells.map((cell) => cell.id),
+    );
+  } catch (error) {
+    app.setToast({
+      message:
+        error instanceof Error ? error.message : "Cannot split these cells",
+    });
+    return false;
+  }
+  app.store.scheduleCapture();
+  app.scene.mutateElement(table, { table: split });
+  const updatedTable = app.scene.getNonDeletedElement(table.id);
+  if (updatedTable && isTableElement(updatedTable)) {
+    refitCellBackgroundTexts(app, updatedTable, splitAnchors);
+  }
+  app.scene.triggerUpdate();
+  return true;
+};
+
+export const clearSelectedTableCells = (
+  app: TableApp,
+  kind: "content" | "backgroundText" | "style",
+): boolean => {
+  const selection = app.state.tableCellSelection;
+  if (!selection) {
+    return false;
+  }
+  const table = app.scene.getNonDeletedElement(selection.tableId);
+  if (!table || !isTableElement(table)) {
+    return false;
+  }
+  const range = getTableCellRange(
+    table.table,
+    selection.anchorId,
+    selection.focusId,
+  );
+  const selected = getCellsInTableRange(table.table, range);
+  if (kind === "style") {
+    const ids = new Set(selected.map((cell) => cell.id));
+    const cells = table.table.cells.map((cell) =>
+      ids.has(cell.id) ? { ...cell, style: {} } : cell,
+    );
+    if (!selected.some((cell) => Object.keys(cell.style).length)) {
+      return false;
+    }
+    app.store.scheduleCapture();
+    app.scene.mutateElement(table, { table: { ...table.table, cells } });
+    app.scene.triggerUpdate();
+    return true;
+  }
+  const elementsMap = app.scene.getNonDeletedElementsMap();
+  const direct = selected.flatMap(
+    (cell) =>
+      getIndexedTableCellChildren(
+        elementsMap,
+        table.id,
+        cell.id,
+        kind === "backgroundText" ? "backgroundText" : "content",
+      ) ?? [],
+  );
+  if (!direct.length) {
+    return false;
+  }
+  const doomedIds = new Set<string>();
+  for (const element of direct) {
+    doomedIds.add(element.id);
+    if (kind === "content") {
+      if (isTableElement(element) || isFrameLikeElement(element)) {
+        for (const descendant of getTableSubtreeElements(
+          app.scene.getNonDeletedElements(),
+          element.id,
+          elementsMap,
+        )) {
+          doomedIds.add(descendant.id);
+        }
+      }
+      const bound = getBoundTextElement(element, elementsMap);
+      if (bound) {
+        doomedIds.add(bound.id);
+      }
+    }
+  }
+  app.store.scheduleCapture();
+  const doomed = [...doomedIds].flatMap((id) => {
+    const element = elementsMap.get(id);
+    return element ? [element] : [];
+  });
+  for (const element of doomed) {
+    app.scene.mutateElement(element as ExcalidrawElement, {
+      isDeleted: true,
+      containerRef: element.containerRef ? undefined : element.containerRef,
+    });
+  }
+  if (kind === "content") {
+    fixBindingsAfterDeletion(app.scene.getNonDeletedElements(), doomed);
+  }
+  app.scene.triggerUpdate();
+  return true;
+};
+
+const copiedTableCellStyles = new WeakMap<object, TableCellData["style"]>();
+
+export const copySelectedTableCellFormat = (app: TableApp): boolean => {
+  const selection = app.state.tableCellSelection;
+  if (!selection) {
+    return false;
+  }
+  const table = app.scene.getNonDeletedElement(selection.tableId);
+  if (!table || !isTableElement(table)) {
+    return false;
+  }
+  const cell = getVisibleTableCell(table.table, selection.focusId);
+  if (!cell) {
+    return false;
+  }
+  copiedTableCellStyles.set(app, { ...cell.style });
+  return true;
+};
+
+export const pasteSelectedTableCellFormat = (app: TableApp): boolean => {
+  const selection = app.state.tableCellSelection;
+  const style = copiedTableCellStyles.get(app);
+  if (!selection || !style) {
+    return false;
+  }
+  const table = app.scene.getNonDeletedElement(selection.tableId);
+  if (!table || !isTableElement(table)) {
+    return false;
+  }
+  const range = getTableCellRange(
+    table.table,
+    selection.anchorId,
+    selection.focusId,
+  );
+  const ids = new Set(
+    getCellsInTableRange(table.table, range)
+      .filter((cell) => !cell.mergedInto)
+      .map((cell) => cell.id),
+  );
+  const cells = table.table.cells.map((cell) =>
+    ids.has(cell.id) ? { ...cell, style: { ...style } } : cell,
+  );
+  if (
+    cells.every(
+      (cell, index) =>
+        JSON.stringify(cell.style) ===
+        JSON.stringify(table.table.cells[index].style),
+    )
+  ) {
+    return false;
+  }
+  app.store.scheduleCapture();
+  app.scene.mutateElement(table, { table: { ...table.table, cells } });
+  app.scene.triggerUpdate();
+  return true;
+};
+
+export const centerSelectedTableCellContent = (app: TableApp): boolean => {
+  const selection = app.state.tableCellSelection;
+  if (!selection) {
+    return false;
+  }
+  const table = app.scene.getNonDeletedElement(selection.tableId);
+  if (!table || !isTableElement(table)) {
+    return false;
+  }
+  const range = getTableCellRange(
+    table.table,
+    selection.anchorId,
+    selection.focusId,
+  );
+  const elementsMap = app.scene.getNonDeletedElementsMap();
+  const moves = new Map<string, { dx: number; dy: number }>();
+  for (const cell of getCellsInTableRange(table.table, range).filter(
+    (candidate) => !candidate.mergedInto,
+  )) {
+    const bounds = getTableCellBounds(table.table, cell.id)!;
+    const direct =
+      getIndexedTableCellChildren(elementsMap, table.id, cell.id, "content") ??
+      [];
+    if (!direct.length) {
+      continue;
+    }
+    const ids = collectCellMemberIds(app, table.id, [cell.id]).filter((id) => {
+      const member = elementsMap.get(id);
+      return member && !isTableCellBackgroundText(member);
+    });
+    const boxes = ids.map((id) =>
+      getElementAbsoluteCoords(elementsMap.get(id)!, elementsMap),
+    );
+    const left = Math.min(...boxes.map((box) => box[0]));
+    const top = Math.min(...boxes.map((box) => box[1]));
+    const right = Math.max(...boxes.map((box) => box[2]));
+    const bottom = Math.max(...boxes.map((box) => box[3]));
+    const dx = table.x + bounds.x + bounds.width / 2 - (left + right) / 2;
+    const dy = table.y + bounds.y + bounds.height / 2 - (top + bottom) / 2;
+    for (const id of ids) {
+      moves.set(id, { dx, dy });
+    }
+  }
+  if (![...moves.values()].some(({ dx, dy }) => dx || dy)) {
+    return false;
+  }
+  app.store.scheduleCapture();
+  for (const [id, { dx, dy }] of moves) {
+    const member = elementsMap.get(id)!;
+    app.scene.mutateElement(member as ExcalidrawElement, {
+      x: member.x + dx,
+      y: member.y + dy,
+    });
+  }
+  app.scene.triggerUpdate();
+  return true;
+};
+
 /**
  * Hover highlight for the cell under the pointer. Same gesture gates as the
  * frame highlight, plus: a child element above the table keeps the pointer to
@@ -444,6 +913,9 @@ export const handleTableCellDoubleClick = (
   sceneX: number,
   sceneY: number,
 ): boolean => {
+  if (app.state.tableCellSelection?.mobileMode) {
+    return true;
+  }
   const hits = app.getElementsAtPosition(sceneX, sceneY);
   const topHit = hits[hits.length - 1];
   if (!topHit || topHit.type !== "table") {
@@ -788,9 +1260,14 @@ const refitCellBackgroundTexts = (
     if (!cell) {
       continue;
     }
-    const row = table.table.rows.find(
+    const startRow = table.table.rows.findIndex(
       (candidate) => candidate.id === cell.rowId,
     );
+    const spanRows = table.table.rows.slice(
+      startRow,
+      startRow + (cell.rowSpan ?? 1),
+    );
+    const row = spanRows[spanRows.length - 1];
     if (!row) {
       continue;
     }
@@ -809,7 +1286,10 @@ const refitCellBackgroundTexts = (
       ).height;
       requiredHeights.set(
         row.id,
-        Math.max(requiredHeights.get(row.id) ?? 0, height),
+        Math.max(
+          requiredHeights.get(row.id) ?? 0,
+          height - (bounds.height - row.height),
+        ),
       );
     }
   }
@@ -1025,6 +1505,12 @@ const resolveStructureHover = (
     for (const row of table.table.rows.slice(0, -1)) {
       offset += row.height;
       if (Math.abs(ly - offset) <= band / 2) {
+        if (
+          getTableCellAtPoint(table, table.x + lx, table.y + offset - 0.001) ===
+          getTableCellAtPoint(table, table.x + lx, table.y + offset + 0.001)
+        ) {
+          continue;
+        }
         return {
           tableId: table.id,
           kind: "rowResize",
@@ -1037,6 +1523,12 @@ const resolveStructureHover = (
     for (const column of table.table.columns.slice(0, -1)) {
       offset += column.width;
       if (Math.abs(lx - offset) <= band / 2) {
+        if (
+          getTableCellAtPoint(table, table.x + offset - 0.001, table.y + ly) ===
+          getTableCellAtPoint(table, table.x + offset + 0.001, table.y + ly)
+        ) {
+          continue;
+        }
         return {
           tableId: table.id,
           kind: "columnResize",
@@ -1963,10 +2455,25 @@ export const finalizeTableGestureOnPointerUp = (
         id,
         getTableLocalPoint(table, sceneCoords.x, sceneCoords.y),
       );
-      const newTable =
-        kind === "row"
-          ? moveRowInTable(table.table, id, boundaryIndex)
-          : moveColumnInTable(table.table, id, boundaryIndex);
+      let newTable: TableDataV1;
+      try {
+        const entries = kind === "row" ? table.table.rows : table.table.columns;
+        const block = getTableAxisBlockRange(table.table, kind, id);
+        newTable = moveTableAxisBlock(
+          table.table,
+          kind,
+          id,
+          Math.min(
+            boundaryIndex,
+            entries.length - (block.end - block.start + 1),
+          ),
+        );
+      } catch {
+        app.setToast({
+          message: "Cannot move this block through another merged cell",
+        });
+        return true;
+      }
       if (newTable === table.table) {
         // released in place — 无变化不进历史
         return true;
@@ -2179,8 +2686,25 @@ export const deleteSelectedTableRowCol = (app: TableApp): boolean => {
 
   const elementsMap = app.scene.getNonDeletedElementsMap();
   const allElements = app.scene.getNonDeletedElements();
+  const remappedAnchors = result.remappedCellIds ?? new Map<string, string>();
+  for (const [oldCellId, newCellId] of remappedAnchors) {
+    for (const memberId of collectCellMemberIds(app, table.id, [oldCellId])) {
+      const member = elementsMap.get(memberId);
+      if (
+        member?.containerRef?.kind === "tableCell" &&
+        member.containerRef.cellId === oldCellId
+      ) {
+        app.scene.mutateElement(member as ExcalidrawElement, {
+          containerRef: { ...member.containerRef, cellId: newCellId },
+        });
+      }
+    }
+  }
   const doomedIds = new Set<string>();
   for (const cellId of result.removedCellIds) {
+    if (remappedAnchors.has(cellId)) {
+      continue;
+    }
     for (const memberId of collectCellMemberIds(app, table.id, [cellId])) {
       doomedIds.add(memberId);
     }
@@ -2226,6 +2750,9 @@ export const deleteSelectedTableRowCol = (app: TableApp): boolean => {
     width: getTableWidth(result.table),
     height: getTableHeight(result.table),
   });
+  for (const newCellId of remappedAnchors.values()) {
+    refitCellBackgroundTexts(app, table, [newCellId]);
+  }
   app.setState({ tableRowColSelection: null });
   app.store.scheduleCapture();
   app.scene.triggerUpdate();
@@ -2251,9 +2778,13 @@ export const moveSelectedTableRowCol = (
 
   const entries =
     selection.kind === "row" ? table.table.rows : table.table.columns;
-  const fromIndex = entries.findIndex((entry) => entry.id === selection.id);
-  const toIndex = fromIndex + direction;
-  if (fromIndex === -1 || toIndex < 0 || toIndex >= entries.length) {
+  const block = getTableAxisBlockRange(
+    table.table,
+    selection.kind,
+    selection.id,
+  );
+  const toIndex = block.start + direction;
+  if (toIndex < 0 || toIndex > entries.length - (block.end - block.start + 1)) {
     return true;
   }
 
@@ -2261,14 +2792,24 @@ export const moveSelectedTableRowCol = (
   // array without the moved entry: a one-slot shift splices at
   // `fromIndex + direction` there (the assertion runs against the full
   // array, so `entries.length - 1` is a valid append-at-end index)
-  const targetIndex = fromIndex + direction;
+  const targetIndex = toIndex;
   if (targetIndex < 0 || targetIndex > entries.length - 1) {
     return true;
   }
-  const newTable =
-    selection.kind === "row"
-      ? moveRowInTable(table.table, selection.id, targetIndex)
-      : moveColumnInTable(table.table, selection.id, targetIndex);
+  let newTable: TableDataV1;
+  try {
+    newTable = moveTableAxisBlock(
+      table.table,
+      selection.kind,
+      selection.id,
+      targetIndex,
+    );
+  } catch {
+    app.setToast({
+      message: "Cannot move a row or column through a merged cell separately",
+    });
+    return true;
+  }
   if (newTable === table.table) {
     return true;
   }

@@ -113,6 +113,11 @@ export type TableCellData = Readonly<{
   columnId: string;
   /** `style: {}` means no cell-level override (table defaults apply). */
   style: Readonly<{ backgroundColor?: string }>;
+  /** Present only on the top-left cell of a merged rectangle. */
+  rowSpan?: number;
+  columnSpan?: number;
+  /** Covered cells retain their ID and point at the visible anchor. */
+  mergedInto?: string;
 }>;
 
 /**

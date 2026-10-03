@@ -1,11 +1,14 @@
 import { randomId } from "@excalidraw/common";
 
-import type { TableDataV1 } from "./types";
 import {
   assertValidTableData,
   getTableColumnOffset,
+  getTableCellRange,
   getTableRowOffset,
 } from "./tableStruct";
+
+import type { TableCellRange } from "./tableStruct";
+import type { TableCellData, TableDataV1 } from "./types";
 
 /**
  * Pure row/column structure commands over `TableDataV1`. Every command takes
@@ -41,6 +44,106 @@ export type TableColumnResizeOptions = {
 export type TableRemovalResult = {
   table: TableDataV1;
   removedCellIds: string[];
+  /** Old anchor ID to surviving top-left cell ID. */
+  remappedCellIds?: ReadonlyMap<string, string>;
+};
+
+export const getCellsInTableRange = (
+  table: TableDataV1,
+  range: TableCellRange,
+) => {
+  const rows = new Set(
+    table.rows.slice(range.startRow, range.endRow + 1).map((row) => row.id),
+  );
+  const columns = new Set(
+    table.columns
+      .slice(range.startColumn, range.endColumn + 1)
+      .map((column) => column.id),
+  );
+  return table.cells.filter(
+    (cell) => rows.has(cell.rowId) && columns.has(cell.columnId),
+  );
+};
+
+export const mergeTableCells = (
+  table: TableDataV1,
+  firstId: string,
+  lastId: string,
+): TableDataV1 => {
+  const range = getTableCellRange(table, firstId, lastId);
+  const selected = getCellsInTableRange(table, range);
+  const visible = selected.filter((cell) => !cell.mergedInto);
+  if (visible.length < 2) {
+    throw new Error("Select at least two visible cells to merge");
+  }
+  const anchor = selected.find(
+    (cell) =>
+      cell.rowId === table.rows[range.startRow].id &&
+      cell.columnId === table.columns[range.startColumn].id,
+  )!;
+  const ids = new Set(selected.map((cell) => cell.id));
+  return assertValidTableData({
+    ...table,
+    cells: table.cells.map((cell) => {
+      if (!ids.has(cell.id)) {
+        return cell;
+      }
+      const {
+        rowSpan: _rowSpan,
+        columnSpan: _columnSpan,
+        mergedInto: _mergedInto,
+        ...base
+      } = cell;
+      return cell.id === anchor.id
+        ? {
+            ...base,
+            rowSpan: range.endRow - range.startRow + 1,
+            columnSpan: range.endColumn - range.startColumn + 1,
+          }
+        : { ...base, mergedInto: anchor.id };
+    }),
+  });
+};
+
+export const splitTableCells = (
+  table: TableDataV1,
+  cellIds: readonly string[],
+): TableDataV1 => {
+  const anchors = new Set(
+    cellIds.map((id) => {
+      const cell = table.cells.find((candidate) => candidate.id === id);
+      if (!cell) {
+        throw new Error(`Table cell not found: ${id}`);
+      }
+      return cell.mergedInto ?? cell.id;
+    }),
+  );
+  if (
+    ![...anchors].some((id) => {
+      const cell = table.cells.find((candidate) => candidate.id === id)!;
+      return (cell.rowSpan ?? 1) > 1 || (cell.columnSpan ?? 1) > 1;
+    })
+  ) {
+    throw new Error("Select a merged cell to split");
+  }
+  return assertValidTableData({
+    ...table,
+    cells: table.cells.map((cell) => {
+      if (
+        (!anchors.has(cell.id) && !cell.mergedInto) ||
+        (cell.mergedInto && !anchors.has(cell.mergedInto))
+      ) {
+        return cell;
+      }
+      const {
+        rowSpan: _rowSpan,
+        columnSpan: _columnSpan,
+        mergedInto: _mergedInto,
+        ...base
+      } = cell;
+      return base;
+    }),
+  });
 };
 
 /** Per-row/column translation of member elements after a structure change. */
@@ -110,11 +213,37 @@ export const insertRowInTable = (
     style: {},
   }));
 
+  const newCellByColumn = new Map<string, TableCellData>(
+    newCells.map((cell) => [cell.columnId, cell]),
+  );
+  const rowIndex = new Map(table.rows.map((row, index) => [row.id, index]));
+  const columnIndex = new Map(
+    table.columns.map((column, index) => [column.id, index]),
+  );
+  const cells = table.cells.map((cell) => {
+    if (cell.mergedInto || !cell.rowSpan || cell.rowSpan < 2) {
+      return cell;
+    }
+    const start = rowIndex.get(cell.rowId)!;
+    if (boundaryIndex <= start || boundaryIndex >= start + cell.rowSpan) {
+      return cell;
+    }
+    for (
+      let column = columnIndex.get(cell.columnId)!;
+      column < columnIndex.get(cell.columnId)! + (cell.columnSpan ?? 1);
+      column++
+    ) {
+      const fresh = newCellByColumn.get(table.columns[column].id)!;
+      newCellByColumn.set(fresh.columnId, { ...fresh, mergedInto: cell.id });
+    }
+    return { ...cell, rowSpan: cell.rowSpan + 1 };
+  });
+
   return assertValidTableData({
     schemaVersion: 1,
     rows,
     columns: table.columns,
-    cells: [...table.cells, ...newCells],
+    cells: [...cells, ...newCellByColumn.values()],
   });
 };
 
@@ -140,11 +269,37 @@ export const insertColumnInTable = (
     style: {},
   }));
 
+  const newCellByRow = new Map<string, TableCellData>(
+    newCells.map((cell) => [cell.rowId, cell]),
+  );
+  const rowIndex = new Map(table.rows.map((row, index) => [row.id, index]));
+  const columnIndex = new Map(
+    table.columns.map((column, index) => [column.id, index]),
+  );
+  const cells = table.cells.map((cell) => {
+    if (cell.mergedInto || !cell.columnSpan || cell.columnSpan < 2) {
+      return cell;
+    }
+    const start = columnIndex.get(cell.columnId)!;
+    if (boundaryIndex <= start || boundaryIndex >= start + cell.columnSpan) {
+      return cell;
+    }
+    for (
+      let row = rowIndex.get(cell.rowId)!;
+      row < rowIndex.get(cell.rowId)! + (cell.rowSpan ?? 1);
+      row++
+    ) {
+      const fresh = newCellByRow.get(table.rows[row].id)!;
+      newCellByRow.set(fresh.rowId, { ...fresh, mergedInto: cell.id });
+    }
+    return { ...cell, columnSpan: cell.columnSpan + 1 };
+  });
+
   return assertValidTableData({
     schemaVersion: 1,
     rows: table.rows,
     columns,
-    cells: [...table.cells, ...newCells],
+    cells: [...cells, ...newCellByRow.values()],
   });
 };
 
@@ -165,24 +320,7 @@ export const removeRowFromTable = (
     );
   }
 
-  const removedCellIds: string[] = [];
-  const cells = table.cells.filter((cell) => {
-    if (cell.rowId !== rowId) {
-      return true;
-    }
-    removedCellIds.push(cell.id);
-    return false;
-  });
-
-  return {
-    table: assertValidTableData({
-      schemaVersion: 1,
-      rows: table.rows.filter((row) => row.id !== rowId),
-      columns: table.columns,
-      cells,
-    }),
-    removedCellIds,
-  };
+  return removeTableAxis(table, "row", rowId);
 };
 
 /** Column counterpart of `removeRowFromTable` (see it for the semantics). */
@@ -197,23 +335,85 @@ export const removeColumnFromTable = (
     );
   }
 
-  const removedCellIds: string[] = [];
-  const cells = table.cells.filter((cell) => {
-    if (cell.columnId !== columnId) {
-      return true;
-    }
-    removedCellIds.push(cell.id);
-    return false;
-  });
+  return removeTableAxis(table, "column", columnId);
+};
 
+const removeTableAxis = (
+  table: TableDataV1,
+  axis: "row" | "column",
+  id: string,
+): TableRemovalResult => {
+  const rows =
+    axis === "row" ? table.rows.filter((row) => row.id !== id) : table.rows;
+  const columns =
+    axis === "column"
+      ? table.columns.filter((column) => column.id !== id)
+      : table.columns;
+  const removed = table.cells.filter((cell) =>
+    axis === "row" ? cell.rowId === id : cell.columnId === id,
+  );
+  const survivors = table.cells.filter((cell) =>
+    axis === "row" ? cell.rowId !== id : cell.columnId !== id,
+  );
+  const next = new Map(
+    survivors.map((cell) => {
+      const {
+        rowSpan: _rowSpan,
+        columnSpan: _columnSpan,
+        mergedInto: _mergedInto,
+        ...base
+      } = cell;
+      return [cell.id, base as TableCellData];
+    }),
+  );
+  const remappedCellIds = new Map<string, string>();
+  for (const anchor of table.cells) {
+    if (
+      anchor.mergedInto ||
+      ((anchor.rowSpan ?? 1) === 1 && (anchor.columnSpan ?? 1) === 1)
+    ) {
+      continue;
+    }
+    const range = getTableCellRange(table, anchor.id, anchor.id);
+    const cells = getCellsInTableRange(table, range)
+      .filter((cell) => next.has(cell.id))
+      .sort(
+        (left, right) =>
+          rows.findIndex((row) => row.id === left.rowId) -
+            rows.findIndex((row) => row.id === right.rowId) ||
+          columns.findIndex((column) => column.id === left.columnId) -
+            columns.findIndex((column) => column.id === right.columnId),
+      );
+    if (!cells.length) {
+      continue;
+    }
+    const newAnchor = cells.find((cell) => cell.id === anchor.id) ?? cells[0];
+    if (newAnchor.id !== anchor.id) {
+      remappedCellIds.set(anchor.id, newAnchor.id);
+    }
+    const rowSpan = new Set(cells.map((cell) => cell.rowId)).size;
+    const columnSpan = new Set(cells.map((cell) => cell.columnId)).size;
+    for (const cell of cells) {
+      next.set(
+        cell.id,
+        cell.id === newAnchor.id
+          ? {
+              ...next.get(cell.id)!,
+              ...(rowSpan > 1 || columnSpan > 1 ? { rowSpan, columnSpan } : {}),
+            }
+          : { ...next.get(cell.id)!, mergedInto: newAnchor.id },
+      );
+    }
+  }
   return {
     table: assertValidTableData({
-      schemaVersion: 1,
-      rows: table.rows,
-      columns: table.columns.filter((column) => column.id !== columnId),
-      cells,
+      ...table,
+      rows,
+      columns,
+      cells: survivors.map((cell) => next.get(cell.id)!),
     }),
-    removedCellIds,
+    removedCellIds: removed.map((cell) => cell.id),
+    remappedCellIds,
   };
 };
 
@@ -275,6 +475,79 @@ export const moveColumnInTable = (
     columns,
     cells: table.cells,
   });
+};
+
+export const getTableAxisBlockRange = (
+  table: TableDataV1,
+  axis: "row" | "column",
+  id: string,
+): { start: number; end: number } => {
+  const entries = axis === "row" ? table.rows : table.columns;
+  const index = entries.findIndex((entry) => entry.id === id);
+  if (index < 0) {
+    throw new Error(`Table ${axis} not found: ${id}`);
+  }
+  let start = index;
+  let end = index;
+  let changed: boolean;
+  do {
+    changed = false;
+    for (const cell of table.cells) {
+      if (cell.mergedInto) {
+        continue;
+      }
+      const span = axis === "row" ? cell.rowSpan ?? 1 : cell.columnSpan ?? 1;
+      if (span === 1) {
+        continue;
+      }
+      const first = entries.findIndex(
+        (entry) => entry.id === (axis === "row" ? cell.rowId : cell.columnId),
+      );
+      const last = first + span - 1;
+      if (first <= end && last >= start) {
+        const nextStart = Math.min(start, first);
+        const nextEnd = Math.max(end, last);
+        changed ||= nextStart !== start || nextEnd !== end;
+        start = nextStart;
+        end = nextEnd;
+      }
+    }
+  } while (changed);
+  return { start, end };
+};
+
+export const moveTableAxisBlock = (
+  table: TableDataV1,
+  axis: "row" | "column",
+  id: string,
+  toIndex: number,
+): TableDataV1 => {
+  const entries = axis === "row" ? table.rows : table.columns;
+  const { start, end } = getTableAxisBlockRange(table, axis, id);
+  const size = end - start + 1;
+  if (
+    !Number.isInteger(toIndex) ||
+    toIndex < 0 ||
+    toIndex > entries.length - size
+  ) {
+    throw new Error(`Invalid table ${axis} move target`);
+  }
+  if (toIndex === start) {
+    return table;
+  }
+  const block = entries.slice(start, end + 1);
+  const rest = [...entries.slice(0, start), ...entries.slice(end + 1)];
+  rest.splice(toIndex, 0, ...block);
+  try {
+    return assertValidTableData({
+      ...table,
+      ...(axis === "row"
+        ? { rows: rest as TableDataV1["rows"] }
+        : { columns: rest as TableDataV1["columns"] }),
+    });
+  } catch {
+    throw new Error(`Cannot move ${axis} block through another merged cell`);
+  }
 };
 
 const assertValidNewSize = (size: number, label: string): void => {

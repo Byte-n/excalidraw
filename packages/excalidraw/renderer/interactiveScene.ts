@@ -49,6 +49,7 @@ import {
   isTableElement,
   isTableCellBackgroundText,
   getTableCellBounds,
+  getTableCellRange,
   maxBindingDistance_simple,
   isTextElement,
   getContainingFrame,
@@ -1098,6 +1099,46 @@ const renderTableCellHighlight = (
     table.y + bounds.y,
     bounds.width,
     bounds.height,
+  );
+  context.restore();
+};
+
+const renderTableCellSelection = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  selection: NonNullable<InteractiveCanvasAppState["tableCellSelection"]>,
+  elementsMap: ElementsMap,
+) => {
+  const table = elementsMap.get(selection.tableId);
+  if (!table || !isTableElement(table) || table.isDeleted) {
+    return;
+  }
+  const range = getTableCellRange(
+    table.table,
+    selection.anchorId,
+    selection.focusId,
+  );
+  const first = table.table.cells.find(
+    (cell) =>
+      cell.rowId === table.table.rows[range.startRow].id &&
+      cell.columnId === table.table.columns[range.startColumn].id,
+  )!;
+  const last = table.table.cells.find(
+    (cell) =>
+      cell.rowId === table.table.rows[range.endRow].id &&
+      cell.columnId === table.table.columns[range.endColumn].id,
+  )!;
+  const start = getTableCellBounds(table.table, first.id)!;
+  const end = getTableCellBounds(table.table, last.id)!;
+  context.save();
+  context.translate(appState.scrollX, appState.scrollY);
+  context.strokeStyle = getThemedColor("rgb(0,118,255)", appState.theme);
+  context.lineWidth = 2 / appState.zoom.value;
+  context.strokeRect(
+    table.x + start.x,
+    table.y + start.y,
+    end.x + end.width - start.x,
+    end.y + end.height - start.y,
   );
   context.restore();
 };
@@ -2268,6 +2309,15 @@ const _renderInteractiveScene = ({
       context,
       appState,
       appState.highlightedTableCell,
+      elementsMap,
+    );
+  }
+
+  if (appState.tableCellSelection && !editingTableBackgroundText) {
+    renderTableCellSelection(
+      context,
+      appState,
+      appState.tableCellSelection,
       elementsMap,
     );
   }

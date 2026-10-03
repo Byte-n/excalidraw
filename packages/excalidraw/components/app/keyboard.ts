@@ -292,6 +292,20 @@ export const onKeyDown = (
     return;
   }
 
+  if (
+    !isInputLike(event.target) &&
+    !event[KEYS.CTRL_OR_CMD] &&
+    !event.altKey &&
+    (event.key === "ArrowUp" ||
+      event.key === "ArrowDown" ||
+      event.key === "ArrowLeft" ||
+      event.key === "ArrowRight") &&
+    app.moveTableCellSelectionFocus(event.key, event.shiftKey)
+  ) {
+    event.preventDefault();
+    return;
+  }
+
   // normalize `event.key` when CapsLock is pressed #2372
 
   if (

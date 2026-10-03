@@ -2041,6 +2041,28 @@ export const tableToolIcon = createIcon(
   tablerIconProps,
 );
 
+export const tableCellSelectIcon = createIcon(
+  <g>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M12 3v18M3 12h18" />
+  </g>,
+  tablerIconProps,
+);
+
+export const tableCellMultiSelectIcon = createIcon(
+  <g>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M12 3v18M3 12h18" />
+    <path d="M5.5 7.5l1.2 1.2 2-2M14.5 7.5l1.2 1.2 2-2M5.5 16.5l1.2 1.2 2-2M14.5 16.5l1.2 1.2 2-2" />
+  </g>,
+  tablerIconProps,
+);
+
+export const tableCellMergeIcon = createIcon(
+  "M3.1 4.1a.7.7 0 0 1 .7-.7h1.4a.7.7 0 0 1 .7.7v1.12a.7.7 0 1 0 1.4 0V4.1A2.1 2.1 0 0 0 5.2 2H3.8a2.1 2.1 0 0 0-2.1 2.1v2.8h1.4zM14.3 4.1a.7.7 0 0 0-.7-.7h-1.4a.7.7 0 0 0-.7.7v1.12a.7.7 0 0 1-1.4 0V4.1c0-1.16.94-2.1 2.1-2.1h1.4c1.16 0 2.1.94 2.1 2.1v2.8h-1.4zM3.8 14.6a.7.7 0 0 1-.7-.7v-2.8H1.7v2.8c0 1.16.94 2.1 2.1 2.1h1.4a2.1 2.1 0 0 0 2.1-2.1v-1.12a.7.7 0 1 0-1.4 0v1.12a.7.7 0 0 1-.7.7zM14.3 13.9a.7.7 0 0 1-.7.7h-1.4a.7.7 0 0 1-.7-.7v-1.12a.7.7 0 0 0-1.4 0v1.12c0 1.16.94 2.1 2.1 2.1h1.4a2.1 2.1 0 0 0 2.1-2.1v-2.8h-1.4zM7.701 9.224a.28.28 0 0 0 0-.448l-2.053-1.54a.28.28 0 0 0-.448.224v.84H1.7a.7.7 0 1 0 0 1.4h3.5v.84c0 .23.263.363.448.224zM9.699 8.776a.28.28 0 0 0 0 .448l2.053 1.54a.28.28 0 0 0 .448-.224V9.7h3.5a.7.7 0 1 0 0-1.4h-3.5v-.84a.28.28 0 0 0-.448-.224z",
+  18,
+);
+
 export const mermaidLogoIcon = createIcon(
   <path
     fill="currentColor"

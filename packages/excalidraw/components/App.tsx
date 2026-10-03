@@ -1807,6 +1807,35 @@ class App extends React.Component<AppProps, AppState> {
     return tableController.handleTableCellDoubleClick(this, sceneX, sceneY);
   };
 
+  public selectTableCellAtPoint = (
+    sceneCoords: { x: number; y: number },
+    shiftKey: boolean,
+  ) => tableController.selectTableCellAtPoint(this, sceneCoords, shiftKey);
+
+  public moveTableCellSelectionFocus = (
+    direction: "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight",
+    extend: boolean,
+  ) => tableController.moveTableCellSelectionFocus(this, direction, extend);
+
+  public commitTableCellMerge = () =>
+    tableController.commitTableCellMerge(this);
+
+  public commitTableCellSplit = () =>
+    tableController.commitTableCellSplit(this);
+
+  public clearSelectedTableCells = (
+    kind: "content" | "backgroundText" | "style",
+  ) => tableController.clearSelectedTableCells(this, kind);
+
+  public copySelectedTableCellFormat = () =>
+    tableController.copySelectedTableCellFormat(this);
+
+  public pasteSelectedTableCellFormat = () =>
+    tableController.pasteSelectedTableCellFormat(this);
+
+  public centerSelectedTableCellContent = () =>
+    tableController.centerSelectedTableCellContent(this);
+
   /**
    * Pointer down on a table structure zone (grip/separator/insert/select):
    * arms the gesture, or performs the select click; returns consumption.
@@ -1833,9 +1862,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   /** Esc during an armed gesture: restore the arm-time scene, no history. */
-  public cancelTableGesture = (
-    pointerDownState: PointerDownState,
-  ): boolean => {
+  public cancelTableGesture = (pointerDownState: PointerDownState): boolean => {
     return tableController.cancelTableGesture(this, pointerDownState);
   };
 
@@ -1875,9 +1902,7 @@ class App extends React.Component<AppProps, AppState> {
    * below (new column right next to) it; without a matching selection the
    * row/column appends at the table's end (phase-1.md:89).
    */
-  public insertTableRowCol = (
-    kind: "insertRow" | "insertColumn",
-  ): boolean => {
+  public insertTableRowCol = (kind: "insertRow" | "insertColumn"): boolean => {
     const selection = this.state.tableRowColSelection;
     if (!selection) {
       return false;
@@ -1932,11 +1957,11 @@ class App extends React.Component<AppProps, AppState> {
               containerRef.cellId,
             )
           : frameId
-        ? getFrameChildrenInsertionIndex(
-            this.scene.getElementsIncludingDeleted(),
-            frameId,
-          )
-        : null;
+          ? getFrameChildrenInsertionIndex(
+              this.scene.getElementsIncludingDeleted(),
+              frameId,
+            )
+          : null;
       this.scene.insertElementsAtIndex(chunk, insertionIndex);
     }
   };

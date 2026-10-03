@@ -10,6 +10,8 @@ import type {
   StaticCanvasAppState,
 } from "@excalidraw/excalidraw/types";
 
+import { getTableCellBounds } from "./tableStruct";
+
 import type {
   ExcalidrawTableElement,
   TableDataV1,
@@ -74,6 +76,14 @@ export const drawTableGridOnCanvas = (
 ) => {
   const { table } = element;
   const isDark = appState.theme === THEME.DARK;
+  const cellsByIntersection = new Map(
+    table.cells.map((cell) => [`${cell.rowId}\u0000${cell.columnId}`, cell]),
+  );
+  const cellsById = new Map(table.cells.map((cell) => [cell.id, cell]));
+  const visibleId = (cellId: string) => {
+    const cell = cellsById.get(cellId)!;
+    return cell.mergedInto ?? cell.id;
+  };
   const columnBounds = new Map<string, { x: number; width: number }>();
   const rowBounds = new Map<string, { y: number; height: number }>();
   const verticalGridOffsets: number[] = [];
@@ -101,30 +111,66 @@ export const drawTableGridOnCanvas = (
 
   // (1) cell backgrounds, so grid lines stay visible above them
   for (const cell of table.cells) {
+    if (cell.mergedInto) {
+      continue;
+    }
     const fill = getTableCellFillColor(cell, isDark);
     if (!fill) {
       continue;
     }
-    const column = columnBounds.get(cell.columnId);
-    const row = rowBounds.get(cell.rowId);
-    if (!column || !row) {
+    const bounds = getTableCellBounds(table, cell.id);
+    if (!bounds) {
       continue;
     }
     context.fillStyle = fill;
-    context.fillRect(column.x, row.y, column.width, row.height);
+    context.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
   }
 
   // (2) interior grid lines
   context.lineWidth = gridLineWidth;
   context.strokeStyle = applyDarkModeFilter(TABLE_STYLE.gridColor, isDark);
   context.beginPath();
-  for (const x of verticalGridOffsets) {
-    context.moveTo(x, 0);
-    context.lineTo(x, height);
-  }
-  for (const y of horizontalGridOffsets) {
-    context.moveTo(0, y);
-    context.lineTo(width, y);
+  const hasMerges = table.cells.some((cell) => cell.mergedInto);
+  if (!hasMerges) {
+    for (const x of verticalGridOffsets) {
+      context.moveTo(x, 0);
+      context.lineTo(x, height);
+    }
+    for (const y of horizontalGridOffsets) {
+      context.moveTo(0, y);
+      context.lineTo(width, y);
+    }
+  } else {
+    for (const [index, x] of verticalGridOffsets.entries()) {
+      for (const row of table.rows) {
+        const bounds = rowBounds.get(row.id)!;
+        const left = cellsByIntersection.get(
+          `${row.id}\u0000${table.columns[index].id}`,
+        )!;
+        const right = cellsByIntersection.get(
+          `${row.id}\u0000${table.columns[index + 1].id}`,
+        )!;
+        if (visibleId(left.id) !== visibleId(right.id)) {
+          context.moveTo(x, bounds.y);
+          context.lineTo(x, bounds.y + bounds.height);
+        }
+      }
+    }
+    for (const [index, y] of horizontalGridOffsets.entries()) {
+      for (const column of table.columns) {
+        const bounds = columnBounds.get(column.id)!;
+        const top = cellsByIntersection.get(
+          `${table.rows[index].id}\u0000${column.id}`,
+        )!;
+        const bottom = cellsByIntersection.get(
+          `${table.rows[index + 1].id}\u0000${column.id}`,
+        )!;
+        if (visibleId(top.id) !== visibleId(bottom.id)) {
+          context.moveTo(bounds.x, y);
+          context.lineTo(bounds.x + bounds.width, y);
+        }
+      }
+    }
   }
   context.stroke();
 
