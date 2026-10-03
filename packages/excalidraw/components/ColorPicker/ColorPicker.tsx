@@ -67,6 +67,7 @@ interface ColorPickerProps {
    * from the picker popup onto it. The value names the
    * `appState.colorTopPicks` slot the customization is stored in */
   customizableTopPicks?: keyof AppState["colorTopPicks"];
+  enableEyeDropper?: boolean;
 }
 
 const ColorPickerPopupContent = ({
@@ -80,6 +81,7 @@ const ColorPickerPopupContent = ({
   getOpenPopup,
   appState,
   excludedColors,
+  enableEyeDropper,
 }: Pick<
   ColorPickerProps,
   | "type"
@@ -91,6 +93,7 @@ const ColorPickerPopupContent = ({
   | "updateData"
   | "appState"
   | "excludedColors"
+  | "enableEyeDropper"
 > & {
   getOpenPopup: () => AppState["openPopup"];
 }) => {
@@ -113,6 +116,7 @@ const ColorPickerPopupContent = ({
           onChange(color);
         }}
         colorPickerType={type}
+        enableEyeDropper={enableEyeDropper}
         placeholder={t("colorPicker.color")}
       />
     </div>
@@ -210,6 +214,9 @@ const ColorPickerPopupContent = ({
             }
           }}
           onEyeDropperToggle={(force) => {
+            if (!enableEyeDropper) {
+              return;
+            }
             setEyeDropperState((state) => {
               if (force) {
                 state = state || {
@@ -355,6 +362,7 @@ const ColorPickerComponent = ({
   appState,
   excludedColors,
   customizableTopPicks,
+  enableEyeDropper = true,
 }: ColorPickerProps) => {
   const openRef = useRef(appState.openPopup);
   useEffect(() => {
@@ -482,6 +490,7 @@ const ColorPickerComponent = ({
               elements={elements}
               palette={palette}
               excludedColors={excludedColors}
+              enableEyeDropper={enableEyeDropper}
               updateData={updateData}
               getOpenPopup={() => openRef.current}
               appState={appState}
@@ -529,6 +538,7 @@ const areColorPickerPropsEqual = (
     prev.topPicks === next.topPicks &&
     prev.excludedColors === next.excludedColors &&
     prev.customizableTopPicks === next.customizableTopPicks &&
+    prev.enableEyeDropper === next.enableEyeDropper &&
     prev.appState.theme === next.appState.theme &&
     prev.appState.colorTopPicks === next.appState.colorTopPicks &&
     // the trigger tweaks its click behavior while a text element is edited

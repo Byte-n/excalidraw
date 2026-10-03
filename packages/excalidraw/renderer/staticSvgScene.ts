@@ -39,10 +39,11 @@ import { getContainingFrame } from "@excalidraw/element";
 import {
   getTableCellBounds,
   getTableCellFillColor,
+  getTableContentClipRects,
+  getTableGridSegments,
   getTableHeight,
-  getTableHorizontalGridOffsets,
-  getTableVerticalGridOffsets,
   getTableWidth,
+  resolveTableColor,
 } from "@excalidraw/element";
 
 import { getCornerRadius, isPathALoop } from "@excalidraw/element";
@@ -55,6 +56,7 @@ import {
 } from "@excalidraw/element";
 
 import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { getTextVerticalOffset } from "@excalidraw/element";
 
 import type {
   ExcalidrawElement,
@@ -151,7 +153,32 @@ const renderElementToSvg = (
     if (isTestEnv()) {
       node.setAttribute("data-id", element.id);
     }
-    root.appendChild(node);
+    let clipped = node;
+    if (node.tagName.toLowerCase() !== "clippath") {
+      for (const [index, clip] of getTableContentClipRects(
+        element,
+        elementsMap,
+      ).entries()) {
+        const id = `table-content-clip-${element.id}-${index}`;
+        const definition = svgRoot.ownerDocument.createElementNS(
+          SVG_NS,
+          "clipPath",
+        );
+        definition.setAttribute("id", id);
+        const rect = svgRoot.ownerDocument.createElementNS(SVG_NS, "rect");
+        rect.setAttribute("x", `${clip.x + offset.x - element.x}`);
+        rect.setAttribute("y", `${clip.y + offset.y - element.y}`);
+        rect.setAttribute("width", `${clip.width}`);
+        rect.setAttribute("height", `${clip.height}`);
+        definition.appendChild(rect);
+        svgRoot.appendChild(definition);
+        const group = svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
+        group.setAttribute("clip-path", `url(#${id})`);
+        group.appendChild(clipped);
+        clipped = group;
+      }
+    }
+    root.appendChild(clipped);
   };
 
   const opacity =
@@ -802,13 +829,17 @@ const renderElementToSvg = (
           offsetY || 0
         }) rotate(${degree} ${cx} ${cy})`,
       );
-      if (opacity !== 1) {
-        group.setAttribute("opacity", `${opacity}`);
+      const tableOpacity = opacity * ((table.style?.opacity ?? 100) / 100);
+      if (tableOpacity !== 1) {
+        group.setAttribute("opacity", `${tableOpacity}`);
       }
 
       // (1) cell backgrounds, so grid lines stay visible above them
       for (const cell of table.cells) {
-        const fill = getTableCellFillColor(cell, isDark);
+        if (cell.mergedInto) {
+          continue;
+        }
+        const fill = getTableCellFillColor(cell, isDark, table);
         if (!fill) {
           continue;
         }
@@ -816,7 +847,7 @@ const renderElementToSvg = (
         if (!bounds) {
           continue;
         }
-        const rect = document.createElementNS(SVG_NS, "rect");
+        const rect = svgRoot.ownerDocument.createElementNS(SVG_NS, "rect");
         rect.setAttribute("x", `${bounds.x}`);
         rect.setAttribute("y", `${bounds.y}`);
         rect.setAttribute("width", `${bounds.width}`);
@@ -833,27 +864,34 @@ const renderElementToSvg = (
         x2: number,
         y2: number,
       ) => {
-        const line = document.createElementNS(SVG_NS, "line");
+        const line = svgRoot.ownerDocument.createElementNS(SVG_NS, "line");
         line.setAttribute("x1", `${x1}`);
         line.setAttribute("y1", `${y1}`);
         line.setAttribute("x2", `${x2}`);
         line.setAttribute("y2", `${y2}`);
         line.setAttribute(
           "stroke",
-          applyDarkModeFilter(TABLE_STYLE.gridColor, isDark),
+          table.style?.gridColor
+            ? resolveTableColor(table.style.gridColor, isDark)
+            : applyDarkModeFilter(TABLE_STYLE.gridColor, isDark),
         );
-        line.setAttribute("stroke-width", `${TABLE_STYLE.gridStrokeWidth}`);
+        line.setAttribute(
+          "stroke-width",
+          `${table.style?.gridWidth ?? TABLE_STYLE.gridStrokeWidth}`,
+        );
+        if (table.style?.gridStyle === "dashed") {
+          line.setAttribute("stroke-dasharray", "6 4");
+        } else if (table.style?.gridStyle === "dotted") {
+          line.setAttribute("stroke-dasharray", "1 3");
+        }
         group.appendChild(line);
       };
-      for (const x of getTableVerticalGridOffsets(table)) {
-        createGridLine(x, 0, x, height);
-      }
-      for (const y of getTableHorizontalGridOffsets(table)) {
-        createGridLine(0, y, width, y);
+      for (const [x1, y1, x2, y2] of getTableGridSegments(table)) {
+        createGridLine(x1, y1, x2, y2);
       }
 
       // (3) outer border
-      const border = document.createElementNS(SVG_NS, "rect");
+      const border = svgRoot.ownerDocument.createElementNS(SVG_NS, "rect");
       border.setAttribute("x", "0");
       border.setAttribute("y", "0");
       border.setAttribute("width", `${width}`);
@@ -861,9 +899,19 @@ const renderElementToSvg = (
       border.setAttribute("fill", "none");
       border.setAttribute(
         "stroke",
-        applyDarkModeFilter(TABLE_STYLE.strokeColor, isDark),
+        table.style?.borderColor
+          ? resolveTableColor(table.style.borderColor, isDark)
+          : applyDarkModeFilter(TABLE_STYLE.strokeColor, isDark),
       );
-      border.setAttribute("stroke-width", `${TABLE_STYLE.strokeWidth}`);
+      border.setAttribute(
+        "stroke-width",
+        `${table.style?.borderWidth ?? TABLE_STYLE.strokeWidth}`,
+      );
+      if (table.style?.borderStyle === "dashed") {
+        border.setAttribute("stroke-dasharray", "6 4");
+      } else if (table.style?.borderStyle === "dotted") {
+        border.setAttribute("stroke-dasharray", "1 3");
+      }
       group.appendChild(border);
 
       const g = maybeWrapNodesInFrameClipPath(
@@ -902,11 +950,14 @@ const renderElementToSvg = (
             : element.textAlign === "right"
             ? element.width
             : 0;
-        const verticalOffset = getVerticalOffset(
-          element.fontFamily,
-          element.fontSize,
-          lineHeightPx,
-        );
+        const verticalOffset =
+          getTextVerticalOffset(
+            element.verticalAlign,
+            element.height,
+            lines.length,
+            lineHeightPx,
+          ) +
+          getVerticalOffset(element.fontFamily, element.fontSize, lineHeightPx);
         const direction = isRTL(element.text) ? "rtl" : "ltr";
         const textAnchor =
           element.textAlign === "center"

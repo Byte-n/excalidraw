@@ -502,8 +502,7 @@ export const textWysiwyg = ({
         width += 0.5;
       }
 
-      // The table background text box is the cell itself. A buffer would make
-      // the editor visibly larger than the table while editing.
+      // Background text uses its measured box; keep the editor at that size.
       if (!isTableCellBackgroundText(updatedTextElement)) {
         // add 5% buffer otherwise it causes wysiwyg to jump
         height *= 1.05;
@@ -572,10 +571,9 @@ export const textWysiwyg = ({
   // prevent line wrapping on Safari
   editable.wrap = "off";
   editable.classList.add("excalidraw-wysiwyg");
-  if (
-    app.ownerWindow.EXCALIDRAW_DEBUG_TEXT_AREA &&
-    isBoundToContainer(element)
-  ) {
+
+  // AI 禁止修改此判断，这是人工控制的 debug 开关。
+  if (app.ownerWindow.EXCALIDRAW_DEBUG_TEXT_AREA) {
     editable.classList.add("excalidraw-wysiwyg--debug-text-area");
   }
 
@@ -610,7 +608,10 @@ export const textWysiwyg = ({
     overflowWrap: "break-word",
     boxSizing: "content-box",
   });
-  editable.value = element.originalText;
+  const isTableTitle = element.containerRef?.kind === "tableTitle";
+  editable.value = isTableTitle
+    ? element.originalText.replace(/\s*[\r\n]+\s*/g, " ")
+    : element.originalText;
   updateWysiwygStyle();
 
   const getCaretIndexFromInitialSceneCoords = () => {
@@ -771,7 +772,9 @@ export const textWysiwyg = ({
     };
 
     editable.oninput = () => {
-      const normalized = normalizeText(editable.value);
+      const normalized = isTableTitle
+        ? normalizeText(editable.value).replace(/\s*[\r\n]+\s*/g, " ")
+        : normalizeText(editable.value);
       if (editable.value !== normalized) {
         const selectionStart = editable.selectionStart;
         editable.value = normalized;
@@ -824,7 +827,10 @@ export const textWysiwyg = ({
       event.preventDefault();
       handleSubmit();
       app.actionManager.executeAction(actionSaveToActiveFile);
-    } else if (event.key === KEYS.ENTER && event[KEYS.CTRL_OR_CMD]) {
+    } else if (
+      event.key === KEYS.ENTER &&
+      (isTableTitle || event[KEYS.CTRL_OR_CMD])
+    ) {
       event.preventDefault();
       if (event.isComposing || event.keyCode === 229) {
         return;

@@ -56,12 +56,84 @@ export const getTableHorizontalGridOffsets = (
 export const getTableCellFillColor = (
   cell: TableCellData,
   isDark: boolean,
+  table?: TableDataV1,
 ): string | null => {
-  const color = cell.style.backgroundColor ?? TABLE_STYLE.backgroundColor;
+  const color =
+    cell.style.backgroundColor ??
+    table?.rows.find((row) => row.id === cell.rowId)?.style?.backgroundColor ??
+    table?.columns.find((column) => column.id === cell.columnId)?.style
+      ?.backgroundColor ??
+    table?.style?.backgroundColor ??
+    TABLE_STYLE.backgroundColor;
   if (isTransparent(color)) {
     return null;
   }
-  return applyDarkModeFilter(color, isDark);
+  return resolveTableColor(color, isDark);
+};
+
+export const resolveTableColor = (color: string, isDark: boolean): string => {
+  if (color === "token:surface") {
+    return isDark ? "#262626" : "#ffffff";
+  }
+  if (color === "token:text") {
+    return isDark ? "#f5f5f5" : "#1e1e1e";
+  }
+  if (color === "token:grid") {
+    return isDark ? "#555555" : TABLE_STYLE.gridColor;
+  }
+  return color;
+};
+
+export type TableGridSegment = readonly [number, number, number, number];
+
+export const getTableGridSegments = (
+  table: TableDataV1,
+): TableGridSegment[] => {
+  if (!table.cells.some((cell) => cell.mergedInto)) {
+    const width = table.columns.reduce((sum, column) => sum + column.width, 0);
+    const height = table.rows.reduce((sum, row) => sum + row.height, 0);
+    return [
+      ...getTableVerticalGridOffsets(table).map(
+        (x): TableGridSegment => [x, 0, x, height],
+      ),
+      ...getTableHorizontalGridOffsets(table).map(
+        (y): TableGridSegment => [0, y, width, y],
+      ),
+    ];
+  }
+  const cells = new Map(
+    table.cells.map((cell) => [`${cell.rowId}\u0000${cell.columnId}`, cell]),
+  );
+  const segments: TableGridSegment[] = [];
+  let x = 0;
+  for (let column = 0; column < table.columns.length - 1; column++) {
+    x += table.columns[column].width;
+    let y = 0;
+    for (const row of table.rows) {
+      const left = cells.get(`${row.id}\u0000${table.columns[column].id}`)!;
+      const right = cells.get(
+        `${row.id}\u0000${table.columns[column + 1].id}`,
+      )!;
+      if ((left.mergedInto ?? left.id) !== (right.mergedInto ?? right.id)) {
+        segments.push([x, y, x, y + row.height]);
+      }
+      y += row.height;
+    }
+  }
+  let y = 0;
+  for (let row = 0; row < table.rows.length - 1; row++) {
+    y += table.rows[row].height;
+    x = 0;
+    for (const column of table.columns) {
+      const top = cells.get(`${table.rows[row].id}\u0000${column.id}`)!;
+      const bottom = cells.get(`${table.rows[row + 1].id}\u0000${column.id}`)!;
+      if ((top.mergedInto ?? top.id) !== (bottom.mergedInto ?? bottom.id)) {
+        segments.push([x, y, x + column.width, y]);
+      }
+      x += column.width;
+    }
+  }
+  return segments;
 };
 
 /**
@@ -76,45 +148,23 @@ export const drawTableGridOnCanvas = (
 ) => {
   const { table } = element;
   const isDark = appState.theme === THEME.DARK;
-  const cellsByIntersection = new Map(
-    table.cells.map((cell) => [`${cell.rowId}\u0000${cell.columnId}`, cell]),
-  );
-  const cellsById = new Map(table.cells.map((cell) => [cell.id, cell]));
-  const visibleId = (cellId: string) => {
-    const cell = cellsById.get(cellId)!;
-    return cell.mergedInto ?? cell.id;
-  };
-  const columnBounds = new Map<string, { x: number; width: number }>();
-  const rowBounds = new Map<string, { y: number; height: number }>();
-  const verticalGridOffsets: number[] = [];
-  const horizontalGridOffsets: number[] = [];
-  let width = 0;
-  let height = 0;
-  for (const [index, column] of table.columns.entries()) {
-    columnBounds.set(column.id, { x: width, width: column.width });
-    width += column.width;
-    if (index < table.columns.length - 1) {
-      verticalGridOffsets.push(width);
-    }
-  }
-  for (const [index, row] of table.rows.entries()) {
-    rowBounds.set(row.id, { y: height, height: row.height });
-    height += row.height;
-    if (index < table.rows.length - 1) {
-      horizontalGridOffsets.push(height);
-    }
-  }
+  context.globalAlpha *= (table.style?.opacity ?? 100) / 100;
+  const width = table.columns.reduce((sum, column) => sum + column.width, 0);
+  const height = table.rows.reduce((sum, row) => sum + row.height, 0);
 
   // zoom compensation keeps the chrome one CSS pixel wide on screen
-  const lineWidth = TABLE_STYLE.strokeWidth / appState.zoom.value;
-  const gridLineWidth = TABLE_STYLE.gridStrokeWidth / appState.zoom.value;
+  const lineWidth =
+    (table.style?.borderWidth ?? TABLE_STYLE.strokeWidth) / appState.zoom.value;
+  const gridLineWidth =
+    (table.style?.gridWidth ?? TABLE_STYLE.gridStrokeWidth) /
+    appState.zoom.value;
 
   // (1) cell backgrounds, so grid lines stay visible above them
   for (const cell of table.cells) {
     if (cell.mergedInto) {
       continue;
     }
-    const fill = getTableCellFillColor(cell, isDark);
+    const fill = getTableCellFillColor(cell, isDark, table);
     if (!fill) {
       continue;
     }
@@ -128,54 +178,29 @@ export const drawTableGridOnCanvas = (
 
   // (2) interior grid lines
   context.lineWidth = gridLineWidth;
-  context.strokeStyle = applyDarkModeFilter(TABLE_STYLE.gridColor, isDark);
+  context.strokeStyle = table.style?.gridColor
+    ? resolveTableColor(table.style.gridColor, isDark)
+    : applyDarkModeFilter(TABLE_STYLE.gridColor, isDark);
+  const gridDash = table.style?.gridStyle;
+  context.setLineDash(
+    gridDash === "dashed" ? [6, 4] : gridDash === "dotted" ? [1, 3] : [],
+  );
   context.beginPath();
-  const hasMerges = table.cells.some((cell) => cell.mergedInto);
-  if (!hasMerges) {
-    for (const x of verticalGridOffsets) {
-      context.moveTo(x, 0);
-      context.lineTo(x, height);
-    }
-    for (const y of horizontalGridOffsets) {
-      context.moveTo(0, y);
-      context.lineTo(width, y);
-    }
-  } else {
-    for (const [index, x] of verticalGridOffsets.entries()) {
-      for (const row of table.rows) {
-        const bounds = rowBounds.get(row.id)!;
-        const left = cellsByIntersection.get(
-          `${row.id}\u0000${table.columns[index].id}`,
-        )!;
-        const right = cellsByIntersection.get(
-          `${row.id}\u0000${table.columns[index + 1].id}`,
-        )!;
-        if (visibleId(left.id) !== visibleId(right.id)) {
-          context.moveTo(x, bounds.y);
-          context.lineTo(x, bounds.y + bounds.height);
-        }
-      }
-    }
-    for (const [index, y] of horizontalGridOffsets.entries()) {
-      for (const column of table.columns) {
-        const bounds = columnBounds.get(column.id)!;
-        const top = cellsByIntersection.get(
-          `${table.rows[index].id}\u0000${column.id}`,
-        )!;
-        const bottom = cellsByIntersection.get(
-          `${table.rows[index + 1].id}\u0000${column.id}`,
-        )!;
-        if (visibleId(top.id) !== visibleId(bottom.id)) {
-          context.moveTo(bounds.x, y);
-          context.lineTo(bounds.x + bounds.width, y);
-        }
-      }
-    }
+  for (const [x1, y1, x2, y2] of getTableGridSegments(table)) {
+    context.moveTo(x1, y1);
+    context.lineTo(x2, y2);
   }
   context.stroke();
 
   // (3) outer border
   context.lineWidth = lineWidth;
-  context.strokeStyle = applyDarkModeFilter(TABLE_STYLE.strokeColor, isDark);
+  context.strokeStyle = table.style?.borderColor
+    ? resolveTableColor(table.style.borderColor, isDark)
+    : applyDarkModeFilter(TABLE_STYLE.strokeColor, isDark);
+  const borderDash = table.style?.borderStyle;
+  context.setLineDash(
+    borderDash === "dashed" ? [6, 4] : borderDash === "dotted" ? [1, 3] : [],
+  );
   context.strokeRect(0, 0, width, height);
+  context.setLineDash([]);
 };

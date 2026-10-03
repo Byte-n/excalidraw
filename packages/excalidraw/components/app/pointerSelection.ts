@@ -708,9 +708,16 @@ export const handleSelectionOnPointerDown = (
       pointerDownState.hit.allHitElements = unlockedHitElements;
 
       const hitElement = pointerDownState.hit.element;
+      const selectedTableContainsHitElement =
+        hitElement?.containerRef?.kind === "tableCell" &&
+        app.state.selectedElementIds[hitElement.containerRef.elementId] &&
+        !event.shiftKey &&
+        !event[KEYS.CTRL_OR_CMD];
       const someHitElementIsSelected =
         pointerDownState.hit.allHitElements.some((element) =>
-          app.isASelectedElement(element),
+          app.isASelectedElement(element) &&
+          (!selectedTableContainsHitElement ||
+            element.id !== hitElement?.containerRef?.elementId),
         ) ||
         // the selected linear element's point handles, midpoint knob and
         // label extend beyond its own hit area, so a hit reported by

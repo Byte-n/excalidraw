@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Popover } from "radix-ui";
 
 import { CLASSES } from "@excalidraw/common";
@@ -31,16 +31,20 @@ import { getTargetElements } from "../scene";
 import { getFormValue } from "../actions/actionProperties";
 
 import { useTextEditorFocus } from "../hooks/useTextEditorFocus";
+import { useSceneNonce } from "../hooks/useSceneNonce";
 
 import { actionToggleViewMode } from "../actions/actionToggleViewMode";
 
 import "./Actions.scss";
 
-import { useExcalidrawContainer } from "./App";
+import App, { useExcalidrawContainer } from "./App";
 import { IconButton } from "./IconButton";
 import Stack from "./Stack";
 import { Tooltip } from "./Tooltip";
 import { PropertiesPopover } from "./PropertiesPopover";
+import { ColorPicker } from "./ColorPicker/ColorPicker";
+import { RadioSelection } from "./RadioSelection";
+import { Range } from "./Range";
 import {
   sharpArrowIcon,
   roundArrowIcon,
@@ -396,6 +400,7 @@ export const SelectedShapeActions = ({
     elementsMap,
     app,
   );
+  const tableSelected = targetElements.some(isTableElement);
 
   if (app.mindmap.getSelectedEdge()) {
     return (
@@ -419,6 +424,7 @@ export const SelectedShapeActions = ({
 
   return (
     <div className="selected-shape-actions">
+      <TableStyleActions app={app} appState={appState} />
       {app.mindmap.getSelectedGraphRoot() ? (
         <MindmapGraphStylePanel app={app} />
       ) : (
@@ -453,7 +459,7 @@ export const SelectedShapeActions = ({
       {predicates.verticalAlign && renderAction("changeVerticalAlign")}
       {predicates.arrowheads && <>{renderAction("changeArrowhead")}</>}
 
-      {predicates.opacity && renderAction("changeOpacity")}
+      {predicates.opacity && !tableSelected && renderAction("changeOpacity")}
 
       {predicates.layers && <LayersFieldset renderAction={renderAction} />}
 
@@ -487,21 +493,33 @@ const CombinedShapeProperties = ({
   setAppState,
   predicates,
   container,
+  app,
 }: {
   appState: UIAppState;
   renderAction: ActionManager["renderAction"];
   setAppState: React.Component<any, AppState>["setState"];
   predicates: ShapeActionPredicates;
   container: HTMLDivElement | null;
+  app: AppClassProperties;
 }) => {
+  const tableSelected =
+    !!appState.tableCellSelection ||
+    !!appState.tableRowColSelection ||
+    Object.keys(appState.selectedElementIds).some((id) =>
+      isTableElement(app.scene.getNonDeletedElement(id)),
+    );
+  const [tablePropertiesOpen, setTablePropertiesOpen] = useState(false);
   const shouldShowCombinedProperties =
+    tableSelected ||
     predicates.hasSelection ||
     (appState.activeTool.type !== "selection" &&
       appState.activeTool.type !== "eraser" &&
       appState.activeTool.type !== "hand" &&
       appState.activeTool.type !== "laser" &&
       appState.activeTool.type !== "lasso");
-  const isOpen = appState.openPopup === "compactStrokeStyles";
+  const isOpen = tableSelected
+    ? tablePropertiesOpen
+    : appState.openPopup === "compactStrokeStyles";
 
   if (!shouldShowCombinedProperties) {
     return null;
@@ -512,7 +530,9 @@ const CombinedShapeProperties = ({
       <Popover.Root
         open={isOpen}
         onOpenChange={(open) => {
-          if (open) {
+          if (tableSelected) {
+            setTablePropertiesOpen(open);
+          } else if (open) {
             setAppState({ openPopup: "compactStrokeStyles" });
           } else {
             setAppState({ openPopup: null });
@@ -530,9 +550,13 @@ const CombinedShapeProperties = ({
               e.preventDefault();
               e.stopPropagation();
 
-              setAppState({
-                openPopup: isOpen ? null : "compactStrokeStyles",
-              });
+              if (tableSelected) {
+                setTablePropertiesOpen(!isOpen);
+              } else {
+                setAppState({
+                  openPopup: isOpen ? null : "compactStrokeStyles",
+                });
+              }
             }}
           >
             {adjustmentsIcon}
@@ -542,25 +566,41 @@ const CombinedShapeProperties = ({
           <PropertiesPopover
             className={PROPERTIES_CLASSES}
             container={container}
-            style={{ maxWidth: "13rem" }}
+            style={{
+              width: tableSelected ? "13rem" : undefined,
+              maxWidth: "13rem",
+            }}
             onClose={() => {}}
           >
             <div className="selected-shape-actions">
-              {predicates.fill && renderAction("changeFillStyle")}
-              {predicates.strokeWidth && renderAction("changeStrokeWidth")}
-              {
-                /* in compact UI the freedraw pressure setting is rendered as a
+              {tableSelected ? (
+                <TableStyleActions
+                  app={app}
+                  appState={appState}
+                  variant="details"
+                />
+              ) : (
+                <>
+                  {predicates.fill && renderAction("changeFillStyle")}
+                  {predicates.strokeWidth && renderAction("changeStrokeWidth")}
+                  {
+                    /* in compact UI the freedraw pressure setting is rendered as a
                   standalone cycle button in the compact actions list; we render
                   it in the combined properties popup as well for clarity
                 */
-                predicates.freedrawMode && renderAction("changeFreedrawMode")
-              }
-              {predicates.strokeStyle && (
-                <>{renderAction("changeStrokeStyle")}</>
+                    predicates.freedrawMode &&
+                      renderAction("changeFreedrawMode")
+                  }
+                  {predicates.strokeStyle && (
+                    <>{renderAction("changeStrokeStyle")}</>
+                  )}
+                  {predicates.sloppiness && (
+                    <>{renderAction("changeSloppiness")}</>
+                  )}
+                  {predicates.roundness && renderAction("changeRoundness")}
+                  {predicates.opacity && renderAction("changeOpacity")}
+                </>
               )}
-              {predicates.sloppiness && <>{renderAction("changeSloppiness")}</>}
-              {predicates.roundness && renderAction("changeRoundness")}
-              {predicates.opacity && renderAction("changeOpacity")}
             </div>
           </PropertiesPopover>
         )}
@@ -957,6 +997,218 @@ const TableCellCompactActions = ({
   );
 };
 
+const TableStyleActions = ({
+  app,
+  appState,
+  variant = "full",
+}: {
+  app: AppClassProperties;
+  appState: UIAppState;
+  variant?: "full" | "fill" | "details";
+}) => {
+  useSceneNonce(app.scene);
+  const cellSelection = appState.tableCellSelection;
+  const axisSelection = appState.tableRowColSelection;
+  const selectedTableId = Object.keys(appState.selectedElementIds).find(
+    (id) => {
+      const element = app.scene.getNonDeletedElement(id);
+      return element && isTableElement(element);
+    },
+  );
+  const tableId =
+    cellSelection?.tableId ?? axisSelection?.tableId ?? selectedTableId;
+  const table = tableId && app.scene.getNonDeletedElement(tableId);
+  if (!table || !isTableElement(table)) {
+    return null;
+  }
+  const targetCells = cellSelection
+    ? getCellsInTableRange(
+        table.table,
+        getTableCellRange(
+          table.table,
+          cellSelection.anchorId,
+          cellSelection.focusId,
+        ),
+      ).filter((cell) => !cell.mergedInto)
+    : [];
+  const axis =
+    axisSelection &&
+    (axisSelection.kind === "row"
+      ? table.table.rows.find((row) => row.id === axisSelection.id)
+      : table.table.columns.find((column) => column.id === axisSelection.id));
+  const getCellFill = (cell: typeof targetCells[number]) =>
+    cell.style.backgroundColor ??
+    table.table.rows.find((row) => row.id === cell.rowId)?.style
+      ?.backgroundColor ??
+    table.table.columns.find((column) => column.id === cell.columnId)?.style
+      ?.backgroundColor ??
+    table.table.style?.backgroundColor ??
+    "transparent";
+  const color = cellSelection
+    ? targetCells[0] && getCellFill(targetCells[0])
+    : axisSelection
+    ? axis?.style?.backgroundColor ??
+      table.table.style?.backgroundColor ??
+      "transparent"
+    : table.table.style?.backgroundColor ?? "transparent";
+  const update = (patch: Record<string, unknown>) => {
+    const current = table.table;
+    let next = current;
+    if (cellSelection) {
+      const ids = new Set(targetCells.map((cell) => cell.id));
+      next = {
+        ...current,
+        cells: current.cells.map((cell) =>
+          ids.has(cell.id)
+            ? { ...cell, style: { ...cell.style, ...patch } }
+            : cell,
+        ),
+      };
+    } else if (axisSelection?.kind === "row") {
+      next = {
+        ...current,
+        rows: current.rows.map((row) =>
+          row.id === axisSelection.id
+            ? { ...row, style: { ...row.style, ...patch } }
+            : row,
+        ),
+      };
+    } else if (axisSelection?.kind === "column") {
+      next = {
+        ...current,
+        columns: current.columns.map((column) =>
+          column.id === axisSelection.id
+            ? { ...column, style: { ...column.style, ...patch } }
+            : column,
+        ),
+      };
+    } else {
+      next = { ...current, style: { ...current.style, ...patch } };
+    }
+    app.scheduleCapture();
+    app.scene.mutateElement(table, { table: next });
+    app.scene.triggerUpdate();
+  };
+  const tableOnly = !cellSelection && !axisSelection;
+  const fillIsMixed =
+    targetCells.length > 1 &&
+    targetCells.some((cell) => getCellFill(cell) !== color);
+  const selectedColor = fillIsMixed ? null : color ?? "transparent";
+  const pickerApp = app as AppClassProperties & Pick<App, "setState">;
+  const updatePickerState = (state?: Partial<AppState>) => {
+    if (state) {
+      pickerApp.setState((previous) => ({ ...previous, ...state }));
+    }
+  };
+  const lineStyleOptions = [
+    {
+      value: "solid" as const,
+      text: t("labels.strokeStyle_solid"),
+      icon: StrokeWidthBaseIcon,
+    },
+    {
+      value: "dashed" as const,
+      text: t("labels.strokeStyle_dashed"),
+      icon: StrokeStyleDashedIcon,
+    },
+    {
+      value: "dotted" as const,
+      text: t("labels.strokeStyle_dotted"),
+      icon: StrokeStyleDottedIcon,
+    },
+  ];
+  const colorPicker = (
+    <ColorPicker
+      key="fill"
+      type="elementBackground"
+      label={t("labels.background")}
+      color={selectedColor}
+      onChange={(nextColor) => update({ backgroundColor: nextColor })}
+      elements={app.scene.getNonDeletedElements()}
+      appState={appState}
+      updateData={updatePickerState}
+      enableEyeDropper={false}
+    />
+  );
+  const borderColorPicker = (
+    <ColorPicker
+      key="border"
+      type="elementStroke"
+      label="Border color"
+      color={
+        table.table.style?.borderColor ??
+        table.table.style?.gridColor ??
+        "#b3b3b3"
+      }
+      onChange={(nextColor) =>
+        update({ borderColor: nextColor, gridColor: nextColor })
+      }
+      elements={app.scene.getNonDeletedElements()}
+      appState={appState}
+      updateData={updatePickerState}
+      enableEyeDropper={false}
+    />
+  );
+  return (
+    <div
+      className={clsx("table-style-actions", {
+        "compact-action-item table-style-actions--fill-only":
+          variant === "fill",
+      })}
+      aria-label="Table style"
+    >
+      {variant !== "details" && (
+        <fieldset>
+          {variant === "full" && <legend>Color</legend>}
+          <div className="table-style-actions__color">
+            {colorPicker}
+            {tableOnly && borderColorPicker}
+          </div>
+        </fieldset>
+      )}
+      {tableOnly && variant !== "fill" && (
+        <>
+          <Range
+            label="Border width"
+            value={
+              table.table.style?.borderWidth ??
+              table.table.style?.gridWidth ??
+              1
+            }
+            onChange={(value) =>
+              update({ borderWidth: value, gridWidth: value })
+            }
+            min={0}
+            max={20}
+            step={0.5}
+          />
+          <fieldset>
+            <legend>Border style</legend>
+            <div className="buttonList">
+              <RadioSelection
+                group="table-border-style"
+                options={lineStyleOptions}
+                value={table.table.style?.borderStyle ?? "solid"}
+                onChange={(value) =>
+                  update({ borderStyle: value, gridStyle: value })
+                }
+              />
+            </div>
+          </fieldset>
+          <Range
+            label={t("labels.opacity")}
+            value={table.table.style?.opacity ?? 100}
+            onChange={(value) => update({ opacity: value })}
+            min={0}
+            max={100}
+            step={1}
+          />
+        </>
+      )}
+    </div>
+  );
+};
+
 /**
  * Compact styles panel — the collapsed, popover-driven layout used on tablets
  * and on desktop when the UI is in "compact" mode.
@@ -982,6 +1234,10 @@ export const CompactShapeActions = ({
     app,
   );
   const { container } = useExcalidrawContainer();
+  const tableSelected =
+    !!appState.tableCellSelection ||
+    !!appState.tableRowColSelection ||
+    targetElements.some(isTableElement);
 
   if (app.mindmap.getSelectedEdge()) {
     return (
@@ -1000,6 +1256,7 @@ export const CompactShapeActions = ({
           setAppState={setAppState}
         />
       )}
+      <TableStyleActions app={app} appState={appState} variant="fill" />
       {app.mindmap.getSelectedGraphRoot() ? (
         <MindmapGraphStylePanel app={app} />
       ) : (
@@ -1030,13 +1287,16 @@ export const CompactShapeActions = ({
         </div>
       )}
 
-      <CombinedShapeProperties
-        appState={appState}
-        renderAction={renderAction}
-        setAppState={setAppState}
-        predicates={predicates}
-        container={container}
-      />
+      {!appState.tableCellSelection && !appState.tableRowColSelection && (
+        <CombinedShapeProperties
+          appState={appState}
+          renderAction={renderAction}
+          setAppState={setAppState}
+          predicates={predicates}
+          container={container}
+          app={app}
+        />
+      )}
 
       <CombinedArrowProperties
         appState={appState}
@@ -1084,13 +1344,15 @@ export const CompactShapeActions = ({
         </div>
       )}
 
-      <CombinedExtraActions
-        appState={appState}
-        renderAction={renderAction}
-        predicates={predicates}
-        setAppState={setAppState}
-        container={container}
-      />
+      {!tableSelected && (
+        <CombinedExtraActions
+          appState={appState}
+          renderAction={renderAction}
+          predicates={predicates}
+          setAppState={setAppState}
+          container={container}
+        />
+      )}
     </div>
   );
 };
@@ -1121,6 +1383,10 @@ export const MobileShapeActions = ({
     app,
   );
   const { container } = useExcalidrawContainer();
+  const tableSelected =
+    !!appState.tableCellSelection ||
+    !!appState.tableRowColSelection ||
+    targetElements.some(isTableElement);
   const mobileActionsRef = useRef<HTMLDivElement>(null);
 
   const ACTIONS_WIDTH =
@@ -1148,6 +1414,7 @@ export const MobileShapeActions = ({
           appState={appState}
           setAppState={setAppState}
         />
+        <TableStyleActions app={app} appState={appState} variant="fill" />
         <div className="compact-action-item">{renderAction("undo")}</div>
         <div className="compact-action-item">{renderAction("redo")}</div>
       </Island>
@@ -1171,6 +1438,7 @@ export const MobileShapeActions = ({
       }}
       ref={mobileActionsRef}
     >
+      <TableStyleActions app={app} appState={appState} variant="fill" />
       <div
         style={{
           display: "flex",
@@ -1194,13 +1462,16 @@ export const MobileShapeActions = ({
             )}
           </div>
         )}
-        <CombinedShapeProperties
-          appState={appState}
-          renderAction={renderAction}
-          setAppState={setAppState}
-          predicates={predicates}
-          container={container}
-        />
+        {!appState.tableRowColSelection && (
+          <CombinedShapeProperties
+            appState={appState}
+            renderAction={renderAction}
+            setAppState={setAppState}
+            predicates={predicates}
+            container={container}
+            app={app}
+          />
+        )}
         {/* Combined Arrow Properties */}
         <CombinedArrowProperties
           appState={appState}
@@ -1233,15 +1504,17 @@ export const MobileShapeActions = ({
         )}
 
         {/* Combined Other Actions */}
-        <CombinedExtraActions
-          appState={appState}
-          renderAction={renderAction}
-          predicates={predicates}
-          setAppState={setAppState}
-          container={container}
-          showDuplicate={!showDuplicateOutside}
-          showDelete={!showDeleteOutside}
-        />
+        {!tableSelected && (
+          <CombinedExtraActions
+            appState={appState}
+            renderAction={renderAction}
+            predicates={predicates}
+            setAppState={setAppState}
+            container={container}
+            showDuplicate={!showDuplicateOutside}
+            showDelete={!showDeleteOutside}
+          />
+        )}
       </div>
       <div
         style={{
@@ -1252,12 +1525,12 @@ export const MobileShapeActions = ({
       >
         <div className="compact-action-item">{renderAction("undo")}</div>
         <div className="compact-action-item">{renderAction("redo")}</div>
-        {showDuplicateOutside && (
+        {(showDuplicateOutside || tableSelected) && (
           <div className="compact-action-item">
             {renderAction("duplicateSelection")}
           </div>
         )}
-        {showDeleteOutside && (
+        {(showDeleteOutside || tableSelected) && (
           <div className="compact-action-item">
             {renderAction("deleteSelectedElements")}
           </div>

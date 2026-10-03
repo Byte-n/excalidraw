@@ -319,6 +319,10 @@ export type TableRowColStructureHover =
     }
   | {
       tableId: ExcalidrawTableElement["id"];
+      kind: "titleBar" | "titleGrip";
+    }
+  | {
+      tableId: ExcalidrawTableElement["id"];
       kind: "rowGrip";
       rowId: string;
     }
@@ -1385,6 +1389,7 @@ export type AppClassProperties = {
   editorInterface: App["editorInterface"];
   scene: App["scene"];
   syncActionResult: App["syncActionResult"];
+  scheduleCapture: App["scheduleCapture"];
   fonts: App["fonts"];
   pasteFromClipboard: App["pasteFromClipboard"];
   id: App["id"];
@@ -1505,6 +1510,7 @@ export type PointerDownState = Readonly<{
     center: { x: number; y: number };
   };
   hit: {
+    tableTitleGripTableId: string | null;
     // The element the pointer is "hitting", is determined on the initial
     // pointer down event
     element: NonDeleted<ExcalidrawElement> | null;

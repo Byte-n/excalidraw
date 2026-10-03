@@ -18,7 +18,108 @@ export const DEFAULT_TABLE_ROW_HEIGHT = 56;
 export const DEFAULT_TABLE_COLUMN_WIDTH = 160;
 
 /** Cell styles are a closed set; unknown keys make the persisted data invalid. */
-const TABLE_CELL_STYLE_KEYS = new Set<string>(["backgroundColor"]);
+const TABLE_CELL_STYLE_KEYS = new Set<string>([
+  "backgroundColor",
+  "clipContent",
+]);
+const TABLE_STYLE_KEYS = new Set<string>([
+  "backgroundColor",
+  "opacity",
+  "borderColor",
+  "borderWidth",
+  "borderStyle",
+  "gridColor",
+  "gridWidth",
+  "gridStyle",
+  "clipContent",
+  "title",
+]);
+const BACKGROUND_TEXT_STYLE_KEYS = new Set<string>([
+  "fontFamily",
+  "fontSize",
+  "fontWeight",
+  "italic",
+  "underline",
+  "strikethrough",
+  "color",
+  "horizontalAlign",
+  "verticalAlign",
+  "padding",
+]);
+
+const assertStyle = (
+  style: unknown,
+  keys: ReadonlySet<string>,
+  label: string,
+): void => {
+  if (!style || typeof style !== "object" || Array.isArray(style)) {
+    throw new Error(`Invalid ${label} style`);
+  }
+  const values = style as Record<string, unknown>;
+  for (const [key, value] of Object.entries(values)) {
+    if (!keys.has(key)) {
+      throw new Error(`Unsupported ${label} style key: ${key}`);
+    }
+    if (key === "backgroundText") {
+      assertStyle(value, BACKGROUND_TEXT_STYLE_KEYS, "background text");
+    } else if (key === "title") {
+      assertStyle(value, new Set(["gap", "align"]), "table title");
+    } else if (
+      [
+        "backgroundColor",
+        "borderColor",
+        "gridColor",
+        "color",
+        "fontFamily",
+      ].includes(key)
+    ) {
+      if (typeof value !== "string") {
+        throw new Error(`Invalid ${label} ${key}`);
+      }
+    } else if (
+      [
+        "opacity",
+        "borderWidth",
+        "gridWidth",
+        "fontSize",
+        "fontWeight",
+        "padding",
+        "gap",
+      ].includes(key)
+    ) {
+      if (
+        typeof value !== "number" ||
+        !Number.isFinite(value) ||
+        value < 0 ||
+        (key === "opacity" && value > 100)
+      ) {
+        throw new Error(`Invalid ${label} ${key}`);
+      }
+    } else if (
+      ["clipContent", "italic", "underline", "strikethrough"].includes(key)
+    ) {
+      if (typeof value !== "boolean") {
+        throw new Error(`Invalid ${label} ${key}`);
+      }
+    } else if (["borderStyle", "gridStyle"].includes(key)) {
+      if (!["solid", "dashed", "dotted"].includes(value as string)) {
+        throw new Error(`Invalid ${label} ${key}`);
+      }
+    } else if (key === "align") {
+      if (!["start", "center", "end"].includes(value as string)) {
+        throw new Error(`Invalid ${label} ${key}`);
+      }
+    } else if (key === "horizontalAlign") {
+      if (!["left", "center", "right"].includes(value as string)) {
+        throw new Error(`Invalid ${label} ${key}`);
+      }
+    } else if (key === "verticalAlign") {
+      if (!["top", "middle", "bottom"].includes(value as string)) {
+        throw new Error(`Invalid ${label} ${key}`);
+      }
+    }
+  }
+};
 
 /**
  * Relative tolerance for the float drift between an element's `width`/
@@ -301,19 +402,7 @@ const assertValidCell = (
       `Table cell ${value.id} references an unknown row or column`,
     );
   }
-  const style = value.style;
-  if (!style || typeof style !== "object" || Array.isArray(style)) {
-    throw new Error(`Invalid table cell style on ${value.id}`);
-  }
-  for (const key of Object.keys(style)) {
-    if (!TABLE_CELL_STYLE_KEYS.has(key)) {
-      throw new Error(`Unsupported table cell style key: ${key}`);
-    }
-  }
-  const backgroundColor = (style as Record<string, unknown>).backgroundColor;
-  if (backgroundColor !== undefined && typeof backgroundColor !== "string") {
-    throw new Error(`Invalid table cell backgroundColor on ${value.id}`);
-  }
+  assertStyle(value.style, TABLE_CELL_STYLE_KEYS, `table cell ${value.id}`);
   for (const key of ["rowSpan", "columnSpan"] as const) {
     if (
       value[key] !== undefined &&
@@ -367,6 +456,20 @@ export const assertValidTableData = (table: unknown): TableDataV1 => {
   assertUniqueIds(columns, "column");
   assertDimensions(rows, "height", "row");
   assertDimensions(columns, "width", "column");
+  if (value.style !== undefined) {
+    assertStyle(value.style, TABLE_STYLE_KEYS, "table");
+  }
+  const axisStyleKeys = new Set(["backgroundColor", "backgroundText"]);
+  for (const row of rows) {
+    if (row.style !== undefined) {
+      assertStyle(row.style, axisStyleKeys, `table row ${row.id}`);
+    }
+  }
+  for (const column of columns) {
+    if (column.style !== undefined) {
+      assertStyle(column.style, axisStyleKeys, `table column ${column.id}`);
+    }
+  }
 
   const rowIds = new Set(rows.map((row) => row.id));
   const columnIds = new Set(columns.map((column) => column.id));

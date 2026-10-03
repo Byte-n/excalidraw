@@ -4,10 +4,7 @@ import { syncMovedIndices } from "./fractionalIndex";
 import { getBoundTextElement } from "./textElement";
 import { mutateElement } from "./mutateElement";
 import { getMindmapElementsForSelection } from "./mindmap";
-import {
-  getTableCellAtPoint,
-  getTableCellBounds,
-} from "./tableStruct";
+import { getTableCellAtPoint, getTableCellBounds } from "./tableStruct";
 import { getIndexedFrameChildren } from "./frameChildrenIndex";
 
 import {
@@ -25,6 +22,7 @@ import type {
   ExcalidrawTableElement,
   TableCellContainerRef,
   TableDataV1,
+  BackgroundTextStyle,
 } from "./types";
 
 /**
@@ -42,6 +40,77 @@ export const tableCellContainerRef = (
   cellId,
   role,
 });
+
+export const getTableContentClipRects = (
+  element: ExcalidrawElement,
+  elementsMap: ElementsMap,
+): readonly { x: number; y: number; width: number; height: number }[] => {
+  const clips: { x: number; y: number; width: number; height: number }[] = [];
+  let current: ExcalidrawElement | undefined = element;
+  if (isBoundToContainer(element)) {
+    current = elementsMap.get(element.containerId);
+  }
+  const visited = new Set<string>();
+  while (current?.containerRef?.elementId && !visited.has(current.id)) {
+    visited.add(current.id);
+    const ref = current.containerRef;
+    const parent = elementsMap.get(ref.elementId);
+    if (!parent) {
+      break;
+    }
+    if (ref.kind === "tableCell" && isTableElement(parent)) {
+      const cell = parent.table.cells.find(
+        (candidate) => candidate.id === ref.cellId,
+      );
+      const visible =
+        cell &&
+        parent.table.cells.find(
+          (candidate) => candidate.id === (cell.mergedInto ?? cell.id),
+        );
+      if (
+        visible &&
+        (visible.style.clipContent ?? parent.table.style?.clipContent)
+      ) {
+        const bounds = getTableCellBounds(parent.table, visible.id);
+        if (bounds) {
+          clips.push({
+            x: parent.x + bounds.x,
+            y: parent.y + bounds.y,
+            width: bounds.width,
+            height: bounds.height,
+          });
+        }
+      }
+    }
+    current = parent;
+  }
+  return clips;
+};
+
+export const getTableBackgroundTextStyle = (
+  element: ExcalidrawElement,
+  elementsMap: ElementsMap,
+): BackgroundTextStyle | undefined => {
+  const ref = element.containerRef;
+  if (!ref || ref.kind !== "tableCell") {
+    return undefined;
+  }
+  const table = elementsMap.get(ref.elementId);
+  if (!table || !isTableElement(table)) {
+    return undefined;
+  }
+  const cell = table.table.cells.find(
+    (candidate) => candidate.id === ref.cellId,
+  );
+  if (!cell) {
+    return undefined;
+  }
+  const row = table.table.rows.find((candidate) => candidate.id === cell.rowId);
+  const column = table.table.columns.find(
+    (candidate) => candidate.id === cell.columnId,
+  );
+  return row?.style?.backgroundText ?? column?.style?.backgroundText;
+};
 
 /** Same direct-parent relation, role and cell — no write, no history. */
 export const isSameTableCellRef = (
@@ -433,10 +502,7 @@ export const getTableCellSnapScope = (
     }
     if (!scope) {
       scope = { tableId: ref.elementId, cellId: ref.cellId };
-    } else if (
-      scope.tableId !== ref.elementId ||
-      scope.cellId !== ref.cellId
-    ) {
+    } else if (scope.tableId !== ref.elementId || scope.cellId !== ref.cellId) {
       return null;
     }
   }
@@ -451,7 +517,13 @@ export const getTableCellSnapScope = (
   if (!table || table.isDeleted || !isTableElement(table)) {
     return null;
   }
-  if (!getTableCellAtPoint(table, table.x + table.width / 2, table.y + table.height / 2)) {
+  if (
+    !getTableCellAtPoint(
+      table,
+      table.x + table.width / 2,
+      table.y + table.height / 2,
+    )
+  ) {
     return null;
   }
   return { table, cellId: scope.cellId };

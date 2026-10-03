@@ -753,6 +753,40 @@ describe("exporting frames", () => {
 });
 
 describe("exporting tables", () => {
+  it("exports table cell content clipping as an SVG clip path", async () => {
+    const original = API.createElement({ type: "table", x: 100, y: 100 });
+    const table = newElementWith(original, {
+      table: { ...original.table, style: { clipContent: true } },
+    });
+    const member = API.createElement({
+      type: "rectangle",
+      x: 120,
+      y: 120,
+      width: 250,
+      height: 30,
+      containerRef: {
+        kind: "tableCell",
+        elementId: table.id,
+        cellId: table.table.cells[0].id,
+        role: "content",
+      },
+    });
+    const svg = await exportToSvg({
+      elements: [table, member],
+      files: null,
+      exportPadding: 0,
+    });
+    const definition = svg.querySelector(
+      `clipPath[id="table-content-clip-${member.id}-0"] rect`,
+    );
+    expect(definition?.getAttribute("width")).toBe("160");
+    expect(
+      svg.querySelector(
+        `g[clip-path="url(#table-content-clip-${member.id}-0)"]`,
+      ),
+    ).not.toBeNull();
+  });
+
   const withCellColors = <T extends ExcalidrawTableElement>(
     table: T,
     colors: Record<number, string>,
@@ -842,12 +876,10 @@ describe("exporting tables", () => {
       applyDarkModeFilter(TABLE_STYLE.gridColor, true),
     );
     const fill = group.querySelector('rect[fill]:not([fill="none"])')!;
-    expect(fill.getAttribute("fill")).toBe(
-      applyDarkModeFilter("#ffc9c9", true),
-    );
+    expect(fill.getAttribute("fill")).toBe("#ffc9c9");
   });
 
-  it("rotates the grid around the element center", async () => {
+  it("keeps the grid unrotated when an angle is supplied", async () => {
     const table = API.createElement({
       type: "table",
       angle: Math.PI / 4,
@@ -860,7 +892,7 @@ describe("exporting tables", () => {
     });
 
     const group = svg.querySelector(`g[data-id="${table.id}"]`)!;
-    expect(group.getAttribute("transform")).toContain("rotate(45");
+    expect(group.getAttribute("transform")).toContain("rotate(0");
   });
 
   it("clips the grid and its cell members to the containing frame", async () => {

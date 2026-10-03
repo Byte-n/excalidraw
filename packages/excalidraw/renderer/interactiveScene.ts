@@ -13,10 +13,13 @@ import {
   arrayToMap,
   BIND_MODE_TIMEOUT,
   DEFAULT_TRANSFORM_HANDLE_SPACING,
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_SIZE,
   TABLE_STRUCTURE_RAIL_OFFSET,
   TABLE_STRUCTURE_INSERTION_OFFSET,
   FRAME_STYLE,
   getFeatureFlag,
+  getFontFamilyString,
   invariant,
   shouldRotateWithDiscreteAngle,
   THEME,
@@ -93,6 +96,8 @@ import type {
   NonDeletedExcalidrawElement,
   NonDeletedSceneElementsMap,
 } from "@excalidraw/element/types";
+
+import { getTableTitle, getTableTitleBar } from "../components/app/tableTitle";
 
 import { renderSnaps } from "../renderer/renderSnaps";
 import { getCompositeControlPointGlobal } from "../components/app/compositeShapeControls";
@@ -1250,8 +1255,42 @@ const renderTableStructureAffordances = (
   appState: InteractiveCanvasAppState,
   table: NonDeleted<ExcalidrawTableElement>,
   hover: InteractiveCanvasAppState["tableStructureHover"] = null,
+  title?: ExcalidrawTextElement,
 ) => {
   withTableLocalTransform(context, appState, () => {
+    if (hover?.tableId === table.id) {
+      const bar = getTableTitleBar(
+        table,
+        title,
+        appState.zoom.value,
+        title?.fontSize ?? DEFAULT_FONT_SIZE,
+      );
+      const dot = 1.4 / appState.zoom.value;
+      context.save();
+      context.fillStyle = getThemedColor("#6b6f76", appState.theme);
+      for (let row = 0; row < 2; row++) {
+        for (let column = 0; column < 3; column++) {
+          context.beginPath();
+          context.arc(
+            bar.grip.x + (4 + column * 6) / appState.zoom.value,
+            bar.grip.y + (7 + row * 6) / appState.zoom.value,
+            dot,
+            0,
+            Math.PI * 2,
+          );
+          context.fill();
+        }
+      }
+      if (!title) {
+        context.globalAlpha = 0.65;
+        context.font = `700 ${DEFAULT_FONT_SIZE}px ${getFontFamilyString({
+          fontFamily: DEFAULT_FONT_FAMILY,
+        })}`;
+        context.textBaseline = "top";
+        context.fillText("Title", bar.x, bar.y);
+      }
+      context.restore();
+    }
     const railOffset = getTableStructureIndicatorOffset(appState.zoom.value);
     const rowSelection =
       appState.tableRowColSelection?.tableId === table.id &&
@@ -2458,7 +2497,13 @@ const _renderInteractiveScene = ({
 
   if (!editingTableBackgroundText) {
     for (const table of structureTables.values()) {
-      renderTableStructureAffordances(context, appState, table, tableVisual);
+      renderTableStructureAffordances(
+        context,
+        appState,
+        table,
+        tableVisual,
+        getTableTitle(app.scene.getNonDeletedElements(), table.id),
+      );
     }
   }
 

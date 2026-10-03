@@ -100,19 +100,67 @@ export type TableCellContainerRef = Readonly<{
   role: "content" | "backgroundText";
 }>;
 
+export type TableTitleContainerRef = Readonly<{
+  kind: "tableTitle";
+  elementId: string;
+}>;
+
 /** Direct spatial parent. Later container kinds extend this discriminated union. */
-export type DirectContainerRef = FrameLikeContainerRef | TableCellContainerRef;
+export type DirectContainerRef =
+  | FrameLikeContainerRef
+  | TableCellContainerRef
+  | TableTitleContainerRef;
 
-export type TableRowData = Readonly<{ id: string; height: number }>;
+export type BackgroundTextStyle = Readonly<{
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  italic?: boolean;
+  underline?: boolean;
+  strikethrough?: boolean;
+  color?: string;
+  horizontalAlign?: "left" | "center" | "right";
+  verticalAlign?: "top" | "middle" | "bottom";
+  padding?: number;
+}>;
 
-export type TableColumnData = Readonly<{ id: string; width: number }>;
+export type TableStyle = Readonly<{
+  backgroundColor?: string;
+  opacity?: number;
+  borderColor?: string;
+  borderWidth?: number;
+  borderStyle?: "solid" | "dashed" | "dotted";
+  gridColor?: string;
+  gridWidth?: number;
+  gridStyle?: "solid" | "dashed" | "dotted";
+  clipContent?: boolean;
+  title?: Readonly<{ gap?: number; align?: "start" | "center" | "end" }>;
+}>;
+
+export type TableRowData = Readonly<{
+  id: string;
+  height: number;
+  style?: Readonly<{
+    backgroundColor?: string;
+    backgroundText?: BackgroundTextStyle;
+  }>;
+}>;
+
+export type TableColumnData = Readonly<{
+  id: string;
+  width: number;
+  style?: Readonly<{
+    backgroundColor?: string;
+    backgroundText?: BackgroundTextStyle;
+  }>;
+}>;
 
 export type TableCellData = Readonly<{
   id: string;
   rowId: string;
   columnId: string;
   /** `style: {}` means no cell-level override (table defaults apply). */
-  style: Readonly<{ backgroundColor?: string }>;
+  style: Readonly<{ backgroundColor?: string; clipContent?: boolean }>;
   /** Present only on the top-left cell of a merged rectangle. */
   rowSpan?: number;
   columnSpan?: number;
@@ -127,6 +175,7 @@ export type TableCellData = Readonly<{
  */
 export type TableDataV1 = Readonly<{
   schemaVersion: 1;
+  style?: TableStyle;
   rows: readonly TableRowData[];
   columns: readonly TableColumnData[];
   cells: readonly TableCellData[];

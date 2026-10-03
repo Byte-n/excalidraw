@@ -1,5 +1,11 @@
 import React from "react";
 import { vi } from "vitest";
+import { assertValidContainerRefs } from "@excalidraw/element";
+
+import type {
+  ExcalidrawElement,
+  ExcalidrawTableElement,
+} from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
 
@@ -8,7 +14,6 @@ import { createUndoAction } from "../actions/actionHistory";
 import {
   actionBringToFront,
   actionCopy,
-  actionDeleteSelected,
   actionDuplicateSelection,
   actionSendToBack,
 } from "../actions";
@@ -24,11 +29,6 @@ import {
   unmountComponent,
   waitFor,
 } from "./test-utils";
-
-import type {
-  ExcalidrawElement,
-  ExcalidrawTableElement,
-} from "@excalidraw/element/types";
 
 unmountComponent();
 
@@ -142,7 +142,10 @@ const dragElementTo = (
   pointer.restorePosition(from.x, from.y);
   pointer.down();
   // cross the drag threshold in a single step, then travel to the target
-  pointer.move(Math.min(30, Math.max(24, to.x - from.x)), Math.min(30, Math.max(24, to.y - from.y)));
+  pointer.move(
+    Math.min(30, Math.max(24, to.x - from.x)),
+    Math.min(30, Math.max(24, to.y - from.y)),
+  );
   pointer.move(to.x - pointer.clientX, to.y - pointer.clientY);
   pointer.up();
 };
@@ -299,7 +302,11 @@ describe("table container drag-in", () => {
     });
     API.setElements([table, nested, member]);
 
-    dragElementTo(member, { x: -280, y: 120 }, { x: nestedCell.x, y: nestedCell.y });
+    dragElementTo(
+      member,
+      { x: -280, y: 120 },
+      { x: nestedCell.x, y: nestedCell.y },
+    );
 
     expect(getLiveElement(member.id)!.containerRef).toEqual({
       kind: "tableCell",
@@ -347,7 +354,104 @@ describe("table container drag-in", () => {
   });
 });
 
+describe("table content clipping", () => {
+  it("excludes the part of a cell member outside its clipped cell from hit testing", async () => {
+    await render(<Excalidraw handleKeyboardGlobally />);
+    const table = makeTable("clip-table", 100, 100);
+    const cellId = table.table.cells[0].id;
+    const member = API.createElement({
+      type: "rectangle",
+      x: 120,
+      y: 120,
+      width: 250,
+      height: 30,
+      containerRef: {
+        kind: "tableCell",
+        elementId: table.id,
+        cellId,
+        role: "content",
+      },
+    });
+    API.setElements([table, member]);
+    expect(
+      h.app
+        .getElementsAtPosition(300, 130)
+        .some((element) => element.id === member.id),
+    ).toBe(true);
+    API.updateElement(table, {
+      table: { ...table.table, style: { clipContent: true } },
+    });
+    expect(
+      h.app
+        .getElementsAtPosition(300, 130)
+        .some((element) => element.id === member.id),
+    ).toBe(false);
+    expect(
+      h.app
+        .getElementsAtPosition(130, 130)
+        .some((element) => element.id === member.id),
+    ).toBe(true);
+  });
+});
+
 describe("table copy", () => {
+  it("copies a title with a remapped table binding", async () => {
+    await render(<Excalidraw autoFocus={true} handleKeyboardGlobally={true} />);
+    const ownerDocument = h.app.ownerDocument;
+    const originalElementFromPoint = ownerDocument.elementFromPoint;
+    Object.assign(ownerDocument, {
+      elementFromPoint: () => GlobalTestState.canvas,
+    });
+    const table = makeTable("title-table", 0, 80);
+    const title = API.createElement({
+      type: "text",
+      x: 0,
+      y: 40,
+      text: "Budget",
+      containerRef: { kind: "tableTitle", elementId: table.id },
+    });
+    API.setElements([table, title]);
+    expect(() => assertValidContainerRefs(h.elements)).not.toThrow();
+    API.setSelectedElements([table as never]);
+    const selected = h.app.scene.getSelectedElements({
+      selectedElementIds: h.state.selectedElementIds,
+      includeBoundTextElement: true,
+      includeElementsInFrames: true,
+    });
+    const json = serializeAsClipboardJSON({ elements: selected, files: null });
+    await h.app.pasteFromClipboard(
+      createPasteEvent({ types: { "text/plain": json } }),
+    );
+    await waitFor(() =>
+      expect(h.elements.filter((element) => !element.isDeleted)).toHaveLength(
+        4,
+      ),
+    );
+    const tableCopy = h.elements.find(
+      (element) => element.type === "table" && element.id !== table.id,
+    )!;
+    const titleCopy = h.elements.find(
+      (element) => element.type === "text" && element.id !== title.id,
+    )!;
+    expect(titleCopy.containerRef).toEqual({
+      kind: "tableTitle",
+      elementId: tableCopy.id,
+    });
+    expect(getLiveElement(title.id).containerRef?.elementId).toBe(table.id);
+    expect(() => assertValidContainerRefs(h.elements)).not.toThrow();
+    expect(() =>
+      assertValidContainerRefs([
+        ...h.elements,
+        { ...title, id: "second-title" },
+      ]),
+    ).toThrow();
+    if (originalElementFromPoint) {
+      Object.assign(ownerDocument, {
+        elementFromPoint: originalElementFromPoint,
+      });
+    }
+  });
+
   it("pastes a table with nested containers and remapped refs", async () => {
     await render(<Excalidraw autoFocus={true} handleKeyboardGlobally={true} />);
     const ownerDocument = h.app.ownerDocument;
@@ -571,7 +675,8 @@ describe("table copy", () => {
     // the copy's membership is re-judged at its new position, so it does not
     // dangle toward the source table (phase-1.md:69)
     const memberCopy = h.elements.find(
-      (element) => element.id !== member.id && element.type === "composite_shape",
+      (element) =>
+        element.id !== member.id && element.type === "composite_shape",
     )!;
     expect(memberCopy.containerRef).toBeUndefined();
   });
@@ -666,9 +771,7 @@ describe("table z-order", () => {
     // outside elements keep their relative order
     expect(memberIndex).toBeLessThan(ids.indexOf(unrelated1.id));
     expect(tableIndex).toBeLessThan(memberIndex);
-    expect(ids.indexOf(unrelated1.id)).toBeLessThan(
-      ids.indexOf(unrelated2.id),
-    );
+    expect(ids.indexOf(unrelated1.id)).toBeLessThan(ids.indexOf(unrelated2.id));
 
     API.setSelectedElements([table as never]);
     API.executeAction(actionBringToFront);

@@ -103,6 +103,10 @@ const tableProvider: ContainerInteractionProvider = {
     const control: ContainerControl =
       hover.kind === "rowGrip" || hover.kind === "columnGrip"
         ? "reorder"
+        : hover.kind === "titleGrip"
+        ? "reorder"
+        : hover.kind === "titleBar"
+        ? "border"
         : hover.kind === "rowInsert" || hover.kind === "columnInsert"
         ? "insert"
         : hover.kind === "rowResize" || hover.kind === "columnResize"

@@ -1,7 +1,7 @@
-import type { Radians } from "@excalidraw/math";
-
 import { API } from "@excalidraw/excalidraw/tests/helpers/api";
 import { THEME } from "@excalidraw/common";
+
+import type { Radians } from "@excalidraw/math";
 
 import type { StaticCanvasAppState } from "@excalidraw/excalidraw/types";
 
@@ -10,6 +10,7 @@ import { newElementWith, type ElementUpdate } from "../src/mutateElement";
 import { getContainingFrame } from "../src/frame";
 import { getTableCellAtPoint } from "../src/tableStruct";
 import { drawTableGridOnCanvas } from "../src/tableRender";
+import { getTextVerticalOffset } from "../src/renderElement";
 
 import type {
   ExcalidrawElement,
@@ -116,6 +117,7 @@ describe("drawTableGridOnCanvas", () => {
       lineTo: vi.fn(),
       stroke: vi.fn(),
       strokeRect: vi.fn(),
+      setLineDash: vi.fn(),
     } as unknown as CanvasRenderingContext2D;
 
     drawTableGridOnCanvas(table, context, {
@@ -131,6 +133,17 @@ describe("drawTableGridOnCanvas", () => {
     expect(context.moveTo).toHaveBeenNthCalledWith(2, 0, 100);
     expect(context.lineTo).toHaveBeenNthCalledWith(2, 200, 100);
     expect(context.strokeRect).toHaveBeenCalledWith(0, 0, 200, 150);
+  });
+});
+
+describe("table background text alignment", () => {
+  it("computes top, middle, and bottom offsets inside a cell", () => {
+    expect(getTextVerticalOffset("top", 100, 1, 20)).toBe(0);
+    expect(getTextVerticalOffset("middle", 100, 1, 20)).toBe(40);
+    expect(getTextVerticalOffset("bottom", 100, 1, 20)).toBe(80);
+    // Content taller than the cell must stay anchored instead of going above
+    // the cell's top edge.
+    expect(getTextVerticalOffset("middle", 20, 2, 20)).toBe(0);
   });
 });
 

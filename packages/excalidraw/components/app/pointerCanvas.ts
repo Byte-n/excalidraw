@@ -96,6 +96,7 @@ import {
 } from "./interactionTarget";
 
 import { hitCompositeControlPoint } from "./compositeShapeControls";
+import { handleTableTitleDoubleClick } from "./table";
 
 import type { AppState, CollaboratorPointer } from "../../types";
 
@@ -528,7 +529,10 @@ export const handleCanvasDoubleClick = (
   // double-clicking a cell's blank area (or its background text) edits that
   // cell's background text; hits above the table fall through to the generic
   // text handling below
-  if (app.handleTableCellDoubleClick(sceneX, sceneY)) {
+  if (
+    handleTableTitleDoubleClick(app, { x: sceneX, y: sceneY }) ||
+    app.handleTableCellDoubleClick(sceneX, sceneY)
+  ) {
     return;
   }
 

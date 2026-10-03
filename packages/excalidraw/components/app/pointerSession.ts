@@ -121,6 +121,7 @@ import * as gestureController from "./gesture";
 
 import { getCompositeControlPointLocal } from "./compositeShapeControls";
 import * as tableController from "./table";
+import { getTableTitle } from "./tableTitle";
 import { resolveInteractionTarget } from "./interactionTarget";
 
 import type { UnsubscribeCallback } from "../../types";
@@ -609,6 +610,21 @@ export const handleCanvasPointerDown = (
     selectedElementsAreBeingDragged: false,
   });
 
+  if (isSelectionLikeTool(app.state.activeTool.type)) {
+    const table = tableController.handleTableTitleGripPointerDown(
+      app,
+      pointerDownState.origin,
+    );
+    if (table !== undefined) {
+      if (table) {
+        pointerDownState.hit.tableTitleGripTableId = table.id;
+        pointerDownState.hit.allHitElements = [table];
+        attachPointerSessionListeners(app, event, pointerDownState);
+      }
+      return;
+    }
+  }
+
   if (app.state.tableCellSelection?.mobileMode) {
     app.selectTableCellAtPoint(pointerDownState.origin, event.shiftKey);
     return;
@@ -982,6 +998,7 @@ export const initialPointerDownState = (
       center: { x: (maxX + minX) / 2, y: (maxY + minY) / 2 },
     },
     hit: {
+      tableTitleGripTableId: null,
       element: null,
       allHitElements: [],
       wasAddedToSelection: false,
@@ -2749,6 +2766,19 @@ export const onPointerUpFromPointerDownHandler = (
       }
 
       app.scene.replaceAllElements(nextElements);
+    }
+
+    if (
+      pointerDownState.hit.tableTitleGripTableId &&
+      !pointerDownState.drag.hasOccurred
+    ) {
+      const title = getTableTitle(
+        app.scene.getNonDeletedElements(),
+        pointerDownState.hit.tableTitleGripTableId,
+      );
+      if (title) {
+        app.setState({ selectedElementIds: { [title.id]: true } });
+      }
     }
 
     // Code below handles selection when element(s) weren't
