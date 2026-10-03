@@ -240,7 +240,7 @@ export const insertRowInTable = (
   });
 
   return assertValidTableData({
-    schemaVersion: 1,
+    ...table,
     rows,
     columns: table.columns,
     cells: [...cells, ...newCellByColumn.values()],
@@ -296,7 +296,7 @@ export const insertColumnInTable = (
   });
 
   return assertValidTableData({
-    schemaVersion: 1,
+    ...table,
     rows: table.rows,
     columns,
     cells: [...cells, ...newCellByRow.values()],
@@ -442,7 +442,7 @@ export const moveRowInTable = (
   rows.splice(toIndex, 0, table.rows[fromIndex]);
 
   return assertValidTableData({
-    schemaVersion: 1,
+    ...table,
     rows,
     columns: table.columns,
     cells: table.cells,
@@ -470,7 +470,7 @@ export const moveColumnInTable = (
   columns.splice(toIndex, 0, table.columns[fromIndex]);
 
   return assertValidTableData({
-    schemaVersion: 1,
+    ...table,
     rows: table.rows,
     columns,
     cells: table.cells,
@@ -587,7 +587,7 @@ export const resizeRowInTable = (
   );
 
   return assertValidTableData({
-    schemaVersion: 1,
+    ...table,
     rows,
     columns: table.columns,
     cells: table.cells,
@@ -612,7 +612,7 @@ export const resizeColumnInTable = (
   );
 
   return assertValidTableData({
-    schemaVersion: 1,
+    ...table,
     rows: table.rows,
     columns,
     cells: table.cells,
