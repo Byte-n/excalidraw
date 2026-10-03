@@ -29,6 +29,7 @@ import {
   STICKY_NOTE_EDGE_SHADOW_WIDTH,
   STICKY_NOTE_FOOTER,
   STICKY_NOTE_SHADOW_OPACITY,
+  VERTICAL_ALIGN,
 } from "@excalidraw/common";
 
 import type {
@@ -70,6 +71,7 @@ import {
   isTableElement,
 } from "./typeChecks";
 import { getContainingFrame } from "./frame";
+import { getTableContentClipRects } from "./tableContainer";
 import { getCornerRadius } from "./utils";
 
 import { ShapeCache } from "./shape";
@@ -462,6 +464,23 @@ const strokeStickyNoteEdge = (
   context.restore();
 };
 
+/** Returns the content-box offset for a text element's vertical alignment. */
+export const getTextVerticalOffset = (
+  verticalAlign: ExcalidrawTextElement["verticalAlign"],
+  boxHeight: number,
+  lineCount: number,
+  lineHeightPx: number,
+): number => {
+  const freeSpace = Math.max(0, boxHeight - lineCount * lineHeightPx);
+  if (verticalAlign === VERTICAL_ALIGN.BOTTOM) {
+    return freeSpace;
+  }
+  if (verticalAlign === VERTICAL_ALIGN.MIDDLE) {
+    return freeSpace / 2;
+  }
+  return 0;
+};
+
 const drawElementOnCanvas = (
   element: NonDeletedExcalidrawElement,
   rc: RoughCanvas,
@@ -694,11 +713,14 @@ const drawElementOnCanvas = (
           element.lineHeight,
         );
 
-        const verticalOffset = getVerticalOffset(
-          element.fontFamily,
-          element.fontSize,
-          lineHeightPx,
-        );
+        const verticalOffset =
+          getTextVerticalOffset(
+            element.verticalAlign,
+            element.height,
+            lines.length,
+            lineHeightPx,
+          ) +
+          getVerticalOffset(element.fontFamily, element.fontSize, lineHeightPx);
 
         for (let index = 0; index < lines.length; index++) {
           context.fillText(
@@ -1038,6 +1060,16 @@ export const renderElement = (
     context.translate(renderState.offset.x, renderState.offset.y);
   }
   try {
+    for (const clip of getTableContentClipRects(element, allElementsMap)) {
+      context.beginPath();
+      context.rect(
+        clip.x + appState.scrollX,
+        clip.y + appState.scrollY,
+        clip.width,
+        clip.height,
+      );
+      context.clip();
+    }
     drawElement(
       element,
       elementsMap,

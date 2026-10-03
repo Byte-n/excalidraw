@@ -103,6 +103,9 @@ export const handleTextWysiwyg = (
   const elementsMap = app.scene.getElementsMapIncludingDeleted();
 
   const updateElement = (nextOriginalText: string, isDeleted: boolean) => {
+    if (element.containerRef?.kind === "tableTitle") {
+      nextOriginalText = nextOriginalText.replace(/\s*[\r\n]+\s*/g, " ");
+    }
     const latestTextElement = app.scene.getElement(
       element.id,
     ) as ExcalidrawTextElement | null;
@@ -131,13 +134,15 @@ export const handleTextWysiwyg = (
           return newElementWith(_element, {
             originalText: nextOriginalText,
             isDeleted: isDeleted ?? _element.isDeleted,
-            ...(stickyLayout?.text ??
-              refreshTextDimensions(
-                _element,
-                getContainerElement(_element, elementsMap),
-                elementsMap,
-                nextOriginalText,
-              )),
+            ...(isTableCellBackgroundText(_element)
+              ? {}
+              : stickyLayout?.text ??
+                refreshTextDimensions(
+                  _element,
+                  getContainerElement(_element, elementsMap),
+                  elementsMap,
+                  nextOriginalText,
+                )),
           });
         }
         return _element;

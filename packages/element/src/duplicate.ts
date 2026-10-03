@@ -332,7 +332,9 @@ export const duplicateElements = (
   // operation unit (phase-1.md:68)
   const tableIdsToDuplicate = new Set(
     elements
-      .filter((el) => _idsOfElementsToDuplicate.has(el.id) && isTableElement(el))
+      .filter(
+        (el) => _idsOfElementsToDuplicate.has(el.id) && isTableElement(el),
+      )
       .map((el) => el.id),
   );
 
@@ -389,7 +391,8 @@ export const duplicateElements = (
 
     // cell members are copied together with their table, never on their own
     if (
-      element.containerRef?.kind === "tableCell" &&
+      (element.containerRef?.kind === "tableCell" ||
+        element.containerRef?.kind === "tableTitle") &&
       tableIdsToDuplicate.has(element.containerRef.elementId)
     ) {
       continue;
@@ -407,7 +410,8 @@ export const duplicateElements = (
       const targetIndex = findLastIndex(elementsWithDuplicates, (el) => {
         return (
           el.id === tableId ||
-          (el.containerRef?.kind === "tableCell" &&
+          ((el.containerRef?.kind === "tableCell" ||
+            el.containerRef?.kind === "tableTitle") &&
             el.containerRef.elementId === tableId) ||
           (isBoundToContainer(el) &&
             elementsMap.get(el.containerId)?.containerRef?.elementId ===

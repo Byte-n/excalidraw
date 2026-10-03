@@ -213,6 +213,38 @@ describe("table tool", () => {
       expect(h.state.selectedElementIds).toEqual({ [content.id]: true });
     });
 
+    it("selects the table first, then drills into cell content or the cell", () => {
+      const blank = cellCenter(table, 1, 1);
+      mouseDown(blank.x, blank.y);
+      mouseUp(blank.x, blank.y);
+      expect(h.state.selectedElementIds).toEqual({ [table.id]: true });
+
+      mouseDown(130, 130);
+      mouseUp(130, 130);
+      expect(h.state.selectedElementIds).toEqual({ [content.id]: true });
+
+      mouseDown(blank.x, blank.y);
+      mouseUp(blank.x, blank.y);
+      expect(h.state.selectedElementIds).toEqual({ [table.id]: true });
+
+      mouseDown(blank.x, blank.y);
+      mouseUp(blank.x, blank.y);
+      expect(h.state.tableCellSelection).toMatchObject({
+        tableId: table.id,
+        focusId: table.table.cells[4].id,
+      });
+      expect(h.state.selectedElementIds).toEqual({});
+
+      const nextCell = cellCenter(table, 0, 0);
+      mouseDown(nextCell.x, nextCell.y);
+      mouseUp(nextCell.x, nextCell.y);
+      expect(h.state.tableCellSelection).toMatchObject({
+        tableId: table.id,
+        focusId: table.table.cells[0].id,
+      });
+      expect(h.state.selectedElementIds).toEqual({});
+    });
+
     it("deselects the table with escape", () => {
       const center = cellCenter(table, 1, 1);
       mouseDown(center.x, center.y);
@@ -275,7 +307,7 @@ describe("table tool", () => {
       API.setElements([table]);
     });
 
-    it("creates a fixed-size text covering the cell and edits it", async () => {
+    it("keeps the displayed text and editor at the measured size", async () => {
       const center = cellCenter(table, 0, 0);
       doubleClickAt(center.x, center.y);
 
@@ -293,11 +325,11 @@ describe("table tool", () => {
       });
       expect(text.containerId).toBeNull();
       expect(text.autoResize).toBe(false);
-      // the fixed box spans the cell's width and stays centered on it (the
-      // editor re-measures the empty text to one 20px line)
-      expect(text.width).toBe(160);
+      expect(text.width).toBeLessThan(160);
       expect(text.x + text.width / 2).toBe(80);
       expect(text.y + text.height / 2).toBe(28);
+      expect(editor.style.width).toBe(`${text.width}px`);
+      expect(editor.style.height).toBe(`${text.height}px`);
       // directly above the table
       expect(h.elements.map((element) => element.id).indexOf(text.id)).toBe(
         h.elements.map((element) => element.id).indexOf(table.id) + 1,
@@ -309,13 +341,13 @@ describe("table tool", () => {
       const committed = getBackgroundTexts()[0];
       expect(committed.id).toBe(text.id);
       expect(committed.text).toBe("hello");
-      // committing only updates the text element's content
       expect(committed.autoResize).toBe(false);
-      expect(committed.width).toBe(160);
+      expect(committed.width).toBeLessThan(160);
       expect(committed.x + committed.width / 2).toBe(80);
+      expect(committed.y + committed.height / 2).toBe(28);
     });
 
-    it("keeps the background editor as wide as its cell near the viewport edge", async () => {
+    it("keeps the measured editor width near the viewport edge", async () => {
       const edgeTable = API.createElement({
         type: "table",
         x: h.state.width - 130,
@@ -328,7 +360,7 @@ describe("table tool", () => {
 
       const editor = await getTextEditor();
       const text = getBackgroundTexts()[0];
-      expect(text.width).toBe(edgeTable.table.columns[0].width);
+      expect(text.width).toBeLessThan(edgeTable.table.columns[0].width);
       expect(editor.style.width).toBe(`${text.width}px`);
     });
 
@@ -345,13 +377,56 @@ describe("table tool", () => {
       const duringEdit = getTable();
       expect(duringEdit.table.rows[0].height).toBeGreaterThan(initialHeight);
       const text = getBackgroundTexts()[0];
-      expect(text.height).toBe(duringEdit.table.rows[0].height);
-      expect(text.width).toBe(duringEdit.table.columns[0].width);
+      expect(text.height).toBeLessThanOrEqual(duringEdit.table.rows[0].height);
+      expect(text.width).toBeLessThanOrEqual(duringEdit.table.columns[0].width);
+      expect(editor.style.width).toBe(`${text.width}px`);
+      expect(editor.style.height).toBe(`${text.height}px`);
 
       Keyboard.exitTextEditor(editor);
       expect(getTable().table.rows[0].height).toBe(
         duringEdit.table.rows[0].height,
       );
+    });
+
+    it("uses the cell background text alignment during display and editing", async () => {
+      API.updateElement(table, {
+        table: {
+          ...table.table,
+          rows: table.table.rows.map((row, index) =>
+            index === 0
+              ? {
+                  ...row,
+                  style: {
+                    backgroundText: {
+                      horizontalAlign: "right" as const,
+                      verticalAlign: "bottom" as const,
+                      padding: 4,
+                    },
+                  },
+                }
+              : row,
+          ),
+        },
+      });
+      const center = cellCenter(table, 0, 0);
+      doubleClickAt(center.x, center.y);
+      const editor = await getTextEditor();
+      updateTextEditor(editor, "hello");
+
+      const text = getBackgroundTexts()[0];
+      expect(text.textAlign).toBe("right");
+      expect(text.verticalAlign).toBe("bottom");
+      expect(text.x + text.width).toBe(160 - 4);
+      expect(text.y + text.height).toBe(table.table.rows[0].height - 4);
+      expect(editor.style.width).toBe(`${text.width}px`);
+      expect(editor.style.height).toBe(`${text.height}px`);
+
+      Keyboard.exitTextEditor(editor);
+      doubleClickAt(center.x, center.y);
+      const reopened = await getTextEditor();
+      expect(reopened.style.width).toBe(`${text.width}px`);
+      expect(reopened.style.height).toBe(`${text.height}px`);
+      Keyboard.exitTextEditor(reopened);
     });
 
     it("re-opens the same element instead of creating a second background text", async () => {

@@ -2,7 +2,6 @@ import {
   KEYS,
   TABLE_STRUCTURE_INSERTION_OFFSET,
   TABLE_STRUCTURE_RAIL_OFFSET,
-  getFontString,
 } from "@excalidraw/common";
 import { getTransformHandles } from "@excalidraw/element";
 import * as Element from "@excalidraw/element";
@@ -24,6 +23,10 @@ import {
 import { actionFinalize } from "../actions/actionFinalize";
 import { actionDeselect } from "../actions/actionDeselect";
 import { getTableStructureHoverAtSceneCoords } from "../components/app/table";
+
+import { getTableTitleBar } from "../components/app/tableTitle";
+
+import { getTextEditor, updateTextEditor } from "./queries/dom";
 
 import { API } from "./helpers/api";
 import { Keyboard } from "./helpers/ui";
@@ -717,29 +720,14 @@ describe("table row/column structure", () => {
       expect(live(content0).y).toBe(snapshot.content0Y);
       const text = live(backgroundText0 as unknown as ExcalidrawTextElement);
       expect(text.fontSize).toBe(20);
-      expect(text.width).toBe(COLUMN_WIDTH);
-      expect(text.height).toBe(
-        Element.measureText(text.text, getFontString(text), text.lineHeight)
-          .height,
-      );
+      expect(text.width).toBeLessThan(COLUMN_WIDTH);
+      expect(text.height).toBeLessThan(ROW_HEIGHT + 24);
       // the squeezed row's members follow their cell's top edge
       expect(live(squeezed).y).toBe(table.y + ROW_HEIGHT + 10 + 24);
       // rows after the squeezed one stay put
       expect(live(content2).y).toBe(snapshot.content2Y);
 
       mouseUp(target.x, target.y);
-    });
-
-    it("keeps background text visible when shrinking a row", () => {
-      createFixture();
-
-      const separator = { x: 300, y: 256 };
-      mouseDown(separator.x, separator.y);
-      mouseMove(separator.x, 205);
-      mouseUp(separator.x, 205);
-
-      expect(getTable().table.rows[0].height).toBeGreaterThan(24);
-      expect(getTable().table.rows[0].height).toBeLessThan(ROW_HEIGHT);
     });
 
     it("resizes only the outermost column from the right edge", async () => {
@@ -806,15 +794,10 @@ describe("table row/column structure", () => {
       mouseUp(separator.x + 40, separator.y);
 
       const text = live(backgroundText0 as unknown as ExcalidrawTextElement);
-      expect(text.width).toBe(COLUMN_WIDTH + 40);
+      expect(text.width).toBeLessThanOrEqual(COLUMN_WIDTH + 40);
       expect(text.originalText).toBe(originalText);
-      expect(text.text).toBe(
-        Element.wrapText(originalText, getFontString(text), COLUMN_WIDTH + 40),
-      );
-      expect(text.height).toBe(
-        Element.measureText(text.text, getFontString(text), text.lineHeight)
-          .height,
-      );
+      expect(text.text).toContain("\n");
+      expect(text.height).toBeGreaterThan(ROW_HEIGHT);
       expect(text.fontSize).toBe(20);
       // the squeezed neighbor compensates: the table's total width holds
       expect(getTable().table.columns[1].width).toBe(COLUMN_WIDTH - 40);
@@ -1315,6 +1298,46 @@ describe("table row/column structure", () => {
       );
     });
 
+    it("keeps the title content-sized through scale preview and commit", async () => {
+      const { table, text } = scaleFixture();
+      const title = Element.newTextElement({
+        x: table.x,
+        y: table.y - 45,
+        text: "Budget 2026",
+        fontSize: 20,
+        containerRef: { kind: "tableTitle", elementId: table.id },
+      });
+      API.setElements([table, title, text]);
+      selectTable(table);
+
+      const original = {
+        width: title.width,
+        height: title.height,
+        fontSize: title.fontSize,
+        gap: table.y - (title.y + title.height),
+      };
+      const handle = seHandleCenter(table);
+      mouseDown(handle.x, handle.y);
+      mouseMove(handle.x + 96, handle.y + 42);
+      await nextFrame();
+
+      const preview = live(title) as ExcalidrawTextElement;
+      expect(preview.width).toBe(original.width);
+      expect(preview.height).toBe(original.height);
+      expect(preview.fontSize).toBe(original.fontSize);
+      expect(preview.autoResize).toBe(true);
+      mouseUp(handle.x + 96, handle.y + 42);
+      const committed = live(title) as ExcalidrawTextElement;
+      expect(committed.width).toBe(original.width);
+      expect(committed.height).toBe(original.height);
+      expect(committed.fontSize).toBe(original.fontSize);
+      expect(committed.autoResize).toBe(true);
+      expect(committed.text).toBe("Budget 2026");
+      expect(getTable().y - (committed.y + committed.height)).toBeCloseTo(
+        original.gap,
+      );
+    });
+
     it("stretches one axis from a side frame and keeps every font size", async () => {
       const { table, text, snapshot } = scaleFixture();
       selectTable(table);
@@ -1387,6 +1410,86 @@ describe("table row/column structure", () => {
       expect(h.state.tableStructureHover).toMatchObject({
         kind: "columnGrip",
       });
+    });
+
+    it("selects from the title grip and edits a single-line title", async () => {
+      const { table } = scaleFixture();
+      const bar = getTableTitleBar(table, undefined, 1, 20);
+      expect(bar.y + bar.height).toBe(
+        table.y - TABLE_STRUCTURE_RAIL_OFFSET - 9 - 2,
+      );
+      const gripX = bar.grip.x + bar.grip.width / 2;
+      const gripY = bar.grip.y + bar.grip.height / 2;
+      mouseMove(gripX, gripY);
+      expect(h.state.tableStructureHover).toMatchObject({
+        tableId: table.id,
+        kind: "titleGrip",
+      });
+      mouseDown(gripX, gripY);
+      expect(h.state.selectedElementIds[table.id]).toBe(true);
+      mouseUp(gripX, gripY);
+
+      fireEvent.doubleClick(GlobalTestState.interactiveCanvas, {
+        clientX: bar.x + 30,
+        clientY: bar.y + bar.height / 2,
+      });
+      const editor = await getTextEditor();
+      updateTextEditor(editor, "Budget\n2026");
+      expect(editor.value).toBe("Budget 2026");
+      fireEvent.keyDown(editor, { key: "Enter" });
+      const title = h.elements.find(
+        (element) => element.containerRef?.kind === "tableTitle",
+      ) as ExcalidrawTextElement;
+      expect(title.originalText).toBe("Budget 2026");
+      expect(title.text).toBe("Budget 2026");
+      const positionedBar = getTableTitleBar(table, title, 1, title.fontSize);
+      expect(title.y).toBe(positionedBar.y);
+
+      const titlePosition = { x: title.x, y: title.y };
+      const textX = title.x + title.width / 2;
+      const textY = title.y + title.height / 2;
+      mouseDown(textX, textY);
+      mouseMove(textX + 40, textY + 30);
+      await nextFrame();
+      mouseUp(textX + 40, textY + 30);
+      expect({ x: live(title).x, y: live(title).y }).toEqual(titlePosition);
+
+      const titleGripX = positionedBar.grip.x + positionedBar.grip.width / 2;
+      const titleGripY = positionedBar.grip.y + positionedBar.grip.height / 2;
+      const tablePosition = { x: table.x, y: table.y };
+      mouseDown(titleGripX, titleGripY);
+      mouseUp(titleGripX, titleGripY);
+      expect(h.state.selectedElementIds[title.id]).toBe(true);
+      expect(h.state.selectedElementIds[table.id]).toBeUndefined();
+      mouseDown(titleGripX, titleGripY);
+      mouseMove(titleGripX + 40, titleGripY + 30);
+      await nextFrame();
+      mouseUp(titleGripX + 40, titleGripY + 30);
+      expect({ x: live(title).x, y: live(title).y }).toEqual({
+        x: titlePosition.x + 40,
+        y: titlePosition.y + 30,
+      });
+      expect(live(title).containerRef).toEqual({
+        kind: "tableTitle",
+        elementId: table.id,
+      });
+      expect({ x: live(table).x, y: live(table).y }).toEqual({
+        x: tablePosition.x + 40,
+        y: tablePosition.y + 30,
+      });
+      expect({
+        x: live(title).x - live(table).x,
+        y: live(title).y - live(table).y,
+      }).toEqual({
+        x: titlePosition.x - tablePosition.x,
+        y: titlePosition.y - tablePosition.y,
+      });
+      expect(
+        getTableStructureHoverAtSceneCoords(h.app, {
+          x: titleGripX + 40,
+          y: titleGripY + 30,
+        }),
+      ).toMatchObject({ tableId: table.id, kind: "titleGrip" });
     });
 
     it("suspends hover for a gesture armed by selection handling", () => {

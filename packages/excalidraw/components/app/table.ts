@@ -4,8 +4,9 @@ import {
   VERTICAL_ALIGN,
   distance,
   DRAGGING_THRESHOLD,
-  getGridPoint,
+  DEFAULT_FONT_SIZE,
   getFontString,
+  getGridPoint,
   getLineHeight,
   isSelectionLikeTool,
   TABLE_STRUCTURE_INSERTION_OFFSET,
@@ -27,6 +28,7 @@ import {
   getMemberTranslationsForRows,
   getTableCellAtPoint,
   getTableCellBounds,
+  getTableBackgroundTextStyle,
   getTableCellRange,
   getVisibleTableCell,
   getTableColumnOffset,
@@ -62,6 +64,7 @@ import type {
   ExcalidrawElement,
   ExcalidrawTableElement,
   ExcalidrawTextElement,
+  ElementsMap,
   NonDeleted,
   NonDeletedExcalidrawElement,
   TableDataV1,
@@ -74,6 +77,14 @@ import type {
 } from "@excalidraw/element";
 
 import { snapNewElement } from "../../snapping";
+
+import {
+  getTableTitle,
+  getTableTitleBar,
+  isInTableTitleBar,
+  isInTableTitleGrip,
+  startTableTitleEditing,
+} from "./tableTitle";
 
 import type App from "../App";
 
@@ -291,23 +302,44 @@ export const selectTableCellAtPoint = (
     }
     return false;
   }
+  const hitElement = app.getElementAtPosition(sceneCoords.x, sceneCoords.y);
+  if (!hitElement || hitElement.id !== target.table.id) {
+    if (selection) {
+      app.setState({ tableCellSelection: null });
+    }
+    return false;
+  }
+  if (
+    !app.state.selectedElementIds[target.table.id] &&
+    selection?.tableId !== target.table.id
+  ) {
+    if (selection) {
+      app.setState({ tableCellSelection: null });
+    }
+    return false;
+  }
   const targetCellId =
     getVisibleTableCell(target.table.table, target.cellId)?.id ?? target.cellId;
   const extend =
     !!selection &&
     selection.tableId === target.table.id &&
     (shiftKey || selection.mobileMode);
-  app.setState({
-    tableCellSelection: {
-      tableId: target.table.id,
-      anchorId: extend ? selection.anchorId : targetCellId,
-      focusId: targetCellId,
-      mobileMode:
-        (selection?.mobileMode && selection.tableId === target.table.id) ||
-        false,
-    },
+  app.setState((prevState) => {
+    const selectedElementIds = { ...prevState.selectedElementIds };
+    delete selectedElementIds[target.table.id];
+    return {
+      selectedElementIds,
+      tableCellSelection: {
+        tableId: target.table.id,
+        anchorId: extend ? selection.anchorId : targetCellId,
+        focusId: targetCellId,
+        mobileMode:
+          (selection?.mobileMode && selection.tableId === target.table.id) ||
+          false,
+      },
+    };
   });
-  return extend;
+  return true;
 };
 
 export const moveTableCellSelectionFocus = (
@@ -950,8 +982,15 @@ const editTableCellBackgroundText = (
   ) as NonDeleted<ExcalidrawTextElement> | undefined;
 
   if (existing) {
-    app.setState({ editingTextElement: existing });
-    app.handleTextWysiwyg(existing, {
+    refitTableCellBackgroundText(app, existing.id);
+    const fitted = app.scene.getNonDeletedElement(existing.id) as
+      | NonDeleted<ExcalidrawTextElement>
+      | undefined;
+    if (!fitted) {
+      return;
+    }
+    app.setState({ editingTextElement: fitted });
+    app.handleTextWysiwyg(fitted, {
       isExistingElement: true,
       initialCaretSceneCoords,
     });
@@ -990,8 +1029,7 @@ const createTableCellBackgroundText = (
     fontSize: app.state.currentItemFontSize,
     fontFamily,
     lineHeight: getLineHeight(fontFamily),
-    // The text box covers the cell; wrapped background text can expand the
-    // owning row, while the column width remains controlled by the table.
+    // The row grows for wrapped text; the column width stays table-controlled.
     textAlign: "center",
     verticalAlign: VERTICAL_ALIGN.MIDDLE,
     containerId: null,
@@ -1005,15 +1043,14 @@ const createTableCellBackgroundText = (
     },
   });
 
-  // Center the fixed-size box on the cell in scene coordinates, so the box
-  // covers the cell exactly.
-  const cellCenterX = table.x + bounds.x + bounds.width / 2;
-  const cellCenterY = table.y + bounds.y + bounds.height / 2;
+  const layout = getCellBackgroundTextLayout(
+    text,
+    table,
+    bounds,
+    app.scene.getNonDeletedElementsMap(),
+  );
   text = newElementWith(text, {
-    width: bounds.width,
-    height: bounds.height,
-    x: cellCenterX - bounds.width / 2,
-    y: cellCenterY - bounds.height / 2,
+    ...layout,
   });
 
   app.scene.insertElementsAtIndex(
@@ -1082,21 +1119,6 @@ const getTableLocalPoint = (
   sceneY: number,
 ): TableLocalPoint => {
   return { x: sceneX - table.x, y: sceneY - table.y };
-};
-
-/** Cell center in scene geometry. */
-const getTableCellSceneCenter = (
-  table: NonDeleted<ExcalidrawTableElement>,
-  cellId: string,
-): { x: number; y: number } | null => {
-  const bounds = getTableCellBounds(table.table, cellId);
-  if (!bounds) {
-    return null;
-  }
-  return {
-    x: table.x + bounds.x + bounds.width / 2,
-    y: table.y + bounds.y + bounds.height / 2,
-  };
 };
 
 /**
@@ -1229,11 +1251,52 @@ const applyMemberTranslations = (
   return movedAny;
 };
 
-/**
- * Re-fits the background text boxes of the given cells to their (new) cell
- * geometry. Background text uses the current column width for wrapping and
- * its measured height is allowed to grow the owning row.
- */
+const getCellBackgroundTextLayout = (
+  text: ExcalidrawTextElement,
+  table: ExcalidrawTableElement,
+  bounds: NonNullable<ReturnType<typeof getTableCellBounds>>,
+  elementsMap: ElementsMap,
+) => {
+  const style = getTableBackgroundTextStyle(text, elementsMap);
+  const padding = style?.padding ?? 0;
+  const availableWidth = Math.max(bounds.width - padding * 2, 1);
+  const font = getFontString(text);
+  const wrapped = wrapText(text.originalText, font, availableWidth);
+  const measured = measureText(wrapped, font, text.lineHeight);
+  const width = Math.min(measured.width, availableWidth);
+  const height = measured.height;
+  const horizontalAlign = style?.horizontalAlign ?? text.textAlign;
+  const verticalAlign = style?.verticalAlign ?? text.verticalAlign;
+  const freeWidth = Math.max(0, bounds.width - padding * 2 - width);
+  const freeHeight = Math.max(0, bounds.height - padding * 2 - height);
+  return {
+    text: wrapped,
+    width,
+    height,
+    textAlign: horizontalAlign,
+    verticalAlign,
+    x:
+      table.x +
+      bounds.x +
+      padding +
+      (horizontalAlign === "center"
+        ? freeWidth / 2
+        : horizontalAlign === "right"
+        ? freeWidth
+        : 0),
+    y:
+      table.y +
+      bounds.y +
+      padding +
+      (verticalAlign === "middle"
+        ? freeHeight / 2
+        : verticalAlign === "bottom"
+        ? freeHeight
+        : 0),
+  };
+};
+
+/** Wrapped text may grow the last row covered by a merged cell. */
 const refitCellBackgroundTexts = (
   app: TableApp,
   table: NonDeleted<ExcalidrawTableElement>,
@@ -1271,24 +1334,22 @@ const refitCellBackgroundTexts = (
     if (!row) {
       continue;
     }
-    const backgroundTexts = texts as ExcalidrawTextElement[];
+    const backgroundTexts = texts.filter(isTextElement);
     textsByCell.set(cellId, backgroundTexts);
     for (const backgroundText of backgroundTexts) {
-      const wrapped = wrapText(
-        backgroundText.originalText,
-        getFontString(backgroundText),
-        Math.max(bounds.width, 1),
+      const layout = getCellBackgroundTextLayout(
+        backgroundText,
+        table,
+        bounds,
+        elementsMap,
       );
-      const height = measureText(
-        wrapped,
-        getFontString(backgroundText),
-        backgroundText.lineHeight,
-      ).height;
+      const padding =
+        getTableBackgroundTextStyle(backgroundText, elementsMap)?.padding ?? 0;
       requiredHeights.set(
         row.id,
         Math.max(
           requiredHeights.get(row.id) ?? 0,
-          height - (bounds.height - row.height),
+          layout.height + padding * 2 - (bounds.height - row.height),
         ),
       );
     }
@@ -1327,8 +1388,7 @@ const refitCellBackgroundTexts = (
   const currentElementsMap = app.scene.getNonDeletedElementsMap();
   for (const [cellId, backgroundTexts] of textsByCell) {
     const bounds = getTableCellBounds(currentTable.table, cellId);
-    const center = getTableCellSceneCenter(currentTable, cellId);
-    if (!bounds || !center) {
+    if (!bounds) {
       continue;
     }
     for (const backgroundText of backgroundTexts) {
@@ -1336,25 +1396,14 @@ const refitCellBackgroundTexts = (
       if (!liveText || !isTextElement(liveText)) {
         continue;
       }
-      const wrapped = wrapText(
-        liveText.originalText,
-        getFontString(liveText),
-        Math.max(bounds.width, 1),
-      );
-      const height = measureText(
-        wrapped,
-        getFontString(liveText),
-        liveText.lineHeight,
-      ).height;
       app.scene.mutateElement(
         liveText,
-        {
-          x: center.x - bounds.width / 2,
-          y: center.y - height / 2,
-          width: bounds.width,
-          height,
-          text: wrapped,
-        },
+        getCellBackgroundTextLayout(
+          liveText,
+          currentTable,
+          bounds,
+          currentElementsMap,
+        ),
         { informMutation: false, isDragging: true },
       );
     }
@@ -1362,9 +1411,8 @@ const refitCellBackgroundTexts = (
 };
 
 /**
- * Background text is a row-sizing input regardless of the table's sizing
- * mode. The text box keeps the cell width, while its wrapped height grows the
- * row and translates members in later rows.
+ * Refit the edited background text to its visible cell, growing its row when
+ * wrapped content needs more space.
  */
 export const refitTableCellBackgroundText = (
   app: TableApp,
@@ -1392,19 +1440,9 @@ export const refitTableCellBackgroundText = (
     return false;
   }
 
-  const row = table.table.rows.find((candidate) => candidate.id === cell.rowId);
-  if (!row) {
-    return false;
-  }
   refitCellBackgroundTexts(app, table, [cell.id]);
-  const updatedTable = app.scene.getNonDeletedElement(table.id);
   app.scene.triggerUpdate();
-  return Boolean(
-    updatedTable &&
-      isTableElement(updatedTable) &&
-      updatedTable.table.rows.find((candidate) => candidate.id === row.id)
-        ?.height !== row.height,
-  );
+  return true;
 };
 
 /**
@@ -1619,6 +1657,49 @@ export const getTableStructureHoverAtSceneCoords = (
   app: TableApp,
   sceneCoords: { x: number; y: number },
 ): TableRowColStructureHover | null => {
+  const selectedElements = app.scene.getSelectedElements(app.state);
+  for (const element of [...app.scene.getNonDeletedElements()].reverse()) {
+    if (!isTableElement(element) || element.locked) {
+      continue;
+    }
+    if (
+      selectedElements.length === 1 &&
+      selectedElements[0].id === element.id &&
+      resizeTest(
+        element,
+        app.scene.getNonDeletedElementsMap(),
+        app.state,
+        sceneCoords.x,
+        sceneCoords.y,
+        app.state.zoom,
+        "mouse",
+        app.editorInterface,
+      )
+    ) {
+      return null;
+    }
+    const structureHover = resolveStructureHover(
+      app,
+      element,
+      getTableLocalPoint(element, sceneCoords.x, sceneCoords.y),
+    );
+    if (structureHover?.kind === "columnInsert") {
+      return structureHover;
+    }
+    const title = getTableTitle(app.scene.getNonDeletedElements(), element.id);
+    const bar = getTableTitleBar(
+      element,
+      title,
+      app.state.zoom.value,
+      title?.fontSize ?? DEFAULT_FONT_SIZE,
+    );
+    if (isInTableTitleBar(sceneCoords, bar)) {
+      return {
+        tableId: element.id,
+        kind: isInTableTitleGrip(sceneCoords, bar) ? "titleGrip" : "titleBar",
+      };
+    }
+  }
   const table = getStructureZoneTableAtSceneCoords(
     app,
     sceneCoords.x,
@@ -1630,27 +1711,6 @@ export const getTableStructureHoverAtSceneCoords = (
 
   // The selected table's whole frame scales (corners uniformly, sides one
   // axis) — its frame band wins over every structure zone around it.
-  const selectedElements = app.scene.getSelectedElements(app.state);
-  if (
-    selectedElements.length === 1 &&
-    selectedElements[0].id === table.id &&
-    isTableElement(selectedElements[0])
-  ) {
-    const handleType = resizeTest(
-      table,
-      app.scene.getNonDeletedElementsMap(),
-      app.state,
-      sceneCoords.x,
-      sceneCoords.y,
-      app.state.zoom,
-      "mouse",
-      app.editorInterface,
-    );
-    if (handleType) {
-      return null;
-    }
-  }
-
   return resolveStructureHover(
     app,
     table,
@@ -1658,10 +1718,58 @@ export const getTableStructureHoverAtSceneCoords = (
   );
 };
 
+export const handleTableTitleGripPointerDown = (
+  app: TableApp,
+  point: { x: number; y: number },
+): ExcalidrawTableElement | null | undefined => {
+  const hover = getTableStructureHoverAtSceneCoords(app, point);
+  if (hover?.kind === "rowInsert" || hover?.kind === "columnInsert") {
+    return undefined;
+  }
+  const hit = app.getElementAtPosition(point.x, point.y);
+  if (hit?.type === "text" && hit.containerRef?.kind === "tableTitle") {
+    return null;
+  }
+  if (hover?.kind !== "titleGrip" && hover?.kind !== "titleBar") {
+    return undefined;
+  }
+  if (hover.kind === "titleGrip") {
+    const table = app.scene.getNonDeletedElement(hover.tableId);
+    if (!table || !isTableElement(table)) {
+      return undefined;
+    }
+    app.setState({
+      selectedElementIds: { [hover.tableId]: true },
+      tableCellSelection: null,
+      tableRowColSelection: null,
+    });
+    return table;
+  }
+  return null;
+};
+
+export const handleTableTitleDoubleClick = (
+  app: TableApp,
+  point: { x: number; y: number },
+): boolean => {
+  const hover = getTableStructureHoverAtSceneCoords(app, point);
+  if (!hover || (hover.kind !== "titleBar" && hover.kind !== "titleGrip")) {
+    return false;
+  }
+  const table = app.scene.getNonDeletedElement(hover.tableId);
+  if (!table || !isTableElement(table)) {
+    return false;
+  }
+  startTableTitleEditing(app as App, table);
+  return true;
+};
+
 const STRUCTURE_CURSORS: {
   [T in TableRowColStructureHover["kind"]]: string;
 } = {
   table: CURSOR_TYPE.AUTO,
+  titleBar: CURSOR_TYPE.TEXT,
+  titleGrip: CURSOR_TYPE.MOVE,
   rowGrip: CURSOR_TYPE.MOVE,
   columnGrip: CURSOR_TYPE.MOVE,
   rowResize: getCursorForResizingElement({ transformHandleType: "s" }),
@@ -1956,6 +2064,10 @@ export const armTableStructureGestureOnPointerDown = (
 
   switch (hover.kind) {
     case "table": {
+      return false;
+    }
+    case "titleBar":
+    case "titleGrip": {
       return false;
     }
     case "rowGrip":

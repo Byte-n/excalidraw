@@ -20,12 +20,14 @@ export const ColorInput = ({
   label,
   colorPickerType,
   placeholder,
+  enableEyeDropper = true,
 }: {
   color: string;
   onChange: (color: string) => void;
   label: string;
   colorPickerType: ColorPickerType;
   placeholder?: string;
+  enableEyeDropper?: boolean;
 }) => {
   const editorInterface = useEditorInterface();
   const [innerValue, setInnerValue] = useState(color);
@@ -111,7 +113,7 @@ export const ColorInput = ({
           placeholder={placeholder}
         />
         {/* TODO reenable on mobile with a better UX */}
-        {editorInterface.formFactor !== "phone" && (
+        {enableEyeDropper && editorInterface.formFactor !== "phone" && (
           <>
             <div
               style={{

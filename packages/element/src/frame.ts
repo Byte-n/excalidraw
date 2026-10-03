@@ -34,7 +34,6 @@ import {
   isBoundToContainer,
   isFrameElement,
   isFrameLikeElement,
-  isTableElement,
   isTextElement,
 } from "./typeChecks";
 
@@ -89,6 +88,10 @@ export const bindElementsToFramesAfterDuplication = (
                 containerRef.cellId) as string,
               containerRef.role,
             ),
+          });
+        } else if (containerRef.kind === "tableTitle") {
+          mutateElement(nextElement, nextElementMap, {
+            containerRef: { kind: "tableTitle", elementId: nextParentId },
           });
         } else {
           mutateElement(nextElement, nextElementMap, {

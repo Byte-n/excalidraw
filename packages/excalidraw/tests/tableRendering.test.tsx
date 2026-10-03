@@ -6,7 +6,14 @@ import {
   toBrandedType,
   TABLE_STYLE,
 } from "@excalidraw/common";
-import { mutateElement, Scene } from "@excalidraw/element";
+import {
+  assertValidTableData,
+  getTableCellFillColor,
+  getTableGridSegments,
+  getTableContentClipRects,
+  mutateElement,
+  Scene,
+} from "@excalidraw/element";
 
 import type {
   ElementsMap,
@@ -106,6 +113,97 @@ const setup = (elements: NonDeletedExcalidrawElement[]) => {
 };
 
 describe("table canvas rendering", () => {
+  it("resolves cell, row, column and table fills in order", () => {
+    const table = API.createElement({ type: "table" }).table;
+    const cell = table.cells[0];
+    const styled = {
+      ...table,
+      style: { backgroundColor: "#111111" },
+      rows: table.rows.map((row, index) =>
+        index === 0 ? { ...row, style: { backgroundColor: "#222222" } } : row,
+      ),
+      columns: table.columns.map((column, index) =>
+        index === 0
+          ? { ...column, style: { backgroundColor: "#333333" } }
+          : column,
+      ),
+    };
+    expect(getTableCellFillColor(cell, false, styled)).toBe("#222222");
+    expect(
+      getTableCellFillColor(
+        { ...cell, style: { backgroundColor: "#444444" } },
+        false,
+        styled,
+      ),
+    ).toBe("#444444");
+    expect(
+      getTableCellFillColor(cell, false, { ...styled, rows: table.rows }),
+    ).toBe("#333333");
+    expect(
+      getTableCellFillColor(cell, false, {
+        ...styled,
+        rows: table.rows,
+        columns: table.columns,
+      }),
+    ).toBe("#111111");
+    expect(() => assertValidTableData(styled)).not.toThrow();
+    expect(() =>
+      assertValidTableData({ ...styled, style: { gridWidth: -1 } }),
+    ).toThrow();
+  });
+
+  it("omits internal edges of a merged cell from shared grid geometry", () => {
+    const table = API.createElement({ type: "table" }).table;
+    const [first, second] = table.cells;
+    const merged = {
+      ...table,
+      cells: table.cells.map((cell) =>
+        cell.id === first.id
+          ? { ...cell, columnSpan: 2 }
+          : cell.id === second.id
+          ? { ...cell, mergedInto: first.id }
+          : cell,
+      ),
+    };
+    expect(getTableGridSegments(merged)).not.toContainEqual([160, 0, 160, 56]);
+    expect(getTableGridSegments(merged)).toContainEqual([160, 56, 160, 112]);
+  });
+
+  it("clips a cell member only when the visible cell or table requests it", () => {
+    const table = API.createElement({ type: "table", x: 100, y: 100 });
+    const cell = table.table.cells[0];
+    const member = API.createElement({
+      type: "rectangle",
+      x: 120,
+      y: 120,
+      width: 250,
+      height: 30,
+      containerRef: {
+        kind: "tableCell",
+        elementId: table.id,
+        cellId: cell.id,
+        role: "content",
+      },
+    });
+    const elementsMap = arrayToMap([table, member]) as ElementsMap;
+    expect(getTableContentClipRects(member, elementsMap)).toEqual([]);
+    mutateElement(table, elementsMap, {
+      table: {
+        ...table.table,
+        cells: table.table.cells.map((candidate) =>
+          candidate.id === cell.id
+            ? { ...candidate, style: { clipContent: true } }
+            : candidate,
+        ),
+      },
+    });
+    expect(getTableContentClipRects(member, elementsMap)).toEqual([
+      { x: 100, y: 100, width: 160, height: 56 },
+    ]);
+    const { draw } = setup([table, member]);
+    expect(callsOf(draw(), "clip").length).toBeGreaterThan(0);
+  });
+
   it("renders the grid without throwing and paints no default cell fills", () => {
     const table = API.createElement({ type: "table" });
     const { draw } = setup([table]);

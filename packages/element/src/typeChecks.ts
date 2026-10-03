@@ -228,6 +228,17 @@ export const validateContainerRef = (
     assertValidTableCellRef(element, containerRef, parent);
     return;
   }
+  if (containerRef.kind === "tableTitle") {
+    if (
+      !parent ||
+      parent.isDeleted ||
+      !isTableElement(parent) ||
+      !isTextElement(element)
+    ) {
+      throw new Error(`Invalid table title reference on ${element.id}`);
+    }
+    return;
+  }
   // untrusted data can carry any kind; the known ones are handled above
   throw new Error(
     `Unsupported container kind: ${String(
@@ -256,6 +267,21 @@ const assertSingleBackgroundTextPerCell = (
       );
     }
     seen.add(key);
+  }
+};
+
+const assertSingleTitlePerTable = (elements: readonly ExcalidrawElement[]) => {
+  const seen = new Set<string>();
+  for (const element of elements) {
+    if (element.isDeleted || element.containerRef?.kind !== "tableTitle") {
+      continue;
+    }
+    if (seen.has(element.containerRef.elementId)) {
+      throw new Error(
+        `Table ${element.containerRef.elementId} already has a title`,
+      );
+    }
+    seen.add(element.containerRef.elementId);
   }
 };
 
@@ -302,6 +328,7 @@ export const assertValidContainerRefs = (
   }
 
   assertSingleBackgroundTextPerCell(elements);
+  assertSingleTitlePerTable(elements);
   assertAcyclicContainerRefs(elementsById);
 };
 

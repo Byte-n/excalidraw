@@ -1,6 +1,7 @@
 import {
   getElementAbsoluteCoords,
   getContainingFrame,
+  getTableContentClipRects,
   hasBoundingBox,
   hitElementBoundText,
   hitElementBoundingBox,
@@ -133,6 +134,15 @@ export const getElementsAtPosition = (
       (element) =>
         !hiddenMindmapElementIds.has(element.id) &&
         app.hitElement(x, y, element),
+    )
+    .filter((element) =>
+      getTableContentClipRects(element, elementsMap).every(
+        (clip) =>
+          x >= clip.x &&
+          y >= clip.y &&
+          x < clip.x + clip.width &&
+          y < clip.y + clip.height,
+      ),
     )
     .filter((element) => {
       const containingFrame = getContainingFrame(element, elementsMap);
