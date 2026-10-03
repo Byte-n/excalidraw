@@ -49,6 +49,14 @@ export {
   actionTableMoveRowDown,
   actionTableMoveColumnLeft,
   actionTableMoveColumnRight,
+  actionTableMergeCells,
+  actionTableSplitCells,
+  actionTableClearContent,
+  actionTableClearBackgroundText,
+  actionTableClearStyle,
+  actionTableCopyFormat,
+  actionTablePasteFormat,
+  actionTableCenterContent,
 } from "./actionTableStructure";
 
 export {

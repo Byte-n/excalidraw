@@ -609,6 +609,11 @@ export const handleCanvasPointerDown = (
     selectedElementsAreBeingDragged: false,
   });
 
+  if (app.state.tableCellSelection?.mobileMode) {
+    app.selectTableCellAtPoint(pointerDownState.origin, event.shiftKey);
+    return;
+  }
+
   if (
     app.handleTextAutoResizeHandlePointerDown(
       selectedElements,
@@ -658,6 +663,10 @@ export const handleCanvasPointerDown = (
     // listeners still attach so move/up/Esc all flow through
     suspendHoverForTableGesture(app, pointerDownState);
     attachPointerSessionListeners(app, event, pointerDownState);
+    return;
+  }
+
+  if (app.selectTableCellAtPoint(pointerDownState.origin, event.shiftKey)) {
     return;
   }
 

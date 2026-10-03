@@ -136,6 +136,24 @@
           var(--mobile-action-button-bg)
         );
       }
+
+      &.table-cell-command {
+        svg {
+          width: 18px;
+          height: 18px;
+        }
+
+        &.active,
+        &[aria-pressed="true"] {
+          background: var(--color-surface-primary-container);
+          color: var(--color-on-primary-container);
+        }
+
+        &:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
+        }
+      }
     }
 
     .compact-popover-content {
@@ -195,6 +213,18 @@
   overflow: none;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.table-cell-shape-actions {
+  width: max-content;
+  max-width: 100%;
+  height: auto !important;
+  margin: 0 auto 4px;
+  padding: 4px !important;
+  overflow-x: auto;
+  background: var(--island-bg-color) !important;
+  pointer-events: auto !important;
+  box-shadow: 0 0 0 1px var(--color-surface-lowest);
 }
 
 .shape-actions-theme-scope {

@@ -269,6 +269,7 @@ const getRelevantAppStateProps = (
   isRotating: appState.isRotating,
   elementsToHighlight: appState.elementsToHighlight,
   highlightedTableCell: appState.highlightedTableCell,
+  tableCellSelection: appState.tableCellSelection,
   tableRowColSelection: appState.tableRowColSelection,
   tableStructureHover: appState.tableStructureHover,
   containerGestureVisual: appState.containerGestureVisual,

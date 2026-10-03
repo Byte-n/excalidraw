@@ -279,7 +279,7 @@ const LayerUI = ({
           "transition-left": appState.zenModeEnabled,
         })}
       >
-        {isCompactStylesPanel ? (
+        {isCompactStylesPanel || appState.tableCellSelection ? (
           <Island
             className={clsx("compact-shape-actions-island")}
             padding={0}
@@ -351,7 +351,7 @@ const LayerUI = ({
               <div
                 className={clsx("selected-shape-actions-container", {
                   "selected-shape-actions-container--compact":
-                    isCompactStylesPanel,
+                    isCompactStylesPanel || !!appState.tableCellSelection,
                 })}
               >
                 {shouldRenderSelectedShapeActions &&

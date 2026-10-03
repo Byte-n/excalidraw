@@ -8,6 +8,9 @@ import {
   getMindmapShapeId,
   isArrowElement,
   isMindmapEdgeElement,
+  isTableElement,
+  getTableCellRange,
+  getCellsInTableRange,
 } from "@excalidraw/element";
 
 import type {
@@ -53,6 +56,9 @@ import {
   StrokeWidthBaseIcon,
   StrokeStyleDashedIcon,
   StrokeStyleDottedIcon,
+  tableCellSelectIcon,
+  tableCellMultiSelectIcon,
+  tableCellMergeIcon,
 } from "./icons";
 
 import { Island } from "./Island";
@@ -857,6 +863,100 @@ const LinearEditorAction = ({
   );
 };
 
+const TableCellCompactActions = ({
+  app,
+  appState,
+  setAppState,
+}: {
+  app: AppClassProperties;
+  appState: UIAppState;
+  setAppState: React.Component<any, AppState>["setState"];
+}) => {
+  const selection = appState.tableCellSelection;
+  if (!selection) {
+    return null;
+  }
+  const table = app.scene.getNonDeletedElement(selection.tableId);
+  let cells: ReturnType<typeof getCellsInTableRange> = [];
+  if (table && isTableElement(table)) {
+    try {
+      cells = getCellsInTableRange(
+        table.table,
+        getTableCellRange(table.table, selection.anchorId, selection.focusId),
+      );
+    } catch {
+      // A stale transient selection disappears when the next cell is chosen.
+    }
+  }
+  const visibleCount = cells.filter((cell) => !cell.mergedInto).length;
+  const hasMergedCell = cells.some(
+    (cell) =>
+      !cell.mergedInto &&
+      ((cell.rowSpan ?? 1) > 1 || (cell.columnSpan ?? 1) > 1),
+  );
+  const fitContent =
+    table &&
+    isTableElement(table) &&
+    (table.table as typeof table.table & { sizingMode?: string }).sizingMode ===
+      "fitContent";
+  const mergeReason = fitContent
+    ? "Merged cells are unavailable in fit-to-content tables"
+    : visibleCount < 2
+    ? "Select at least two visible cells to merge"
+    : null;
+  const splitReason = hasMergedCell ? null : "Select a merged cell to split";
+  const cellAction = hasMergedCell ? "split" : "merge";
+  const cellActionLabel = t(
+    hasMergedCell ? "labels.tableSplitCells" : "labels.tableMergeCells",
+  );
+  const cellActionReason = hasMergedCell ? splitReason : mergeReason;
+  return (
+    <>
+      <div className="compact-action-item">
+        <button
+          type="button"
+          className="compact-action-button table-cell-command"
+          data-testid="table-cell-multi-select"
+          aria-label={t("labels.tableCellSelection")}
+          aria-pressed={selection.mobileMode}
+          title={t("labels.tableCellSelection")}
+          onClick={() =>
+            setAppState((state) => ({
+              tableCellSelection: state.tableCellSelection && {
+                ...state.tableCellSelection,
+                mobileMode: !state.tableCellSelection.mobileMode,
+              },
+            }))
+          }
+        >
+          {selection.mobileMode
+            ? tableCellMultiSelectIcon
+            : tableCellSelectIcon}
+        </button>
+      </div>
+      <div className="compact-action-item">
+        <button
+          type="button"
+          className={clsx("compact-action-button table-cell-command", {
+            active: hasMergedCell,
+          })}
+          data-testid={`table-${cellAction}-cells`}
+          aria-label={cellActionLabel}
+          disabled={!!cellActionReason}
+          title={cellActionReason ?? cellActionLabel}
+          onClick={() =>
+            hasMergedCell
+              ? app.commitTableCellSplit()
+              : app.commitTableCellMerge()
+          }
+        >
+          {tableCellMergeIcon}
+        </button>
+      </div>
+    </>
+  );
+};
+
 /**
  * Compact styles panel — the collapsed, popover-driven layout used on tablets
  * and on desktop when the UI is in "compact" mode.
@@ -893,6 +993,13 @@ export const CompactShapeActions = ({
 
   return (
     <div className="compact-shape-actions">
+      {appState.tableCellSelection && (
+        <TableCellCompactActions
+          app={app}
+          appState={appState}
+          setAppState={setAppState}
+        />
+      )}
       {app.mindmap.getSelectedGraphRoot() ? (
         <MindmapGraphStylePanel app={app} />
       ) : (
@@ -1032,6 +1139,20 @@ export const MobileShapeActions = ({
   const showDeleteOutside = ACTIONS_WIDTH >= MIN_WIDTH + ADDITIONAL_WIDTH;
   const showDuplicateOutside =
     ACTIONS_WIDTH >= MIN_WIDTH + 2 * ADDITIONAL_WIDTH;
+
+  if (appState.tableCellSelection) {
+    return (
+      <Island className="compact-shape-actions mobile-shape-actions table-cell-shape-actions">
+        <TableCellCompactActions
+          app={app}
+          appState={appState}
+          setAppState={setAppState}
+        />
+        <div className="compact-action-item">{renderAction("undo")}</div>
+        <div className="compact-action-item">{renderAction("redo")}</div>
+      </Island>
+    );
+  }
 
   return (
     <Island

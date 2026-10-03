@@ -154,7 +154,15 @@ export type ActionName =
   | "tableMoveRowUp"
   | "tableMoveRowDown"
   | "tableMoveColumnLeft"
-  | "tableMoveColumnRight";
+  | "tableMoveColumnRight"
+  | "tableMergeCells"
+  | "tableSplitCells"
+  | "tableClearContent"
+  | "tableClearBackgroundText"
+  | "tableClearStyle"
+  | "tableCopyFormat"
+  | "tablePasteFormat"
+  | "tableCenterContent";
 
 export type PanelComponentProps = {
   elements: readonly ExcalidrawElement[];

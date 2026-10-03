@@ -244,6 +244,7 @@ export type InteractiveCanvasAppState = Readonly<
     isRotating: AppState["isRotating"];
     elementsToHighlight: AppState["elementsToHighlight"];
     highlightedTableCell: AppState["highlightedTableCell"];
+    tableCellSelection: AppState["tableCellSelection"];
     tableRowColSelection: AppState["tableRowColSelection"];
     tableStructureHover: AppState["tableStructureHover"];
     containerGestureVisual: AppState["containerGestureVisual"];
@@ -560,6 +561,12 @@ export interface AppState {
   highlightedTableCell: {
     tableId: ExcalidrawTableElement["id"];
     cellId: string;
+  } | null;
+  tableCellSelection: {
+    tableId: ExcalidrawTableElement["id"];
+    anchorId: string;
+    focusId: string;
+    mobileMode: boolean;
   } | null;
   /**
    * The selected table row or column (phase-1.md:78): highlight + the outer
@@ -1429,6 +1436,12 @@ export type AppClassProperties = {
   /** table row/column structure commands (P1-5b, phase-1.md:91-97) */
   deleteSelectedTableRowCol: App["deleteSelectedTableRowCol"];
   moveSelectedTableRowCol: App["moveSelectedTableRowCol"];
+  commitTableCellMerge: App["commitTableCellMerge"];
+  commitTableCellSplit: App["commitTableCellSplit"];
+  clearSelectedTableCells: App["clearSelectedTableCells"];
+  copySelectedTableCellFormat: App["copySelectedTableCellFormat"];
+  pasteSelectedTableCellFormat: App["pasteSelectedTableCellFormat"];
+  centerSelectedTableCellContent: App["centerSelectedTableCellContent"];
   insertTableRowCol: App["insertTableRowCol"];
 
   isInteractionEnabled: App["isInteractionEnabled"];
