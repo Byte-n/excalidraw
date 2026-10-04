@@ -1426,7 +1426,7 @@ describe("table row/column structure", () => {
       });
     });
 
-    it("selects from the title grip and edits a single-line title", async () => {
+    it("selects the table from the title grip and edits a single-line title", async () => {
       const { table } = scaleFixture();
       const bar = getTableTitleBar(table, undefined, 1, 20);
       expect(bar.y + bar.height).toBe(
@@ -1442,6 +1442,7 @@ describe("table row/column structure", () => {
       mouseDown(gripX, gripY);
       expect(h.state.selectedElementIds[table.id]).toBe(true);
       mouseUp(gripX, gripY);
+      expect(h.state.selectedElementIds[table.id]).toBe(true);
 
       fireEvent.doubleClick(GlobalTestState.interactiveCanvas, {
         clientX: bar.x + 30,
@@ -1473,8 +1474,15 @@ describe("table row/column structure", () => {
       const tablePosition = { x: table.x, y: table.y };
       mouseDown(titleGripX, titleGripY);
       mouseUp(titleGripX, titleGripY);
-      expect(h.state.selectedElementIds[title.id]).toBe(true);
-      expect(h.state.selectedElementIds[table.id]).toBeUndefined();
+      expect(h.state.selectedElementIds[table.id]).toBe(true);
+      expect(h.state.selectedElementIds[title.id]).toBeUndefined();
+      fireEvent.doubleClick(GlobalTestState.interactiveCanvas, {
+        clientX: titleGripX,
+        clientY: titleGripY,
+      });
+      const gripEditor = await getTextEditor();
+      expect(gripEditor.value).toBe("Budget 2026");
+      fireEvent.keyDown(gripEditor, { key: "Enter" });
       mouseDown(titleGripX, titleGripY);
       mouseMove(titleGripX + 40, titleGripY + 30);
       await nextFrame();
