@@ -4,6 +4,7 @@ import { KEYS } from "@excalidraw/common";
 
 import { Excalidraw } from "../index";
 import { defaultLang, setLanguage, t } from "../i18n";
+import { getShortcutKey } from "../shortcut";
 
 import { API } from "./helpers/api";
 import { Keyboard } from "./helpers/ui";
@@ -34,6 +35,54 @@ describe("shortcuts", () => {
       ).toEqual(["R", "2"]);
       expect(within(tools).queryByText(t("toolBar.diamond"))).toBeNull();
       expect(within(tools).queryByText(t("toolBar.ellipse"))).toBeNull();
+    },
+  );
+
+  it.each(["en", "zh-CN"])(
+    "%s lists table keyboard operations in the table section",
+    async (langCode) => {
+      await render(<Excalidraw handleKeyboardGlobally langCode={langCode} />);
+      await waitFor(() =>
+        expect(window.h.app.ownerDocument.documentElement.lang).toBe(langCode),
+      );
+
+      Keyboard.keyPress("?");
+      const table = screen
+        .getByRole("heading", { level: 4, name: t("toolBar.table") })
+        .closest(".HelpDialog__island")! as HTMLElement;
+      const expected = [
+        ["labels.tableNavigateCells", [getShortcutKey("Arrow Keys")]],
+        [
+          "labels.tableExtendSelection",
+          [getShortcutKey("Shift+Arrow Keys"), getShortcutKey("Shift+click")],
+        ],
+        ["labels.tableEditCell", [getShortcutKey("Enter")]],
+        ["labels.tableExitSelection", [getShortcutKey("Esc")]],
+        ["labels.tableInsertRow", [getShortcutKey("CtrlOrCmd+Shift+R")]],
+        ["labels.tableInsertColumn", [getShortcutKey("CtrlOrCmd+Shift+C")]],
+        ["labels.tableMoveRowUp", [getShortcutKey("CtrlOrCmd+Shift+ArrowUp")]],
+        [
+          "labels.tableMoveRowDown",
+          [getShortcutKey("CtrlOrCmd+Shift+ArrowDown")],
+        ],
+        [
+          "labels.tableMoveColumnLeft",
+          [getShortcutKey("CtrlOrCmd+Shift+ArrowLeft")],
+        ],
+        [
+          "labels.tableMoveColumnRight",
+          [getShortcutKey("CtrlOrCmd+Shift+ArrowRight")],
+        ],
+      ] as const;
+
+      for (const [label, shortcuts] of expected) {
+        const row = within(table)
+          .getByText(t(label))
+          .closest(".HelpDialog__shortcut")!;
+        expect(
+          Array.from(row.querySelectorAll("kbd"), (key) => key.textContent),
+        ).toEqual(shortcuts.flatMap((shortcut) => shortcut.split("+")));
+      }
     },
   );
 

@@ -182,30 +182,6 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
             <Shortcut label={t("toolBar.bucketfill")} shortcuts={[KEYS.B]} />
             <Shortcut label={t("toolBar.table")} shortcuts={[KEYS.J]} />
             <Shortcut
-              label={t("labels.tableInsertRow")}
-              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+R")]}
-            />
-            <Shortcut
-              label={t("labels.tableInsertColumn")}
-              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+C")]}
-            />
-            <Shortcut
-              label={t("labels.tableMoveRowUp")}
-              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowUp")]}
-            />
-            <Shortcut
-              label={t("labels.tableMoveRowDown")}
-              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowDown")]}
-            />
-            <Shortcut
-              label={t("labels.tableMoveColumnLeft")}
-              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowLeft")]}
-            />
-            <Shortcut
-              label={t("labels.tableMoveColumnRight")}
-              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowRight")]}
-            />
-            <Shortcut
               label={t("labels.eyeDropper")}
               shortcuts={[KEYS.I, "Shift+S", "Shift+G"]}
             />
@@ -274,6 +250,54 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
               label={t("toolBar.convertElementType")}
               shortcuts={["Tab", "Shift+Tab"]}
               isOr={true}
+            />
+          </ShortcutIsland>
+          <ShortcutIsland
+            className="HelpDialog__island--table"
+            caption={t("toolBar.table")}
+          >
+            <Shortcut
+              label={t("labels.tableNavigateCells")}
+              shortcuts={[getShortcutKey("Arrow Keys")]}
+            />
+            <Shortcut
+              label={t("labels.tableExtendSelection")}
+              shortcuts={[
+                getShortcutKey("Shift+Arrow Keys"),
+                getShortcutKey("Shift+click"),
+              ]}
+            />
+            <Shortcut
+              label={t("labels.tableEditCell")}
+              shortcuts={[getShortcutKey("Enter")]}
+            />
+            <Shortcut
+              label={t("labels.tableExitSelection")}
+              shortcuts={[getShortcutKey("Esc")]}
+            />
+            <Shortcut
+              label={t("labels.tableInsertRow")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+R")]}
+            />
+            <Shortcut
+              label={t("labels.tableInsertColumn")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+C")]}
+            />
+            <Shortcut
+              label={t("labels.tableMoveRowUp")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowUp")]}
+            />
+            <Shortcut
+              label={t("labels.tableMoveRowDown")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowDown")]}
+            />
+            <Shortcut
+              label={t("labels.tableMoveColumnLeft")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowLeft")]}
+            />
+            <Shortcut
+              label={t("labels.tableMoveColumnRight")}
+              shortcuts={[getShortcutKey("CtrlOrCmd+Shift+ArrowRight")]}
             />
           </ShortcutIsland>
           <ShortcutIsland
