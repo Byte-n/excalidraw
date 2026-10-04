@@ -1450,9 +1450,9 @@ export const refitTableCellBackgroundText = (
  * (phase-1.md:80-83). Priority: insertion point > reorder grip > resize
  * line > first row/column border strip (outer frame affordances beat
  * cells). Every zone is at least `TABLE_STRUCTURE_ZONE_SIZE` CSS px wide.
- * Resize lines carry the dragged `edge`: an `end` border squeezes the two
- * adjacent entries, a `start` border (the outer left/top frame) grows the
- * first entry and moves the frame edge.
+ * Resize lines carry the dragged `edge`: an `end` border changes the entry
+ * before the separator and shifts later entries, while a `start` border (the
+ * outer left/top frame) grows the first entry and moves the frame edge.
  */
 const resolveStructureHover = (
   app: TableApp,
@@ -1535,9 +1535,8 @@ const resolveStructureHover = (
     };
   }
 
-  // The interior grid lines drag the boundary between the two adjacent
-  // rows/columns: the entry above/left grows or shrinks, its neighbor
-  // compensates, and the table's total size stays put.
+  // Interior grid lines change the entry above/left; later entries keep their
+  // dimensions and move with the new boundary.
   if (insideRows && insideColumns) {
     let offset = 0;
     for (const row of table.table.rows.slice(0, -1)) {
@@ -2129,9 +2128,8 @@ export const armTableStructureGestureOnPointerDown = (
         table,
         isRow ? "row" : "column",
       );
-      // the members whose cell geometry the drag changes: an `end` border
-      // moves the boundary into the adjacent next entry (squeeze), while a
-      // `start` border drags the first entry's outer frame edge
+      // The start-edge gesture moves the first entry's outer frame and its
+      // members. End-edge members are translated from old/new grid offsets.
       const affectedOwnerIds =
         hover.edge === "start"
           ? new Set([entries[0].id])
@@ -2289,9 +2287,6 @@ export const handleTableGestureMove = (
       const isRow = gesture.kind === "resizeRow";
       const local = getTableLocalPoint(table, pointerCoords.x, pointerCoords.y);
       const minSize = isRow ? MIN_TABLE_ROW_HEIGHT : MIN_TABLE_COLUMN_WIDTH;
-      const nextEntrySize = isRow
-        ? gesture.startTable.rows[gesture.startIndex + 1]?.height
-        : gesture.startTable.columns[gesture.startIndex + 1]?.width;
       // 判定一律以按下时的快照为基准，随后整帧重设
       const pointerAxis = isRow ? local.y : local.x;
       const requestedSize =
@@ -2300,17 +2295,9 @@ export const handleTableGestureMove = (
             // distance to the entry's far edge
             gesture.startOffset + gesture.startSize - pointerAxis
           : pointerAxis - gesture.startOffset;
-      // an `end` border squeezes the two adjacent entries, so the delta
-      // clamps on both minima; a `start` border (and the outermost `end`
-      // border) only respects the dragged entry's own minimum
-      const maxDelta =
-        gesture.edge === "end" && nextEntrySize !== undefined
-          ? nextEntrySize - minSize
-          : Number.POSITIVE_INFINITY;
-      const size = Math.min(
-        Math.max(requestedSize, minSize),
-        gesture.startSize + maxDelta,
-      );
+      // A separator changes only the entry on its left/top side. Entries
+      // after it keep their sizes and move with the new boundary.
+      const size = Math.max(requestedSize, minSize);
       if (
         size ===
         (isRow
@@ -2325,12 +2312,7 @@ export const handleTableGestureMove = (
         ? {
             ...gesture.startTable,
             rows: gesture.startTable.rows.map((row, index) =>
-              index === gesture.startIndex
-                ? { ...row, height: size }
-                : // the squeezed neighbor compensates the boundary move
-                gesture.edge === "end" && index === gesture.startIndex + 1
-                ? { ...row, height: nextEntrySize! - delta }
-                : row,
+              index === gesture.startIndex ? { ...row, height: size } : row,
             ),
           }
         : {
@@ -2338,23 +2320,38 @@ export const handleTableGestureMove = (
             columns: gesture.startTable.columns.map((column, index) =>
               index === gesture.startIndex
                 ? { ...column, width: size }
-                : gesture.edge === "end" && index === gesture.startIndex + 1
-                ? { ...column, width: nextEntrySize! - delta }
                 : column,
             ),
           };
-      for (const memberId of gesture.affectedMembers) {
-        const start = gesture.startMembers.get(memberId)!;
-        const member = app.scene.getNonDeletedElement(memberId);
-        if (member) {
-          app.scene.mutateElement(
-            member as ExcalidrawElement,
-            {
-              x: start.x + (isRow ? 0 : memberDelta),
-              y: start.y + (isRow ? memberDelta : 0),
-            },
-            { informMutation: false, isDragging: true },
-          );
+      if (gesture.edge === "end") {
+        const translations = isRow
+          ? getMemberTranslationsForRows(gesture.startTable, newTable)
+          : getMemberTranslationsForColumns(gesture.startTable, newTable);
+        applyMemberTranslations(
+          app,
+          table,
+          isRow ? "row" : "column",
+          translations,
+          {
+            startMembers: gesture.startMembers,
+          },
+        );
+      } else {
+        // The first row/column's outer frame moves with the table. Its own
+        // members follow that frame; later entries retain their scene position.
+        for (const memberId of gesture.affectedMembers) {
+          const start = gesture.startMembers.get(memberId)!;
+          const member = app.scene.getNonDeletedElement(memberId);
+          if (member) {
+            app.scene.mutateElement(
+              member as ExcalidrawElement,
+              {
+                x: start.x + (isRow ? 0 : memberDelta),
+                y: start.y + (isRow ? memberDelta : 0),
+              },
+              { informMutation: false, isDragging: true },
+            );
+          }
         }
       }
       const updatedTable = app.scene.getNonDeletedElement(gesture.tableId);
@@ -2373,7 +2370,7 @@ export const handleTableGestureMove = (
         },
         { informMutation: false, isDragging: true },
       );
-      // 被调行列及被挤压邻格的背景文本跟随新格几何（字号不变）；
+      // 被调行列及后续平移单元格的背景文本跟随新格几何（字号不变）；
       // 必须在表格数据落地之后按新 bounds 计算
       if (updatedTable && isTableElement(updatedTable)) {
         refitCellBackgroundTexts(app, updatedTable, gesture.resizedCellIds);

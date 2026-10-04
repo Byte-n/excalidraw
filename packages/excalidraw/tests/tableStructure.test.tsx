@@ -366,18 +366,18 @@ describe("table row/column structure", () => {
     it("keeps the reorder preview line on the visible grid boundaries after a resize", async () => {
       const { table, snapshot } = createFixture();
 
-      // grow the first row (the second compensates) so the grid is uneven
+      // grow the first row; later rows keep their sizes and move down
       const separator = { x: table.x + 100, y: table.y + ROW_HEIGHT };
       mouseDown(separator.x, separator.y);
       mouseMove(separator.x, separator.y + 24);
       mouseUp(separator.x, separator.y + 24);
       expect(getTable().table.rows[0].height).toBe(ROW_HEIGHT + 24);
 
-      // row0's grip: row0 is 80px tall after the squeeze-style resize
+      // row0's grip: row0 is 80px tall after the resize
       const grip = { x: table.x - 12, y: table.y + (ROW_HEIGHT + 24) / 2 };
       mouseDown(grip.x, grip.y);
 
-      // rows are now [80, 32, 56]; pointer in the second row's upper half:
+      // rows are now [80, 56, 56]; pointer in the second row's upper half:
       // no center crossed yet, the line waits at the top edge
       mouseMove(grip.x, table.y + ROW_HEIGHT + 24 + 16 - 10);
       await nextFrame();
@@ -392,7 +392,7 @@ describe("table row/column structure", () => {
       await nextFrame();
       expect(h.state.tableStructurePreview).toMatchObject({
         boundaryIndex: 1,
-        offset: ROW_HEIGHT + 24 + ROW_HEIGHT - 24,
+        offset: ROW_HEIGHT + 24 + ROW_HEIGHT,
       });
 
       // pointer past the third row's center: the line reaches the bottom edge
@@ -400,7 +400,7 @@ describe("table row/column structure", () => {
       await nextFrame();
       expect(h.state.tableStructurePreview).toMatchObject({
         boundaryIndex: 2,
-        offset: ROW_HEIGHT + 24 + ROW_HEIGHT - 24 + ROW_HEIGHT,
+        offset: ROW_HEIGHT + 24 + ROW_HEIGHT + ROW_HEIGHT,
       });
 
       mouseUp(grip.x, table.y + ROW_HEIGHT + 24 + 32 + 56 + 10);
@@ -676,26 +676,9 @@ describe("table row/column structure", () => {
       },
     );
 
-    it("squeezes the adjacent row when dragging an inner separator", async () => {
+    it("resizes one row and shifts all following rows", async () => {
       const { table, content0, backgroundText0, content2, snapshot } =
         createFixture();
-      // a member of the squeezed row follows its cell's top edge
-      const squeezed = API.createElement({
-        type: "rectangle",
-        x: table.x + 10,
-        y: table.y + ROW_HEIGHT + 10,
-        width: 40,
-        height: 40,
-        backgroundColor: "#ff0000",
-        containerRef: {
-          kind: "tableCell",
-          elementId: table.id,
-          cellId: table.table.cells[3].id,
-          role: "content",
-        },
-      });
-      API.setElements([...h.elements, squeezed] as any);
-
       // the separator between the first and the second row
       const separator = { x: table.x + 100, y: table.y + ROW_HEIGHT };
       mouseMove(separator.x, separator.y);
@@ -713,19 +696,17 @@ describe("table row/column structure", () => {
 
       const resized = getTable();
       expect(resized.table.rows[0].height).toBe(ROW_HEIGHT + 24);
-      expect(resized.table.rows[1].height).toBe(ROW_HEIGHT - 24);
-      // the squeeze keeps the grid's total height
-      expect(resized.height).toBe(3 * ROW_HEIGHT);
+      expect(resized.table.rows[1].height).toBe(ROW_HEIGHT);
+      expect(resized.table.rows[2].height).toBe(ROW_HEIGHT);
+      expect(resized.height).toBe(3 * ROW_HEIGHT + 24);
       // members of the grown row do not move and do not scale
       expect(live(content0).y).toBe(snapshot.content0Y);
       const text = live(backgroundText0 as unknown as ExcalidrawTextElement);
       expect(text.fontSize).toBe(20);
       expect(text.width).toBeLessThan(COLUMN_WIDTH);
       expect(text.height).toBeLessThan(ROW_HEIGHT + 24);
-      // the squeezed row's members follow their cell's top edge
-      expect(live(squeezed).y).toBe(table.y + ROW_HEIGHT + 10 + 24);
-      // rows after the squeezed one stay put
-      expect(live(content2).y).toBe(snapshot.content2Y);
+      // every later row, including its content, follows the moved boundary
+      expect(live(content2).y).toBe(snapshot.content2Y + 24);
 
       mouseUp(target.x, target.y);
     });
@@ -774,7 +755,7 @@ describe("table row/column structure", () => {
       expect(getTable().table.columns[0].width).toBe(COLUMN_WIDTH);
     });
 
-    it("squeezes the adjacent column and keeps the background text following the cell width", async () => {
+    it("resizes one column and shifts all following columns", async () => {
       const { table, backgroundText0, snapshot } = createFixture();
       const originalText =
         "A longer background label that needs to wrap when its column changes width";
@@ -782,6 +763,21 @@ describe("table row/column structure", () => {
         originalText,
         text: originalText,
       });
+      const laterColumnContent = API.createElement({
+        type: "rectangle",
+        x: table.x + 2 * COLUMN_WIDTH + 10,
+        y: table.y + 10,
+        width: 40,
+        height: 40,
+        backgroundColor: "#00ff00",
+        containerRef: {
+          kind: "tableCell",
+          elementId: table.id,
+          cellId: table.table.cells[2].id,
+          role: "content",
+        },
+      });
+      API.setElements([...h.elements, laterColumnContent] as any);
 
       // the separator between the first and the second column
       const separator = {
@@ -799,9 +795,10 @@ describe("table row/column structure", () => {
       expect(text.text).toContain("\n");
       expect(text.height).toBeGreaterThan(ROW_HEIGHT);
       expect(text.fontSize).toBe(20);
-      // the squeezed neighbor compensates: the table's total width holds
-      expect(getTable().table.columns[1].width).toBe(COLUMN_WIDTH - 40);
-      expect(getTable().width).toBe(3 * COLUMN_WIDTH);
+      expect(getTable().table.columns[1].width).toBe(COLUMN_WIDTH);
+      expect(getTable().table.columns[2].width).toBe(COLUMN_WIDTH);
+      expect(getTable().width).toBe(3 * COLUMN_WIDTH + 40);
+      expect(live(laterColumnContent).x).toBe(table.x + 2 * COLUMN_WIDTH + 50);
       expect(snapshot.columnWidths[0]).toBe(COLUMN_WIDTH);
     });
 
@@ -860,7 +857,7 @@ describe("table row/column structure", () => {
       expect(resized.table.rows[1].height).toBe(ROW_HEIGHT);
     });
 
-    it("stops the squeeze at the neighbor's minimum width", async () => {
+    it("stops a resized column at its own minimum width", async () => {
       const { table } = createFixture();
 
       const separator = {
@@ -868,14 +865,14 @@ describe("table row/column structure", () => {
         y: table.y + ROW_HEIGHT / 2,
       };
       mouseDown(separator.x, separator.y);
-      mouseMove(separator.x + 200, separator.y);
+      mouseMove(separator.x - 200, separator.y);
       await nextFrame();
-      mouseUp(separator.x + 200, separator.y);
+      mouseUp(separator.x - 200, separator.y);
 
       const resized = getTable();
-      expect(resized.table.columns[1].width).toBe(24);
-      expect(resized.table.columns[0].width).toBe(2 * COLUMN_WIDTH - 24);
-      expect(resized.width).toBe(3 * COLUMN_WIDTH);
+      expect(resized.table.columns[0].width).toBe(24);
+      expect(resized.table.columns[1].width).toBe(COLUMN_WIDTH);
+      expect(resized.width).toBe(2 * COLUMN_WIDTH + 24);
     });
   });
 
