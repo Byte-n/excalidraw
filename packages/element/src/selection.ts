@@ -207,7 +207,6 @@ export const getSelectedElements = (
   }
 
   if (opts?.includeElementsInFrames) {
-    const elementsToInclude: NonDeletedExcalidrawElement[] = [];
     const sceneElements = Array.from(elements.values());
     const elementsMap = arrayToMap(elements);
     selectedElements.forEach((element) => {
@@ -218,7 +217,6 @@ export const getSelectedElements = (
           elementsMap,
         ).forEach((child) => {
           if (!child.isDeleted && !addedElements.has(child.id)) {
-            elementsToInclude.push(child as NonDeletedExcalidrawElement);
             addedElements.add(child.id);
           }
           if (opts.includeBoundTextElement) {
@@ -228,16 +226,17 @@ export const getSelectedElements = (
               !boundText.isDeleted &&
               !addedElements.has(boundText.id)
             ) {
-              elementsToInclude.push(boundText as NonDeletedExcalidrawElement);
               addedElements.add(boundText.id);
             }
           }
         });
       }
-      elementsToInclude.push(element);
     });
 
-    return elementsToInclude;
+    return sceneElements.filter(
+      (element): element is NonDeletedExcalidrawElement =>
+        !element.isDeleted && addedElements.has(element.id),
+    );
   }
 
   return selectedElements;

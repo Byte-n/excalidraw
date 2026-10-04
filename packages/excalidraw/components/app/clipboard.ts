@@ -29,6 +29,7 @@ import {
   makeNextSelectedElementIds,
   convertToExcalidrawElements,
   type ExcalidrawElementSkeleton,
+  isTableElement,
 } from "@excalidraw/element";
 
 import type {
@@ -54,6 +55,8 @@ import { isMaybeMermaidDefinition } from "../../mermaid";
 import { getShortcutKey } from "../../shortcut";
 import { tryParseSpreadsheet } from "../../charts";
 import { isSidebarDockedAtom } from "../Sidebar/Sidebar";
+
+import { pasteTableRangeIntoCell, pasteTSVIntoCell } from "./tableClipboard";
 
 import type App from "../App";
 import type { ClipboardData, PastedMixedContent } from "../../clipboard";
@@ -121,6 +124,20 @@ export const insertClipboardContent = async (
 
   // ------------------- Spreadsheet -------------------
 
+  if (data.text && app.state.tableCellSelection && !data.elements) {
+    try {
+      pasteTSVIntoCell(
+        app,
+        data.text,
+        app.state.tableCellSelection.tableId,
+        app.state.tableCellSelection.anchorId,
+      );
+    } catch (error: any) {
+      app.setState({ errorMessage: error.message });
+    }
+    return;
+  }
+
   if (!isPlainPaste && data.text) {
     const result = tryParseSpreadsheet(data.text);
     if (result.ok) {
@@ -158,6 +175,63 @@ export const insertClipboardContent = async (
 
   // ------------------- Elements -------------------
   if (data.elements) {
+    if (data.tableRange) {
+      const sourceTable = data.elements.find(isTableElement);
+      if (!sourceTable) {
+        app.setState({ errorMessage: "Table clipboard data is incomplete" });
+        return;
+      }
+      const targetSelection = app.state.tableCellSelection;
+      const targetRowCol = app.state.tableRowColSelection;
+      const targetTableId = targetSelection?.tableId ?? targetRowCol?.tableId;
+      const targetTable =
+        targetTableId && app.scene.getNonDeletedElement(targetTableId);
+      const targetCellId =
+        targetSelection?.anchorId ??
+        (targetTable && isTableElement(targetTable) && targetRowCol
+          ? targetTable.table.cells.find((cell) =>
+              targetRowCol.kind === "row"
+                ? cell.rowId === targetRowCol.id
+                : cell.columnId === targetRowCol.id,
+            )?.id
+          : undefined);
+      const hovered = app.getTableCellDropTargetAtSceneCoords({
+        x: sceneX,
+        y: sceneY,
+      });
+      const destination =
+        targetTable && isTableElement(targetTable) && targetCellId
+          ? { table: targetTable, cellId: targetCellId }
+          : hovered;
+      if (destination && data.mixedTableSelection) {
+        app.setState({
+          errorMessage:
+            "Mixed table selections can only be pasted on the canvas",
+        });
+        return;
+      }
+      if (destination) {
+        try {
+          pasteTableRangeIntoCell(
+            app,
+            {
+              table: sourceTable,
+              elements: data.elements.filter(
+                (element) => element.id !== sourceTable.id,
+              ) as ExcalidrawElement[],
+            },
+            destination.table.id,
+            destination.cellId,
+          );
+          if (data.files) {
+            app.addFiles(Object.values(data.files));
+          }
+        } catch (error: any) {
+          app.setState({ errorMessage: error.message });
+        }
+        return;
+      }
+    }
     const elements = (
       data.programmaticAPI
         ? convertToExcalidrawElements(
@@ -166,14 +240,18 @@ export const insertClipboardContent = async (
         : data.elements
     ) as readonly ExcalidrawElement[];
     // TODO: remove formatting from elements if isPlainPaste
-    app.addElementsFromPasteOrLibrary({
-      elements,
-      files: data.files || null,
-      position:
-        app.editorInterface.formFactor === "desktop" ? "cursor" : "center",
-      retainSeed: isPlainPaste,
-      preserveFrameChildrenOrder: true,
-    });
+    try {
+      app.addElementsFromPasteOrLibrary({
+        elements,
+        files: data.files || null,
+        position:
+          app.editorInterface.formFactor === "desktop" ? "cursor" : "center",
+        retainSeed: isPlainPaste,
+        preserveFrameChildrenOrder: true,
+      });
+    } catch (error: any) {
+      app.setState({ errorMessage: error.message });
+    }
     return;
   }
 

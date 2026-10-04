@@ -49,6 +49,8 @@ export type PastedMixedContent = { type: "text" | "imageUrl"; value: string }[];
 
 export interface ClipboardData {
   elements?: readonly ExcalidrawElement[];
+  tableRange?: boolean;
+  mixedTableSelection?: boolean;
   files?: BinaryFiles;
   text?: string;
   mixedContent?: PastedMixedContent;
@@ -81,6 +83,8 @@ const clipboardContainsElements = (
   version?: number;
   elements: ExcalidrawElement[];
   files?: BinaryFiles;
+  tableRange?: boolean;
+  mixedTableSelection?: boolean;
 } => {
   if (
     [
@@ -161,7 +165,9 @@ export const serializeAsClipboardJSON = ({
   // the table element) both qualify
   const copiedContainerIds = new Set<string>(
     elements
-      .filter((element) => isFrameLikeElement(element) || isTableElement(element))
+      .filter(
+        (element) => isFrameLikeElement(element) || isTableElement(element),
+      )
       .map((element) => element.id),
   );
   let foundFile = false;
@@ -369,7 +375,12 @@ const parseClipboardEventTextData = async (
 
     return {
       type: "text",
-      value: (dataList.getData(MIME_TYPES.text) || "").trim(),
+      value: (() => {
+        const value = dataList.getData(MIME_TYPES.text) || "";
+        return value.includes("\t") || value.includes("\n")
+          ? value
+          : value.trim();
+      })(),
     };
   } catch {
     return { type: "text", value: "" };
@@ -549,7 +560,9 @@ export const parseClipboard = async (
   }
 
   try {
-    const systemClipboardData = JSON.parse(parsedEventData.value);
+    const systemClipboardData = JSON.parse(
+      dataList.getData(MIME_TYPES.excalidrawClipboard) || parsedEventData.value,
+    );
     const programmaticAPI =
       systemClipboardData.type === EXPORT_DATA_TYPES.excalidrawClipboardWithAPI;
     if (clipboardContainsElements(systemClipboardData)) {
@@ -576,6 +589,8 @@ export const parseClipboard = async (
       }
       return {
         elements: systemClipboardData.elements,
+        tableRange: systemClipboardData.tableRange === true,
+        mixedTableSelection: systemClipboardData.mixedTableSelection === true,
         files: systemClipboardData.files,
         text: isPlainPaste
           ? JSON.stringify(systemClipboardData.elements, null, 2)

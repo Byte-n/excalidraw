@@ -28,7 +28,6 @@ import { Scene } from "../src/Scene";
 
 import type {
   ExcalidrawElement,
-  ExcalidrawFrameLikeElement,
   ExcalidrawTableElement,
   NonDeletedSceneElementsMap,
   SceneElementsMap,
@@ -203,6 +202,44 @@ describe("table cell membership", () => {
 });
 
 describe("table structure ids", () => {
+  it("preserves merged cells and deep-copies every style level", () => {
+    const source = makeTable("styled").table;
+    const [first, second] = source.cells;
+    const styled = {
+      ...source,
+      style: { backgroundColor: "#eeeeee" },
+      rows: source.rows.map((row, index) =>
+        index === 0
+          ? { ...row, style: { backgroundText: { fontSize: 18 } } }
+          : row,
+      ),
+      columns: source.columns.map((column, index) =>
+        index === 0
+          ? { ...column, style: { backgroundColor: "#dddddd" } }
+          : column,
+      ),
+      cells: source.cells.map((cell) =>
+        cell.id === first.id
+          ? { ...cell, columnSpan: 2, style: { backgroundColor: "#cccccc" } }
+          : cell.id === second.id
+          ? { ...cell, mergedInto: first.id }
+          : cell,
+      ),
+    } as const;
+
+    const { table: copied, cellIdMap } = regenerateTableIds(styled);
+    expect(copied.style).toEqual(styled.style);
+    expect(copied.rows[0].style).toEqual(styled.rows[0].style);
+    expect(copied.columns[0].style).toEqual(styled.columns[0].style);
+    expect(copied.cells[0]).toMatchObject({
+      columnSpan: 2,
+      style: { backgroundColor: "#cccccc" },
+    });
+    expect(copied.cells[1].mergedInto).toBe(cellIdMap.get(first.id));
+    expect(copied.cells[0].style).not.toBe(styled.cells[0].style);
+    expect(copied.rows[0].style).not.toBe(styled.rows[0].style);
+  });
+
   it("regenerates every row, column and cell id, keeping the grid", () => {
     const table = makeTable("table-1");
     const { table: next, cellIdMap } = regenerateTableIds(table.table);
@@ -325,11 +362,7 @@ describe("table cell snap scope", () => {
     const elements = [table, dragged, sibling, outsider];
     const elementsMap = asMap(elements);
 
-    const scope = getTableCellSnapScope(
-      elements,
-      [dragged],
-      elementsMap,
-    );
+    const scope = getTableCellSnapScope(elements, [dragged], elementsMap);
     expect(scope?.table.id).toBe(table.id);
     expect(scope?.cellId).toBe(table.table.cells[0].id);
 
@@ -349,7 +382,11 @@ describe("table cell snap scope", () => {
     const elementsMap = asMap([table, cellA, cellB, free]);
 
     expect(
-      getTableCellSnapScope([table, cellA, cellB, free], [cellA, cellB], elementsMap),
+      getTableCellSnapScope(
+        [table, cellA, cellB, free],
+        [cellA, cellB],
+        elementsMap,
+      ),
     ).toBeNull();
     expect(
       getTableCellSnapScope([table, cellA, cellB, free], [free], elementsMap),
@@ -545,11 +582,9 @@ describe("table subtree with an in-cell frame", () => {
   it("deletes the frame subtree with the table and restores it in one step", () => {
     const { elementsMap, elements } = buildSceneWithFrame();
     const subtreeIds = new Set(
-      getTableSubtreeElements(
-        elements,
-        "table-1",
-        elementsMap,
-      ).map((element) => element.id),
+      getTableSubtreeElements(elements, "table-1", elementsMap).map(
+        (element) => element.id,
+      ),
     );
     expect(subtreeIds.has("frame-1")).toBe(true);
     expect(subtreeIds.has("frame-member-1")).toBe(true);

@@ -1,10 +1,14 @@
-import { arrayToMap, randomId } from "@excalidraw/common";
+import { arrayToMap, cloneJSON, randomId } from "@excalidraw/common";
 
 import { syncMovedIndices } from "./fractionalIndex";
 import { getBoundTextElement } from "./textElement";
 import { mutateElement } from "./mutateElement";
 import { getMindmapElementsForSelection } from "./mindmap";
-import { getTableCellAtPoint, getTableCellBounds } from "./tableStruct";
+import {
+  assertValidTableData,
+  getTableCellAtPoint,
+  getTableCellBounds,
+} from "./tableStruct";
 import { getIndexedFrameChildren } from "./frameChildrenIndex";
 
 import {
@@ -415,6 +419,8 @@ export const regenerateTableIds = (
   table: TableDataV1,
   randomizer: () => string = randomId,
 ): { table: TableDataV1; cellIdMap: Map<string, string> } => {
+  // Reject malformed source structures before their references are remapped.
+  assertValidTableData(table);
   const rowIdMap = new Map(table.rows.map((row) => [row.id, randomizer()]));
   const columnIdMap = new Map(
     table.columns.map((column) => [column.id, randomizer()]),
@@ -424,19 +430,29 @@ export const regenerateTableIds = (
   return {
     table: {
       schemaVersion: table.schemaVersion,
+      style: table.style ? cloneJSON(table.style) : undefined,
       rows: table.rows.map((row) => ({
         id: rowIdMap.get(row.id)!,
         height: row.height,
+        style: row.style ? cloneJSON(row.style) : undefined,
       })),
       columns: table.columns.map((column) => ({
         id: columnIdMap.get(column.id)!,
         width: column.width,
+        style: column.style ? cloneJSON(column.style) : undefined,
       })),
       cells: table.cells.map((cell) => ({
         id: cellIdMap.get(cell.id)!,
         rowId: rowIdMap.get(cell.rowId)!,
         columnId: columnIdMap.get(cell.columnId)!,
-        style: cell.style,
+        style: cloneJSON(cell.style),
+        ...(cell.rowSpan !== undefined ? { rowSpan: cell.rowSpan } : {}),
+        ...(cell.columnSpan !== undefined
+          ? { columnSpan: cell.columnSpan }
+          : {}),
+        ...(cell.mergedInto
+          ? { mergedInto: cellIdMap.get(cell.mergedInto)! }
+          : {}),
       })),
     },
     cellIdMap,

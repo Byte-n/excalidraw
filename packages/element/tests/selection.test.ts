@@ -26,9 +26,9 @@ describe("frame selection", () => {
     );
 
     expect(selected.map((element) => element.id)).toEqual([
+      frame.id,
       owner.id,
       label.id,
-      frame.id,
     ]);
   });
 });

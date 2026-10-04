@@ -50,6 +50,7 @@ import {
   assertBaseShapeData,
   assertMindmapShapeData,
   assertValidTableData,
+  assertValidContainerRefs,
   normalizeTableDimensions,
 } from "@excalidraw/element";
 import { normalizeFixedPoint } from "@excalidraw/element";
@@ -1068,6 +1069,21 @@ export const restoreElements = <T extends ExcalidrawElement>(
       }
     | undefined,
 ): CombineBrandsIfNeeded<T, OrderedExcalidrawElement> => {
+  if (targetElements?.some((element) => element.type === "table")) {
+    const incomingIds = new Set<string>();
+    for (const element of targetElements) {
+      if (incomingIds.has(element.id)) {
+        throw new Error(`Duplicate element id: ${element.id}`);
+      }
+      incomingIds.add(element.id);
+    }
+    const otherElements = existingElements
+      ? Array.from(existingElements.values()).filter(
+          (element) => !incomingIds.has(element.id),
+        )
+      : [];
+    assertValidContainerRefs([...otherElements, ...targetElements]);
+  }
   // used to detect duplicate top-level element ids
   const existingIds = new Set<string>();
   const targetElementsMap = arrayToMap(targetElements || []);

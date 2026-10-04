@@ -1,10 +1,19 @@
 import {
+  deepCopyElement,
   getMindmapElementsForSelection,
   getTextFromElements,
+  isFrameLikeElement,
+  isTableElement,
   isTextElement,
 } from "@excalidraw/element";
 
-import { CODES, KEYS, isFirefox } from "@excalidraw/common";
+import {
+  CODES,
+  KEYS,
+  MIME_TYPES,
+  EXPORT_DATA_TYPES,
+  isFirefox,
+} from "@excalidraw/common";
 
 import { CaptureUpdateAction } from "@excalidraw/element";
 
@@ -16,6 +25,11 @@ import {
   probablySupportsClipboardWriteText,
   readSystemClipboard,
 } from "../clipboard";
+import {
+  createTableRangeClipboard,
+  getSelectedTableRange,
+  tableRangeToTSV,
+} from "../components/app/tableClipboard";
 import { DuplicateIcon, cutIcon, pngIcon, svgIcon } from "../components/icons";
 import { exportCanvas, prepareElementsForExport } from "../data/index";
 import { t } from "../i18n";
@@ -29,6 +43,94 @@ export const actionCopy = register<ClipboardEvent | null>({
   icon: DuplicateIcon,
   trackEvent: { category: "element" },
   perform: async (elements, appState, event, app) => {
+    const selectedTableId =
+      appState.tableCellSelection?.tableId ??
+      appState.tableRowColSelection?.tableId;
+    const selectedTable =
+      selectedTableId && app.scene.getNonDeletedElement(selectedTableId);
+    if (selectedTable && isTableElement(selectedTable)) {
+      try {
+        const range = getSelectedTableRange(appState, selectedTable);
+        if (range) {
+          const snapshot = createTableRangeClipboard(
+            selectedTable,
+            range,
+            app.scene.getNonDeletedElements(),
+          );
+          const selected = app.scene.getSelectedElements({
+            selectedElementIds: appState.selectedElementIds,
+            includeBoundTextElement: true,
+            includeElementsInFrames: true,
+          });
+          const rangeIds = new Set([
+            selectedTable.id,
+            ...snapshot.elements.map((element) => element.id),
+          ]);
+          const extras = selected.filter(
+            (element) => !rangeIds.has(element.id),
+          );
+          const copiedContainerIds = new Set([
+            snapshot.table.id,
+            ...extras
+              .filter(
+                (element) =>
+                  isTableElement(element) || isFrameLikeElement(element),
+              )
+              .map((element) => element.id),
+          ]);
+          const copiedExtras = extras.map((element) =>
+            element.containerRef &&
+            !copiedContainerIds.has(element.containerRef.elementId)
+              ? { ...deepCopyElement(element), containerRef: undefined }
+              : element,
+          );
+          const json = JSON.stringify({
+            type: EXPORT_DATA_TYPES.excalidrawClipboard,
+            tableRange: true,
+            mixedTableSelection: extras.length > 0,
+            elements: [snapshot.table, ...snapshot.elements, ...copiedExtras],
+            files: app.files,
+          });
+          const formats = {
+            [MIME_TYPES.excalidrawClipboard]: json,
+            [MIME_TYPES.text]: tableRangeToTSV(snapshot),
+          };
+          const ClipboardItemConstructor = (
+            app.ownerWindow as typeof globalThis
+          ).ClipboardItem;
+          if (
+            !event &&
+            ClipboardItemConstructor &&
+            app.ownerWindow.navigator.clipboard?.write
+          ) {
+            try {
+              const BlobConstructor = (app.ownerWindow as typeof globalThis)
+                .Blob;
+              await app.ownerWindow.navigator.clipboard.write([
+                new ClipboardItemConstructor(
+                  Object.fromEntries(
+                    Object.entries(formats).map(([type, value]) => [
+                      type,
+                      new BlobConstructor([value], { type }),
+                    ]),
+                  ),
+                ),
+              ]);
+            } catch {
+              await copyTextToSystemClipboard(formats);
+            }
+          } else {
+            await copyTextToSystemClipboard(formats, event);
+          }
+          return { captureUpdate: CaptureUpdateAction.NEVER };
+        }
+      } catch (error: any) {
+        return {
+          captureUpdate: CaptureUpdateAction.NEVER,
+          appState: { ...appState, errorMessage: error.message },
+        };
+      }
+    }
     let elementsToCopy = app.scene.getSelectedElements({
       selectedElementIds: appState.selectedElementIds,
       includeBoundTextElement: true,
@@ -129,6 +231,17 @@ export const actionCut = register<ClipboardEvent | null>({
   icon: cutIcon,
   trackEvent: { category: "element" },
   perform: async (elements, appState, event, app) => {
+    if (
+      appState.tableCellSelection ||
+      appState.tableRowColSelection ||
+      app.scene
+        .getSelectedElements({
+          selectedElementIds: appState.selectedElementIds,
+        })
+        .some(isTableElement)
+    ) {
+      return false;
+    }
     const copied = await actionCopy.perform(elements, appState, event, app);
     if (
       copied === false ||

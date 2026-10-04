@@ -14,7 +14,7 @@ import {
   getNonDeletedElements,
 } from "@excalidraw/element";
 
-import { isFrameLikeElement } from "@excalidraw/element";
+import { isFrameLikeElement, isTableElement } from "@excalidraw/element";
 
 import { getElementsOverlappingFrame } from "@excalidraw/element";
 
@@ -91,7 +91,7 @@ export const prepareElementsForExport = (
         firstElement,
         elementsMap,
       );
-    } else if (exportedElements.length > 1) {
+    } else if (exportedElements.length > 1 || isTableElement(firstElement)) {
       exportedElements = getSelectedElements(
         elements,
         { selectedElementIds },

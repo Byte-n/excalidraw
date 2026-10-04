@@ -6,6 +6,10 @@ import {
   getObservedAppState,
   CaptureUpdateAction,
   StoreDelta,
+  assertValidContainerRefs,
+  assertValidTableData,
+  isTableElement,
+  normalizeTableDimensions,
   type ApplyToOptions,
   type ElementUpdate,
 } from "@excalidraw/element";
@@ -156,8 +160,22 @@ export const updateScene = <K extends keyof AppState>(
      */
     captureUpdate?: SceneData["captureUpdate"];
   },
-) =>
-  withBatchedUpdates(() => {
+) => {
+  if (sceneData.elements?.some(isTableElement)) {
+    const ids = new Set<string>();
+    for (const element of sceneData.elements) {
+      if (ids.has(element.id)) {
+        throw new Error(`Duplicate element id: ${element.id}`);
+      }
+      ids.add(element.id);
+      if (isTableElement(element)) {
+        assertValidTableData(element.table);
+        normalizeTableDimensions(element);
+      }
+    }
+    assertValidContainerRefs(sceneData.elements);
+  }
+  return withBatchedUpdates(() => {
     const { elements, appState, collaborators, captureUpdate } = sceneData;
 
     if (captureUpdate) {
@@ -192,6 +210,7 @@ export const updateScene = <K extends keyof AppState>(
       app.setState({ collaborators });
     }
   })();
+};
 
 export const setElementRenderOverrides = (
   app: App,

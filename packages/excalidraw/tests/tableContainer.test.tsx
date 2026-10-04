@@ -575,9 +575,9 @@ describe("table copy", () => {
       h.app,
     );
     expect(copySpy.mock.calls[1][0].map((element) => element.id)).toEqual([
+      frame.id,
       nestedTable.id,
       member.id,
-      frame.id,
     ]);
     copySpy.mockRestore();
 
