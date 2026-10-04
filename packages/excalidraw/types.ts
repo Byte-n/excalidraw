@@ -1388,6 +1388,9 @@ export type AppClassProperties = {
   files: BinaryFiles;
   editorInterface: App["editorInterface"];
   scene: App["scene"];
+  setState: App["setState"];
+  moveTableCellSelectionFocus: App["moveTableCellSelectionFocus"];
+  editSelectedTableCellBackgroundText: App["editSelectedTableCellBackgroundText"];
   syncActionResult: App["syncActionResult"];
   scheduleCapture: App["scheduleCapture"];
   fonts: App["fonts"];

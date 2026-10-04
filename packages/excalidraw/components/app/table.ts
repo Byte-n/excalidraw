@@ -1003,6 +1003,28 @@ const editTableCellBackgroundText = (
   app.handleTextWysiwyg(text, { isExistingElement: false });
 };
 
+export const editSelectedTableCellBackgroundText = (app: TableApp): boolean => {
+  const selection = app.state.tableCellSelection;
+  if (!selection || app.state.editingTextElement) {
+    return false;
+  }
+  const table = app.scene.getNonDeletedElement(selection.tableId);
+  if (!table || !isTableElement(table) || table.locked) {
+    return false;
+  }
+  const cell = getVisibleTableCell(table.table, selection.focusId);
+  const bounds = cell && getTableCellBounds(table.table, cell.id);
+  if (!bounds) {
+    return false;
+  }
+  const initialCaretSceneCoords = {
+    x: table.x + bounds.x + bounds.width / 2,
+    y: table.y + bounds.y + bounds.height / 2,
+  };
+  editTableCellBackgroundText(app, table, cell.id, initialCaretSceneCoords);
+  return true;
+};
+
 const createTableCellBackgroundText = (
   app: TableApp,
   table: NonDeleted<ExcalidrawTableElement>,
@@ -1109,6 +1131,12 @@ const getTableCellBackgroundInsertionIndex = (
 
 /** Minimum hit area of every structure zone, in CSS px (phase-1.md:89). */
 export const TABLE_STRUCTURE_ZONE_SIZE = 24;
+const TABLE_TOUCH_STRUCTURE_ZONE_SIZE = 44;
+
+const getTableStructureZoneSize = (app: TableApp) =>
+  app.editorInterface.isTouchScreen
+    ? TABLE_TOUCH_STRUCTURE_ZONE_SIZE
+    : TABLE_STRUCTURE_ZONE_SIZE;
 
 type TableLocalPoint = { x: number; y: number };
 
@@ -1459,7 +1487,7 @@ const resolveStructureHover = (
   table: NonDeleted<ExcalidrawTableElement>,
   local: TableLocalPoint,
 ): TableRowColStructureHover | null => {
-  const band = TABLE_STRUCTURE_ZONE_SIZE / app.state.zoom.value;
+  const band = getTableStructureZoneSize(app) / app.state.zoom.value;
   const { x: lx, y: ly } = local;
   const inLeftBand = lx >= -band && lx < 0;
   const inTopBand = ly >= -band && ly < 0;
@@ -1627,7 +1655,7 @@ const getStructureZoneTableAtSceneCoords = (
   sceneX: number,
   sceneY: number,
 ): NonDeleted<ExcalidrawTableElement> | null => {
-  const band = TABLE_STRUCTURE_ZONE_SIZE / app.state.zoom.value;
+  const band = getTableStructureZoneSize(app) / app.state.zoom.value;
   const outerExtent =
     TABLE_STRUCTURE_INSERTION_OFFSET / app.state.zoom.value + band / 2;
   let candidate: NonDeleted<ExcalidrawTableElement> | null = null;

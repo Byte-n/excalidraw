@@ -9,6 +9,7 @@ import {
   assertValidTableData,
   createTableData,
   evenlySplitTableSize,
+  getTableCellAtPoint,
   getTableCellBounds,
   getTableColumnOffset,
   getTableHeight,
@@ -90,6 +91,31 @@ const setupTableCell = () => {
 };
 
 describe("createTableData", () => {
+  it("validates and hits distant cells in a 100 by 100 table", () => {
+    const element = newTableElement({
+      type: "table",
+      x: 20,
+      y: 30,
+      rowCount: 100,
+      columnCount: 100,
+    });
+    expect(assertValidTableData(element.table)).toBe(element.table);
+    const last = element.table.cells[9999];
+    expect(
+      getTableCellAtPoint(
+        element,
+        element.x + element.width - 1,
+        element.y + element.height - 1,
+      ),
+    ).toBe(last.id);
+    expect(getTableCellBounds(element.table, last.id)).toEqual({
+      x: element.width - element.table.columns[99].width,
+      y: element.height - element.table.rows[99].height,
+      width: element.table.columns[99].width,
+      height: element.table.rows[99].height,
+    });
+  });
+
   it("creates a default 3x3 grid with unique ids", () => {
     const table = createTableData();
 

@@ -176,6 +176,23 @@ describe("table row/column structure", () => {
     await render(<Excalidraw handleKeyboardGlobally />);
   });
 
+  it("keeps a 44 CSS px row grip target on touch screens", () => {
+    const { table } = createFixture();
+    const point = { x: table.x - 35, y: table.y + ROW_HEIGHT / 2 };
+    expect(getTableStructureHoverAtSceneCoords(h.app, point)).toBeNull();
+
+    const original = h.app.editorInterface;
+    h.app.editorInterface = { ...original, isTouchScreen: true };
+    try {
+      expect(getTableStructureHoverAtSceneCoords(h.app, point)).toMatchObject({
+        tableId: table.id,
+        kind: "rowGrip",
+      });
+    } finally {
+      h.app.editorInterface = original;
+    }
+  });
+
   it("suspends hover scans during a table gesture and restores them afterwards", () => {
     const { table } = createFixture();
     selectRow(0, table);

@@ -1817,6 +1817,9 @@ class App extends React.Component<AppProps, AppState> {
     extend: boolean,
   ) => tableController.moveTableCellSelectionFocus(this, direction, extend);
 
+  public editSelectedTableCellBackgroundText = () =>
+    tableController.editSelectedTableCellBackgroundText(this);
+
   public commitTableCellMerge = () =>
     tableController.commitTableCellMerge(this);
 

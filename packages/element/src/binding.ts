@@ -1338,6 +1338,7 @@ export const updateBoundElements = (
   scene: Scene,
   options?: {
     simultaneouslyUpdated?: readonly NonDeletedExcalidrawElement[];
+    simultaneouslyUpdatedElementIds?: ReadonlySet<string>;
     changedElements?: Map<string, ExcalidrawElement>;
   },
 ) => {
@@ -1346,9 +1347,9 @@ export const updateBoundElements = (
   }
 
   const { simultaneouslyUpdated } = options ?? {};
-  const simultaneouslyUpdatedElementIds = getSimultaneouslyUpdatedElementIds(
-    simultaneouslyUpdated,
-  );
+  const simultaneouslyUpdatedElementIds =
+    options?.simultaneouslyUpdatedElementIds ??
+    getSimultaneouslyUpdatedElementIds(simultaneouslyUpdated);
 
   let elementsMap: ElementsMap = scene.getNonDeletedElementsMap();
   if (options?.changedElements) {

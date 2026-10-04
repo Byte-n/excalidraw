@@ -189,19 +189,60 @@ export const getTableWidth = (table: Pick<TableDataV1, "columns">): number =>
 export const getTableHeight = (table: Pick<TableDataV1, "rows">): number =>
   table.rows.reduce((acc, row) => acc + row.height, 0);
 
+type TableLookup = {
+  rows: ReadonlyMap<string, number>;
+  columns: ReadonlyMap<string, number>;
+  cells: ReadonlyMap<string, TableCellData>;
+  intersections: ReadonlyMap<string, TableCellData>;
+  rowEnds: readonly number[];
+  columnEnds: readonly number[];
+};
+
+const tableLookups = new WeakMap<TableDataV1, TableLookup>();
+
+const getTableLookup = (table: TableDataV1): TableLookup => {
+  const cached = tableLookups.get(table);
+  if (cached) {
+    return cached;
+  }
+  let rowEnd = 0;
+  let columnEnd = 0;
+  const lookup: TableLookup = {
+    rows: new Map(table.rows.map((row, index) => [row.id, index])),
+    columns: new Map(table.columns.map((column, index) => [column.id, index])),
+    cells: new Map(table.cells.map((cell) => [cell.id, cell])),
+    intersections: new Map(
+      table.cells.map((cell) => [`${cell.rowId}\u0000${cell.columnId}`, cell]),
+    ),
+    rowEnds: table.rows.map((row) => (rowEnd += row.height)),
+    columnEnds: table.columns.map((column) => (columnEnd += column.width)),
+  };
+  tableLookups.set(table, lookup);
+  return lookup;
+};
+
+const indexAtOffset = (ends: readonly number[], offset: number): number => {
+  let low = 0;
+  let high = ends.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (offset < ends[middle]) {
+      high = middle;
+    } else {
+      low = middle + 1;
+    }
+  }
+  return low;
+};
+
 /** Table-local offset (x grows rightwards) accumulated over preceding columns. */
 export const getTableColumnOffset = (
   table: TableDataV1,
   columnId: string,
 ): number | null => {
-  let offset = 0;
-  for (const column of table.columns) {
-    if (column.id === columnId) {
-      return offset;
-    }
-    offset += column.width;
-  }
-  return null;
+  const lookup = getTableLookup(table);
+  const index = lookup.columns.get(columnId);
+  return index === undefined ? null : index ? lookup.columnEnds[index - 1] : 0;
 };
 
 /** Table-local offset (y grows downwards) accumulated over preceding rows. */
@@ -209,14 +250,9 @@ export const getTableRowOffset = (
   table: TableDataV1,
   rowId: string,
 ): number | null => {
-  let offset = 0;
-  for (const row of table.rows) {
-    if (row.id === rowId) {
-      return offset;
-    }
-    offset += row.height;
-  }
-  return null;
+  const lookup = getTableLookup(table);
+  const index = lookup.rows.get(rowId);
+  return index === undefined ? null : index ? lookup.rowEnds[index - 1] : 0;
 };
 
 /**
@@ -233,28 +269,19 @@ export const getTableCellBounds = (
   }
   const x = getTableColumnOffset(table, cell.columnId);
   const y = getTableRowOffset(table, cell.rowId);
-  const column = table.columns.find(
-    (candidate) => candidate.id === cell.columnId,
-  );
-  const row = table.rows.find((candidate) => candidate.id === cell.rowId);
-  if (x === null || y === null || !column || !row) {
+  if (x === null || y === null) {
     return null;
   }
-  const rowIndex = table.rows.findIndex(
-    (candidate) => candidate.id === cell.rowId,
-  );
-  const columnIndex = table.columns.findIndex(
-    (candidate) => candidate.id === cell.columnId,
-  );
+  const lookup = getTableLookup(table);
+  const rowIndex = lookup.rows.get(cell.rowId)!;
+  const columnIndex = lookup.columns.get(cell.columnId)!;
+  const rowEnd = rowIndex + (cell.rowSpan ?? 1) - 1;
+  const columnEnd = columnIndex + (cell.columnSpan ?? 1) - 1;
   return {
     x,
     y,
-    width: table.columns
-      .slice(columnIndex, columnIndex + (cell.columnSpan ?? 1))
-      .reduce((sum, item) => sum + item.width, 0),
-    height: table.rows
-      .slice(rowIndex, rowIndex + (cell.rowSpan ?? 1))
-      .reduce((sum, item) => sum + item.height, 0),
+    width: lookup.columnEnds[columnEnd] - x,
+    height: lookup.rowEnds[rowEnd] - y,
   };
 };
 
@@ -262,12 +289,9 @@ export const getVisibleTableCell = (
   table: TableDataV1,
   cellId: string,
 ): TableCellData | null => {
-  const cell = table.cells.find((candidate) => candidate.id === cellId);
-  return cell
-    ? table.cells.find(
-        (candidate) => candidate.id === (cell.mergedInto ?? cell.id),
-      ) ?? null
-    : null;
+  const byId = getTableLookup(table).cells;
+  const cell = byId.get(cellId);
+  return cell ? byId.get(cell.mergedInto ?? cell.id) ?? null : null;
 };
 
 export type TableCellRange = Readonly<{
@@ -501,16 +525,15 @@ export const assertValidTableData = (table: unknown): TableDataV1 => {
     );
   }
 
-  const byIntersection = new Map(
-    cells.map((cell) => [`${cell.rowId}\u0000${cell.columnId}`, cell]),
-  );
+  const lookup = getTableLookup(table as TableDataV1);
+  const byIntersection = lookup.intersections;
   const ownership = new Map<string, string>();
   for (const cell of cells) {
     if (cell.mergedInto) {
       continue;
     }
-    const row = rows.findIndex((entry) => entry.id === cell.rowId);
-    const column = columns.findIndex((entry) => entry.id === cell.columnId);
+    const row = lookup.rows.get(cell.rowId)!;
+    const column = lookup.columns.get(cell.columnId)!;
     const rowSpan = cell.rowSpan ?? 1;
     const columnSpan = cell.columnSpan ?? 1;
     if (row + rowSpan > rows.length || column + columnSpan > columns.length) {
@@ -563,36 +586,14 @@ export const getTableCellAtPoint = (
   }
 
   const { table } = element;
-  let columnId: string | null = null;
-  let offset = 0;
-  for (const column of table.columns) {
-    if (x < offset + column.width) {
-      columnId = column.id;
-      break;
-    }
-    offset += column.width;
-  }
-  if (!columnId) {
+  const lookup = getTableLookup(table);
+  const column = table.columns[indexAtOffset(lookup.columnEnds, x)];
+  const row = table.rows[indexAtOffset(lookup.rowEnds, y)];
+  if (!column || !row) {
     return null;
   }
-
-  let rowId: string | null = null;
-  offset = 0;
-  for (const row of table.rows) {
-    if (y < offset + row.height) {
-      rowId = row.id;
-      break;
-    }
-    offset += row.height;
-  }
-  if (!rowId) {
-    return null;
-  }
-
-  const cell = table.cells.find(
-    (candidate) => candidate.rowId === rowId && candidate.columnId === columnId,
-  );
-  return cell ? getVisibleTableCell(table, cell.id)?.id ?? null : null;
+  const cell = lookup.intersections.get(`${row.id}\u0000${column.id}`);
+  return cell ? lookup.cells.get(cell.mergedInto ?? cell.id)?.id ?? null : null;
 };
 
 /**

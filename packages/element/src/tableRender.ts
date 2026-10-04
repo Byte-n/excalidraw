@@ -86,9 +86,33 @@ export const resolveTableColor = (color: string, isDark: boolean): string => {
 
 export type TableGridSegment = readonly [number, number, number, number];
 
-export const getTableGridSegments = (
-  table: TableDataV1,
-): TableGridSegment[] => {
+const tableRenderCache = new WeakMap<
+  TableDataV1,
+  { segments: TableGridSegment[]; hasCellFill: boolean }
+>();
+
+const getTableRenderData = (table: TableDataV1) => {
+  const cached = tableRenderCache.get(table);
+  if (cached) {
+    return cached;
+  }
+  const hasFill = (color?: string) => !!color && !isTransparent(color);
+  const data = {
+    segments: buildTableGridSegments(table),
+    hasCellFill:
+      hasFill(table.style?.backgroundColor) ||
+      table.rows.some((row) => hasFill(row.style?.backgroundColor)) ||
+      table.columns.some((column) => hasFill(column.style?.backgroundColor)) ||
+      table.cells.some((cell) => hasFill(cell.style.backgroundColor)),
+  };
+  tableRenderCache.set(table, data);
+  return data;
+};
+
+export const getTableGridSegments = (table: TableDataV1): TableGridSegment[] =>
+  getTableRenderData(table).segments;
+
+const buildTableGridSegments = (table: TableDataV1): TableGridSegment[] => {
   if (!table.cells.some((cell) => cell.mergedInto)) {
     const width = table.columns.reduce((sum, column) => sum + column.width, 0);
     const height = table.rows.reduce((sum, row) => sum + row.height, 0);
@@ -136,6 +160,32 @@ export const getTableGridSegments = (
   return segments;
 };
 
+const getVisibleLocalBounds = (context: CanvasRenderingContext2D) => {
+  if (!context.getTransform || !context.canvas) {
+    return null;
+  }
+  const { a, b, c, d, e, f } = context.getTransform();
+  const determinant = a * d - b * c;
+  if (!determinant) {
+    return null;
+  }
+  const corners = [
+    [0, 0],
+    [context.canvas.width, 0],
+    [0, context.canvas.height],
+    [context.canvas.width, context.canvas.height],
+  ].map(([x, y]) => ({
+    x: (d * (x - e) - c * (y - f)) / determinant,
+    y: (a * (y - f) - b * (x - e)) / determinant,
+  }));
+  return {
+    minX: Math.min(...corners.map((corner) => corner.x)),
+    maxX: Math.max(...corners.map((corner) => corner.x)),
+    minY: Math.min(...corners.map((corner) => corner.y)),
+    maxY: Math.max(...corners.map((corner) => corner.y)),
+  };
+};
+
 /**
  * Paints the table grid in table-local coordinates — the caller positions the
  * context at the element beforehand. Like frames, tables bypass the roughjs
@@ -158,9 +208,11 @@ export const drawTableGridOnCanvas = (
   const gridLineWidth =
     (table.style?.gridWidth ?? TABLE_STYLE.gridStrokeWidth) /
     appState.zoom.value;
+  const visible = getVisibleLocalBounds(context);
+  const renderData = getTableRenderData(table);
 
   // (1) cell backgrounds, so grid lines stay visible above them
-  for (const cell of table.cells) {
+  for (const cell of renderData.hasCellFill ? table.cells : []) {
     if (cell.mergedInto) {
       continue;
     }
@@ -170,6 +222,15 @@ export const drawTableGridOnCanvas = (
     }
     const bounds = getTableCellBounds(table, cell.id);
     if (!bounds) {
+      continue;
+    }
+    if (
+      visible &&
+      (bounds.x > visible.maxX ||
+        bounds.y > visible.maxY ||
+        bounds.x + bounds.width < visible.minX ||
+        bounds.y + bounds.height < visible.minY)
+    ) {
       continue;
     }
     context.fillStyle = fill;
@@ -186,7 +247,16 @@ export const drawTableGridOnCanvas = (
     gridDash === "dashed" ? [6, 4] : gridDash === "dotted" ? [1, 3] : [],
   );
   context.beginPath();
-  for (const [x1, y1, x2, y2] of getTableGridSegments(table)) {
+  for (const [x1, y1, x2, y2] of renderData.segments) {
+    if (
+      visible &&
+      (Math.max(x1, x2) < visible.minX ||
+        Math.min(x1, x2) > visible.maxX ||
+        Math.max(y1, y2) < visible.minY ||
+        Math.min(y1, y2) > visible.maxY)
+    ) {
+      continue;
+    }
     context.moveTo(x1, y1);
     context.lineTo(x2, y2);
   }

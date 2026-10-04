@@ -333,6 +333,60 @@ describe("table tool", () => {
       expect(h.state.selectedElementIds).toEqual({});
     });
 
+    it("opens selected cell text with Enter and exits cell focus with Escape", async () => {
+      const center = cellCenter(table, 1, 1);
+      clickAt(center.x, center.y);
+      clickAt(center.x, center.y);
+
+      Keyboard.keyPress(KEYS.ENTER);
+      const editor = await getTextEditor();
+      expect(editor).toBeTruthy();
+      expect(getBackgroundTexts()).toHaveLength(1);
+
+      Keyboard.exitTextEditor(editor);
+      Keyboard.keyPress(KEYS.ESCAPE);
+      expect(h.state.tableCellSelection).toBeNull();
+      expect(h.state.selectedElementIds).toEqual({ [table.id]: true });
+    });
+
+    it("exposes one accessible proxy for the focused cell", () => {
+      const center = cellCenter(table, 1, 1);
+      clickAt(center.x, center.y);
+      clickAt(center.x, center.y);
+
+      const grid = document.querySelector(".table-accessibility-grid");
+      expect(grid?.getAttribute("role")).toBe("grid");
+      expect(grid?.getAttribute("aria-rowcount")).toBe("3");
+      expect(grid?.querySelectorAll('[role="gridcell"]')).toHaveLength(1);
+      expect(grid?.getAttribute("aria-label")).toContain("row 2, column 2");
+
+      Keyboard.keyPress(KEYS.ARROW_RIGHT);
+      expect(
+        document
+          .querySelector(".table-accessibility-grid")
+          ?.getAttribute("aria-label"),
+      ).toContain("row 2, column 3");
+    });
+
+    it("leaves table keyboard commands alone during IME composition", () => {
+      const center = cellCenter(table, 1, 1);
+      clickAt(center.x, center.y);
+      clickAt(center.x, center.y);
+      const focusId = h.state.tableCellSelection?.focusId;
+
+      fireEvent.keyDown(GlobalTestState.interactiveCanvas, {
+        key: KEYS.ARROW_RIGHT,
+        isComposing: true,
+      });
+      fireEvent.keyDown(GlobalTestState.interactiveCanvas, {
+        key: KEYS.ENTER,
+        isComposing: true,
+      });
+
+      expect(h.state.tableCellSelection?.focusId).toBe(focusId);
+      expect(h.state.editingTextElement).toBeNull();
+    });
+
     it("highlights the hovered cell and resets off the table", () => {
       const first = cellCenter(table, 0, 0);
       mouseMove(first.x, first.y);

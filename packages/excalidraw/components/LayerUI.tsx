@@ -54,6 +54,7 @@ import { sidebarRightIcon } from "./icons";
 import { DefaultSidebar } from "./DefaultSidebar";
 import { TTDDialog } from "./TTDDialog/TTDDialog";
 import { Stats } from "./Stats";
+import { TableAccessibility } from "./TableAccessibility";
 import ElementLinkDialog from "./ElementLinkDialog";
 import { ErrorDialog } from "./ErrorDialog";
 import { EyeDropper, activeEyeDropperAtom } from "./EyeDropper";
@@ -489,6 +490,7 @@ const LayerUI = ({
 
   const layerUIJSX = (
     <>
+      <TableAccessibility app={app} appState={appState} />
       {/* ------------------------- tunneled UI ---------------------------- */}
       {/* make sure we render host app components first so that we can detect
           them first on initial render to optimize layout shift */}

@@ -164,7 +164,7 @@ export const dragSelectedElements = (
         );
       }
       updateBoundElements(element, scene, {
-        simultaneouslyUpdated: Array.from(elementsToUpdate),
+        simultaneouslyUpdatedElementIds: elementsToUpdateIds,
       });
     } else if (
       // NOTE: Add a little initial drag to the arrow dragging when the arrow

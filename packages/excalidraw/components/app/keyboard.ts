@@ -293,6 +293,36 @@ export const onKeyDown = (
   }
 
   if (
+    ("isComposing" in event && event.isComposing) ||
+    ("nativeEvent" in event && event.nativeEvent.isComposing) ||
+    event.key === "Process"
+  ) {
+    return;
+  }
+
+  if (
+    app.state.tableCellSelection &&
+    !isInputLike(event.target) &&
+    !app.state.editingTextElement &&
+    !event[KEYS.CTRL_OR_CMD] &&
+    !event.altKey
+  ) {
+    if (event.key === KEYS.ENTER && app.editSelectedTableCellBackgroundText()) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === KEYS.ESCAPE) {
+      const tableId = app.state.tableCellSelection.tableId;
+      app.setState({
+        tableCellSelection: null,
+        selectedElementIds: { [tableId]: true },
+      });
+      event.preventDefault();
+      return;
+    }
+  }
+
+  if (
     !isInputLike(event.target) &&
     !event[KEYS.CTRL_OR_CMD] &&
     !event.altKey &&

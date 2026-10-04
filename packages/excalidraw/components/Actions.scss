@@ -138,6 +138,9 @@
       }
 
       &.table-cell-command {
+        min-width: 44px;
+        min-height: 44px;
+
         svg {
           width: 18px;
           height: 18px;
