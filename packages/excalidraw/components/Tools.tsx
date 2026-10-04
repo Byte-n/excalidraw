@@ -386,17 +386,19 @@ export const LassoToolButton = createToolButton("lasso", {
 });
 
 /**
- * The selection ⇄ lasso popover used in compact (tablet) and mobile
- * toolbars; picking an option also makes it the preferred selection tool.
+ * The selection ⇄ lasso popover used in all toolbars; picking an option also
+ * makes it the preferred selection tool.
  */
 export const SelectionToolPopover = ({
   app,
   activeTool,
   setAppState,
+  showShortcut = false,
 }: {
   app: AppClassProperties;
   activeTool: UIAppState["activeTool"];
   setAppState: React.Component<any, AppState>["setState"];
+  showShortcut?: boolean;
 }) => {
   const SELECTION_TOOLS = [
     {
@@ -434,6 +436,9 @@ export const SelectionToolPopover = ({
         }
       }}
       displayedOption={displayedOption}
+      keyBindingLabel={showShortcut ? getToolLetter("selection") : undefined}
+      shortcut={showShortcut ? getToolShortcut("selection") : undefined}
+      ariaKeyshortcuts={showShortcut ? getToolShortcut("selection") : undefined}
     />
   );
 };

@@ -464,21 +464,11 @@ export const reconcileStylesPanelMode = (
     return;
   }
 
-  const prevStylesPanelMode = app["stylesPanelMode"];
   app["stylesPanelMode"] = nextStylesPanelMode;
 
   // the panel footprint differs between modes (compact vs full), so a
   // measurement taken in the previous mode no longer applies
   app.viewport.invalidateUIOffset("stylesPanel");
-
-  if (prevStylesPanelMode !== "full" && nextStylesPanelMode === "full") {
-    app.setState((prevState) => ({
-      preferredSelectionTool: {
-        type: "selection",
-        initialized: true,
-      },
-    }));
-  }
 };
 
 export const setDesktopUIMode = (

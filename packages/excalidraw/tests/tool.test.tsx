@@ -13,7 +13,7 @@ import { findShapeByKey } from "../components/Tools";
 
 import { API } from "./helpers/api";
 import { Pointer } from "./helpers/ui";
-import { act, fireEvent, GlobalTestState, render } from "./test-utils";
+import { act, fireEvent, GlobalTestState, render, waitFor } from "./test-utils";
 
 import type { AppClassProperties, ExcalidrawImperativeAPI } from "../types";
 
@@ -411,6 +411,91 @@ describe("toolbar", () => {
     expect(badge("text")).toBe("T");
     expect(badge("stickynote")).toBe("N");
     expect(badge("eraser")).toBe("E");
+  });
+
+  it("switches between selection and lasso from the full toolbar", async () => {
+    await render(<Excalidraw UIOptions={{ getFormFactor: () => "desktop" }} />);
+
+    const selectionTrigger = queryTool("selection")!;
+    const extraToolsTrigger =
+      h.app.ownerDocument.querySelector<HTMLButtonElement>(
+        ".App-toolbar__extra-tools-trigger",
+      )!;
+    expect(selectionTrigger).toHaveAttribute("aria-label", "Selection");
+    expect(
+      selectionTrigger.querySelector(".ToolIcon__keybinding")?.textContent,
+    ).toBe("V");
+
+    fireEvent.click(selectionTrigger);
+    fireEvent.click(
+      h.app.ownerDocument.querySelector<HTMLButtonElement>(
+        '.tool-popover-content [data-testid="toolbar-lasso"]',
+      )!,
+    );
+    expect(h.state.activeTool.type).toBe("lasso");
+    expect(h.state.preferredSelectionTool.type).toBe("lasso");
+    expect(selectionTrigger).toHaveAttribute("aria-label", "Lasso selection");
+    expect(selectionTrigger).toHaveAttribute("aria-pressed", "true");
+    expect(extraToolsTrigger).not.toHaveClass(
+      "App-toolbar__extra-tools-trigger--selected",
+    );
+
+    openExtraTools();
+    expect(
+      h.app.ownerDocument.querySelector(
+        '.App-toolbar__extra-tools-dropdown [data-testid="toolbar-lasso"]',
+      ),
+    ).toBeNull();
+  });
+
+  it("switches back to selection from the full toolbar popover", async () => {
+    await render(<Excalidraw UIOptions={{ getFormFactor: () => "desktop" }} />);
+
+    const selectionTrigger = queryTool("selection")!;
+    fireEvent.click(selectionTrigger);
+    fireEvent.click(
+      h.app.ownerDocument.querySelector<HTMLButtonElement>(
+        '.tool-popover-content [data-testid="toolbar-lasso"]',
+      )!,
+    );
+
+    fireEvent.click(
+      h.app.ownerDocument.querySelector<HTMLButtonElement>(
+        '.tool-popover-content [data-testid="toolbar-selection"]',
+      )!,
+    );
+    expect(h.state.activeTool.type).toBe("selection");
+    expect(h.state.preferredSelectionTool.type).toBe("selection");
+  });
+
+  it("keeps the preferred selection tool when entering the full toolbar", async () => {
+    let formFactor: "tablet" | "desktop" = "tablet";
+    await render(
+      <Excalidraw UIOptions={{ getFormFactor: () => formFactor }} />,
+    );
+    fireEvent.resize(h.app.ownerWindow);
+    await waitFor(() =>
+      expect(h.app.editorInterface.formFactor).toBe("tablet"),
+    );
+
+    fireEvent.click(queryTool("selection")!);
+    fireEvent.click(
+      h.app.ownerDocument.querySelector<HTMLButtonElement>(
+        '.tool-popover-content [data-testid="toolbar-lasso"]',
+      )!,
+    );
+    expect(h.state.preferredSelectionTool.type).toBe("lasso");
+
+    formFactor = "desktop";
+    fireEvent.resize(h.app.ownerWindow);
+    await waitFor(() =>
+      expect(h.app.editorInterface.formFactor).toBe("desktop"),
+    );
+    expect(h.state.preferredSelectionTool.type).toBe("lasso");
+    expect(queryTool("selection")).toHaveAttribute(
+      "aria-label",
+      "Lasso selection",
+    );
   });
 
   it.each([

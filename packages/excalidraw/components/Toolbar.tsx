@@ -19,7 +19,6 @@ import {
   EmbedIcon,
   frameToolIcon,
   ImageIcon,
-  LassoIcon,
   laserPointerToolIcon,
   bucketFillIcon,
   MagicIcon,
@@ -37,9 +36,7 @@ import {
   getToolShortcut,
   HandToolButton,
   isToolButtonDisabled,
-  LassoToolButton,
   LineToolButton,
-  SelectionToolButton,
   SelectionToolPopover,
   StickyNoteToolButton,
   TextToolButton,
@@ -76,10 +73,6 @@ const ExtraToolsDropdown = ({
   const laserToolSelected = activeTool.type === "laser";
   const bucketFillToolSelected = activeTool.type === "bucketfill";
   const tableToolSelected = activeTool.type === "table";
-  const lassoToolSelected =
-    isFullStylesPanel &&
-    activeTool.type === "lasso" &&
-    app.state.preferredSelectionTool.type !== "lasso";
   const embeddableToolSelected = activeTool.type === "embeddable";
 
   return (
@@ -91,7 +84,6 @@ const ExtraToolsDropdown = ({
             frameToolSelected ||
             embeddableToolSelected ||
             (isFullStylesPanel && drawShapeToolSelected) ||
-            lassoToolSelected ||
             bucketFillToolSelected ||
             tableToolSelected ||
             // in collab we're already highlighting the laser button
@@ -115,8 +107,6 @@ const ExtraToolsDropdown = ({
           ? drawShapeToolIcon
           : laserToolSelected && !app.props.isCollaborating
           ? laserPointerToolIcon
-          : lassoToolSelected
-          ? LassoIcon
           : bucketFillToolSelected
           ? bucketFillIcon
           : tableToolSelected
@@ -213,17 +203,6 @@ const ExtraToolsDropdown = ({
             {t("toolBar.table")}
           </DropdownMenu.Item>
         )}
-        {isFullStylesPanel && (
-          <DropdownMenu.Item
-            onSelect={() => app.setActiveTool({ type: "lasso" })}
-            icon={LassoIcon}
-            data-testid="toolbar-lasso"
-            selected={lassoToolSelected}
-            disabled={isToolButtonDisabled(app, "lasso")}
-          >
-            {t("toolBar.lasso")}
-          </DropdownMenu.Item>
-        )}
         <div style={{ margin: "6px 0", fontSize: 14, fontWeight: 600 }}>
           Generate
         </div>
@@ -312,13 +291,11 @@ export const Toolbar = ({
         )}
 
         <HandToolButton {...toolProps} hideKeyBinding />
-        {isCompactStylesPanel ? (
-          <SelectionToolPopover {...toolProps} setAppState={setAppState} />
-        ) : appState.preferredSelectionTool.type === "lasso" ? (
-          <LassoToolButton {...toolProps} />
-        ) : (
-          <SelectionToolButton {...toolProps} />
-        )}
+        <SelectionToolPopover
+          {...toolProps}
+          setAppState={setAppState}
+          showShortcut={!isCompactStylesPanel}
+        />
         <GenericShapeToolPopover {...toolProps} />
         <ArrowToolButton {...toolProps} />
         <LineToolButton {...toolProps} />
