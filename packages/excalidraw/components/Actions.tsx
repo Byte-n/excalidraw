@@ -2,7 +2,13 @@ import clsx from "clsx";
 import { useRef, useState } from "react";
 import { Popover } from "radix-ui";
 
-import { CLASSES } from "@excalidraw/common";
+import {
+  CLASSES,
+  DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE,
+  DEFAULT_ELEMENT_STROKE_COLOR_PALETTE,
+  DEFAULT_ELEMENT_BACKGROUND_PICKS,
+  DEFAULT_ELEMENT_STROKE_PICKS,
+} from "@excalidraw/common";
 
 import {
   getMindmapShapeId,
@@ -37,7 +43,7 @@ import { actionToggleViewMode } from "../actions/actionToggleViewMode";
 
 import "./Actions.scss";
 
-import App, { useExcalidrawContainer } from "./App";
+import { useExcalidrawContainer } from "./App";
 import { IconButton } from "./IconButton";
 import Stack from "./Stack";
 import { Tooltip } from "./Tooltip";
@@ -418,6 +424,24 @@ export const SelectedShapeActions = ({
         <div>{renderAction("changeBucketFillBackgroundColor")}</div>
         {renderAction("changeFillStyle")}
         {renderAction("changeOpacity")}
+      </div>
+    );
+  }
+
+  if (appState.tableCellSelection) {
+    return (
+      <div className="selected-shape-actions">
+        <TableStyleActions app={app} appState={appState} />
+        <fieldset>
+          <legend>{t("labels.actions")}</legend>
+          <div className="buttonList table-cell-action-buttons">
+            <TableCellCompactActions
+              app={app}
+              appState={appState}
+              setAppState={app.setState.bind(app)}
+            />
+          </div>
+        </fieldset>
       </div>
     );
   }
@@ -1052,10 +1076,34 @@ const TableStyleActions = ({
       "transparent"
     : table.table.style?.backgroundColor ?? "transparent";
   const update = (patch: Record<string, unknown>) => {
-    const current = table.table;
+    const currentCellSelection = app.state.tableCellSelection;
+    const currentAxisSelection = app.state.tableRowColSelection;
+    const currentTableId =
+      currentCellSelection?.tableId ??
+      currentAxisSelection?.tableId ??
+      Object.keys(app.state.selectedElementIds).find((id) =>
+        isTableElement(app.scene.getNonDeletedElement(id)),
+      );
+    const currentTable =
+      currentTableId && app.scene.getNonDeletedElement(currentTableId);
+    if (!currentTable || !isTableElement(currentTable)) {
+      return;
+    }
+    const current = currentTable.table;
     let next = current;
-    if (cellSelection) {
-      const ids = new Set(targetCells.map((cell) => cell.id));
+    if (currentCellSelection) {
+      const ids = new Set(
+        getCellsInTableRange(
+          current,
+          getTableCellRange(
+            current,
+            currentCellSelection.anchorId,
+            currentCellSelection.focusId,
+          ),
+        )
+          .filter((cell) => !cell.mergedInto)
+          .map((cell) => cell.id),
+      );
       next = {
         ...current,
         cells: current.cells.map((cell) =>
@@ -1064,20 +1112,20 @@ const TableStyleActions = ({
             : cell,
         ),
       };
-    } else if (axisSelection?.kind === "row") {
+    } else if (currentAxisSelection?.kind === "row") {
       next = {
         ...current,
         rows: current.rows.map((row) =>
-          row.id === axisSelection.id
+          row.id === currentAxisSelection.id
             ? { ...row, style: { ...row.style, ...patch } }
             : row,
         ),
       };
-    } else if (axisSelection?.kind === "column") {
+    } else if (currentAxisSelection?.kind === "column") {
       next = {
         ...current,
         columns: current.columns.map((column) =>
-          column.id === axisSelection.id
+          column.id === currentAxisSelection.id
             ? { ...column, style: { ...column.style, ...patch } }
             : column,
         ),
@@ -1086,7 +1134,7 @@ const TableStyleActions = ({
       next = { ...current, style: { ...current.style, ...patch } };
     }
     app.scheduleCapture();
-    app.scene.mutateElement(table, { table: next });
+    app.scene.mutateElement(currentTable, { table: next });
     app.scene.triggerUpdate();
   };
   const tableOnly = !cellSelection && !axisSelection;
@@ -1094,10 +1142,9 @@ const TableStyleActions = ({
     targetCells.length > 1 &&
     targetCells.some((cell) => getCellFill(cell) !== color);
   const selectedColor = fillIsMixed ? null : color ?? "transparent";
-  const pickerApp = app as AppClassProperties & Pick<App, "setState">;
   const updatePickerState = (state?: Partial<AppState>) => {
     if (state) {
-      pickerApp.setState((previous) => ({ ...previous, ...state }));
+      app.setState((previous) => ({ ...previous, ...state }));
     }
   };
   const lineStyleOptions = [
@@ -1124,17 +1171,20 @@ const TableStyleActions = ({
       label={t("labels.background")}
       color={selectedColor}
       onChange={(nextColor) => update({ backgroundColor: nextColor })}
+      palette={DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE}
+      topPicks={DEFAULT_ELEMENT_BACKGROUND_PICKS}
+      customizableTopPicks="elementBackground"
+      compact={variant === "fill"}
       elements={app.scene.getNonDeletedElements()}
       appState={appState}
       updateData={updatePickerState}
-      enableEyeDropper={false}
     />
   );
   const borderColorPicker = (
     <ColorPicker
       key="border"
       type="elementStroke"
-      label="Border color"
+      label={t("labels.stroke")}
       color={
         table.table.style?.borderColor ??
         table.table.style?.gridColor ??
@@ -1143,10 +1193,13 @@ const TableStyleActions = ({
       onChange={(nextColor) =>
         update({ borderColor: nextColor, gridColor: nextColor })
       }
+      palette={DEFAULT_ELEMENT_STROKE_COLOR_PALETTE}
+      topPicks={DEFAULT_ELEMENT_STROKE_PICKS}
+      customizableTopPicks="elementStroke"
+      compact={variant === "fill"}
       elements={app.scene.getNonDeletedElements()}
       appState={appState}
       updateData={updatePickerState}
-      enableEyeDropper={false}
     />
   );
   return (
@@ -1157,14 +1210,21 @@ const TableStyleActions = ({
       })}
       aria-label="Table style"
     >
+      {variant !== "details" && tableOnly && (
+        <div className={variant === "fill" ? "compact-action-item" : undefined}>
+          {variant === "full" && (
+            <h3 aria-hidden="true">{t("labels.stroke")}</h3>
+          )}
+          {borderColorPicker}
+        </div>
+      )}
       {variant !== "details" && (
-        <fieldset>
-          {variant === "full" && <legend>Color</legend>}
-          <div className="table-style-actions__color">
-            {colorPicker}
-            {tableOnly && borderColorPicker}
-          </div>
-        </fieldset>
+        <div className={variant === "fill" ? "compact-action-item" : undefined}>
+          {variant === "full" && (
+            <h3 aria-hidden="true">{t("labels.background")}</h3>
+          )}
+          {colorPicker}
+        </div>
       )}
       {tableOnly && variant !== "fill" && (
         <>

@@ -68,6 +68,7 @@ interface ColorPickerProps {
    * `appState.colorTopPicks` slot the customization is stored in */
   customizableTopPicks?: keyof AppState["colorTopPicks"];
   enableEyeDropper?: boolean;
+  compact?: boolean;
 }
 
 const ColorPickerPopupContent = ({
@@ -82,6 +83,7 @@ const ColorPickerPopupContent = ({
   appState,
   excludedColors,
   enableEyeDropper,
+  compact,
 }: Pick<
   ColorPickerProps,
   | "type"
@@ -94,13 +96,14 @@ const ColorPickerPopupContent = ({
   | "appState"
   | "excludedColors"
   | "enableEyeDropper"
+  | "compact"
 > & {
   getOpenPopup: () => AppState["openPopup"];
 }) => {
   const { container } = useExcalidrawContainer();
   const app = useApp();
   const stylesPanelMode = useStylesPanelMode();
-  const isCompactMode = stylesPanelMode !== "full";
+  const isCompactMode = compact || stylesPanelMode !== "full";
   const isMobileMode = stylesPanelMode === "mobile";
   const [, setActiveColorPickerSection] = useAtom(activeColorPickerSectionAtom);
 
@@ -275,6 +278,7 @@ const ColorPickerTrigger = ({
   mode = "background",
   onToggle,
   editingTextElement,
+  compact,
 }: {
   color: string | null;
   label: string;
@@ -283,10 +287,11 @@ const ColorPickerTrigger = ({
   mode?: "background" | "stroke";
   onToggle: () => void;
   editingTextElement?: boolean;
+  compact?: boolean;
 }) => {
   const app = useApp();
   const stylesPanelMode = useStylesPanelMode();
-  const isCompactMode = stylesPanelMode !== "full";
+  const isCompactMode = compact || stylesPanelMode !== "full";
   const isMobileMode = stylesPanelMode === "mobile";
   const dnd = useColorPickerDnD();
   const displayColor = color
@@ -363,13 +368,14 @@ const ColorPickerComponent = ({
   excludedColors,
   customizableTopPicks,
   enableEyeDropper = true,
+  compact = false,
 }: ColorPickerProps) => {
   const openRef = useRef(appState.openPopup);
   useEffect(() => {
     openRef.current = appState.openPopup;
   }, [appState.openPopup]);
   const stylesPanelMode = useStylesPanelMode();
-  const isCompactMode = stylesPanelMode !== "full";
+  const isCompactMode = compact || stylesPanelMode !== "full";
 
   const isTopPicksCustomizable = !!customizableTopPicks && !isCompactMode;
 
@@ -467,6 +473,7 @@ const ColorPickerComponent = ({
             theme={appState.theme}
             mode={type === "elementStroke" ? "stroke" : "background"}
             editingTextElement={!!appState.editingTextElement}
+            compact={compact}
             onToggle={() => {
               // atomic switch: if another popup is open, close it first, then open this one next tick
               if (appState.openPopup === type) {
@@ -491,6 +498,7 @@ const ColorPickerComponent = ({
               palette={palette}
               excludedColors={excludedColors}
               enableEyeDropper={enableEyeDropper}
+              compact={compact}
               updateData={updateData}
               getOpenPopup={() => openRef.current}
               appState={appState}
@@ -539,6 +547,7 @@ const areColorPickerPropsEqual = (
     prev.excludedColors === next.excludedColors &&
     prev.customizableTopPicks === next.customizableTopPicks &&
     prev.enableEyeDropper === next.enableEyeDropper &&
+    prev.compact === next.compact &&
     prev.appState.theme === next.appState.theme &&
     prev.appState.colorTopPicks === next.appState.colorTopPicks &&
     // the trigger tweaks its click behavior while a text element is edited

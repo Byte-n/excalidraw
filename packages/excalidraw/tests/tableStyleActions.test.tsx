@@ -8,7 +8,13 @@ import {
 import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
-import { act, fireEvent, render, unmountComponent } from "./test-utils";
+import {
+  act,
+  fireEvent,
+  render,
+  unmountComponent,
+  waitFor,
+} from "./test-utils";
 
 unmountComponent();
 
@@ -23,6 +29,17 @@ describe("table style controls", () => {
 
     const panel = document.querySelector(".table-style-actions");
     expect(panel).not.toBeNull();
+    expect(
+      Array.from(panel!.querySelectorAll(":scope > div > h3")).map(
+        (heading) => heading.textContent,
+      ),
+    ).toEqual(["Stroke", "Background"]);
+    expect(
+      Array.from(panel!.querySelectorAll(":scope > div > h3")).every(
+        (heading) =>
+          heading.nextElementSibling?.matches(".color-picker-container"),
+      ),
+    ).toBe(true);
     expect(panel!.querySelector("[title='Clear fill override']")).toBeNull();
     expect(panel!.textContent).toContain("Border width");
 
@@ -40,6 +57,148 @@ describe("table style controls", () => {
           | undefined
       )?.table.style?.backgroundColor,
     ).toBe(fill);
+  });
+
+  it("uses separate stroke and background controls in the compact toolbar", async () => {
+    (global as any).ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    await render(<Excalidraw UIOptions={{ getFormFactor: () => "tablet" }} />);
+    fireEvent.resize(window);
+    await waitFor(() =>
+      expect(window.h.app.editorInterface.formFactor).toBe("tablet"),
+    );
+    const table = API.createElement({ type: "table" });
+    API.setElements([table]);
+    act(() => {
+      API.setAppState({ selectedElementIds: { [table.id]: true } });
+    });
+
+    const panel = document.querySelector(
+      ".compact-shape-actions .table-style-actions--fill-only",
+    )!;
+    expect(
+      Array.from(panel.querySelectorAll(":scope > .compact-action-item")).map(
+        (item) =>
+          item.querySelector(".properties-trigger")?.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Stroke", "Background"]);
+
+    fireEvent.click(
+      panel.querySelector<HTMLButtonElement>(`[aria-label='Stroke']`)!,
+    );
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>("[data-testid='color-red']")!,
+    );
+    expect(
+      (
+        window.h.elements.find(
+          (element) => element.id === table.id,
+        ) as typeof table
+      ).table.style?.borderColor,
+    ).toBe(DEFAULT_ELEMENT_STROKE_PICKS[1]);
+
+    fireEvent.click(
+      panel.querySelector<HTMLButtonElement>(`[aria-label='Background']`)!,
+    );
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>("[data-testid='color-red']")!,
+    );
+    expect(
+      (
+        window.h.elements.find(
+          (element) => element.id === table.id,
+        ) as typeof table
+      ).table.style?.backgroundColor,
+    ).toBe(DEFAULT_ELEMENT_BACKGROUND_PICKS[1]);
+  });
+
+  it("shows the full shape background picker for selected cells on desktop", async () => {
+    await render(<Excalidraw />);
+    const table = API.createElement({ type: "table" });
+    API.setElements([table]);
+    act(() => {
+      API.setAppState({
+        tableCellSelection: {
+          tableId: table.id,
+          anchorId: table.table.cells[0].id,
+          focusId: table.table.cells[0].id,
+          mobileMode: false,
+        },
+      });
+    });
+
+    const panel = document.querySelector(
+      ".selected-shape-actions .table-style-actions",
+    )!;
+    expect(
+      Array.from(panel.querySelectorAll(":scope > div > h3")).map(
+        (heading) => heading.textContent,
+      ),
+    ).toEqual(["Background"]);
+    expect(panel.querySelector(".color-picker__top-picks")).not.toBeNull();
+    expect(
+      document.querySelector("[data-testid='table-cell-multi-select']"),
+    ).not.toBeNull();
+    expect(
+      document.querySelector("[data-testid='table-merge-cells']"),
+    ).not.toBeNull();
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>(
+        "[data-testid='table-cell-multi-select']",
+      )!,
+    );
+    expect(window.h.state.tableCellSelection?.mobileMode).toBe(true);
+    fireEvent.click(
+      panel.querySelector<HTMLButtonElement>(
+        `[data-testid='color-top-pick-${DEFAULT_ELEMENT_BACKGROUND_PICKS[1]}']`,
+      )!,
+    );
+    expect(
+      (
+        window.h.elements.find(
+          (element) => element.id === table.id,
+        ) as typeof table
+      ).table.cells[0].style.backgroundColor,
+    ).toBe(DEFAULT_ELEMENT_BACKGROUND_PICKS[1]);
+  });
+
+  it("keeps the selected-cell color picker compact on tablets", async () => {
+    (global as any).ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    await render(<Excalidraw UIOptions={{ getFormFactor: () => "tablet" }} />);
+    fireEvent.resize(window);
+    await waitFor(() =>
+      expect(window.h.app.editorInterface.formFactor).toBe("tablet"),
+    );
+    const table = API.createElement({ type: "table" });
+    API.setElements([table]);
+    act(() => {
+      API.setAppState({
+        tableCellSelection: {
+          tableId: table.id,
+          anchorId: table.table.cells[0].id,
+          focusId: table.table.cells[0].id,
+          mobileMode: false,
+        },
+      });
+    });
+
+    const panel = document.querySelector(
+      ".compact-shape-actions .table-style-actions--fill-only",
+    )!;
+    expect(panel.querySelector(".color-picker__top-picks")).toBeNull();
+    expect(
+      panel.querySelectorAll(":scope > .compact-action-item"),
+    ).toHaveLength(1);
+    expect(
+      panel.querySelector(".properties-trigger")?.getAttribute("aria-label"),
+    ).toBe("Background");
   });
 
   it("uses one border color for the frame and grid", async () => {
@@ -114,11 +273,14 @@ describe("table style controls", () => {
       });
     });
     const fill = DEFAULT_ELEMENT_BACKGROUND_PICKS[2];
-    const swatch = document.querySelector<HTMLButtonElement>(
-      `.table-style-actions [data-testid='color-top-pick-${fill}']`,
-    )!;
-    fireEvent.click(swatch);
-    expect(swatch).toHaveClass("active");
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>(
+        ".table-style-actions [aria-label='Background']",
+      )!,
+    );
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>("[data-testid='color-green']")!,
+    );
     expect(
       (
         window.h.elements.find(
