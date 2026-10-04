@@ -54,6 +54,7 @@ import {
   isTextElement,
   isStickyNoteElement,
   isTableElement,
+  getTableCellAtPoint,
   getNormalizedDimensions,
   isInvisiblySmallElement,
   getStickyNoteMinSize,
@@ -682,7 +683,35 @@ export const handleCanvasPointerDown = (
     return;
   }
 
-  if (app.selectTableCellAtPoint(pointerDownState.origin, event.shiftKey)) {
+  // Keep a selected table as the drag target. A click is resolved on pointer
+  // up so it can still enter a cell or select its content.
+  const selectedTable =
+    selectedElements.length === 1 && isTableElement(selectedElements[0])
+      ? selectedElements[0]
+      : null;
+  const bodyHit = app.getElementAtPosition(
+    pointerDownState.origin.x,
+    pointerDownState.origin.y,
+  );
+  if (
+    selectedTable &&
+    !event[KEYS.CTRL_OR_CMD] &&
+    getTableCellAtPoint(
+      selectedTable,
+      pointerDownState.origin.x,
+      pointerDownState.origin.y,
+    ) &&
+    (bodyHit?.id === selectedTable.id ||
+      (bodyHit?.containerRef?.kind === "tableCell" &&
+        bodyHit.containerRef.elementId === selectedTable.id))
+  ) {
+    pointerDownState.hit.tableBodyHitElement = bodyHit;
+  }
+
+  if (
+    !pointerDownState.hit.tableBodyHitElement &&
+    app.selectTableCellAtPoint(pointerDownState.origin, event.shiftKey)
+  ) {
     return;
   }
 
@@ -999,6 +1028,7 @@ export const initialPointerDownState = (
     },
     hit: {
       tableTitleGripTableId: null,
+      tableBodyHitElement: null,
       element: null,
       allHitElements: [],
       wasAddedToSelection: false,
@@ -2778,6 +2808,25 @@ export const onPointerUpFromPointerDownHandler = (
       );
       if (title) {
         app.setState({ selectedElementIds: { [title.id]: true } });
+      }
+    }
+
+    if (
+      pointerDownState.hit.tableBodyHitElement &&
+      !pointerDownState.drag.hasOccurred
+    ) {
+      const bodyHit = pointerDownState.hit.tableBodyHitElement;
+      if (isTableElement(bodyHit)) {
+        if (
+          app.selectTableCellAtPoint(
+            pointerDownState.origin,
+            childEvent.shiftKey,
+          )
+        ) {
+          return;
+        }
+      } else {
+        pointerDownState.hit.element = bodyHit;
       }
     }
 

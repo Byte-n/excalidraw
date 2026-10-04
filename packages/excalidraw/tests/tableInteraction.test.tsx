@@ -286,6 +286,43 @@ describe("table tool", () => {
       expect(h.state.selectedElementIds).toEqual({});
     });
 
+    it("drags the selected table from a blank cell", () => {
+      const blank = cellCenter(table, 1, 1);
+      clickAt(blank.x, blank.y);
+      const startX = table.x;
+      const startY = table.y;
+      expect(h.state.selectedElementIds).toEqual({ [table.id]: true });
+
+      mouseDown(blank.x, blank.y);
+      mouseMove(blank.x + 40, blank.y + 25);
+      mouseUp(blank.x + 40, blank.y + 25);
+
+      expect(getTable().x).toBe(startX + 40);
+      expect(getTable().y).toBe(startY + 25);
+      expect(h.state.selectedElementIds).toEqual({ [table.id]: true });
+      expect(h.state.tableCellSelection).toBeNull();
+    });
+
+    it("drags the selected table from a cell graphic", () => {
+      const blank = cellCenter(table, 1, 1);
+      clickAt(blank.x, blank.y);
+      const startX = table.x;
+      const startY = table.y;
+      const contentStartX = content.x;
+      const contentStartY = content.y;
+
+      mouseDown(130, 130);
+      mouseMove(170, 155);
+      mouseUp(170, 155);
+
+      expect(getTable().x).toBe(startX + 40);
+      expect(getTable().y).toBe(startY + 25);
+      expect(h.scene.getElement(content.id)?.x).toBe(contentStartX + 40);
+      expect(h.scene.getElement(content.id)?.y).toBe(contentStartY + 25);
+      expect(h.state.selectedElementIds).toEqual({ [table.id]: true });
+      expect(h.state.tableCellSelection).toBeNull();
+    });
+
     it("deselects the table with escape", () => {
       const center = cellCenter(table, 1, 1);
       mouseDown(center.x, center.y);

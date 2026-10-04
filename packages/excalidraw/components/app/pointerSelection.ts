@@ -706,6 +706,11 @@ export const handleSelectionOnPointerDown = (
       // For overlapped elements one position may hit
       // multiple elements
       pointerDownState.hit.allHitElements = unlockedHitElements;
+      if (pointerDownState.hit.tableBodyHitElement) {
+        const table = selectedElements[0] as NonDeleted<ExcalidrawTableElement>;
+        pointerDownState.hit.element = table;
+        pointerDownState.hit.allHitElements = [table];
+      }
 
       const hitElement = pointerDownState.hit.element;
       const selectedTableContainsHitElement =

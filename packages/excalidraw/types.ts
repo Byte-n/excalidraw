@@ -1511,6 +1511,7 @@ export type PointerDownState = Readonly<{
   };
   hit: {
     tableTitleGripTableId: string | null;
+    tableBodyHitElement: NonDeleted<ExcalidrawElement> | null;
     // The element the pointer is "hitting", is determined on the initial
     // pointer down event
     element: NonDeleted<ExcalidrawElement> | null;
