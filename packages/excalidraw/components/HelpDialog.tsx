@@ -1,4 +1,5 @@
 import React from "react";
+import { Tabs as RadixTabs } from "radix-ui";
 
 import { isDarwin, isFirefox, isWindows } from "@excalidraw/common";
 
@@ -62,19 +63,42 @@ const Header = () => (
 const Section = (props: { title: string; children: React.ReactNode }) => (
   <>
     <h3>{props.title}</h3>
-    <div className="HelpDialog__islands-container">{props.children}</div>
+    <RadixTabs.Root defaultValue="tools">
+      <RadixTabs.List className="HelpDialog__tabs" aria-label={props.title}>
+        <RadixTabs.Trigger value="tools">
+          {t("helpDialog.tools")}
+        </RadixTabs.Trigger>
+        <RadixTabs.Trigger value="table">
+          {t("toolBar.table")}
+        </RadixTabs.Trigger>
+        <RadixTabs.Trigger value="view">
+          {t("helpDialog.view")}
+        </RadixTabs.Trigger>
+        <RadixTabs.Trigger value="editor">
+          {t("helpDialog.editor")}
+        </RadixTabs.Trigger>
+        <RadixTabs.Trigger value="mindmap">
+          {t("toolBar.mindmap")}
+        </RadixTabs.Trigger>
+      </RadixTabs.List>
+      {props.children}
+    </RadixTabs.Root>
   </>
 );
 
 const ShortcutIsland = (props: {
+  value: string;
   caption: string;
   children: React.ReactNode;
   className?: string;
 }) => (
-  <div className={`HelpDialog__island ${props.className}`}>
+  <RadixTabs.Content
+    value={props.value}
+    className={`HelpDialog__island ${props.className || ""}`}
+  >
     <h4 className="HelpDialog__island-title">{props.caption}</h4>
     <div className="HelpDialog__island-content">{props.children}</div>
-  </div>
+  </RadixTabs.Content>
 );
 
 function* intersperse(as: JSX.Element[][], delim: string | null) {
@@ -144,6 +168,7 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
         <Section title={t("helpDialog.shortcuts")}>
           <ShortcutIsland
             className="HelpDialog__island--tools"
+            value="tools"
             caption={t("helpDialog.tools")}
           >
             <Shortcut label={t("toolBar.hand")} shortcuts={[KEYS.H]} />
@@ -254,6 +279,7 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
           </ShortcutIsland>
           <ShortcutIsland
             className="HelpDialog__island--table"
+            value="table"
             caption={t("toolBar.table")}
           >
             <Shortcut
@@ -302,6 +328,7 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
           </ShortcutIsland>
           <ShortcutIsland
             className="HelpDialog__island--view"
+            value="view"
             caption={t("helpDialog.view")}
           >
             <Shortcut
@@ -376,6 +403,7 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
           </ShortcutIsland>
           <ShortcutIsland
             className="HelpDialog__island--editor"
+            value="editor"
             caption={t("helpDialog.editor")}
           >
             <Shortcut
@@ -557,6 +585,7 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
           </ShortcutIsland>
           <ShortcutIsland
             className="HelpDialog__island--mindmap"
+            value="mindmap"
             caption={t("toolBar.mindmap")}
           >
             <p className="HelpDialog__note">

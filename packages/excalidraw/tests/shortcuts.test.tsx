@@ -47,6 +47,9 @@ describe("shortcuts", () => {
       );
 
       Keyboard.keyPress("?");
+      fireEvent.mouseDown(
+        screen.getByRole("tab", { name: t("toolBar.table") }),
+      );
       const table = screen
         .getByRole("heading", { level: 4, name: t("toolBar.table") })
         .closest(".HelpDialog__island")! as HTMLElement;
@@ -101,6 +104,9 @@ describe("shortcuts", () => {
           ),
         );
         Keyboard.keyPress("?");
+        fireEvent.mouseDown(
+          screen.getByRole("tab", { name: t("toolBar.mindmap") }),
+        );
         const heading = await screen.findByRole("heading", {
           level: 4,
           name: langCode === "en" ? "Mindmap" : "思维导图",
