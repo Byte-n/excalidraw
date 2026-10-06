@@ -8,7 +8,7 @@
 
 通用根默认仅允许 elements/assets Map，`extraRootMaps` 显式扩展 Map 名称；不允许未知根、列表型根或嵌套元素/资产共享类型。通用数据、key/id、元素身份/版本/有限几何、完整墓碑、资产不可删除/改绑始终由包检查。缺失依赖的 Yjs 更新拒绝，不能将未验证的潜在状态留在权威文档。既有关系仍是软关系，不添加全场景双向关系硬约束；宿主可通过 transition 提供自身政策。
 
-宿主注入 `validateDocument` 校验额外 metadata（例如 schema 版本）、`validator.validateScene` 校验场景 schema/预算，以及 `validateTransition`、`authorizeAssets` 与 `authorize`。`readScene` 可提供宿主公开结构读取；通用根/身份检查仍先运行，不因回调绕过。同步 scene/document validator 必须返回 undefined；授权和 transition 可异步。远端 actor 来自已认证 connection，Yjs origin 不携带认证身份。`onRejected` 可等待宿主原子拒绝登记后再抛出；`mapError` 转换到宿主 hook 错误，默认 `CanvasHookError` 提供稳定 reason/code，原始业务错误供宿主诊断。
+宿主注入 `validateDocument` 校验额外 metadata（例如 schema 版本）、`validator.validateScene` 校验场景 schema/预算，以及 `validateTransition`、`authorizeAssets` 与 `authorize`。`readScene` 可提供宿主公开结构读取；通用根/身份检查仍先运行，不因回调绕过。同步 scene/document validator 必须返回 undefined；授权和 transition 可异步。远端 actor 来自已认证 connection，Yjs origin 不携带认证身份。`onRejected` 可等待宿主原子拒绝登记后再抛出；`mapError` 转换到宿主 hook 错误，默认 `CanvasHookError` 提供稳定 reason/code，以及区分场景与转换校验的 `kind`，原始业务错误供宿主诊断。
 
 ## 持久化与卸载
 

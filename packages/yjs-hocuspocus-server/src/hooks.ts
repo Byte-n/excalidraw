@@ -14,7 +14,12 @@ import type {
 
 /** reason/code 可由 Hocuspocus 错误通道直接识别，不暴露输入内容。 */
 export class CanvasHookError extends Error {
-  constructor(readonly reason: string, readonly code = 4400, cause?: unknown) {
+  constructor(
+    readonly reason: string,
+    readonly code = 4400,
+    cause?: unknown,
+    readonly kind: "scene" | "transition" = "scene",
+  ) {
     super(reason, { cause });
     this.name = "CanvasHookError";
   }
@@ -242,14 +247,24 @@ export const createCanvasHocuspocusHooks = <
   ) => {
     const ids = new Set(candidate.elements.map((element) => element.id));
     if (before.elements.some((element) => !ids.has(element.id))) {
-      throw new CanvasHookError("canvas elements require deletion tombstones");
+      throw new CanvasHookError(
+        "canvas elements require deletion tombstones",
+        4400,
+        undefined,
+        "transition",
+      );
     }
     for (const [id, asset] of Object.entries(before.assets)) {
       if (
         !Object.hasOwn(candidate.assets, id) ||
         !equal(asset, candidate.assets[id])
       ) {
-        throw new CanvasHookError("canvas assets cannot be deleted or rebound");
+        throw new CanvasHookError(
+          "canvas assets cannot be deleted or rebound",
+          4400,
+          undefined,
+          "transition",
+        );
       }
     }
   };
