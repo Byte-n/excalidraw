@@ -35,6 +35,16 @@ export type ExcalidrawSceneElement = {
         role: "content" | "backgroundText";
       };
   boundElements?: readonly { id: string; type: string }[] | null;
+  startBinding?: {
+    elementId: string;
+    fixedPoint: [number, number];
+    mode: "inside" | "orbit" | "skip";
+  } | null;
+  endBinding?: {
+    elementId: string;
+    fixedPoint: [number, number];
+    mode: "inside" | "orbit" | "skip";
+  } | null;
   table?: {
     cells: readonly { id: string; [key: string]: unknown }[];
     [key: string]: unknown;

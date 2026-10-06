@@ -235,3 +235,118 @@ test("commands preserve unrelated canonical elements and create fresh tombstone 
   binding.dispose();
   doc.destroy();
 });
+
+test.each(["local", "command"] as const)(
+  "%s rejects a later asset conflict without changing the document",
+  (operation) => {
+    const doc = new Y.Doc();
+    const binding = createSceneBinding<Element, { size: number }>({ doc });
+    binding.setGate({ initialized: true, synced: true, canEdit: true });
+    binding.applyLocal([{ id: "keep", value: 1 }], { fixed: { size: 1 } });
+    const before = Y.encodeStateAsUpdate(doc);
+    const updates = vi.fn();
+    doc.on("update", updates);
+    const elements = [{ id: "new", value: 2 }];
+    const assets = { fresh: { size: 2 }, fixed: { size: 3 } };
+    expect(() =>
+      operation === "local"
+        ? binding.applyLocal(elements, assets)
+        : binding.applyCommand({ elements, assets }),
+    ).toThrow("asset cannot be rebound");
+    expect(Y.encodeStateAsUpdate(doc)).toEqual(before);
+    expect(updates).not.toHaveBeenCalled();
+    binding.dispose();
+    doc.destroy();
+  },
+);
+
+test.each(["local", "command"] as const)(
+  "%s rejects an uncloneable later asset before writing elements or earlier assets",
+  (operation) => {
+    const doc = new Y.Doc();
+    const binding = createSceneBinding<Element, unknown>({ doc });
+    binding.setGate({ initialized: true, synced: true, canEdit: true });
+    binding.applyLocal([{ id: "keep", value: 1 }]);
+    const before = Y.encodeStateAsUpdate(doc);
+    const updates = vi.fn();
+    doc.on("update", updates);
+    const elements = [{ id: "new", value: 2 }];
+    const assets = { fresh: { size: 2 }, invalid: { callback: () => {} } };
+    expect(() =>
+      operation === "local"
+        ? binding.applyLocal(elements, assets)
+        : binding.applyCommand({ elements, assets }),
+    ).toThrow();
+    expect(Y.encodeStateAsUpdate(doc)).toEqual(before);
+    expect(updates).not.toHaveBeenCalled();
+    binding.dispose();
+    doc.destroy();
+  },
+);
+
+test("a later normalization failure leaves existing canonical objects and Y.Doc unchanged", () => {
+  const doc = new Y.Doc();
+  const binding = createSceneBinding<Element>({
+    doc,
+    adapter: {
+      normalizePersistent: (element) => {
+        if (element.id === "invalid") {
+          throw new Error("normalization rejected");
+        }
+        element.value += 1;
+        return element;
+      },
+    },
+  });
+  binding.setGate({ initialized: true, synced: true, canEdit: true });
+  binding.applyLocal([{ id: "keep", value: 1 }]);
+  const before = Y.encodeStateAsUpdate(doc);
+  const updates = vi.fn();
+  doc.on("update", updates);
+  expect(() =>
+    binding.applyCommand({
+      elements: [binding.getElements()[0]!, { id: "invalid", value: 2 }],
+    }),
+  ).toThrow("normalization rejected");
+  expect(binding.getElements()).toEqual([{ id: "keep", value: 1 }]);
+  expect(Y.encodeStateAsUpdate(doc)).toEqual(before);
+  expect(updates).not.toHaveBeenCalled();
+  binding.dispose();
+  doc.destroy();
+});
+
+test("a later adapter clone failure occurs before any command write", () => {
+  const doc = new Y.Doc();
+  let rejectClone = false;
+  const binding = createSceneBinding<Element>({
+    doc,
+    adapter: {
+      cloneElement: (element) => {
+        if (rejectClone && element.id === "later") {
+          throw new Error("clone rejected");
+        }
+        return structuredClone(element);
+      },
+      validateCanonical: () => {
+        rejectClone = true;
+      },
+    },
+  });
+  binding.setGate({ initialized: true, synced: true, canEdit: true });
+  binding.applyLocal([{ id: "keep", value: 1 }]);
+  const before = Y.encodeStateAsUpdate(doc);
+  const updates = vi.fn();
+  doc.on("update", updates);
+  expect(() =>
+    binding.applyCommand({
+      elements: [
+        { id: "first", value: 2 },
+        { id: "later", value: 3 },
+      ],
+    }),
+  ).toThrow("clone rejected");
+  expect(Y.encodeStateAsUpdate(doc)).toEqual(before);
+  expect(updates).not.toHaveBeenCalled();
+  binding.dispose();
+  doc.destroy();
+});

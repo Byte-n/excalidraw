@@ -1,3 +1,5 @@
+import { assertSceneValue, equalSceneValue } from "./scene-value";
+
 import { createYjsSceneBinding } from "./index";
 
 import type * as Y from "yjs";
@@ -97,26 +99,42 @@ export const createSceneBinding = <
     assertWritable();
     doc.transact(run, origin);
   };
+  // 比较、克隆和资产冲突检测都在写入前完成，Yjs 事务不会回滚异常。
+  const prepareAssets = (nextAssets: Readonly<Record<string, TAsset>>) => {
+    const prepared: [string, TAsset][] = [];
+    for (const [id, input] of Object.entries(nextAssets)) {
+      const asset = clone(input);
+      assertSceneValue(asset);
+      const existing = assets.get(id);
+      if (existing !== undefined && !equalSceneValue(existing, asset)) {
+        throw new Error("asset cannot be rebound");
+      }
+      if (existing === undefined) {
+        prepared.push([id, asset]);
+      }
+    }
+    return prepared;
+  };
   const applyLocal = (
     elements: readonly TElement[],
     nextAssets: Readonly<Record<string, TAsset>> = {},
   ) => {
     assertWritable();
     const next = elements.map(elementClone);
-    adapter.validate?.(next, nextAssets);
+    const validation: unknown = adapter.validate?.(next, nextAssets);
+    if (validation !== undefined) {
+      throw new Error(
+        "scene validation must be synchronous and return undefined",
+      );
+    }
+    const preparedElements = next.map(clone);
+    const preparedAssets = prepareAssets(nextAssets);
+    assertSceneValue(preparedElements);
+    assertSceneValue(preparedAssets);
     transact(() => {
-      elementBinding.transact(next);
-      for (const [id, asset] of Object.entries(nextAssets)) {
-        const existing = assets.get(id);
-        if (
-          existing !== undefined &&
-          JSON.stringify(existing) !== JSON.stringify(asset)
-        ) {
-          throw new Error("asset cannot be rebound");
-        }
-        if (existing === undefined) {
-          assets.set(id, clone(asset));
-        }
+      elementBinding.transact(preparedElements);
+      for (const [id, asset] of preparedAssets) {
+        assets.set(id, asset);
       }
     });
   };
@@ -136,12 +154,14 @@ export const createSceneBinding = <
     }
     assertWritable();
     const current = new Map(
-      getElements().map((element) => [element.id, element]),
+      getElements().map((element) => [element.id, elementClone(element)]),
     );
     const changed = new Map<string, TElement>();
     for (const input of command.elements) {
       const id = adapter.getId?.(input) ?? input.id;
-      const value = adapter.normalizePersistent?.(input) ?? elementClone(input);
+      const value =
+        adapter.normalizePersistent?.(elementClone(input)) ??
+        elementClone(input);
       if (JSON.stringify(current.get(id)) !== JSON.stringify(value)) {
         current.set(id, value);
         changed.set(id, value);
@@ -179,36 +199,28 @@ export const createSceneBinding = <
       elements: [...current.values()],
       assets: { ...getAssets(), ...nextAssets },
     };
-    adapter.validateCanonical?.(scene);
-    // 资产冲突必须在事务前拒绝，不能留下已发布元素的半提交。
-    for (const [id, asset] of Object.entries(nextAssets)) {
-      const existing = assets.get(id);
-      if (
-        existing !== undefined &&
-        JSON.stringify(existing) !== JSON.stringify(asset)
-      ) {
-        throw new Error("asset cannot be rebound");
-      }
+    const validation: unknown = adapter.validateCanonical?.(scene);
+    if (validation !== undefined) {
+      throw new Error(
+        "scene validation must be synchronous and return undefined",
+      );
     }
-    if (!changed.size && !Object.keys(nextAssets).length) {
+    const preparedElements = [...changed].map(
+      ([id, value]) => [id, clone(elementClone(value))] as const,
+    );
+    const preparedAssets = prepareAssets(nextAssets);
+    assertSceneValue(preparedElements);
+    assertSceneValue(preparedAssets);
+    if (!preparedElements.length && !preparedAssets.length) {
       return [];
     }
     doc.transact(() => {
       const elements = doc.getMap<unknown>(elementsName);
-      for (const [id, value] of changed) {
-        elements.set(id, elementClone(value));
+      for (const [id, value] of preparedElements) {
+        elements.set(id, value);
       }
-      for (const [id, asset] of Object.entries(nextAssets)) {
-        const existing = assets.get(id);
-        if (
-          existing !== undefined &&
-          JSON.stringify(existing) !== JSON.stringify(asset)
-        ) {
-          throw new Error("asset cannot be rebound");
-        }
-        if (existing === undefined) {
-          assets.set(id, clone(asset));
-        }
+      for (const [id, asset] of preparedAssets) {
+        assets.set(id, asset);
       }
     }, origin);
     return [...changed.keys()];

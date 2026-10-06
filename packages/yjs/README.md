@@ -44,3 +44,11 @@ editor 解绑仅清除指针/选区/跟随、计时器、DOM 监听与在途资�
 锁定的 `@excalidraw/element 0.18.0` 公开根入口可在无 DOM 的 Node 中导入。公开 `newElement`、`newTextElement`、`newArrowElement` 支持 headless factory；文字需要宿主通过公开 `setCustomTextMetricsProvider` 注入度量。`calculateFixedPointForNonElbowArrowBinding` 和 `calculateFixedPointForElbowArrowBinding` 可用元素 Map 计算连接几何。高层 `convertToExcalidrawElements` 及 `bindBindingElement` 依赖 Scene/DOM，不能用于 headless 命令路径；core 根 Node 导入当前也受 roughjs 扩展名解析限制。后续场景命令应使用公开 element factory/纯几何，并在完整候选场景内同步维护反向关系，不扩展 core 或将软关系升级成全场景硬约束。
 
 Hocuspocus 会话与 hooks 契约分别位于 `@excalidraw/yjs-hocuspocus-client` 和 `@excalidraw/yjs-hocuspocus-server`，均锁定 Hocuspocus `4.6.0` 与 Yjs `13.6.32` peer；本包继续不依赖 Hocuspocus。通用场景结构和算法与宿主 schema、预算、资产授权及 epoch/replica 政策保持分离。
+
+## Headless 场景命令
+
+`createExcalidrawSceneCommands({ binding, validateScene })` 在可写绑定上运行批量 `add`、`update`、`delete`、`connect`。先克隆完整 canonical 场景、计算候选、检查目标和 `expectedVersion`、元素身份与有限几何、宿主同步校验及资产不可改绑，再一次无异步事务发布。同步校验返回 `undefined`，不得返回 Promise；失败不会改变 Y.Doc 或其 state vector。`update` 由内核生成版本、nonce 与时间，不允许覆盖身份、类型和关系字段；删除保留完整墓碑。返回 ID 仅表示本地发布，不代表远端写入接纳 ACK。
+
+`connect` 接收 line/arrow 的 start/end `{ elementId, fixedPoint, mode }`，同批修订连接线与两端 `boundElements`，重连时移除该连接线的旧反向引用；不对不相关 canonical 软关系追加全场景硬约束，显示投影仍不回写。关系指向已删除/不存在的目标会在事务前拒绝。`createSceneConnectionEndpoint` 用公开 element 几何计算 arrow/elbow 的 fixedPoint；line 可由宿主提供显式 endpoint。
+
+`createSceneElement`、`createSceneTextElement`、`createSceneLineElement`、`createSceneArrowElement` 使用锁定 element 公开 factory 生成完整元素和身份，填入合法 fractional index；矩形等基本图形在当前版本规范化为 `composite_shape`。多个图形默认同索引允许并发，canonical 顺序仍由 index 和 ID 确定；需要指定位置时由宿主提供公开 factory 的 index。文字度量通过 `setCustomTextMetricsProvider` 显式注入，此 provider 是 element 的进程级配置，宿主应在创建文字前统一初始化。Node 测试直接导入三种条件公开产物，无 DOM、IndexedDB 或 editor attach，并验证单份 Yjs 与一批一次 update。

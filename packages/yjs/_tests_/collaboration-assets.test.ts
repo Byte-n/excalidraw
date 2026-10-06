@@ -176,9 +176,20 @@ test("上传中删除后迟到成功不复活，真实 undo 删除使用已上�
   expect(fixture.document.getMap("elements").size).toBe(0);
   expect(api.getSceneElements()).toHaveLength(0);
   // 删除完成后通过公开 editor API 恢复同一元素，模拟 Excalidraw undo 产生的完整快照。
-  act(() => api.updateScene({ elements: [image()], captureUpdate: CaptureUpdateAction.IMMEDIATELY }));
+  act(() =>
+    api.updateScene({
+      // 宿主场景 JSON 通过公开恢复边界生成合法 editor 元素。
+      elements: restoreElements(
+        [image()] as unknown as Parameters<typeof restoreElements>[0],
+        null,
+      ),
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    }),
+  );
   await waitFor(() => expect(api.getSceneElements()).toHaveLength(1));
-  await waitFor(() => expect(fixture.document.getMap("elements").has("image")).toBe(true));
+  await waitFor(() =>
+    expect(fixture.document.getMap("elements").has("image")).toBe(true),
+  );
   expect(api.getSceneElements()).toHaveLength(1);
   expect(upload).toHaveBeenCalledTimes(1);
 });

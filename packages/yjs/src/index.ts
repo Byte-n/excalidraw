@@ -98,3 +98,18 @@ export type {
   ExcalidrawPresencePeer,
   ExcalidrawPresenceState,
 } from "./collaboration-types";
+
+export { createExcalidrawSceneCommands } from "./scene-commands";
+export type {
+  ExcalidrawSceneCommands,
+  SceneMutation,
+  SceneConnectionEndpoint,
+} from "./scene-commands";
+export {
+  createSceneElement,
+  createSceneTextElement,
+  createSceneLineElement,
+  createSceneArrowElement,
+  createSceneConnectionEndpoint,
+  setCustomTextMetricsProvider,
+} from "./element-factory";
