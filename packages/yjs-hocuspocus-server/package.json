@@ -21,9 +21,9 @@
     "gen:types": "rimraf dist/types && tsc",
     "build:esm": "rimraf dist && node ../../scripts/buildBase.js && yarn gen:types",
     "build": "yarn build:esm",
-    "test": "vitest run --root ../.. packages/yjs-hocuspocus-server/_tests_ --passWithNoTests",
-    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
-    "lint": "eslint --ext .ts src --max-warnings 0"
+    "test": "vitest run --root ../.. --config packages/yjs-hocuspocus-server/_tests_/vitest.config.ts",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false && tsc -p _tests_/tsconfig.json",
+    "lint": "eslint --ext .ts src _tests_ --max-warnings 0"
   },
   "peerDependencies": {
     "@excalidraw/yjs": "0.1.0",
@@ -32,5 +32,10 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "@hocuspocus/provider": "4.6.0",
+    "@types/ws": "8.18.1",
+    "ws": "8.17.1"
   }
 }
