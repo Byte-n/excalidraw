@@ -557,3 +557,113 @@ test("persistence cleanup failure rejects close but still destroys owned resourc
     await server.destroy();
   }
 });
+
+test("opted-in offline editing accumulates locally, while authentication suspension stops editing until reconnection", async () => {
+  const { server, url, changes } = await startServer();
+  const session = createHocuspocusHeadlessSession({
+    ...options(url),
+    allowOfflineEditing: true,
+  });
+  try {
+    await session.ready;
+    session.provider.configuration.websocketProvider.disconnect();
+    await vi.waitFor(() =>
+      expect(session.getState()).toMatchObject({
+        status: "disconnected",
+        synced: true,
+        canEdit: true,
+      }),
+    );
+    session.applyCommand({
+      elements: [
+        createSceneElement({
+          type: "rectangle",
+          x: 0,
+          y: 0,
+          width: 30,
+          height: 30,
+        }),
+      ],
+    });
+    expect(session.getScene().elements).toHaveLength(1);
+    expect(changes).not.toHaveBeenCalled();
+    session.suspend();
+    expect(session.getState()).toMatchObject({ synced: false, canEdit: false });
+    const emit: unknown = Reflect.get(session.provider, "emit");
+    if (typeof emit !== "function") {
+      throw new Error("provider event emitter unavailable");
+    }
+    emit.call(session.provider, "authenticated", { scope: "read-write" });
+    emit.call(session.provider, "synced", { state: true });
+    expect(session.getState()).toMatchObject({ synced: false, canEdit: false });
+    expect(() => session.applyCommand({ elements: [] })).toThrow();
+    await session.reconnect();
+    await vi.waitFor(() =>
+      expect(session.getState()).toMatchObject({ synced: true, canEdit: true }),
+    );
+    await vi.waitFor(() => expect(changes).toHaveBeenCalledTimes(1));
+  } finally {
+    await session.close();
+    await server.destroy();
+  }
+});
+
+test("failed recovery preservation keeps the stopped original document available for export", async () => {
+  const { server, url } = await startServer();
+  const session = createHocuspocusHeadlessSession(options(url));
+  const cause = new Error("recovery storage unavailable");
+  try {
+    await session.ready;
+    const element = createSceneElement({
+      type: "rectangle",
+      x: 0,
+      y: 0,
+      width: 20,
+      height: 20,
+    });
+    session.applyCommand({ elements: [element] });
+    session.reject({ code: "rejected", message: "recovery required" });
+    await expect(
+      session.close({
+        preserve: () => {
+          throw cause;
+        },
+      }),
+    ).rejects.toBe(cause);
+    expect(session.document.isDestroyed).toBe(false);
+    expect(session.document.getMap("elements").get(element.id)).toEqual(
+      element,
+    );
+    expect(session.provider.isAttached).toBe(false);
+  } finally {
+    session.document.destroy();
+    await server.destroy();
+  }
+});
+
+test("paused authentication failure keeps resources and authenticates only after an explicit retry", async () => {
+  const { server, url } = await startServer();
+  let token = "denied";
+  const session = createHocuspocusHeadlessSession({
+    ...options(url),
+    token: () => token,
+    onAuthenticationFailed: () => "pause",
+  });
+  try {
+    await vi.waitFor(() =>
+      expect(session.getState()).toMatchObject({
+        status: "disconnected",
+        canEdit: false,
+      }),
+    );
+    expect(session.document.isDestroyed).toBe(false);
+    expect(session.provider.isAttached).toBe(false);
+    token = "writer";
+    await session.reconnect();
+    await session.ready;
+    expect(session.getState()).toMatchObject({ synced: true, canEdit: true });
+  } finally {
+    await session.close();
+    await server.destroy();
+  }
+});

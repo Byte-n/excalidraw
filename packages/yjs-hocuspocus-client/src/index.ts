@@ -73,6 +73,8 @@ export type HocuspocusHeadlessSessionOptions<
   signal?: AbortSignal;
   syncTimeoutMs?: number;
   persistence?: HocuspocusLocalPersistence;
+  /** 首次同步后的普通断线允许本地编辑；暂停认证或拒绝仍关闭门控。 */
+  allowOfflineEditing?: boolean;
   validateScene(scene: SceneSnapshot<TElement, TAsset>): void;
   onError?(error: HocuspocusSessionError): void;
   /** 本地副本加载后、首次网络接入前的宿主初始化；不持有连接。 */
@@ -83,7 +85,9 @@ export type HocuspocusHeadlessSessionOptions<
   }): void | Promise<void>;
   /** 宿主解析业务 stateless 协议，并调用 session 的权限/拒绝/恢复入口。 */
   onStateless?(payload: string): void;
-  onAuthenticationFailed?(reason: string): "retry" | "reject" | "close";
+  onAuthenticationFailed?(
+    reason: string,
+  ): "retry" | "pause" | "reject" | "close";
 };
 
 export interface HocuspocusHeadlessSession<
@@ -104,6 +108,10 @@ export interface HocuspocusHeadlessSession<
   }): string[];
   setPermission(canEdit: boolean): void;
   reject(error: HocuspocusSessionError): void;
+  /** 暂停发送及编辑，保留副本与资源，宿主恢复鉴权后 reconnect。 */
+  suspend(): void;
+  /** 普通网络断线，离线编辑政策由 allowOfflineEditing 控制。 */
+  disconnect(): void;
   reconnect(): Promise<void>;
   refreshToken(): Promise<void>;
   /** 幂等；仅销毁 owned 文档和 provider，释放自身监听与持久化适配。 */
@@ -138,7 +146,9 @@ export type ExcalidrawHocuspocusCollaborationController<
   TAsset extends { size: number; mimeType: string },
 > = ExcalidrawCollaborationController<TElement, TAsset> & {
   readonly session: HocuspocusHeadlessSession<TElement, TAsset>;
-  close(): Promise<void>;
+  close(options?: {
+    preserve?(document: Y.Doc): void | Promise<void>;
+  }): Promise<void>;
 };
 
 export type CreateExcalidrawHocuspocusCollaboration = <

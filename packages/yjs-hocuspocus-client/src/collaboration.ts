@@ -48,11 +48,14 @@ export const createExcalidrawHocuspocusCollaboration = <
     }),
   );
   let closing: Promise<void> | undefined;
-  const close = () => {
+  const close: ExcalidrawHocuspocusCollaborationController<
+    TElement,
+    TAsset
+  >["close"] = (options) => {
     if (!closing) {
       unsubscribe();
       collaboration.dispose();
-      closing = session.close();
+      closing = session.close(options);
     }
     return closing;
   };

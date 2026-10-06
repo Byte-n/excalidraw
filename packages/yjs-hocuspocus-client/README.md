@@ -8,9 +8,9 @@
 
 默认创建 owned Doc、provider/socket；借用 Doc 时仍拥有自己创建的 provider/socket；显式借用 provider 时要求其 document 和 room 匹配，释放仅移除 session 自身监听。已认证且已同步的 borrowed provider 直接 ready，不重新连接。borrowed provider 的 token 与 socket 配置仍由原拥有者管理。注入 persistence 为会话专用适配，由 session 调用 close；presence 通道由 browser controller 释放，不能自行销毁共享 provider。
 
-`ready` 表示首次远端同步和场景校验完成，连接/权限状态可通过 `getState`、`subscribe` 观察。断线重连复用同一 Doc/provider，重新认证和同步后解除写入门控。`setPermission` 提供宿主附加权限 gate，不能提升 server 已声明的 readonly scope。`refreshToken` 续签使用同一 provider；token 可返回字符串或 `{token,expiresAtMs}`，后者提前 30 秒自动续签。Hocuspocus onTokenSync 不会自动发送新 authenticated scope，宿主服务必须显式通过原生协议回传；业务 stateless 推送可由宿主解析后设置 gate。
+`ready` 表示首次远端同步和场景校验完成，连接/权限状态可通过 `getState`、`subscribe` 观察。断线重连复用同一 Doc/provider，重新认证和同步后解除写入门控。宿主可选择 `allowOfflineEditing: true`，首次同步后普通 `disconnect()` 保留本地编辑，恢复后同步积累的修改。`suspend()` 暂停认证、网络发送与编辑，保留原副本，旧 authenticated/synced 回调不能重新开放门控；新令牌通过宿主验证后显式 `reconnect()` 恢复。`setPermission` 提供宿主附加权限 gate，不能提升 server 已声明的 readonly scope。`refreshToken` 续签使用同一 provider；token 可返回字符串或 `{token,expiresAtMs}`，后者提前 30 秒自动续签。Hocuspocus onTokenSync 不会自动发送新 authenticated scope，宿主服务必须显式通过原生协议回传；业务 stateless 推送可由宿主解析后设置 gate。
 
-`onAuthenticationFailed(reason)` 可按宿主策略选择 retry/reject/close（默认 close）。`reject(error)` 立即门控并停止 owned 网络发送，保留副本等待宿主恢复。宿主调用 `close({preserve(document)})` 时先停 socket、destroy provider，再停止 persistence、执行副本隔离回调，最后销毁 owned Doc；不得将旧被拒场景重新发回同一权威 room。browser controller 关闭后由宿主创建新 controller/Doc，重置 editor、撤销和异步资源代际；包不伪造原地 Yjs 清空恢复。`close` 幂等，`dispose` 触发同一关闭流程。
+`onAuthenticationFailed(reason)` 可按宿主策略选择 retry/pause/reject/close（默认 close）。`reject(error)` 立即门控并停止 owned 网络发送，保留副本等待宿主恢复。宿主调用 `close({preserve(document)})` 时先停 socket、destroy provider，再停止 persistence、执行副本隔离回调，最后销毁 owned Doc；preserve 保存失败时停止发送并保留原 Doc 供宿主导出，close Promise 返回失败；不得将旧被拒场景重新发回同一权威 room。browser controller 关闭后由宿主创建新 controller/Doc，重置 editor、撤销和异步资源代际；包不伪造原地 Yjs 清空恢复。`close` 幂等，`dispose` 触发同一关闭流程。
 
 `applyCommand` 接受公开快照/import 命令，`mutate` 复用 yjs add/update/delete/connect 命令内核。一次本地发布仅产生一次 Yjs update。ready、发送完成和 unsyncedChanges 清零都不代表具体工具写入 ACK；断线有未同步本地更新时 `onError` 提供 `outcome: "unknown"`。本包不实现 AgentTool。
 

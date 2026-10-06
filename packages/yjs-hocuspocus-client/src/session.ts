@@ -52,6 +52,8 @@ export const createHocuspocusHeadlessSession = <
     generation: 0,
   };
   let authorized = false;
+  let initiallySynced = false;
+  let suspended = false;
   let permission = true;
   let closed = false;
   let settled = false;
@@ -181,7 +183,7 @@ export const createHocuspocusHeadlessSession = <
     cleanups.push(() => provider.off(event, listener));
   };
   listen<onAuthenticatedParameters>("authenticated", ({ scope }) => {
-    if (!closed) {
+    if (!closed && !suspended) {
       authorized = scope === "read-write";
       update({
         canEdit:
@@ -209,6 +211,9 @@ export const createHocuspocusHeadlessSession = <
             failReady({ ...error, cause });
             void session.close();
           });
+        } else if (action === "pause") {
+          session.suspend();
+          report(error);
         } else if (action === "reject") {
           session.reject(error);
         } else {
@@ -223,15 +228,27 @@ export const createHocuspocusHeadlessSession = <
     if (!closed && state.status !== "rejected") {
       update({
         status,
-        ...(status !== "connected" ? { synced: false, canEdit: false } : {}),
+        ...(status !== "connected"
+          ? {
+              synced:
+                initiallySynced && !suspended && !!options.allowOfflineEditing,
+              canEdit:
+                initiallySynced &&
+                !suspended &&
+                !!options.allowOfflineEditing &&
+                authorized &&
+                permission,
+            }
+          : {}),
       });
     }
   });
   listen<onSyncedParameters>("synced", ({ state: synced }) => {
-    if (closed || state.status === "rejected") {
+    if (closed || suspended || state.status === "rejected") {
       return;
     }
     if (synced) {
+      initiallySynced = true;
       try {
         const validation: unknown = options.validateScene(
           binding.getCanonical(),
@@ -261,11 +278,15 @@ export const createHocuspocusHeadlessSession = <
   });
   listen<unknown>("disconnect", () => {
     if (!closed && state.status !== "rejected") {
-      authorized = false;
+      const offlineEditable =
+        !!options.allowOfflineEditing && initiallySynced && !suspended;
+      if (!offlineEditable) {
+        authorized = false;
+      }
       update({
         status: "disconnected",
-        canEdit: false,
-        synced: false,
+        canEdit: offlineEditable && authorized && permission,
+        synced: offlineEditable,
         generation: state.generation + 1,
       });
       if (provider.hasUnsyncedChanges) {
@@ -341,6 +362,28 @@ export const createHocuspocusHeadlessSession = <
       failReady(error);
       report(error);
     },
+    suspend: () => {
+      if (closed) {
+        return;
+      }
+      suspended = true;
+      authorized = false;
+      update({
+        status: "disconnected",
+        synced: false,
+        canEdit: false,
+        generation: state.generation + 1,
+      });
+      if (ownProvider) {
+        socket?.disconnect();
+        provider.detach();
+      }
+    },
+    disconnect: () => {
+      if (!closed && ownProvider) {
+        socket?.disconnect();
+      }
+    },
     reconnect: async () => {
       if (closed) {
         throw new Error("Hocuspocus session is closed");
@@ -348,6 +391,7 @@ export const createHocuspocusHeadlessSession = <
       if (state.status === "rejected") {
         throw new Error("rejected session requires a fresh document");
       }
+      suspended = false;
       update({ status: "connecting", synced: false, canEdit: false });
       provider.synced = false;
       provider.attach();
@@ -399,8 +443,11 @@ export const createHocuspocusHeadlessSession = <
         } finally {
           try {
             await options.persistence?.close();
-            await closeOptions?.preserve?.(document);
           } finally {
+            // 保存失败时保留原文档，宿主可继续导出或重试隔离。
+            if (closeOptions?.preserve) {
+              await closeOptions.preserve(document);
+            }
             if (ownDocument) {
               document.destroy();
             }
