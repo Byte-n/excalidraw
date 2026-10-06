@@ -11,12 +11,13 @@ test.each(["development", "production", "default"])(
         "-e",
         `
           import assert from 'node:assert/strict';
+          delete globalThis.navigator;
           import * as Y from 'yjs';
-          import {
+          const {
             createSceneElement, createSceneTextElement, createSceneArrowElement,
             createSceneConnectionEndpoint, setCustomTextMetricsProvider,
             createSceneBinding, createExcalidrawSceneCommands,
-          } from '@excalidraw/yjs';
+          } = await import('@excalidraw/yjs');
           assert.equal(typeof window, 'undefined');
           assert.equal(typeof document, 'undefined');
           assert.equal(typeof indexedDB, 'undefined');

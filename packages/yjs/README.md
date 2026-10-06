@@ -52,3 +52,5 @@ Hocuspocus 会话与 hooks 契约分别位于 `@excalidraw/yjs-hocuspocus-client
 `connect` 接收 line/arrow 的 start/end `{ elementId, fixedPoint, mode }`，同批修订连接线与两端 `boundElements`，重连时移除该连接线的旧反向引用；不对不相关 canonical 软关系追加全场景硬约束，显示投影仍不回写。关系指向已删除/不存在的目标会在事务前拒绝。`createSceneConnectionEndpoint` 用公开 element 几何计算 arrow/elbow 的 fixedPoint；line 可由宿主提供显式 endpoint。
 
 `createSceneElement`、`createSceneTextElement`、`createSceneLineElement`、`createSceneArrowElement` 使用锁定 element 公开 factory 生成完整元素和身份，填入合法 fractional index；矩形等基本图形在当前版本规范化为 `composite_shape`。多个图形默认同索引允许并发，canonical 顺序仍由 index 和 ID 确定；需要指定位置时由宿主提供公开 factory 的 index。文字度量通过 `setCustomTextMetricsProvider` 显式注入，此 provider 是 element 的进程级配置，宿主应在创建文字前统一初始化。Node 测试直接导入三种条件公开产物，无 DOM、IndexedDB 或 editor attach，并验证单份 Yjs 与一批一次 update。
+
+common 公开产物的模块级平台检测已提供无 navigator/window/document 的 Node 守卫；无浏览器环境的平台标志为 false。严格 Node 工厂回归在移除 navigator 后动态导入公开入口，避免 Node 内置 navigator 掩盖初始化依赖。

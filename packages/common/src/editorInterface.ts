@@ -34,21 +34,25 @@ export const MQ_RIGHT_SIDEBAR_MIN_WIDTH = 1229;
 // -----------------------------------------------------------------------------
 
 // user agent detections
-export const isDarwin = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
-export const isWindows = /^Win/.test(navigator.platform);
-export const isAndroid = /\b(android)\b/i.test(navigator.userAgent);
+// 公开纯数据能力可由无浏览器环境的 Node 消费，平台检测不初始化浏览器对象。
+const platform = typeof navigator === "undefined" ? "" : navigator.platform;
+const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
+export const isDarwin = /Mac|iPod|iPhone|iPad/.test(platform);
+export const isWindows = /^Win/.test(platform);
+export const isAndroid = /\b(android)\b/i.test(userAgent);
 export const isFirefox =
   typeof window !== "undefined" &&
   "netscape" in window &&
-  navigator.userAgent.indexOf("rv:") > 1 &&
-  navigator.userAgent.indexOf("Gecko") > 1;
-export const isChrome = navigator.userAgent.indexOf("Chrome") !== -1;
-export const isSafari =
-  !isChrome && navigator.userAgent.indexOf("Safari") !== -1;
+  userAgent.indexOf("rv:") > 1 &&
+  userAgent.indexOf("Gecko") > 1;
+export const isChrome = userAgent.indexOf("Chrome") !== -1;
+export const isSafari = !isChrome && userAgent.indexOf("Safari") !== -1;
 export const isIOS =
-  /iPad|iPhone/i.test(navigator.platform) ||
+  /iPad|iPhone/i.test(platform) ||
   // iPadOS 13+
-  (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+  (userAgent.includes("Mac") &&
+    typeof document !== "undefined" &&
+    "ontouchend" in document);
 // keeping function so it can be mocked in test
 export const isBrave = () =>
   (navigator as any).brave?.isBrave?.name === "isBrave";
@@ -58,7 +62,7 @@ export const isBrave = () =>
 //   /android|webos|ipod|blackberry|iemobile|opera mini/i.test(
 //     navigator.userAgent,
 //   ) ||
-//   /android|ios|ipod|blackberry|windows phone/i.test(navigator.platform);
+//   /android|ios|ipod|blackberry|windows phone/i.test(platform);
 
 // utilities
 export const isMobileBreakpoint = (width: number, height: number) => {

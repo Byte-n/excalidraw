@@ -5,6 +5,7 @@ import type {
   ExcalidrawSceneCommand,
   ExcalidrawSceneElement,
   SceneSnapshot,
+  SceneMutation,
 } from "@excalidraw/yjs";
 
 import type {
@@ -37,10 +38,13 @@ export type HocuspocusSessionError = Readonly<{
   outcome?: "unknown";
 }>;
 
+export type HocuspocusSessionToken =
+  | string
+  | { token: string; expiresAtMs?: number };
 export type HocuspocusTokenProvider = (input: {
   room: string;
   signal: AbortSignal;
-}) => string | Promise<string>;
+}) => HocuspocusSessionToken | Promise<HocuspocusSessionToken>;
 
 export interface HocuspocusLocalPersistence {
   /** 宿主控制副本政策，加载完成不代表首次远端同步完成。 */
@@ -71,6 +75,15 @@ export type HocuspocusHeadlessSessionOptions<
   persistence?: HocuspocusLocalPersistence;
   validateScene(scene: SceneSnapshot<TElement, TAsset>): void;
   onError?(error: HocuspocusSessionError): void;
+  /** 本地副本加载后、首次网络接入前的宿主初始化；不持有连接。 */
+  prepare?(input: {
+    document: Y.Doc;
+    provider: HocuspocusProvider;
+    signal: AbortSignal;
+  }): void | Promise<void>;
+  /** 宿主解析业务 stateless 协议，并调用 session 的权限/拒绝/恢复入口。 */
+  onStateless?(payload: string): void;
+  onAuthenticationFailed?(reason: string): "retry" | "reject" | "close";
 };
 
 export interface HocuspocusHeadlessSession<
@@ -85,8 +98,18 @@ export interface HocuspocusHeadlessSession<
   subscribe(listener: (state: HocuspocusSessionState) => void): () => void;
   getScene(): SceneSnapshot<TElement, TAsset>;
   applyCommand(command: ExcalidrawSceneCommand<TElement, TAsset>): string[];
+  mutate(input: {
+    mutations: readonly SceneMutation<TElement>[];
+    assets?: Readonly<Record<string, TAsset>>;
+  }): string[];
+  setPermission(canEdit: boolean): void;
+  reject(error: HocuspocusSessionError): void;
+  reconnect(): Promise<void>;
+  refreshToken(): Promise<void>;
   /** 幂等；仅销毁 owned 文档和 provider，释放自身监听与持久化适配。 */
-  close(): Promise<void>;
+  close(options?: {
+    preserve?(document: Y.Doc): void | Promise<void>;
+  }): Promise<void>;
 }
 
 export type CreateHocuspocusHeadlessSession = <
@@ -101,7 +124,13 @@ export type ExcalidrawHocuspocusCollaborationOptions<
   TAsset extends { size: number; mimeType: string },
 > = HocuspocusHeadlessSessionOptions<TElement, TAsset> & {
   assets: AssetTransport<TAsset>;
-  presence: ExcalidrawPresenceChannel;
+  presence:
+    | ExcalidrawPresenceChannel
+    | ((provider: HocuspocusProvider) => ExcalidrawPresenceChannel);
+  onSceneError?(
+    error: unknown,
+    operation: "restore" | "publish" | "command",
+  ): void;
 };
 
 export type ExcalidrawHocuspocusCollaborationController<
@@ -118,3 +147,6 @@ export type CreateExcalidrawHocuspocusCollaboration = <
 >(
   options: ExcalidrawHocuspocusCollaborationOptions<TElement, TAsset>,
 ) => ExcalidrawHocuspocusCollaborationController<TElement, TAsset>;
+
+export { createHocuspocusHeadlessSession } from "./session";
+export { createExcalidrawHocuspocusCollaboration } from "./collaboration";
