@@ -65,6 +65,7 @@ import type Library from "./data/library";
 import type { ContextMenuItems } from "./components/ContextMenu";
 import type { SnapLine } from "./snapping";
 import type { ImportedDataState } from "./data/types";
+import type { ImportContext, PreparedImport } from "./data/import";
 import type { SetViewportOptions } from "./viewport";
 
 import type { Language } from "./i18n";
@@ -1021,7 +1022,29 @@ export type ElementRenderOffsets = ReadonlyMap<
   NonNullable<ElementRenderOverride["offset"]>
 >;
 
+export type ExcalidrawCollaborationPresentation = Readonly<{
+  isCollaborating: boolean;
+  readOnly: boolean;
+  userToFollow: UserToFollow | null;
+}>;
+
+/** 只描述编辑器接入，不持有传输服务或外部文档的所有权。 */
+export interface ExcalidrawCollaboration {
+  attach(
+    api: ExcalidrawImperativeAPI,
+    context: { ownerDocument: Document },
+  ): () => void;
+  getSnapshot(): ExcalidrawCollaborationPresentation;
+  subscribe(listener: () => void): () => void;
+  onChange: NonNullable<ExcalidrawProps["onChange"]>;
+  onPointerUpdate: NonNullable<ExcalidrawProps["onPointerUpdate"]>;
+  onScrollChange: NonNullable<ExcalidrawProps["onScrollChange"]>;
+  onUserFollow: NonNullable<ExcalidrawProps["onUserFollow"]>;
+}
+
 export interface ExcalidrawProps {
+  /** 协作对象由创建方管理；组件卸载仅解除当前编辑器绑定。 */
+  collaboration?: ExcalidrawCollaboration;
   className?: string;
   /**
    * Document that owns Excalidraw's mounted DOM.
@@ -1074,6 +1097,11 @@ export interface ExcalidrawProps {
     data: ClipboardData,
     event: ClipboardEvent | null,
   ) => Promise<boolean> | boolean;
+  /** Intercepts parsed file/drop/paste imports before the local scene mutation. */
+  onImport?: (
+    prepared: PreparedImport,
+    context: ImportContext,
+  ) => MaybePromise<boolean | void>;
   /**
    * Called when element(s) are duplicated so you can listen or modify as
    * needed.

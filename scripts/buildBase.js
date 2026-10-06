@@ -14,10 +14,12 @@ const getConfig = (outdir) => ({
     "@excalidraw/utils": path.resolve(__dirname, "../packages/utils/src"),
   },
   external: [
+    "@excalidraw/excalidraw",
     "@excalidraw/common",
     "@excalidraw/element",
     "@excalidraw/math",
     "@excalidraw/fractional-indexing",
+    "yjs",
   ],
 });
 

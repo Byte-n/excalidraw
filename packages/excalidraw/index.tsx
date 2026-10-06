@@ -30,6 +30,7 @@ import {
 } from "./hooks/useAppStateValue";
 import { EditorJotaiProvider, editorJotaiStore } from "./editor-jotai";
 import polyfill from "./polyfill";
+import { useExcalidrawCollaboration } from "./useExcalidrawCollaboration";
 
 import "./css/app.scss";
 import "./css/styles.scss";
@@ -69,6 +70,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     onExport,
     className,
     ownerDocument = document,
+    collaboration,
     onChange,
     onThemeChange,
     onIncrement,
@@ -95,6 +97,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     name,
     renderCustomStats,
     onPaste,
+    onImport,
     detectScroll = true,
     handleKeyboardGlobally = false,
     onLibraryChange,
@@ -156,16 +159,55 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
   };
 
   const setExcalidrawAPI = useContext(ExcalidrawAPISetContext);
+  const { onApi: bindCollaborationApi, presentation } =
+    useExcalidrawCollaboration(collaboration, ownerDocument);
 
   const onExcalidrawAPIRef = useRef(onExcalidrawAPI);
   onExcalidrawAPIRef.current = onExcalidrawAPI;
 
   const handleExcalidrawAPI = useCallback(
     (api: ExcalidrawImperativeAPI | null) => {
+      bindCollaborationApi(api);
       setExcalidrawAPI?.(api);
       onExcalidrawAPIRef.current?.(api);
     },
-    [setExcalidrawAPI],
+    [setExcalidrawAPI, bindCollaborationApi],
+  );
+
+  // 每类事件只从组件入口送入协作对象，业务观察回调随后执行一次。
+  const handleChange = useCallback<NonNullable<ExcalidrawProps["onChange"]>>(
+    (...args) => {
+      collaboration?.onChange(...args);
+      onChange?.(...args);
+    },
+    [collaboration, onChange],
+  );
+  const handlePointerUpdate = useCallback<
+    NonNullable<ExcalidrawProps["onPointerUpdate"]>
+  >(
+    (payload) => {
+      collaboration?.onPointerUpdate(payload);
+      onPointerUpdate?.(payload);
+    },
+    [collaboration, onPointerUpdate],
+  );
+  const handleScrollChange = useCallback<
+    NonNullable<ExcalidrawProps["onScrollChange"]>
+  >(
+    (...args) => {
+      collaboration?.onScrollChange(...args);
+      onScrollChange?.(...args);
+    },
+    [collaboration, onScrollChange],
+  );
+  const handleUserFollow = useCallback<
+    NonNullable<ExcalidrawProps["onUserFollow"]>
+  >(
+    (payload) => {
+      collaboration?.onUserFollow(payload);
+      onUserFollow?.(payload);
+    },
+    [collaboration, onUserFollow],
   );
 
   // whether the browser's own zoom is kept available while the editor is
@@ -213,7 +255,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           onExport={onExport}
           className={className}
           ownerDocument={ownerDocument}
-          onChange={onChange}
+          onChange={collaboration ? handleChange : onChange}
           onThemeChange={onThemeChange}
           onIncrement={onIncrement}
           initialData={initialData}
@@ -222,13 +264,19 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           onMount={onMount}
           onUnmount={onUnmount}
           onInitialize={onInitialize}
-          isCollaborating={isCollaborating}
-          onPointerUpdate={onPointerUpdate}
+          isCollaborating={presentation?.isCollaborating ?? isCollaborating}
+          onPointerUpdate={
+            collaboration ? handlePointerUpdate : onPointerUpdate
+          }
           renderTopLeftUI={renderTopLeftUI}
           renderTopRightUI={renderTopRightUI}
           renderTopCenterToolbar={renderTopCenterToolbar}
           langCode={langCode}
-          viewModeEnabled={viewModeEnabled}
+          viewModeEnabled={
+            presentation
+              ? viewModeEnabled === true || presentation.readOnly
+              : viewModeEnabled
+          }
           interaction={interaction}
           ui={ui}
           activeTool={activeTool}
@@ -240,6 +288,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           renderCustomStats={renderCustomStats}
           UIOptions={UIOptions}
           onPaste={onPaste}
+          onImport={onImport}
           detectScroll={detectScroll}
           handleKeyboardGlobally={handleKeyboardGlobally}
           onLibraryChange={onLibraryChange}
@@ -249,9 +298,9 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           generateLinkForSelection={generateLinkForSelection}
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
-          onScrollChange={onScrollChange}
-          onUserFollow={onUserFollow}
-          userToFollow={userToFollow}
+          onScrollChange={collaboration ? handleScrollChange : onScrollChange}
+          onUserFollow={collaboration ? handleUserFollow : onUserFollow}
+          userToFollow={presentation ? presentation.userToFollow : userToFollow}
           onDuplicate={onDuplicate}
           validateEmbeddable={validateEmbeddable}
           renderEmbeddable={renderEmbeddable}
@@ -432,11 +481,18 @@ export {
 } from "@excalidraw/utils/export";
 
 export { serializeAsJSON, serializeLibraryAsJSON } from "./data/json";
+export { prepareExport } from "./data/export-preparation";
 export {
   loadFromBlob,
   loadSceneOrLibraryFromBlob,
   loadLibraryFromBlob,
 } from "./data/blob";
+export { prepareClipboardImport, prepareImportBlob } from "./data/import";
+export type {
+  ImportContext,
+  ImportSource,
+  PreparedImport,
+} from "./data/import";
 export { mergeLibraryItems, getLibraryItemsHash } from "./data/library";
 export { isLinearElement } from "@excalidraw/element";
 
@@ -496,6 +552,8 @@ export type {
 } from "./components/TTDDialog/types";
 
 export type {
+  ExcalidrawCollaboration,
+  ExcalidrawCollaborationPresentation,
   ViewportStatusFrame,
   ElementRenderOverride,
   ElementRenderOverrides,

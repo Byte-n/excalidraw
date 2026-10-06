@@ -56,6 +56,7 @@ import { actionFinalize } from "../../actions";
 
 import { parseDataTransferEvent } from "../../clipboard";
 import { loadFromBlob } from "../../data";
+import { prepareImportBlob } from "../../data/import";
 
 import { distributeLibraryItemsOnSquareGrid } from "../../data/library";
 
@@ -483,6 +484,42 @@ export const handleAppOnDrop = async (
 
   // must be retrieved first, in the same frame
   const fileItems = dataTransferList.getFiles();
+  if (app.props.onImport && fileItems.length) {
+    try {
+      const context = {
+        source: "drop" as const,
+        position: { x: sceneX, y: sceneY },
+      };
+      const images = fileItems
+        .map((item) => item.file)
+        .filter(isSupportedImageFile);
+      const prepared =
+        fileItems.length > 1 && images.length === fileItems.length
+          ? {
+              kind: "image" as const,
+              source: "drop" as const,
+              files: images,
+              replace: false as const,
+            }
+          : await prepareImportBlob(
+              fileItems[0].file,
+              context,
+              app.state,
+              app.scene.getElementsIncludingDeleted(),
+            );
+      await app.props.onImport(prepared, context);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        app.setState({
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : t("alerts.couldNotLoadInvalidFile"),
+        });
+      }
+    }
+    return;
+  }
 
   if (fileItems.length === 1) {
     const { file, fileHandle } = fileItems[0];

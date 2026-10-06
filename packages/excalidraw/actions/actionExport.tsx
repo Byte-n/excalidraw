@@ -13,6 +13,8 @@ import { IconButton } from "../components/IconButton";
 import { Tooltip } from "../components/Tooltip";
 import { ExportIcon, questionCircle, saveAs } from "../components/icons";
 import { loadFromJSON, saveAsJSON } from "../data";
+import { prepareImportBlob } from "../data/import";
+import { fileOpen } from "../data/filesystem";
 import { isImageFileHandle } from "../data/blob";
 import { nativeFileSystemSupported } from "../data/filesystem";
 
@@ -401,6 +403,17 @@ export const actionLoadScene = register({
   },
   perform: async (elements, appState, _, app) => {
     try {
+      if (app.props.onImport) {
+        const file = await fileOpen({ description: "Excalidraw files" });
+        const prepared = await prepareImportBlob(
+          file,
+          { source: "file" },
+          appState,
+          elements,
+        );
+        await app.props.onImport(prepared, { source: "file" });
+        return false;
+      }
       const {
         elements: loadedElements,
         appState: loadedAppState,

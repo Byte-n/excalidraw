@@ -371,6 +371,38 @@ export const pasteFromClipboard = async (app: App, event: ClipboardEvent) => {
 
   const data = await parseClipboard(dataTransferList, isPlainPaste);
 
+  if (app.props.onImport) {
+    const prepared = data.elements
+      ? {
+          kind: "clipboard-elements" as const,
+          source: "paste" as const,
+          elements: data.elements,
+          files: data.files,
+          replace: false as const,
+        }
+      : filesList.length
+      ? {
+          kind: "image" as const,
+          source: "paste" as const,
+          files: filesList.map((item) => item.file),
+          replace: false as const,
+        }
+      : null;
+    if (prepared) {
+      event?.preventDefault();
+      try {
+        await app.props.onImport(prepared, { source: "paste" });
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          app.setState({
+            errorMessage: error instanceof Error ? error.message : "导入失败",
+          });
+        }
+      }
+      return;
+    }
+  }
+
   if (app.props.onPaste) {
     try {
       if ((await app.props.onPaste(data, event)) === false) {

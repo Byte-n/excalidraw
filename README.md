@@ -122,3 +122,7 @@ If you like the project, you can become a sponsor at [Open Collective](https://o
 Last but not least, we're thankful to these companies for offering their services for free:
 
 [![Vercel](./.github/assets/vercel.svg)](https://vercel.com) [![Sentry](./.github/assets/sentry.svg)](https://sentry.io) [![Crowdin](./.github/assets/crowdin.svg)](https://crowdin.com)
+
+## 包构建顺序
+
+`yarn build:packages` 按 common → fractional-indexing → laser-pointer → math → element → excalidraw → yjs 构建。Yjs 协作内核消费 core 公开 API，core 先生成产物与声明；core 不依赖 Yjs。

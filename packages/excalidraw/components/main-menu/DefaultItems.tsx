@@ -72,6 +72,7 @@ export const LoadScene = () => {
   const { t } = useI18n();
   const actionManager = useExcalidrawActionManager();
   const elements = useExcalidrawElements();
+  const appProps = useAppProps();
 
   if (!actionManager.isActionEnabled(actionLoadScene)) {
     return null;
@@ -79,6 +80,7 @@ export const LoadScene = () => {
 
   const handleSelect = async () => {
     if (
+      appProps.onImport ||
       !elements.length ||
       (await openConfirmModal({
         title: t("overwriteConfirm.modal.loadFromFile.title"),
