@@ -20,9 +20,9 @@ binding.transact([{ id: "text", text: "宿主元素" }]);
 binding.dispose();
 ```
 
-editor 解绑仅清除指针/选区/跟随、计时器、DOM 监听与在途资源，支持 StrictMode 和重新挂载；会话 `dispose` 才释放宿主为本会话创建的 Presence 通道。通道不应直接销毁共享 provider。绑定释放不销毁宿主 doc，宿主在自身会话结束时管理 doc/provider 生命周期。此基础快照接口不代表完整增量/撤销/命令契约已实现。
+editor 解绑仅清除指针/选区/跟随、计时器、DOM 监听与在途资源，支持 StrictMode 和重新挂载；会话 `dispose` 才释放宿主为本会话创建的 Presence 通道。通道不应直接销毁共享 provider。绑定释放不销毁宿主 doc，宿主在自身会话结束时管理 doc/provider 生命周期。基础绑定提供整对象事务写入；显式场景命令及 editor 撤销边界由下述命令内核与 controller 提供。
 
-`yjs` 为 peer `^13.6.0`，开发与当前 Web 均锁定 `13.6.32`。core peer 为 `@excalidraw/excalidraw ^0.18.0`。公开入口可在 Node 中导入和使用基础绑定；editor attach 时才动态加载公开 core 根入口。加载期间只读，保留首次非 loading 初始化信号；迟到加载受绑定代际保护，失败通过 `onError(error, "restore")` 报告。包构建保持 `yjs` 和 core 根入口 external；场景内核仅调用 core 公开 restore 与 capture 能力，不打包第二份 editor/React。宿主必须提供一份运行时 Yjs，Vite 链接开发需在 `resolve.dedupe` 中包含 `yjs`，否则 Yarn 与 pnpm 各自的物理安装可能产生不同构造器。当前 Web 的真实构建验证两侧 peer 解析汇合到宿主 pnpm 版本；不承诺跨独立工程的直接 Node 导入天然去重。
+`yjs` 为 peer `^13.6.0`，开发与当前 Web 均锁定 `13.6.32`。core peer 为 `@excalidraw/excalidraw ^0.18.0`。公开入口可在 Node 中导入和使用基础绑定；editor attach 时才动态加载公开 core 根入口。加载期间只读，保留首次非 loading 初始化信号；迟到加载受绑定代际保护，失败通过 `onError(error, "restore")` 报告。包构建保持 `yjs` 和 core 根入口 external；场景内核仅调用 core 公开 restore 与 capture 能力，不打包第二份 editor/React。宿主必须提供一份运行时 Yjs，Vite 链接开发需在 `resolve.dedupe` 中包含 `yjs`，否则 Yarn 与 pnpm 各自的物理安装可能产生不同构造器。docs-platform Web 与 collaboration 通过本地 `file:` 依赖安装公开产物，使 Yjs/client/server 与宿主 provider 使用 pnpm peer 图中的同一 Yjs；Web 另保留 Vite 去重。vendor 独立 Yarn 安装用于包构建和测试，不承诺任意跨独立工程的直接 Node 导入天然去重。修改包后须重新构建并刷新宿主安装产物；docs-platform 根目录的 `pnpm vendor:build` 完成此顺序。
 
 ## 产物与命令
 
@@ -41,7 +41,7 @@ editor 解绑仅清除指针/选区/跟随、计时器、DOM 监听与在途资�
 
 ## Node 场景命令能力边界
 
-锁定的 `@excalidraw/element 0.18.0` 公开根入口可在无 DOM 的 Node 中导入。公开 `newElement`、`newTextElement`、`newArrowElement` 支持 headless factory；文字需要宿主通过公开 `setCustomTextMetricsProvider` 注入度量。`calculateFixedPointForNonElbowArrowBinding` 和 `calculateFixedPointForElbowArrowBinding` 可用元素 Map 计算连接几何。高层 `convertToExcalidrawElements` 及 `bindBindingElement` 依赖 Scene/DOM，不能用于 headless 命令路径；core 根 Node 导入当前也受 roughjs 扩展名解析限制。后续场景命令应使用公开 element factory/纯几何，并在完整候选场景内同步维护反向关系，不扩展 core 或将软关系升级成全场景硬约束。
+锁定的 `@excalidraw/element 0.18.0` 公开根入口可在无 DOM 的 Node 中导入。公开 `newElement`、`newTextElement`、`newArrowElement` 支持 headless factory；文字需要宿主通过公开 `setCustomTextMetricsProvider` 注入度量。`calculateFixedPointForNonElbowArrowBinding` 和 `calculateFixedPointForElbowArrowBinding` 可用元素 Map 计算连接几何。高层 `convertToExcalidrawElements` 及 `bindBindingElement` 依赖 Scene/DOM，不能用于 headless 命令路径；core 根 Node 导入当前也受 roughjs 扩展名解析限制。场景命令使用公开 element factory/纯几何，在完整候选场景内同步维护反向关系，不扩展 core 或将软关系升级成全场景硬约束。
 
 Hocuspocus 会话与 hooks 契约分别位于 `@excalidraw/yjs-hocuspocus-client` 和 `@excalidraw/yjs-hocuspocus-server`，均锁定 Hocuspocus `4.6.0` 与 Yjs `13.6.32` peer；本包继续不依赖 Hocuspocus。通用场景结构和算法与宿主 schema、预算、资产授权及 epoch/replica 政策保持分离。
 
