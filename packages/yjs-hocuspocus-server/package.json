@@ -1,0 +1,36 @@
+{
+  "name": "@excalidraw/yjs-hocuspocus-server",
+  "version": "0.1.0",
+  "description": "Host-injected Hocuspocus server contracts for Excalidraw scenes",
+  "type": "module",
+  "types": "./dist/types/yjs-hocuspocus-server/src/index.d.ts",
+  "main": "./dist/prod/index.js",
+  "module": "./dist/prod/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/types/yjs-hocuspocus-server/src/index.d.ts",
+      "development": "./dist/dev/index.js",
+      "production": "./dist/prod/index.js",
+      "default": "./dist/prod/index.js"
+    }
+  },
+  "files": [
+    "dist/*"
+  ],
+  "scripts": {
+    "gen:types": "rimraf dist/types && tsc",
+    "build:esm": "rimraf dist && node ../../scripts/buildBase.js && yarn gen:types",
+    "build": "yarn build:esm",
+    "test": "vitest run --root ../.. packages/yjs-hocuspocus-server/_tests_ --passWithNoTests",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "lint": "eslint --ext .ts src --max-warnings 0"
+  },
+  "peerDependencies": {
+    "@excalidraw/yjs": "0.1.0",
+    "@hocuspocus/server": "4.6.0",
+    "yjs": "13.6.32"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

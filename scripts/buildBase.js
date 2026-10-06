@@ -20,6 +20,9 @@ const getConfig = (outdir) => ({
     "@excalidraw/math",
     "@excalidraw/fractional-indexing",
     "yjs",
+    "@excalidraw/yjs",
+    "@hocuspocus/provider",
+    "@hocuspocus/server",
   ],
 });
 

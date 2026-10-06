@@ -35,6 +35,12 @@ editor 解绑仅清除指针/选区/跟随、计时器、DOM 监听与在途资�
 | `yarn --cwd packages/yjs typecheck` | source 与 `_tests_` TypeScript 严格检查 |
 | `yarn --cwd packages/yjs lint` | source 与测试 ESLint，禁止 warning |
 | `yarn --cwd packages/yjs test` | 真实 Y.Doc 与公开包入口测试，先构建产物 |
-| `yarn build:packages` | common → fractional-indexing → laser-pointer → math → element → excalidraw → yjs |
+| `yarn build:packages` | common → fractional-indexing → laser-pointer → math → element → excalidraw → yjs → yjs-hocuspocus-client → yjs-hocuspocus-server |
 
 运行时 `development` 条件解析到 `dist/dev/index.js`；`production` 和默认解析到 `dist/prod/index.js`；类型解析到 `dist/types/yjs/src/index.d.ts`。发布文件限定 `dist/*`，不依赖源码 alias。从仓库根运行 `pnpm --dir apps/web test:canvas-package` 验证三种条件导出、产物依赖边界及实际 Web 构建中的单一 Yjs；Web `typecheck` 的消费者直接读取 exports 指向的声明。
+
+## Node 场景命令能力边界
+
+锁定的 `@excalidraw/element 0.18.0` 公开根入口可在无 DOM 的 Node 中导入。公开 `newElement`、`newTextElement`、`newArrowElement` 支持 headless factory；文字需要宿主通过公开 `setCustomTextMetricsProvider` 注入度量。`calculateFixedPointForNonElbowArrowBinding` 和 `calculateFixedPointForElbowArrowBinding` 可用元素 Map 计算连接几何。高层 `convertToExcalidrawElements` 及 `bindBindingElement` 依赖 Scene/DOM，不能用于 headless 命令路径；core 根 Node 导入当前也受 roughjs 扩展名解析限制。后续场景命令应使用公开 element factory/纯几何，并在完整候选场景内同步维护反向关系，不扩展 core 或将软关系升级成全场景硬约束。
+
+Hocuspocus 会话与 hooks 契约分别位于 `@excalidraw/yjs-hocuspocus-client` 和 `@excalidraw/yjs-hocuspocus-server`，均锁定 Hocuspocus `4.6.0` 与 Yjs `13.6.32` peer；本包继续不依赖 Hocuspocus。通用场景结构和算法与宿主 schema、预算、资产授权及 epoch/replica 政策保持分离。
