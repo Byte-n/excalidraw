@@ -28,7 +28,7 @@ import { LinearElementEditor } from "@excalidraw/element";
 import { getBoundTextElement, getContainerElement } from "@excalidraw/element";
 import { getLineHeightInPx } from "@excalidraw/element";
 import {
-  isArrowElement,
+  isLinearElement,
   isIframeLikeElement,
   isInitializedImageElement,
   isTextElement,
@@ -122,7 +122,7 @@ const renderElementToSvg = (
   let cy = (y2 - y1) / 2 - (element.y - y1);
   if (isTextElement(element)) {
     const container = getContainerElement(element, elementsMap);
-    if (isArrowElement(container)) {
+    if (isLinearElement(container)) {
       const [x1, y1, x2, y2] = getElementAbsoluteCoords(container, elementsMap);
 
       const boundTextCoords = LinearElementEditor.getBoundTextElementPosition(

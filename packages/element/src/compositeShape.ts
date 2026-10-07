@@ -28,7 +28,7 @@ import type {
 
 export type { BaseShapeId } from "./types";
 
-const BASE_SHAPE_IDS: readonly BaseShapeId[] = [
+export const BASE_SHAPE_IDS: readonly BaseShapeId[] = [
   "rectangle",
   "diamond",
   "ellipse",

@@ -5,7 +5,6 @@ import {
   convertToShape,
   convertToShapeHandlePointerMoveFromPointerDown,
   getHoveredElementForBinding,
-  isBindingElement,
   isLineElement,
   LinearElementEditor,
   maxBindingDistance_simple,
@@ -15,6 +14,7 @@ import {
 
 import type {
   ExcalidrawArrowElement,
+  ExcalidrawLinearElement,
   ExcalidrawLineElement,
   NonDeleted,
   NonDeletedExcalidrawElement,
@@ -88,7 +88,9 @@ export class AppDrawShape {
    * "inside" and stay where they were drawn, like the interactive
    * inside→inside flow.
    */
-  private bindRecognizedArrow = (arrow: NonDeleted<ExcalidrawArrowElement>) => {
+  private bindRecognizedArrow = (
+    arrow: NonDeleted<ExcalidrawLinearElement>,
+  ) => {
     const { app } = this;
     const elementsMap = app.scene.getNonDeletedElementsMap();
     const elements = app.scene.getNonDeletedElements();
@@ -254,7 +256,7 @@ export class AppDrawShape {
 
         app.insertNewElement(element);
 
-        if (app.state.isBindingEnabled && isBindingElement(element)) {
+        if (app.state.isBindingEnabled && element.type === "arrow") {
           this.bindRecognizedArrow(element);
         }
       }

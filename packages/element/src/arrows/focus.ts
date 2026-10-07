@@ -25,7 +25,7 @@ import { moveArrowAboveBindable } from "../zindex";
 
 import type {
   ElementsMap,
-  ExcalidrawArrowElement,
+  ExcalidrawLinearElement,
   ExcalidrawBindableElement,
   NonDeleted,
   FixedPointBinding,
@@ -37,7 +37,7 @@ import type { Scene } from "../Scene";
 
 export const isFocusPointVisible = (
   focusPoint: GlobalPoint,
-  arrow: ExcalidrawArrowElement,
+  arrow: ExcalidrawLinearElement,
   bindableElement: ExcalidrawBindableElement,
   elementsMap: ElementsMap,
   appState: {
@@ -102,7 +102,7 @@ export const isFocusPointVisible = (
 
 // Updates the arrow endpoints in "orbit" configuration
 const focusPointUpdate = (
-  arrow: NonDeleted<ExcalidrawArrowElement>,
+  arrow: NonDeleted<ExcalidrawLinearElement>,
   bindableElement: ExcalidrawBindableElement | null,
   isStartBinding: boolean,
   elementsMap: NonDeletedSceneElementsMap,
@@ -341,7 +341,7 @@ export const handleFocusPointDrag = (
 };
 
 export const handleFocusPointPointerDown = (
-  arrow: ExcalidrawArrowElement,
+  arrow: ExcalidrawLinearElement,
   pointerDownState: { origin: { x: number; y: number } },
   elementsMap: NonDeletedSceneElementsMap,
   appState: AppState,
@@ -444,7 +444,7 @@ export const handleFocusPointPointerUp = (
     "Must have a dragged focus point at pointer release",
   );
 
-  const arrow = LinearElementEditor.getElement<ExcalidrawArrowElement>(
+  const arrow = LinearElementEditor.getElement<ExcalidrawLinearElement>(
     linearElementEditor.elementId,
     scene.getNonDeletedElementsMap(),
   );
@@ -503,7 +503,7 @@ export const handleFocusPointPointerUp = (
 };
 
 export const handleFocusPointHover = (
-  arrow: ExcalidrawArrowElement,
+  arrow: ExcalidrawLinearElement,
   scenePointerX: number,
   scenePointerY: number,
   scene: Scene,

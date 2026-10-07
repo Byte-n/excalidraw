@@ -47,6 +47,8 @@ export const mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
   elementsMap: ElementsMap,
   updates: ElementUpdate<TElement>,
   options?: {
+    // 纯场景计算只更新几何与关系，版本由提交边界生成。
+    skipVersionBump?: boolean;
     isDragging?: boolean;
     isBindingEnabled?: boolean;
     isMidpointSnappingEnabled?: boolean;
@@ -160,9 +162,11 @@ export const mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
     ShapeCache.delete(element);
   }
 
-  element.version = updates.version ?? element.version + 1;
-  element.versionNonce = updates.versionNonce ?? randomInteger();
-  element.updated = getUpdatedTimestamp();
+  if (!options?.skipVersionBump) {
+    element.version = updates.version ?? element.version + 1;
+    element.versionNonce = updates.versionNonce ?? randomInteger();
+    element.updated = getUpdatedTimestamp();
+  }
 
   return element;
 };

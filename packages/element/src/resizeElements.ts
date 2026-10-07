@@ -272,7 +272,7 @@ const rotateSingleElement = (
     const textElement =
       scene.getElement<ExcalidrawTextElementWithContainer>(boundTextElementId);
 
-    if (textElement && !isArrowElement(element)) {
+    if (textElement && !isLinearElement(element)) {
       const { x, y } = computeBoundTextPosition(
         element,
         textElement,
@@ -490,7 +490,7 @@ const rotateMultipleElements = (
       }
 
       const boundText = getBoundTextElement(element, elementsMap);
-      if (boundText && !isArrowElement(element)) {
+      if (boundText && !isLinearElement(element)) {
         const { x, y } = computeBoundTextPosition(
           element,
           boundText,

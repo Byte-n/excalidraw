@@ -76,7 +76,7 @@ import { ShapeCache, toggleLinePolygonState } from "./shape";
 
 import { getLockedLinearCursorAlignSize } from "./sizeHelpers";
 
-import { isLineElement } from "./typeChecks";
+import { isLineElement, isLinearElement } from "./typeChecks";
 
 import type { Scene } from "./Scene";
 
@@ -138,6 +138,7 @@ const BoundTextPositionCache = new WeakMap<
     containerVersion: ExcalidrawElement["version"];
     textVersion: ExcalidrawElement["version"];
     position: { x: number; y: number };
+    geometryKey: readonly unknown[];
   }
 >();
 
@@ -1967,7 +1968,7 @@ export class LinearElementEditor {
       elementsMap,
     );
     const boundTextElement = getBoundTextElement(element, elementsMap);
-    if (!element || !isArrowElement(element) || !boundTextElement) {
+    if (!element || !isLinearElement(element) || !boundTextElement) {
       return null;
     }
     const pointerGlobalPoint = pointFrom<GlobalPoint>(
@@ -2065,13 +2066,25 @@ export class LinearElementEditor {
     boundTextElement: ExcalidrawTextElementWithContainer,
     elementsMap: ElementsMap,
   ): { x: number; y: number } => {
-    // derived on every hit test, bounds query and render of the label, so
-    // memoize on the pair of versions the result depends on
+    // 纯计算场景不会递增版本，缓存同时依赖实际几何与标签尺寸。
+    const geometryKey = [
+      element.points,
+      element.x,
+      element.y,
+      element.angle,
+      element.roundness,
+      boundTextElement.width,
+      boundTextElement.height,
+      boundTextElement.labelPosition,
+    ];
     const cached = BoundTextPositionCache.get(boundTextElement);
     if (
       cached &&
       cached.containerVersion === element.version &&
-      cached.textVersion === boundTextElement.version
+      cached.textVersion === boundTextElement.version &&
+      geometryKey.every((value, index) =>
+        Object.is(value, cached.geometryKey[index]),
+      )
     ) {
       return cached.position;
     }
@@ -2085,6 +2098,7 @@ export class LinearElementEditor {
     BoundTextPositionCache.set(boundTextElement, {
       containerVersion: element.version,
       textVersion: boundTextElement.version,
+      geometryKey,
       position,
     });
 
@@ -2099,7 +2113,7 @@ export class LinearElementEditor {
     if (element.points.length < 2) {
       return { x: boundTextElement.x, y: boundTextElement.y };
     }
-    if (isArrowElement(element) && boundTextElement.labelPosition != null) {
+    if (isLinearElement(element) && boundTextElement.labelPosition != null) {
       const pathPoint = LinearElementEditor.getPointAtPathParameter(
         element,
         boundTextElement.labelPosition,
@@ -2762,17 +2776,33 @@ type LinearElementPathMetrics = {
 
 const LinearElementPathMetricsCache = new WeakMap<
   ExcalidrawElement,
-  { version: ExcalidrawElement["version"]; metrics: LinearElementPathMetrics }
+  {
+    version: ExcalidrawElement["version"];
+    metrics: LinearElementPathMetrics;
+    geometryKey: readonly unknown[];
+  }
 >();
 
 function getLinearElementPathMetrics(
   element: ExcalidrawLinearElement,
   elementsMap: ElementsMap,
 ): LinearElementPathMetrics {
+  const geometryKey = [
+    element.points,
+    element.x,
+    element.y,
+    element.angle,
+    element.roundness,
+  ];
   const cached = LinearElementPathMetricsCache.get(element);
 
   if (cached) {
-    if (cached.version === element.version) {
+    if (
+      cached.version === element.version &&
+      geometryKey.every((value, index) =>
+        Object.is(value, cached.geometryKey[index]),
+      )
+    ) {
       return cached.metrics;
     }
 
@@ -2798,6 +2828,7 @@ function getLinearElementPathMetrics(
   LinearElementPathMetricsCache.set(element, {
     version: element.version,
     metrics,
+    geometryKey,
   });
 
   return metrics;

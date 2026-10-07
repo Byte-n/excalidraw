@@ -5,7 +5,11 @@ import { isFiniteNumber } from "@excalidraw/math";
 import type { AppState } from "@excalidraw/excalidraw/types";
 import type { GlobalPoint } from "@excalidraw/math";
 
-import { isFrameLikeElement, isTableElement, isTextElement } from "./typeChecks";
+import {
+  isFrameLikeElement,
+  isTableElement,
+  isTextElement,
+} from "./typeChecks";
 import { getElementsInGroup } from "./groups";
 import { syncMovedIndices } from "./fractionalIndex";
 import { getSelectedElements } from "./selection";
@@ -18,7 +22,7 @@ import { getNonDeletedElements } from ".";
 import type { Scene } from "./Scene";
 import type {
   ElementsMap,
-  ExcalidrawArrowElement,
+  ExcalidrawLinearElement,
   ExcalidrawElement,
   ExcalidrawFrameLikeElement,
   NonDeletedExcalidrawElement,
@@ -165,7 +169,7 @@ const getContiguousFrameRangeElements = (
  */
 export const moveArrowAboveBindable = (
   point: GlobalPoint,
-  arrow: ExcalidrawArrowElement,
+  arrow: ExcalidrawLinearElement,
   elements: readonly OrderedExcalidrawElement[],
   elementsMap: NonDeletedSceneElementsMap,
   scene: Scene,
@@ -603,10 +607,7 @@ function shiftElementsAccountingForFrames(
       )) {
         const existing = elementsToMove.get(member.id);
         if (!existing) {
-          elementsToMove.set(
-            member.id,
-            member as NonDeletedExcalidrawElement,
-          );
+          elementsToMove.set(member.id, member as NonDeletedExcalidrawElement);
         }
       }
     }

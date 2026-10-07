@@ -44,7 +44,7 @@ import { normalizeText } from "@excalidraw/element";
 import { wrapText } from "@excalidraw/element";
 import { getWrappedTextLines } from "@excalidraw/element";
 import {
-  isArrowElement,
+  isLinearElement,
   isBoundToContainer,
   isMindmapLayoutFrozen,
   isStickyNoteElement,
@@ -310,7 +310,7 @@ export const textWysiwyg = ({
       let maxHeight = updatedTextElement.height;
 
       if (container && updatedTextElement.containerId) {
-        if (isArrowElement(container)) {
+        if (isLinearElement(container)) {
           const boundTextCoords =
             LinearElementEditor.getBoundTextElementPosition(
               container,
@@ -375,7 +375,7 @@ export const textWysiwyg = ({
           // container in the same pass, so it cannot jump to (0, 0).
           if (
             isAdaptive &&
-            !isArrowElement(container) &&
+            !isLinearElement(container) &&
             (height > maxHeight + 1e-6 ||
               (isComposite && width > maxWidth + 1e-6))
           ) {
@@ -434,7 +434,7 @@ export const textWysiwyg = ({
           } else if (
             isComposite &&
             isAdaptive &&
-            !isArrowElement(container) &&
+            !isLinearElement(container) &&
             height < maxHeight - 1e-6
           ) {
             const dimensions = getBoundTextContainerDimensions(
@@ -467,7 +467,7 @@ export const textWysiwyg = ({
             // is reached when text is removed
             isAdaptive &&
             !isComposite &&
-            !isArrowElement(container) &&
+            !isLinearElement(container) &&
             container.height > originalContainerData.height &&
             height < maxHeight
           ) {
@@ -993,7 +993,7 @@ export const textWysiwyg = ({
               id: element.id,
             }),
           });
-        } else if (isArrowElement(container)) {
+        } else if (isLinearElement(container)) {
           // updating an arrow label may change bounds, prevent stale cache:
           bumpVersion(container);
         }

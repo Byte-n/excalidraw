@@ -1,3 +1,8 @@
+import {
+  setTableSceneCellStyle,
+  setTableSceneStyle,
+} from "@excalidraw/element/tableScene";
+
 import clsx from "clsx";
 import { useRef, useState } from "react";
 import { Popover } from "radix-ui";
@@ -1075,7 +1080,7 @@ const TableStyleActions = ({
       table.table.style?.backgroundColor ??
       "transparent"
     : table.table.style?.backgroundColor ?? "transparent";
-  const update = (patch: Record<string, unknown>) => {
+  const update = (patch: Partial<NonNullable<typeof table.table.style>>) => {
     const currentCellSelection = app.state.tableCellSelection;
     const currentAxisSelection = app.state.tableRowColSelection;
     const currentTableId =
@@ -1104,14 +1109,19 @@ const TableStyleActions = ({
           .filter((cell) => !cell.mergedInto)
           .map((cell) => cell.id),
       );
-      next = {
-        ...current,
-        cells: current.cells.map((cell) =>
-          ids.has(cell.id)
-            ? { ...cell, style: { ...cell.style, ...patch } }
-            : cell,
-        ),
-      };
+      app.scheduleCapture();
+      for (const cellId of ids) {
+        setTableSceneCellStyle(app.scene, currentTable, cellId, {
+          ...(patch.backgroundColor !== undefined && {
+            backgroundColor: patch.backgroundColor,
+          }),
+          ...(patch.clipContent !== undefined && {
+            clipContent: patch.clipContent,
+          }),
+        });
+      }
+      app.scene.triggerUpdate();
+      return;
     } else if (currentAxisSelection?.kind === "row") {
       next = {
         ...current,
@@ -1131,7 +1141,10 @@ const TableStyleActions = ({
         ),
       };
     } else {
-      next = { ...current, style: { ...current.style, ...patch } };
+      app.scheduleCapture();
+      setTableSceneStyle(app.scene, currentTable, patch);
+      app.scene.triggerUpdate();
+      return;
     }
     app.scheduleCapture();
     app.scene.mutateElement(currentTable, { table: next });

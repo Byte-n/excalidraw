@@ -63,7 +63,6 @@ import {
   isLinearElement,
   isFreeDrawElement,
   isInitializedImageElement,
-  isArrowElement,
   hasBoundTextElement,
   isMagicFrameElement,
   isFrameLikeElement,
@@ -848,7 +847,7 @@ const drawElementFromCanvas = (
 
   const boundTextElement = getBoundTextElement(element, allElementsMap);
 
-  if (isArrowElement(element) && boundTextElement) {
+  if (isLinearElement(element) && boundTextElement) {
     // punch the label "hole" by clipping the arrow's blit out of the label
     // rect (even-odd) instead of baking a rotated arrow copy with a cleared
     // hole into a separate (`maxDim`-squared!) canvas. The hole stays
@@ -1210,7 +1209,7 @@ const drawElement = (
         let shiftY = (y2 - y1) / 2 - (element.y - y1);
         if (isTextElement(element)) {
           const container = getContainerElement(element, elementsMap);
-          if (isArrowElement(container)) {
+          if (isLinearElement(container)) {
             const boundTextCoords =
               LinearElementEditor.getBoundTextElementPosition(
                 container,
@@ -1226,7 +1225,7 @@ const drawElement = (
 
         const boundTextElement = getBoundTextElement(element, elementsMap);
 
-        if (isArrowElement(element) && boundTextElement) {
+        if (isLinearElement(element) && boundTextElement) {
           // Draw arrow directly as vector (no temp-canvas bitmap blit which
           // introduces resampling blur). The label "hole" is cut by clipping
           // the arrow's own strokes out of the label rect (even-odd clip)

@@ -5,7 +5,6 @@ import {
   distance,
   DRAGGING_THRESHOLD,
   DEFAULT_FONT_SIZE,
-  getFontString,
   getGridPoint,
   getLineHeight,
   isSelectionLikeTool,
@@ -28,7 +27,6 @@ import {
   getMemberTranslationsForRows,
   getTableCellAtPoint,
   getTableCellBounds,
-  getTableBackgroundTextStyle,
   getTableCellRange,
   getVisibleTableCell,
   getTableColumnOffset,
@@ -36,47 +34,54 @@ import {
   getTableRowOffset,
   getTableSubtreeElements,
   getTableWidth,
-  measureText,
   resizeTest,
-  insertColumnInTable,
-  insertRowInTable,
   isBelowTableMinimumPreset,
   isBoundToContainer,
   isFrameLikeElement,
   isTableCellBackgroundText,
   isTableElement,
-  isTextElement,
   getTableAxisBlockRange,
   moveTableAxisBlock,
-  mergeTableCells,
-  splitTableCells,
   getCellsInTableRange,
   newElementWith,
   newTextElement,
   newTableElement,
-  removeColumnFromTable,
-  removeRowFromTable,
   tableDefaultSizes,
-  wrapText,
 } from "@excalidraw/element";
 
-import type {
-  ExcalidrawElement,
-  ExcalidrawTableElement,
-  ExcalidrawTextElement,
-  ElementsMap,
-  NonDeleted,
-  NonDeletedExcalidrawElement,
-  TableDataV1,
-  TableCellData,
-} from "@excalidraw/element/types";
+import { applyTableOperation } from "@excalidraw/element/tableScene";
+import {
+  collectCellMemberIds as collectSceneCellMemberIds,
+  getRowOrColumnCellIds,
+  applyMemberTranslations as translateSceneMembers,
+  getCellBackgroundTextLayout,
+  refitCellBackgroundTexts as refitSceneCellBackgroundTexts,
+} from "@excalidraw/element/tableSceneGeometry";
+import {
+  createCalculationScene,
+  finishSceneOperation,
+} from "@excalidraw/element/sceneOperations";
+import { splitTableSceneCells } from "@excalidraw/element/tableScene";
 
 import type {
   ElementUpdate,
   MaybeTransformHandleType,
 } from "@excalidraw/element";
 
+import type {
+  ExcalidrawElement,
+  ExcalidrawTableElement,
+  ExcalidrawTextElement,
+  NonDeleted,
+  NonDeletedExcalidrawElement,
+  TableDataV1,
+  TableCellData,
+} from "@excalidraw/element/types";
+import type { CanvasElementOperationResult } from "@excalidraw/element/sceneOperations";
+
 import { snapNewElement } from "../../snapping";
+
+import { commitCanvasElementOperation } from "./sceneOperations";
 
 import {
   getTableTitle,
@@ -411,19 +416,14 @@ export const commitTableCellMerge = (app: TableApp): boolean => {
     });
     return false;
   }
-  let merged: TableDataV1;
-  let range;
+  let result: CanvasElementOperationResult;
   try {
-    range = getTableCellRange(
-      table.table,
-      selection.anchorId,
-      selection.focusId,
-    );
-    merged = mergeTableCells(
-      table.table,
-      selection.anchorId,
-      selection.focusId,
-    );
+    result = applyTableOperation(app.scene.getElementsIncludingDeleted(), {
+      action: "mergeCells",
+      target: { tableId: table.id },
+      firstCellId: selection.anchorId,
+      lastCellId: selection.focusId,
+    });
   } catch (error) {
     app.setToast({
       message:
@@ -431,84 +431,12 @@ export const commitTableCellMerge = (app: TableApp): boolean => {
     });
     return false;
   }
-  const selected = getCellsInTableRange(table.table, range).sort(
-    (left, right) =>
-      table.table.rows.findIndex((row) => row.id === left.rowId) -
-        table.table.rows.findIndex((row) => row.id === right.rowId) ||
-      table.table.columns.findIndex((column) => column.id === left.columnId) -
-        table.table.columns.findIndex((column) => column.id === right.columnId),
-  );
-  const anchorId = merged.cells.find(
-    (cell) =>
-      cell.rowId === table.table.rows[range.startRow].id &&
-      cell.columnId === table.table.columns[range.startColumn].id,
-  )!.id;
-  const oldAnchorIds = new Set(
-    selected.filter((cell) => !cell.mergedInto).map((cell) => cell.id),
-  );
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  const backgrounds = selected.flatMap((cell) =>
-    (
-      getIndexedTableCellChildren(
-        elementsMap,
-        table.id,
-        cell.id,
-        "backgroundText",
-      ) ?? []
-    ).filter(isTextElement),
-  );
-  const content = backgrounds
-    .filter((text) => text.originalText.length > 0)
-    .map((text) => text.originalText)
-    .join("\n");
-  const retained =
-    backgrounds.find(
-      (text) =>
-        text.containerRef?.kind === "tableCell" &&
-        text.containerRef.cellId === anchorId,
-    ) ?? backgrounds.find((text) => text.originalText.length > 0);
+  if (result.references.domain !== "table") {
+    return false;
+  }
+  const anchorId = result.references.anchorCellId!;
   app.store.scheduleCapture();
-  for (const cellId of oldAnchorIds) {
-    if (cellId === anchorId) {
-      continue;
-    }
-    for (const member of getIndexedTableCellChildren(
-      elementsMap,
-      table.id,
-      cellId,
-    ) ?? []) {
-      if (
-        member.containerRef?.kind === "tableCell" &&
-        member.containerRef.role === "content"
-      ) {
-        app.scene.mutateElement(member as ExcalidrawElement, {
-          containerRef: { ...member.containerRef, cellId: anchorId },
-        });
-      }
-    }
-  }
-  for (const text of backgrounds) {
-    if (text.id === retained?.id) {
-      app.scene.mutateElement(text, {
-        originalText: content,
-        containerRef: {
-          kind: "tableCell",
-          elementId: table.id,
-          cellId: anchorId,
-          role: "backgroundText",
-        },
-      });
-    } else {
-      app.scene.mutateElement(text, {
-        isDeleted: true,
-        containerRef: undefined,
-      });
-    }
-  }
-  app.scene.mutateElement(table, { table: merged });
-  if (retained) {
-    refitCellBackgroundTexts(app, table, [anchorId]);
-  }
+  commitCanvasElementOperation(app.scene, result);
   app.setState({
     tableCellSelection: { ...selection, anchorId, focusId: anchorId },
   });
@@ -521,43 +449,39 @@ export const commitTableCellSplit = (app: TableApp): boolean => {
   if (!selection) {
     return false;
   }
-  const table = app.scene.getNonDeletedElement(selection.tableId);
-  if (!table || !isTableElement(table)) {
-    return false;
-  }
-  let split: TableDataV1;
-  let splitAnchors: string[];
+  const input = app.scene.getElementsIncludingDeleted();
+  const scene = createCalculationScene(input);
+  let result: CanvasElementOperationResult;
   try {
-    const range = getTableCellRange(
+    const table = scene.getNonDeletedElement(selection.tableId);
+    if (!table || !isTableElement(table)) {
+      return false;
+    }
+    const cells = getCellsInTableRange(
       table.table,
-      selection.anchorId,
-      selection.focusId,
+      getTableCellRange(table.table, selection.anchorId, selection.focusId),
     );
-    const cells = getCellsInTableRange(table.table, range);
-    splitAnchors = cells
-      .filter(
-        (cell) =>
-          !cell.mergedInto &&
-          ((cell.rowSpan ?? 1) > 1 || (cell.columnSpan ?? 1) > 1),
-      )
-      .map((cell) => cell.id);
-    split = splitTableCells(
-      table.table,
+    splitTableSceneCells(
+      scene,
+      table,
       cells.map((cell) => cell.id),
     );
+    result = finishSceneOperation(input, scene.getElementsIncludingDeleted(), {
+      domain: "table",
+      action: "splitCell",
+      tableId: table.id,
+    });
   } catch (error) {
     app.setToast({
       message:
         error instanceof Error ? error.message : "Cannot split these cells",
     });
     return false;
+  } finally {
+    scene.destroy();
   }
   app.store.scheduleCapture();
-  app.scene.mutateElement(table, { table: split });
-  const updatedTable = app.scene.getNonDeletedElement(table.id);
-  if (updatedTable && isTableElement(updatedTable)) {
-    refitCellBackgroundTexts(app, updatedTable, splitAnchors);
-  }
+  commitCanvasElementOperation(app.scene, result);
   app.scene.triggerUpdate();
   return true;
 };
@@ -1158,87 +1082,7 @@ const collectCellMemberIds = (
   app: TableApp,
   tableId: string,
   cellIds: readonly string[],
-): string[] => {
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  const allElements = app.scene.getNonDeletedElements();
-  const ids = new Set<string>();
-  for (const cellId of cellIds) {
-    for (const member of getIndexedTableCellChildren(
-      elementsMap,
-      tableId,
-      cellId,
-    ) ?? []) {
-      ids.add(member.id);
-      if (isTableElement(member) || isFrameLikeElement(member)) {
-        for (const descendant of getTableSubtreeElements(
-          allElements,
-          member.id,
-          elementsMap,
-        )) {
-          ids.add(descendant.id);
-        }
-      }
-      const boundText = getBoundTextElement(member, elementsMap);
-      if (boundText) {
-        ids.add(boundText.id);
-      }
-    }
-  }
-  return [...ids];
-};
-
-/** Cell ids of one row or column of the table. */
-const getRowOrColumnCellIds = (
-  table: NonDeleted<ExcalidrawTableElement>,
-  kind: "row" | "column",
-  id: string,
-): string[] =>
-  table.table.cells
-    .filter((cell) => (kind === "row" ? cell.rowId : cell.columnId) === id)
-    .map((cell) => cell.id);
-
-/**
- * Resolves the translation delta for every member element of the translated
- * rows/columns — direct cell members, nested subtree members, and bound texts
- * (which follow their host, having no cell ref of their own).
- */
-const buildMemberDeltas = (
-  app: TableApp,
-  table: NonDeleted<ExcalidrawTableElement>,
-  kind: "row" | "column",
-  translations: Map<string, { dx: number; dy: number }>,
-): Map<string, { dx: number; dy: number }> => {
-  const deltas = new Map<string, { dx: number; dy: number }>();
-  for (const id of translations.keys()) {
-    const delta = translations.get(id)!;
-    for (const memberId of collectCellMemberIds(
-      app,
-      table.id,
-      getRowOrColumnCellIds(table, kind, id),
-    )) {
-      deltas.set(memberId, delta);
-    }
-  }
-
-  // bound texts have no cell ref: they move with their host element
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  for (const [memberId, delta] of deltas) {
-    const member = elementsMap.get(memberId);
-    const boundText = member ? getBoundTextElement(member, elementsMap) : null;
-    if (boundText && !deltas.has(boundText.id)) {
-      deltas.set(boundText.id, delta);
-    }
-  }
-  return deltas;
-};
-
-/**
- * Moves the members of every translated row/column by its table-provided
- * delta — `getMemberTranslationsForRows/Columns` is the only source of member
- * displacement (phase-1.md:95); the App layer never computes one itself.
- * With `startMembers` given, positions reset from the arm-time snapshot so
- * live drag frames cannot accumulate rounding drift.
- */
+) => collectSceneCellMemberIds(app.scene, tableId, cellIds);
 const applyMemberTranslations = (
   app: TableApp,
   table: NonDeleted<ExcalidrawTableElement>,
@@ -1247,196 +1091,12 @@ const applyMemberTranslations = (
   opts?: {
     startMembers?: Map<string, { x: number; y: number; ownerId: string }>;
   },
-): boolean => {
-  if (!translations.size) {
-    return false;
-  }
-  const deltas = buildMemberDeltas(app, table, kind, translations);
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  const candidateIds = opts?.startMembers
-    ? [...opts.startMembers.keys()]
-    : [...deltas.keys()];
-  let movedAny = false;
-
-  for (const memberId of candidateIds) {
-    const member = elementsMap.get(memberId);
-    if (!member || member.isDeleted) {
-      continue;
-    }
-    const start = opts?.startMembers?.get(memberId);
-    const delta = deltas.get(memberId) ?? { dx: 0, dy: 0 };
-    const x = (start ? start.x : member.x) + delta.dx;
-    const y = (start ? start.y : member.y) + delta.dy;
-    if (member.x !== x || member.y !== y) {
-      app.scene.mutateElement(
-        member as ExcalidrawElement,
-        { x, y },
-        { informMutation: false, isDragging: true },
-      );
-      movedAny = true;
-    }
-  }
-  return movedAny;
-};
-
-const getCellBackgroundTextLayout = (
-  text: ExcalidrawTextElement,
-  table: ExcalidrawTableElement,
-  bounds: NonNullable<ReturnType<typeof getTableCellBounds>>,
-  elementsMap: ElementsMap,
-) => {
-  const style = getTableBackgroundTextStyle(text, elementsMap);
-  const padding = style?.padding ?? 0;
-  const availableWidth = Math.max(bounds.width - padding * 2, 1);
-  const font = getFontString(text);
-  const wrapped = wrapText(text.originalText, font, availableWidth);
-  const measured = measureText(wrapped, font, text.lineHeight);
-  const width = Math.min(measured.width, availableWidth);
-  const height = measured.height;
-  const horizontalAlign = style?.horizontalAlign ?? text.textAlign;
-  const verticalAlign = style?.verticalAlign ?? text.verticalAlign;
-  const freeWidth = Math.max(0, bounds.width - padding * 2 - width);
-  const freeHeight = Math.max(0, bounds.height - padding * 2 - height);
-  return {
-    text: wrapped,
-    width,
-    height,
-    textAlign: horizontalAlign,
-    verticalAlign,
-    x:
-      table.x +
-      bounds.x +
-      padding +
-      (horizontalAlign === "center"
-        ? freeWidth / 2
-        : horizontalAlign === "right"
-        ? freeWidth
-        : 0),
-    y:
-      table.y +
-      bounds.y +
-      padding +
-      (verticalAlign === "middle"
-        ? freeHeight / 2
-        : verticalAlign === "bottom"
-        ? freeHeight
-        : 0),
-  };
-};
-
-/** Wrapped text may grow the last row covered by a merged cell. */
+) => translateSceneMembers(app.scene, table, kind, translations, opts);
 const refitCellBackgroundTexts = (
   app: TableApp,
   table: NonDeleted<ExcalidrawTableElement>,
   cellIds: readonly string[],
-): void => {
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  const textsByCell = new Map<string, ExcalidrawTextElement[]>();
-  const requiredHeights = new Map<string, number>();
-  for (const cellId of cellIds) {
-    const texts = getIndexedTableCellChildren(
-      elementsMap,
-      table.id,
-      cellId,
-      "backgroundText",
-    );
-    if (!texts?.length) {
-      continue;
-    }
-    const bounds = getTableCellBounds(table.table, cellId);
-    if (!bounds) {
-      continue;
-    }
-    const cell = table.table.cells.find((candidate) => candidate.id === cellId);
-    if (!cell) {
-      continue;
-    }
-    const startRow = table.table.rows.findIndex(
-      (candidate) => candidate.id === cell.rowId,
-    );
-    const spanRows = table.table.rows.slice(
-      startRow,
-      startRow + (cell.rowSpan ?? 1),
-    );
-    const row = spanRows[spanRows.length - 1];
-    if (!row) {
-      continue;
-    }
-    const backgroundTexts = texts.filter(isTextElement);
-    textsByCell.set(cellId, backgroundTexts);
-    for (const backgroundText of backgroundTexts) {
-      const layout = getCellBackgroundTextLayout(
-        backgroundText,
-        table,
-        bounds,
-        elementsMap,
-      );
-      const padding =
-        getTableBackgroundTextStyle(backgroundText, elementsMap)?.padding ?? 0;
-      requiredHeights.set(
-        row.id,
-        Math.max(
-          requiredHeights.get(row.id) ?? 0,
-          layout.height + padding * 2 - (bounds.height - row.height),
-        ),
-      );
-    }
-  }
-
-  const rowsNeedGrowth = table.table.rows.some((row) => {
-    const requiredHeight = requiredHeights.get(row.id);
-    return requiredHeight !== undefined && requiredHeight > row.height;
-  });
-  if (rowsNeedGrowth) {
-    const nextTable: TableDataV1 = {
-      ...table.table,
-      rows: table.table.rows.map((row) => {
-        const requiredHeight = requiredHeights.get(row.id);
-        return requiredHeight !== undefined && requiredHeight > row.height
-          ? { ...row, height: requiredHeight }
-          : row;
-      }),
-    };
-    const translations = getMemberTranslationsForRows(table.table, nextTable);
-    applyMemberTranslations(app, table, "row", translations);
-    app.scene.mutateElement(
-      table,
-      {
-        table: nextTable,
-        height: getTableHeight(nextTable),
-      },
-      { informMutation: false, isDragging: true },
-    );
-  }
-
-  const currentTable = app.scene.getNonDeletedElement(table.id);
-  if (!currentTable || !isTableElement(currentTable)) {
-    return;
-  }
-  const currentElementsMap = app.scene.getNonDeletedElementsMap();
-  for (const [cellId, backgroundTexts] of textsByCell) {
-    const bounds = getTableCellBounds(currentTable.table, cellId);
-    if (!bounds) {
-      continue;
-    }
-    for (const backgroundText of backgroundTexts) {
-      const liveText = currentElementsMap.get(backgroundText.id);
-      if (!liveText || !isTextElement(liveText)) {
-        continue;
-      }
-      app.scene.mutateElement(
-        liveText,
-        getCellBackgroundTextLayout(
-          liveText,
-          currentTable,
-          bounds,
-          currentElementsMap,
-        ),
-        { informMutation: false, isDragging: true },
-      );
-    }
-  }
-};
+) => refitSceneCellBackgroundTexts(app.scene, table, cellIds);
 
 /**
  * Refit the edited background text to its visible cell, growing its row when
@@ -2768,35 +2428,17 @@ export const commitTableInsert = (
   kind: "insertRow" | "insertColumn",
   boundaryIndex: number,
 ): void => {
-  const newTable =
-    kind === "insertRow"
-      ? insertRowInTable(table.table, boundaryIndex)
-      : insertColumnInTable(table.table, boundaryIndex);
-  const translations =
-    kind === "insertRow"
-      ? getMemberTranslationsForRows(table.table, newTable)
-      : getMemberTranslationsForColumns(table.table, newTable);
-  app.store.scheduleCapture();
-  applyMemberTranslations(
-    app,
-    table,
-    kind === "insertRow" ? "row" : "column",
-    translations,
-  );
-  app.scene.mutateElement(table, {
-    table: newTable,
-    width: getTableWidth(newTable),
-    height: getTableHeight(newTable),
+  const result = applyTableOperation(app.scene.getElementsIncludingDeleted(), {
+    action: kind,
+    target: { tableId: table.id },
+    at: boundaryIndex,
   });
+  app.store.scheduleCapture();
+  commitCanvasElementOperation(app.scene, result);
   app.scene.triggerUpdate();
 };
 
-/**
- * Deletes the selected row/column (the `tableRowColSelection` channel):
- * the removed cells' members go away recursively (nested subtrees included),
- * bindings are repaired, and the whole operation is one undo entry
- * (phase-1.md:96). Deleting the last row/column is rejected.
- */
+/** 删除轴的成员迁移、墓碑与布局由完整场景操作统一处理。 */
 export const deleteSelectedTableRowCol = (app: TableApp): boolean => {
   const selection = app.state.tableRowColSelection;
   if (!selection) {
@@ -2807,99 +2449,32 @@ export const deleteSelectedTableRowCol = (app: TableApp): boolean => {
     app.setState({ tableRowColSelection: null });
     return true;
   }
-
-  const kind = selection.kind;
-  const id = selection.id;
-  let result;
+  let result: CanvasElementOperationResult;
   try {
-    result =
-      kind === "row"
-        ? removeRowFromTable(table.table, id)
-        : removeColumnFromTable(table.table, id);
+    result = applyTableOperation(
+      app.scene.getElementsIncludingDeleted(),
+      selection.kind === "row"
+        ? {
+            action: "deleteRow",
+            target: { tableId: table.id },
+            rowId: selection.id,
+          }
+        : {
+            action: "deleteColumn",
+            target: { tableId: table.id },
+            columnId: selection.id,
+          },
+    );
   } catch {
-    // 最后一行/列拒绝删除——走删除整表的明确命令
     return true;
   }
-
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  const allElements = app.scene.getNonDeletedElements();
-  const remappedAnchors = result.remappedCellIds ?? new Map<string, string>();
-  for (const [oldCellId, newCellId] of remappedAnchors) {
-    for (const memberId of collectCellMemberIds(app, table.id, [oldCellId])) {
-      const member = elementsMap.get(memberId);
-      if (
-        member?.containerRef?.kind === "tableCell" &&
-        member.containerRef.cellId === oldCellId
-      ) {
-        app.scene.mutateElement(member as ExcalidrawElement, {
-          containerRef: { ...member.containerRef, cellId: newCellId },
-        });
-      }
-    }
-  }
-  const doomedIds = new Set<string>();
-  for (const cellId of result.removedCellIds) {
-    if (remappedAnchors.has(cellId)) {
-      continue;
-    }
-    for (const memberId of collectCellMemberIds(app, table.id, [cellId])) {
-      doomedIds.add(memberId);
-    }
-  }
-  // nested containers inside the removed cells take their own subtrees
-  for (const memberId of [...doomedIds]) {
-    const member = elementsMap.get(memberId);
-    if (member && (isTableElement(member) || isFrameLikeElement(member))) {
-      for (const descendant of getTableSubtreeElements(
-        allElements,
-        member.id,
-        elementsMap,
-      )) {
-        doomedIds.add(descendant.id);
-      }
-    }
-  }
-
-  for (const memberId of doomedIds) {
-    const member = elementsMap.get(memberId);
-    if (member) {
-      app.scene.mutateElement(member as ExcalidrawElement, {
-        isDeleted: true,
-        // the ref clears along with the element: a dangling tableCell ref
-        // to a removed cell would fail the scene's reference validation
-        containerRef: member.containerRef ? undefined : member.containerRef,
-      });
-    }
-  }
-  fixBindingsAfterDeletion(
-    app.scene.getNonDeletedElements(),
-    [...doomedIds].reduce<ExcalidrawElement[]>((acc, id) => {
-      const element = elementsMap.get(id);
-      if (element) {
-        acc.push(element as ExcalidrawElement);
-      }
-      return acc;
-    }, []),
-  );
-
-  app.scene.mutateElement(table, {
-    table: result.table,
-    width: getTableWidth(result.table),
-    height: getTableHeight(result.table),
-  });
-  for (const newCellId of remappedAnchors.values()) {
-    refitCellBackgroundTexts(app, table, [newCellId]);
-  }
-  app.setState({ tableRowColSelection: null });
   app.store.scheduleCapture();
+  commitCanvasElementOperation(app.scene, result);
+  app.setState({ tableRowColSelection: null });
   app.scene.triggerUpdate();
   return true;
 };
 
-/**
- * Moves the selected row/column one slot (keyboard reorder entry,
- * phase-1.md:89). Returns false when nothing is selectable.
- */
 export const moveSelectedTableRowCol = (
   app: TableApp,
   direction: -1 | 1,

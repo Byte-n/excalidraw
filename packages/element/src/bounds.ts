@@ -288,7 +288,7 @@ export const getElementAbsoluteCoords = (
     const container = elementsMap
       ? getContainerElement(element, elementsMap)
       : null;
-    if (isArrowElement(container)) {
+    if (isLinearElement(container)) {
       const { x, y } = LinearElementEditor.getBoundTextElementPosition(
         container,
         element as ExcalidrawTextElementWithContainer,
@@ -1353,7 +1353,7 @@ export const elementsOverlappingBBox = <T extends ExcalidrawElement>({
 
     // Whether the element bounds should include the bound text element bounds
     const boundTextElement =
-      isArrowElement(element) && getBoundTextElement(element, elementsMap);
+      isLinearElement(element) && getBoundTextElement(element, elementsMap);
     if (boundTextElement) {
       const { x, y } = LinearElementEditor.getBoundTextElementPosition(
         element,

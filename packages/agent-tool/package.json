@@ -1,0 +1,34 @@
+{
+  "name": "@excalidraw/agent-tool",
+  "version": "0.1.0",
+  "description": "Typed Excalidraw Agent semantic tools",
+  "type": "module",
+  "types": "./dist/types/agent-tool/src/index.d.ts",
+  "main": "./dist/prod/index.js",
+  "module": "./dist/prod/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/types/agent-tool/src/index.d.ts",
+      "development": "./dist/dev/index.js",
+      "production": "./dist/prod/index.js",
+      "default": "./dist/prod/index.js"
+    }
+  },
+  "files": ["dist/*"],
+  "scripts": {
+    "gen:types": "rimraf dist/types && tsc",
+    "build:esm": "rimraf dist && node ../../scripts/buildBase.js && yarn gen:types",
+    "build": "yarn build:esm",
+    "test": "vitest run --root ../.. --config packages/agent-tool/_tests_/vitest.config.ts",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false && tsc -p _tests_/tsconfig.json",
+    "lint": "eslint --ext .ts src _tests_ --max-warnings 0"
+  },
+  "peerDependencies": {
+    "@excalidraw/yjs": "0.1.0"
+  },
+  "dependencies": {
+    "@excalidraw/yjs": "file:../yjs",
+    "zod": "4.4.3"
+  },
+  "publishConfig": {"access": "public"}
+}

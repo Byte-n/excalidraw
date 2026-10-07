@@ -27,7 +27,7 @@ import {
 
 import {
   hasBoundTextElement,
-  isArrowElement,
+  isLinearElement,
   isStickyNoteElement,
   isTextBindableContainer,
   isTextElement,
@@ -182,8 +182,10 @@ export const actionBindText = register({
       verticalAlign: VERTICAL_ALIGN.MIDDLE,
       textAlign: TEXT_ALIGN.CENTER,
       autoResize: true,
-      angle: (isArrowElement(container) ? 0 : container?.angle ?? 0) as Radians,
-      labelPosition: isArrowElement(container)
+      angle: (isLinearElement(container)
+        ? 0
+        : container?.angle ?? 0) as Radians,
+      labelPosition: isLinearElement(container)
         ? DEFAULT_BOUND_TEXT_LABEL_POSITION
         : null,
       ...(stickyInk

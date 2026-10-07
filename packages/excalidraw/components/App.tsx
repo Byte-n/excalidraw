@@ -47,7 +47,6 @@ import {
 } from "@excalidraw/element";
 
 import type {
-  ExcalidrawArrowElement,
   ExcalidrawElement,
   ExcalidrawEmbeddableElement,
   ExcalidrawFrameLikeElement,
@@ -724,7 +723,7 @@ class App extends React.Component<AppProps, AppState> {
     null;
 
   public handleDelayedBindModeChange(
-    arrow: ExcalidrawArrowElement,
+    arrow: ExcalidrawLinearElement,
     hoveredElement: NonDeletedExcalidrawElement | null,
   ) {
     return keyboardController.handleDelayedBindModeChange(

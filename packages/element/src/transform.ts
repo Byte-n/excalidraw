@@ -41,7 +41,7 @@ import {
 import { normalizeStickyNoteStrokeColor } from "./stickyNote";
 import { measureText, normalizeText } from "./textMeasurements";
 import {
-  isArrowElement,
+  isLinearElement,
   isFrameLikeElement,
   isStickyNoteElement,
   isTextElement,
@@ -305,7 +305,7 @@ const bindTextToContainer = (
     ...textProps,
     containerId: container.id,
     strokeColor: stickyInk ?? (textProps.strokeColor || container.strokeColor),
-    labelPosition: isArrowElement(container)
+    labelPosition: isLinearElement(container)
       ? DEFAULT_BOUND_TEXT_LABEL_POSITION
       : null,
   });
@@ -634,7 +634,10 @@ const applyTableSkeletonSizes = (
   const columns = columnWidths
     ? table.columns.map((column, i) => ({ ...column, width: columnWidths[i] }))
     : table.columns;
-  if (rows.length !== table.rows.length || columns.length !== table.columns.length) {
+  if (
+    rows.length !== table.rows.length ||
+    columns.length !== table.columns.length
+  ) {
     throw new Error(
       `Table skeleton rowHeights/columnWidths length does not match the created grid`,
     );
@@ -1001,7 +1004,9 @@ export const convertToExcalidrawElements = (
       const member = skeletonToElement.get(skeleton);
       if (!member) {
         throw new Error(
-          `Table cell member with id ${skeleton.id ?? "(unspecified)"} wasn't mapped correctly`,
+          `Table cell member with id ${
+            skeleton.id ?? "(unspecified)"
+          } wasn't mapped correctly`,
         );
       }
       if (isFrameLikeElement(member)) {
@@ -1071,7 +1076,7 @@ export const convertToExcalidrawElements = (
           elementStore.add(container);
           elementStore.add(text);
 
-          if (isArrowElement(container)) {
+          if (isLinearElement(container)) {
             const originalStart =
               element.type === "arrow" ? element?.start : undefined;
             const originalEnd =

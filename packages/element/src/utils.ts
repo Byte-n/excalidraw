@@ -58,7 +58,6 @@ import { getStickyNoteCornerRadius } from "./stickyNote";
 
 import type {
   ElementsMap,
-  ExcalidrawArrowElement,
   ExcalidrawBindableElement,
   ExcalidrawDiamondElement,
   ExcalidrawElement,
@@ -672,7 +671,7 @@ export const getSnapOutlineMidPoint = (
 };
 
 export const projectFixedPointOntoDiagonal = (
-  arrow: ExcalidrawArrowElement,
+  arrow: ExcalidrawLinearElement,
   point: GlobalPoint,
   element: ExcalidrawBindableElement,
   startOrEnd: "start" | "end",

@@ -1,5 +1,8 @@
 import {
   getActiveTextElement,
+  applyShapeOperation,
+  applyConnectorOperation,
+  isCompositeShapeElement,
   getBoundTextElement,
   frameLikeContainerRef,
   isTableCellBackgroundText,
@@ -34,7 +37,7 @@ import {
   getApproxMinLineWidth,
   getApproxMinLineHeight,
   getLineHeightInPx,
-  isArrowElement,
+  isLinearElement,
   newTextElement,
 } from "@excalidraw/element";
 
@@ -55,6 +58,7 @@ import { textWysiwyg } from "../../wysiwyg/textWysiwyg";
 import { withBatchedUpdates } from "../../reactUtils";
 
 import * as tableController from "./table";
+import { commitCanvasElementOperation } from "./sceneOperations";
 
 import type App from "../App";
 
@@ -113,6 +117,27 @@ export const handleTextWysiwyg = (
       return;
     }
     const container = getContainerElement(latestTextElement, elementsMap);
+    if (
+      container &&
+      (isCompositeShapeElement(container) || isLinearElement(container)) &&
+      (nextOriginalText || isDeleted) &&
+      (nextOriginalText !== latestTextElement.originalText || isDeleted)
+    ) {
+      const input = app.scene.getElementsIncludingDeleted();
+      const result = isCompositeShapeElement(container)
+        ? applyShapeOperation(input, {
+            action: "update",
+            target: { elementId: container.id },
+            text: isDeleted ? "" : nextOriginalText,
+          })
+        : applyConnectorOperation(input, {
+            action: "update",
+            target: { elementId: container.id },
+            label: isDeleted ? "" : nextOriginalText,
+          });
+      commitCanvasElementOperation(app.scene, result);
+      return;
+    }
     const stickyContainer =
       container && isStickyNoteElement(container) ? container : null;
     const stickyLayout = stickyContainer
@@ -426,7 +451,7 @@ export const startTextEditing = (
   const existingTextElement = arrowEndpointBinding
     ? null
     : app.getSelectedTextElement(container) ||
-      (container && isArrowElement(container)
+      (container && isLinearElement(container)
         ? getBoundTextElement(container, app.scene.getNonDeletedElementsMap())
         : null) ||
       app.getTextElementAtPosition(sceneX, sceneY);
@@ -442,7 +467,7 @@ export const startTextEditing = (
     !existingTextElement &&
     shouldBindToContainer &&
     container &&
-    !isArrowElement(container) &&
+    !isLinearElement(container) &&
     !isStickyNoteElement(container)
   ) {
     const fontString = {
@@ -542,13 +567,13 @@ export const startTextEditing = (
         (parentCenterPosition ? VERTICAL_ALIGN.MIDDLE : DEFAULT_VERTICAL_ALIGN),
       containerId: shouldBindToContainer ? container?.id : undefined,
       labelPosition:
-        shouldBindToContainer && container && isArrowElement(container)
+        shouldBindToContainer && container && isLinearElement(container)
           ? DEFAULT_BOUND_TEXT_LABEL_POSITION
           : null,
       groupIds: container?.groupIds ?? [],
       lineHeight,
       angle: container
-        ? isArrowElement(container)
+        ? isLinearElement(container)
           ? (0 as Radians)
           : container.angle
         : (0 as Radians),

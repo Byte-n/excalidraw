@@ -402,11 +402,13 @@ export const isLinearElementType = (
 export const isBindingElement = <T extends ExcalidrawElement>(
   element?: T | null,
   includeLocked = true,
-): element is T & ExcalidrawArrowElement => {
+): element is T & ExcalidrawLinearElement => {
   return (
     element != null &&
     (!element.locked || includeLocked === true) &&
-    isBindingElementType(element.type)
+    (isBindingElementType(element.type) ||
+      (element.type === "line" &&
+        !!(element.startBinding || element.endBinding)))
   );
 };
 
@@ -480,7 +482,7 @@ export const isTextBindableContainer = <T extends ExcalidrawElement>(
     (element.type === "composite_shape" ||
       element.type === "stickynote" ||
       element.type === "mindmap-node" ||
-      isArrowElement(element))
+      isLinearElement(element))
   );
 };
 

@@ -1,29 +1,18 @@
+import { TABLE_STRUCTURE_RAIL_OFFSET } from "@excalidraw/common";
 import {
-  DEFAULT_FONT_SIZE,
-  TABLE_STRUCTURE_RAIL_OFFSET,
-} from "@excalidraw/common";
-import { newTextElement } from "@excalidraw/element";
+  getTableSceneTitle,
+  getTableSceneTitlePosition,
+  setTableSceneTitle,
+} from "@excalidraw/element/tableScene";
 
 import type {
-  ExcalidrawElement,
   ExcalidrawTableElement,
   ExcalidrawTextElement,
-  NonDeleted,
 } from "@excalidraw/element/types";
 
 import type App from "../App";
 
-export const getTableTitle = (
-  elements: readonly ExcalidrawElement[],
-  tableId: string,
-): NonDeleted<ExcalidrawTextElement> | undefined =>
-  elements.find(
-    (element): element is NonDeleted<ExcalidrawTextElement> =>
-      !element.isDeleted &&
-      element.type === "text" &&
-      element.containerRef?.kind === "tableTitle" &&
-      element.containerRef.elementId === tableId,
-  );
+export const getTableTitle = getTableSceneTitle;
 
 export const getTableTitleBar = (
   table: ExcalidrawTableElement,
@@ -33,8 +22,9 @@ export const getTableTitleBar = (
 ) => {
   const lineHeight = title?.height ?? fontSize * 1.25;
   const gap = table.table.style?.title?.gap ?? 2;
-  const y =
-    table.y - (TABLE_STRUCTURE_RAIL_OFFSET + 9 + gap) / zoom - lineHeight;
+  const y = title
+    ? getTableSceneTitlePosition(table, title).y
+    : table.y - (TABLE_STRUCTURE_RAIL_OFFSET + 9 + gap) / zoom - lineHeight;
   const align = table.table.style?.title?.align ?? "start";
   const width = title?.width ?? Math.min(table.width, 100 / zoom);
   const x =
@@ -83,34 +73,10 @@ export const startTableTitleEditing = (
   const existing = getTableTitle(app.scene.getNonDeletedElements(), table.id);
   let title = existing;
   if (!title) {
-    const fontSize = DEFAULT_FONT_SIZE;
-    const bar = getTableTitleBar(
-      table,
-      undefined,
-      app.state.zoom.value,
-      fontSize,
-    );
-    const created = newTextElement({
-      x: bar.x,
-      y: bar.y,
-      text: "Title",
-      fontSize,
-      fontFamily: app.state.currentItemFontFamily,
-      containerRef: { kind: "tableTitle", elementId: table.id },
-      locked: false,
-    });
-    const positioned = getTableTitleBar(
-      table,
-      created,
-      app.state.zoom.value,
-      fontSize,
-    );
-    title = { ...created, x: positioned.x, y: positioned.y };
     app.store.scheduleCapture();
-    app.scene.insertElementsAtIndex(
-      [title],
-      app.scene.getElementIndex(table.id) + 1,
-    );
+    title = setTableSceneTitle(app.scene, table, "Title", {
+      fontFamily: app.state.currentItemFontFamily,
+    });
     app.scene.triggerUpdate();
   }
   app.setState({ editingTextElement: title });

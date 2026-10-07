@@ -545,7 +545,7 @@ export type ExcalidrawTextContainer =
   | ExcalidrawMindmapNodeElement
   | ExcalidrawCompositeShapeElement
   | ExcalidrawStickyNoteElement
-  | ExcalidrawArrowElement;
+  | ExcalidrawLinearElement;
 
 export type ExcalidrawTextElementWithContainer = {
   containerId: ExcalidrawTextContainer["id"];

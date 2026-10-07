@@ -1,5 +1,7 @@
 import { assertSceneValue, equalSceneValue } from "./scene-value";
 
+import { YjsSceneError } from "./errors";
+
 import { createYjsSceneBinding } from "./index";
 
 import type * as Y from "yjs";
@@ -113,7 +115,7 @@ export const createSceneBinding = <
       assertSceneValue(asset);
       const existing = assets.get(id);
       if (existing !== undefined && !equalSceneValue(existing, asset)) {
-        throw new Error("asset cannot be rebound");
+        throw new YjsSceneError("invalid_asset", "asset cannot be rebound");
       }
       if (existing === undefined) {
         prepared.push([id, asset]);

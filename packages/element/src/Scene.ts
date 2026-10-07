@@ -128,6 +128,8 @@ export class Scene {
   // instance methods/props
   // ---------------------------------------------------------------------------
 
+  private readonly calculationOnly: boolean;
+
   private callbacks: Set<SceneStateCallback> = new Set();
 
   private nonDeletedElements: readonly Ordered<NonDeletedExcalidrawElement>[] =
@@ -196,8 +198,10 @@ export class Scene {
     elements: ElementsMapOrArray | null = null,
     options?: {
       skipValidation?: true;
+      calculationOnly?: boolean;
     },
   ) {
+    this.calculationOnly = options?.calculationOnly ?? false;
     if (elements) {
       this.replaceAllElements(elements, options);
     }
@@ -314,7 +318,7 @@ export class Scene {
       }
     }
 
-    if (!options?.skipValidation) {
+    if (!options?.skipValidation && !this.calculationOnly) {
       validateIndicesThrottled(_nextElements);
       assertValidContainerRefs(_nextElements);
     }
@@ -332,7 +336,10 @@ export class Scene {
       this.nonDeletedElementsMap,
     );
 
-    this.elements = syncInvalidIndices(_nextElements);
+    // 候选场景不分配索引或版本，统一提交边界负责这些元数据。
+    this.elements = this.calculationOnly
+      ? (_nextElements as readonly OrderedExcalidrawElement[])
+      : syncInvalidIndices(_nextElements);
     this.elementsMap.clear();
     this.elements.forEach((element) => {
       if (isFrameLikeElement(element)) {
@@ -440,9 +447,14 @@ export class Scene {
       ...this.elements.slice(index),
     ];
 
-    syncMovedIndices(nextElements, arrayToMap(elements));
+    if (!this.calculationOnly) {
+      syncMovedIndices(nextElements, arrayToMap(elements));
+    }
 
-    this.replaceAllElements(nextElements);
+    this.replaceAllElements(
+      nextElements,
+      this.calculationOnly ? { skipValidation: true } : undefined,
+    );
   }
 
   /** low-level - generally use app.insertNewElement() */
@@ -536,7 +548,7 @@ export class Scene {
       element,
       elementsMap,
       updates,
-      options,
+      { ...options, skipVersionBump: this.calculationOnly },
     );
 
     if (

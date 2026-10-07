@@ -73,7 +73,6 @@ import { isStickyNoteElement } from "@excalidraw/element";
 import { detectLineHeight } from "@excalidraw/element";
 import {
   isArrowBoundToElement,
-  isArrowElement,
   isElbowArrow,
   isLinearElement,
   isLineElement,
@@ -313,7 +312,7 @@ const getFontFamilyByName = (fontFamilyName: string): FontFamilyValues => {
   return DEFAULT_FONT_FAMILY;
 };
 
-const repairBinding = <T extends ExcalidrawArrowElement>(
+const repairBinding = <T extends ExcalidrawLinearElement>(
   element: T,
   binding: FixedPointBinding | null,
   targetElementsMap: Readonly<ElementsMap>,
@@ -421,7 +420,7 @@ const repairBinding = <T extends ExcalidrawArrowElement>(
               { value: 1 as NormalizedZoomValue },
             ) || p;
       const { fixedPoint } = calculateFixedPointForNonElbowArrowBinding(
-        safeElement as NonDeleted<ExcalidrawArrowElement>,
+        safeElement as NonDeleted<ExcalidrawLinearElement>,
         boundElement as NonDeleted<ExcalidrawBindableElement>,
         startOrEnd,
         elementsMap,
@@ -656,8 +655,20 @@ export const restoreElement = (
 
       const restoredLine = restoreElementWithProperties(element, {
         type: "line",
-        startBinding: null,
-        endBinding: null,
+        startBinding: repairBinding(
+          { ...element, x, y, points },
+          element.startBinding,
+          targetElementsMap,
+          existingElementsMap,
+          "start",
+        ),
+        endBinding: repairBinding(
+          { ...element, x, y, points },
+          element.endBinding,
+          targetElementsMap,
+          existingElementsMap,
+          "end",
+        ),
         startArrowhead,
         endArrowhead,
         points,
@@ -893,7 +904,7 @@ const repairBoundElement = (
     : null;
 
   (boundElement as Mutable<typeof boundElement>).angle = (
-    isArrowElement(container) ? 0 : container?.angle ?? 0
+    isLinearElement(container) ? 0 : container?.angle ?? 0
   ) as Radians;
 
   if (!container) {
@@ -1184,15 +1195,13 @@ export const restoreElements = <T extends ExcalidrawElement>(
     if (isLinearElement(element)) {
       if (
         element.startBinding &&
-        (!restoredElementsMap.has(element.startBinding.elementId) ||
-          !isArrowElement(element))
+        !restoredElementsMap.has(element.startBinding.elementId)
       ) {
         (element as Mutable<ExcalidrawLinearElement>).startBinding = null;
       }
       if (
         element.endBinding &&
-        (!restoredElementsMap.has(element.endBinding.elementId) ||
-          !isArrowElement(element))
+        !restoredElementsMap.has(element.endBinding.elementId)
       ) {
         (element as Mutable<ExcalidrawLinearElement>).endBinding = null;
       }

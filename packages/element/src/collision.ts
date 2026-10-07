@@ -83,7 +83,6 @@ import { getFreedrawFillPolygon, getFreedrawMaxStrokeRadius } from "./shape";
 
 import type {
   ElementsMap,
-  ExcalidrawArrowElement,
   ExcalidrawBindableElement,
   ExcalidrawElement,
   ExcalidrawEllipseElement,
@@ -433,7 +432,7 @@ export const getHoveredElementForBinding = (
 
 export const getHoveredElementForFocusPoint = (
   point: GlobalPoint,
-  arrow: ExcalidrawArrowElement,
+  arrow: ExcalidrawLinearElement,
   elements: readonly Ordered<NonDeletedExcalidrawElement>[],
   elementsMap: NonDeletedSceneElementsMap,
   tolerance?: number,

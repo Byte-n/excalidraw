@@ -57,6 +57,7 @@ import {
 import type {
   ExcalidrawBindableElement,
   ExcalidrawArrowElement,
+  ExcalidrawLinearElement,
   ExcalidrawTextContainer,
   NonDeleted,
 } from "@excalidraw/element/types";
@@ -915,7 +916,7 @@ export const resetDelayedBindMode = (app: App) => {
 
 export const handleDelayedBindModeChange = (
   app: App,
-  arrow: ExcalidrawArrowElement,
+  arrow: ExcalidrawLinearElement,
   hoveredElement: NonDeletedExcalidrawElement | null,
 ) => {
   if (arrow.isDeleted || isElbowArrow(arrow)) {

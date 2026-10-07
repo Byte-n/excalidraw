@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {"types": ["vitest/globals", "vite/client"]},
+  "include": ["../src/**/*", "./**/*.ts"],
+  "exclude": ["../dist", "../types"]
+}
