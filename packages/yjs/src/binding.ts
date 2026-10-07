@@ -47,6 +47,9 @@ export const createSceneBinding = <
     generation: 0,
   };
   let disposed = false;
+  const remoteListeners = new Set<
+    (scene: SceneSnapshot<TElement, TAsset>) => void
+  >();
   const listener = (transaction: Y.Transaction) => {
     if (disposed || transaction.origin === origin || gate.generation < 0) {
       return;
@@ -72,6 +75,9 @@ export const createSceneBinding = <
         }
       }
       onRemoteSceneChange?.(scene);
+      for (const notify of remoteListeners) {
+        notify(scene);
+      }
     }
   };
   if (observeRemote) {
@@ -256,6 +262,15 @@ export const createSceneBinding = <
     getAssets,
     getCanonical,
     getAdapter: () => adapter,
+    subscribeRemoteSceneChange: (notify) => {
+      if (disposed) {
+        return () => {};
+      }
+      remoteListeners.add(notify);
+      return () => {
+        remoteListeners.delete(notify);
+      };
+    },
     setGate: (next) => {
       gate = { ...gate, ...next };
     },
@@ -270,6 +285,7 @@ export const createSceneBinding = <
     dispose: () => {
       if (!disposed) {
         disposed = true;
+        remoteListeners.clear();
         if (observeRemote) {
           doc.off("afterTransaction", listener);
         }

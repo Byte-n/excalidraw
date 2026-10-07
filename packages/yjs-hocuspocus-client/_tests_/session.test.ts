@@ -667,3 +667,218 @@ test("paused authentication failure keeps resources and authenticates only after
     await server.destroy();
   }
 });
+
+test("externally managed collaboration binds before attach, accepts the initial scene and never manages borrowed resources", async () => {
+  const { server, url } = await startServer();
+  const authority = createHocuspocusHeadlessSession(options(url));
+  await authority.ready;
+  const element = createSceneElement({ type: "rectangle", x: 42, y: 0 });
+  authority.mutate({ mutations: [{ type: "add", element }] });
+  await vi.waitFor(() =>
+    expect(
+      server.hocuspocus.documents.get("test-canvas")?.getMap("elements").size,
+    ).toBe(1),
+  );
+  const document = new Y.Doc();
+  const socket = new HocuspocusProviderWebsocket({
+    url,
+    autoConnect: false,
+    WebSocketPolyfill: WebSocket,
+  });
+  const provider = new HocuspocusProvider({
+    document,
+    websocketProvider: socket,
+    name: "test-canvas",
+    token: "writer",
+  });
+  const attach = vi.spyOn(provider, "attach");
+  const connect = vi.spyOn(socket, "connect");
+  const disconnect = vi.spyOn(socket, "disconnect");
+  const sendToken = vi.spyOn(provider, "sendToken");
+  const destroy = vi.spyOn(provider, "destroy");
+  const observe = vi.spyOn(document, "on");
+  const unobserve = vi.spyOn(document, "off");
+  const disposePresence = vi.fn();
+  const validateScene = vi.fn((scene: { elements: readonly unknown[] }) => {
+    expect(scene.elements).toHaveLength(1);
+  });
+  const collaboration = createExcalidrawHocuspocusCollaboration({
+    ...options(url),
+    document,
+    provider,
+    ownership: "borrowed",
+    connectionManagedExternally: true,
+    syncTimeoutMs: 1,
+    validateScene,
+    presence: {
+      sessionId: "managed-controller",
+      publish: () => {},
+      subscribe: () => () => {},
+      dispose: disposePresence,
+    },
+    assets: {
+      upload: async () => ({ size: 1, mimeType: "image/png" }),
+      authorize: async () => "injected-url",
+      fetch: async () => new Blob(["x"]),
+    },
+  });
+  const disposeBinding = vi.spyOn(collaboration.session.binding, "dispose");
+  disposePresence.mockImplementation(() => {
+    expect(disposeBinding).not.toHaveBeenCalled();
+  });
+  try {
+    expect(
+      observe.mock.calls.filter(([event]) => event === "afterTransaction"),
+    ).toHaveLength(1);
+    expect(collaboration.session.getState().canEdit).toBe(false);
+    expect(() =>
+      collaboration.session.mutate({ mutations: [{ type: "add", element }] }),
+    ).toThrow("not writable");
+    await new Promise<void>((resolve) => setTimeout(resolve, 15));
+    expect(attach).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+    provider.attach();
+    await socket.connect();
+    await collaboration.session.ready;
+    expect(validateScene).toHaveBeenCalled();
+    expect(collaboration.getScene().elements).toHaveLength(1);
+    expect(collaboration.session.getState().canEdit).toBe(true);
+    const sentTokens = sendToken.mock.calls.length;
+    await expect(collaboration.session.reconnect()).rejects.toThrow(
+      "managed externally",
+    );
+    await expect(collaboration.session.refreshToken()).rejects.toThrow(
+      "managed externally",
+    );
+    collaboration.session.disconnect();
+    collaboration.session.suspend();
+    expect(collaboration.session.getState().canEdit).toBe(false);
+    expect(disconnect).not.toHaveBeenCalled();
+    collaboration.session.resume();
+    expect(collaboration.session.getState().canEdit).toBe(true);
+    await collaboration.session.close();
+    await collaboration.close();
+    expect(disposePresence).toHaveBeenCalledTimes(1);
+    expect(disposeBinding).toHaveBeenCalledTimes(1);
+    expect(
+      unobserve.mock.calls.filter(([event]) => event === "afterTransaction"),
+    ).toHaveLength(1);
+    expect(destroy).not.toHaveBeenCalled();
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(attach).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(sendToken).toHaveBeenCalledTimes(sentTokens);
+    expect(document.isDestroyed).toBe(false);
+    expect(provider.isAttached).toBe(true);
+  } finally {
+    await collaboration.close();
+    socket.destroy();
+    provider.destroy();
+    document.destroy();
+    await authority.close();
+    await server.destroy();
+  }
+});
+
+test("externally managed session resumes authentication gates on the same provider and controller after a normal reconnect", async () => {
+  const { server, url } = await startServer();
+  const document = new Y.Doc();
+  const socket = new HocuspocusProviderWebsocket({
+    url,
+    autoConnect: false,
+    WebSocketPolyfill: WebSocket,
+  });
+  const provider = new HocuspocusProvider({
+    document,
+    websocketProvider: socket,
+    name: "test-canvas",
+    token: "writer",
+  });
+  const session = createHocuspocusHeadlessSession({
+    ...options(url),
+    document,
+    provider,
+    ownership: "borrowed",
+    connectionManagedExternally: true,
+    allowOfflineEditing: true,
+  });
+  try {
+    provider.attach();
+    await socket.connect();
+    await session.ready;
+    session.setPermission(false);
+    expect(session.getState().canEdit).toBe(false);
+    session.setPermission(true);
+    expect(session.getState().canEdit).toBe(true);
+    socket.disconnect();
+    await vi.waitFor(() =>
+      expect(session.getState().status).toBe("disconnected"),
+    );
+    expect(session.getState().canEdit).toBe(true);
+    session.suspend();
+    expect(session.getState().canEdit).toBe(false);
+    await socket.connect();
+    await vi.waitFor(() => expect(session.getState().canEdit).toBe(true));
+    expect(session.provider).toBe(provider);
+    expect(session.document).toBe(document);
+    session.reject({ code: "rejected", message: "authority rejected content" });
+    session.resume();
+    expect(session.getState().canEdit).toBe(false);
+    const authenticated = new Promise<void>((resolve) => {
+      provider.on("authenticated", () => resolve());
+    });
+    await provider.sendToken();
+    await authenticated;
+    expect(session.getState().status).toBe("rejected");
+  } finally {
+    await session.close();
+    socket.destroy();
+    provider.destroy();
+    document.destroy();
+    await server.destroy();
+  }
+});
+
+test("external initial scene validation failure stops the controller gate while retaining host resources", async () => {
+  const { server, url } = await startServer();
+  const document = new Y.Doc();
+  const socket = new HocuspocusProviderWebsocket({
+    url,
+    autoConnect: false,
+    WebSocketPolyfill: WebSocket,
+  });
+  const provider = new HocuspocusProvider({
+    document,
+    websocketProvider: socket,
+    name: "test-canvas",
+    token: "writer",
+  });
+  const session = createHocuspocusHeadlessSession({
+    ...options(url),
+    document,
+    provider,
+    ownership: "borrowed",
+    connectionManagedExternally: true,
+    validateScene: () => {
+      throw new Error("scene budget rejected");
+    },
+  });
+  try {
+    provider.attach();
+    await socket.connect();
+    await expect(session.ready).rejects.toMatchObject({
+      code: "rejected",
+      message: "synchronized scene rejected",
+    });
+    expect(session.getState().canEdit).toBe(false);
+    expect(document.isDestroyed).toBe(false);
+    await session.close();
+    expect(provider.isAttached).toBe(true);
+  } finally {
+    await session.close();
+    socket.destroy();
+    provider.destroy();
+    document.destroy();
+    await server.destroy();
+  }
+});

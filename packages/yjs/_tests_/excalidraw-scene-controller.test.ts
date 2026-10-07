@@ -6,6 +6,8 @@ import { Excalidraw, CaptureUpdateAction } from "@excalidraw/excalidraw";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
+import { createSceneBinding } from "../src/binding";
+
 import { createExcalidrawSceneController } from "../src/excalidraw-scene-controller";
 
 import { element, validateScene } from "./helpers";
@@ -20,12 +22,26 @@ afterEach(() => cleanup());
 const mount = async (
   state: Partial<ExcalidrawSceneState> = {},
   loading?: Promise<null>,
+  borrowed = false,
 ) => {
   const doc = new Y.Doc();
   doc.getMap("elements").set("a", element());
   const errors = vi.fn();
+  const binding = borrowed
+    ? createSceneBinding<
+        ExcalidrawSceneElement,
+        { size: number; mimeType: string }
+      >({ doc, adapter: { validateCanonical: validateScene } })
+    : undefined;
+  binding?.setGate({
+    initialized: true,
+    synced: true,
+    canEdit: true,
+    generation: 42,
+  });
   const controller = createExcalidrawSceneController({
     document: doc,
+    borrowedBinding: binding,
     state: { canEdit: true, synced: true, online: true, ...state },
     validateScene,
     onError: errors,
@@ -51,9 +67,10 @@ const mount = async (
   onTestFinished(() => {
     mounted.unmount();
     controller.dispose();
+    binding?.dispose();
     doc.destroy();
   });
-  return { doc, controller, api, errors, mounted };
+  return { doc, controller, api, errors, mounted, binding };
 };
 
 const edit = (
@@ -256,4 +273,29 @@ test("资产不可重绑先预检，失败不发布元素或任何 update", asyn
   ).toThrow("cannot be rebound");
   expect(updates).not.toHaveBeenCalled();
   expect(doc.getMap("elements").has("partial")).toBe(false);
+});
+
+test("借用 binding 复用场景监听与命令，gate 和最终释放始终由 session 拥有者管理", async () => {
+  const { doc, controller, api, binding } = await mount({}, undefined, true);
+  const gate = binding!.getGate();
+  expect(gate.generation).toBe(42);
+  await waitFor(() => expect(controller.getReadOnly()).toBe(false));
+  const prepared = controller.prepareImportCommand({
+    elements: [element("b", 33)],
+  });
+  act(() => prepared.commit());
+  expect(doc.getMap("elements").has("b")).toBe(true);
+  act(() => doc.getMap("elements").set("a", element("a", 90, { version: 2 })));
+  await waitFor(() =>
+    expect(api.getSceneElements().find((value) => value.id === "a")?.x).toBe(
+      90,
+    ),
+  );
+  const disposal = vi.spyOn(binding!, "dispose");
+  controller.dispose();
+  controller.dispose();
+  expect(disposal).not.toHaveBeenCalled();
+  expect(binding!.getGate()).toEqual(gate);
+  binding!.applyCommand({ elements: [element("c", 17)] });
+  expect(doc.getMap("elements").has("c")).toBe(true);
 });

@@ -20,6 +20,8 @@ export const createExcalidrawHocuspocusCollaboration = <
     try {
       return createExcalidrawCollaboration({
         document: session.document,
+        borrowedBinding: session.binding,
+        deferInitialSceneValidation: options.deferInitialSceneValidation,
         state: {
           canEdit: false,
           synced: false,
@@ -39,14 +41,15 @@ export const createExcalidrawHocuspocusCollaboration = <
       throw error;
     }
   })();
-  const unsubscribe = session.subscribe((state) =>
+  const updateState = () => {
+    const state = session.getState();
     collaboration.updateState({
       canEdit: state.canEdit,
       synced: state.synced,
       online: state.status === "connected",
       isCollaborating: state.status !== "closed",
-    }),
-  );
+    });
+  };
   let closing: Promise<void> | undefined;
   const close: ExcalidrawHocuspocusCollaborationController<
     TElement,
@@ -59,6 +62,17 @@ export const createExcalidrawHocuspocusCollaboration = <
     }
     return closing;
   };
+  const unsubscribe = session.subscribe((state) => {
+    if (state.status === "closed") {
+      void close();
+    } else {
+      updateState();
+    }
+  });
+  updateState();
+  if (session.getState().status === "closed") {
+    void close();
+  }
   return {
     ...collaboration,
     session,

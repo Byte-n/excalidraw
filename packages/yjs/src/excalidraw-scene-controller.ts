@@ -85,20 +85,31 @@ export const createExcalidrawSceneController = <
   const listeners = new Set<() => void>();
   let readOnly = true;
 
-  const binding = createSceneBinding<TElement, TAsset>({
-    doc: document,
-    adapter: {
-      sort: orderExcalidrawSceneElements,
-      validateCanonical: options.validateScene,
-      tombstone: (element) => ({
-        ...structuredClone(element),
-        isDeleted: true,
-        version: element.version + 1,
-        versionNonce: element.versionNonce + 1,
-      }),
-    },
-    onRemoteSceneChange: () => refreshScene(),
-  });
+  if (
+    options.borrowedBinding &&
+    options.borrowedBinding.document !== document
+  ) {
+    throw new Error("borrowed binding must match controller document");
+  }
+  const ownBinding = !options.borrowedBinding;
+  const binding =
+    options.borrowedBinding ??
+    createSceneBinding<TElement, TAsset>({
+      doc: document,
+      adapter: {
+        sort: orderExcalidrawSceneElements,
+        validateCanonical: options.validateScene,
+        tombstone: (element) => ({
+          ...structuredClone(element),
+          isDeleted: true,
+          version: element.version + 1,
+          versionNonce: element.versionNonce + 1,
+        }),
+      },
+      onRemoteSceneChange: () => refreshScene(),
+    });
+  const unsubscribeBinding =
+    options.borrowedBinding?.subscribeRemoteSceneChange(() => refreshScene());
   const session = new ExcalidrawSceneSession(binding);
   const writable = () =>
     !disposed &&
@@ -110,12 +121,14 @@ export const createExcalidrawSceneController = <
     sceneApplied;
   const refreshGate = () => {
     const next = !writable();
-    binding.setGate({
-      initialized: initialized && sceneApplied && !failed && !!api,
-      canEdit: state.canEdit,
-      synced: hasSynced,
-      generation,
-    });
+    if (ownBinding) {
+      binding.setGate({
+        initialized: initialized && sceneApplied && !failed && !!api,
+        canEdit: state.canEdit,
+        synced: hasSynced,
+        generation,
+      });
+    }
     if (readOnly !== next) {
       readOnly = next;
       for (const listener of listeners) {
@@ -377,10 +390,15 @@ export const createExcalidrawSceneController = <
     }
   };
   try {
-    getScene();
+    if (!options.deferInitialSceneValidation || hasSynced) {
+      getScene();
+    }
   } catch (error) {
     // 初始副本非法时停止 owned 监听，保留原场景并由宿主呈现领域失败。
-    binding.dispose();
+    unsubscribeBinding?.();
+    if (ownBinding) {
+      binding.dispose();
+    }
     session.dispose();
     options.assets?.cancelPending();
     fail(error, "restore");
@@ -490,7 +508,10 @@ export const createExcalidrawSceneController = <
     prepareImportCommand: (command) => {
       assertWritable();
       const epoch = generation;
-      const prepared = binding.prepareImportCommand(command, epoch);
+      const prepared = binding.prepareImportCommand(
+        command,
+        ownBinding ? epoch : binding.getGate().generation,
+      );
       return {
         commit: () => {
           assertWritable();
@@ -521,7 +542,10 @@ export const createExcalidrawSceneController = <
       generation++;
       api = null;
       refreshGate();
-      binding.dispose();
+      unsubscribeBinding?.();
+      if (ownBinding) {
+        binding.dispose();
+      }
       session.dispose();
       overlay.clear();
       listeners.clear();

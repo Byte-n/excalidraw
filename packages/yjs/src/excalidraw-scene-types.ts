@@ -6,7 +6,7 @@ import type {
 import type * as Y from "yjs";
 
 import type { AssetCoordinator } from "./assets";
-import type { SceneSnapshot } from "./types";
+import type { SceneBinding, SceneSnapshot } from "./types";
 
 /** JSON 场景仅声明协作算法读取的结构；业务字段由宿主校验并完整保留。 */
 export type ExcalidrawSceneElement = {
@@ -69,6 +69,10 @@ export type ExcalidrawSceneControllerOptions<
   TAsset extends { size: number; mimeType: string },
 > = {
   document: Y.Doc;
+  /** 借用 binding 时由拥有者写 gate 并最终释放，controller 只订阅场景。 */
+  borrowedBinding?: SceneBinding<TElement, TAsset>;
+  /** 未同步的新空文档可等待首次远端场景；已同步场景仍立即校验。 */
+  deferInitialSceneValidation?: boolean;
   state: ExcalidrawSceneState;
   assets?: AssetCoordinator<TAsset>;
   validateScene(scene: SceneSnapshot<TElement, TAsset>): void;

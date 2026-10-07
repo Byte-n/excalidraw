@@ -4,9 +4,11 @@
 
 ## 宿主注入与生命周期
 
-宿主提供 `url`、完整 `room`、`token({room,signal})`、`validateScene`，可注入 `WebSocketPolyfill`、`persistence`、`prepare`、`presence` factory、资源 transport 和业务 stateless 解析。包不解释 API URL、epoch、replica、权限业务字段或恢复策略。副本 `load` 完成后执行 `prepare({document,provider,signal})`，再启动连接；这些异步适配必须遵循 signal，迟到完成不会复活已关闭连接。首次同步默认超时 30 秒，可通过 `syncTimeoutMs` 调整。
+宿主提供 `url`、完整 `room`、`token({room,signal})`、`validateScene`，可注入 `WebSocketPolyfill`、`persistence`、`prepare`、`presence` factory、资源 transport 和业务 stateless 解析。包不解释 API URL、epoch、replica、权限业务字段或恢复策略。副本 `load` 完成后执行 `prepare({document,provider,signal})`，再启动连接；这些异步适配必须遵循 signal，迟到完成不会复活已关闭连接。自管理连接首次同步默认超时 30 秒，可通过 `syncTimeoutMs` 调整；外部连接模式不创建独立连接超时，由宿主引擎负责离线和鉴权恢复。
 
 默认创建 owned Doc、provider/socket；借用 Doc 时仍拥有自己创建的 provider/socket；显式借用 provider 时要求其 document 和 room 匹配，释放仅移除 session 自身监听。已认证且已同步的 borrowed provider 直接 ready，不重新连接。borrowed provider 的 token 与 socket 配置仍由原拥有者管理。注入 persistence 为会话专用适配，由 session 调用 close；presence 通道由 browser controller 释放，不能自行销毁共享 provider。
+
+显式 borrowed provider 可配置 `connectionManagedExternally: true`，用于由宿主连接引擎统一持有 token、provider、持久化和文档。此模式的持久化加载和 `prepare` 初始化均由宿主完成，禁止重复注入这两个选项。`deferInitialSceneValidation` 仅供宿主对尚未同步的新空文档延后 editor 初始接纳，缓存内容仍须在宿主边界校验，首次同步始终执行完整 `validateScene`。session 创建唯一 scene binding 并管理 gate，browser controller 注入该 borrowed binding 并订阅远端场景。此模式同步创建 scene binding 与 browser controller，宿主必须在组合入口返回后才 attach/connect provider；session 只订阅连接、认证和首次同步，执行 `validateScene` 并更新场景 gate，不自行 attach/connect/disconnect、续签或销毁借用资源。`reconnect`、`refreshToken` 在此模式拒绝调用；`suspend` 仅关闭本地 gate，`resume` 仅恢复本地认证状态，认证成功也会恢复暂停 gate，权限仍受 `setPermission` 和服务端 scope 约束。宿主先 `controller.close()` 停止 editor/scene/presence 监听，再关闭 provider、持久化和文档；普通重连保留 controller，被拒场景需要新文档和新 controller。
 
 `ready` 表示首次远端同步和场景校验完成，连接/权限状态可通过 `getState`、`subscribe` 观察。断线重连复用同一 Doc/provider，重新认证和同步后解除写入门控。宿主可选择 `allowOfflineEditing: true`，首次同步后普通 `disconnect()` 保留本地编辑，恢复后同步积累的修改。`suspend()` 暂停认证、网络发送与编辑，保留原副本，旧 authenticated/synced 回调不能重新开放门控；新令牌通过宿主验证后显式 `reconnect()` 恢复。`setPermission` 提供宿主附加权限 gate，不能提升 server 已声明的 readonly scope。`refreshToken` 续签使用同一 provider；token 可返回字符串或 `{token,expiresAtMs}`，后者提前 30 秒自动续签。Hocuspocus onTokenSync 不会自动发送新 authenticated scope，宿主服务必须显式通过原生协议回传；业务 stateless 推送可由宿主解析后设置 gate。
 

@@ -1,6 +1,7 @@
 import {
   createExcalidrawSceneCommands,
   createSceneBinding,
+  orderExcalidrawSceneElements,
 } from "@excalidraw/yjs";
 
 import {
@@ -41,6 +42,17 @@ export const createHocuspocusHeadlessSession = <
   ) {
     throw new Error("borrowed provider must match session document and room");
   }
+  if (options.connectionManagedExternally && !options.provider) {
+    throw new Error(
+      "externally managed connection requires a borrowed provider",
+    );
+  }
+  const externallyManaged = !!options.connectionManagedExternally;
+  if (externallyManaged && (options.persistence || options.prepare)) {
+    throw new Error(
+      "externally managed connection prepares document and persistence in host",
+    );
+  }
   const document = options.document ?? new Y.Doc();
   const ownDocument = !options.document;
   const ownProvider = !options.provider;
@@ -69,7 +81,16 @@ export const createHocuspocusHeadlessSession = <
   void ready.catch(() => {});
   const binding = createSceneBinding<TElement, TAsset>({
     doc: document,
-    adapter: { validateCanonical: options.validateScene },
+    adapter: {
+      validateCanonical: options.validateScene,
+      sort: orderExcalidrawSceneElements,
+      tombstone: (element) => ({
+        ...structuredClone(element),
+        isDeleted: true,
+        version: element.version + 1,
+        versionNonce: element.versionNonce + 1,
+      }),
+    },
   });
   const commands = createExcalidrawSceneCommands({ binding });
   const listeners = new Set<(next: HocuspocusSessionState) => void>();
@@ -183,14 +204,13 @@ export const createHocuspocusHeadlessSession = <
     cleanups.push(() => provider.off(event, listener));
   };
   listen<onAuthenticatedParameters>("authenticated", ({ scope }) => {
-    if (!closed && !suspended) {
+    if (externallyManaged && !closed && state.status !== "rejected") {
+      session.resume();
+    }
+    if (!closed && !suspended && state.status !== "rejected") {
       authorized = scope === "read-write";
       update({
-        canEdit:
-          authorized &&
-          permission &&
-          state.synced &&
-          state.status !== "rejected",
+        canEdit: authorized && permission && state.synced,
       });
     }
   });
@@ -202,6 +222,11 @@ export const createHocuspocusHeadlessSession = <
           code: "authentication",
           message: reason,
         };
+        if (externallyManaged) {
+          session.suspend();
+          report(error);
+          return;
+        }
         update({ status: "rejected", canEdit: false, synced: false });
         const action = options.onAuthenticationFailed?.(reason) ?? "close";
         if (action === "retry") {
@@ -321,6 +346,7 @@ export const createHocuspocusHeadlessSession = <
   const session: HocuspocusHeadlessSession<TElement, TAsset> = {
     document,
     provider,
+    binding,
     ready,
     getState: () => state,
     subscribe: (listener) => {
@@ -384,7 +410,28 @@ export const createHocuspocusHeadlessSession = <
         socket?.disconnect();
       }
     },
+    resume: () => {
+      if (closed || state.status === "rejected") {
+        return;
+      }
+      suspended = false;
+      authorized =
+        provider.isAuthenticated && provider.authorizedScope === "read-write";
+      const synced = initiallySynced && provider.synced;
+      update({
+        status:
+          provider.isAuthenticated &&
+          provider.configuration.websocketProvider.status === "connected"
+            ? "connected"
+            : state.status,
+        synced,
+        canEdit: synced && authorized && permission,
+      });
+    },
     reconnect: async () => {
+      if (externallyManaged) {
+        throw new Error("connection is managed externally");
+      }
       if (closed) {
         throw new Error("Hocuspocus session is closed");
       }
@@ -401,6 +448,9 @@ export const createHocuspocusHeadlessSession = <
       }
     },
     refreshToken: async () => {
+      if (externallyManaged) {
+        throw new Error("connection is managed externally");
+      }
       if (closed) {
         throw new Error("Hocuspocus session is closed");
       }
@@ -421,8 +471,6 @@ export const createHocuspocusHeadlessSession = <
       clearTimeout(timeout);
       clearTimeout(tokenRefresh);
       options.signal?.removeEventListener("abort", abort);
-      cleanups.forEach((cleanup) => cleanup());
-      binding.dispose();
       update({
         status: "closed",
         synced: false,
@@ -430,6 +478,8 @@ export const createHocuspocusHeadlessSession = <
         generation: state.generation + 1,
       });
       listeners.clear();
+      cleanups.forEach((cleanup) => cleanup());
+      binding.dispose();
       failReady({
         code: "cancelled",
         message: "session closed before initial sync",
@@ -474,15 +524,17 @@ export const createHocuspocusHeadlessSession = <
       if (closed) {
         return;
       }
-      timeout = setTimeout(() => {
-        const error: HocuspocusSessionError = {
-          code: "timeout",
-          message: "initial synchronization timed out",
-        };
-        failReady(error);
-        report(error);
-        void session.close();
-      }, options.syncTimeoutMs ?? 30_000);
+      if (!externallyManaged) {
+        timeout = setTimeout(() => {
+          const error: HocuspocusSessionError = {
+            code: "timeout",
+            message: "initial synchronization timed out",
+          };
+          failReady(error);
+          report(error);
+          void session.close();
+        }, options.syncTimeoutMs ?? 30_000);
+      }
       await options.persistence?.load(document, controller.signal);
       controller.signal.throwIfAborted();
       await options.prepare?.({
@@ -493,6 +545,7 @@ export const createHocuspocusHeadlessSession = <
       controller.signal.throwIfAborted();
       if (provider.synced && provider.isAuthenticated) {
         options.validateScene(binding.getCanonical());
+        initiallySynced = true;
         authorized = provider.authorizedScope === "read-write";
         update({
           status: "connected",
@@ -501,7 +554,7 @@ export const createHocuspocusHeadlessSession = <
         });
         settled = true;
         resolveReady();
-      } else {
+      } else if (!externallyManaged) {
         await session.reconnect();
       }
       await ready;

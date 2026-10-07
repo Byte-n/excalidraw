@@ -8,6 +8,8 @@
 
 统一入口接收宿主 `document`、`presence`、`assets`、`state`、`validateScene` 与 `onError`。Presence 通道提供 `sessionId`、`publish`、`subscribe`、`dispose`；远端会话身份由宿主校验并携带名称与颜色。资源 transport 提供上传、授权、下载，内部协调器由会话拥有。React 宿主按 Y.Doc 在 effect 中创建并清理实例，避免 StrictMode 废弃 render 遗留文档监听。实例在权限与连接变化时保持稳定；新文档绑定清空 editor 的旧撤销历史。宿主通过 `updateState` 更新编辑权限、首次同步、连接呈现与网络状态；通过命令、导入准备和快照方法对接业务操作。`prepareImportCommand().commit()` 自行完成原子发布、目标 overlay 清理和 editor 回灌，调用者无需额外刷新。
 
+组合连接 session 时可注入 `borrowedBinding`：controller 校验其 document 身份并订阅 `subscribeRemoteSceneChange`，不创建第二份 binding，不写共享 gate，也不负责最终 dispose。binding 拥有者管理初始化、同步、权限和代际，controller 另行校验 editor 就绪与显示状态；controller 关闭只释放自己的场景订阅、display 与 editor 监听，随后连接 session 释放 binding。
+
 内部场景控制器处理 canonical/display 双基线、显示版本水位、相对几何变化、局部重排、交互保护、初始化门控、资源 overlay 和显式命令。它通过宿主业务接纳 callback 校验完整候选场景，不消费宿主的排序、投影或变化识别算法。
 
 ```ts

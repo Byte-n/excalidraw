@@ -5,6 +5,7 @@ import type {
   ExcalidrawSceneCommand,
   ExcalidrawSceneElement,
   SceneSnapshot,
+  SceneBinding,
   SceneMutation,
 } from "@excalidraw/yjs";
 
@@ -53,12 +54,24 @@ export interface HocuspocusLocalPersistence {
 }
 
 export type HocuspocusSessionResource =
-  | { document?: never; provider?: never; ownership?: "owned" }
-  | { document: Y.Doc; provider?: never; ownership: "borrowed" }
+  | {
+      document?: never;
+      provider?: never;
+      ownership?: "owned";
+      connectionManagedExternally?: false;
+    }
+  | {
+      document: Y.Doc;
+      provider?: never;
+      ownership: "borrowed";
+      connectionManagedExternally?: false;
+    }
   | {
       document: Y.Doc;
       provider: HocuspocusProvider;
       ownership: "borrowed";
+      /** 连接生命周期由 provider 拥有者管理，本 session 只管理场景门控与监听。 */
+      connectionManagedExternally?: boolean;
     };
 
 export type HocuspocusHeadlessSessionOptions<
@@ -75,6 +88,8 @@ export type HocuspocusHeadlessSessionOptions<
   persistence?: HocuspocusLocalPersistence;
   /** 首次同步后的普通断线允许本地编辑；暂停认证或拒绝仍关闭门控。 */
   allowOfflineEditing?: boolean;
+  /** 仅新建且未同步的空文档延后 editor 初始接纳，首次同步仍完整校验。 */
+  deferInitialSceneValidation?: boolean;
   validateScene(scene: SceneSnapshot<TElement, TAsset>): void;
   onError?(error: HocuspocusSessionError): void;
   /** 本地副本加载后、首次网络接入前的宿主初始化；不持有连接。 */
@@ -96,6 +111,8 @@ export interface HocuspocusHeadlessSession<
 > {
   readonly document: Y.Doc;
   readonly provider: HocuspocusProvider;
+  /** 唯一场景 binding；session 管理 gate 与释放，browser controller 只借用。 */
+  readonly binding: SceneBinding<TElement, TAsset>;
   /** 首次同步只解除本地编辑门控，不构成远端写入 ACK。 */
   ready: Promise<void>;
   getState(): HocuspocusSessionState;
@@ -112,6 +129,8 @@ export interface HocuspocusHeadlessSession<
   suspend(): void;
   /** 普通网络断线，离线编辑政策由 allowOfflineEditing 控制。 */
   disconnect(): void;
+  /** 恢复本地认证 gate；不连接、续签或改变借用 provider。 */
+  resume(): void;
   reconnect(): Promise<void>;
   refreshToken(): Promise<void>;
   /** 幂等；仅销毁 owned 文档和 provider，释放自身监听与持久化适配。 */

@@ -64,6 +64,9 @@ export type SceneBinding<TElement extends SceneElement, TAsset = unknown> = {
   getAssets(): Readonly<Record<string, TAsset>>;
   getCanonical(): SceneSnapshot<TElement, TAsset>;
   getAdapter(): SceneAdapter<TElement, TAsset>;
+  subscribeRemoteSceneChange(
+    listener: (scene: SceneSnapshot<TElement, TAsset>) => void,
+  ): () => void;
   setGate(gate: Partial<BindingGate>): void;
   getGate(): BindingGate;
   applyLocal(
