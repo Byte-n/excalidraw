@@ -463,7 +463,10 @@ export const createCanvasHocuspocusHooks = <
           candidate: scene,
           context,
         });
-        await options.validator.authorizeAssets({ candidate: scene, context });
+        await options.validator.authorizeAssets?.({
+          candidate: scene,
+          context,
+        });
         await options.authorize(context);
         if (state.invalidated || document.isDestroyed || connection.readOnly) {
           throw new CanvasHookError(

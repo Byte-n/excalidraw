@@ -73,7 +73,7 @@ export interface CanvasValidator<
     candidate: SceneSnapshot<TElement, TAsset>;
     context: CanvasUpdateContext<TContext, TActor, TFence>;
   }): void | Promise<void>;
-  authorizeAssets(input: {
+  authorizeAssets?(input: {
     candidate: SceneSnapshot<TElement, TAsset>;
     context: CanvasUpdateContext<TContext, TActor, TFence>;
   }): void | Promise<void>;

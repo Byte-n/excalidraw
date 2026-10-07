@@ -153,7 +153,9 @@ test("a read-only client cannot bypass its local gate with a raw Yjs update", as
 test("authorization is checked again after asynchronous asset authorization", async () => {
   const gate = deferred();
   let context:
-    | Parameters<HookOptions["validator"]["authorizeAssets"]>[0]["context"]
+    | Parameters<
+        NonNullable<HookOptions["validator"]["authorizeAssets"]>
+      >[0]["context"]
     | undefined;
   const f = await fixture({
     authorizeAssets: async (input) => {

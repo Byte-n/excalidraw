@@ -53,7 +53,6 @@ export const startPersistenceRoom = async (
     validator: {
       validateScene: () => {},
       validateTransition: () => {},
-      authorizeAssets: () => {},
     },
     resolveActor: (connection) => connection.context.actor,
     authorize: () => {},
@@ -208,7 +207,7 @@ export const startHookRoom = async (
           }
         }
       },
-      authorizeAssets: overrides.authorizeAssets ?? (() => {}),
+      authorizeAssets: overrides.authorizeAssets,
     },
     resolveActor: (connection) => connection.context.id,
     authorize: overrides.authorize ?? (() => {}),
