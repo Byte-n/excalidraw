@@ -242,6 +242,64 @@ test("纯图片加载状态/版本、选区和视口快照不写文档，移动�
   assert.equal(Object.keys(left.getScene().assets).length, 1);
 });
 
+test("缺省文本尺寸只在文本或所属容器发生编辑时物化", () => {
+  const { a, left } = pair();
+  const text = element("lazy-text", 0, {
+    type: "text",
+    width: undefined,
+    height: undefined,
+    text: "原文",
+    originalText: "原文",
+    fontSize: 20,
+    fontFamily: 1,
+    baseFontSize: null,
+    textAlign: "left",
+    verticalAlign: "top",
+    containerId: null,
+    autoResize: true,
+    lineHeight: 1.25,
+    index: "a1",
+  });
+  const lazyText = { ...text };
+  delete lazyText.width;
+  delete lazyText.height;
+  left.applyCommand({ elements: [lazyText] });
+  const session = new ExcalidrawSceneSession(left.binding);
+  const display = session
+    .project()
+    .map((value) =>
+      value.id === "lazy-text" ? { ...value, width: 42, height: 25 } : value,
+    );
+  session.accept(display);
+  let updates = 0;
+  a.on("update", () => updates++);
+  session.publish(display);
+  assert.equal(updates, 0);
+  const canonical = left
+    .getScene()
+    .elements.find((value) => value.id === "lazy-text")!;
+  assert.equal(Object.hasOwn(canonical, "width"), false);
+  session.publish(
+    display.map((value) =>
+      value.id === "lazy-text"
+        ? {
+            ...value,
+            text: "修改后",
+            originalText: "修改后",
+            width: 70,
+            height: 25,
+          }
+        : value,
+    ),
+  );
+  assert.equal(updates, 1);
+  const materialized = left
+    .getScene()
+    .elements.find((value) => value.id === "lazy-text")!;
+  assert.equal(materialized.width, 70);
+  assert.equal(materialized.height, 25);
+});
+
 test("合法软关系竞争确定性保留用户文字，普通移动不透传解除关系", () => {
   const { a, b, left, right } = pair();
   const text = (id: string) =>

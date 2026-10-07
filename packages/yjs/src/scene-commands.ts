@@ -170,14 +170,18 @@ export const createExcalidrawSceneCommands = <
         element.version < 1 ||
         !Number.isSafeInteger(element.versionNonce) ||
         typeof element.isDeleted !== "boolean" ||
-        ![
-          element.x,
-          element.y,
-          element.width,
-          element.height,
-          element.angle,
-          element.updated,
-        ].every(Number.isFinite)
+        ![element.x, element.y, element.angle, element.updated].every(
+          Number.isFinite,
+        ) ||
+        (element.type === "text"
+          ? !(
+              (element.width === undefined && element.height === undefined) ||
+              (typeof element.width === "number" &&
+                Number.isFinite(element.width) &&
+                typeof element.height === "number" &&
+                Number.isFinite(element.height))
+            )
+          : ![element.width, element.height].every(Number.isFinite))
       ) {
         throw new Error(
           "scene command candidate has invalid element identity or geometry",

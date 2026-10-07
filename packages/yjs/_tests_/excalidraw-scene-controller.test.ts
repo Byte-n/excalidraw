@@ -23,9 +23,10 @@ const mount = async (
   state: Partial<ExcalidrawSceneState> = {},
   loading?: Promise<null>,
   borrowed = false,
+  initialElement: ExcalidrawSceneElement = element(),
 ) => {
   const doc = new Y.Doc();
-  doc.getMap("elements").set("a", element());
+  doc.getMap("elements").set(initialElement.id, initialElement);
   const errors = vi.fn();
   const binding = borrowed
     ? createSceneBinding<
@@ -72,6 +73,31 @@ const mount = async (
   });
   return { doc, controller, api, errors, mounted, binding };
 };
+
+test("缺省独立文本首次 restore 只在 display 副本测量，不写回 canonical", async () => {
+  const text = element("lazy-text", 0, {
+    type: "text",
+    text: "第一行\n第二行",
+    originalText: "第一行\n第二行",
+    fontSize: 20,
+    fontFamily: 1,
+    baseFontSize: null,
+    textAlign: "left",
+    verticalAlign: "top",
+    containerId: null,
+    autoResize: true,
+    lineHeight: 1.25,
+  });
+  delete text.width;
+  delete text.height;
+  const { doc, api } = await mount({}, undefined, false, text);
+  const displayed = api.getSceneElements()[0]!;
+  expect(Number.isFinite(displayed.width) && displayed.width > 0).toBe(true);
+  expect(Number.isFinite(displayed.height) && displayed.height > 0).toBe(true);
+  const canonical = doc.getMap<ExcalidrawSceneElement>("elements").get("lazy-text")!;
+  expect(Object.hasOwn(canonical, "width")).toBe(false);
+  expect(Object.hasOwn(canonical, "height")).toBe(false);
+});
 
 const edit = (
   api: ExcalidrawImperativeAPI,

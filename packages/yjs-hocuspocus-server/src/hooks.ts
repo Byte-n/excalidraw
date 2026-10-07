@@ -209,11 +209,23 @@ export const createCanvasHocuspocusHooks = <
         ![
           fields.x,
           fields.y,
-          fields.width,
-          fields.height,
           fields.angle,
           fields.updated,
-        ].every((field) => typeof field === "number" && Number.isFinite(field))
+        ].every((field) => typeof field === "number" && Number.isFinite(field)) ||
+        (fields.type === "text"
+          ? !(
+              (fields.width === undefined && fields.height === undefined) ||
+              (typeof fields.width === "number" &&
+                Number.isFinite(fields.width) &&
+                typeof fields.height === "number" &&
+                Number.isFinite(fields.height))
+            )
+          : ![
+              fields.width,
+              fields.height,
+            ].every(
+              (field) => typeof field === "number" && Number.isFinite(field),
+            ))
       ) {
         throw new CanvasHookError(
           "canvas element identity or geometry is invalid",

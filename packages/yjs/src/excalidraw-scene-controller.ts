@@ -247,7 +247,9 @@ export const createExcalidrawSceneController = <
           typeof primitives.restoreElements
         >[0],
         null,
-        { repairBindings: true },
+        // 缺省尺寸的文本只在显示副本中测量；applyScene 受 applyingScene
+        // 保护，不会因首次渲染触发 canonical 写回。
+        { repairBindings: true, refreshDimensions: true },
       );
       editor.updateScene({
         elements,

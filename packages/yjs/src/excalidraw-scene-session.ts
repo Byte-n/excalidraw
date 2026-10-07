@@ -17,6 +17,8 @@ export class ExcalidrawSceneSession<
   private readonly projectedCanonical = new Map<string, TElement>();
   private protectedInput = new Map<string, TElement>();
   private readonly watermarks = new Map<string, number>();
+  /** canonical 文本缺少尺寸时，仅在真实文本或相关几何编辑后物化。 */
+  private readonly lazyTextDimensions = new Set<string>();
 
   constructor(readonly binding: SceneBinding<TElement, TAsset>) {}
 
@@ -26,6 +28,7 @@ export class ExcalidrawSceneSession<
     this.projectedCanonical.clear();
     this.protectedInput.clear();
     this.watermarks.clear();
+    this.lazyTextDimensions.clear();
   }
 
   project(
@@ -57,6 +60,14 @@ export class ExcalidrawSceneSession<
       const previous = this.projectedCanonical.get(element.id);
       const baseline = this.display.get(element.id);
       const source = byId.get(element.id)!;
+      if (
+        source.type === "text" &&
+        (source.width === undefined || source.height === undefined)
+      ) {
+        this.lazyTextDimensions.add(source.id);
+      } else {
+        this.lazyTextDimensions.delete(source.id);
+      }
       const floor = this.watermarks.get(element.id) ?? 0;
       // 同一 canonical 重复投影复用显示版本，真实远端内容即使版本更低也越过 Store 水位。
       if (
@@ -134,6 +145,23 @@ export class ExcalidrawSceneSession<
     const assets = this.binding.getCanonical().assets;
     const changes: TElement[] = [];
     const reordering = new Set<string>();
+    const changedById = new Map<string, ReadonlySet<string>>();
+    for (const incoming of elements) {
+      const before = this.display.get(incoming.id);
+      if (!before) {
+        continue;
+      }
+      changedById.set(
+        incoming.id,
+        new Set(
+          [
+            ...new Set([...Object.keys(before), ...Object.keys(incoming)]),
+          ].filter(
+            (key) => !technical.has(key) && !equal(before[key], incoming[key]),
+          ),
+        ),
+      );
+    }
     for (const incoming of elements) {
       this.observeVersion(incoming);
       // 未关联图片属于本地 overlay，技术加载状态也不构成文档编辑。
@@ -160,9 +188,25 @@ export class ExcalidrawSceneSession<
         continue;
       }
       const keys = new Set([...Object.keys(before), ...Object.keys(incoming)]);
-      const changed = [...keys].filter(
+      let changed = [...keys].filter(
         (key) => !technical.has(key) && !equal(before[key], incoming[key]),
       );
+      const shouldMaterialize = this.shouldMaterializeText(
+        incoming,
+        changed,
+        changedById,
+      );
+      if (this.lazyTextDimensions.has(incoming.id) && !shouldMaterialize) {
+        changed = changed.filter((key) => key !== "width" && key !== "height");
+      } else if (shouldMaterialize) {
+        if (typeof incoming.width === "number") {
+          changed.push("width");
+        }
+        if (typeof incoming.height === "number") {
+          changed.push("height");
+        }
+        changed = [...new Set(changed)];
+      }
       if (!changed.length || !source) {
         continue;
       }
@@ -271,6 +315,50 @@ export class ExcalidrawSceneSession<
       );
     }
     return ids;
+  }
+
+  private shouldMaterializeText(
+    element: TElement,
+    changed: readonly string[],
+    changedById: ReadonlyMap<string, ReadonlySet<string>>,
+  ): boolean {
+    if (element.type !== "text" || !this.lazyTextDimensions.has(element.id)) {
+      return false;
+    }
+    const geometry = new Set(["x", "y", "angle"]);
+    if (
+      changed.some(
+        (key) =>
+          !technical.has(key) &&
+          !geometry.has(key) &&
+          key !== "width" &&
+          key !== "height",
+      ) ||
+      changed.some((key) => geometry.has(key))
+    ) {
+      return true;
+    }
+    if (typeof element.containerId === "string") {
+      const containerChanges = changedById.get(element.containerId);
+      if (
+        containerChanges &&
+        [
+          "x",
+          "y",
+          "width",
+          "height",
+          "angle",
+          "points",
+          "startBinding",
+          "endBinding",
+        ].some((key) =>
+          containerChanges.has(key),
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private observeVersion(element: TElement): void {

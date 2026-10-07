@@ -18,8 +18,9 @@ export type ExcalidrawSceneElement = {
   isDeleted: boolean;
   x: number;
   y: number;
-  width: number;
-  height: number;
+  /** 文本 canonical 可延迟到浏览器显示/编辑时补齐；其他元素仍由宿主 schema 强制。 */
+  width?: number;
+  height?: number;
   angle: number;
   updated: number;
   fileId?: string | null;
