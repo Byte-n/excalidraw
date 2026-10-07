@@ -4,6 +4,8 @@ import type { CanvasSceneOperation } from "@excalidraw/yjs";
 
 import {
   CanvasToolResultSchema,
+  CanvasQueryToolResultSchema,
+  CanvasEditToolResultSchema,
   ConnectorEditInputSchema,
   ConnectorQueryInputSchema,
   MindmapEditInputSchema,
@@ -22,12 +24,15 @@ import {
 
 import type { CanvasAgentPort } from "./port";
 
-export type CanvasAgentTool = Readonly<{
+export type CanvasAgentTool<
+  TInputSchema extends import("zod").ZodType = import("zod").ZodType,
+  TOutputSchema extends import("zod").ZodType = import("zod").ZodType,
+> = Readonly<{
   name: string;
   description: string;
-  inputSchema: import("zod").ZodType;
-  outputSchema: typeof CanvasToolResultSchema;
-  execute(input: unknown): CanvasToolResult;
+  inputSchema: TInputSchema;
+  outputSchema: TOutputSchema;
+  execute(input: import("zod").infer<TInputSchema>): import("zod").infer<TOutputSchema>;
 }>;
 
 const errorResult = (error: CanvasToolError): CanvasToolResult => ({
@@ -138,22 +143,25 @@ const receiptOutput = (
   };
 };
 
-const executeTool = (
+const executeTool = <TOutputSchema extends import("zod").ZodType>(
   port: CanvasAgentPort,
   domain: CanvasSceneOperation["domain"],
   inputSchema: import("zod").ZodType,
   kind: "query" | "edit",
+  outputSchema: TOutputSchema,
   rawInput: unknown,
-): CanvasToolResult => {
+): import("zod").infer<TOutputSchema> => {
   const parsed = inputSchema.safeParse(rawInput);
   if (!parsed.success) {
-    return errorResult({
+    return outputSchema.parse({
+      ...errorResult({
       code: "invalid_input",
       message: "工具参数无效",
       issues: parsed.error.issues.map((issue) => ({
         path: issue.path.join("."),
         message: "参数不符合工具契约",
       })),
+      }),
     });
   }
   try {
@@ -184,12 +192,10 @@ const executeTool = (
               receipt: receiptOutput(receipt),
             };
           })();
-    const validated = CanvasToolResultSchema.safeParse(output);
-    return validated.success
-      ? validated.data
-      : errorResult({ code: "internal_error", message: "工具输出无效" });
+    const validated = outputSchema.safeParse(output);
+    return validated.success ? validated.data : outputSchema.parse(errorResult({ code: "internal_error", message: "工具输出无效" }));
   } catch (error) {
-    return errorResult(mapError(error));
+    return outputSchema.parse(errorResult(mapError(error)));
   }
 };
 
@@ -199,12 +205,12 @@ const queryTool = (
   domain: CanvasSceneOperation["domain"],
   schema: import("zod").ZodType,
   port: CanvasAgentPort,
-): CanvasAgentTool => ({
+): CanvasAgentTool<typeof schema, typeof CanvasQueryToolResultSchema> => ({
   name,
   description,
   inputSchema: schema,
-  outputSchema: CanvasToolResultSchema,
-  execute: (input) => executeTool(port, domain, schema, "query", input),
+  outputSchema: CanvasQueryToolResultSchema,
+  execute: (input) => executeTool(port, domain, schema, "query", CanvasQueryToolResultSchema, input),
 });
 
 const editTool = (
@@ -213,17 +219,17 @@ const editTool = (
   domain: CanvasSceneOperation["domain"],
   schema: import("zod").ZodType,
   port: CanvasAgentPort,
-): CanvasAgentTool => ({
+): CanvasAgentTool<typeof schema, typeof CanvasEditToolResultSchema> => ({
   name,
   description,
   inputSchema: schema,
-  outputSchema: CanvasToolResultSchema,
-  execute: (input) => executeTool(port, domain, schema, "edit", input),
+  outputSchema: CanvasEditToolResultSchema,
+  execute: (input) => executeTool(port, domain, schema, "edit", CanvasEditToolResultSchema, input),
 });
 
 export const createCanvasAgentTools = (
   port: CanvasAgentPort,
-): readonly CanvasAgentTool[] => [
+) => [
   queryTool(
     "queryShapes",
     "查询普通图形的语义摘要和稳定 ID。",

@@ -492,3 +492,17 @@ export const CanvasToolResultSchema = z.union([
   z.object({ ok: z.literal(false), error: CanvasToolErrorSchema }).strict(),
 ]);
 export type CanvasToolResult = z.infer<typeof CanvasToolResultSchema>;
+
+/** 查询工具只会返回读取结果或错误。 */
+export const CanvasQueryToolResultSchema = z.union([
+  z.object({ ok: z.literal(true), status: z.literal("read"), result: CanvasQueryResultSchema }).strict(),
+  z.object({ ok: z.literal(false), error: CanvasToolErrorSchema }).strict(),
+]);
+export type CanvasQueryToolResult = z.infer<typeof CanvasQueryToolResultSchema>;
+
+/** 编辑工具只会返回本地应用回执或错误。 */
+export const CanvasEditToolResultSchema = z.union([
+  z.object({ ok: z.literal(true), status: z.literal("local_applied"), receipt: CanvasReceiptSchema }).strict(),
+  z.object({ ok: z.literal(false), error: CanvasToolErrorSchema }).strict(),
+]);
+export type CanvasEditToolResult = z.infer<typeof CanvasEditToolResultSchema>;

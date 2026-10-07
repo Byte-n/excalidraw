@@ -1,5 +1,7 @@
 export {
   CanvasToolResultSchema,
+  CanvasQueryToolResultSchema,
+  CanvasEditToolResultSchema,
   CanvasToolErrorSchema,
   CanvasQueryResultSchema,
   CanvasReceiptSchema,
@@ -14,6 +16,8 @@ export {
 } from "./schemas";
 export type {
   CanvasToolResult,
+  CanvasQueryToolResult,
+  CanvasEditToolResult,
   CanvasToolError,
   CanvasQueryResult,
   CanvasReceipt,
