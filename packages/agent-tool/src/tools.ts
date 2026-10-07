@@ -287,3 +287,74 @@ export const createCanvasAgentTools = (
     port,
   ),
 ];
+
+import type { CanvasScriptPort } from "./port";
+import {
+  ScriptApiInfoInputSchema,
+  ScriptDocumentationOutputSchema,
+  ScriptExecuteCodeInputSchema,
+  ScriptExportInputSchema,
+  ScriptExportOutputSchema,
+  ScriptOverviewInputSchema,
+  ScriptOutputSchema,
+} from "./schemas";
+
+const scriptMethods = [
+  "getScene() -> Promise<SceneSnapshot>",
+  "getElements(ids?: string[]) -> Promise<CanonicalElement[]>",
+  "query(input) -> Promise<CanvasQueryResult>",
+  "createElement(input) -> Promise<CanonicalDraft>",
+  "mutate(input) -> Promise<BatchReceipt>",
+  "execute(input) -> Promise<CanvasReceipt>",
+] as const;
+const documentation = (member?: string): string => {
+  if (member) return scriptMethods.find((method) => method.startsWith(`${member}(`)) ?? "未知协作 API 成员";
+  return scriptMethods.join("\n");
+};
+const validDocumentation = (text: string) => ScriptDocumentationOutputSchema.parse({ ok: true, status: "read", result: { text } });
+
+export const createCanvasScriptTools = (port: CanvasScriptPort) => [
+  {
+    name: "high_level_overview",
+    description: "说明画板协作脚本的使用顺序、六个 API 方法和提交边界。",
+    inputSchema: ScriptOverviewInputSchema,
+    outputSchema: ScriptDocumentationOutputSchema,
+    execute: async (input: unknown) => {
+      const parsed = ScriptOverviewInputSchema.parse(input);
+      void parsed;
+      return validDocumentation("先读取 collaboration.getScene 或 query，再用 createElement 与 mutate/execute 提交；每批提交独立回执，local_applied 不代表远端持久化。\n\n" + scriptMethods.join("\n"));
+    },
+  },
+  {
+    name: "collaboration_api_info",
+    description: "返回实际公开的六个协作 API 方法及 Promise 输入输出。",
+    inputSchema: ScriptApiInfoInputSchema,
+    outputSchema: ScriptDocumentationOutputSchema,
+    execute: async (input: unknown) => {
+      const parsed = ScriptApiInfoInputSchema.parse(input);
+      return validDocumentation(documentation(parsed.member));
+    },
+  },
+  {
+    name: "execute_code",
+    description: "在指定画板执行受限 JavaScript；宿主负责权限、审批、取消和资源释放。",
+    inputSchema: ScriptExecuteCodeInputSchema,
+    outputSchema: ScriptOutputSchema,
+    execute: async (input: unknown) => {
+      const parsed = ScriptExecuteCodeInputSchema.parse(input);
+      const result = await port.executeCode(parsed);
+      return ScriptOutputSchema.parse(result);
+    },
+  },
+  {
+    name: "export",
+    description: "从一次有效协作会话读取指定画板的完整 canonical elements 快照。",
+    inputSchema: ScriptExportInputSchema,
+    outputSchema: ScriptExportOutputSchema,
+    execute: async (input: unknown) => {
+      const parsed = ScriptExportInputSchema.parse(input);
+      const result = await port.exportScene(parsed);
+      return ScriptExportOutputSchema.parse(result);
+    },
+  },
+] as const;

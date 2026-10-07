@@ -26,20 +26,14 @@ const queryResult = (domain: "shape" | "connector" | "mindmap" | "table") => ({
 });
 
 const receipt = (operation: CanvasSceneOperation): CanvasLocalReceipt => {
-  const { domain, operation: value } = operation;
-  const action = value.action;
-  const references =
-    domain === "mindmap"
-      ? {
-          domain,
-          action,
-          graphId: "graph-1",
-          nodeId: "node-1",
-          rootNodeId: null,
-        }
-      : domain === "table"
-      ? { domain, action, tableId: "table-1" }
-      : { domain, action, elementId: "element-1" };
+  const action = operation.operation.action;
+  const references = operation.domain === "mindmap"
+    ? { domain: "mindmap" as const, action: operation.operation.action, graphId: "graph-1", nodeId: "node-1", rootNodeId: null }
+    : operation.domain === "table"
+    ? { domain: "table" as const, action: operation.operation.action, tableId: "table-1" }
+    : operation.domain === "shape"
+    ? { domain: "shape" as const, action: operation.operation.action, elementId: "element-1" }
+    : { domain: "connector" as const, action: operation.operation.action, elementId: "element-1" };
   return {
     changedElementIds: ["element-1"],
     createdElementIds:
