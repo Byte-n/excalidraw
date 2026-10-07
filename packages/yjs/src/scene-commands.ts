@@ -1,5 +1,7 @@
 import { getUpdatedTimestamp, randomInteger } from "@excalidraw/common";
 
+import { YjsSceneError } from "./errors";
+
 import type { ExcalidrawSceneElement } from "./excalidraw-scene-types";
 import type { SceneBinding, SceneSnapshot } from "./types";
 
@@ -70,10 +72,10 @@ export const createExcalidrawSceneCommands = <
     const get = (id: string, version?: number): TElement => {
       const element = elements.get(id);
       if (!element || element.isDeleted) {
-        throw new Error(`scene command target not found: ${id}`);
+        throw new YjsSceneError("target_not_found", "target not found：场景命令目标不存在");
       }
       if (version !== undefined && version !== element.version) {
-        throw new Error(`scene command version conflict: ${id}`);
+        throw new YjsSceneError("version_conflict", "version conflict：场景命令目标版本冲突");
       }
       return element;
     };
@@ -89,16 +91,14 @@ export const createExcalidrawSceneCommands = <
       if (mutation.type === "add") {
         const element = structuredClone(mutation.element);
         if (!element.id || elements.has(element.id) || element.isDeleted) {
-          throw new Error(
-            `scene command duplicate or invalid add: ${element.id}`,
-          );
+          throw new YjsSceneError("invalid_input", "场景命令新增元素身份无效或重复");
         }
         if (
           element.startBinding ||
           element.endBinding ||
           element.boundElements?.length
         ) {
-          throw new Error("add relationships through a connect command");
+          throw new YjsSceneError("invalid_operation", "新增元素必须通过连接命令建立关系");
         }
         elements.set(element.id, element);
         changed.add(element.id);
@@ -108,7 +108,7 @@ export const createExcalidrawSceneCommands = <
       if (mutation.type === "update") {
         for (const key of Object.keys(mutation.patch)) {
           if (reserved.has(key)) {
-            throw new Error(`scene command reserved update field: ${key}`);
+            throw new YjsSceneError("invalid_input", "场景命令更新包含受保护字段");
           }
         }
         Object.assign(element, structuredClone(mutation.patch));
@@ -118,7 +118,7 @@ export const createExcalidrawSceneCommands = <
         bump(element);
       } else {
         if (!["line", "arrow"].includes(element.type)) {
-          throw new Error("scene connection requires line or arrow");
+          throw new YjsSceneError("invalid_operation", "场景连接只支持 line 或 arrow");
         }
         const endpoints = [mutation.start, mutation.end].filter(
           (endpoint) => endpoint !== null,
@@ -130,7 +130,7 @@ export const createExcalidrawSceneCommands = <
             !endpoint.fixedPoint.every(Number.isFinite) ||
             !["inside", "orbit", "skip"].includes(endpoint.mode)
           ) {
-            throw new Error("scene connection endpoint is invalid");
+            throw new YjsSceneError("invalid_input", "场景连接端点无效");
           }
           get(endpoint.elementId);
         }
@@ -190,9 +190,7 @@ export const createExcalidrawSceneCommands = <
     }
     const validation: unknown = validateScene?.(structuredClone(candidate));
     if (validation !== undefined) {
-      throw new Error(
-        "scene command validation must be synchronous and return undefined",
-      );
+      throw new YjsSceneError("invalid_scene", "场景命令校验必须同步完成");
     }
     return binding.applyCommand(
       {
