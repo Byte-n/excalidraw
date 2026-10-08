@@ -422,32 +422,6 @@ export const TableQueryInputSchema = z.union([
 ]);
 export type TableQueryInput = z.infer<typeof TableQueryInputSchema>;
 
-export const CanvasToolErrorSchema = z
-  .object({
-    code: z.enum([
-      "invalid_input",
-      "target_not_found",
-      "version_conflict",
-      "invalid_operation",
-      "invalid_scene",
-      "invalid_asset",
-      "scene_limit_exceeded",
-      "not_editable",
-      "session_unavailable",
-      "internal_error",
-      "canvas_not_found",
-      "forbidden",
-      "approval_rejected",
-    ]),
-    message: z.string(),
-    issues: z
-      .array(z.object({ path: z.string(), message: z.string() }).strict())
-      .readonly()
-      .optional(),
-  })
-  .strict();
-export type CanvasToolError = z.infer<typeof CanvasToolErrorSchema>;
-
 export const CanvasQueryResultSchema = z
   .object({
     domain: z.enum(["shape", "connector", "mindmap", "table"]),
@@ -474,59 +448,74 @@ export const CanvasReceiptSchema = z
   })
   .strict();
 export type CanvasReceipt = z.infer<typeof CanvasReceiptSchema>;
-export const CanvasToolResultSchema = z.union([
+
+const scriptCanvasId = z.string().uuid();
+export const ScriptExecuteCodeInputSchema = z
+  .object({
+    canvasId: scriptCanvasId,
+    code: z
+      .string()
+      .min(1)
+      .max(64 * 1024),
+    mode: z.enum(["read", "write"]),
+  })
+  .strict();
+export const ScriptExportInputSchema = z
+  .object({ canvasId: scriptCanvasId })
+  .strict();
+export const ScriptOverviewInputSchema = z.object({}).strict();
+export const ScriptApiInfoInputSchema = z
+  .object({
+    member: z
+      .enum([
+        "getScene",
+        "getElements",
+        "query",
+        "createElement",
+        "mutate",
+        "execute",
+      ])
+      .optional(),
+  })
+  .strict();
+const scriptError = z
+  .object({ code: z.string().min(1), message: z.string().min(1) })
+  .strict();
+export const ScriptOutputSchema = z.union([
+  z
+    .object({
+      ok: z.literal(true),
+      status: z.enum(["read", "local_applied"]),
+      result: z.json(),
+      receipts: z.array(z.json()).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ok: z.literal(false),
+      error: scriptError,
+      receipts: z.array(z.json()).optional(),
+    })
+    .strict(),
+]);
+export const ScriptDocumentationOutputSchema = z
+  .object({
+    ok: z.literal(true),
+    status: z.literal("read"),
+    result: z.object({ text: z.string() }).strict(),
+  })
+  .strict();
+export const ScriptExportOutputSchema = z.union([
   z
     .object({
       ok: z.literal(true),
       status: z.literal("read"),
-      result: CanvasQueryResultSchema,
+      result: z.json(),
     })
     .strict(),
-  z
-    .object({
-      ok: z.literal(true),
-      status: z.literal("local_applied"),
-      receipt: CanvasReceiptSchema,
-    })
-    .strict(),
-  z.object({ ok: z.literal(false), error: CanvasToolErrorSchema }).strict(),
-]);
-export type CanvasToolResult = z.infer<typeof CanvasToolResultSchema>;
-
-/** 查询工具只会返回读取结果或错误。 */
-export const CanvasQueryToolResultSchema = z.union([
-  z.object({ ok: z.literal(true), status: z.literal("read"), result: CanvasQueryResultSchema }).strict(),
-  z.object({ ok: z.literal(false), error: CanvasToolErrorSchema }).strict(),
-]);
-export type CanvasQueryToolResult = z.infer<typeof CanvasQueryToolResultSchema>;
-
-/** 编辑工具只会返回本地应用回执或错误。 */
-export const CanvasEditToolResultSchema = z.union([
-  z.object({ ok: z.literal(true), status: z.literal("local_applied"), receipt: CanvasReceiptSchema }).strict(),
-  z.object({ ok: z.literal(false), error: CanvasToolErrorSchema }).strict(),
-]);
-export type CanvasEditToolResult = z.infer<typeof CanvasEditToolResultSchema>;
-
-const scriptCanvasId = z.string().uuid();
-export const ScriptExecuteCodeInputSchema = z.object({
-  canvasId: scriptCanvasId,
-  code: z.string().min(1).max(64 * 1024),
-  mode: z.enum(["read", "write"]),
-}).strict();
-export const ScriptExportInputSchema = z.object({ canvasId: scriptCanvasId }).strict();
-export const ScriptOverviewInputSchema = z.object({}).strict();
-export const ScriptApiInfoInputSchema = z.object({
-  member: z.enum(["getScene", "getElements", "query", "createElement", "mutate", "execute"]).optional(),
-}).strict();
-const scriptError = z.object({ code: z.string().min(1), message: z.string().min(1) }).strict();
-export const ScriptOutputSchema = z.union([
-  z.object({ ok: z.literal(true), status: z.enum(["read", "local_applied"]), result: z.json(), receipts: z.array(z.json()).optional() }).strict(),
-  z.object({ ok: z.literal(false), error: scriptError, receipts: z.array(z.json()).optional() }).strict(),
-]);
-export const ScriptDocumentationOutputSchema = z.object({ ok: z.literal(true), status: z.literal("read"), result: z.object({ text: z.string() }).strict() }).strict();
-export const ScriptExportOutputSchema = z.union([
-  z.object({ ok: z.literal(true), status: z.literal("read"), result: z.json() }).strict(),
   z.object({ ok: z.literal(false), error: scriptError }).strict(),
 ]);
-export type ScriptExecuteCodeInput = z.infer<typeof ScriptExecuteCodeInputSchema>;
+export type ScriptExecuteCodeInput = z.infer<
+  typeof ScriptExecuteCodeInputSchema
+>;
 export type ScriptExportInput = z.infer<typeof ScriptExportInputSchema>;

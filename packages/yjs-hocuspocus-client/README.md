@@ -14,6 +14,8 @@
 
 `onAuthenticationFailed(reason)` 可按宿主策略选择 retry/pause/reject/close（默认 close）。`reject(error)` 立即门控并停止 owned 网络发送，保留副本等待宿主恢复。宿主调用 `close({preserve(document)})` 时先停 socket、destroy provider，再停止 persistence、执行副本隔离回调，最后销毁 owned Doc；preserve 保存失败时停止发送并保留原 Doc 供宿主导出，close Promise 返回失败；不得将旧被拒场景重新发回同一权威 room。browser controller 关闭后由宿主创建新 controller/Doc，重置 editor、撤销和异步资源代际；包不伪造原地 Yjs 清空恢复。`close` 幂等，`dispose` 触发同一关闭流程。
 
+`getScene()` 保留原始 canonical 读取；`getSceneSnapshot()` 返回独立 JSON 数据副本，先检查数据描述符，再以宿主 `validateScene` 同步验证原始值与副本。合法可选 undefined 字段被省略，缺省文本尺寸保持缺省，不应用宿主 schema 的显示投影；getter、toJSON、函数、非有限数值、循环引用、稀疏数组和非普通对象被拒绝，副本丢失必需字段也必须失败。
+
 `applyCommand` 接受公开快照/import 命令，`mutate` 复用 yjs add/update/delete/connect 命令内核。一次本地发布仅产生一次 Yjs update。ready、发送完成和 unsyncedChanges 清零都不代表具体工具写入 ACK；断线有未同步本地更新时 `onError` 提供 `outcome: "unknown"`。本包不实现 AgentTool。
 
 ## 依赖与验证

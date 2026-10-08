@@ -1551,6 +1551,16 @@
   resolved "https://registry.yarnpkg.com/@excalidraw/random-username/-/random-username-1.1.0.tgz#6f388d6a9708cf655b8c9c6aa3fa569ee71ecf0f"
   integrity sha512-nULYsQxkWHnbmHvcs+efMkJ4/9TtvNyFeLyHdeGxW0zHs6P+jYVqcRff9A6Vq9w9JXeDRnRh2VKvTtS19GW2qA==
 
+"@excalidraw/yjs-hocuspocus-client@file:packages/yjs-hocuspocus-client":
+  version "0.1.0"
+
+"@excalidraw/yjs@file:packages/yjs":
+  version "0.1.0"
+  dependencies:
+    "@excalidraw/common" "0.18.0"
+    "@excalidraw/element" "0.18.0"
+    "@excalidraw/fractional-indexing" "3.3.0"
+
 "@firebase/analytics-compat@0.2.17":
   version "0.2.17"
   resolved "https://registry.yarnpkg.com/@firebase/analytics-compat/-/analytics-compat-0.2.17.tgz#c3cfc8ffb863d574ec26d86f9c8344d752832995"
@@ -10938,6 +10948,11 @@ yjs@13.6.32:
   integrity sha512-lfiJIIC4Xayt5ItynE407ehlE03pCjeOc4hkR4yxxvvNJ4kuiN25B0g+Qp8XagYz361LLL7DCzR5bvFJ81QKtQ==
   dependencies:
     lib0 "^0.2.99"
+
+zod@4.4.3:
+  version "4.4.3"
+  resolved "https://registry.npmmirror.com/zod/-/zod-4.4.3.tgz#b680f172885d18bbebf21a834ea25e55a1bbf356"
+  integrity sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==
 
 zustand@^4.3.2:
   version "4.5.6"

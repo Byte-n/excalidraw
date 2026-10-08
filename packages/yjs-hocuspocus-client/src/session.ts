@@ -12,6 +12,8 @@ import * as Y from "yjs";
 
 import type { ExcalidrawSceneElement } from "@excalidraw/yjs";
 
+import { cloneCanonicalData } from "./snapshot";
+
 import type {
   onAuthenticatedParameters,
   onAuthenticationFailedParameters,
@@ -356,6 +358,19 @@ export const createHocuspocusHeadlessSession = <
       };
     },
     getScene: () => binding.getCanonical(),
+    getSceneSnapshot: () => {
+      const scene = binding.getCanonical();
+      const snapshot = cloneCanonicalData(scene);
+      for (const candidate of [scene, snapshot]) {
+        const validation: unknown = options.validateScene(candidate);
+        if (validation !== undefined) {
+          throw new Error(
+            "scene validation must be synchronous and return undefined",
+          );
+        }
+      }
+      return snapshot;
+    },
     applyCommand: (command) => binding.applyCommand(command),
     mutate: (input) => commands.apply(input),
     setPermission: (canEdit) => {

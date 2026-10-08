@@ -23,11 +23,17 @@
     "typecheck": "tsc --noEmit --emitDeclarationOnly false && tsc -p _tests_/tsconfig.json",
     "lint": "eslint --ext .ts src _tests_ --max-warnings 0"
   },
+  "devDependencies": {
+    "@hocuspocus/provider": "4.6.0",
+    "yjs": "13.6.32"
+  },
   "peerDependencies": {
-    "@excalidraw/yjs": "0.1.0"
+    "@excalidraw/yjs": "0.1.0",
+    "@excalidraw/yjs-hocuspocus-client": "0.1.0"
   },
   "dependencies": {
     "@excalidraw/yjs": "file:../yjs",
+    "@excalidraw/yjs-hocuspocus-client": "file:../yjs-hocuspocus-client",
     "zod": "4.4.3"
   },
   "publishConfig": {"access": "public"}

@@ -118,6 +118,8 @@ export interface HocuspocusHeadlessSession<
   getState(): HocuspocusSessionState;
   subscribe(listener: (state: HocuspocusSessionState) => void): () => void;
   getScene(): SceneSnapshot<TElement, TAsset>;
+  /** 验证 canonical 与规范化后的独立 JSON 副本，不应用宿主显示投影。 */
+  getSceneSnapshot(): SceneSnapshot<TElement, TAsset>;
   applyCommand(command: ExcalidrawSceneCommand<TElement, TAsset>): string[];
   mutate(input: {
     mutations: readonly SceneMutation<TElement>[];

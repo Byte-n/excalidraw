@@ -1,8 +1,4 @@
 export {
-  CanvasToolResultSchema,
-  CanvasQueryToolResultSchema,
-  CanvasEditToolResultSchema,
-  CanvasToolErrorSchema,
   CanvasQueryResultSchema,
   CanvasReceiptSchema,
   ShapeEditInputSchema,
@@ -13,12 +9,8 @@ export {
   MindmapQueryInputSchema,
   TableEditInputSchema,
   TableQueryInputSchema,
-} from "./schemas";
+} from "./schemas.js";
 export type {
-  CanvasToolResult,
-  CanvasQueryToolResult,
-  CanvasEditToolResult,
-  CanvasToolError,
   CanvasQueryResult,
   CanvasReceipt,
   ShapeEditInput,
@@ -29,12 +21,24 @@ export type {
   MindmapQueryInput,
   TableEditInput,
   TableQueryInput,
-} from "./schemas";
-export { createCanvasAgentTools } from "./tools";
-export type { CanvasAgentTool } from "./tools";
-export type { CanvasAgentPort, CanvasSceneQuery } from "./port";
-export { createCanvasScriptTools } from "./tools";
-export type { CanvasScriptPort } from "./port";
+} from "./schemas.js";
+export {
+  createCanvasScriptTools,
+  createCanvasOverviewTool,
+  createCanvasApiInfoTool,
+  createCanvasExecuteCodeTool,
+  createCanvasExportTool,
+} from "./tools.js";
+export type {
+  CanvasExportContext,
+  CanvasExportHooks,
+  CanvasScriptHooks,
+  CanvasCollaborationApi,
+  CanvasExecutionContext,
+  CanvasCodeExecutor,
+  CanvasExecuteCodeHooks,
+} from "./port.js";
+export { createCanvasCollaboration } from "./collaboration.js";
 export {
   ScriptExecuteCodeInputSchema,
   ScriptExportInputSchema,
@@ -43,4 +47,4 @@ export {
   ScriptOutputSchema,
   ScriptExportOutputSchema,
   ScriptDocumentationOutputSchema,
-} from "./schemas";
+} from "./schemas.js";

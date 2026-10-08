@@ -1,20 +1,54 @@
-import type { CanvasLocalReceipt, CanvasSceneOperation } from "@excalidraw/yjs";
+import type { ExcalidrawSceneElement } from "@excalidraw/yjs";
+import type { HocuspocusHeadlessSession } from "@excalidraw/yjs-hocuspocus-client";
 
-import type { CanvasQueryResult } from "./schemas";
+import type { ScriptExecuteCodeInput, ScriptExportInput } from "./schemas.js";
 
-/** 宿主注入的最小端口；连接、权限、审批和生命周期不属于 agent-tool。 */
-export type CanvasSceneQuery = Readonly<{
-  domain: "shape" | "connector" | "mindmap" | "table";
-  input: Readonly<Record<string, unknown>>;
+/** 协作对象由当前 session 能力构造；执行器仅桥接其显式公开的方法。 */
+export type CanvasCollaborationApi = Readonly<
+  Record<string, (...args: unknown[]) => unknown | Promise<unknown>>
+>;
+export type CanvasExecutionContext = Readonly<
+  ScriptExecuteCodeInput & { signal?: AbortSignal }
+>;
+export type CanvasCodeExecutor = Readonly<{
+  execute(
+    input: Readonly<{
+      code: string;
+      collaboration: CanvasCollaborationApi;
+      signal?: AbortSignal;
+      cancel?: () => void;
+      onError?: (error: unknown) => void;
+    }>,
+  ): Promise<unknown>;
 }>;
-
-export type CanvasAgentPort = Readonly<{
-  query(query: CanvasSceneQuery): CanvasQueryResult;
-  execute(operation: CanvasSceneOperation): CanvasLocalReceipt;
+export type CanvasExecuteCodeHooks = Readonly<{
+  sessionFactory(
+    context: CanvasExecutionContext,
+  ):
+    | HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>
+    | Promise<HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>>;
+  collaborationFactory?(
+    session: HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>,
+    context: CanvasExecutionContext,
+  ): CanvasCollaborationApi | Promise<CanvasCollaborationApi>;
+  executor?: CanvasCodeExecutor;
+  onError?(error: unknown, context: CanvasExecutionContext): void;
 }>;
-
-/** 脚本工具注入端口；宿主负责鉴权、审批、运行时和会话生命周期。 */
-export type CanvasScriptPort = Readonly<{
-  executeCode(input: { canvasId: string; code: string; mode: "read" | "write" }): Promise<unknown>;
-  exportScene(input: { canvasId: string }): Promise<unknown>;
+export type CanvasExportContext = Readonly<
+  ScriptExportInput & { signal?: AbortSignal }
+>;
+export type CanvasExportHooks = Readonly<{
+  sessionFactory(
+    context: CanvasExportContext,
+  ):
+    | HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>
+    | Promise<HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>>;
 }>;
+export type CanvasScriptHooks = Readonly<{
+  sessionFactory(
+    context: CanvasExecutionContext | CanvasExportContext,
+  ):
+    | HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>
+    | Promise<HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>>;
+}> &
+  Pick<CanvasExecuteCodeHooks, "collaborationFactory" | "executor" | "onError">;

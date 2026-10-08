@@ -125,4 +125,4 @@ Last but not least, we're thankful to these companies for offering their service
 
 ## 包构建顺序
 
-`yarn build:packages` 按 common → fractional-indexing → laser-pointer → math → element → excalidraw → yjs → yjs-hocuspocus-client → yjs-hocuspocus-server 构建。Yjs 协作内核消费 core 公开 API，core 先生成产物与声明；core 不依赖 Yjs。
+`yarn build:packages` 按 common → fractional-indexing → laser-pointer → math → element → excalidraw → yjs → yjs-hocuspocus-client → agent-tool → yjs-hocuspocus-server 构建。Yjs 协作内核消费 core 公开 API，core 先生成产物与声明；core 不依赖 Yjs。`yarn build:agent-tool` 在 yjs-hocuspocus-client 产物就绪后可单独构建 Agent 语义工具包的运行时与声明产物。

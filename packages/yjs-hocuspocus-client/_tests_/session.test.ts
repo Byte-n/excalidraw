@@ -882,3 +882,125 @@ test("external initial scene validation failure stops the controller gate while 
     await server.destroy();
   }
 });
+
+test("JSON 快照省略可选 undefined 并保留缺省文本尺寸，不应用宿主投影", async () => {
+  const { server, url } = await startServer();
+  const session = createHocuspocusHeadlessSession({
+    ...options(url),
+    validateScene: (scene) => {
+      for (const element of scene.elements) {
+        if (!element.id || !Number.isSafeInteger(element.version)) {
+          throw new Error("invalid_scene");
+        }
+      }
+    },
+  });
+  try {
+    await session.ready;
+    const element = {
+      ...createSceneElement({ type: "rectangle", x: 0, y: 0 }),
+      type: "text",
+      width: undefined,
+      height: undefined,
+      optional: undefined,
+    };
+    const scene = { elements: [element], assets: {} };
+    vi.spyOn(session.binding, "getCanonical").mockReturnValue(scene);
+    const snapshot = session.getSceneSnapshot();
+    expect(snapshot).toEqual(JSON.parse(JSON.stringify(scene)));
+    expect(snapshot.elements[0]).not.toHaveProperty("width");
+    expect(snapshot.elements[0]).not.toHaveProperty("height");
+    expect(snapshot.elements[0]).not.toHaveProperty("optional");
+    expect(session.getScene()).toBe(scene);
+    snapshot.elements[0]!.x = 99;
+    expect(element.x).toBe(0);
+  } finally {
+    await session.close();
+    await server.destroy();
+  }
+});
+
+test("JSON 快照在复制后拒绝丢失的非枚举必需字段", async () => {
+  const { server, url } = await startServer();
+  const session = createHocuspocusHeadlessSession({
+    ...options(url),
+    validateScene: (scene) => {
+      if (
+        scene.elements.some((element) => !Number.isSafeInteger(element.version))
+      ) {
+        throw new Error("invalid_scene");
+      }
+    },
+  });
+  try {
+    await session.ready;
+    const element = createSceneElement({ type: "rectangle", x: 0, y: 0 });
+    Object.defineProperty(element, "version", {
+      value: element.version,
+      enumerable: false,
+    });
+    vi.spyOn(session.binding, "getCanonical").mockReturnValue({
+      elements: [element],
+      assets: {},
+    });
+    expect(() => session.getSceneSnapshot()).toThrow("invalid_scene");
+  } finally {
+    await session.close();
+    await server.destroy();
+  }
+});
+
+test("JSON 快照拒绝 getter、toJSON、稀疏和越界数组，且不执行其方法", async () => {
+  const { server, url } = await startServer();
+  const session = createHocuspocusHeadlessSession(options(url));
+  try {
+    await session.ready;
+    const getter = vi.fn(() => "secret");
+    const toJSON = vi.fn(() => ({}));
+    const element = createSceneElement({ type: "rectangle", x: 0, y: 0 });
+    const withGetter = { ...element };
+    Object.defineProperty(withGetter, "secret", {
+      get: getter,
+      enumerable: true,
+    });
+    const outOfRange = Array<typeof element>(1);
+    Object.defineProperty(outOfRange, "4294967295", {
+      value: element,
+      enumerable: true,
+    });
+    const canonical = vi.spyOn(session.binding, "getCanonical");
+    for (const elements of [
+      [withGetter],
+      [{ ...element, toJSON }],
+      Array<typeof element>(1),
+      outOfRange,
+    ]) {
+      canonical.mockReturnValue({ elements, assets: {} });
+      expect(() => session.getSceneSnapshot()).toThrow("invalid_scene");
+    }
+    expect(getter).not.toHaveBeenCalled();
+    expect(toJSON).not.toHaveBeenCalled();
+  } finally {
+    await session.close();
+    await server.destroy();
+  }
+});
+
+test("JSON 快照拒绝未同步完成的宿主校验", async () => {
+  const { server, url } = await startServer();
+  let asynchronous = false;
+  const session = createHocuspocusHeadlessSession({
+    ...options(url),
+    validateScene: () => (asynchronous ? Promise.resolve() : undefined),
+  });
+  try {
+    await session.ready;
+    asynchronous = true;
+    expect(() => session.getSceneSnapshot()).toThrow(
+      "scene validation must be synchronous",
+    );
+  } finally {
+    await session.close();
+    await server.destroy();
+  }
+});
