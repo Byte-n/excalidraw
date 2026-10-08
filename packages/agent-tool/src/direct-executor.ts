@@ -123,15 +123,20 @@ export const directExecutor: CanvasCodeExecutor = {
         ok: false,
         error: {
           code: errorCode,
-          message:
-            errorCode === "execution_cancelled"
-              ? "脚本执行已取消"
-              : errorCode === "invalid_result"
-              ? "脚本返回值不是有效 JSON"
-              : "脚本执行失败",
+          message: describeFailure(errorCode, error),
         },
         receipts,
       };
     }
   },
 };
+
+function describeFailure (code: string, error: unknown): string {
+  const fallback = code === "execution_cancelled"
+    ? "脚本执行已取消"
+    : code === "invalid_result"
+    ? "脚本返回值不是有效 JSON"
+    : "脚本执行失败";
+  const detail = error instanceof Error ? error.message.trim() : String(error);
+  return detail && detail !== code ? `${fallback}: ${detail}` : fallback;
+}
