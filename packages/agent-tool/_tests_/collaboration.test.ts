@@ -2,6 +2,7 @@ import {
   createCanvasCollaboration,
   createCanvasExecuteCodeTool,
   type CanvasExecutionContext,
+  type CanvasExecuteInput,
 } from "../src";
 
 import { rectangle, sessionFixture, withScene } from "./helpers";
@@ -63,6 +64,7 @@ test("默认工厂拒绝非法 canonical、新增输入和非数据快照，不�
   try {
     const api = createCanvasCollaboration(f.session, context());
     expect(() =>
+      // @ts-expect-error Deliberately incomplete canonical element.
       api.mutate!({ mutations: [{ type: "add", element: { id: "fake" } }] }),
     ).toThrow();
     expect(f.binding.getElements()).toHaveLength(0);
@@ -100,7 +102,7 @@ test("默认工厂在权限、取消、同步及 generation 翻转后拒绝旧�
       f.session,
       context("write", controller.signal),
     );
-    const input = {
+    const input: CanvasExecuteInput = {
       domain: "shape",
       operation: {
         action: "create",
@@ -118,7 +120,9 @@ test("默认工厂在权限、取消、同步及 generation 翻转后拒绝旧�
     f.binding.setGate({ synced: true, generation: 1 });
     expect(() => api.getElements!()).toThrow("session_unavailable");
     controller.abort();
-    expect(() => api.query!({})).toThrow("execution_cancelled");
+    expect(() =>
+      api.query!({ domain: "shape", operation: { action: "list" } }),
+    ).toThrow("execution_cancelled");
     expect(f.binding.getElements()).toHaveLength(0);
   } finally {
     await f.dispose();
@@ -198,7 +202,7 @@ test("可选异步工厂获得当前 session 与上下文，严格输入在调�
 test("默认执行器用真实领域写入生成回执，非法安全版本和受保护 patch 不改变场景", async () => {
   const f = sessionFixture();
   try {
-    const operation = {
+    const operation: CanvasExecuteInput = {
       domain: "shape",
       operation: {
         action: "create",
@@ -239,10 +243,10 @@ test("默认执行器用真实领域写入生成回执，非法安全版本和�
       }),
     ).toThrow();
     expect(f.binding.getElements()).toEqual([value]);
-    expect(() => api.query!({})).toThrow("unsupported_collaboration_method");
-    expect(() => api.createElement!({})).toThrow(
-      "unsupported_collaboration_method",
-    );
+    expect(
+      api.query({ domain: "shape", operation: { action: "list" } }),
+    ).toMatchObject({ total: 1 });
+    expect(() => Reflect.apply(api.createElement!, api, [{}])).toThrow();
   } finally {
     await f.dispose();
   }
@@ -316,7 +320,7 @@ test("新增元素拒绝无法完整保留的 JSON 字段且不产生事务", as
     const updates = vi.fn();
     f.doc.on("update", updates);
     const api = createCanvasCollaboration(f.session, context());
-    const valid: Record<string, unknown> = JSON.parse(
+    const valid: ReturnType<typeof rectangle> = JSON.parse(
       JSON.stringify(rectangle()),
     );
     const hiddenVersion = { ...valid };
@@ -365,6 +369,88 @@ test("新增元素拒绝无法完整保留的 JSON 字段且不产生事务", as
     api.mutate!({ mutations: [{ type: "add", element: valid }] });
     expect(updates).toHaveBeenCalledTimes(1);
     expect(f.binding.getElements()[0]).toEqual(valid);
+  } finally {
+    await f.dispose();
+  }
+});
+
+test("草稿不提交，add 后可分页查询，删除和返回副本不影响查询", async () => {
+  const f = sessionFixture();
+  try {
+    const api = createCanvasCollaboration(f.session, context());
+    const draft = await api.createElement!({
+      kind: "rectangle",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 60,
+    });
+    expect(f.binding.getElements()).toHaveLength(0);
+    await api.mutate!({ mutations: [{ type: "add", element: draft }] });
+    const result = await api.query({
+      domain: "shape",
+      operation: { action: "list", limit: 1 },
+    });
+    expect(result).toMatchObject({ total: 1, hasMore: false });
+    result.items[0].x = 999;
+    expect(f.binding.getElements()[0].x).toBe(0);
+    expect(
+      await api.query({
+        domain: "shape",
+        operation: { action: "list", offset: 1 },
+      }),
+    ).toMatchObject({ total: 1, items: [] });
+    await api.mutate!({ mutations: [{ type: "delete", id: draft.id }] });
+    expect(
+      await api.query({ domain: "shape", operation: { action: "list" } }),
+    ).toMatchObject({ total: 0 });
+    expect(() =>
+      api.query({
+        domain: "shape",
+        operation: { action: "get", elementId: draft.id },
+      }),
+    ).toThrow("target_not_found");
+  } finally {
+    await f.dispose();
+  }
+});
+
+test("四个领域查询均校验协议，草稿脚本只产生读取结果", async () => {
+  const f = sessionFixture();
+  try {
+    const api = createCanvasCollaboration(f.session, context("read"));
+    for (const domain of ["shape", "connector", "mindmap", "table"] as const) {
+      expect(
+        await api.query({ domain, operation: { action: "list" } }),
+      ).toEqual({
+        domain,
+        items: [],
+        total: 0,
+        offset: 0,
+        limit: 50,
+        hasMore: false,
+      });
+      expect(() =>
+        Reflect.apply(api.query, api, [
+          { domain, operation: { action: "list", limit: 201 } },
+        ]),
+      ).toThrow();
+    }
+    const tool = createCanvasExecuteCodeTool({
+      sessionFactory: () => f.session,
+    });
+    expect(
+      await tool.execute({
+        canvasId,
+        mode: "write",
+        code: 'return await collaboration.createElement({ kind: "rectangle", x: 0, y: 0, width: 10, height: 10 });',
+      }),
+    ).toMatchObject({
+      ok: true,
+      status: "read",
+      result: { type: "composite_shape", width: 10 },
+    });
+    expect(f.binding.getElements()).toHaveLength(0);
   } finally {
     await f.dispose();
   }

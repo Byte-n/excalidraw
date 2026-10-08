@@ -1,3 +1,4 @@
+import { collaborationApiDocumentation } from "./api-documentation.generated.js";
 import { directExecutor } from "./direct-executor.js";
 import {
   createCanvasCollaboration,
@@ -20,22 +21,45 @@ import type {
   CanvasScriptHooks,
 } from "./port.js";
 
-const scriptMethods = [
-  "getScene() -> Promise<SceneSnapshot>",
-  "getElements(ids?: string[]) -> Promise<CanonicalElement[]>",
-  "query(input) -> Promise<CanvasQueryResult>",
-  "createElement(input) -> Promise<CanonicalDraft>",
-  "mutate(input) -> Promise<BatchReceipt>",
-  "execute(input) -> Promise<CanvasReceipt>",
-] as const;
+const scriptMethods = collaborationApiDocumentation.members.map(
+  (member) => member.signature,
+);
 const documentation = (member?: string): string => {
-  if (member) {
-    return (
-      scriptMethods.find((method) => method.startsWith(`${member}(`)) ??
-      "未知协作 API 成员"
-    );
+  const members = collaborationApiDocumentation.members.filter(
+    (entry) => !member || entry.name === member,
+  );
+  const text = members
+    .map((entry) =>
+      [
+        entry.signature,
+        entry.description,
+        ...entry.parameters.map(
+          (parameter) => `参数 ${parameter.name}: ${parameter.type}`,
+        ),
+        `返回: Promise<${entry.returns}>`,
+      ].join("\n"),
+    )
+    .join("\n\n");
+  const referencedTypes: { name: string; definition: string }[] = [];
+  let references = text;
+  for (
+    let index = 0;
+    index < collaborationApiDocumentation.types.length;
+    index++
+  ) {
+    for (const type of collaborationApiDocumentation.types) {
+      if (
+        !referencedTypes.some((entry) => entry.name === type.name) &&
+        new RegExp(`\\b${type.name}\\b`).test(references)
+      ) {
+        referencedTypes.push(type);
+        references += `\n${type.definition}`;
+      }
+    }
   }
-  return scriptMethods.join("\n");
+  return `execute_code 中所有公开方法均返回 Promise；原始宿主方法可同步或异步。\n\n${text}\n\n${referencedTypes
+    .map((type) => `${type.name} = ${type.definition}`)
+    .join("\n\n")}`;
 };
 const validDocumentation = (text: string) =>
   ScriptDocumentationOutputSchema.parse({
@@ -53,7 +77,7 @@ export const createCanvasOverviewTool = () => ({
     const parsed = ScriptOverviewInputSchema.parse(input);
     void parsed;
     return validDocumentation(
-      `先读取 collaboration.getScene 或 query，再用 createElement 与 mutate/execute 提交；每批提交独立回执，local_applied 不代表远端持久化。\n\n${scriptMethods.join(
+      `先读取 collaboration.getScene 或 getElements，再用 write 模式下的 mutate/execute 提交；query 查询领域元素，createElement 构造基础形状草稿后用 mutate(add) 提交；每批提交独立回执，local_applied 不代表远端持久化。\n\n${scriptMethods.join(
         "\n",
       )}`,
     );
@@ -62,7 +86,8 @@ export const createCanvasOverviewTool = () => ({
 
 export const createCanvasApiInfoTool = () => ({
   name: "collaboration_api_info" as const,
-  description: "返回实际公开的六个协作 API 方法及 Promise 输入输出。",
+  description:
+    "查询从 CanvasCollaborationApi 类型和 JSDoc 自动生成的 API 文档，包含参数、返回类型及能力限制。",
   inputSchema: ScriptApiInfoInputSchema,
   outputSchema: ScriptDocumentationOutputSchema,
   execute: async (input: unknown) => {

@@ -1,4 +1,6 @@
 import {
+  BASE_SHAPE_IDS,
+  createSceneElement,
   createCanvasSceneCommands,
   createExcalidrawSceneCommands,
 } from "@excalidraw/yjs";
@@ -13,6 +15,11 @@ import type {
 } from "@excalidraw/yjs";
 
 import {
+  CanvasQueryResultSchema,
+  ShapeQueryInputSchema,
+  ConnectorQueryInputSchema,
+  MindmapQueryInputSchema,
+  TableQueryInputSchema,
   CanvasReceiptSchema,
   ConnectorEditInputSchema,
   MindmapEditInputSchema,
@@ -20,10 +27,14 @@ import {
   TableEditInputSchema,
 } from "./schemas.js";
 
-import type { CanvasCollaborationApi, CanvasExecutionContext } from "./port.js";
+import type {
+  CanvasCollaborationApi,
+  CanvasExecutionContext,
+  CanvasSceneSnapshot,
+} from "./port.js";
 
 const version = z.number().int().safe().positive();
-const ExecuteInputSchema = z.discriminatedUnion("domain", [
+export const ExecuteInputSchema = z.discriminatedUnion("domain", [
   z
     .object({
       domain: z.literal("shape"),
@@ -53,6 +64,37 @@ const ExecuteInputSchema = z.discriminatedUnion("domain", [
     })
     .strict(),
 ]);
+/** 基础形状草稿；复杂领域结构使用 execute 创建。 */
+export const CreateElementInputSchema = z
+  .object({
+    kind: z.enum(BASE_SHAPE_IDS),
+    x: z.number().finite(),
+    y: z.number().finite(),
+    width: z.number().finite().positive(),
+    height: z.number().finite().positive(),
+    angle: z.number().finite().optional(),
+  })
+  .strict();
+export const QueryInputSchema = z.discriminatedUnion("domain", [
+  z
+    .object({ domain: z.literal("shape"), operation: ShapeQueryInputSchema })
+    .strict(),
+  z
+    .object({
+      domain: z.literal("connector"),
+      operation: ConnectorQueryInputSchema,
+    })
+    .strict(),
+  z
+    .object({
+      domain: z.literal("mindmap"),
+      operation: MindmapQueryInputSchema,
+    })
+    .strict(),
+  z
+    .object({ domain: z.literal("table"), operation: TableQueryInputSchema })
+    .strict(),
+]);
 const sceneElement = z.custom<ExcalidrawSceneElement>(
   (value) => typeof value === "object" && value !== null && "id" in value,
   "新增元素必须是 canonical 元素",
@@ -65,7 +107,7 @@ const endpoint = z
   })
   .strict()
   .nullable();
-const MutateInputSchema = z
+export const MutateInputSchema = z
   .object({
     mutations: z
       .array(
@@ -166,7 +208,7 @@ const SceneSnapshotSchema = z
     assets: z.record(z.string(), z.json()),
   })
   .strict();
-const MutationReceiptSchema = z
+export const MutationReceiptSchema = z
   .object({ changedElementIds: z.array(z.string().min(1)) })
   .strict();
 
@@ -198,10 +240,12 @@ export const createCanvasSceneReader = (
   generation = session.getState().generation,
 ) => {
   const assertActive = createReadGuard(session, context, generation);
-  return () => {
+  return (): CanvasSceneSnapshot => {
     assertActive();
     const copy = session.getSceneSnapshot();
-    return SceneSnapshotSchema.parse({ schemaVersion: 2, ...copy });
+    const parsed = SceneSnapshotSchema.parse({ schemaVersion: 2, ...copy });
+    // session 已验证完整 canonical 场景，保留其元素类型和 JSON 副本。
+    return { ...parsed, elements: [...copy.elements] };
   };
 };
 
@@ -257,17 +301,82 @@ export const createCanvasCollaboration = (
         : scene.elements,
     );
   };
-  const unsupported = (): never => {
-    assertActive();
-    throw new Error("unsupported_collaboration_method");
-  };
   const read: CanvasCollaborationApi = {
     getScene: (...args) => {
       z.tuple([]).parse(args);
       return getScene();
     },
     getElements,
-    query: unsupported,
+    query: (...args: unknown[]) => {
+      assertActive();
+      const [input] = z.tuple([QueryInputSchema]).parse(args);
+      const operation = input.operation;
+      let items: Record<string, unknown>[] = getScene().elements.filter(
+        (element) => {
+          if (element.isDeleted) {
+            return false;
+          }
+          switch (input.domain) {
+            case "shape":
+              return (
+                element.type === "composite_shape" ||
+                BASE_SHAPE_IDS.some((kind) => kind === element.type)
+              );
+            case "connector":
+              return element.type === "arrow" || element.type === "line";
+            case "mindmap":
+              return (
+                element.type === "mindmap-node" ||
+                element.type === "mindmap-edge"
+              );
+            case "table":
+              return element.type === "table";
+          }
+          return false;
+        },
+      );
+      if ("elementId" in operation && operation.elementId) {
+        items = items.filter((element) => element.id === operation.elementId);
+      }
+      if ("graphId" in operation) {
+        items = items.filter(
+          (element) => element.graphId === operation.graphId,
+        );
+        if (operation.nodeId) {
+          items = items.filter((element) => element.id === operation.nodeId);
+        }
+      }
+      if ("tableId" in operation) {
+        items = items.filter((element) => element.id === operation.tableId);
+        if (operation.cellId) {
+          items = items.flatMap(
+            (element) =>
+              (element.table as ExcalidrawSceneElement["table"])?.cells.filter(
+                (cell) => cell.id === operation.cellId,
+              ) ?? [],
+          );
+        }
+      }
+      if (operation.action === "get" && items.length === 0) {
+        throw new Error("target_not_found");
+      }
+      if ("text" in operation && operation.text !== undefined) {
+        const text = operation.text;
+        items = items.filter((element) =>
+          JSON.stringify(element).includes(text),
+        );
+      }
+      const offset = "offset" in operation ? operation.offset : 0;
+      const limit = "limit" in operation ? operation.limit : 1;
+      return CanvasQueryResultSchema.parse({
+        domain: input.domain,
+        items: items.slice(offset, offset + limit),
+        total: items.length,
+        offset,
+        limit,
+        hasMore: offset + limit < items.length,
+      });
+    },
   };
   if (context.mode === "read") {
     return Object.freeze(read);
@@ -281,7 +390,23 @@ export const createCanvasCollaboration = (
   });
   return Object.freeze({
     ...read,
-    createElement: unsupported,
+    createElement: (...args: unknown[]) => {
+      assertActive();
+      const [input] = z.tuple([CreateElementInputSchema]).parse(args);
+      const { kind, ...geometry } = input;
+      // 工厂包含合法可选 undefined 字段，canonical JSON 草稿省略这些字段。
+      return JSON.parse(
+        JSON.stringify(
+          createSceneElement({
+            type: kind,
+            ...geometry,
+            angle: geometry.angle as Parameters<
+              typeof createSceneElement
+            >[0]["angle"],
+          }),
+        ),
+      );
+    },
     execute: (...args: unknown[]) => {
       const [operation] = z.tuple([ExecuteInputSchema]).parse(args);
       assertActive(true);

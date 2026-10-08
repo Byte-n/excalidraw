@@ -58,14 +58,14 @@ export const directExecutor: CanvasCodeExecutor = {
     let accepting = true;
     const facade = Object.freeze(
       Object.fromEntries(
-        Object.keys(collaboration).map((method) => [
+        Object.entries(collaboration).map(([method, invoke]) => [
           method,
           (...args: unknown[]) => {
             const call = (async () => {
               if (!accepting || signal?.aborted) {
                 throw new Error("execution_cancelled");
               }
-              const value = await collaboration[method]!(...args);
+              const value = await Reflect.apply(invoke, collaboration, args);
               if (method === "mutate" || method === "execute") {
                 receipts.push({ method, receipt: value });
               }

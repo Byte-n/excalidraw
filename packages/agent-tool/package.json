@@ -14,14 +14,18 @@
       "default": "./dist/prod/index.js"
     }
   },
-  "files": ["dist/*"],
+  "files": [
+    "dist/*"
+  ],
   "scripts": {
     "gen:types": "rimraf dist/types && tsc",
-    "build:esm": "rimraf dist && node ../../scripts/buildBase.js && yarn gen:types",
+    "build:esm": "yarn docs:generate && rimraf dist && node ../../scripts/buildBase.js && yarn gen:types",
     "build": "yarn build:esm",
     "test": "vitest run --root ../.. --config packages/agent-tool/_tests_/vitest.config.ts",
     "typecheck": "tsc --noEmit --emitDeclarationOnly false && tsc -p _tests_/tsconfig.json",
-    "lint": "eslint --ext .ts src _tests_ --max-warnings 0"
+    "lint": "eslint --ext .ts src _tests_ --max-warnings 0",
+    "docs:generate": "node scripts/generate-api-docs.mjs",
+    "docs:check": "node scripts/generate-api-docs.mjs --check"
   },
   "devDependencies": {
     "@hocuspocus/provider": "4.6.0",
@@ -36,5 +40,7 @@
     "@excalidraw/yjs-hocuspocus-client": "file:../yjs-hocuspocus-client",
     "zod": "4.4.3"
   },
-  "publishConfig": {"access": "public"}
+  "publishConfig": {
+    "access": "public"
+  }
 }

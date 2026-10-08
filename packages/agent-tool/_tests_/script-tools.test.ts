@@ -50,6 +50,26 @@ test("collaboration docs cover every public promise method and member lookup", a
   await expect(tool.execute({ member: "close" })).rejects.toThrow();
 });
 
+test("生成文档展开参数类型、返回字段和默认能力限制", async () => {
+  const tool = createCanvasScriptTools(port)[1];
+  const mutation = (await tool.execute({ member: "mutate" })).result.text;
+  expect(mutation).toContain('type: "connect"');
+  expect(mutation).toContain("fixedPoint: [number, number]");
+  expect(mutation).toContain("changedElementIds: string[]");
+  expect(mutation).toContain("1–1000");
+  expect(mutation).not.toContain("仅 write 模式公开");
+  expect(mutation).not.toContain("execute(");
+  const execute = (await tool.execute({ member: "execute" })).result.text;
+  expect(execute).toContain('action: "setCellText"');
+  expect(execute).toContain("expectedVersion?: number");
+  const query = (await tool.execute({ member: "query" })).result.text;
+  expect(query).toContain("target_not_found");
+  expect(query).toContain("ShapeQueryInput =");
+  const scene = (await tool.execute({ member: "getScene" })).result.text;
+  expect(scene).toContain("ExcalidrawSceneElement =");
+  expect(scene).toContain("CanvasJsonValue =");
+});
+
 test("script and export validate strict envelopes and host JSON output", async () => {
   const tools = createCanvasScriptTools(port);
   expect(
