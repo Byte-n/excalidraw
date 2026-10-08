@@ -46,7 +46,6 @@ export type {
   CanvasConnectorQueryInput,
   CanvasMindmapQueryInput,
   CanvasTableQueryInput,
-  CanvasCodeCapabilities,
   CanvasExecutionContext,
   CanvasCodeExecutor,
   CanvasExecuteCodeHooks,

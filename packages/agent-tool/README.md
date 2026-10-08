@@ -30,6 +30,6 @@ await tool.execute(
 
 ### 协作 API 类型和生成文档
 
-`CanvasCollaborationApi` 显式声明六个成员，导出快照、领域查询/执行、mutation 输入和回执类型。默认宿主方法可以同步或异步返回；`execute_code` 的脚本 facade 始终返回 Promise。写方法只在 write 模式公开；`query` 支持四个领域；`createElement` 使用 `CanvasCreateElementInput` 构造基础形状草稿，复杂领域结构通过 `execute` 创建。自定义宿主仍可通过 `CanvasCodeCapabilities` 提供部分或额外方法，默认 API 文档不描述这些自定义能力。
+`CanvasCollaborationApi` 显式声明六个成员，导出快照、领域查询/执行、mutation 输入和回执类型。默认宿主方法可以同步或异步返回；`execute_code` 的脚本 facade 始终返回 Promise。写方法只在 write 模式公开；`query` 支持四个领域；`createElement` 使用 `CanvasCreateElementInput` 构造基础形状草稿，复杂领域结构通过 `execute` 创建。
 
 在本包运行 `yarn docs:generate`，使用 TypeScript Compiler API 提取接口签名、JSDoc 和展开的关联类型，生成 `src/api-documentation.generated.ts`。`collaboration_api_info({ member })` 直接查询这份静态数据，返回参数字段、字面量联合、返回类型和能力限制；省略 member 返回全部成员。运行时不依赖 TypeScript，也不读取源文件。包构建自动重新生成，`yarn docs:check` 可检查提交的生成数据是否过期。修改接口、相关 Zod schema 或 JSDoc 后应重新生成并提交产物。

@@ -77,12 +77,6 @@ export interface CanvasCollaborationApi {
   ) => CanvasApiResult<CanvasReceipt>;
 }
 
-/** 自定义宿主可提供额外或部分方法；执行器逐个桥接其实际公开能力。 */
-export type CanvasCodeCapabilities =
-  | CanvasCollaborationApi
-  | Readonly<
-      Record<string, (...args: unknown[]) => unknown | Promise<unknown>>
-    >;
 export type CanvasExecutionContext = Readonly<
   ScriptExecuteCodeInput & { signal?: AbortSignal }
 >;
@@ -90,7 +84,7 @@ export type CanvasCodeExecutor = Readonly<{
   execute(
     input: Readonly<{
       code: string;
-      collaboration: CanvasCodeCapabilities;
+      collaboration: CanvasCollaborationApi;
       signal?: AbortSignal;
       cancel?: () => void;
       onError?: (error: unknown) => void;
@@ -106,7 +100,7 @@ export type CanvasExecuteCodeHooks = Readonly<{
   collaborationFactory?(
     session: HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>,
     context: CanvasExecutionContext,
-  ): CanvasCodeCapabilities | Promise<CanvasCodeCapabilities>;
+  ): CanvasCollaborationApi | Promise<CanvasCollaborationApi>;
   executor?: CanvasCodeExecutor;
   onError?(error: unknown, context: CanvasExecutionContext): void;
 }>;
