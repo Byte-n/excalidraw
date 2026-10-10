@@ -1980,6 +1980,65 @@ const renderFocusPointIndicator = ({
   }
 };
 
+// arc-shaped double-headed arrow, bulging away from the selection
+const renderRotationHandle = (
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  zoom: number,
+) => {
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  // arc centered toward the selection (bottom-left), so it curves around the corner
+  const r = size * 0.75;
+  const ox = cx - r * Math.SQRT1_2;
+  const oy = cy + r * Math.SQRT1_2;
+  const start = -Math.PI * 0.5;
+  const end = 0;
+  const head = size * 0.32;
+
+  const drawArc = () => {
+    context.beginPath();
+    context.arc(ox, oy, r, start, end);
+    context.stroke();
+  };
+  const drawHead = (angle: number, dir: 1 | -1) => {
+    const px = ox + r * Math.cos(angle);
+    const py = oy + r * Math.sin(angle);
+    // tangent pointing outward along the arc
+    const t = angle + (dir * Math.PI) / 2;
+    const tx = Math.cos(t);
+    const ty = Math.sin(t);
+    context.beginPath();
+    context.moveTo(px + tx * head, py + ty * head);
+    context.lineTo(px - ty * head * 0.8, py + tx * head * 0.8);
+    context.lineTo(px + ty * head * 0.8, py - tx * head * 0.8);
+    context.closePath();
+    context.fill();
+    context.stroke();
+  };
+
+  // match the other transform handles: handle-fill body, thin selection outline
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  const color = context.strokeStyle;
+  const fill = context.fillStyle;
+  // arc as an outlined band
+  context.strokeStyle = color;
+  context.lineWidth = 3 / zoom;
+  drawArc();
+  context.strokeStyle = fill;
+  context.lineWidth = 1 / zoom;
+  drawArc();
+  // arrowheads drawn like handles: filled with handle fill, outlined
+  context.strokeStyle = color;
+  context.fillStyle = fill;
+  context.lineWidth = 1 / zoom;
+  drawHead(start, -1);
+  drawHead(end, 1);
+};
+
 const renderTransformHandles = (
   context: CanvasRenderingContext2D,
   renderConfig: InteractiveCanvasRenderConfig,
@@ -1998,7 +2057,21 @@ const renderTransformHandles = (
         context.strokeStyle = renderConfig.selectionColor;
       }
       if (key === "rotation") {
-        fillCircle(context, x + width / 2, y + height / 2, width / 2, true);
+        // hidden while rotating — the cursor takes over as the indicator
+        if (appState.isRotating) {
+          context.restore();
+          return;
+        }
+        // the handle is positioned in rotated space; rotate the glyph to match
+        context.translate(x + width / 2, y + height / 2);
+        context.rotate(angle);
+        renderRotationHandle(
+          context,
+          -width / 2,
+          -height / 2,
+          width,
+          appState.zoom.value,
+        );
         // prefer round corners if roundRect API is available
       } else if (context.roundRect) {
         context.beginPath();

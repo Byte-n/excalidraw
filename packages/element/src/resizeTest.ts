@@ -233,6 +233,30 @@ const rotateResizeCursor = (cursor: string, angle: number) => {
 /*
  * Returns bi-directional cursor for the element being resized
  */
+// arc-shaped double-headed arrow matching the rotation handle icon,
+// white halo so it reads on any background
+const ROTATION_CURSOR_PATH =
+  "M7 7A11 11 0 0 1 17 17M3.5 7L8 3.5v7zM17 20.5L13.5 16h7z";
+const ROTATION_CURSOR_ANGLE_STEP = 2;
+const rotationCursorCache = new Map<number, string>();
+
+// rotation cursor turned to match the (rotated) rotation handle
+export const getRotationCursor = (angle: number): string => {
+  const deg =
+    (((Math.round((angle * 180) / Math.PI / ROTATION_CURSOR_ANGLE_STEP) *
+      ROTATION_CURSOR_ANGLE_STEP) %
+      360) +
+      360) %
+    360;
+  let cursor = rotationCursorCache.get(deg);
+  if (!cursor) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(${deg} 12 12)"><path d="${ROTATION_CURSOR_PATH}" stroke="#fff" stroke-width="4"/><path d="${ROTATION_CURSOR_PATH}" stroke="#000" stroke-width="1.5"/><path d="M3.5 7L8 3.5v7zM17 20.5L13.5 16h7z" fill="#000"/></g></svg>`;
+    cursor = `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, grab`;
+    rotationCursorCache.set(deg, cursor);
+  }
+  return cursor;
+};
+
 export const getCursorForResizingElement = (resizingElement: {
   element?: ExcalidrawElement;
   transformHandleType: MaybeTransformHandleType;
@@ -268,7 +292,7 @@ export const getCursorForResizingElement = (resizingElement: {
       }
       break;
     case "rotation":
-      return "grab";
+      return getRotationCursor(element?.angle ?? 0);
   }
 
   if (cursor && element) {

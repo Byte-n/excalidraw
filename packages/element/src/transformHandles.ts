@@ -53,6 +53,7 @@ const transformHandleSizes: { [k in PointerType]: number } = {
 };
 
 const ROTATION_RESIZE_HANDLE_GAP = 16;
+const ROTATION_HANDLE_SCALE = 1.75;
 
 export const DEFAULT_OMIT_SIDES = {
   e: true,
@@ -148,6 +149,7 @@ export const getTransformHandlesFromCoords = (
 
   const width = x2 - x1;
   const height = y2 - y1;
+  const rotationHandleSize = handleWidth * ROTATION_HANDLE_SCALE;
   const dashedLineMargin = margin / zoom.value;
   const centeringOffset = (size - spacing * 2) / (2 * zoom.value);
 
@@ -199,14 +201,22 @@ export const getTransformHandlesFromCoords = (
     rotation: omitSides.rotation
       ? undefined
       : generateTransformHandle(
-          x1 + width / 2 - handleWidth / 2,
+          // placed diagonally outside the top-right (ne) corner handle
+          x2 +
+            dashedLineMargin -
+            centeringOffset +
+            handleWidth / 2 +
+            ROTATION_RESIZE_HANDLE_GAP / zoom.value -
+            rotationHandleSize / 2,
           y1 -
             dashedLineMargin -
             handleMarginY +
-            centeringOffset -
-            ROTATION_RESIZE_HANDLE_GAP / zoom.value,
-          handleWidth,
-          handleHeight,
+            centeringOffset +
+            handleHeight / 2 -
+            ROTATION_RESIZE_HANDLE_GAP / zoom.value -
+            rotationHandleSize / 2,
+          rotationHandleSize,
+          rotationHandleSize,
           cx,
           cy,
           angle,

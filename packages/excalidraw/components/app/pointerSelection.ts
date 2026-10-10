@@ -31,6 +31,7 @@ import {
   isPointInElement,
   getSnapOutlineMidPoint,
   getBindingStrategyForDraggingBindingElementEndpoints,
+  getRotationCursor,
 } from "@excalidraw/element";
 
 import { TOOL_TYPE, distance } from "@excalidraw/common";
@@ -379,8 +380,26 @@ export const maybeHandleResize = (
       resizeY,
       pointerDownState.resize.center.x,
       pointerDownState.resize.center.y,
+      pointerDownState.origin,
     )
   ) {
+    if (transformHandleType === "rotation") {
+      // keep the cursor aligned with where the rotation handle would be:
+      // a single element reports its (possibly snapped) angle, a multi
+      // selection's handle sits at 0 so follow the pointer's sweep
+      const { center } = pointerDownState.resize;
+      const { origin } = pointerDownState;
+      app.cursor.set(
+        getRotationCursor(
+          selectedElements.length === 1
+            ? selectedElements[0].angle
+            : Math.atan2(
+                pointerCoords.y - center.y,
+                pointerCoords.x - center.x,
+              ) - Math.atan2(origin.y - center.y, origin.x - center.x),
+        ),
+      );
+    }
     const elementsToHighlight = new Set<NonDeletedExcalidrawElement>();
     selectedFrames.forEach((frame: any) => {
       getElementsInResizingFrame(
@@ -719,10 +738,11 @@ export const handleSelectionOnPointerDown = (
         !event.shiftKey &&
         !event[KEYS.CTRL_OR_CMD];
       const someHitElementIsSelected =
-        pointerDownState.hit.allHitElements.some((element) =>
-          app.isASelectedElement(element) &&
-          (!selectedTableContainsHitElement ||
-            element.id !== hitElement?.containerRef?.elementId),
+        pointerDownState.hit.allHitElements.some(
+          (element) =>
+            app.isASelectedElement(element) &&
+            (!selectedTableContainsHitElement ||
+              element.id !== hitElement?.containerRef?.elementId),
         ) ||
         // the selected linear element's point handles, midpoint knob and
         // label extend beyond its own hit area, so a hit reported by

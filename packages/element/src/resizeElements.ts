@@ -118,6 +118,9 @@ export const transformElements = (
   pointerY: number,
   centerX: number,
   centerY: number,
+  // pointer position where the rotation drag started; rotation is applied as
+  // the angular delta from it, so the handle can sit anywhere (e.g. a corner)
+  rotationOrigin?: { x: number; y: number },
 ): boolean => {
   const elementsMap = scene.getNonDeletedElementsMap();
   if (selectedElements.length === 1) {
@@ -130,6 +133,8 @@ export const transformElements = (
           pointerX,
           pointerY,
           shouldRotateWithDiscreteAngle,
+          originalElements.get(element.id)?.angle ?? element.angle,
+          rotationOrigin,
         );
         updateBoundElements(element, scene);
       }
@@ -182,6 +187,7 @@ export const transformElements = (
         shouldRotateWithDiscreteAngle,
         centerX,
         centerY,
+        rotationOrigin,
       );
       return true;
     } else if (transformHandleType) {
@@ -222,12 +228,31 @@ export const transformElements = (
   return false;
 };
 
+/**
+ * Angle swept by the pointer around the center since the drag started.
+ * Without an origin, falls back to a handle straight above the center.
+ */
+const getRotationDelta = (
+  pointerX: number,
+  pointerY: number,
+  cx: number,
+  cy: number,
+  origin?: { x: number; y: number },
+) => {
+  const startAngle = origin
+    ? Math.atan2(origin.y - cy, origin.x - cx)
+    : -Math.PI / 2;
+  return Math.atan2(pointerY - cy, pointerX - cx) - startAngle;
+};
+
 const rotateSingleElement = (
   element: NonDeletedExcalidrawElement,
   scene: Scene,
   pointerX: number,
   pointerY: number,
   shouldRotateWithDiscreteAngle: boolean,
+  origAngle: number,
+  rotationOrigin?: { x: number; y: number },
 ) => {
   const [x1, y1, x2, y2] = getElementAbsoluteCoords(
     element,
@@ -239,8 +264,9 @@ const rotateSingleElement = (
   if (isFrameLikeElement(element)) {
     angle = 0 as Radians;
   } else {
-    angle = ((5 * Math.PI) / 2 +
-      Math.atan2(pointerY - cy, pointerX - cx)) as Radians;
+    angle = (4 * Math.PI +
+      origAngle +
+      getRotationDelta(pointerX, pointerY, cx, cy, rotationOrigin)) as Radians;
     if (shouldRotateWithDiscreteAngle) {
       angle = (angle + SHIFT_LOCKING_ANGLE / 2) as Radians;
       angle = (angle - (angle % SHIFT_LOCKING_ANGLE)) as Radians;
@@ -432,10 +458,12 @@ const rotateMultipleElements = (
   shouldRotateWithDiscreteAngle: boolean,
   centerX: number,
   centerY: number,
+  rotationOrigin?: { x: number; y: number },
 ) => {
   const elementsMap = scene.getNonDeletedElementsMap();
   let centerAngle =
-    (5 * Math.PI) / 2 + Math.atan2(pointerY - centerY, pointerX - centerX);
+    4 * Math.PI +
+    getRotationDelta(pointerX, pointerY, centerX, centerY, rotationOrigin);
   if (shouldRotateWithDiscreteAngle) {
     centerAngle += SHIFT_LOCKING_ANGLE / 2;
     centerAngle -= centerAngle % SHIFT_LOCKING_ANGLE;
