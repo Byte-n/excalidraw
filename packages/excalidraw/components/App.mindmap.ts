@@ -1682,15 +1682,37 @@ export class AppMindmap {
       .map((element) => session.initialElements.get(element.id) ?? element);
     const movedIds = new Set<string>();
     for (const graphId of session.graphIds) {
+      const elementsById = new Map(
+        elements.map((element) => [element.id, element]),
+      );
       const nodeIds = session.nodeIds.filter((id) => {
-        const element = elements.find((item) => item.id === id);
+        const element = elementsById.get(id);
         return (
           !!element &&
           isMindmapNodeElement(element) &&
           element.graphId === graphId
         );
       });
+      // `applyMindmapOperation("move")` translates a node's entire subtree, so
+      // moving a selected descendant whose ancestor is also selected would
+      // translate it again and tear the graph apart. Only move the top-level
+      // selected nodes — those without a selected ancestor — and let each
+      // subtree move carry its selected descendants exactly once.
+      const selectedNodeIds = new Set(nodeIds);
+      const isCoveredBySelectedAncestor = (nodeId: string): boolean => {
+        let current = elementsById.get(nodeId);
+        while (current && isMindmapNodeElement(current) && current.parentId) {
+          if (selectedNodeIds.has(current.parentId)) {
+            return true;
+          }
+          current = elementsById.get(current.parentId);
+        }
+        return false;
+      };
       for (const nodeId of nodeIds) {
+        if (isCoveredBySelectedAncestor(nodeId)) {
+          continue;
+        }
         const node = elements.find((element) => element.id === nodeId);
         if (!node || !isMindmapNodeElement(node) || node.isDeleted) {
           continue;

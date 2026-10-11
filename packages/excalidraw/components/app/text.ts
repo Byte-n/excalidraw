@@ -117,6 +117,30 @@ export const handleTextWysiwyg = (
       return;
     }
     const container = getContainerElement(latestTextElement, elementsMap);
+    // When a composite/linear container's bound text is submitted empty or as
+    // whitespace, the text must be deleted. handleSubmit has already detached
+    // the text from the container's boundElements, so the composite/connector
+    // label-update path below cannot rediscover the text to delete it — it looks
+    // the bound text up via the (now-empty) boundElements. Mark the text deleted
+    // directly instead, without refreshing dimensions (the text is going away,
+    // and composite geometry is owned by the shape model).
+    if (
+      container &&
+      (isCompositeShapeElement(container) || isLinearElement(container)) &&
+      isDeleted
+    ) {
+      app.scene.replaceAllElements([
+        ...app.scene.getElementsIncludingDeleted().map((_element) =>
+          _element.id === latestTextElement.id && isTextElement(_element)
+            ? newElementWith(_element, {
+                originalText: nextOriginalText,
+                isDeleted: true,
+              })
+            : _element,
+        ),
+      ]);
+      return;
+    }
     if (
       container &&
       (isCompositeShapeElement(container) || isLinearElement(container)) &&

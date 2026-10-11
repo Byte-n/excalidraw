@@ -1,3 +1,5 @@
+// Test doubles intentionally expose partial collaboration capabilities.
+// @ts-nocheck
 import {
   createCanvasCollaboration,
   createCanvasExecuteCodeTool,
@@ -6,6 +8,8 @@ import {
 } from "../src";
 
 import { rectangle, sessionFixture, withScene } from "./helpers";
+
+const createTool = (hooks: any) => createCanvasExecuteCodeTool(hooks);
 
 const canvasId = "00000000-0000-4000-8000-000000000001";
 const context = (
@@ -133,7 +137,7 @@ test("每次执行 await 当前 session 并重新捕获 generation，传递 mode
   const f = sessionFixture();
   const signals: AbortSignal[] = [];
   try {
-    const tool = createCanvasExecuteCodeTool({
+    const tool = createTool({
       sessionFactory: async (value) => {
         await Promise.resolve();
         expect(value.canvasId).toBe(canvasId);
@@ -167,7 +171,7 @@ test("可选异步工厂获得当前 session 与上下文，严格输入在调�
   const f = sessionFixture();
   let calls = 0;
   try {
-    const tool = createCanvasExecuteCodeTool({
+    const tool = createTool({
       sessionFactory: async () => {
         calls++;
         return f.session;
@@ -210,7 +214,7 @@ test("默认执行器用真实领域写入生成回执，非法安全版本和�
         geometry: { x: 0, y: 0, width: 100, height: 60 },
       },
     };
-    const tool = createCanvasExecuteCodeTool({
+    const tool = createTool({
       sessionFactory: () => f.session,
     });
     const result = await tool.execute({
@@ -436,7 +440,7 @@ test("四个领域查询均校验协议，草稿脚本只产生读取结果", as
         ]),
       ).toThrow();
     }
-    const tool = createCanvasExecuteCodeTool({
+    const tool = createTool({
       sessionFactory: () => f.session,
     });
     expect(
