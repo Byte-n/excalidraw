@@ -2,12 +2,12 @@
 // non-deleted element at runtime.
 // @ts-nocheck
 import { Excalidraw } from "@excalidraw/excalidraw";
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
-import { UI } from "@excalidraw/excalidraw/tests/helpers/ui";
+import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
+import { UI } from "@excalidraw/excalidraw/_tests_/helpers/ui";
 import {
   render,
   unmountComponent,
-} from "@excalidraw/excalidraw/tests/test-utils";
+} from "@excalidraw/excalidraw/_tests_/test-utils";
 import { DEFAULT_TRANSFORM_HANDLE_SPACING } from "@excalidraw/common";
 import { type Radians } from "@excalidraw/math";
 

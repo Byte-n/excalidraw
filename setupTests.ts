@@ -7,12 +7,12 @@ import { configure } from "@testing-library/react";
 import { vi } from "vitest";
 
 import polyfill from "./packages/excalidraw/polyfill";
-import { mockThrottleRAF } from "./packages/excalidraw/tests/helpers/mocks";
-import { yellow } from "./packages/excalidraw/tests/helpers/colorize";
+import { mockThrottleRAF } from "./packages/excalidraw/_tests_/helpers/mocks";
+import { yellow } from "./packages/excalidraw/_tests_/helpers/colorize";
 import {
   PolyfillLocalStorage,
   testPolyfills,
-} from "./packages/excalidraw/tests/helpers/polyfills";
+} from "./packages/excalidraw/_tests_/helpers/polyfills";
 
 Object.assign(globalThis, testPolyfills);
 PolyfillLocalStorage();

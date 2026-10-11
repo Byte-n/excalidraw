@@ -22,15 +22,15 @@ import { Excalidraw, getCommonBounds } from "../../index";
 import { actionGroup } from "../../actions";
 import { t } from "../../i18n";
 import * as StaticScene from "../../renderer/staticScene";
-import { API } from "../../tests/helpers/api";
-import { Keyboard, Pointer, UI } from "../../tests/helpers/ui";
-import { getTextEditor, updateTextEditor } from "../../tests/queries/dom";
+import { API } from "../../_tests_/helpers/api";
+import { Keyboard, Pointer, UI } from "../../_tests_/helpers/ui";
+import { getTextEditor, updateTextEditor } from "../../_tests_/queries/dom";
 import {
   GlobalTestState,
   mockBoundingClientRect,
   render,
   restoreOriginalGetBoundingClientRect,
-} from "../../tests/test-utils";
+} from "../../_tests_/test-utils";
 
 import { getStepSizedValue } from "./utils";
 

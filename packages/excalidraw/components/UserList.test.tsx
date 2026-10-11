@@ -7,7 +7,7 @@ import {
   getByText,
   render,
   waitFor,
-} from "../tests/test-utils";
+} from "../_tests_/test-utils";
 
 import type { Collaborator, SocketId } from "../types";
 

@@ -717,7 +717,7 @@ for (const element of elements) {
 }
 
 const png = readFileSync(
-  resolve(root, "packages/excalidraw/tests/fixtures/smiley.png"),
+  resolve(root, "packages/excalidraw/_tests_/fixtures/smiley.png"),
 );
 const scene = {
   type: "excalidraw",

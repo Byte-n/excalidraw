@@ -1,8 +1,8 @@
 import React from "react";
 
 import { Excalidraw } from "../index";
-import { API } from "../tests/helpers/api";
-import { act, assertElements, render } from "../tests/test-utils";
+import { API } from "../_tests_/helpers/api";
+import { act, assertElements, render } from "../_tests_/test-utils";
 
 import { actionDeleteSelected } from "./actionDeleteSelected";
 

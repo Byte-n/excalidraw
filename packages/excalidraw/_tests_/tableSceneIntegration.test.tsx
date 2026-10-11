@@ -9,8 +9,8 @@ import {
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
-import { API } from "../tests/helpers/api";
-import { act, render, unmountComponent } from "../tests/test-utils";
+import { API } from "../_tests_/helpers/api";
+import { act, render, unmountComponent } from "../_tests_/test-utils";
 
 unmountComponent();
 

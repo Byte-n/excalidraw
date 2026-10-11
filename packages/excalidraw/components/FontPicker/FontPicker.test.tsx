@@ -1,8 +1,8 @@
 import { KEYS } from "@excalidraw/common";
 
 import { Excalidraw } from "../..";
-import { Keyboard } from "../../tests/helpers/ui";
-import { act, render } from "../../tests/test-utils";
+import { Keyboard } from "../../_tests_/helpers/ui";
+import { act, render } from "../../_tests_/test-utils";
 
 describe("FontPicker", () => {
   it("should be able to open font picker", async () => {

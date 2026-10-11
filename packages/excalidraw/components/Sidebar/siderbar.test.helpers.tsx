@@ -6,7 +6,7 @@ import {
   queryByTestId,
   render,
   withExcalidrawDimensions,
-} from "../../tests/test-utils";
+} from "../../_tests_/test-utils";
 
 export const assertSidebarDockButton = async <T extends boolean>(
   hasDockButton: T,

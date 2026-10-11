@@ -10,9 +10,9 @@ import {
 } from "@excalidraw/common";
 
 import { Excalidraw } from "../index";
-import { API } from "../tests/helpers/api";
-import { UI } from "../tests/helpers/ui";
-import { render } from "../tests/test-utils";
+import { API } from "../_tests_/helpers/api";
+import { UI } from "../_tests_/helpers/ui";
+import { render } from "../_tests_/test-utils";
 
 describe("element locking", () => {
   beforeEach(async () => {

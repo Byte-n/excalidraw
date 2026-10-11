@@ -1,8 +1,8 @@
 import { pointFrom } from "@excalidraw/math";
 
 import { Excalidraw } from "../index";
-import { API } from "../tests/helpers/api";
-import { render } from "../tests/test-utils";
+import { API } from "../_tests_/helpers/api";
+import { render } from "../_tests_/test-utils";
 
 import { actionFlipHorizontal, actionFlipVertical } from "./actionFlip";
 

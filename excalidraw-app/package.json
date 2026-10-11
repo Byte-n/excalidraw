@@ -42,7 +42,7 @@
   "prettier": "@excalidraw/prettier-config",
   "scripts": {
     "typecheck": "echo 'typecheck is covered by the root project'",
-    "test": "vitest run --root .. excalidraw-app/tests",
+    "test": "vitest run --root .. excalidraw-app/_tests_",
     "build-node": "node ./scripts/build-node.js",
     "build:app:docker": "cross-env VITE_APP_DISABLE_SENTRY=true vite build",
     "build:app": "cross-env VITE_APP_GIT_SHA=$VERCEL_GIT_COMMIT_SHA cross-env VITE_APP_ENABLE_TRACKING=true vite build",

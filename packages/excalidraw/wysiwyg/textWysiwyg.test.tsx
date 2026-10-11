@@ -25,21 +25,21 @@ import type {
 } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
-import { API } from "../tests/helpers/api";
-import { Keyboard, Pointer, UI } from "../tests/helpers/ui";
-import { getTextEditor, updateTextEditor } from "../tests/queries/dom";
+import { API } from "../_tests_/helpers/api";
+import { Keyboard, Pointer, UI } from "../_tests_/helpers/ui";
+import { getTextEditor, updateTextEditor } from "../_tests_/queries/dom";
 import {
   GlobalTestState,
   act,
   render,
   screen,
   unmountComponent,
-} from "../tests/test-utils";
+} from "../_tests_/test-utils";
 import {
   fireEvent,
   mockBoundingClientRect,
   restoreOriginalGetBoundingClientRect,
-} from "../tests/test-utils";
+} from "../_tests_/test-utils";
 import { actionBindText } from "../actions";
 import { actionTextAutoResize } from "../actions/actionTextAutoResize";
 

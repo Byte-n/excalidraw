@@ -4,8 +4,8 @@ import {
 } from "@excalidraw/element";
 
 import { Excalidraw } from "../index";
-import { API } from "../tests/helpers/api";
-import { act, render } from "../tests/test-utils";
+import { API } from "../_tests_/helpers/api";
+import { act, render } from "../_tests_/test-utils";
 
 import {
   actionBindText,

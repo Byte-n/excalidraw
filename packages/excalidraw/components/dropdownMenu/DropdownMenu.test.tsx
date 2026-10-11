@@ -3,13 +3,13 @@ import React from "react";
 import { KEYS } from "@excalidraw/common";
 
 import { Excalidraw } from "../../index";
-import { Keyboard } from "../../tests/helpers/ui";
+import { Keyboard } from "../../_tests_/helpers/ui";
 import {
   render,
   waitFor,
   getByTestId,
   fireEvent,
-} from "../../tests/test-utils";
+} from "../../_tests_/test-utils";
 
 describe("Test <DropdownMenu/>", () => {
   it("closes on Escape", async () => {

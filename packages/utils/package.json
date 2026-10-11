@@ -69,7 +69,7 @@
   "repository": "https://github.com/excalidraw/excalidraw",
   "scripts": {
     "gen:types": "rimraf types && tsc",
-    "test": "vitest run --root ../.. packages/utils/tests",
+    "test": "vitest run --root ../.. packages/utils/_tests_",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "build:esm": "rimraf dist && node ../../scripts/buildUtils.js && yarn gen:types"
   }

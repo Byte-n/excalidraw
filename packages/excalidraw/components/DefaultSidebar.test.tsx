@@ -7,7 +7,7 @@ import {
   fireEvent,
   waitFor,
   withExcalidrawDimensions,
-} from "../tests/test-utils";
+} from "../_tests_/test-utils";
 
 import {
   assertExcalidrawWithSidebar,
