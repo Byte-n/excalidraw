@@ -71,6 +71,8 @@
   "homepage": "https://github.com/excalidraw/excalidraw/tree/master/packages/excalidraw",
   "scripts": {
     "gen:types": "rimraf types && tsc",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run --root ../.. packages/excalidraw",
     "build:esm": "rimraf dist && node ../../scripts/buildPackage.js && yarn gen:types"
   },
   "peerDependencies": {

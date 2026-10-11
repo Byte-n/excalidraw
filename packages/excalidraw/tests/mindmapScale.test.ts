@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   buildMindmapGraphIndex,
@@ -10,6 +11,14 @@ import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { restoreElements } from "../data/restore";
 
+// Resolve the samples relative to this test file so the suite works whether it
+// is launched from the repo root or from the package directory (the package's
+// `test` script only changes the vitest project root, not `process.cwd()`).
+const samplesDir = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../docs/mindmap-plan/samples",
+);
+
 describe("P10 scale samples", () => {
   for (const [name, count] of [
     ["medium", 500],
@@ -19,10 +28,7 @@ describe("P10 scale samples", () => {
   ] as const) {
     it(`restores ${name} without losing nodes`, () => {
       const sample = JSON.parse(
-        readFileSync(
-          resolve(`docs/mindmap-plan/samples/p10-${name}.excalidraw`),
-          "utf8",
-        ),
+        readFileSync(resolve(samplesDir, `p10-${name}.excalidraw`), "utf8"),
       ) as { elements: ExcalidrawElement[] };
       const restored = restoreElements(sample.elements, null, {
         repairBindings: true,

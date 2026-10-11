@@ -29,6 +29,8 @@
   },
   "scripts": {
     "gen:types": "rimraf types && tsc",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run --root ../.. packages/laser-pointer/_tests_",
     "build:esm": "rimraf dist && node ../../scripts/buildBase.js && yarn gen:types"
   }
 }
