@@ -88,7 +88,7 @@ describe("table style controls", () => {
           item.querySelector(".properties-trigger")?.getAttribute("aria-label"),
       ),
     ).toEqual(["Stroke", "Background"]);
-    expect(getComputedStyle(panel).flexDirection).toBe("column");
+    expect(panel).toHaveClass("table-style-actions--fill-only");
 
     fireEvent.click(
       panel.querySelector<HTMLButtonElement>(`[aria-label='Stroke']`)!,

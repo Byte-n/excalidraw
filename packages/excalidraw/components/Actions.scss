@@ -225,7 +225,9 @@
   min-width: 0;
 
   &--fill-only {
-    display: contents;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
   }
 
   fieldset {
