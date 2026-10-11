@@ -206,12 +206,9 @@ export const createCanvasHocuspocusHooks = <
         typeof fields.index !== "string" ||
         !fields.index ||
         !Number.isSafeInteger(fields.versionNonce) ||
-        ![
-          fields.x,
-          fields.y,
-          fields.angle,
-          fields.updated,
-        ].every((field) => typeof field === "number" && Number.isFinite(field)) ||
+        ![fields.x, fields.y, fields.angle, fields.updated].every(
+          (field) => typeof field === "number" && Number.isFinite(field),
+        ) ||
         (fields.type === "text"
           ? !(
               (fields.width === undefined && fields.height === undefined) ||
@@ -220,10 +217,7 @@ export const createCanvasHocuspocusHooks = <
                 typeof fields.height === "number" &&
                 Number.isFinite(fields.height))
             )
-          : ![
-              fields.width,
-              fields.height,
-            ].every(
+          : ![fields.width, fields.height].every(
               (field) => typeof field === "number" && Number.isFinite(field),
             ))
       ) {

@@ -1190,7 +1190,6 @@ describe("Test Transform", () => {
   });
 });
 
-
 describe("table skeletons", () => {
   const tableOpts = { regenerateIds: false };
 

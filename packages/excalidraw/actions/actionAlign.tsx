@@ -95,7 +95,9 @@ export const actionAlignTop = register({
   },
   keyTest: (event, appState) =>
     !appState.tableRowColSelection &&
-    event[KEYS.CTRL_OR_CMD] && event.shiftKey && event.key === KEYS.ARROW_UP,
+    event[KEYS.CTRL_OR_CMD] &&
+    event.shiftKey &&
+    event.key === KEYS.ARROW_UP,
   PanelComponent: ({ elements, appState, updateData, app }) => (
     <IconButton
       hidden={!alignActionsPredicate(appState, app)}
@@ -130,7 +132,9 @@ export const actionAlignBottom = register({
   },
   keyTest: (event, appState) =>
     !appState.tableRowColSelection &&
-    event[KEYS.CTRL_OR_CMD] && event.shiftKey && event.key === KEYS.ARROW_DOWN,
+    event[KEYS.CTRL_OR_CMD] &&
+    event.shiftKey &&
+    event.key === KEYS.ARROW_DOWN,
   PanelComponent: ({ elements, appState, updateData, app }) => (
     <IconButton
       hidden={!alignActionsPredicate(appState, app)}

@@ -45,11 +45,7 @@ import {
   isCompositeShapeOpen,
 } from "./compositeShape";
 import { mindmapShapeData } from "./mindmap";
-import {
-  createTableData,
-  getTableHeight,
-  getTableWidth,
-} from "./tableStruct";
+import { createTableData, getTableHeight, getTableWidth } from "./tableStruct";
 
 import type {
   ExcalidrawElement,

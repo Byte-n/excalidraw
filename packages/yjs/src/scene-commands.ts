@@ -72,10 +72,16 @@ export const createExcalidrawSceneCommands = <
     const get = (id: string, version?: number): TElement => {
       const element = elements.get(id);
       if (!element || element.isDeleted) {
-        throw new YjsSceneError("target_not_found", "target not found：场景命令目标不存在");
+        throw new YjsSceneError(
+          "target_not_found",
+          "target not found：场景命令目标不存在",
+        );
       }
       if (version !== undefined && version !== element.version) {
-        throw new YjsSceneError("version_conflict", "version conflict：场景命令目标版本冲突");
+        throw new YjsSceneError(
+          "version_conflict",
+          "version conflict：场景命令目标版本冲突",
+        );
       }
       return element;
     };
@@ -91,14 +97,20 @@ export const createExcalidrawSceneCommands = <
       if (mutation.type === "add") {
         const element = structuredClone(mutation.element);
         if (!element.id || elements.has(element.id) || element.isDeleted) {
-          throw new YjsSceneError("invalid_input", "场景命令新增元素身份无效或重复");
+          throw new YjsSceneError(
+            "invalid_input",
+            "场景命令新增元素身份无效或重复",
+          );
         }
         if (
           element.startBinding ||
           element.endBinding ||
           element.boundElements?.length
         ) {
-          throw new YjsSceneError("invalid_operation", "新增元素必须通过连接命令建立关系");
+          throw new YjsSceneError(
+            "invalid_operation",
+            "新增元素必须通过连接命令建立关系",
+          );
         }
         elements.set(element.id, element);
         changed.add(element.id);
@@ -108,7 +120,10 @@ export const createExcalidrawSceneCommands = <
       if (mutation.type === "update") {
         for (const key of Object.keys(mutation.patch)) {
           if (reserved.has(key)) {
-            throw new YjsSceneError("invalid_input", "场景命令更新包含受保护字段");
+            throw new YjsSceneError(
+              "invalid_input",
+              "场景命令更新包含受保护字段",
+            );
           }
         }
         Object.assign(element, structuredClone(mutation.patch));
@@ -118,7 +133,10 @@ export const createExcalidrawSceneCommands = <
         bump(element);
       } else {
         if (!["line", "arrow"].includes(element.type)) {
-          throw new YjsSceneError("invalid_operation", "场景连接只支持 line 或 arrow");
+          throw new YjsSceneError(
+            "invalid_operation",
+            "场景连接只支持 line 或 arrow",
+          );
         }
         const endpoints = [mutation.start, mutation.end].filter(
           (endpoint) => endpoint !== null,

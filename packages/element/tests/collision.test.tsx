@@ -189,7 +189,6 @@ describe("hitElementItself cache", () => {
     expect(distanceSpy).toHaveBeenCalledTimes(2);
     distanceSpy.mockRestore();
   });
-
 });
 
 describe("freedraw collision matches the rendered stroke width", () => {

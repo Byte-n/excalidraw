@@ -14,7 +14,6 @@ import type {
   ExcalidrawTableElement,
   ExcalidrawTextElement,
   NonDeletedExcalidrawElement,
-  TableDataV1,
 } from "../src/types";
 
 /**
@@ -117,15 +116,6 @@ const makeNestedTables = () => {
   });
 
   return { parent: sizedParent, child: sizedChild };
-};
-
-type UpdateBag = {
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  table?: TableDataV1;
-  fontSize?: number;
 };
 
 /**

@@ -351,9 +351,7 @@ export class ExcalidrawSceneSession<
           "points",
           "startBinding",
           "endBinding",
-        ].some((key) =>
-          containerChanges.has(key),
-        )
+        ].some((key) => containerChanges.has(key))
       ) {
         return true;
       }

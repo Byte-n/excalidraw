@@ -94,7 +94,9 @@ test("缺省独立文本首次 restore 只在 display 副本测量，不写回 c
   const displayed = api.getSceneElements()[0]!;
   expect(Number.isFinite(displayed.width) && displayed.width > 0).toBe(true);
   expect(Number.isFinite(displayed.height) && displayed.height > 0).toBe(true);
-  const canonical = doc.getMap<ExcalidrawSceneElement>("elements").get("lazy-text")!;
+  const canonical = doc
+    .getMap<ExcalidrawSceneElement>("elements")
+    .get("lazy-text")!;
   expect(Object.hasOwn(canonical, "width")).toBe(false);
   expect(Object.hasOwn(canonical, "height")).toBe(false);
 });

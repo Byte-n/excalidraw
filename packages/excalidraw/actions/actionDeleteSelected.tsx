@@ -340,10 +340,7 @@ export const actionDeleteSelected = register({
         isTableElement(element),
       )
         ? CaptureUpdateAction.IMMEDIATELY
-        : isSomeElementSelected(
-            getNonDeletedElements(elements),
-            appState,
-          )
+        : isSomeElementSelected(getNonDeletedElements(elements), appState)
         ? CaptureUpdateAction.IMMEDIATELY
         : CaptureUpdateAction.EVENTUALLY,
     };

@@ -441,6 +441,5 @@ describe("normalizeElementsOrder", () => {
     const elements = makeElements(10000);
     const t0 = Date.now();
     normalizeElementOrder(elements);
-    console.info(`${Date.now() - t0}ms`);
   });
 });

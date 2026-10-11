@@ -5,11 +5,6 @@
     "rootDir": "../",
     "paths": {}
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "_tests_",
-    "dist"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["_tests_", "dist"]
 }
