@@ -1,7 +1,10 @@
 import React from "react";
 
 import {
+  COLOR_PALETTE,
+  DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX,
   DEFAULT_ELEMENT_BACKGROUND_PICKS,
+  DEFAULT_ELEMENT_STROKE_COLOR_INDEX,
   DEFAULT_ELEMENT_STROKE_PICKS,
 } from "@excalidraw/common";
 
@@ -98,7 +101,7 @@ describe("table style controls", () => {
           (element) => element.id === table.id,
         ) as typeof table
       ).table.style?.borderColor,
-    ).toBe(DEFAULT_ELEMENT_STROKE_PICKS[1]);
+    ).toBe(COLOR_PALETTE.red[DEFAULT_ELEMENT_STROKE_COLOR_INDEX]);
 
     fireEvent.click(
       panel.querySelector<HTMLButtonElement>(`[aria-label='Background']`)!,
@@ -112,7 +115,7 @@ describe("table style controls", () => {
           (element) => element.id === table.id,
         ) as typeof table
       ).table.style?.backgroundColor,
-    ).toBe(DEFAULT_ELEMENT_BACKGROUND_PICKS[1]);
+    ).toBe(COLOR_PALETTE.red[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX]);
   });
 
   it("shows the full shape background picker for selected cells on desktop", async () => {
@@ -272,7 +275,7 @@ describe("table style controls", () => {
         },
       });
     });
-    const fill = DEFAULT_ELEMENT_BACKGROUND_PICKS[2];
+    const fill = COLOR_PALETTE.green[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX];
     fireEvent.click(
       document.querySelector<HTMLButtonElement>(
         ".table-style-actions [aria-label='Background']",

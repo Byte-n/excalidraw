@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Copiar coma",
+    "contextMenuView": "Vista",
+    "contextMenuSnapping": "Ajustament",
+    "contextMenuEdit": "Modificar",
+    "contextMenuText": "Tèxte e contenidor",
+    "contextMenuStyle": "Estils",
+    "contextMenuLink": "Ligams",
+    "contextMenuTable": "Taula"
   },
   "elementLink": {
     "title": "",

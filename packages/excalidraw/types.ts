@@ -221,6 +221,7 @@ export type StaticCanvasAppState = Readonly<
     frameRendering: AppState["frameRendering"];
     currentHoveredFontFamily: AppState["currentHoveredFontFamily"];
     hoveredElementIds: AppState["hoveredElementIds"];
+    hoveredElementId: AppState["hoveredElementId"];
     suggestedBinding: AppState["suggestedBinding"];
     // Cropping
     croppingElementId: AppState["croppingElementId"];
@@ -264,6 +265,7 @@ export type InteractiveCanvasAppState = Readonly<
     activeLockedId: AppState["activeLockedId"];
     // Non-used but needed in binding highlight arrow overdraw
     hoveredElementIds: AppState["hoveredElementIds"];
+    hoveredElementId: AppState["hoveredElementId"];
     frameRendering: AppState["frameRendering"];
     shouldCacheIgnoreZoom: AppState["shouldCacheIgnoreZoom"];
     exportScale: AppState["exportScale"];
@@ -703,6 +705,7 @@ export interface AppState {
   lastPointerDownWith: PointerType;
   selectedElementIds: Readonly<{ [id: string]: true }>;
   hoveredElementIds: Readonly<{ [id: string]: true }>;
+  hoveredElementId: string | null;
   previousSelectedElementIds: { [id: string]: true };
   selectedElementsAreBeingDragged: boolean;
   shouldCacheIgnoreZoom: boolean;

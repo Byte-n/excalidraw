@@ -36,9 +36,7 @@ describe("Test TypeChecks", () => {
       containerRef: { kind: "frameLike", elementId: frame.id },
     });
 
-    expect(() =>
-      assertValidContainerRefs([frame, child]),
-    ).not.toThrow();
+    expect(() => assertValidContainerRefs([frame, child])).not.toThrow();
     expect(() =>
       assertValidContainerRefs([
         frame,
@@ -141,9 +139,9 @@ describe("Test TypeChecks", () => {
       containerId: owner.id,
       containerRef: { kind: "frameLike", elementId: frame.id },
     });
-    expect(() =>
-      assertValidContainerRefs([frame, owner, label]),
-    ).toThrow("cannot have a containerRef");
+    expect(() => assertValidContainerRefs([frame, owner, label])).toThrow(
+      "cannot have a containerRef",
+    );
   });
 
   describe("tableCell container refs", () => {
@@ -338,9 +336,7 @@ describe("Test TypeChecks", () => {
         containerRef: tableCellRef(table),
       });
 
-      expect(() =>
-        assertValidContainerRefs([table, frame]),
-      ).not.toThrow();
+      expect(() => assertValidContainerRefs([table, frame])).not.toThrow();
 
       const scene = new Scene([table, frame]);
       const newcomer = API.createElement({ type: "frame" });
@@ -406,9 +402,9 @@ describe("Test TypeChecks", () => {
         containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
-      expect(() =>
-        assertValidContainerRefs([cyclicTable, frame]),
-      ).toThrow("cycle detected");
+      expect(() => assertValidContainerRefs([cyclicTable, frame])).toThrow(
+        "cycle detected",
+      );
     });
 
     it("keeps the frame-delete guard for an in-cell frame with members", () => {

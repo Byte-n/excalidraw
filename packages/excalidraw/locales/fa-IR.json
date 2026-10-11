@@ -195,7 +195,15 @@
     "boxSelectionContain": "دربرگیری",
     "boxSelectionOverlap": "هم‌پوشانی",
     "arrowBinding": "اتصال پیکان",
-    "midpointSnapping": "چسبیدن به نقاط میانی"
+    "midpointSnapping": "چسبیدن به نقاط میانی",
+    "contextMenuCopyAs": "کپی به‌صورت",
+    "contextMenuView": "نما",
+    "contextMenuSnapping": "چسباندن",
+    "contextMenuEdit": "ویرایش",
+    "contextMenuText": "متن و محفظه",
+    "contextMenuStyle": "سبک‌ها",
+    "contextMenuLink": "پیوندها",
+    "contextMenuTable": "جدول"
   },
   "elementLink": {
     "title": "لینک به آیتم",

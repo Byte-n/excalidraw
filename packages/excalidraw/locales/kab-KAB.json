@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Nɣel am",
+    "contextMenuView": "Timeẓri",
+    "contextMenuSnapping": "Asentem",
+    "contextMenuEdit": "Ẓreg",
+    "contextMenuText": "Aḍris d ukanun",
+    "contextMenuStyle": "Isental",
+    "contextMenuLink": "Iseɣwan",
+    "contextMenuTable": "Tafelwit"
   },
   "elementLink": {
     "title": "",

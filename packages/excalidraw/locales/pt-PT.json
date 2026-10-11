@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "Ligar automaticamente as setas",
-    "midpointSnapping": "Ligar automaticamente aos pontos médios"
+    "midpointSnapping": "Ligar automaticamente aos pontos médios",
+    "contextMenuCopyAs": "Copiar como",
+    "contextMenuView": "Vista",
+    "contextMenuSnapping": "Ajuste",
+    "contextMenuEdit": "Editar",
+    "contextMenuText": "Texto e contentor",
+    "contextMenuStyle": "Estilos",
+    "contextMenuLink": "Ligações",
+    "contextMenuTable": "Tabela"
   },
   "elementLink": {
     "title": "Hiperligação para o objeto",

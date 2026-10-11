@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Sao chép dưới dạng",
+    "contextMenuView": "Chế độ xem",
+    "contextMenuSnapping": "Bắt dính",
+    "contextMenuEdit": "Chỉnh sửa",
+    "contextMenuText": "Văn bản và vùng chứa",
+    "contextMenuStyle": "Kiểu",
+    "contextMenuLink": "Liên kết",
+    "contextMenuTable": "Bảng"
   },
   "elementLink": {
     "title": "Liên kết đến đối tượng",

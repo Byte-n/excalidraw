@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "矢印の結合",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "コピー形式",
+    "contextMenuView": "表示",
+    "contextMenuSnapping": "スナップ",
+    "contextMenuEdit": "編集",
+    "contextMenuText": "テキストとコンテナ",
+    "contextMenuStyle": "スタイル",
+    "contextMenuLink": "リンク",
+    "contextMenuTable": "テーブル"
   },
   "elementLink": {
     "title": "オブジェクトにリンク",

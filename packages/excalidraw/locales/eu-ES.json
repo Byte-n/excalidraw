@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "Gezi azala",
-    "midpointSnapping": "Lotu erdiko puntuetara"
+    "midpointSnapping": "Lotu erdiko puntuetara",
+    "contextMenuCopyAs": "Kopiatu honela",
+    "contextMenuView": "Ikusi",
+    "contextMenuSnapping": "Atrakatu",
+    "contextMenuEdit": "Editatu",
+    "contextMenuText": "Testua eta edukiontzia",
+    "contextMenuStyle": "Estiloak",
+    "contextMenuLink": "Estekak",
+    "contextMenuTable": "Taula"
   },
   "elementLink": {
     "title": "Estekatu objektura",

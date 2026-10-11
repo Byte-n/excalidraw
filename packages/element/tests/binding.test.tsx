@@ -17,6 +17,7 @@ import {
 import { defaultLang, setLanguage } from "@excalidraw/excalidraw/i18n";
 
 import { bindBindingElement, updateBoundElements } from "../src/binding";
+import { getElementAbsoluteCoords } from "../src/bounds";
 import { isCompositeShapeId } from "../src/compositeShape";
 import { getTransformHandles } from "../src/transformHandles";
 import {
@@ -94,10 +95,12 @@ describe("binding for simple arrows", () => {
       expect(arrow.x).toBe(290);
       expect(arrow.y).toBe(70);
 
-      // Restore bindable
+      // Restore bindable. Grab the rect's interior (not its left-edge midpoint)
+      // so this stays a translation — the selection border's side handles now
+      // sit on the border line, so an edge-midpoint grab would resize instead.
       mouse.reset();
-      mouse.downAt(280, 110);
-      mouse.moveTo(130, 110);
+      mouse.downAt(350, 130);
+      mouse.moveTo(200, 130);
       mouse.up();
 
       // Move the start point of the arrow to check if
@@ -532,9 +535,22 @@ describe("binding for simple arrows", () => {
       ).rotation!;
       const rotationHandleX = rotation[0] + rotation[2] / 2;
       const rotationHandleY = rotation[1] + rotation[3] / 2;
+      // Rotation is now computed as the angular delta swept from the drag
+      // origin around the element's center. Dragging the handle to the point
+      // diametrically opposite its start (its reflection through the center)
+      // sweeps exactly half a turn, flipping the arrow and unbinding it.
+      const [ax1, ay1, ax2, ay2] = getElementAbsoluteCoords(
+        arrow,
+        arrayToMap(h.elements),
+      );
+      const centerX = (ax1 + ax2) / 2;
+      const centerY = (ay1 + ay2) / 2;
       mouse.reset();
       mouse.down(rotationHandleX, rotationHandleY);
-      mouse.move(300, 400);
+      mouse.moveTo(
+        2 * centerX - rotationHandleX,
+        2 * centerY - rotationHandleY,
+      );
       mouse.up();
       expect(arrow.angle).toBeGreaterThan(0.7 * Math.PI);
       expect(arrow.angle).toBeLessThan(1.3 * Math.PI);
@@ -802,7 +818,9 @@ describe("binding to a point-like (sub-pixel) element", () => {
       }) as NonDeleted<ExcalidrawArrowElement>;
       API.setElements([rect, arrow]);
 
-      bindBindingElement(arrow, rect, "orbit", "end", h.scene);
+      act(() => {
+        bindBindingElement(arrow, rect, "orbit", "end", h.scene);
+      });
 
       const endBinding = arrow.endBinding as FixedPointBinding;
       expect(endBinding.elementId).toBe(rect.id);
@@ -811,8 +829,10 @@ describe("binding to a point-like (sub-pixel) element", () => {
       expect(endBinding.fixedPoint[1]).toBeCloseTo(0.5001);
 
       // Grow the element to a normal size and let bound arrows follow
-      h.scene.mutateElement(rect, { width: 300, height: 200 });
-      updateBoundElements(rect, h.scene);
+      act(() => {
+        h.scene.mutateElement(rect, { width: 300, height: 200 });
+        updateBoundElements(rect, h.scene);
+      });
 
       // The arrow endpoint must track the element (its center), not fly off
       expect(Math.abs(arrow.width)).toBeLessThan(1000);

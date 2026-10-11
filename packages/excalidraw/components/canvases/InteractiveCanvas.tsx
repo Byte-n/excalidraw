@@ -284,6 +284,7 @@ const getRelevantAppStateProps = (
   searchMatches: appState.searchMatches,
   activeLockedId: appState.activeLockedId,
   hoveredElementIds: appState.hoveredElementIds,
+  hoveredElementId: appState.hoveredElementId,
   frameRendering: appState.frameRendering,
   shouldCacheIgnoreZoom: appState.shouldCacheIgnoreZoom,
   exportScale: appState.exportScale,

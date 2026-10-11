@@ -195,7 +195,15 @@
     "boxSelectionContain": "Ovij",
     "boxSelectionOverlap": "Prekrij",
     "arrowBinding": "Vezava puščic",
-    "midpointSnapping": "Pripni na srednje točke"
+    "midpointSnapping": "Pripni na srednje točke",
+    "contextMenuCopyAs": "Kopiraj kot",
+    "contextMenuView": "Pogled",
+    "contextMenuSnapping": "Pripenjanje",
+    "contextMenuEdit": "Uredi",
+    "contextMenuText": "Besedilo in vsebnik",
+    "contextMenuStyle": "Slogi",
+    "contextMenuLink": "Povezave",
+    "contextMenuTable": "Tabela"
   },
   "elementLink": {
     "title": "Povezava do objekta",

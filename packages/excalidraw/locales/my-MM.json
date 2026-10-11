@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "အဖြစ်ကူးယူရန်",
+    "contextMenuView": "မြင်ကွင်း",
+    "contextMenuSnapping": "ဆွဲကပ်ခြင်း",
+    "contextMenuEdit": "တည်းဖြတ်ရန်",
+    "contextMenuText": "စာသားနှင့်ကွန်တိန်နာ",
+    "contextMenuStyle": "စတိုင်များ",
+    "contextMenuLink": "လင့်များ",
+    "contextMenuTable": "ဇယား"
   },
   "elementLink": {
     "title": "",

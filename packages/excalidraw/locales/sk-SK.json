@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "Pripájanie šípky",
-    "midpointSnapping": "Prichytiť k bodom"
+    "midpointSnapping": "Prichytiť k bodom",
+    "contextMenuCopyAs": "Kopírovať ako",
+    "contextMenuView": "Zobrazenie",
+    "contextMenuSnapping": "Prichytenie",
+    "contextMenuEdit": "Upraviť",
+    "contextMenuText": "Text a kontajner",
+    "contextMenuStyle": "Štýly",
+    "contextMenuLink": "Odkazy",
+    "contextMenuTable": "Tabuľka"
   },
   "elementLink": {
     "title": "Odkaz na objekt",

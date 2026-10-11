@@ -160,7 +160,12 @@ export const AppView = ({ app }: { app: App }) => {
         app.isInteractionEnabled() ? app.toggleOverscrollBehavior : undefined
       }
       onPointerLeave={
-        app.isInteractionEnabled() ? app.toggleOverscrollBehavior : undefined
+        app.isInteractionEnabled()
+          ? (event) => {
+              app.toggleOverscrollBehavior(event);
+              app.setState({ hoveredElementId: null });
+            }
+          : undefined
       }
     >
       <ExcalidrawAPIContext.Provider value={app.api}>

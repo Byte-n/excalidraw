@@ -945,9 +945,9 @@ describe("duplicating tables with an in-cell frame (phase-1.md:60, :69)", () => 
     const frameMemberCopy = byOrig(frameMember.id);
 
     // layer 1: the table structure ids are regenerated
-    expect((tableCopy as typeof table).table.cells.map((cell) => cell.id)).not.toEqual(
-      originalCells.map((cell) => cell.id),
-    );
+    expect(
+      (tableCopy as typeof table).table.cells.map((cell) => cell.id),
+    ).not.toEqual(originalCells.map((cell) => cell.id));
     const cellIdMap = new Map(
       originalCells.map((cell, index) => [
         cell.id,

@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "ලෙස පිටපත් කරන්න",
+    "contextMenuView": "දසුන",
+    "contextMenuSnapping": "ස්නැප් කිරීම",
+    "contextMenuEdit": "සංස්කරණය",
+    "contextMenuText": "පෙළ සහ බහාලුම",
+    "contextMenuStyle": "විලාස",
+    "contextMenuLink": "සබැඳි",
+    "contextMenuTable": "වගුව"
   },
   "elementLink": {
     "title": "",

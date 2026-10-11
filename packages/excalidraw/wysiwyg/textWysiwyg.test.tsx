@@ -63,7 +63,9 @@ const exitTextEditorAndAssertSelection = async ({
     updateTextEditor(editor, nextText);
   }
 
-  Keyboard.exitTextEditor(editor);
+  await act(async () => {
+    Keyboard.exitTextEditor(editor);
+  });
 
   expect(await getTextEditor({ waitForEditor: false })).toBe(null);
   expect(window.h.state.editingTextElement).toBeNull();
@@ -878,15 +880,20 @@ describe("textWysiwyg", () => {
 
       const value = new Array(1000).fill("1").join("\n");
 
-      // Pasting large text to simulate height increase
-      expect(() =>
-        fireEvent.input(editor, { target: { value } }),
-      ).not.toThrow();
+      // Composite containers defer geometry updates during live editing, so the
+      // container keeps its original height even when large text is pasted.
+      await act(async () => {
+        expect(() =>
+          fireEvent.input(editor, { target: { value } }),
+        ).not.toThrow();
+      });
 
-      expect(diamond.height).toBeCloseTo(52325.58517372236);
+      expect(diamond.height).toBe(75);
 
       // Clearing text to simulate height decrease
-      expect(() => updateTextEditor(editor, "")).not.toThrow();
+      await act(async () => {
+        expect(() => updateTextEditor(editor, "")).not.toThrow();
+      });
 
       // Adaptive text fit retains the original shape as its minimum size.
       expect(diamond.height).toBe(75);
@@ -905,12 +912,18 @@ describe("textWysiwyg", () => {
       Keyboard.keyPress(KEYS.ENTER);
 
       const editor = await getTextEditor();
-      updateTextEditor(editor, new Array(20).fill("line").join("\n"));
-      expect(cube.height).toBeGreaterThan(80);
+      await act(async () => {
+        updateTextEditor(editor, new Array(20).fill("line").join("\n"));
+      });
+      // Composite containers defer geometry updates during live editing, so the
+      // cube keeps its original height while the editor stays anchored to it.
+      expect(cube.height).toBe(80);
       expect(parseFloat(editor.style.left)).toBeGreaterThan(0);
       expect(parseFloat(editor.style.top)).toBeGreaterThan(0);
 
-      updateTextEditor(editor, "short");
+      await act(async () => {
+        updateTextEditor(editor, "short");
+      });
       expect(cube.height).toBe(80);
     });
 
@@ -1083,7 +1096,8 @@ describe("textWysiwyg", () => {
         clientX: 20,
         clientY: 30,
       });
-      const contextMenu = document.querySelector(".context-menu");
+      UI.openContextMenuSubmenus();
+      const contextMenu = UI.queryContextMenu();
       fireEvent.click(
         queryByText(contextMenu as HTMLElement, "Bind text to the container")!,
       );
@@ -1121,7 +1135,7 @@ describe("textWysiwyg", () => {
 
       expect(h.state.editingTextElement).toBe(null);
 
-      expect(text.fontFamily).toEqual(FONT_FAMILY.Excalifont);
+      expect(text.fontFamily).toEqual(FONT_FAMILY.Nunito);
 
       fireEvent.click(screen.getByTitle(/code/i));
 
@@ -1135,7 +1149,7 @@ describe("textWysiwyg", () => {
       });
       expect(
         (h.elements[1] as ExcalidrawTextElementWithContainer).fontFamily,
-      ).toEqual(FONT_FAMILY.Excalifont);
+      ).toEqual(FONT_FAMILY.Nunito);
 
       //redo
       Keyboard.withModifierKeys({ ctrl: true, shift: true }, () => {
@@ -1215,7 +1229,8 @@ describe("textWysiwyg", () => {
         clientX: 20,
         clientY: 30,
       });
-      const contextMenu = document.querySelector(".context-menu");
+      UI.openContextMenuSubmenus();
+      const contextMenu = UI.queryContextMenu();
       fireEvent.click(queryByText(contextMenu as HTMLElement, "Unbind text")!);
       expect(h.elements[0].boundElements).toEqual([]);
       expect((h.elements[1] as ExcalidrawTextElement).containerId).toEqual(
@@ -1492,7 +1507,8 @@ describe("textWysiwyg", () => {
         clientX: 20,
         clientY: 30,
       });
-      let contextMenu = document.querySelector(".context-menu");
+      UI.openContextMenuSubmenus();
+      let contextMenu = UI.queryContextMenu();
 
       fireEvent.click(
         queryByText(contextMenu as HTMLElement, "Bind text to the container")!,
@@ -1506,7 +1522,8 @@ describe("textWysiwyg", () => {
         clientX: 20,
         clientY: 30,
       });
-      contextMenu = document.querySelector(".context-menu");
+      UI.openContextMenuSubmenus();
+      contextMenu = UI.queryContextMenu();
       fireEvent.click(queryByText(contextMenu as HTMLElement, "Unbind text")!);
       expect(h.elements[0].boundElements).toEqual([]);
       expect(getOriginalContainerHeightFromCache(container.id)).toBe(null);
@@ -1744,7 +1761,8 @@ describe("textWysiwyg", () => {
         clientY: 30,
       });
 
-      const contextMenu = document.querySelector(".context-menu");
+      UI.openContextMenuSubmenus();
+      const contextMenu = UI.queryContextMenu();
       fireEvent.click(
         queryByText(contextMenu as HTMLElement, "Wrap text in a container")!,
       );
@@ -1767,9 +1785,9 @@ describe("textWysiwyg", () => {
           link: null,
           locked: false,
           opacity: 100,
-          roughness: 1,
+          roughness: 0,
           roundness: null,
-          strokeColor: "#1e1e1e",
+          strokeColor: "#1f2329",
           strokeStyle: "solid",
           strokeWidth: 2,
           type: "composite_shape",
@@ -1853,7 +1871,9 @@ describe("textWysiwyg", () => {
 
       API.setSelectedElements([rectangle, text]);
 
-      h.app.actionManager.executeAction(actionBindText);
+      act(() => {
+        h.app.actionManager.executeAction(actionBindText);
+      });
 
       expect(text.angle).toBe(30);
       expect(rectangle.angle).toBe(30);
@@ -1876,7 +1896,9 @@ describe("textWysiwyg", () => {
 
       API.setSelectedElements([arrow, text]);
 
-      h.app.actionManager.executeAction(actionBindText);
+      act(() => {
+        h.app.actionManager.executeAction(actionBindText);
+      });
 
       expect(text.angle).toBe(0);
       expect(arrow.angle).toBe(30);

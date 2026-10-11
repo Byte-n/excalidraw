@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "Atalho de flecha",
-    "midpointSnapping": "Encaixar em pontos intermediários"
+    "midpointSnapping": "Encaixar em pontos intermediários",
+    "contextMenuCopyAs": "Copiar como",
+    "contextMenuView": "Visualização",
+    "contextMenuSnapping": "Ajuste",
+    "contextMenuEdit": "Editar",
+    "contextMenuText": "Texto e contêiner",
+    "contextMenuStyle": "Estilos",
+    "contextMenuLink": "Links",
+    "contextMenuTable": "Tabela"
   },
   "elementLink": {
     "title": "Links para o objeto",

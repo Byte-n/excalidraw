@@ -70,7 +70,12 @@ import {
 import { headingIsHorizontal, vectorToHeading } from "./heading";
 import { mutateElement } from "./mutateElement";
 import { getBoundTextElement, handleBindTextResize } from "./textElement";
-import { isArrowElement, isBindingElement, isElbowArrow } from "./typeChecks";
+import {
+  isArrowElement,
+  isBindingElement,
+  isCurvedArrow,
+  isElbowArrow,
+} from "./typeChecks";
 
 import { ShapeCache, toggleLinePolygonState } from "./shape";
 
@@ -814,6 +819,7 @@ export class LinearElementEditor {
     // Since its not needed outside editor unless 2 pointer lines or bound text
     if (
       !isElbowArrow(element) &&
+      !isCurvedArrow(element) &&
       !appState.selectedLinearElement?.isEditing &&
       element.points.length > 2 &&
       !boundText
@@ -883,6 +889,7 @@ export class LinearElementEditor {
     if (
       points.length >= 3 &&
       !appState.selectedLinearElement?.isEditing &&
+      !isCurvedArrow(element) &&
       !isElbowArrow(element)
     ) {
       return null;

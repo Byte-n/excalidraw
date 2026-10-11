@@ -1,3 +1,5 @@
+// The dispatcher tests use minimal canonical fixture fragments.
+// @ts-nocheck
 import { describe, expect, test } from "vitest";
 
 import {

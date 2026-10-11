@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "Pijlverbinding",
-    "midpointSnapping": "Vastklikken op middelpunt"
+    "midpointSnapping": "Vastklikken op middelpunt",
+    "contextMenuCopyAs": "Kopiëren als",
+    "contextMenuView": "Weergave",
+    "contextMenuSnapping": "Uitlijnen",
+    "contextMenuEdit": "Bewerken",
+    "contextMenuText": "Tekst en container",
+    "contextMenuStyle": "Stijlen",
+    "contextMenuLink": "Links",
+    "contextMenuTable": "Tabel"
   },
   "elementLink": {
     "title": "Link naar object",

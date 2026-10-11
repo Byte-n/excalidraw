@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Kopioi muodossa",
+    "contextMenuView": "Näkymä",
+    "contextMenuSnapping": "Tarttuminen",
+    "contextMenuEdit": "Muokkaa",
+    "contextMenuText": "Teksti ja säilö",
+    "contextMenuStyle": "Tyylit",
+    "contextMenuLink": "Linkit",
+    "contextMenuTable": "Taulukko"
   },
   "elementLink": {
     "title": "",

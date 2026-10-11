@@ -505,6 +505,9 @@ export const getCornerRadius = (x: number, element: ExcalidrawElement) => {
     return Math.min(element.width, element.height) / 2;
   }
   if (element.type === "composite_shape") {
+    if (element.shape.id === "rectangle") {
+      return 0;
+    }
     return getCompositeShapeCornerRadius(x, element.roundness);
   }
   if (

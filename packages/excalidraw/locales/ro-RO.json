@@ -195,7 +195,15 @@
     "boxSelectionContain": "Încapsulare",
     "boxSelectionOverlap": "Suprapunere",
     "arrowBinding": "Legare săgeată",
-    "midpointSnapping": "Ancorare la punctele medii"
+    "midpointSnapping": "Ancorare la punctele medii",
+    "contextMenuCopyAs": "Copiază ca",
+    "contextMenuView": "Vizualizare",
+    "contextMenuSnapping": "Aliniere",
+    "contextMenuEdit": "Editează",
+    "contextMenuText": "Text și container",
+    "contextMenuStyle": "Stiluri",
+    "contextMenuLink": "Linkuri",
+    "contextMenuTable": "Tabel"
   },
   "elementLink": {
     "title": "Link către obiect",

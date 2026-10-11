@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
@@ -11,14 +12,19 @@ type ShowcaseScene = {
   files: Record<string, { dataURL: string }>;
 };
 
+// Resolve the sample relative to this test file so the suite works whether it
+// is launched from the repo root or from the package directory (the package's
+// `test` script only changes the vitest project root, not `process.cwd()`).
+const samplesDir = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../../docs/mindmap-plan/samples",
+);
+
 describe("showcase whiteboard sample", () => {
   it("restores its graphs, flowchart and embedded image", () => {
     const scene = JSON.parse(
       readFileSync(
-        resolve(
-          process.cwd(),
-          "docs/mindmap-plan/samples/showcase-all-types.excalidraw",
-        ),
+        resolve(samplesDir, "showcase-all-types.excalidraw"),
         "utf8",
       ),
     ) as ShowcaseScene;

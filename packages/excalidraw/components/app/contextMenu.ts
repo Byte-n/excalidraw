@@ -68,12 +68,15 @@ import { actionTextAutoResize } from "../../actions/actionTextAutoResize";
 import { actionToggleViewMode } from "../../actions/actionToggleViewMode";
 import { actionToggleShapeSwitch } from "../../actions/actionToggleShapeSwitch";
 import { trackEvent } from "../../analytics";
-import { CONTEXT_MENU_SEPARATOR } from "../ContextMenu";
+import {
+  CONTEXT_MENU_SEPARATOR,
+  type ContextMenuItems,
+  type ContextMenuSubmenu,
+} from "../ContextMenu";
 
 import type React from "react";
 
 import type App from "../App";
-import type { ContextMenuItems } from "../ContextMenu";
 
 export const handleCanvasContextMenu = (
   app: App,
@@ -195,65 +198,51 @@ export const getContextMenuItems = (
   app: App,
   type: "canvas" | "element",
 ): ContextMenuItems => {
-  const options: ContextMenuItems = [];
+  const submenu = (
+    label: ContextMenuSubmenu["label"],
+    items: ContextMenuItems,
+  ): ContextMenuSubmenu => ({ type: "submenu", label, items });
 
-  options.push(actionCopyAsPng, actionCopyAsSvg);
+  const copyAsSubmenu = submenu("labels.contextMenuCopyAs", [
+    actionCopyAsPng,
+    actionCopyAsSvg,
+    copyText,
+  ]);
+  const viewSubmenu = submenu("labels.contextMenuView", [
+    actionToggleGridMode,
+    actionToggleZenMode,
+    actionToggleViewMode,
+    actionToggleStats,
+  ]);
+  const snappingSubmenu = submenu("labels.contextMenuSnapping", [
+    actionToggleObjectsSnapMode,
+    actionToggleArrowBinding,
+    actionToggleMidpointSnapping,
+  ]);
 
   // canvas contextMenu
   // -------------------------------------------------------------------------
 
   if (type === "canvas") {
     if (app.state.viewModeEnabled) {
-      return [
-        ...options,
-        actionToggleGridMode,
-        actionToggleZenMode,
-        actionToggleViewMode,
-        actionToggleStats,
-      ];
+      return [copyAsSubmenu, viewSubmenu];
     }
 
     return [
       actionPaste,
       CONTEXT_MENU_SEPARATOR,
-      actionCopyAsPng,
-      actionCopyAsSvg,
-      copyText,
+      copyAsSubmenu,
       CONTEXT_MENU_SEPARATOR,
       actionSelectAll,
       actionUnlockAllElements,
       CONTEXT_MENU_SEPARATOR,
-      actionToggleGridMode,
-      actionToggleObjectsSnapMode,
-      actionToggleArrowBinding,
-      actionToggleMidpointSnapping,
-      actionToggleZenMode,
-      actionToggleViewMode,
-      actionToggleStats,
+      snappingSubmenu,
+      viewSubmenu,
     ];
   }
-
-  // element contextMenu
-  // -------------------------------------------------------------------------
-
-  options.push(copyText);
 
   if (app.state.viewModeEnabled) {
-    return [actionCopy, ...options];
-  }
-
-  if (app.mindmap.getSelectedNode()) {
-    return [
-      actionMindmapCreateChild,
-      actionMindmapCreateSibling,
-      actionMindmapToggleCollapse,
-      actionMindmapPromote,
-      actionToggleShapeSwitch,
-      actionToggleElementLock,
-      CONTEXT_MENU_SEPARATOR,
-      { ...actionDeleteSelected, label: "labels.deleteMindmapSubtree" },
-      actionMindmapDeletePreservingChildren,
-    ];
+    return [actionCopy, copyAsSubmenu];
   }
 
   const zIndexActions: ContextMenuItems =
@@ -267,56 +256,75 @@ export const getContextMenuItems = (
         ]
       : [];
 
+  if (app.mindmap.getSelectedNode()) {
+    return [
+      actionCopy,
+      copyAsSubmenu,
+      CONTEXT_MENU_SEPARATOR,
+      actionMindmapCreateChild,
+      actionMindmapCreateSibling,
+      actionMindmapToggleCollapse,
+      actionMindmapPromote,
+      actionToggleShapeSwitch,
+      actionToggleElementLock,
+      ...zIndexActions,
+      CONTEXT_MENU_SEPARATOR,
+      { ...actionDeleteSelected, label: "labels.deleteMindmapSubtree" },
+      actionMindmapDeletePreservingChildren,
+    ];
+  }
+
   return [
     ...(app.state.tableCellSelection
       ? ([
-          actionTableClearContent,
-          actionTableClearBackgroundText,
-          actionTableClearStyle,
-          actionTableCopyFormat,
-          actionTablePasteFormat,
-          actionTableCenterContent,
+          submenu("labels.contextMenuTable", [
+            actionTableClearContent,
+            actionTableClearBackgroundText,
+            actionTableClearStyle,
+            actionTableCopyFormat,
+            actionTablePasteFormat,
+            actionTableCenterContent,
+          ]),
           CONTEXT_MENU_SEPARATOR,
         ] as ContextMenuItems)
       : []),
-    CONTEXT_MENU_SEPARATOR,
     actionCut,
     actionCopy,
     actionPaste,
+    actionDuplicateSelection,
+    CONTEXT_MENU_SEPARATOR,
+    copyAsSubmenu,
+    CONTEXT_MENU_SEPARATOR,
+    actionGroup,
+    actionUngroup,
+    actionToggleElementLock,
+    ...zIndexActions,
+    actionFlipHorizontal,
+    actionFlipVertical,
+    CONTEXT_MENU_SEPARATOR,
+    submenu("labels.contextMenuEdit", [
+      actionToggleCropEditor,
+      actionToggleLinearEditor,
+      actionToggleShapeSwitch,
+      actionAddToLibrary,
+    ]),
+    CONTEXT_MENU_SEPARATOR,
+    submenu("labels.contextMenuText", [
+      actionTextAutoResize,
+      actionSetCompositeShapeTextFitAuto,
+      actionSetCompositeShapeTextFitFixed,
+      actionUnbindText,
+      actionBindText,
+      actionWrapTextInContainer,
+    ]),
     CONTEXT_MENU_SEPARATOR,
     actionSelectAllElementsInFrame,
     actionRemoveAllElementsFromFrame,
     actionWrapSelectionInFrame,
     CONTEXT_MENU_SEPARATOR,
-    actionToggleCropEditor,
+    submenu("labels.contextMenuStyle", [actionCopyStyles, actionPasteStyles]),
     CONTEXT_MENU_SEPARATOR,
-    ...options,
-    CONTEXT_MENU_SEPARATOR,
-    actionCopyStyles,
-    actionPasteStyles,
-    CONTEXT_MENU_SEPARATOR,
-    actionGroup,
-    actionTextAutoResize,
-    actionSetCompositeShapeTextFitAuto,
-    actionSetCompositeShapeTextFitFixed,
-    actionUnbindText,
-    actionBindText,
-    actionWrapTextInContainer,
-    actionUngroup,
-    CONTEXT_MENU_SEPARATOR,
-    actionAddToLibrary,
-    ...zIndexActions,
-    CONTEXT_MENU_SEPARATOR,
-    actionFlipHorizontal,
-    actionFlipVertical,
-    CONTEXT_MENU_SEPARATOR,
-    actionToggleLinearEditor,
-    CONTEXT_MENU_SEPARATOR,
-    actionLink,
-    actionCopyElementLink,
-    CONTEXT_MENU_SEPARATOR,
-    actionDuplicateSelection,
-    actionToggleElementLock,
+    submenu("labels.contextMenuLink", [actionLink, actionCopyElementLink]),
     CONTEXT_MENU_SEPARATOR,
     actionDeleteSelected,
   ];

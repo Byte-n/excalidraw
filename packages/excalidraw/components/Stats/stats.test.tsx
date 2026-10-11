@@ -106,6 +106,7 @@ describe("binding with linear elements", () => {
       clientX: 1,
       clientY: 1,
     });
+    UI.openContextMenuSubmenus();
     const contextMenu = UI.queryContextMenu();
     fireEvent.click(queryByTestId(contextMenu!, "stats")!);
     stats = UI.queryStats();
@@ -170,6 +171,7 @@ describe("stats for a generic element", () => {
       clientX: 1,
       clientY: 1,
     });
+    UI.openContextMenuSubmenus();
     const contextMenu = UI.queryContextMenu();
     fireEvent.click(queryByTestId(contextMenu!, "stats")!);
     stats = UI.queryStats();
@@ -362,6 +364,7 @@ describe("stats for a non-generic element", () => {
       clientX: 1,
       clientY: 1,
     });
+    UI.openContextMenuSubmenus();
     const contextMenu = UI.queryContextMenu();
     fireEvent.click(queryByTestId(contextMenu!, "stats")!);
     stats = UI.queryStats();
@@ -518,6 +521,7 @@ describe("stats for multiple elements", () => {
       clientX: 1,
       clientY: 1,
     });
+    UI.openContextMenuSubmenus();
     const contextMenu = UI.queryContextMenu();
     fireEvent.click(queryByTestId(contextMenu!, "stats")!);
     stats = UI.queryStats();
@@ -751,6 +755,7 @@ describe("frame resizing behavior", () => {
       clientX: 1,
       clientY: 1,
     });
+    UI.openContextMenuSubmenus();
     const contextMenu = UI.queryContextMenu();
     fireEvent.click(queryByTestId(contextMenu!, "stats")!);
     stats = UI.queryStats();

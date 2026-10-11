@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "คัดลอกเป็น",
+    "contextMenuView": "มุมมอง",
+    "contextMenuSnapping": "การสแนป",
+    "contextMenuEdit": "แก้ไข",
+    "contextMenuText": "ข้อความและคอนเทนเนอร์",
+    "contextMenuStyle": "สไตล์",
+    "contextMenuLink": "ลิงก์",
+    "contextMenuTable": "ตาราง"
   },
   "elementLink": {
     "title": "ลิงค์ไปสู่วัตถุ",

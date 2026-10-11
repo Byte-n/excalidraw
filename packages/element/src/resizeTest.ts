@@ -61,13 +61,7 @@ export const resizeTest = <Point extends GlobalPoint | LocalPoint>(
   }
 
   const { rotation: rotationTransformHandle, ...transformHandles } =
-    getTransformHandles(
-      element,
-      zoom,
-      elementsMap,
-      pointerType,
-      getOmitSidesForEditorInterface(editorInterface),
-    );
+    getTransformHandles(element, zoom, elementsMap, pointerType, {});
 
   if (
     rotationTransformHandle &&

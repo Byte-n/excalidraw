@@ -8,36 +8,58 @@
 
   .context-menu {
     position: relative;
-    border-radius: 4px;
-    box-shadow: 0 3px 10px color.adjust(#000, $alpha: -0.8);
+    width: 236px;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px color.adjust(#1f2329, $alpha: -0.88),
+      0 2px 6px color.adjust(#1f2329, $alpha: -0.94);
     list-style: none;
     user-select: none;
     margin: 0;
-    padding: 0.5rem 0;
-    background-color: var(--popup-secondary-bg-color);
-    border: 1px solid var(--button-gray-3);
+    padding: 6px;
+    background-color: #ffffff;
+    border: 1px solid rgba(31, 35, 41, 0.08);
     cursor: default;
+    font-size: 13px;
+    line-height: 1;
   }
 
   .context-menu button {
-    color: var(--popup-text-color);
+    color: #1f2329;
+  }
+
+  &.theme--dark .context-menu {
+    background-color: #26272b;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  &.theme--dark .context-menu button {
+    color: #e6e8eb;
+  }
+
+  &.theme--dark .context-menu-item__icon {
+    color: #b4b9c1;
   }
 
   .context-menu-item {
     position: relative;
     width: 100%;
-    min-width: 9.5rem;
+    min-width: 0;
     margin: 0;
-    padding: 0.25rem 1rem 0.25rem 1.25rem;
+    min-height: 32px;
+    height: auto;
+    padding: 8px 10px;
+    box-sizing: border-box;
     text-align: start;
-    border-radius: 0;
+    border-radius: 6px;
     background-color: transparent;
     border: none;
-    white-space: nowrap;
+    white-space: normal;
     font-family: inherit;
 
     display: grid;
-    grid-template-columns: 1fr 0.2fr;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    gap: 10px;
     align-items: center;
 
     &.checkmark::before {
@@ -49,31 +71,66 @@
 
     &.dangerous {
       .context-menu-item__label {
-        color: $color-red-7;
+        color: #d83a52;
       }
     }
 
     .context-menu-item__label {
       justify-self: start;
-      margin-inline-end: 20px;
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      line-height: 16px;
+    }
+    .context-menu-item__icon {
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--popup-text-color);
+      opacity: 0.82;
+
+      svg {
+        width: 16px;
+        height: 16px;
+        color: inherit;
+        stroke: currentColor;
+      }
     }
     .context-menu-item__shortcut {
       justify-self: end;
       opacity: 0.6;
       font-family: inherit;
-      font-size: 0.7rem;
+      font-size: 12px;
+      line-height: 1;
+      color: #8f959e;
+      white-space: nowrap;
     }
   }
 
   .context-menu-item:hover {
-    color: var(--popup-bg-color);
-    background-color: var(--select-highlight-color);
+    color: #1f2329;
+    background-color: #f2f3f5;
 
     &.dangerous {
       .context-menu-item__label {
-        color: var(--popup-bg-color);
+        color: #d83a52;
       }
-      background-color: $color-red-6;
+      background-color: #fdecee;
+    }
+  }
+
+  &.theme--dark .context-menu-item:hover {
+    color: #e6e8eb;
+    background-color: #313237;
+
+    &.dangerous {
+      .context-menu-item__label {
+        color: #ff7a8c;
+      }
+      background-color: #3a1d23;
     }
   }
 
@@ -81,7 +138,38 @@
     z-index: 1;
   }
 
+  .context-menu-submenu {
+    position: relative;
+  }
+
+  .context-menu-submenu__trigger {
+    cursor: default;
+  }
+
+  .context-menu-submenu__chevron {
+    justify-self: end;
+    color: #8f959e;
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .context-menu-submenu__content {
+    position: absolute;
+    z-index: 1;
+    inset-inline-start: 100%;
+    top: -6px;
+  }
+
   @include isMobile {
+    .context-menu-submenu__content {
+      position: static;
+      width: auto;
+      margin: 0 0 0 8px;
+      padding: 0;
+      border: none;
+      box-shadow: none;
+    }
+
     .context-menu-item {
       display: block;
 
@@ -97,6 +185,11 @@
 
   .context-menu-item-separator {
     border: none;
-    border-top: 1px solid $color-gray-5;
+    border-top: 1px solid #eef0f2;
+    margin: 5px 4px;
+  }
+
+  &.theme--dark .context-menu-item-separator {
+    border-top-color: #34363b;
   }
 }

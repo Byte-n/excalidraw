@@ -111,7 +111,7 @@ describe("table cell merge", () => {
     expect(
       h.elements.find((element) => element.id === shape.id)?.containerRef,
     ).toMatchObject({ cellId: firstId });
-    expect(h.app.commitTableCellSplit()).toBe(true);
+    act(() => expect(h.app.commitTableCellSplit()).toBe(true));
     expect(
       h.elements.find((element) => element.id === shape.id)?.containerRef,
     ).toMatchObject({ cellId: firstId });
@@ -225,10 +225,10 @@ describe("table cell merge", () => {
       }),
     );
     const merge = h.app.ownerDocument.querySelector<HTMLButtonElement>(
-      ".compact-shape-actions [data-testid='table-merge-cells']",
+      ".selected-shape-actions [data-testid='table-merge-cells']",
     );
     const multiSelect = h.app.ownerDocument.querySelector<HTMLButtonElement>(
-      ".compact-shape-actions [data-testid='table-cell-multi-select']",
+      ".selected-shape-actions [data-testid='table-cell-multi-select']",
     );
     expect(multiSelect?.getAttribute("aria-pressed")).toBe("false");
     expect(multiSelect?.querySelector("svg")).not.toBeNull();
@@ -237,7 +237,7 @@ describe("table cell merge", () => {
     expect(merge?.title).toContain("Select at least two visible cells");
     expect(
       h.app.ownerDocument.querySelector<HTMLButtonElement>(
-        ".compact-shape-actions [data-testid='table-split-cells']",
+        ".selected-shape-actions [data-testid='table-split-cells']",
       ),
     ).toBeNull();
     act(() => fireEvent.click(multiSelect!));
@@ -258,12 +258,12 @@ describe("table cell merge", () => {
       }),
     );
     const enabledMerge = h.app.ownerDocument.querySelector<HTMLButtonElement>(
-      ".compact-shape-actions [data-testid='table-merge-cells']",
+      ".selected-shape-actions [data-testid='table-merge-cells']",
     );
     expect(enabledMerge?.disabled).toBe(false);
     act(() => fireEvent.click(enabledMerge!));
     const split = h.app.ownerDocument.querySelector<HTMLButtonElement>(
-      ".compact-shape-actions [data-testid='table-split-cells']",
+      ".selected-shape-actions [data-testid='table-split-cells']",
     );
     expect(split?.disabled).toBe(false);
     expect(split?.classList.contains("active")).toBe(true);
@@ -273,7 +273,7 @@ describe("table cell merge", () => {
     expect(split?.getAttribute("aria-label")).toBe("Split cells");
     expect(
       h.app.ownerDocument.querySelector<HTMLButtonElement>(
-        ".compact-shape-actions [data-testid='table-merge-cells']",
+        ".selected-shape-actions [data-testid='table-merge-cells']",
       ),
     ).toBeNull();
   });

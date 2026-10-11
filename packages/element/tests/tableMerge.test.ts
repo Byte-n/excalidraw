@@ -1,10 +1,8 @@
-import {
-  assertValidTableData,
-  createTableData,
-  getTableCellBounds,
-  getTableCellRange,
-  getVisibleTableCell,
-} from "../src/tableStruct";
+import { API } from "@excalidraw/excalidraw/tests/helpers/api";
+import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
+import { serializeAsJSON } from "@excalidraw/excalidraw/data/json";
+import { restoreElements } from "@excalidraw/excalidraw/data/restore";
+
 import {
   insertColumnInTable,
   insertRowInTable,
@@ -14,10 +12,13 @@ import {
   removeRowFromTable,
   splitTableCells,
 } from "../src/tableOps";
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
-import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
-import { serializeAsJSON } from "@excalidraw/excalidraw/data/json";
-import { restoreElements } from "@excalidraw/excalidraw/data/restore";
+import {
+  assertValidTableData,
+  createTableData,
+  getTableCellBounds,
+  getTableCellRange,
+  getVisibleTableCell,
+} from "../src/tableStruct";
 import { newElementWith } from "../src/mutateElement";
 
 const fixture = () => {

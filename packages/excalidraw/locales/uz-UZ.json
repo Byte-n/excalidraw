@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Sifatida nusxalash",
+    "contextMenuView": "Koʻrinish",
+    "contextMenuSnapping": "Yopish",
+    "contextMenuEdit": "Tahrirlash",
+    "contextMenuText": "Matn va konteyner",
+    "contextMenuStyle": "Uslublar",
+    "contextMenuLink": "Havolalar",
+    "contextMenuTable": "Jadval"
   },
   "elementLink": {
     "title": "",

@@ -195,7 +195,15 @@
     "boxSelectionContain": "Mettre en page",
     "boxSelectionOverlap": "Chevaucher",
     "arrowBinding": "Liaison de flèches",
-    "midpointSnapping": "S'accrocher aux points intermédiaires"
+    "midpointSnapping": "S'accrocher aux points intermédiaires",
+    "contextMenuCopyAs": "Copier en tant que",
+    "contextMenuView": "Affichage",
+    "contextMenuSnapping": "Alignement",
+    "contextMenuEdit": "Modifier",
+    "contextMenuText": "Texte et conteneur",
+    "contextMenuStyle": "Styles",
+    "contextMenuLink": "Liens",
+    "contextMenuTable": "Tableau"
   },
   "elementLink": {
     "title": "Lien vers un objet",

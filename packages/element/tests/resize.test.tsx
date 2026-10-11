@@ -475,15 +475,17 @@ describe("line element", () => {
     const nextWidth = prevWidth + 30;
     const nextHeight = prevHeight + 30;
 
-    resizeSingleElement(
-      nextWidth,
-      nextHeight,
-      element,
-      element,
-      h.app.scene.getNonDeletedElementsMap(),
-      h.app.scene,
-      "ne",
-    );
+    act(() => {
+      resizeSingleElement(
+        nextWidth,
+        nextHeight,
+        element,
+        element,
+        h.app.scene.getNonDeletedElementsMap(),
+        h.app.scene,
+        "ne",
+      );
+    });
 
     expect(element.x).not.toBe(prevX);
     expect(element.y).not.toBe(prevY);
@@ -511,15 +513,17 @@ describe("line element", () => {
     const nextWidth = prevWidth * -1;
     const nextHeight = prevHeight * -1;
 
-    resizeSingleElement(
-      nextWidth,
-      nextHeight,
-      element,
-      element,
-      h.app.scene.getNonDeletedElementsMap(),
-      h.app.scene,
-      "se",
-    );
+    act(() => {
+      resizeSingleElement(
+        nextWidth,
+        nextHeight,
+        element,
+        element,
+        h.app.scene.getNonDeletedElementsMap(),
+        h.app.scene,
+        "se",
+      );
+    });
 
     expect(element.width).toBe(prevWidth);
     expect(element.height).toBe(prevHeight);
@@ -566,18 +570,20 @@ describe("line element", () => {
     const prevSmallestX = Math.min(...element.points.map((p) => p[0]));
     const prevBiggestX = Math.max(...element.points.map((p) => p[0]));
 
-    resizeSingleElement(
-      prevWidth + 20,
-      prevHeight,
-      element,
-      element,
-      h.app.scene.getNonDeletedElementsMap(),
-      h.app.scene,
-      "e",
-      {
-        shouldResizeFromCenter: true,
-      },
-    );
+    act(() => {
+      resizeSingleElement(
+        prevWidth + 20,
+        prevHeight,
+        element,
+        element,
+        h.app.scene.getNonDeletedElementsMap(),
+        h.app.scene,
+        "e",
+        {
+          shouldResizeFromCenter: true,
+        },
+      );
+    });
 
     expect(element.width).toBeCloseTo(prevWidth + 20);
     expect(element.height).toBeCloseTo(prevHeight);

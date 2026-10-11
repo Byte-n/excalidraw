@@ -216,7 +216,7 @@ describe("Test Linear Elements", () => {
     const line = h.elements[0] as ExcalidrawLinearElement;
 
     expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`6`);
-    expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
+    expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`6`);
     expect((h.elements[0] as ExcalidrawLinearElement).points.length).toEqual(2);
 
     // drag line from midpoint
@@ -224,7 +224,7 @@ describe("Test Linear Elements", () => {
     expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
       `10`,
     );
-    expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
+    expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`9`);
     expect(line.points.length).toEqual(3);
     expect(line.points).toMatchInlineSnapshot(`
       [
@@ -298,8 +298,9 @@ describe("Test Linear Elements", () => {
       clientX: midpoint[0],
       clientY: midpoint[1],
     });
+    UI.openContextMenuSubmenus();
     // Enter line editor
-    const contextMenu = document.querySelector(".context-menu");
+    const contextMenu = UI.queryContextMenu();
     fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
       button: 2,
       clientX: midpoint[0],
@@ -336,12 +337,13 @@ describe("Test Linear Elements", () => {
       clientX: midpoint[0],
       clientY: midpoint[1],
     });
-    const contextMenu = document.querySelector(".context-menu");
+    const contextMenu = UI.queryContextMenu();
     fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
       button: 2,
       clientX: midpoint[0],
       clientY: midpoint[1],
     });
+    UI.openContextMenuSubmenus();
 
     expect(() =>
       fireEvent.click(queryByText(contextMenu as HTMLElement, "Edit arrow")!),
@@ -508,7 +510,7 @@ describe("Test Linear Elements", () => {
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
         `14`,
       );
-      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
+      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`9`);
 
       expect(line.points.length).toEqual(3);
       expect(line.points).toMatchInlineSnapshot(`
@@ -549,7 +551,7 @@ describe("Test Linear Elements", () => {
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
         `11`,
       );
-      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`6`);
+      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
 
       const midPointsWithRoundEdge = LinearElementEditor.getEditorMidPoints(
         h.elements[0] as ExcalidrawLinearElement,
@@ -610,7 +612,7 @@ describe("Test Linear Elements", () => {
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
         `13`,
       );
-      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
+      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`8`);
 
       expect([line.x, line.y]).toEqual([
         points[0][0] + deltaX,
@@ -678,7 +680,7 @@ describe("Test Linear Elements", () => {
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
           `18`,
         );
-        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`9`);
+        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`12`);
 
         expect(line.points.length).toEqual(5);
 
@@ -729,7 +731,7 @@ describe("Test Linear Elements", () => {
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
           `14`,
         );
-        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
+        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`9`);
 
         const newPoints = LinearElementEditor.getPointsGlobalCoordinates(
           line,
@@ -770,7 +772,7 @@ describe("Test Linear Elements", () => {
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
           `14`,
         );
-        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
+        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`8`);
 
         const newPoints = LinearElementEditor.getPointsGlobalCoordinates(
           line,
@@ -818,7 +820,7 @@ describe("Test Linear Elements", () => {
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
           `22`,
         );
-        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`10`);
+        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`12`);
 
         const newMidPoints = LinearElementEditor.getEditorMidPoints(
           line,
@@ -876,7 +878,7 @@ describe("Test Linear Elements", () => {
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
           `18`,
         );
-        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`9`);
+        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`12`);
         expect(line.points.length).toEqual(5);
 
         expect((h.elements[0] as ExcalidrawLinearElement).points)
@@ -974,7 +976,7 @@ describe("Test Linear Elements", () => {
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
           `14`,
         );
-        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
+        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`8`);
 
         const newPoints = LinearElementEditor.getPointsGlobalCoordinates(
           line,
@@ -1604,7 +1606,8 @@ describe("Test Linear Elements", () => {
         clientX: 20,
         clientY: 30,
       });
-      let contextMenu = document.querySelector(".context-menu");
+      UI.openContextMenuSubmenus();
+      let contextMenu = UI.queryContextMenu();
 
       fireEvent.click(
         queryByText(contextMenu as HTMLElement, "Bind text to the container")!,
@@ -1632,7 +1635,8 @@ describe("Test Linear Elements", () => {
         clientX: 20,
         clientY: 30,
       });
-      contextMenu = document.querySelector(".context-menu");
+      UI.openContextMenuSubmenus();
+      contextMenu = UI.queryContextMenu();
       fireEvent.click(queryByText(contextMenu as HTMLElement, "Unbind text")!);
       expect(container.boundElements).toEqual([]);
       expect(text).toEqual(
@@ -2022,5 +2026,32 @@ describe("Test Linear Elements", () => {
 
       expect(angleDifference).toBeLessThan(tolerance);
     });
+  });
+
+  it("should keep adding control points to a curved arrow outside the editor", () => {
+    const arrow = createTwoPointerLinearElement("arrow", {
+      type: ROUNDNESS.PROPORTIONAL_RADIUS,
+    });
+    const elementsMap = h.app.scene.getNonDeletedElementsMap();
+
+    drag(midpoint, pointFrom<GlobalPoint>(midpoint[0], midpoint[1] + delta));
+    expect(arrow.points).toHaveLength(3);
+    expect(h.state.selectedLinearElement?.isEditing).toBe(false);
+
+    for (let pointCount = 3; pointCount < 5; pointCount++) {
+      const midPoints = LinearElementEditor.getEditorMidPoints(
+        arrow,
+        elementsMap,
+        h.state,
+      );
+      expect(midPoints).toHaveLength(pointCount - 1);
+      const segmentMidpoint = midPoints[midPoints.length - 1]!;
+      expect(segmentMidpoint).not.toBeNull();
+      drag(
+        segmentMidpoint,
+        pointFrom<GlobalPoint>(segmentMidpoint[0], segmentMidpoint[1] + delta),
+      );
+      expect(arrow.points).toHaveLength(pointCount + 1);
+    }
   });
 });

@@ -195,7 +195,15 @@
     "boxSelectionContain": "Slå in",
     "boxSelectionOverlap": "Överlappande",
     "arrowBinding": "Pilbindning",
-    "midpointSnapping": "Fäst mot mittpunkter"
+    "midpointSnapping": "Fäst mot mittpunkter",
+    "contextMenuCopyAs": "Kopiera som",
+    "contextMenuView": "Visa",
+    "contextMenuSnapping": "Fäst mot",
+    "contextMenuEdit": "Redigera",
+    "contextMenuText": "Text och behållare",
+    "contextMenuStyle": "Stilar",
+    "contextMenuLink": "Länkar",
+    "contextMenuTable": "Tabell"
   },
   "elementLink": {
     "title": "Länk till objektet",

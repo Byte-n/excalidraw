@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "Привязка стрелкой",
-    "midpointSnapping": "Привязка к средней точке"
+    "midpointSnapping": "Привязка к средней точке",
+    "contextMenuCopyAs": "Копировать как",
+    "contextMenuView": "Вид",
+    "contextMenuSnapping": "Привязка",
+    "contextMenuEdit": "Изменить",
+    "contextMenuText": "Текст и контейнер",
+    "contextMenuStyle": "Стили",
+    "contextMenuLink": "Ссылки",
+    "contextMenuTable": "Таблица"
   },
   "elementLink": {
     "title": "Ссылка на объект",

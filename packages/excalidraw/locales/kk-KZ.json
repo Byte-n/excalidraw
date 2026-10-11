@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Мына түрде көшіру",
+    "contextMenuView": "Көрініс",
+    "contextMenuSnapping": "Жабыстыру",
+    "contextMenuEdit": "Өңдеу",
+    "contextMenuText": "Мәтін және контейнер",
+    "contextMenuStyle": "Стильдер",
+    "contextMenuLink": "Сілтемелер",
+    "contextMenuTable": "Кесте"
   },
   "elementLink": {
     "title": "",

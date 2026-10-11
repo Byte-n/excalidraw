@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Kopēt kā",
+    "contextMenuView": "Skats",
+    "contextMenuSnapping": "Pievilkšana",
+    "contextMenuEdit": "Rediģēt",
+    "contextMenuText": "Teksts un konteiners",
+    "contextMenuStyle": "Stili",
+    "contextMenuLink": "Saites",
+    "contextMenuTable": "Tabula"
   },
   "elementLink": {
     "title": "",

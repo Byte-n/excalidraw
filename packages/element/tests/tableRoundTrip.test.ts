@@ -24,10 +24,7 @@ import {
   isTextElement,
 } from "../src/typeChecks";
 
-import type {
-  ExcalidrawElement,
-  ExcalidrawTableElement,
-} from "../src/types";
+import type { ExcalidrawElement, ExcalidrawTableElement } from "../src/types";
 
 /**
  * A scene exercising every persisted relationship of the table container: a
@@ -345,7 +342,10 @@ describe("table container serialization round-trips", () => {
           element.containerRef.role === "content",
       )!;
 
-      const json = serializeAsClipboardJSON({ elements: [member], files: null });
+      const json = serializeAsClipboardJSON({
+        elements: [member],
+        files: null,
+      });
       const clipboardData = await parseClipboard(
         await parseDataTransferEvent(
           createPasteEvent({ types: { "text/plain": json } }),

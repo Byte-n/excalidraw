@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "Pfeilbindung",
-    "midpointSnapping": "An Mittelpunkten einrasten"
+    "midpointSnapping": "An Mittelpunkten einrasten",
+    "contextMenuCopyAs": "Kopieren als",
+    "contextMenuView": "Ansicht",
+    "contextMenuSnapping": "Einrasten",
+    "contextMenuEdit": "Bearbeiten",
+    "contextMenuText": "Text und Container",
+    "contextMenuStyle": "Stile",
+    "contextMenuLink": "Links",
+    "contextMenuTable": "Tabelle"
   },
   "elementLink": {
     "title": "Link zum Objekt",

@@ -1857,7 +1857,9 @@ describe("Special cases", () => {
       height: 50,
     });
 
-    h.elements = [rect1, rect2];
+    act(() => {
+      h.elements = [rect1, rect2];
+    });
 
     // Lasso path enclosing rect1 fully, and intersecting rect2 partially
     const startPoint = pointFrom<GlobalPoint>(80, 80);

@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Αντιγραφή ως",
+    "contextMenuView": "Προβολή",
+    "contextMenuSnapping": "Προσκόλληση",
+    "contextMenuEdit": "Επεξεργασία",
+    "contextMenuText": "Κείμενο και περίβλημα",
+    "contextMenuStyle": "Στυλ",
+    "contextMenuLink": "Σύνδεσμοι",
+    "contextMenuTable": "Πίνακας"
   },
   "elementLink": {
     "title": "",

@@ -1786,10 +1786,11 @@ describe("z-indexing a table subtree with an in-cell frame (phase-1.md:60, :68)"
   const withIndex = (
     element: ExcalidrawElement,
     index: string,
-  ): ExcalidrawElement => ({
-    ...element,
-    index,
-  } as ExcalidrawElement);
+  ): ExcalidrawElement =>
+    ({
+      ...element,
+      index,
+    } as ExcalidrawElement);
 
   // [table, cellMember, frame(in cell), frameMember(of frame), unrelated]
   const buildElements = () => {
@@ -1834,7 +1835,7 @@ describe("z-indexing a table subtree with an in-cell frame (phase-1.md:60, :68)"
       selectedElementIds: { [tableId]: true },
       selectedGroupIds: {},
       editingGroupId: null,
-    }) as unknown as AppState;
+    } as unknown as AppState);
 
   it("brings the table's whole subtree, cell frame included, to the front", () => {
     const elements = buildElements();

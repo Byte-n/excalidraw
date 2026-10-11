@@ -1,10 +1,12 @@
 import { KEYS } from "@excalidraw/common";
-import type { Radians } from "@excalidraw/math";
+
 import {
   getCommonBounds,
   getTransformHandlesFromCoords,
   newElementWith,
 } from "@excalidraw/element";
+
+import type { Radians } from "@excalidraw/math";
 
 import type {
   ExcalidrawTableElement,

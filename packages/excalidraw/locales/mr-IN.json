@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "म्हणून कॉपी करा",
+    "contextMenuView": "दृश्य",
+    "contextMenuSnapping": "स्नॅपिंग",
+    "contextMenuEdit": "संपादित करा",
+    "contextMenuText": "मजकूर आणि कंटेनर",
+    "contextMenuStyle": "शैली",
+    "contextMenuLink": "दुवे",
+    "contextMenuTable": "तक्ता"
   },
   "elementLink": {
     "title": "वस्तू ह्याचा दुवा",

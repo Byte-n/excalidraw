@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Kopiér som",
+    "contextMenuView": "Visning",
+    "contextMenuSnapping": "Fastgørelse",
+    "contextMenuEdit": "Rediger",
+    "contextMenuText": "Tekst og beholder",
+    "contextMenuStyle": "Typografier",
+    "contextMenuLink": "Links",
+    "contextMenuTable": "Tabel"
   },
   "elementLink": {
     "title": "",

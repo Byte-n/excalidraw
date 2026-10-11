@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "इस रूप में कॉपी करें",
+    "contextMenuView": "दृश्य",
+    "contextMenuSnapping": "स्नैपिंग",
+    "contextMenuEdit": "संपादित करें",
+    "contextMenuText": "पाठ और कंटेनर",
+    "contextMenuStyle": "शैलियाँ",
+    "contextMenuLink": "लिंक",
+    "contextMenuTable": "तालिका"
   },
   "elementLink": {
     "title": "वस्तु की कड़ी",

@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "複製為",
+    "contextMenuView": "檢視",
+    "contextMenuSnapping": "吸附",
+    "contextMenuEdit": "編輯",
+    "contextMenuText": "文字與容器",
+    "contextMenuStyle": "樣式",
+    "contextMenuLink": "連結",
+    "contextMenuTable": "表格"
   },
   "elementLink": {
     "title": "",

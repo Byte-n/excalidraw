@@ -243,12 +243,16 @@ describe("Test measureText", () => {
 
     it("should return max height when container is ellipse", () => {
       const container = API.createElement({ type: "ellipse", ...params });
-      expect(getBoundTextMaxHeight(container, boundTextElement)).toBe(134.35028842544403);
+      expect(getBoundTextMaxHeight(container, boundTextElement)).toBe(
+        134.35028842544403,
+      );
     });
 
     it("should return max height when container is diamond", () => {
       const container = API.createElement({ type: "diamond", ...params });
-      expect(getBoundTextMaxHeight(container, boundTextElement)).toBe(94.04172004786263);
+      expect(getBoundTextMaxHeight(container, boundTextElement)).toBe(
+        94.04172004786263,
+      );
     });
 
     it("should return max height when container is arrow", () => {

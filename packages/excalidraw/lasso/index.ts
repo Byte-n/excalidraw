@@ -65,7 +65,7 @@ export class LassoTrail extends AnimatedTrail {
         return Math.min(easeOut(l), easeOut(t));
       },
       // same color as the marquee selection (theme-aware, host-overridable)
-      fill: () => setColorAlpha(getSelectionColor(app.interactiveCanvas), 0.05),
+      fill: () => setColorAlpha(getSelectionColor(app.interactiveCanvas), 0.08),
       stroke: () => getSelectionColor(app.interactiveCanvas),
     });
   }

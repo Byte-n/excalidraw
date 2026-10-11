@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "ចម្លងជា",
+    "contextMenuView": "ទិដ្ឋភាព",
+    "contextMenuSnapping": "ការចាប់",
+    "contextMenuEdit": "កែសម្រួល",
+    "contextMenuText": "អត្ថបទ និងធុង",
+    "contextMenuStyle": "រចនាប័ទ្ម",
+    "contextMenuLink": "តំណ",
+    "contextMenuTable": "តារាង"
   },
   "elementLink": {
     "title": "",

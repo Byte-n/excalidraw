@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "کۆپیکردن وەک",
+    "contextMenuView": "دیمەن",
+    "contextMenuSnapping": "گرتن",
+    "contextMenuEdit": "دەستکاریکردن",
+    "contextMenuText": "دەق و کۆنتەینەر",
+    "contextMenuStyle": "شێوازەکان",
+    "contextMenuLink": "بەستەرەکان",
+    "contextMenuTable": "خشتە"
   },
   "elementLink": {
     "title": "",

@@ -195,7 +195,15 @@
     "boxSelectionContain": "Cakup penuh",
     "boxSelectionOverlap": "Tumpang tindih",
     "arrowBinding": "Pengikatan anak panah",
-    "midpointSnapping": "Rapatkan ke titik tengah"
+    "midpointSnapping": "Rapatkan ke titik tengah",
+    "contextMenuCopyAs": "Salin sebagai",
+    "contextMenuView": "Tampilan",
+    "contextMenuSnapping": "Jepret",
+    "contextMenuEdit": "Edit",
+    "contextMenuText": "Teks dan wadah",
+    "contextMenuStyle": "Gaya",
+    "contextMenuLink": "Tautan",
+    "contextMenuTable": "Tabel"
   },
   "elementLink": {
     "title": "Taut ke objek",

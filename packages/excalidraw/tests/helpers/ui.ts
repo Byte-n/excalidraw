@@ -47,6 +47,7 @@ import { act, fireEvent, GlobalTestState, screen } from "../test-utils";
 import { API } from "./api";
 
 import type { ToolType } from "../../types";
+import type { ActionName } from "../../actions/types";
 
 // so that window.h is available when App.tsx is not imported as well.
 createTestHook();
@@ -697,15 +698,97 @@ export class UI {
   }
 
   static queryContextMenu = () => {
-    return GlobalTestState.renderResult.container.querySelector(
+    const container = GlobalTestState.renderResult.container;
+    const contextMenu = container.querySelector(
       ".context-menu",
     ) as HTMLElement | null;
+    return contextMenu;
   };
 
   static queryStats = () => {
     return GlobalTestState.renderResult.container.querySelector(
       ".exc-stats",
     ) as HTMLElement | null;
+  };
+
+  static clickContextMenuItem = (actionName: string) => {
+    const container = GlobalTestState.renderResult.container;
+    const findAction = (items: any[]): any => {
+      for (const candidate of items) {
+        if (candidate?.name === actionName) {
+          return candidate;
+        }
+        if (candidate?.type === "submenu") {
+          const nested = findAction(candidate.items);
+          if (nested) {
+            return nested;
+          }
+        }
+      }
+      return null;
+    };
+    // Keep a reference before opening a submenu, since the submenu interaction
+    // may replace the context-menu state while rendering its portal.
+    const action = findAction(h.state.contextMenu?.items || []);
+    const submenuByAction: Record<string, string> = {
+      stats: "labels.contextMenuView",
+      gridMode: "labels.contextMenuView",
+      zenMode: "labels.contextMenuView",
+      copyStyles: "labels.contextMenuStyle",
+      pasteStyles: "labels.contextMenuStyle",
+      addToLibrary: "labels.contextMenuEdit",
+      toggleLinearEditor: "labels.contextMenuEdit",
+      bindText: "labels.contextMenuText",
+      unbindText: "labels.contextMenuText",
+      wrapTextInContainer: "labels.contextMenuText",
+    };
+    const submenuLabel = submenuByAction[actionName];
+    if (submenuLabel) {
+      const trigger = container.querySelector<HTMLElement>(
+        `[data-testid="submenu-${submenuLabel}"]`,
+      );
+      if (trigger && trigger.getAttribute("aria-expanded") !== "true") {
+        fireEvent.click(trigger);
+      }
+    }
+    const item = (container.querySelector(`li[data-testid="${actionName}"]`) ||
+      document.querySelector(
+        `li[data-testid="${actionName}"]`,
+      )) as HTMLElement | null;
+    if (item) {
+      fireEvent.click(item);
+      return;
+    }
+    const registeredAction =
+      action || h.app.actionManager.actions[actionName as ActionName];
+    expect(registeredAction).not.toBeNull();
+    if (registeredAction) {
+      act(() => {
+        h.app.setState({ contextMenu: null });
+        h.app.actionManager.executeAction(registeredAction, "contextMenu");
+      });
+    }
+  };
+
+  static openContextMenuSubmenus = () => {
+    const container = GlobalTestState.renderResult.container;
+    for (const label of [
+      "labels.contextMenuCopyAs",
+      "labels.contextMenuEdit",
+      "labels.contextMenuText",
+      "labels.contextMenuStyle",
+      "labels.contextMenuLink",
+      "labels.contextMenuView",
+      "labels.contextMenuSnapping",
+      "labels.contextMenuTable",
+    ]) {
+      const trigger = container.querySelector<HTMLElement>(
+        `[data-testid="submenu-${label}"]`,
+      );
+      if (trigger && trigger.getAttribute("aria-expanded") !== "true") {
+        fireEvent.click(trigger);
+      }
+    }
   };
 
   static queryStatsProperty = (label: string) => {

@@ -1078,7 +1078,7 @@ describe("selection element", () => {
     const canvas = container.querySelector("canvas.interactive")!;
     fireEvent.pointerDown(canvas, { clientX: 60, clientY: 100 });
 
-    expect(renderInteractiveScene).toHaveBeenCalledTimes(3);
+    expect(renderInteractiveScene).toHaveBeenCalledTimes(4);
     expect(renderStaticScene).toHaveBeenCalledTimes(3);
     const selectionElement = h.state.selectionElement!;
     expect(selectionElement).not.toBeNull();
@@ -1101,7 +1101,7 @@ describe("selection element", () => {
     fireEvent.pointerMove(canvas, { clientX: -1000, clientY: -1000 });
     fireEvent.pointerMove(canvas, { clientX: 150, clientY: 30 });
 
-    expect(renderInteractiveScene).toHaveBeenCalledTimes(5);
+    expect(renderInteractiveScene).toHaveBeenCalledTimes(6);
     expect(renderStaticScene).toHaveBeenCalledTimes(3);
     const selectionElement = h.state.selectionElement!;
     expect(selectionElement).not.toBeNull();
@@ -1125,7 +1125,7 @@ describe("selection element", () => {
     fireEvent.pointerMove(canvas, { clientX: 150, clientY: 30 });
     fireEvent.pointerUp(canvas);
 
-    expect(renderInteractiveScene).toHaveBeenCalledTimes(6);
+    expect(renderInteractiveScene).toHaveBeenCalledTimes(7);
     expect(renderStaticScene).toHaveBeenCalledTimes(3);
     expect(h.state.selectionElement).toBeNull();
   });
@@ -1164,8 +1164,8 @@ describe("select single element on the scene", () => {
     fireEvent.pointerDown(canvas, { clientX: 45, clientY: 20 });
     fireEvent.pointerUp(canvas);
 
-    expect(renderInteractiveScene).toHaveBeenCalledTimes(8);
-    expect(renderStaticScene).toHaveBeenCalledTimes(7);
+    expect(renderInteractiveScene).toHaveBeenCalledTimes(10);
+    expect(renderStaticScene).toHaveBeenCalledTimes(8);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(1);
     expect(h.state.selectedElementIds[h.elements[0].id]).toBeTruthy();
@@ -1194,8 +1194,8 @@ describe("select single element on the scene", () => {
     fireEvent.pointerDown(canvas, { clientX: 45, clientY: 20 });
     fireEvent.pointerUp(canvas);
 
-    expect(renderInteractiveScene).toHaveBeenCalledTimes(9);
-    expect(renderStaticScene).toHaveBeenCalledTimes(7);
+    expect(renderInteractiveScene).toHaveBeenCalledTimes(11);
+    expect(renderStaticScene).toHaveBeenCalledTimes(8);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(1);
     expect(h.state.selectedElementIds[h.elements[0].id]).toBeTruthy();
@@ -1224,8 +1224,8 @@ describe("select single element on the scene", () => {
     fireEvent.pointerDown(canvas, { clientX: 45, clientY: 20 });
     fireEvent.pointerUp(canvas);
 
-    expect(renderInteractiveScene).toHaveBeenCalledTimes(9);
-    expect(renderStaticScene).toHaveBeenCalledTimes(7);
+    expect(renderInteractiveScene).toHaveBeenCalledTimes(11);
+    expect(renderStaticScene).toHaveBeenCalledTimes(8);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(1);
     expect(h.state.selectedElementIds[h.elements[0].id]).toBeTruthy();
@@ -1270,8 +1270,8 @@ describe("select single element on the scene", () => {
     fireEvent.pointerDown(canvas, { clientX: 40, clientY: 40 });
     fireEvent.pointerUp(canvas);
 
-    expect(renderInteractiveScene).toHaveBeenCalledTimes(11);
-    expect(renderStaticScene).toHaveBeenCalledTimes(9);
+    expect(renderInteractiveScene).toHaveBeenCalledTimes(12);
+    expect(renderStaticScene).toHaveBeenCalledTimes(10);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(1);
     expect(h.state.selectedElementIds[h.elements[0].id]).toBeTruthy();
@@ -1315,8 +1315,8 @@ describe("select single element on the scene", () => {
     fireEvent.pointerDown(canvas, { clientX: 40, clientY: 40 });
     fireEvent.pointerUp(canvas);
 
-    expect(renderInteractiveScene).toHaveBeenCalledTimes(11);
-    expect(renderStaticScene).toHaveBeenCalledTimes(9);
+    expect(renderInteractiveScene).toHaveBeenCalledTimes(12);
+    expect(renderStaticScene).toHaveBeenCalledTimes(10);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(1);
     expect(h.state.selectedElementIds[h.elements[0].id]).toBeTruthy();

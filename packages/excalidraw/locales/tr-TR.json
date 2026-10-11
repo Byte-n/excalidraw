@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Şu biçimde kopyala",
+    "contextMenuView": "Görünüm",
+    "contextMenuSnapping": "Yaslama",
+    "contextMenuEdit": "Düzenle",
+    "contextMenuText": "Metin ve kapsayıcı",
+    "contextMenuStyle": "Stiller",
+    "contextMenuLink": "Bağlantılar",
+    "contextMenuTable": "Tablo"
   },
   "elementLink": {
     "title": "Nesneye bağlantıla",

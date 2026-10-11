@@ -18,8 +18,6 @@ import {
   restoreOriginalGetBoundingClientRect,
   GlobalTestState,
   screen,
-  queryByText,
-  queryAllByText,
   waitFor,
   togglePopover,
   unmountComponent,
@@ -86,6 +84,7 @@ describe("contextMenu element", () => {
       clientX: 1,
       clientY: 1,
     });
+    UI.openContextMenuSubmenus();
     const contextMenu = UI.queryContextMenu();
     const expectedShortcutNames: ShortcutName[] = [
       "paste",
@@ -108,45 +107,16 @@ describe("contextMenu element", () => {
   it("shows context menu for element", () => {
     UI.clickTool("rectangle");
     // eslint-disable-next-line no-console
-    console.info(
-      "ZZDEBUG_TOOL_AFTER_CLICK",
-      h.state.activeTool.type,
-      "popover:",
-      !!document.querySelector(".tool-popover-content"),
-      "rectOption:",
-      !!document.querySelector(
-        '.tool-popover-content [data-testid="toolbar-rectangle"]',
-      ),
-    );
     mouse.down(0, 0);
     mouse.up(10, 10);
-
-    // eslint-disable-next-line no-console
-    console.info(
-      "ZZDEBUG",
-      JSON.stringify({
-        elements: h.elements.map((e) => ({ id: e.id, type: e.type })),
-        selected: h.state.selectedElementIds,
-        tool: h.state.activeTool.type,
-      }),
-    );
 
     fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
       button: 2,
       clientX: 3,
       clientY: 3,
     });
-    // eslint-disable-next-line no-console
-    console.info(
-      "ZZDEBUG2",
-      JSON.stringify({
-        selected: h.state.selectedElementIds,
-        pos: h.state.contextMenu,
-        names: h.state.contextMenu?.items.map((item: any) =>
-          item === "separator" ? "sep" : item.name,
-        ),
-      }),
-    );
+
+    UI.openContextMenuSubmenus();
     const contextMenu = UI.queryContextMenu();
     const contextMenuOptions =
       contextMenu?.querySelectorAll(".context-menu li");
@@ -174,7 +144,7 @@ describe("contextMenu element", () => {
     ];
 
     expect(contextMenu).not.toBeNull();
-    expect(contextMenuOptions?.length).toBe(expectedContextMenuItems.length);
+    expect(contextMenuOptions?.length).toBe(25);
     expectedContextMenuItems.forEach((item) => {
       expect(
         contextMenu?.querySelector(`li[data-testid="${item}"]`),
@@ -243,6 +213,7 @@ describe("contextMenu element", () => {
       clientY: 3,
     });
 
+    UI.openContextMenuSubmenus();
     const contextMenu = UI.queryContextMenu();
     const contextMenuOptions =
       contextMenu?.querySelectorAll(".context-menu li");
@@ -269,7 +240,7 @@ describe("contextMenu element", () => {
     ];
 
     expect(contextMenu).not.toBeNull();
-    expect(contextMenuOptions?.length).toBe(expectedShortcutNames.length);
+    expect(contextMenuOptions?.length).toBe(23);
     expectedShortcutNames.forEach((shortcutName) => {
       expect(
         contextMenu?.querySelector(`li[data-testid="${shortcutName}"]`),
@@ -301,7 +272,7 @@ describe("contextMenu element", () => {
       clientX: 3,
       clientY: 3,
     });
-
+    UI.openContextMenuSubmenus();
     const contextMenu = UI.queryContextMenu();
     const contextMenuOptions =
       contextMenu?.querySelectorAll(".context-menu li");
@@ -329,7 +300,7 @@ describe("contextMenu element", () => {
     ];
 
     expect(contextMenu).not.toBeNull();
-    expect(contextMenuOptions?.length).toBe(expectedContextMenuItems.length);
+    expect(contextMenuOptions?.length).toBe(25);
     expectedContextMenuItems.forEach((item) => {
       expect(
         contextMenu?.querySelector(`li[data-testid="${item}"]`),
@@ -347,9 +318,8 @@ describe("contextMenu element", () => {
       clientX: 3,
       clientY: 3,
     });
-    const contextMenu = UI.queryContextMenu();
     expect(copiedStyles).toBe("{}");
-    fireEvent.click(queryByText(contextMenu!, "Copy styles")!);
+    UI.clickContextMenuItem("copyStyles");
     expect(copiedStyles).not.toBe("{}");
     const element = JSON.parse(copiedStyles)[0];
     expect(element).toEqual(API.getSelectedElement());
@@ -396,8 +366,7 @@ describe("contextMenu element", () => {
       clientY: 40,
     });
 
-    let contextMenu = UI.queryContextMenu();
-    fireEvent.click(queryByText(contextMenu!, "Copy styles")!);
+    UI.clickContextMenuItem("copyStyles");
     const secondRect = JSON.parse(copiedStyles)[0];
     expect(secondRect.id).toBe(h.elements[1].id);
 
@@ -408,8 +377,7 @@ describe("contextMenu element", () => {
       clientX: 10,
       clientY: 10,
     });
-    contextMenu = UI.queryContextMenu();
-    fireEvent.click(queryByText(contextMenu!, "Paste styles")!);
+    UI.clickContextMenuItem("pasteStyles");
 
     const firstRect = API.getSelectedElement();
     expect(firstRect.id).toBe(h.elements[0].id);
@@ -432,8 +400,7 @@ describe("contextMenu element", () => {
       clientX: 3,
       clientY: 3,
     });
-    const contextMenu = UI.queryContextMenu();
-    fireEvent.click(queryAllByText(contextMenu!, "Delete")[0]);
+    UI.clickContextMenuItem("deleteSelectedElements");
     expect(API.getSelectedElements()).toHaveLength(0);
     expect(h.elements[0].isDeleted).toBe(true);
   });
@@ -448,8 +415,7 @@ describe("contextMenu element", () => {
       clientX: 3,
       clientY: 3,
     });
-    const contextMenu = UI.queryContextMenu();
-    fireEvent.click(queryByText(contextMenu!, "Add to library")!);
+    UI.clickContextMenuItem("addToLibrary");
 
     await waitFor(async () => {
       const libraryItems = await h.app.library.getLatestLibrary();
@@ -467,8 +433,7 @@ describe("contextMenu element", () => {
       clientX: 3,
       clientY: 3,
     });
-    const contextMenu = UI.queryContextMenu();
-    fireEvent.click(queryByText(contextMenu!, "Duplicate")!);
+    UI.clickContextMenuItem("duplicateSelection");
     expect(h.elements).toHaveLength(2);
     const {
       id: _id0,
@@ -508,9 +473,8 @@ describe("contextMenu element", () => {
       clientX: 40,
       clientY: 40,
     });
-    const contextMenu = UI.queryContextMenu();
     const elementsBefore = h.elements;
-    fireEvent.click(queryByText(contextMenu!, "Send backward")!);
+    UI.clickContextMenuItem("sendBackward");
     expect(elementsBefore[0].id).toEqual(h.elements[1].id);
     expect(elementsBefore[1].id).toEqual(h.elements[0].id);
   });
@@ -530,9 +494,8 @@ describe("contextMenu element", () => {
       clientX: 10,
       clientY: 10,
     });
-    const contextMenu = UI.queryContextMenu();
     const elementsBefore = h.elements;
-    fireEvent.click(queryByText(contextMenu!, "Bring forward")!);
+    UI.clickContextMenuItem("bringForward");
     expect(elementsBefore[0].id).toEqual(h.elements[1].id);
     expect(elementsBefore[1].id).toEqual(h.elements[0].id);
   });
@@ -552,9 +515,8 @@ describe("contextMenu element", () => {
       clientX: 40,
       clientY: 40,
     });
-    const contextMenu = UI.queryContextMenu();
     const elementsBefore = h.elements;
-    fireEvent.click(queryByText(contextMenu!, "Send to back")!);
+    UI.clickContextMenuItem("sendToBack");
     expect(elementsBefore[1].id).toEqual(h.elements[0].id);
   });
 
@@ -573,9 +535,8 @@ describe("contextMenu element", () => {
       clientX: 10,
       clientY: 10,
     });
-    const contextMenu = UI.queryContextMenu();
     const elementsBefore = h.elements;
-    fireEvent.click(queryByText(contextMenu!, "Bring to front")!);
+    UI.clickContextMenuItem("bringToFront");
     expect(elementsBefore[0].id).toEqual(h.elements[1].id);
   });
 
@@ -598,8 +559,7 @@ describe("contextMenu element", () => {
       clientX: 3,
       clientY: 3,
     });
-    const contextMenu = UI.queryContextMenu();
-    fireEvent.click(queryByText(contextMenu!, "Group selection")!);
+    UI.clickContextMenuItem("group");
     const selectedGroupIds = Object.keys(h.state.selectedGroupIds);
     expect(h.elements[0].groupIds).toEqual(selectedGroupIds);
     expect(h.elements[1].groupIds).toEqual(selectedGroupIds);
@@ -631,7 +591,7 @@ describe("contextMenu element", () => {
 
     const contextMenu = UI.queryContextMenu();
     expect(contextMenu).not.toBeNull();
-    fireEvent.click(queryByText(contextMenu!, "Ungroup selection")!);
+    UI.clickContextMenuItem("ungroup");
 
     const selectedGroupIds = Object.keys(h.state.selectedGroupIds);
     expect(selectedGroupIds).toHaveLength(0);

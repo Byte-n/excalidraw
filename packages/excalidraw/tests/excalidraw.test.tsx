@@ -15,6 +15,7 @@ import {
   render,
   waitFor,
 } from "./test-utils";
+import { UI } from "./helpers/ui";
 
 const { h } = window;
 
@@ -39,7 +40,8 @@ describe("<Excalidraw/>", () => {
         clientX: 1,
         clientY: 1,
       });
-      const contextMenu = document.querySelector(".context-menu");
+      UI.openContextMenuSubmenus();
+      const contextMenu = UI.queryContextMenu();
       fireEvent.click(queryByText(contextMenu as HTMLElement, "Zen mode")!);
       expect(h.state.zenModeEnabled).toBe(true);
       expect(container.querySelector(".excalidraw")).toHaveClass(
@@ -62,7 +64,8 @@ describe("<Excalidraw/>", () => {
         clientX: 1,
         clientY: 1,
       });
-      const contextMenu = document.querySelector(".context-menu");
+      UI.openContextMenuSubmenus();
+      const contextMenu = UI.queryContextMenu();
       expect(queryByText(contextMenu as HTMLElement, "Zen mode")).toBe(null);
       expect(h.state.zenModeEnabled).toBe(true);
       expect(
@@ -114,7 +117,8 @@ describe("<Excalidraw/>", () => {
         clientX: 1,
         clientY: 1,
       });
-      const contextMenu = document.querySelector(".context-menu");
+      UI.openContextMenuSubmenus();
+      const contextMenu = UI.queryContextMenu();
       fireEvent.click(queryByText(contextMenu as HTMLElement, "Toggle grid")!);
       expect(h.state.gridModeEnabled).toBe(true);
     });
@@ -133,6 +137,7 @@ describe("<Excalidraw/>", () => {
         clientX: 1,
         clientY: 1,
       });
+      UI.openContextMenuSubmenus();
       const contextMenu = document.querySelector(".context-menu");
       expect(queryByText(contextMenu as HTMLElement, "Show grid")).toBe(null);
       expect(h.state.gridModeEnabled).toBe(false);

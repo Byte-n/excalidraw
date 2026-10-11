@@ -430,6 +430,32 @@ describe("composite shape data", () => {
     },
   );
 
+  it("uses a sharp outline for rectangle regardless of roundness", () => {
+    const element = newElement({
+      type: "rectangle",
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 80,
+      roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
+      roughness: 0,
+    });
+    if (element.type !== "composite_shape") {
+      throw new Error("Expected composite shape");
+    }
+
+    const geometry = getCompositeShapeGeometry(element);
+    expect(geometry.primitive).toEqual({
+      kind: "rectangle",
+      width: 120,
+      height: 80,
+      radius: 0,
+    });
+    expect(
+      geometry.outline.commands.filter((command) => command.type === "cubic"),
+    ).toHaveLength(0);
+  });
+
   it.each([
     "rectangle",
     "diamond",
@@ -1465,7 +1491,13 @@ describe("composite shape data", () => {
       if (!drawable || Array.isArray(drawable)) {
         throw new Error("Expected one drawable");
       }
-      expect(drawable.shape).toBe(type === "ellipse" ? "ellipse" : "path");
+      expect(drawable.shape).toBe(
+        type === "ellipse"
+          ? "ellipse"
+          : type === "rectangle"
+          ? "rectangle"
+          : "path",
+      );
       expect(geometry.outline.closed).toBe(true);
 
       const points = getCompositeShapeGlobalPoints(element);

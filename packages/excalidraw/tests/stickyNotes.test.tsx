@@ -2,6 +2,7 @@ import React from "react";
 
 import {
   COLOR_PALETTE,
+  DEFAULT_ELEMENT_STROKE_PICKS,
   DEFAULT_STICKY_NOTE_SIZE,
   KEYS,
   STICKY_NOTE_MIN_FONT_SIZE,
@@ -351,14 +352,16 @@ describe("sticky notes", () => {
       layoutNotes(note.id);
       API.setSelectedElements([getElement(note.id), getElement(rectangle.id)]);
 
-      UI.clickOnTestId(`color-top-pick-${RED}`);
+      // 混合选区使用元素描边快捷色
+      const pick = DEFAULT_ELEMENT_STROKE_PICKS[4];
+      UI.clickOnTestId(`color-top-pick-${pick}`);
 
-      expect(getElement(rectangle.id).strokeColor).toBe(RED);
-      expect(getElement(note.id).strokeColor).toBe(RED);
+      expect(getElement(rectangle.id).strokeColor).toBe(pick);
+      expect(getElement(note.id).strokeColor).toBe(pick);
       // the note's visible text is its label
-      expect(getElement(label.id).strokeColor).toBe(RED);
-      expect(h.state.currentItemStrokeColor).toBe(RED);
-      expect(h.state.currentItemStickynoteStrokeColor).toBe(RED);
+      expect(getElement(label.id).strokeColor).toBe(pick);
+      expect(h.state.currentItemStrokeColor).toBe(pick);
+      expect(h.state.currentItemStickynoteStrokeColor).toBe(pick);
     });
 
     it("creates notes from the sticky defaults, not the shape defaults", async () => {
@@ -1094,6 +1097,7 @@ describe("sticky notes", () => {
         clientX: 1,
         clientY: 1,
       });
+      UI.openContextMenuSubmenus();
       const contextMenu = UI.queryContextMenu();
       fireEvent.click(queryByTestId(contextMenu!, "stats")!);
     };

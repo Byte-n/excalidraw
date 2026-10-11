@@ -195,7 +195,15 @@
     "boxSelectionContain": "完全包覆",
     "boxSelectionOverlap": "部分重疊",
     "arrowBinding": "箭頭連結",
-    "midpointSnapping": "貼齊中點"
+    "midpointSnapping": "貼齊中點",
+    "contextMenuCopyAs": "複製為",
+    "contextMenuView": "檢視",
+    "contextMenuSnapping": "吸附",
+    "contextMenuEdit": "編輯",
+    "contextMenuText": "文字與容器",
+    "contextMenuStyle": "樣式",
+    "contextMenuLink": "連結",
+    "contextMenuTable": "表格"
   },
   "elementLink": {
     "title": "連結至物件",

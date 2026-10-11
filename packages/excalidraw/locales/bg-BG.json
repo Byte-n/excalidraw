@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Копирай като",
+    "contextMenuView": "Изглед",
+    "contextMenuSnapping": "Прилепване",
+    "contextMenuEdit": "Редактиране",
+    "contextMenuText": "Текст и контейнер",
+    "contextMenuStyle": "Стилове",
+    "contextMenuLink": "Връзки",
+    "contextMenuTable": "Таблица"
   },
   "elementLink": {
     "title": "",

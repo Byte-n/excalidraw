@@ -35,13 +35,13 @@ import {
   getCompositeShapeOffsetPaths,
   isCompositeShapeElement,
   FOCUS_POINT_SIZE,
-  getOmitSidesForEditorInterface,
   getTransformHandles,
   getTransformHandlesFromCoords,
   hasBoundingBox,
   hitElementItself,
   isArrowElement,
   isBindableElement,
+  isCurvedArrow,
   isElbowArrow,
   isFrameLikeElement,
   isImageElement,
@@ -120,6 +120,7 @@ import {
   getNormalizedCanvasDimensions,
   strokeRectWithRotation_simple,
   snapScrollToDevicePixels,
+  getSelectionColor,
 } from "./helpers";
 
 import type {
@@ -954,6 +955,8 @@ type ElementSelectionBorder = {
   padding?: number;
 };
 
+const ELEMENT_OUTLINE_PADDING = DEFAULT_TRANSFORM_HANDLE_SPACING * 2;
+
 const renderSelectionBorder = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
@@ -974,12 +977,11 @@ const renderSelectionBorder = (
   const elementWidth = x2 - x1;
   const elementHeight = y2 - y1;
 
-  const padding =
-    elementProperties.padding ?? DEFAULT_TRANSFORM_HANDLE_SPACING * 2;
+  const padding = elementProperties.padding ?? ELEMENT_OUTLINE_PADDING;
 
   const linePadding = padding / appState.zoom.value;
-  const lineWidth = 8 / appState.zoom.value;
-  const spaceWidth = 4 / appState.zoom.value;
+  const lineWidth = 3 / appState.zoom.value;
+  const spaceWidth = 3 / appState.zoom.value;
 
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
@@ -988,12 +990,11 @@ const renderSelectionBorder = (
   const count = selectionColors.length;
   for (let index = 0; index < count; ++index) {
     context.strokeStyle = selectionColors[index];
-    if (dashed) {
-      context.setLineDash([
-        lineWidth,
-        spaceWidth + (lineWidth + spaceWidth) * (count - 1),
-      ]);
-    }
+    context.setLineDash(
+      dashed
+        ? [lineWidth, spaceWidth + (lineWidth + spaceWidth) * (count - 1)]
+        : [],
+    );
     context.lineDashOffset = (lineWidth + spaceWidth) * index;
     strokeRectWithRotation_simple(
       context,
@@ -1006,6 +1007,44 @@ const renderSelectionBorder = (
       angle,
     );
   }
+  context.restore();
+};
+
+const renderTransformStatusLabel = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  isResizing: boolean,
+  selectionColor: string,
+  bounds: [number, number, number, number],
+  angle: number,
+) => {
+  if (!isResizing && !appState.isRotating) {
+    return;
+  }
+  const [x1, y1, x2, y2] = bounds;
+  const zoom = appState.zoom.value;
+  const text = appState.isRotating
+    ? `${Math.round((angle * 180) / Math.PI)}°`
+    : `${Math.round(Math.abs(x2 - x1))} × ${Math.round(Math.abs(y2 - y1))}`;
+  context.save();
+  context.font = "11px sans-serif";
+  const width = context.measureText(text).width + 12 / zoom;
+  const height = 20 / zoom;
+  const centerX = (x1 + x2) / 2 + appState.scrollX;
+  const top = y2 + appState.scrollY + 10 / zoom;
+  const left = centerX - width / 2;
+  context.fillStyle = appState.isRotating ? "#1f2329" : selectionColor;
+  context.beginPath();
+  if (context.roundRect) {
+    context.roundRect(left, top, width, height, 5 / zoom);
+  } else {
+    context.rect(left, top, width, height);
+  }
+  context.fill();
+  context.fillStyle = "#fff";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, centerX, top + height / 2);
   context.restore();
 };
 
@@ -1661,11 +1700,13 @@ const renderElementsBoxHighlight = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
   elements: readonly NonDeletedExcalidrawElement[],
-  config?: { colors?: string[]; dashed?: boolean },
+  elementsMap: RenderableElementsMap,
+  config?: { colors?: string[]; dashed?: boolean; padding?: number },
 ) => {
   const {
     colors = [getThemedColor("rgb(0,118,255)", appState.theme)],
     dashed = false,
+    padding = 0,
   } = config || {};
   const individualElements = elements.filter(
     (element) => element.groupIds.length === 0,
@@ -1676,6 +1717,32 @@ const renderElementsBoxHighlight = (
   );
 
   const getSelectionFromElements = (elements: ExcalidrawElement[]) => {
+    // Individual elements can be rotated. Keep their local rectangle and
+    // angle so the highlight follows the element instead of its axis-aligned
+    // bounds. Groups still use common bounds below because they have no
+    // single rotation angle.
+    if (elements.length === 1) {
+      const [element] = elements;
+      const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(
+        element,
+        elementsMap,
+        true,
+      );
+      return {
+        angle: element.angle,
+        x1,
+        x2,
+        y1,
+        y2,
+        selectionColors: colors,
+        dashed,
+        cx,
+        cy,
+        activeEmbeddable: false,
+        padding,
+      };
+    }
+
     const [x1, y1, x2, y2] = getCommonBounds(elements);
     return {
       angle: 0,
@@ -1688,6 +1755,7 @@ const renderElementsBoxHighlight = (
       cx: x1 + (x2 - x1) / 2,
       cy: y1 + (y2 - y1) / 2,
       activeEmbeddable: false,
+      padding,
     };
   };
 
@@ -1816,7 +1884,11 @@ const renderLinearPointHandles = (
     );
 
     midPoints.forEach((segmentMidPoint) => {
-      if (appState.selectedLinearElement?.isEditing || points.length === 2) {
+      if (
+        appState.selectedLinearElement?.isEditing ||
+        points.length === 2 ||
+        isCurvedArrow(element)
+      ) {
         renderSingleLinearPoint(
           context,
           appState,
@@ -2075,7 +2147,39 @@ const renderTransformHandles = (
         // prefer round corners if roundRect API is available
       } else if (context.roundRect) {
         context.beginPath();
-        context.roundRect(x, y, width, height, 2 / appState.zoom.value);
+        const isSideHandle =
+          key === "n" || key === "s" || key === "e" || key === "w";
+        const visualWidth =
+          isSideHandle && (key === "n" || key === "s")
+            ? 16 / appState.zoom.value
+            : isSideHandle
+            ? 5 / appState.zoom.value
+            : width;
+        const visualHeight =
+          isSideHandle && (key === "n" || key === "s")
+            ? 5 / appState.zoom.value
+            : isSideHandle
+            ? 16 / appState.zoom.value
+            : height;
+        if (isSideHandle) {
+          context.translate(x + width / 2, y + height / 2);
+          context.rotate(angle);
+          context.roundRect(
+            -visualWidth / 2,
+            -visualHeight / 2,
+            visualWidth,
+            visualHeight,
+            Math.min(visualWidth, visualHeight) / 2,
+          );
+        } else {
+          context.roundRect(
+            x + (width - visualWidth) / 2,
+            y + (height - visualHeight) / 2,
+            visualWidth,
+            visualHeight,
+            width / 2,
+          );
+        }
         context.fill();
         context.stroke();
       } else {
@@ -2284,7 +2388,6 @@ const _renderInteractiveScene = ({
   // the same whole-device-pixel scroll the static scene draws at, so the
   // overlays sit exactly on the content
   const appState = snapScrollToDevicePixels(unsnappedAppState, scale);
-
   const [normalizedWidth, normalizedHeight] = getNormalizedCanvasDimensions(
     canvas,
     scale,
@@ -2315,7 +2418,8 @@ const _renderInteractiveScene = ({
     // correct element from visible elements
     if (
       appState.selectedLinearElement?.isEditing &&
-      appState.selectedLinearElement.elementId === element.id
+      appState.selectedLinearElement.elementId === element.id &&
+      selectedElements.some((selected) => selected.id === element.id)
     ) {
       if (element) {
         editingLinearElement = element as NonDeleted<ExcalidrawLinearElement>;
@@ -2453,7 +2557,63 @@ const _renderInteractiveScene = ({
   }
 
   if (appState.elementsToHighlight) {
-    renderElementsBoxHighlight(context, appState, appState.elementsToHighlight);
+    renderElementsBoxHighlight(
+      context,
+      appState,
+      appState.elementsToHighlight,
+      elementsMap,
+      {
+        colors: [getThemedColor("rgba(22,119,255,0.55)", appState.theme)],
+        padding: 5,
+      },
+    );
+  }
+
+  if (appState.hoveredElementId) {
+    const hoveredElement = allElementsMap.get(appState.hoveredElementId);
+    if (
+      hoveredElement &&
+      !hoveredElement.isDeleted &&
+      !isLinearElement(hoveredElement) &&
+      !isMindmapEdgeElement(hoveredElement) &&
+      !selectedElements.some((element) => element.id === hoveredElement.id) &&
+      appState.activeLockedId !== hoveredElement.id
+    ) {
+      renderElementsBoxHighlight(
+        context,
+        appState,
+        [hoveredElement],
+        elementsMap,
+        {
+          colors: [
+            hoveredElement.locked
+              ? getThemedColor("#a8adb6", appState.theme)
+              : getThemedColor("rgba(22,119,255,0.55)", appState.theme),
+          ],
+          dashed: hoveredElement.locked,
+          padding: ELEMENT_OUTLINE_PADDING,
+        },
+      );
+    }
+  }
+
+  // While a box selection is in progress, selectedElementIds is updated as
+  // the pointer moves. Keep the same border treatment as a committed
+  // selection until the selection is committed, instead of painting handles.
+  if (appState.selectionElement && selectedElements.length) {
+    renderElementsBoxHighlight(
+      context,
+      appState,
+      selectedElements,
+      elementsMap,
+      {
+        colors: [
+          renderConfig.selectionColor ||
+            getSelectionColor(app.interactiveCanvas),
+        ],
+        padding: ELEMENT_OUTLINE_PADDING,
+      },
+    );
   }
 
   if (appState.activeLockedId) {
@@ -2465,9 +2625,11 @@ const _renderInteractiveScene = ({
       context,
       appState,
       elements as NonDeletedExcalidrawElement[], // We don't typecheck runtime because of performance
+      elementsMap,
       {
-        colors: [getThemedColor("#ced4da", appState.theme)],
+        colors: [getThemedColor("#a8adb6", appState.theme)],
         dashed: true,
+        padding: ELEMENT_OUTLINE_PADDING,
       },
     );
   }
@@ -2482,7 +2644,10 @@ const _renderInteractiveScene = ({
   if (
     selectedElements.length === 1 &&
     appState.selectedLinearElement?.isEditing &&
-    appState.selectedLinearElement.elementId === selectedElements[0].id
+    appState.selectedLinearElement.elementId === selectedElements[0].id &&
+    selectedElements.some(
+      (selected) => selected.id === appState.selectedLinearElement?.elementId,
+    )
   ) {
     renderLinearPointHandles(
       context,
@@ -2496,9 +2661,12 @@ const _renderInteractiveScene = ({
   const selectedLinearElement =
     linearState &&
     LinearElementEditor.getElement(linearState.elementId, allElementsMap);
+  const isSelectedLinearElement =
+    !!selectedLinearElement &&
+    selectedElements.some((element) => element.id === selectedLinearElement.id);
   // Arrows have a different highlight behavior when
   // they are the only selected element
-  if (selectedLinearElement) {
+  if (selectedLinearElement && isSelectedLinearElement) {
     if (!appState.selectedLinearElement.isDragging) {
       if (linearState.segmentMidPointHoveredCoords) {
         renderElbowArrowMidPointHighlight(context, appState);
@@ -2587,6 +2755,7 @@ const _renderInteractiveScene = ({
   // Paint selected elements
   if (
     !editingTableBackgroundText &&
+    !appState.selectionElement &&
     !appState.multiElement &&
     !appState.newElement &&
     !appState.selectedLinearElement?.isEditing &&
@@ -2620,9 +2789,9 @@ const _renderInteractiveScene = ({
       );
     }
     const selectionColor =
-      renderConfig.selectionColor || getThemedColor("#000", appState.theme);
-    const lockedSelectionColor = getThemedColor("#ced4da", appState.theme);
-    const groupSelectionColor = getThemedColor("#000", appState.theme);
+      renderConfig.selectionColor || getSelectionColor(app.interactiveCanvas);
+    const lockedSelectionColor = getThemedColor("#a8adb6", appState.theme);
+    const groupSelectionColor = selectionColor;
 
     if (showBoundingBox) {
       // Optimisation for finding quickly relevant element ids
@@ -2759,7 +2928,7 @@ const _renderInteractiveScene = ({
         appState.zoom,
         elementsMap,
         "mouse", // when we render we don't know which pointer type so use mouse,
-        getOmitSidesForEditorInterface(editorInterface),
+        {},
       );
       if (
         !appState.viewModeEnabled &&
@@ -2784,7 +2953,7 @@ const _renderInteractiveScene = ({
         ) {
           context.setLineDash([]);
           context.lineWidth = 1.5 / appState.zoom.value;
-          context.strokeStyle = getThemedColor("#5e5ad8", appState.theme);
+          context.strokeStyle = selectionColor;
           context.fillStyle = getThemedColor("#fff", appState.theme);
           for (const point of getCompositeShapeControlPoints(selected)) {
             const [x, y] = getCompositeControlPointGlobal(selected, point);
@@ -2822,7 +2991,7 @@ const _renderInteractiveScene = ({
         elementsMap,
       );
       const initialLineDash = context.getLineDash();
-      context.setLineDash([2 / appState.zoom.value]);
+      context.setLineDash([3 / appState.zoom.value, 3 / appState.zoom.value]);
       const lineWidth = context.lineWidth;
       context.lineWidth = 1 / appState.zoom.value;
       context.strokeStyle = selectionColor;
@@ -2850,11 +3019,8 @@ const _renderInteractiveScene = ({
               isMindmapEdgeElement(element) ||
               isTableElement(element),
           )
-          ? {
-              ...getOmitSidesForEditorInterface(editorInterface),
-              rotation: true,
-            }
-          : getOmitSidesForEditorInterface(editorInterface),
+          ? { rotation: true }
+          : {},
       );
       if (visibleSelectedElements.some((element) => !element.locked)) {
         renderTransformHandles(
@@ -2867,6 +3033,21 @@ const _renderInteractiveScene = ({
       }
     }
     context.restore();
+    if (visibleSelectedElements.length === 1 && showBoundingBox) {
+      const [x1, y1, x2, y2] = getElementAbsoluteCoords(
+        visibleSelectedElements[0],
+        elementsMap,
+        true,
+      );
+      renderTransformStatusLabel(
+        context,
+        appState,
+        app.state.isResizing,
+        selectionColor,
+        [x1, y1, x2, y2],
+        visibleSelectedElements[0].angle,
+      );
+    }
   }
 
   appState.searchMatches?.matches.forEach(({ id, focus, matchedLines }) => {

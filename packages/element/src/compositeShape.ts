@@ -2334,10 +2334,7 @@ export const getCompositeShapeGeometry = (
 ): CompositeShapeGeometry => {
   const { width: w, height: h } = element;
   if (element.shape.id === "rectangle") {
-    const radius = getCompositeShapeCornerRadius(
-      Math.min(w, h),
-      element.roundness,
-    );
+    const radius = 0;
     return {
       outline: getBaseRectangleOutline(w, h, radius),
       details: [],

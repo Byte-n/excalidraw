@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "இவ்வாறு நகலெடு",
+    "contextMenuView": "காட்சி",
+    "contextMenuSnapping": "ஒட்டுதல்",
+    "contextMenuEdit": "திருத்து",
+    "contextMenuText": "உரை மற்றும் கொள்கலன்",
+    "contextMenuStyle": "பாணிகள்",
+    "contextMenuLink": "இணைப்புகள்",
+    "contextMenuTable": "அட்டவணை"
   },
   "elementLink": {
     "title": "இணைப்பு",

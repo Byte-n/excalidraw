@@ -20,6 +20,7 @@ import {
   COLOR_PALETTE,
   DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX,
   DEFAULT_ELEMENT_STROKE_COLOR_INDEX,
+  DEFAULT_NEW_ELEMENT_STROKE_COLOR,
   reseed,
   randomId,
 } from "@excalidraw/common";
@@ -112,7 +113,8 @@ const checkpoint = (name: string) => {
 const renderStaticScene = vi.spyOn(StaticScene, "renderStaticScene");
 
 const transparent = COLOR_PALETTE.transparent;
-const black = COLOR_PALETTE.black;
+// 新建元素默认描边色
+const defaultStroke = DEFAULT_NEW_ELEMENT_STROKE_COLOR;
 const red = COLOR_PALETTE.red[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX];
 const blue = COLOR_PALETTE.blue[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX];
 const yellow = COLOR_PALETTE.yellow[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX];
@@ -1267,7 +1269,10 @@ describe("history", () => {
       expect(API.getSelectedElements().length).toBe(0);
       expect(h.elements).toEqual([
         expect.objectContaining({ id: rectangle.id }),
-        expect.objectContaining({ id: freedraw1.id, strokeColor: black }),
+        expect.objectContaining({
+          id: freedraw1.id,
+          strokeColor: defaultStroke,
+        }),
       ]);
 
       Keyboard.undo();
@@ -1278,7 +1283,7 @@ describe("history", () => {
         expect.objectContaining({ id: rectangle.id }),
         expect.objectContaining({
           id: freedraw1.id,
-          strokeColor: black,
+          strokeColor: defaultStroke,
           isDeleted: true,
         }),
       ]);
@@ -1297,7 +1302,7 @@ describe("history", () => {
         expect.objectContaining({ id: rectangle.id }),
         expect.objectContaining({
           id: freedraw1.id,
-          strokeColor: black,
+          strokeColor: defaultStroke,
           isDeleted: true,
         }),
         expect.objectContaining({
@@ -1569,9 +1574,10 @@ describe("history", () => {
         // bind text1 to rect1
         mouse.select([rect1, text]);
         fireEvent.contextMenu(GlobalTestState.interactiveCanvas);
+        UI.openContextMenuSubmenus();
         fireEvent.click(
           queryByText(
-            document.querySelector(".context-menu") as HTMLElement,
+            UI.queryContextMenu() as HTMLElement,
             "Bind text to the container",
           )!,
         );

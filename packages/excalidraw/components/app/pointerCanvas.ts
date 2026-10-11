@@ -1237,6 +1237,11 @@ export const handleCanvasPointerMove = (
     hitElement = hitElementMightBeLocked;
   }
 
+  const hoveredElementId = hitElementMightBeLocked?.id ?? null;
+  if (app.state.hoveredElementId !== hoveredElementId) {
+    app.setState({ hoveredElementId });
+  }
+
   const hoveredArrowTextAnchor =
     app.arrowText.updateHoveredAnchor(scenePointer);
 

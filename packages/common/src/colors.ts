@@ -235,40 +235,48 @@ const COMMON_ELEMENT_SHADES = pick(COLOR_PALETTE, [
  * reorder) preserves it */
 export const COLOR_TOP_PICKS_SLOTS = 5;
 
+// 新建元素默认描边色（墨色），同时作为描边快捷色第一项；不参与旧数据兜底
+export const DEFAULT_NEW_ELEMENT_STROKE_COLOR = "#1f2329";
+
 // ORDER matters for positioning in quick picker
 export const DEFAULT_ELEMENT_STROKE_PICKS = [
+  DEFAULT_NEW_ELEMENT_STROKE_COLOR,
+  "#0e8c7e",
+  "#b86e00",
+  "#7146d6",
+  "#d83a52",
+] as ColorTuple;
+
+// ORDER matters for positioning in quick picker
+export const DEFAULT_ELEMENT_BACKGROUND_PICKS = [
+  COLOR_PALETTE.transparent,
+  "#e6f4f1",
+  "#fff3dc",
+  "#f0ebfc",
+  "#fdecee",
+] as ColorTuple;
+
+// ORDER matters for positioning in quick picker.
+// 油漆桶快捷色：元素填充快捷色的四个浅色（去掉对油漆桶无效的透明）加浅蓝
+export const BUCKET_FILL_BACKGROUND_PICKS = [
+  "#e6f4f1",
+  "#fff3dc",
+  "#f0ebfc",
+  "#fdecee",
+  "#e8f0f8",
+] as ColorTuple;
+
+// sticky notes are their own color domain (own defaults, own picks)
+export const DEFAULT_STICKY_NOTE_BG = "#ffdf6b";
+
+// 便签描边快捷色保持独立取值，不随元素描边快捷色变化
+export const STICKY_NOTE_STROKE_PICKS = [
   COLOR_PALETTE.black,
   COLOR_PALETTE.red[DEFAULT_ELEMENT_STROKE_COLOR_INDEX],
   COLOR_PALETTE.green[DEFAULT_ELEMENT_STROKE_COLOR_INDEX],
   COLOR_PALETTE.blue[DEFAULT_ELEMENT_STROKE_COLOR_INDEX],
   COLOR_PALETTE.yellow[DEFAULT_ELEMENT_STROKE_COLOR_INDEX],
 ] as ColorTuple;
-
-// ORDER matters for positioning in quick picker
-export const DEFAULT_ELEMENT_BACKGROUND_PICKS = [
-  COLOR_PALETTE.transparent,
-  COLOR_PALETTE.red[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX],
-  COLOR_PALETTE.green[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX],
-  COLOR_PALETTE.blue[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX],
-  COLOR_PALETTE.yellow[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX],
-] as ColorTuple;
-
-// ORDER matters for positioning in quick picker.
-// Same as element background picks, with `transparent` (a no-op fill for the
-// bucket tool) swapped for white.
-export const BUCKET_FILL_BACKGROUND_PICKS = [
-  COLOR_PALETTE.white,
-  COLOR_PALETTE.red[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX],
-  COLOR_PALETTE.green[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX],
-  COLOR_PALETTE.blue[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX],
-  COLOR_PALETTE.yellow[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX],
-] as ColorTuple;
-
-// sticky notes are their own color domain (own defaults, own picks)
-export const DEFAULT_STICKY_NOTE_BG = "#ffdf6b";
-
-export const STICKY_NOTE_STROKE_PICKS: ColorTuple =
-  DEFAULT_ELEMENT_STROKE_PICKS;
 
 // ORDER matters for positioning in quick picker. Classic note colors; the
 // first one is `DEFAULT_STICKY_NOTE_BG`. Never transparent.

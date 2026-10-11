@@ -6,7 +6,7 @@ import { Excalidraw } from "../index";
 
 import { mockMermaidToExcalidraw } from "./helpers/mocks";
 import { getTextEditor, updateTextEditor } from "./queries/dom";
-import { render, waitFor } from "./test-utils";
+import { act, render, waitFor } from "./test-utils";
 
 // Mock CodeMirror deps so the dynamic import of CodeMirrorEditor fails,
 // causing TTDDialogInput to fall back to <textarea> in tests.
@@ -143,5 +143,14 @@ describe("Test <MermaidToExcalidraw/>", () => {
     expect(
       dialog.querySelector('[data-testid="mermaid-error"]'),
     ).toMatchInlineSnapshot("null");
+
+    // Typing schedules a deferred re-render that runs the async mermaid parse
+    // (rejects -> setError on this component) after the test body. The error
+    // has no observable DOM here (the `mermaid-error` UI was removed and
+    // CodeMirror is mocked), so drain the pending microtasks within act to
+    // keep that state update from escaping.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve));
+    });
   });
 });

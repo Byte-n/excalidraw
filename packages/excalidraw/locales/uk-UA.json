@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Копіювати як",
+    "contextMenuView": "Вигляд",
+    "contextMenuSnapping": "Привʼязка",
+    "contextMenuEdit": "Редагувати",
+    "contextMenuText": "Текст і контейнер",
+    "contextMenuStyle": "Стилі",
+    "contextMenuLink": "Посилання",
+    "contextMenuTable": "Таблиця"
   },
   "elementLink": {
     "title": "Посилання на об’єкт",

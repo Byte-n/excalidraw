@@ -195,7 +195,15 @@
     "boxSelectionContain": "עטיפה",
     "boxSelectionOverlap": "חפיפה",
     "arrowBinding": "קשירת חצים",
-    "midpointSnapping": "הצמדה לנקודות ביניים"
+    "midpointSnapping": "הצמדה לנקודות ביניים",
+    "contextMenuCopyAs": "העתקה בתור",
+    "contextMenuView": "תצוגה",
+    "contextMenuSnapping": "הצמדה",
+    "contextMenuEdit": "עריכה",
+    "contextMenuText": "טקסט ומכל",
+    "contextMenuStyle": "סגנונות",
+    "contextMenuLink": "קישורים",
+    "contextMenuTable": "טבלה"
   },
   "elementLink": {
     "title": "קישור לפריט",

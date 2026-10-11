@@ -1111,8 +1111,10 @@ describe("table row/column structure", () => {
         id: table.table.rows[1].id,
       });
 
-      h.app.deleteSelectedTableRowCol();
-      h.app.setState({ tableRowColSelection: null });
+      act(() => {
+        h.app.deleteSelectedTableRowCol();
+        h.app.setState({ tableRowColSelection: null });
+      });
 
       const nextTable = getTable();
       expect(nextTable.id).toBe(table.id);
@@ -1738,7 +1740,9 @@ describe("table row/column structure", () => {
       const { table, content2, snapshot } = createFixture();
       selectRow(0, table);
 
-      h.app.insertTableRowCol("insertRow");
+      act(() => {
+        h.app.insertTableRowCol("insertRow");
+      });
 
       const nextTable = getTable();
       expect(nextTable.table.rows).toHaveLength(4);

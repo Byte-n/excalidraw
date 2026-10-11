@@ -1693,7 +1693,8 @@ describe("computeBucketFillPolygon", () => {
     });
 
     // step 1: click the overlap — the opaque container is on top, so the
-    // region is its whole footprint
+    // region is its whole footprint. Rectangles render with square corners
+    // (corner radius 0), so the footprint is the full 100x100 bounding box.
     const first = computeBucketFillPolygon({
       point: pointFrom<GlobalPoint>(75, 75),
       ...setup([lower, upper]),
@@ -1703,7 +1704,7 @@ describe("computeBucketFillPolygon", () => {
       return;
     }
     expect(polygonArea(first.scenePoints)).toBeGreaterThan(9000);
-    expect(polygonArea(first.scenePoints)).toBeLessThan(10000);
+    expect(polygonArea(first.scenePoints)).toBeLessThanOrEqual(10000);
     expect(first.insertion).toEqual({
       placement: "above",
       elementId: upper.id,

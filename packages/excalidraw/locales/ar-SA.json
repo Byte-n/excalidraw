@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "نسخ كـ",
+    "contextMenuView": "العرض",
+    "contextMenuSnapping": "المحاذاة",
+    "contextMenuEdit": "تحرير",
+    "contextMenuText": "النص والحاوية",
+    "contextMenuStyle": "الأنماط",
+    "contextMenuLink": "الروابط",
+    "contextMenuTable": "الجدول"
   },
   "elementLink": {
     "title": "رابط إلى الكائن",

@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Kopijuoti kaip",
+    "contextMenuView": "Rodinys",
+    "contextMenuSnapping": "Prikibimas",
+    "contextMenuEdit": "Redaguoti",
+    "contextMenuText": "Tekstas ir konteineris",
+    "contextMenuStyle": "Stiliai",
+    "contextMenuLink": "Nuorodos",
+    "contextMenuTable": "Lentelė"
   },
   "elementLink": {
     "title": "",

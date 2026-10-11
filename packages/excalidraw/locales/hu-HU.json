@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Másolás másként",
+    "contextMenuView": "Nézet",
+    "contextMenuSnapping": "Illesztés",
+    "contextMenuEdit": "Szerkesztés",
+    "contextMenuText": "Szöveg és tároló",
+    "contextMenuStyle": "Stílusok",
+    "contextMenuLink": "Hivatkozások",
+    "contextMenuTable": "Táblázat"
   },
   "elementLink": {
     "title": "Hivatkozás az objektumhoz",

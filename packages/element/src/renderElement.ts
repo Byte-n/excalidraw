@@ -1006,7 +1006,7 @@ export const renderSelectionElement = (
   context.save();
   context.translate(element.x + appState.scrollX, element.y + appState.scrollY);
   context.fillStyle = applyDarkModeFilter(
-    "rgba(0, 0, 200, 0.04)",
+    selectionColor ? `${selectionColor}14` : "rgba(22, 119, 255, 0.08)",
     appState.theme === THEME.DARK,
   );
 

@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "ਇਸ ਤਰ੍ਹਾਂ ਕਾਪੀ ਕਰੋ",
+    "contextMenuView": "ਦ੍ਰਿਸ਼",
+    "contextMenuSnapping": "ਸਨੈਪਿੰਗ",
+    "contextMenuEdit": "ਸੋਧੋ",
+    "contextMenuText": "ਟੈਕਸਟ ਅਤੇ ਕੰਟੇਨਰ",
+    "contextMenuStyle": "ਸਟਾਈਲ",
+    "contextMenuLink": "ਲਿੰਕ",
+    "contextMenuTable": "ਟੇਬਲ"
   },
   "elementLink": {
     "title": "",

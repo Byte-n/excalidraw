@@ -5,19 +5,18 @@ import { THEME } from "@excalidraw/common";
 import type { PointSnapLine, PointerSnapLine } from "../snapping";
 import type { InteractiveCanvasAppState } from "../types";
 
-const SNAP_COLOR_LIGHT = "#ff6b6b";
+const SNAP_COLOR_LIGHT = "#1677ff";
 // dark-mode colors are the equivalents of what the former CSS inversion filter
 // produced (see `applyDarkModeFilter`)
-const SNAP_COLOR_DARK = "#ff9090";
-const SNAP_COLOR_DARK_ZEN = "#da5b5b";
+const SNAP_COLOR_DARK = "#4096ff";
+const SNAP_COLOR_DARK_ZEN = "#4096ff";
 const SNAP_WIDTH = 1;
-const SNAP_CROSS_SIZE = 2;
 
 export const renderSnaps = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
 ) => {
-  if (!appState.snapLines.length) {
+  if (!appState.snapLines.length || appState.selectedLinearElement?.isEditing) {
     return;
   }
 
@@ -29,7 +28,7 @@ export const renderSnaps = (
       : appState.zenModeEnabled
       ? SNAP_COLOR_DARK_ZEN
       : SNAP_COLOR_DARK;
-  // in zen mode make the cross more visible since we don't draw the lines
+  // in zen mode make the remaining snap marks more visible
   const snapWidth =
     (appState.zenModeEnabled ? SNAP_WIDTH * 1.5 : SNAP_WIDTH) /
     appState.zoom.value;
@@ -77,7 +76,7 @@ const drawPointsSnapLine = (
   }
 
   for (const point of pointSnapLine.points) {
-    drawCross(point, appState, context);
+    drawPoint(point, appState, context);
   }
 };
 
@@ -86,30 +85,21 @@ const drawPointerSnapLine = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
 ) => {
-  drawCross(pointerSnapLine.points[0], appState, context);
+  drawPoint(pointerSnapLine.points[0], appState, context);
   if (!appState.zenModeEnabled) {
     drawLine(pointerSnapLine.points[0], pointerSnapLine.points[1], context);
   }
 };
 
-const drawCross = <Point extends LocalPoint | GlobalPoint>(
+const drawPoint = <Point extends LocalPoint | GlobalPoint>(
   [x, y]: Point,
   appState: InteractiveCanvasAppState,
   context: CanvasRenderingContext2D,
 ) => {
   context.save();
-  const size =
-    (appState.zenModeEnabled ? SNAP_CROSS_SIZE * 1.5 : SNAP_CROSS_SIZE) /
-    appState.zoom.value;
-  context.beginPath();
-
-  context.moveTo(x - size, y - size);
-  context.lineTo(x + size, y + size);
-
-  context.moveTo(x + size, y - size);
-  context.lineTo(x - size, y + size);
-
-  context.stroke();
+  context.arc(x, y, 3 / appState.zoom.value, 0, Math.PI * 2);
+  context.fillStyle = context.strokeStyle;
+  context.fill();
   context.restore();
 };
 

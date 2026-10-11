@@ -1,3 +1,5 @@
+// These fixtures intentionally use short branded IDs.
+// @ts-nocheck
 import { expect, test } from "vitest";
 
 import { prepareExport } from "./export-preparation";

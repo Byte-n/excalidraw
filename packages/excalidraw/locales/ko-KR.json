@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "화살표 연결",
-    "midpointSnapping": "중간에 맞춤"
+    "midpointSnapping": "중간에 맞춤",
+    "contextMenuCopyAs": "다른 형식으로 복사",
+    "contextMenuView": "보기",
+    "contextMenuSnapping": "스냅",
+    "contextMenuEdit": "편집",
+    "contextMenuText": "텍스트 및 컨테이너",
+    "contextMenuStyle": "스타일",
+    "contextMenuLink": "링크",
+    "contextMenuTable": "표"
   },
   "elementLink": {
     "title": "객체에 연결",

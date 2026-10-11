@@ -454,7 +454,7 @@ export const ELEMENT_PENDING_DRAW_SHAPE_OPACITY = 70;
 // below the cutoff size.
 export const DEFAULT_PROPORTIONAL_RADIUS = 0.25;
 // Fixed radius for the ADAPTIVE_RADIUS algorithm. In pixels.
-export const DEFAULT_ADAPTIVE_RADIUS = 32;
+export const DEFAULT_ADAPTIVE_RADIUS = 10;
 // roundness type (algorithm)
 export const ROUNDNESS = {
   // Used for legacy rounding (rectangles), which currently works the same

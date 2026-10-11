@@ -188,14 +188,18 @@ describe("elbow arrow routing", () => {
     }) as NonDeleted<ExcalidrawElbowArrowElement>;
     API.setElements([rectangle1, rectangle2, arrow]);
 
-    bindBindingElement(arrow, rectangle1, "orbit", "start", h.scene);
-    bindBindingElement(arrow, rectangle2, "orbit", "end", h.scene);
+    act(() => {
+      bindBindingElement(arrow, rectangle1, "orbit", "start", h.scene);
+      bindBindingElement(arrow, rectangle2, "orbit", "end", h.scene);
+    });
 
     expect(arrow.startBinding).not.toBe(null);
     expect(arrow.endBinding).not.toBe(null);
 
-    h.scene.mutateElement(arrow, {
-      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(90, 200)],
+    act(() => {
+      h.scene.mutateElement(arrow, {
+        points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(90, 200)],
+      });
     });
 
     expect(arrow.points).toCloselyEqualPoints([
@@ -217,6 +221,7 @@ describe("elbow arrow ui", () => {
       clientX: 1,
       clientY: 1,
     });
+    UI.openContextMenuSubmenus();
     const contextMenu = UI.queryContextMenu();
     fireEvent.click(queryByTestId(contextMenu!, "stats")!);
   });

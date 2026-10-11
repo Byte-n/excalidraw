@@ -236,7 +236,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "箭头绑定",
-    "midpointSnapping": "吸附到中点"
+    "midpointSnapping": "吸附到中点",
+    "contextMenuCopyAs": "复制为",
+    "contextMenuView": "视图",
+    "contextMenuSnapping": "吸附",
+    "contextMenuEdit": "编辑",
+    "contextMenuText": "文字和容器",
+    "contextMenuStyle": "样式",
+    "contextMenuLink": "链接",
+    "contextMenuTable": "表格"
   },
   "elementLink": {
     "title": "链接到对象",

@@ -195,7 +195,15 @@
     "boxSelectionContain": "Avvolgi",
     "boxSelectionOverlap": "Sovrapponi",
     "arrowBinding": "Legatura a freccia",
-    "midpointSnapping": "Aggancia ai punti medi"
+    "midpointSnapping": "Aggancia ai punti medi",
+    "contextMenuCopyAs": "Copia come",
+    "contextMenuView": "Visualizzazione",
+    "contextMenuSnapping": "Aggancio",
+    "contextMenuEdit": "Modifica",
+    "contextMenuText": "Testo e contenitore",
+    "contextMenuStyle": "Stili",
+    "contextMenuLink": "Collegamenti",
+    "contextMenuTable": "Tabella"
   },
   "elementLink": {
     "title": "Link all'oggetto",

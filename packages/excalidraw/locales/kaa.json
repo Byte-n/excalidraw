@@ -195,7 +195,15 @@
     "boxSelectionContain": "",
     "boxSelectionOverlap": "",
     "arrowBinding": "",
-    "midpointSnapping": ""
+    "midpointSnapping": "",
+    "contextMenuCopyAs": "Mına túrde kóshiriw",
+    "contextMenuView": "Kórinis",
+    "contextMenuSnapping": "Jaqınlastırıw",
+    "contextMenuEdit": "Ózgertiw",
+    "contextMenuText": "Tekst hám konteyner",
+    "contextMenuStyle": "Stiller",
+    "contextMenuLink": "Siltemeler",
+    "contextMenuTable": "Keste"
   },
   "elementLink": {
     "title": "",

@@ -97,6 +97,9 @@ import type {
 import type { Drawable, Options } from "roughjs/bin/core";
 import type { Point as RoughPoint } from "roughjs/bin/geometry";
 
+// 折线箭头拐角圆角半径（场景坐标），画布与 SVG 导出共用
+const ELBOW_ARROW_CORNER_RADIUS = 10;
+
 export class ShapeCache {
   private static rg = new RoughGenerator();
   private static cache = new WeakMap<
@@ -691,8 +694,10 @@ export const generateLinearCollisionShape = (
         : [pointFrom<LocalPoint>(0, 0)];
 
       if (isElbowArrow(element)) {
-        return generator.path(generateElbowArrowShape(points, 16), options)
-          .sets[0].ops;
+        return generator.path(
+          generateElbowArrowShape(points, ELBOW_ARROW_CORNER_RADIUS),
+          options,
+        ).sets[0].ops;
       } else if (!element.roundness) {
         return points.map((point, idx) => {
           const p = pointRotateRads(
@@ -1071,7 +1076,7 @@ const _generateElementShape = (
         } else {
           shape = [
             generator.path(
-              generateElbowArrowShape(points, 16),
+              generateElbowArrowShape(points, ELBOW_ARROW_CORNER_RADIUS),
               generateRoughOptions(element, true, isDarkMode),
             ),
           ];
