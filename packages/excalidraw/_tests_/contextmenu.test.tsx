@@ -346,7 +346,6 @@ describe("contextMenu element", () => {
     // Stroke style
     fireEvent.click(screen.getByTitle("Dotted"));
     // Roughness
-    fireEvent.click(screen.getByTitle("Cartoonist"));
     // Opacity
     fireEvent.change(screen.getByTestId("opacity"), {
       target: { value: "60" },
@@ -386,7 +385,6 @@ describe("contextMenu element", () => {
     expect(firstRect.fillStyle).toBe("cross-hatch");
     expect(firstRect.strokeWidth).toBe(STROKE_WIDTH.bold);
     expect(firstRect.strokeStyle).toBe("dotted");
-    expect(firstRect.roughness).toBe(2); // Cartoonist: 2
     expect(firstRect.opacity).toBe(60);
   });
 

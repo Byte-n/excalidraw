@@ -478,7 +478,6 @@ const restoreElementWithProperties = <
     fillStyle: element.fillStyle || DEFAULT_ELEMENT_PROPS.fillStyle,
     strokeWidth: element.strokeWidth || DEFAULT_ELEMENT_PROPS.strokeWidth,
     strokeStyle: element.strokeStyle ?? DEFAULT_ELEMENT_PROPS.strokeStyle,
-    roughness: element.roughness ?? DEFAULT_ELEMENT_PROPS.roughness,
     opacity:
       element.opacity == null ? DEFAULT_ELEMENT_PROPS.opacity : element.opacity,
     angle: element.angle || (0 as Radians),

@@ -5,7 +5,7 @@ import {
   FONT_SIZES,
   getFontString,
   getLineHeight,
-  ROUGHNESS,
+
 } from "@excalidraw/common";
 
 import {
@@ -127,7 +127,6 @@ export const renderRadarChart = (
           width: levelRadius * 2,
           height: levelRadius * 2,
           strokeStyle: "solid",
-          roughness: ROUGHNESS.architect,
           opacity: GRID_OPACITY,
           polygon: true,
           points,
@@ -147,7 +146,6 @@ export const renderRadarChart = (
       width: Math.abs(px),
       height: Math.abs(py),
       strokeStyle: "solid",
-      roughness: ROUGHNESS.architect,
       opacity: GRID_OPACITY,
       points: [pointFrom(0, 0), pointFrom(px, py)],
     });

@@ -444,7 +444,6 @@ describe("box-selection overlap mode", () => {
       backgroundColor: "transparent",
       fillStyle: "solid",
       roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
-      roughness: 0,
     });
 
     API.setElements([rect]);

@@ -10,7 +10,7 @@ import {
   getAllColorsSpecificShade,
   getFontString,
   getLineHeight,
-  ROUGHNESS,
+
 } from "@excalidraw/common";
 
 import {
@@ -424,7 +424,6 @@ export const createSeriesLegend = (
       y: legendY - pillHeight / 2,
       width: pillWidth,
       height: pillHeight,
-      roughness: ROUGHNESS.architect,
       roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
     }),
   );
@@ -444,7 +443,6 @@ export const createSeriesLegend = (
         height: RADAR_LEGEND_SWATCH_SIZE,
         fillStyle: "solid",
         strokeColor: item.color,
-        roughness: ROUGHNESS.architect,
         roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
       }),
     );

@@ -32,7 +32,6 @@ exports[`Test dragCreate > add element to the scene when pointer dragging long e
       50,
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -71,7 +70,6 @@ exports[`Test dragCreate > add element to the scene when pointer dragging long e
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "shape": {
@@ -110,7 +108,6 @@ exports[`Test dragCreate > add element to the scene when pointer dragging long e
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "shape": {
@@ -160,7 +157,6 @@ exports[`Test dragCreate > add element to the scene when pointer dragging long e
     ],
   ],
   "polygon": false,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "startArrowhead": null,
@@ -197,7 +193,6 @@ exports[`Test dragCreate > add element to the scene when pointer dragging long e
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "shape": {

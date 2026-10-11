@@ -20,7 +20,6 @@ export {
   actionChangeBucketFillBackgroundColor,
   actionChangeStrokeWidth,
   actionChangeFillStyle,
-  actionChangeSloppiness,
   actionChangeFreedrawMode,
   actionChangeOpacity,
   actionChangeFontSize,

@@ -287,7 +287,6 @@ export const actionWrapTextInContainer = register({
           angle: textElement.angle,
           fillStyle: appState.currentItemFillStyle,
           strokeColor: appState.currentItemStrokeColor,
-          roughness: appState.currentItemRoughness,
           strokeWidth: getStrokeWidthByKey(
             "rectangle",
             appState.currentItemStrokeWidthKey,

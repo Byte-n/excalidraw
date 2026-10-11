@@ -44,7 +44,6 @@ export const commonProps = {
   fontFamily: DEFAULT_FONT_FAMILY,
   fontSize: DEFAULT_FONT_SIZE,
   opacity: 100,
-  roughness: 1,
   strokeColor: COLOR_PALETTE.black,
   roundness: null,
   strokeStyle: "solid",

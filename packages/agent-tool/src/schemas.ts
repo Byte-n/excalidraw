@@ -56,7 +56,6 @@ const shapeStyle = z
       .optional(),
     strokeWidth: nullableNumber,
     strokeStyle: z.enum(["solid", "dashed", "dotted"]).nullable().optional(),
-    roughness: nullableNumber,
     opacity: finite.min(0).max(100).nullable().optional(),
     roundness: z.enum(["round", "sharp"]).nullable().optional(),
   })
@@ -67,7 +66,6 @@ const connectorStyle = z
     strokeColor: nullableString,
     strokeWidth: nullableNumber,
     strokeStyle: z.enum(["solid", "dashed", "dotted"]).nullable().optional(),
-    roughness: nullableNumber,
     opacity: finite.min(0).max(100).nullable().optional(),
   })
   .strict()

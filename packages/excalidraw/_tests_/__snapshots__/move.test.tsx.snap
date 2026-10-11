@@ -17,7 +17,6 @@ exports[`duplicate element on move when ALT is clicked > rectangle 5`] = `
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "shape": {
@@ -54,7 +53,6 @@ exports[`duplicate element on move when ALT is clicked > rectangle 6`] = `
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1505387817,
   "shape": {
@@ -91,7 +89,6 @@ exports[`move element > rectangle 5`] = `
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "shape": {
@@ -133,7 +130,6 @@ exports[`move element > rectangles with binding arrow 5`] = `
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "shape": {
@@ -175,7 +171,6 @@ exports[`move element > rectangles with binding arrow 6`] = `
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1116226695,
   "shape": {
@@ -233,7 +228,6 @@ exports[`move element > rectangles with binding arrow 7`] = `
       "90.01760",
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },

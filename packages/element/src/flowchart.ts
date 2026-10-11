@@ -240,7 +240,6 @@ const cloneFlowchartNode = (
     width: template.width,
     height: template.height,
     roundness: template.roundness,
-    roughness: template.roughness,
     backgroundColor: template.backgroundColor,
     strokeColor: template.strokeColor,
     strokeWidth: template.strokeWidth,
@@ -379,7 +378,6 @@ const createBindingArrow = (
     strokeStyle: startBindingElement.strokeStyle,
     strokeWidth: startBindingElement.strokeWidth,
     opacity: startBindingElement.opacity,
-    roughness: startBindingElement.roughness,
     points: [pointFrom(0, 0), pointFrom(endX, endY)],
     elbowed: true,
   });

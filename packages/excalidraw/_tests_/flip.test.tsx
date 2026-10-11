@@ -149,7 +149,6 @@ const createLinearElementWithCurveInsideMinMaxPoints = (
     fillStyle: "hachure",
     strokeWidth: 1,
     strokeStyle: "solid",
-    roughness: 1,
     opacity: 100,
     groupIds: [],
     roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
@@ -180,7 +179,6 @@ const createLinearElementsWithCurveOutsideMinMaxPoints = (
     fillStyle: "hachure",
     strokeWidth: 1,
     strokeStyle: "solid",
-    roughness: 1,
     opacity: 100,
     groupIds: [],
     roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
@@ -858,7 +856,6 @@ describe("image", () => {
 describe("mutliple elements", () => {
   it("with bound text flip correctly", async () => {
     UI.clickTool("arrow");
-    fireEvent.click(screen.getByTitle("Architect"));
     const arrow = UI.createElement("arrow", {
       x: 0,
       y: 0,

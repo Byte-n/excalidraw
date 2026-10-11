@@ -30,7 +30,6 @@ exports[`select single element on the scene > arrow 1`] = `
       50,
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -80,7 +79,6 @@ exports[`select single element on the scene > arrow escape 1`] = `
     ],
   ],
   "polygon": false,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "startArrowhead": null,
@@ -115,7 +113,6 @@ exports[`select single element on the scene > diamond 1`] = `
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "shape": {
@@ -152,7 +149,6 @@ exports[`select single element on the scene > ellipse 1`] = `
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "shape": {
@@ -189,7 +185,6 @@ exports[`select single element on the scene > rectangle 1`] = `
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "shape": {

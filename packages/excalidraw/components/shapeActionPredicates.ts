@@ -30,7 +30,6 @@ import {
   hasBackground,
   hasFillStyle,
   hasFreedrawMode,
-  hasRoughness,
   hasStrokeStyle,
   hasStrokeWidth,
 } from "../scene";
@@ -153,7 +152,6 @@ export const getShapeActionPredicates = (
     strokeWidth: forToolOrSelection(hasStrokeWidth),
     freedrawMode: forToolOrSelection(hasFreedrawMode),
     strokeStyle: forToolOrSelection(hasStrokeStyle),
-    sloppiness: forToolOrSelection(hasRoughness),
     roundness: forToolOrSelection(canChangeRoundness),
     arrowType: forToolOrSelection(toolIsArrow),
     arrowheads: forToolOrSelection(canHaveArrowheads),

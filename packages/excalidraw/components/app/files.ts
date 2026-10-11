@@ -754,7 +754,6 @@ export const newImagePlaceholder = (
     fillStyle: app.state.currentItemFillStyle,
     strokeWidth: app.getCurrentItemStrokeWidth("image"),
     strokeStyle: app.state.currentItemStrokeStyle,
-    roughness: app.state.currentItemRoughness,
     roundness: null,
     opacity: app.state.currentItemOpacity,
     locked: false,

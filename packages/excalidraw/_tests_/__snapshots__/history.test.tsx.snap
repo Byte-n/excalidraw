@@ -33,7 +33,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -152,7 +151,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -187,7 +185,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -243,7 +240,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
       "112.79549",
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -283,7 +279,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -538,7 +533,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -574,7 +568,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -649,7 +642,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
                 0,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -710,7 +702,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -829,7 +820,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -864,7 +854,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -913,7 +902,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
       0,
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -1138,7 +1126,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -1174,7 +1161,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -1249,7 +1235,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
                 0,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -1310,7 +1295,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -1449,7 +1433,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
       "29.32551",
     ],
   ],
-  "roughness": 0,
   "roundness": null,
   "startArrowhead": null,
   "startBinding": {
@@ -1494,7 +1477,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -1534,7 +1516,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -1586,7 +1567,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -1622,7 +1602,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -1710,7 +1689,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -1849,7 +1827,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
       "-17.59718",
     ],
   ],
-  "roughness": 0,
   "roundness": null,
   "startArrowhead": null,
   "startBinding": {
@@ -1894,7 +1871,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -1934,7 +1910,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -2006,7 +1981,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
                 "-17.59718",
               ],
             ],
-            "roughness": 0,
             "roundness": null,
             "startArrowhead": null,
             "startBinding": {
@@ -2103,7 +2077,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -2221,7 +2194,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -2256,7 +2228,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -2308,7 +2279,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -2344,7 +2314,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -2405,7 +2374,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -2527,7 +2495,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -2567,7 +2534,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -2623,7 +2589,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
       "-439.20000",
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -2682,7 +2647,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -2718,7 +2682,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -2800,7 +2763,6 @@ exports[`history > multiplayer undo/redo > conflicts in arrows and their bindabl
                 "-439.20000",
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -2899,7 +2861,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -3022,7 +2983,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -3065,7 +3025,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "que pasa",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -3107,7 +3066,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "ola",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -3161,7 +3119,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -3237,7 +3194,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -3360,7 +3316,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -3403,7 +3358,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "que pasa",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -3445,7 +3399,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "ola",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -3506,7 +3459,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
             "locked": false,
             "opacity": 100,
             "originalText": "que pasa",
-            "roughness": 0,
             "roundness": null,
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
@@ -3589,7 +3541,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -3712,7 +3663,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -3755,7 +3705,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "ola",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -3797,7 +3746,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "que pasa",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -3913,7 +3861,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -4031,7 +3978,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -4071,7 +4017,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -4116,7 +4061,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "que pasa",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -4233,7 +4177,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -4351,7 +4294,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -4394,7 +4336,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "que pasa",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -4495,7 +4436,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -4618,7 +4558,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -4661,7 +4600,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "que pasa",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -4712,7 +4650,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -4784,7 +4721,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -4907,7 +4843,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -4950,7 +4885,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "que pasa",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -5009,7 +4943,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
             "locked": false,
             "opacity": 100,
             "originalText": "que pasa",
-            "roughness": 0,
             "roundness": null,
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
@@ -5085,7 +5018,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -5208,7 +5140,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -5251,7 +5182,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "que pasa",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -5341,7 +5271,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -5464,7 +5393,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -5507,7 +5435,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "que pasa",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -5597,7 +5524,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -5715,7 +5641,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -5758,7 +5683,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "que pasa",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -5809,7 +5733,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -5876,7 +5799,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -5999,7 +5921,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -6042,7 +5963,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
   "locked": false,
   "opacity": 100,
   "originalText": "que pasa",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -6101,7 +6021,6 @@ exports[`history > multiplayer undo/redo > conflicts in bound text elements and 
             "locked": false,
             "opacity": 100,
             "originalText": "que pasa",
-            "roughness": 0,
             "roundness": null,
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
@@ -6162,7 +6081,6 @@ exports[`history > multiplayer undo/redo > conflicts in frames and their childre
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -6280,7 +6198,6 @@ exports[`history > multiplayer undo/redo > conflicts in frames and their childre
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -6316,7 +6233,6 @@ exports[`history > multiplayer undo/redo > conflicts in frames and their childre
   "locked": false,
   "name": null,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -6364,7 +6280,6 @@ exports[`history > multiplayer undo/redo > conflicts in frames and their childre
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -6450,7 +6365,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -6569,7 +6483,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -6606,7 +6519,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -6672,7 +6584,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -6710,7 +6621,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -6818,7 +6728,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -6935,7 +6844,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -6970,7 +6878,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -7005,7 +6912,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -7063,7 +6969,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -7123,7 +7028,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -7207,7 +7111,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -7294,7 +7197,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -7414,7 +7316,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -7449,7 +7350,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -7484,7 +7384,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -7542,7 +7441,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -7578,7 +7476,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -7614,7 +7511,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -7717,7 +7613,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -7845,7 +7740,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -7882,7 +7776,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -7919,7 +7812,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -7956,7 +7848,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -8068,7 +7959,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -8196,7 +8086,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
       10,
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -8273,7 +8162,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
                 10,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -8381,7 +8269,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -8496,7 +8383,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -8555,7 +8441,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -8640,7 +8525,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -8755,7 +8639,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -8790,7 +8673,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -8825,7 +8707,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -8909,7 +8790,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -8945,7 +8825,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -8981,7 +8860,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -9041,7 +8919,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -9156,7 +9033,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -9191,7 +9067,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -9226,7 +9101,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -9310,7 +9184,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -9346,7 +9219,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -9382,7 +9254,6 @@ exports[`history > multiplayer undo/redo > should iterate through the history wh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -9442,7 +9313,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -9563,7 +9433,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -9598,7 +9467,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -9633,7 +9501,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -9691,7 +9558,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -9750,7 +9616,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -9892,7 +9757,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -10031,7 +9895,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
     0,
     0,
   ],
-  "roughness": 0,
   "roundness": null,
   "simulatePressure": false,
   "strokeColor": "#1f2329",
@@ -10067,7 +9930,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -10143,7 +10005,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
               0,
               0,
             ],
-            "roughness": 0,
             "roundness": null,
             "simulatePressure": false,
             "strokeColor": "#1f2329",
@@ -10205,7 +10066,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -10322,7 +10182,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -10358,7 +10217,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -10416,7 +10274,6 @@ exports[`history > multiplayer undo/redo > should not let remote changes to inte
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -10506,7 +10363,6 @@ exports[`history > multiplayer undo/redo > should not override remote changes on
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -10623,7 +10479,6 @@ exports[`history > multiplayer undo/redo > should not override remote changes on
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -10658,7 +10513,6 @@ exports[`history > multiplayer undo/redo > should not override remote changes on
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -10744,7 +10598,6 @@ exports[`history > multiplayer undo/redo > should not override remote changes on
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -10805,7 +10658,6 @@ exports[`history > multiplayer undo/redo > should not override remote changes on
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -10922,7 +10774,6 @@ exports[`history > multiplayer undo/redo > should not override remote changes on
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -10980,7 +10831,6 @@ exports[`history > multiplayer undo/redo > should not override remote changes on
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -11066,7 +10916,6 @@ exports[`history > multiplayer undo/redo > should override remotely added groups
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -11187,7 +11036,6 @@ exports[`history > multiplayer undo/redo > should override remotely added groups
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -11225,7 +11073,6 @@ exports[`history > multiplayer undo/redo > should override remotely added groups
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -11262,7 +11109,6 @@ exports[`history > multiplayer undo/redo > should override remotely added groups
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -11299,7 +11145,6 @@ exports[`history > multiplayer undo/redo > should override remotely added groups
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -11402,7 +11247,6 @@ exports[`history > multiplayer undo/redo > should override remotely added points
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -11544,7 +11388,6 @@ exports[`history > multiplayer undo/redo > should override remotely added points
       20,
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -11620,7 +11463,6 @@ exports[`history > multiplayer undo/redo > should override remotely added points
                 10,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -11740,7 +11582,6 @@ exports[`history > multiplayer undo/redo > should redistribute deltas when eleme
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -11855,7 +11696,6 @@ exports[`history > multiplayer undo/redo > should redistribute deltas when eleme
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -11913,7 +11753,6 @@ exports[`history > multiplayer undo/redo > should redistribute deltas when eleme
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -12005,7 +11844,6 @@ exports[`history > multiplayer undo/redo > should redraw arrows on undo > [end o
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -12123,7 +11961,6 @@ exports[`history > multiplayer undo/redo > should redraw arrows on undo > [end o
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -12158,7 +11995,6 @@ exports[`history > multiplayer undo/redo > should redraw arrows on undo > [end o
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "diamond",
@@ -12219,7 +12055,6 @@ exports[`history > multiplayer undo/redo > should redraw arrows on undo > [end o
       "236.10000",
     ],
   ],
-  "roughness": 0,
   "roundness": null,
   "startArrowhead": null,
   "startBinding": {
@@ -12304,7 +12139,6 @@ exports[`history > multiplayer undo/redo > should redraw arrows on undo > [end o
                 "236.10000",
               ],
             ],
-            "roughness": 0,
             "roundness": null,
             "startArrowhead": null,
             "startBinding": {
@@ -12392,7 +12226,6 @@ exports[`history > multiplayer undo/redo > should redraw arrows on undo > [end o
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -12428,7 +12261,6 @@ exports[`history > multiplayer undo/redo > should redraw arrows on undo > [end o
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "diamond",
@@ -12971,7 +12803,6 @@ exports[`history > multiplayer undo/redo > should update history entries after r
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -13088,7 +12919,6 @@ exports[`history > multiplayer undo/redo > should update history entries after r
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -13199,7 +13029,6 @@ exports[`history > multiplayer undo/redo > should update history entries after r
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -13260,7 +13089,6 @@ exports[`history > singleplayer undo/redo > remounting undo/redo buttons should 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -13375,7 +13203,6 @@ exports[`history > singleplayer undo/redo > remounting undo/redo buttons should 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -13410,7 +13237,6 @@ exports[`history > singleplayer undo/redo > remounting undo/redo buttons should 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -13469,7 +13295,6 @@ exports[`history > singleplayer undo/redo > remounting undo/redo buttons should 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -13529,7 +13354,6 @@ exports[`history > singleplayer undo/redo > should clear the redo stack on eleme
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -13646,7 +13470,6 @@ exports[`history > singleplayer undo/redo > should clear the redo stack on eleme
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -13681,7 +13504,6 @@ exports[`history > singleplayer undo/redo > should clear the redo stack on eleme
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -13739,7 +13561,6 @@ exports[`history > singleplayer undo/redo > should clear the redo stack on eleme
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -13800,7 +13621,6 @@ exports[`history > singleplayer undo/redo > should create entry when selecting f
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -13915,7 +13735,6 @@ exports[`history > singleplayer undo/redo > should create entry when selecting f
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -13969,7 +13788,6 @@ exports[`history > singleplayer undo/redo > should create entry when selecting f
     0,
     0,
   ],
-  "roughness": 0,
   "roundness": null,
   "simulatePressure": false,
   "strokeColor": "#1f2329",
@@ -14024,7 +13842,6 @@ exports[`history > singleplayer undo/redo > should create entry when selecting f
     0,
     0,
   ],
-  "roughness": 0,
   "roundness": null,
   "simulatePressure": false,
   "strokeColor": "#e03131",
@@ -14083,7 +13900,6 @@ exports[`history > singleplayer undo/redo > should create entry when selecting f
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -14173,7 +13989,6 @@ exports[`history > singleplayer undo/redo > should create entry when selecting f
               0,
               0,
             ],
-            "roughness": 0,
             "roundness": null,
             "simulatePressure": false,
             "strokeColor": "#e03131",
@@ -14235,7 +14050,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on e
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -14355,7 +14169,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on e
   "link": "https://www.youtube.com/watch?v=gkGMXY0wekg",
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "transparent",
   "strokeStyle": "solid",
@@ -14409,7 +14222,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on e
             "link": "https://www.youtube.com/watch?v=gkGMXY0wekg",
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "strokeColor": "transparent",
             "strokeStyle": "solid",
@@ -14466,7 +14278,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on e
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -14583,7 +14394,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on e
   "link": "https://www.youtube.com/watch?v=gkGMXY0wekg",
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "transparent",
   "strokeStyle": "solid",
@@ -14637,7 +14447,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on e
             "link": "https://www.youtube.com/watch?v=gkGMXY0wekg",
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "strokeColor": "transparent",
             "strokeStyle": "solid",
@@ -14694,7 +14503,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on i
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -14817,7 +14625,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on i
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "scale": [
     1,
@@ -14855,7 +14662,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on i
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "scale": [
     1,
@@ -14917,7 +14723,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on i
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "scale": [
               1,
@@ -14956,7 +14761,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on i
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "scale": [
               1,
@@ -15018,7 +14822,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on i
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -15138,7 +14941,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on i
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "scale": [
     1,
@@ -15176,7 +14978,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on i
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "scale": [
     1,
@@ -15238,7 +15039,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on i
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "scale": [
               1,
@@ -15277,7 +15077,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on i
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "scale": [
               1,
@@ -15339,7 +15138,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on s
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -15457,7 +15255,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on s
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -15491,7 +15288,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on s
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -15557,7 +15353,6 @@ exports[`history > singleplayer undo/redo > should create new history entry on s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -15618,7 +15413,6 @@ exports[`history > singleplayer undo/redo > should disable undo/redo buttons whe
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -15735,7 +15529,6 @@ exports[`history > singleplayer undo/redo > should disable undo/redo buttons whe
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -15770,7 +15563,6 @@ exports[`history > singleplayer undo/redo > should disable undo/redo buttons whe
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -15828,7 +15620,6 @@ exports[`history > singleplayer undo/redo > should disable undo/redo buttons whe
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -15889,7 +15680,6 @@ exports[`history > singleplayer undo/redo > should end up with no history entry 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -16006,7 +15796,6 @@ exports[`history > singleplayer undo/redo > should end up with no history entry 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -16041,7 +15830,6 @@ exports[`history > singleplayer undo/redo > should end up with no history entry 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -16099,7 +15887,6 @@ exports[`history > singleplayer undo/redo > should end up with no history entry 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -16160,7 +15947,6 @@ exports[`history > singleplayer undo/redo > should iterate through the history w
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -16277,7 +16063,6 @@ exports[`history > singleplayer undo/redo > should iterate through the history w
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -16376,7 +16161,6 @@ exports[`history > singleplayer undo/redo > should iterate through the history w
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -16436,7 +16220,6 @@ exports[`history > singleplayer undo/redo > should not clear the redo stack on s
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -16553,7 +16336,6 @@ exports[`history > singleplayer undo/redo > should not clear the redo stack on s
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -16588,7 +16370,6 @@ exports[`history > singleplayer undo/redo > should not clear the redo stack on s
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -16646,7 +16427,6 @@ exports[`history > singleplayer undo/redo > should not clear the redo stack on s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -16745,7 +16525,6 @@ exports[`history > singleplayer undo/redo > should not clear the redo stack on s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -16806,7 +16585,6 @@ exports[`history > singleplayer undo/redo > should not collapse when applying co
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -16924,7 +16702,6 @@ exports[`history > singleplayer undo/redo > should not collapse when applying co
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -17000,7 +16777,6 @@ exports[`history > singleplayer undo/redo > should not end up with history entry
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -17122,7 +16898,6 @@ exports[`history > singleplayer undo/redo > should not end up with history entry
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -17159,7 +16934,6 @@ exports[`history > singleplayer undo/redo > should not end up with history entry
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -17224,7 +16998,6 @@ exports[`history > singleplayer undo/redo > should not end up with history entry
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -17262,7 +17035,6 @@ exports[`history > singleplayer undo/redo > should not end up with history entry
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -17323,7 +17095,6 @@ exports[`history > singleplayer undo/redo > should not end up with history entry
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -17441,7 +17212,6 @@ exports[`history > singleplayer undo/redo > should not end up with history entry
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -17476,7 +17246,6 @@ exports[`history > singleplayer undo/redo > should not end up with history entry
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -17528,7 +17297,6 @@ exports[`history > singleplayer undo/redo > should not end up with history entry
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -17564,7 +17332,6 @@ exports[`history > singleplayer undo/redo > should not end up with history entry
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -17625,7 +17392,6 @@ exports[`history > singleplayer undo/redo > should not modify anything on unrela
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -17743,7 +17509,6 @@ exports[`history > singleplayer undo/redo > should not modify anything on unrela
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -17802,7 +17567,6 @@ exports[`history > singleplayer undo/redo > should not override appstate changes
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -17921,7 +17685,6 @@ exports[`history > singleplayer undo/redo > should not override appstate changes
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -18052,7 +17815,6 @@ exports[`history > singleplayer undo/redo > should not override appstate changes
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -18113,7 +17875,6 @@ exports[`history > singleplayer undo/redo > should support appstate name or view
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -18294,7 +18055,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -18422,7 +18182,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -18465,7 +18224,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "locked": false,
   "opacity": 100,
   "originalText": "ola",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -18504,7 +18262,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -18560,7 +18317,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
       0,
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -18729,7 +18485,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -18773,7 +18528,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "locked": false,
             "opacity": 100,
             "originalText": "ola",
-            "roughness": 0,
             "roundness": null,
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
@@ -18808,7 +18562,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -18990,7 +18743,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
                 0,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -19089,7 +18841,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -19217,7 +18968,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -19260,7 +19010,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "locked": false,
   "opacity": 100,
   "originalText": "ola",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -19299,7 +19048,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -19355,7 +19103,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
       0,
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -19414,7 +19161,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -19458,7 +19204,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "locked": false,
             "opacity": 100,
             "originalText": "ola",
-            "roughness": 0,
             "roundness": null,
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
@@ -19493,7 +19238,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -19675,7 +19419,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
                 0,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -19782,7 +19525,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -19910,7 +19652,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -19953,7 +19694,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "locked": false,
   "opacity": 100,
   "originalText": "ola",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -19992,7 +19732,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -20048,7 +19787,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
       0,
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -20107,7 +19845,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -20151,7 +19888,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "locked": false,
             "opacity": 100,
             "originalText": "ola",
-            "roughness": 0,
             "roundness": null,
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
@@ -20186,7 +19922,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -20368,7 +20103,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
                 0,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -20475,7 +20209,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -20601,7 +20334,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -20644,7 +20376,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "locked": false,
   "opacity": 100,
   "originalText": "ola",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -20683,7 +20414,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -20739,7 +20469,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
       0,
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -20884,7 +20613,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -20928,7 +20656,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "locked": false,
             "opacity": 100,
             "originalText": "ola",
-            "roughness": 0,
             "roundness": null,
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
@@ -20963,7 +20690,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -21145,7 +20871,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
                 0,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -21271,7 +20996,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -21400,7 +21124,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -21443,7 +21166,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "locked": false,
   "opacity": 100,
   "originalText": "ola",
-  "roughness": 0,
   "roundness": null,
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
@@ -21482,7 +21204,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -21538,7 +21259,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
       0,
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -21679,7 +21399,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -21723,7 +21442,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "locked": false,
             "opacity": 100,
             "originalText": "ola",
-            "roughness": 0,
             "roundness": null,
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
@@ -21758,7 +21476,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -21940,7 +21657,6 @@ exports[`history > singleplayer undo/redo > should support bidirectional binding
                 0,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -22086,7 +21802,6 @@ exports[`history > singleplayer undo/redo > should support changes in elements' 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -22206,7 +21921,6 @@ exports[`history > singleplayer undo/redo > should support changes in elements' 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -22241,7 +21955,6 @@ exports[`history > singleplayer undo/redo > should support changes in elements' 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -22276,7 +21989,6 @@ exports[`history > singleplayer undo/redo > should support changes in elements' 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -22334,7 +22046,6 @@ exports[`history > singleplayer undo/redo > should support changes in elements' 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -22393,7 +22104,6 @@ exports[`history > singleplayer undo/redo > should support changes in elements' 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -22452,7 +22162,6 @@ exports[`history > singleplayer undo/redo > should support changes in elements' 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -22615,7 +22324,6 @@ exports[`history > singleplayer undo/redo > should support duplication of groups
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -22739,7 +22447,6 @@ exports[`history > singleplayer undo/redo > should support duplication of groups
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -22776,7 +22483,6 @@ exports[`history > singleplayer undo/redo > should support duplication of groups
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -22813,7 +22519,6 @@ exports[`history > singleplayer undo/redo > should support duplication of groups
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -22850,7 +22555,6 @@ exports[`history > singleplayer undo/redo > should support duplication of groups
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -22887,7 +22591,6 @@ exports[`history > singleplayer undo/redo > should support duplication of groups
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -22924,7 +22627,6 @@ exports[`history > singleplayer undo/redo > should support duplication of groups
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -22989,7 +22691,6 @@ exports[`history > singleplayer undo/redo > should support duplication of groups
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -23027,7 +22728,6 @@ exports[`history > singleplayer undo/redo > should support duplication of groups
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -23096,7 +22796,6 @@ exports[`history > singleplayer undo/redo > should support duplication of groups
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -23134,7 +22833,6 @@ exports[`history > singleplayer undo/redo > should support duplication of groups
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -23195,7 +22893,6 @@ exports[`history > singleplayer undo/redo > should support element creation, del
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -23312,7 +23009,6 @@ exports[`history > singleplayer undo/redo > should support element creation, del
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -23347,7 +23043,6 @@ exports[`history > singleplayer undo/redo > should support element creation, del
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -23382,7 +23077,6 @@ exports[`history > singleplayer undo/redo > should support element creation, del
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "shape": {
     "id": "rectangle",
@@ -23440,7 +23134,6 @@ exports[`history > singleplayer undo/redo > should support element creation, del
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -23499,7 +23192,6 @@ exports[`history > singleplayer undo/redo > should support element creation, del
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -23558,7 +23250,6 @@ exports[`history > singleplayer undo/redo > should support element creation, del
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -23703,7 +23394,6 @@ exports[`history > singleplayer undo/redo > should support linear element creati
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -23839,7 +23529,6 @@ exports[`history > singleplayer undo/redo > should support linear element creati
       20,
     ],
   ],
-  "roughness": 0,
   "roundness": {
     "type": 2,
   },
@@ -23915,7 +23604,6 @@ exports[`history > singleplayer undo/redo > should support linear element creati
                 10,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },

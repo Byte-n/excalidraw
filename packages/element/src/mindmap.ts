@@ -517,7 +517,6 @@ const createDerivedEdge = (
     DEFAULT_MINDMAP_EDGE_STROKE_WIDTH,
   strokeStyle:
     root?.defaultEdgeStrokeStyle ?? DEFAULT_MINDMAP_EDGE_STROKE_STYLE,
-  roughness: 0,
   opacity: child.opacity,
   roundness: null,
   seed: child.seed,

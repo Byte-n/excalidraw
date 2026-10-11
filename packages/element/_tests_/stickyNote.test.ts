@@ -152,19 +152,6 @@ describe("sticky note text layout", () => {
     expect(intersection[1]).toBeLessThan(getStickyNoteCornerRadius(sticky));
   });
 
-  it("preserves roughness for render-only shape variation", () => {
-    const sticky = newStickyNoteElement({
-      type: "stickynote",
-      x: 0,
-      y: 0,
-      width: DEFAULT_STICKY_NOTE_SIZE,
-      height: DEFAULT_STICKY_NOTE_SIZE,
-      roughness: 2,
-    });
-
-    expect(sticky.roughness).toBe(2);
-  });
-
   it("respects user font size below the sticky note minimum font size", () => {
     const fontSize = STICKY_NOTE_MIN_FONT_SIZE - 1;
     const { scene, textId } = createStickyWithText("short");

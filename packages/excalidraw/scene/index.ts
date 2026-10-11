@@ -8,7 +8,6 @@ export { getScrollToContentState } from "../viewport";
 export {
   hasBackground,
   hasFillStyle,
-  hasRoughness,
   hasStrokeWidth,
   hasStrokeStyle,
   hasFreedrawMode,

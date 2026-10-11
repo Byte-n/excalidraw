@@ -608,7 +608,6 @@ export const addTextFromPaste = (
     strokeWidth: app.getCurrentItemStrokeWidth("text"),
     strokeStyle: app.state.currentItemStrokeStyle,
     roundness: null,
-    roughness: app.state.currentItemRoughness,
     opacity: app.state.currentItemOpacity,
     text,
     fontSize: app.state.currentItemFontSize,

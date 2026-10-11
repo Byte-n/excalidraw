@@ -108,7 +108,6 @@ describe("composite shape data", () => {
       y: 0,
       width: 48,
       height: 36,
-      roughness: 0,
     });
     if (element.type !== "composite_shape") {
       throw new Error("Expected composite shape");
@@ -232,7 +231,6 @@ describe("composite shape data", () => {
       y: 0,
       width,
       height,
-      roughness: 0,
     });
     if (element.type !== "composite_shape") {
       throw new Error("Expected composite shape");
@@ -272,7 +270,6 @@ describe("composite shape data", () => {
       y: 0,
       width,
       height,
-      roughness: 0,
     });
     if (element.type !== "composite_shape") {
       throw new Error("Expected composite shape");
@@ -320,7 +317,6 @@ describe("composite shape data", () => {
           y: 0,
           width,
           height,
-          roughness: 0,
         });
         if (element.type !== "composite_shape") {
           throw new Error("Expected composite shape");
@@ -365,7 +361,6 @@ describe("composite shape data", () => {
         y: 0,
         width: 120,
         height: 80,
-        roughness: 0,
       });
       if (element.type !== "composite_shape") {
         throw new Error("Expected composite shape");
@@ -399,7 +394,6 @@ describe("composite shape data", () => {
         y: 0,
         width: 120,
         height: 80,
-        roughness: 0,
       });
       if (element.type !== "composite_shape") {
         throw new Error("Expected composite shape");
@@ -438,7 +432,6 @@ describe("composite shape data", () => {
       width: 120,
       height: 80,
       roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
-      roughness: 0,
     });
     if (element.type !== "composite_shape") {
       throw new Error("Expected composite shape");
@@ -1056,7 +1049,6 @@ describe("composite shape data", () => {
       y: 0,
       width: 100,
       height: 80,
-      roughness: 0,
     });
     if (element.type !== "composite_shape") {
       throw new Error("Expected composite shape");
@@ -1099,7 +1091,6 @@ describe("composite shape data", () => {
       y: 0,
       width: 120,
       height: 80,
-      roughness: 0,
     });
     if (element.type !== "composite_shape") {
       throw new Error("Expected composite shape");
@@ -1137,7 +1128,6 @@ describe("composite shape data", () => {
       height: 80,
       backgroundColor: "#eae2fe",
       fillStyle: "solid",
-      roughness: 0,
     });
     if (element.type !== "composite_shape") {
       throw new Error("Expected composite shape");
@@ -1208,7 +1198,6 @@ describe("composite shape data", () => {
       height: 67.22422,
       backgroundColor: "#dff5e5",
       fillStyle: "solid",
-      roughness: 0,
     });
     if (element.type !== "composite_shape") {
       throw new Error("Expected composite shape");
@@ -1308,7 +1297,6 @@ describe("composite shape data", () => {
       y: 0,
       width: 100,
       height: 80,
-      roughness: 0,
     });
     if (element.type !== "composite_shape") {
       throw new Error("Expected composite shape");
@@ -1526,7 +1514,6 @@ describe("composite shape data", () => {
       width: 120,
       height: 120,
       angle: 0 as Radians,
-      roughness: 0,
     });
     if (element.type !== "composite_shape") {
       throw new Error("Expected composite shape");

@@ -73,9 +73,6 @@ export const hasStrokeStyle = (type: ElementOrToolType) =>
   type === "line" ||
   type === "autoshape";
 
-export const hasRoughness = (type: ElementOrToolType) =>
-  hasStrokeStyle(type) || type === "stickynote";
-
 export const hasFreedrawMode = (type: ElementOrToolType) => type === "freedraw";
 
 export const canChangeRoundness = (type: ElementOrToolType | BaseShapeId) =>

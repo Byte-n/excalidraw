@@ -60,7 +60,6 @@ export type StickyNotePathCommand =
       point: StickyNoteRenderPoint;
     };
 
-const STICKY_NOTE_RENDER_ROUGHNESS = [0, 1.5, 8] as const;
 const STICKY_NOTE_CORNER_RADIUS_RATIO = 0.04;
 const STICKY_NOTE_MAX_CORNER_RADIUS = 16;
 
@@ -235,9 +234,8 @@ export const getStickyNoteRenderPoints = (
     seedOffset?: number;
   } = {},
 ): StickyNoteRenderPoint[] => {
-  const roughness = Math.max(0, Math.min(2, Math.round(element.roughness)));
   const amount = Math.min(
-    STICKY_NOTE_RENDER_ROUGHNESS[roughness],
+    0,
     Math.min(element.width, element.height) * 0.012,
   );
 
@@ -290,7 +288,7 @@ export const getStickyNotePathCommands = (
   // The note's seed keeps the same corner for the paper and shadow through
   // redraws and resizes.
   const liftedCorner =
-    element.roughness === 2
+    false
       ? Math.floor(seededRandom(element.seed)() * points.length)
       : -1;
 

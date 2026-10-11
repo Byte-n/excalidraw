@@ -98,7 +98,6 @@ describe("duplicating single elements", () => {
       strokeWidth: 1,
       strokeStyle: "solid",
       roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
-      roughness: 1,
       opacity: 100,
     });
 
@@ -144,7 +143,6 @@ describe("duplicating single elements", () => {
       strokeWidth: 1,
       strokeStyle: "solid",
       roundness: null,
-      roughness: 1,
       opacity: 100,
       text: "hello",
       fontSize: 20,

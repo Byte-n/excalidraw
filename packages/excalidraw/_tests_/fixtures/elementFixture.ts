@@ -16,7 +16,6 @@ const elementBase: Omit<ExcalidrawElement, "type"> = {
   fillStyle: "hachure",
   strokeWidth: 1,
   strokeStyle: "solid",
-  roughness: 1,
   opacity: 100,
   groupIds: [],
   containerRef: undefined,

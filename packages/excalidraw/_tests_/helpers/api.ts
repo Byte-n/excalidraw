@@ -204,7 +204,6 @@ export class API {
     strokeWidth?: ExcalidrawGenericElement["strokeWidth"];
     strokeStyle?: ExcalidrawGenericElement["strokeStyle"];
     roundness?: ExcalidrawGenericElement["roundness"];
-    roughness?: ExcalidrawGenericElement["roughness"];
     opacity?: ExcalidrawGenericElement["opacity"];
     // text props
     text?: T extends "text" ? ExcalidrawTextElement["text"] : never;
@@ -327,7 +326,7 @@ export class API {
                     : ROUNDNESS.PROPORTIONAL_RADIUS,
           }
         : null,
-      roughness: rest.roughness ?? 0,
+
       opacity: rest.opacity ?? appState.currentItemOpacity,
       boundElements: rest.boundElements ?? null,
       locked: rest.locked ?? false,

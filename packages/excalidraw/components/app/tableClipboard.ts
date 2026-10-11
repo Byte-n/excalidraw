@@ -619,7 +619,6 @@ export const pasteTSVIntoCell = (
         fillStyle: app.state.currentItemFillStyle,
         strokeWidth: app.getCurrentItemStrokeWidth("text"),
         strokeStyle: app.state.currentItemStrokeStyle,
-        roughness: app.state.currentItemRoughness,
         opacity: app.state.currentItemOpacity,
         containerId: null,
         autoResize: false,

@@ -101,7 +101,6 @@ export type ElementConstructorOpts = MarkOptional<
   | "fillStyle"
   | "strokeColor"
   | "backgroundColor"
-  | "roughness"
   | "strokeWidth"
   | "roundness"
   | "locked"
@@ -128,7 +127,6 @@ const _newElementBase = <T extends ExcalidrawElement>(
     fillStyle = DEFAULT_ELEMENT_PROPS.fillStyle,
     strokeWidth = DEFAULT_ELEMENT_PROPS.strokeWidth,
     strokeStyle = DEFAULT_ELEMENT_PROPS.strokeStyle,
-    roughness = DEFAULT_ELEMENT_PROPS.roughness,
     opacity = DEFAULT_ELEMENT_PROPS.opacity,
     width = 0,
     height = 0,
@@ -184,7 +182,6 @@ const _newElementBase = <T extends ExcalidrawElement>(
     fillStyle,
     strokeWidth,
     strokeStyle,
-    roughness,
     opacity,
     groupIds,
     containerRef,
@@ -325,7 +322,6 @@ export const newMindmapNodeElement = (
     height: 56,
     backgroundColor: opts.role === "root" ? "#d0bfff" : "#e5dbff",
     fillStyle: "solid",
-    roughness: 0,
     roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
     ...opts,
     angle: 0 as Radians,
@@ -357,7 +353,6 @@ export const newMindmapEdgeElement = (
     },
 ): NonDeleted<ExcalidrawMindmapEdgeElement> => ({
   ..._newElementBase<ExcalidrawMindmapEdgeElement>("mindmap-edge", {
-    roughness: 0,
     ...opts,
     angle: 0 as Radians,
   }),

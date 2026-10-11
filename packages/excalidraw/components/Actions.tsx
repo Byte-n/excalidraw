@@ -471,7 +471,6 @@ export const SelectedShapeActions = ({
 
       {predicates.freedrawMode && renderAction("changeFreedrawMode")}
 
-      {predicates.sloppiness && <>{renderAction("changeSloppiness")}</>}
 
       {predicates.roundness && <>{renderAction("changeRoundness")}</>}
 
@@ -622,9 +621,6 @@ const CombinedShapeProperties = ({
                   }
                   {predicates.strokeStyle && (
                     <>{renderAction("changeStrokeStyle")}</>
-                  )}
-                  {predicates.sloppiness && (
-                    <>{renderAction("changeSloppiness")}</>
                   )}
                   {predicates.roundness && renderAction("changeRoundness")}
                   {predicates.opacity && renderAction("changeOpacity")}

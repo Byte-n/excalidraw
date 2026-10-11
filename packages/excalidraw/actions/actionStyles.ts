@@ -131,7 +131,6 @@ export const actionPasteStyles = register({
                 ? elementStylesToCopyFrom.fillStyle
                 : element.fillStyle,
               opacity: elementStylesToCopyFrom?.opacity,
-              roughness: elementStylesToCopyFrom?.roughness,
               roundness: elementStylesToCopyFrom.roundness
                 ? canApplyRoundnessTypeToElement(
                     elementStylesToCopyFrom.roundness.type,

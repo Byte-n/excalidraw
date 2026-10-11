@@ -575,7 +575,7 @@ describe("autoshape styles panel & selection (preview path)", () => {
     // transparent (the default), shown otherwise
     expect(predicates.fill).toBe(false);
     expect(predicates.strokeWidth).toBe(true);
-    expect(predicates.sloppiness).toBe(true);
+    expect(predicates.roundness).toBe(true);
     expect(predicates.roundness).toBe(false);
     expect(predicates.opacity).toBe(false);
     expect(predicates.layers).toBe(false);

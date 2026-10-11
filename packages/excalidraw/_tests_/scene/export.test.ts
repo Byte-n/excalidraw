@@ -103,7 +103,6 @@ describe("exportToSvg", () => {
       y: 0,
       width: 120,
       height: 80,
-      roughness: 0,
       backgroundColor: "#d0ebff",
     });
 

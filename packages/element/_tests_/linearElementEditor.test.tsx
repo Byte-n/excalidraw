@@ -83,7 +83,6 @@ describe("Test Linear Elements", () => {
   const createTwoPointerLinearElement = (
     type: ExcalidrawLinearElement["type"],
     roundness: ExcalidrawElement["roundness"] = null,
-    roughness: ExcalidrawLinearElement["roughness"] = 0,
   ) => {
     const line = API.createElement({
       x: p1[0],
@@ -91,7 +90,6 @@ describe("Test Linear Elements", () => {
       width: p2[0] - p1[0],
       height: 0,
       type,
-      roughness,
       points: [pointFrom(0, 0), pointFrom(p2[0] - p1[0], p2[1] - p1[1])],
       roundness,
     });
@@ -104,7 +102,6 @@ describe("Test Linear Elements", () => {
   const createThreePointerLinearElement = (
     type: ExcalidrawLinearElement["type"],
     roundness: ExcalidrawElement["roundness"] = null,
-    roughness: ExcalidrawLinearElement["roughness"] = 0,
   ) => {
     //dragging line from midpoint
     const p3 = [midpoint[0] + delta - p1[0], midpoint[1] + delta - p1[1]];
@@ -114,7 +111,6 @@ describe("Test Linear Elements", () => {
       width: p3[0] - p1[0],
       height: 0,
       type,
-      roughness,
       points: [
         pointFrom(0, 0),
         pointFrom(p3[0], p3[1]),

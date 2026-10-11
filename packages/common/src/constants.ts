@@ -205,7 +205,6 @@ export const FRAME_STYLE = {
   strokeWidth: 2 as ExcalidrawElement["strokeWidth"],
   strokeStyle: "solid" as ExcalidrawElement["strokeStyle"],
   fillStyle: "solid" as ExcalidrawElement["fillStyle"],
-  roughness: 0 as ExcalidrawElement["roughness"],
   roundness: null as ExcalidrawElement["roundness"],
   backgroundColor: "transparent" as ExcalidrawElement["backgroundColor"],
   radius: 8,
@@ -475,12 +474,6 @@ export const ROUNDNESS = {
   ADAPTIVE_RADIUS: 3,
 } as const;
 
-export const ROUGHNESS = {
-  architect: 0,
-  artist: 1,
-  cartoonist: 2,
-} as const;
-
 export type StrokeWidthKey = "thin" | "medium" | "bold";
 
 export const STROKE_WIDTH_KEYS: readonly StrokeWidthKey[] = [
@@ -529,7 +522,6 @@ export const DEFAULT_ELEMENT_PROPS: {
   fillStyle: ExcalidrawElement["fillStyle"];
   strokeWidth: ExcalidrawElement["strokeWidth"];
   strokeStyle: ExcalidrawElement["strokeStyle"];
-  roughness: ExcalidrawElement["roughness"];
   opacity: ExcalidrawElement["opacity"];
   locked: ExcalidrawElement["locked"];
 } = {
@@ -538,7 +530,6 @@ export const DEFAULT_ELEMENT_PROPS: {
   fillStyle: "solid",
   strokeWidth: STROKE_WIDTH[DEFAULT_ELEMENT_STROKE_WIDTH_KEY],
   strokeStyle: "solid",
-  roughness: ROUGHNESS.artist,
   opacity: 100,
   locked: false,
 };

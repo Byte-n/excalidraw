@@ -1232,7 +1232,6 @@ export const handleFreeDrawElementOnPointerDown = (
     fillStyle: app.state.currentItemFillStyle,
     strokeWidth: app.getCurrentItemStrokeWidth("freedraw"),
     strokeStyle: app.state.currentItemStrokeStyle,
-    roughness: app.state.currentItemRoughness,
     opacity: app.state.currentItemOpacity,
     roundness: null,
     simulatePressure,
@@ -1436,7 +1435,6 @@ export const handleLinearElementOnPointerDown = (
             fillStyle: app.state.currentItemFillStyle,
             strokeWidth: app.getCurrentItemStrokeWidth(elementType),
             strokeStyle: app.state.currentItemStrokeStyle,
-            roughness: app.state.currentItemRoughness,
             opacity: app.state.currentItemOpacity,
             roundness:
               app.state.currentItemArrowType === ARROW_TYPE.round
@@ -1461,7 +1459,6 @@ export const handleLinearElementOnPointerDown = (
             fillStyle: app.state.currentItemFillStyle,
             strokeWidth: app.getCurrentItemStrokeWidth(elementType),
             strokeStyle: app.state.currentItemStrokeStyle,
-            roughness: app.state.currentItemRoughness,
             opacity: app.state.currentItemOpacity,
             roundness:
               app.state.currentItemRoundness === "round"
@@ -1609,7 +1606,6 @@ export const createGenericElementOnPointerDown = (
     fillStyle: app.state.currentItemFillStyle,
     strokeWidth: app.getCurrentItemStrokeWidth(elementType),
     strokeStyle: app.state.currentItemStrokeStyle,
-    roughness: app.state.currentItemRoughness,
     opacity: app.state.currentItemOpacity,
     roundness: app.getCurrentItemRoundness(elementType),
     locked: false,

@@ -969,7 +969,6 @@ const createTableCellBackgroundText = (
     fillStyle: app.state.currentItemFillStyle,
     strokeWidth: app.getCurrentItemStrokeWidth("text"),
     strokeStyle: app.state.currentItemStrokeStyle,
-    roughness: app.state.currentItemRoughness,
     opacity: app.state.currentItemOpacity,
     text: "",
     fontSize: app.state.currentItemFontSize,

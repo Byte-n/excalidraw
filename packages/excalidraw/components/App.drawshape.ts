@@ -211,7 +211,6 @@ export class AppDrawShape {
       strokeColor: line.strokeColor,
       backgroundColor: line.backgroundColor,
       fillStyle: line.fillStyle,
-      roughness: line.roughness,
       opacity: line.opacity,
       strokeStyle: line.strokeStyle,
       strokeWidth: line.strokeWidth,

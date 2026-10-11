@@ -4,7 +4,6 @@ import {
   DEFAULT_ELEMENT_PROPS,
   DEFAULT_NEW_ELEMENT_STROKE_COLOR,
   FONT_FAMILY,
-  ROUGHNESS,
   DEFAULT_FONT_SIZE,
   DEFAULT_ELEMENT_STROKE_WIDTH_KEY,
   DEFAULT_TEXT_ALIGN,
@@ -37,7 +36,6 @@ export const getDefaultAppState = (): Omit<
     currentItemFontFamily: FONT_FAMILY.Nunito,
     currentItemFontSize: DEFAULT_FONT_SIZE,
     currentItemOpacity: DEFAULT_ELEMENT_PROPS.opacity,
-    currentItemRoughness: ROUGHNESS.architect,
     currentItemStrokeVariability: "constant",
     currentItemStartArrowhead: null,
     currentItemStrokeColor: DEFAULT_NEW_ELEMENT_STROKE_COLOR,
@@ -189,7 +187,6 @@ const APP_STATE_STORAGE_CONF = (<
     server: false,
   },
   currentItemOpacity: { browser: true, export: false, server: false },
-  currentItemRoughness: { browser: true, export: false, server: false },
   currentItemStrokeVariability: {
     browser: true,
     export: false,

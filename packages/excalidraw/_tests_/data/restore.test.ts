@@ -920,7 +920,6 @@ describe("restoreElements", () => {
         fillStyle: "cross-hatch",
         strokeWidth: 2,
         strokeStyle: "dashed",
-        roughness: 2,
         opacity: 10,
         x: 10,
         y: 20,

@@ -270,7 +270,6 @@ export class AppBucketFill {
       fillStyle: this.app.state.currentItemFillStyle,
       strokeWidth: 1,
       strokeStyle: "solid",
-      roughness: 0,
       roundness: null,
       opacity: this.app.state.currentItemOpacity,
       containerRef: frameLikeContainerRef(frameId),

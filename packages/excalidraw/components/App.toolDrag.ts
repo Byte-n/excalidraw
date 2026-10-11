@@ -61,7 +61,6 @@ export const DRAGGABLE_TOOLS: Partial<Record<ToolType, DraggableTool>> = {
         fillStyle: state.currentItemFillStyle,
         strokeWidth: app.getCurrentItemStrokeWidth("stickynote"),
         strokeStyle: state.currentItemStrokeStyle,
-        roughness: state.currentItemRoughness,
         opacity: state.currentItemOpacity,
         roundness: app.getCurrentItemRoundness("stickynote"),
         locked: false,

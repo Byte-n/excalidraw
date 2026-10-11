@@ -33,7 +33,6 @@ exports[`given element A and group of elements B and given both are selected whe
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -183,7 +182,6 @@ exports[`given element A and group of elements B and given both are selected whe
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -242,7 +240,6 @@ exports[`given element A and group of elements B and given both are selected whe
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -301,7 +298,6 @@ exports[`given element A and group of elements B and given both are selected whe
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -493,7 +489,6 @@ exports[`given element A and group of elements B and given both are selected whe
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -645,7 +640,6 @@ exports[`given element A and group of elements B and given both are selected whe
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -704,7 +698,6 @@ exports[`given element A and group of elements B and given both are selected whe
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -763,7 +756,6 @@ exports[`given element A and group of elements B and given both are selected whe
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -943,7 +935,6 @@ exports[`regression tests > Cmd/Ctrl-click exclusively select element under poin
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -1086,7 +1077,6 @@ exports[`regression tests > Cmd/Ctrl-click exclusively select element under poin
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -1145,7 +1135,6 @@ exports[`regression tests > Cmd/Ctrl-click exclusively select element under poin
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -1319,7 +1308,6 @@ exports[`regression tests > Cmd/Ctrl-click exclusively select element under poin
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -1543,7 +1531,6 @@ exports[`regression tests > Drags selected element when hitting only bounding bo
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -1686,7 +1673,6 @@ exports[`regression tests > Drags selected element when hitting only bounding bo
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "ellipse",
@@ -1774,7 +1760,6 @@ exports[`regression tests > adjusts z order when grouping > [end of test] appSta
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -1922,7 +1907,6 @@ exports[`regression tests > adjusts z order when grouping > [end of test] undo s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -1981,7 +1965,6 @@ exports[`regression tests > adjusts z order when grouping > [end of test] undo s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -2040,7 +2023,6 @@ exports[`regression tests > adjusts z order when grouping > [end of test] undo s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -2192,7 +2174,6 @@ exports[`regression tests > alt-drag duplicates an element > [end of test] appSt
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -2337,7 +2318,6 @@ exports[`regression tests > alt-drag duplicates an element > [end of test] undo 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -2396,7 +2376,6 @@ exports[`regression tests > alt-drag duplicates an element > [end of test] undo 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -2466,7 +2445,6 @@ exports[`regression tests > arrow keys > [end of test] appState 1`] = `
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -2609,7 +2587,6 @@ exports[`regression tests > arrow keys > [end of test] undo stack 1`] = `
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -2670,7 +2647,6 @@ exports[`regression tests > can drag element that covers another element, while 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -2815,7 +2791,6 @@ exports[`regression tests > can drag element that covers another element, while 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -2874,7 +2849,6 @@ exports[`regression tests > can drag element that covers another element, while 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -2933,7 +2907,6 @@ exports[`regression tests > can drag element that covers another element, while 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "ellipse",
@@ -3029,7 +3002,6 @@ exports[`regression tests > change the properties of a shape > [end of test] app
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -3172,7 +3144,6 @@ exports[`regression tests > change the properties of a shape > [end of test] und
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -3308,7 +3279,6 @@ exports[`regression tests > click on an element and drag it > [dragged] appState
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -3430,7 +3400,6 @@ exports[`regression tests > click on an element and drag it > [dragged] element 
   "link": null,
   "locked": false,
   "opacity": 100,
-  "roughness": 0,
   "roundness": null,
   "seed": 1278240551,
   "shape": {
@@ -3490,7 +3459,6 @@ exports[`regression tests > click on an element and drag it > [dragged] undo sta
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -3578,7 +3546,6 @@ exports[`regression tests > click on an element and drag it > [end of test] appS
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -3723,7 +3690,6 @@ exports[`regression tests > click on an element and drag it > [end of test] undo
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -3838,7 +3804,6 @@ exports[`regression tests > click to select a shape > [end of test] appState 1`]
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -3983,7 +3948,6 @@ exports[`regression tests > click to select a shape > [end of test] undo stack 1
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -4042,7 +4006,6 @@ exports[`regression tests > click to select a shape > [end of test] undo stack 1
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -4125,7 +4088,6 @@ exports[`regression tests > click-drag to select a group > [end of test] appStat
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -4271,7 +4233,6 @@ exports[`regression tests > click-drag to select a group > [end of test] undo st
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -4330,7 +4291,6 @@ exports[`regression tests > click-drag to select a group > [end of test] undo st
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -4389,7 +4349,6 @@ exports[`regression tests > click-drag to select a group > [end of test] undo st
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -4473,7 +4432,6 @@ exports[`regression tests > deleting last but one element in editing group shoul
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -4618,7 +4576,6 @@ exports[`regression tests > deleting last but one element in editing group shoul
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -4677,7 +4634,6 @@ exports[`regression tests > deleting last but one element in editing group shoul
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -4938,7 +4894,6 @@ exports[`regression tests > deselects group of selected elements on pointer down
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -5032,7 +4987,6 @@ exports[`regression tests > deselects group of selected elements on pointer down
     "link": null,
     "locked": false,
     "opacity": 100,
-    "roughness": 0,
     "roundness": null,
     "seed": 493213705,
     "strokeColor": "#1f2329",
@@ -5111,7 +5065,6 @@ exports[`regression tests > deselects group of selected elements on pointer down
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -5170,7 +5123,6 @@ exports[`regression tests > deselects group of selected elements on pointer down
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "ellipse",
@@ -5251,7 +5203,6 @@ exports[`regression tests > deselects group of selected elements on pointer up w
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -5395,7 +5346,6 @@ exports[`regression tests > deselects group of selected elements on pointer up w
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -5454,7 +5404,6 @@ exports[`regression tests > deselects group of selected elements on pointer up w
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "ellipse",
@@ -5556,7 +5505,6 @@ exports[`regression tests > deselects selected element on pointer down when poin
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -5649,7 +5597,6 @@ exports[`regression tests > deselects selected element on pointer down when poin
     "link": null,
     "locked": false,
     "opacity": 100,
-    "roughness": 0,
     "roundness": null,
     "seed": 1116226695,
     "strokeColor": "#1f2329",
@@ -5728,7 +5675,6 @@ exports[`regression tests > deselects selected element on pointer down when poin
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -5789,7 +5735,6 @@ exports[`regression tests > deselects selected element, on pointer up, when clic
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -5932,7 +5877,6 @@ exports[`regression tests > deselects selected element, on pointer up, when clic
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "ellipse",
@@ -6013,7 +5957,6 @@ exports[`regression tests > double click to edit a group > [end of test] appStat
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -6156,7 +6099,6 @@ exports[`regression tests > double click to edit a group > [end of test] undo st
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -6215,7 +6157,6 @@ exports[`regression tests > double click to edit a group > [end of test] undo st
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -6274,7 +6215,6 @@ exports[`regression tests > double click to edit a group > [end of test] undo st
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -6440,7 +6380,6 @@ exports[`regression tests > drags selected elements from point inside common bou
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -6587,7 +6526,6 @@ exports[`regression tests > drags selected elements from point inside common bou
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -6646,7 +6584,6 @@ exports[`regression tests > drags selected elements from point inside common bou
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "ellipse",
@@ -6766,7 +6703,6 @@ exports[`regression tests > draw every type of shape > [end of test] appState 1`
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -6907,7 +6843,6 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -6966,7 +6901,6 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "diamond",
@@ -7025,7 +6959,6 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "ellipse",
@@ -7102,7 +7035,6 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
                 10,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -7182,7 +7114,6 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
               ],
             ],
             "polygon": false,
-            "roughness": 0,
             "roundness": null,
             "startArrowhead": null,
             "startBinding": null,
@@ -7260,7 +7191,6 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
                 10,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -7391,7 +7321,6 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
               ],
             ],
             "polygon": false,
-            "roughness": 0,
             "roundness": null,
             "startArrowhead": null,
             "startBinding": null,
@@ -7535,7 +7464,6 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
               0,
               0,
             ],
-            "roughness": 0,
             "roundness": null,
             "simulatePressure": false,
             "strokeColor": "#1f2329",
@@ -7597,7 +7525,6 @@ exports[`regression tests > given a group of selected elements with an element t
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -7743,7 +7670,6 @@ exports[`regression tests > given a group of selected elements with an element t
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -7802,7 +7728,6 @@ exports[`regression tests > given a group of selected elements with an element t
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "ellipse",
@@ -7861,7 +7786,6 @@ exports[`regression tests > given a group of selected elements with an element t
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "diamond",
@@ -7965,7 +7889,6 @@ exports[`regression tests > given a selected element A and a not selected elemen
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -8111,7 +8034,6 @@ exports[`regression tests > given a selected element A and a not selected elemen
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -8170,7 +8092,6 @@ exports[`regression tests > given a selected element A and a not selected elemen
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "ellipse",
@@ -8273,7 +8194,6 @@ exports[`regression tests > given selected element A with lower z-index than uns
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -8418,7 +8338,6 @@ exports[`regression tests > given selected element A with lower z-index than uns
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -8454,7 +8373,6 @@ exports[`regression tests > given selected element A with lower z-index than uns
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -8537,7 +8455,6 @@ exports[`regression tests > given selected element A with lower z-index than uns
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -8682,7 +8599,6 @@ exports[`regression tests > given selected element A with lower z-index than uns
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -8718,7 +8634,6 @@ exports[`regression tests > given selected element A with lower z-index than uns
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -8806,7 +8721,6 @@ exports[`regression tests > key 2 selects rectangle tool > [end of test] appStat
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -8949,7 +8863,6 @@ exports[`regression tests > key 2 selects rectangle tool > [end of test] undo st
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -9010,7 +8923,6 @@ exports[`regression tests > key 5 selects arrow tool > [end of test] appState 1`
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -9202,7 +9114,6 @@ exports[`regression tests > key 5 selects arrow tool > [end of test] undo stack 
                 30,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -9263,7 +9174,6 @@ exports[`regression tests > key 6 selects line tool > [end of test] appState 1`]
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -9455,7 +9365,6 @@ exports[`regression tests > key 6 selects line tool > [end of test] undo stack 1
               ],
             ],
             "polygon": false,
-            "roughness": 0,
             "roundness": null,
             "startArrowhead": null,
             "startBinding": null,
@@ -9514,7 +9423,6 @@ exports[`regression tests > key 7 selects freedraw tool > [end of test] appState
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -9668,7 +9576,6 @@ exports[`regression tests > key 7 selects freedraw tool > [end of test] undo sta
               0,
               0,
             ],
-            "roughness": 0,
             "roundness": null,
             "simulatePressure": false,
             "strokeColor": "#1f2329",
@@ -9730,7 +9637,6 @@ exports[`regression tests > key a selects arrow tool > [end of test] appState 1`
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -9922,7 +9828,6 @@ exports[`regression tests > key a selects arrow tool > [end of test] undo stack 
                 30,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -9983,7 +9888,6 @@ exports[`regression tests > key l selects line tool > [end of test] appState 1`]
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -10175,7 +10079,6 @@ exports[`regression tests > key l selects line tool > [end of test] undo stack 1
               ],
             ],
             "polygon": false,
-            "roughness": 0,
             "roundness": null,
             "startArrowhead": null,
             "startBinding": null,
@@ -10234,7 +10137,6 @@ exports[`regression tests > key p selects freedraw tool > [end of test] appState
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -10388,7 +10290,6 @@ exports[`regression tests > key p selects freedraw tool > [end of test] undo sta
               0,
               0,
             ],
-            "roughness": 0,
             "roundness": null,
             "simulatePressure": false,
             "strokeColor": "#1f2329",
@@ -10450,7 +10351,6 @@ exports[`regression tests > key r selects rectangle tool > [end of test] appStat
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -10593,7 +10493,6 @@ exports[`regression tests > key r selects rectangle tool > [end of test] undo st
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -10654,7 +10553,6 @@ exports[`regression tests > make a group and duplicate it > [end of test] appSta
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -10805,7 +10703,6 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -10864,7 +10761,6 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -10923,7 +10819,6 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -11072,7 +10967,6 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -11110,7 +11004,6 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -11148,7 +11041,6 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -11234,7 +11126,6 @@ exports[`regression tests > noop interaction after undo shouldn't create history
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -11379,7 +11270,6 @@ exports[`regression tests > noop interaction after undo shouldn't create history
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -11438,7 +11328,6 @@ exports[`regression tests > noop interaction after undo shouldn't create history
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -11543,7 +11432,6 @@ exports[`regression tests > pinch-to-zoom works > [end of test] appState 1`] = `
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -11685,7 +11573,6 @@ exports[`regression tests > shift click on selected element should deselect it o
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -11828,7 +11715,6 @@ exports[`regression tests > shift click on selected element should deselect it o
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -11909,7 +11795,6 @@ exports[`regression tests > shift-click to multiselect, then drag > [end of test
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -12056,7 +11941,6 @@ exports[`regression tests > shift-click to multiselect, then drag > [end of test
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -12115,7 +11999,6 @@ exports[`regression tests > shift-click to multiselect, then drag > [end of test
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -12257,7 +12140,6 @@ exports[`regression tests > should group elements and ungroup them > [end of tes
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -12406,7 +12288,6 @@ exports[`regression tests > should group elements and ungroup them > [end of tes
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -12465,7 +12346,6 @@ exports[`regression tests > should group elements and ungroup them > [end of tes
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -12524,7 +12404,6 @@ exports[`regression tests > should group elements and ungroup them > [end of tes
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -12720,7 +12599,6 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -12873,7 +12751,6 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -12932,7 +12809,6 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -13083,7 +12959,6 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -13142,7 +13017,6 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -13399,7 +13273,6 @@ exports[`regression tests > spacebar + drag scrolls the canvas > [end of test] a
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -13544,7 +13417,6 @@ exports[`regression tests > supports nested groups > [end of test] appState 1`] 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -13689,7 +13561,6 @@ exports[`regression tests > supports nested groups > [end of test] undo stack 1`
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -13748,7 +13619,6 @@ exports[`regression tests > supports nested groups > [end of test] undo stack 1`
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -13807,7 +13677,6 @@ exports[`regression tests > supports nested groups > [end of test] undo stack 1`
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -14209,7 +14078,6 @@ exports[`regression tests > switches from group of selected elements to another 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -14305,7 +14173,6 @@ exports[`regression tests > switches from group of selected elements to another 
     "link": null,
     "locked": false,
     "opacity": 100,
-    "roughness": 0,
     "roundness": null,
     "seed": 1006504105,
     "strokeColor": "#1f2329",
@@ -14384,7 +14251,6 @@ exports[`regression tests > switches from group of selected elements to another 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -14443,7 +14309,6 @@ exports[`regression tests > switches from group of selected elements to another 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "ellipse",
@@ -14502,7 +14367,6 @@ exports[`regression tests > switches from group of selected elements to another 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "diamond",
@@ -14583,7 +14447,6 @@ exports[`regression tests > switches selected element on pointer down > [end of 
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -14678,7 +14541,6 @@ exports[`regression tests > switches selected element on pointer down > [end of 
     "link": null,
     "locked": false,
     "opacity": 100,
-    "roughness": 0,
     "roundness": null,
     "seed": 23633383,
     "strokeColor": "#1f2329",
@@ -14757,7 +14619,6 @@ exports[`regression tests > switches selected element on pointer down > [end of 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -14816,7 +14677,6 @@ exports[`regression tests > switches selected element on pointer down > [end of 
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "ellipse",
@@ -14877,7 +14737,6 @@ exports[`regression tests > two-finger scroll works > [end of test] appState 1`]
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -15019,7 +14878,6 @@ exports[`regression tests > undo/redo drawing an element > [end of test] appStat
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -15234,7 +15092,6 @@ exports[`regression tests > undo/redo drawing an element > [end of test] redo st
                 10,
               ],
             ],
-            "roughness": 0,
             "roundness": {
               "type": 2,
             },
@@ -15293,7 +15150,6 @@ exports[`regression tests > undo/redo drawing an element > [end of test] undo st
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -15352,7 +15208,6 @@ exports[`regression tests > undo/redo drawing an element > [end of test] undo st
             "link": null,
             "locked": false,
             "opacity": 100,
-            "roughness": 0,
             "roundness": null,
             "shape": {
               "id": "rectangle",
@@ -15413,7 +15268,6 @@ exports[`regression tests > updates fontSize & fontFamily appState > [end of tes
   "currentItemFontFamily": 8,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",
@@ -15555,7 +15409,6 @@ exports[`regression tests > zoom hotkeys > [end of test] appState 1`] = `
   "currentItemFontFamily": 6,
   "currentItemFontSize": 20,
   "currentItemOpacity": 100,
-  "currentItemRoughness": 0,
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffdf6b",

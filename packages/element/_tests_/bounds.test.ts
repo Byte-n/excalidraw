@@ -42,7 +42,6 @@ const _ce = ({
     fillStyle: "solid",
     strokeWidth: 1,
     roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
-    roughness: 0,
     opacity: 1,
     x,
     y,

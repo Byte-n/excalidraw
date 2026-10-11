@@ -35,7 +35,6 @@ export type ConnectorStyle = NullableStyle<{
   strokeColor: string;
   strokeWidth: number;
   strokeStyle: StrokeStyle;
-  roughness: number;
   opacity: number;
 }>;
 export type ShapeStyle = ConnectorStyle &

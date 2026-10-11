@@ -19,7 +19,6 @@ import {
   polygonFromPoints,
 } from "@excalidraw/math";
 import {
-  ROUGHNESS,
   THEME,
   isTransparent,
   assertNever,
@@ -74,7 +73,6 @@ import {
 import { getCornerRadius, isPathALoop } from "./utils";
 import { headingForPointIsHorizontal } from "./heading";
 
-import { canChangeRoundness } from "./comparisons";
 import {
   elementCenterPoint,
   getArrowheadPoints,
@@ -189,31 +187,6 @@ const getDashArrayDashed = (strokeWidth: number) => [8, 8 + strokeWidth];
 
 const getDashArrayDotted = (strokeWidth: number) => [1.5, 6 + strokeWidth];
 
-function adjustRoughness(element: ExcalidrawElement): number {
-  const roughness = element.roughness;
-
-  const maxSize = Math.max(element.width, element.height);
-  const minSize = Math.min(element.width, element.height);
-
-  // don't reduce roughness if
-  if (
-    // both sides relatively big
-    (minSize >= 20 && maxSize >= 50) ||
-    // is round & both sides above 15px
-    (minSize >= 15 &&
-      !!element.roundness &&
-      canChangeRoundness(
-        element.type === "composite_shape" ? element.shape.id : element.type,
-      )) ||
-    // relatively long linear element
-    (isLinearElement(element) && maxSize >= 50)
-  ) {
-    return roughness;
-  }
-
-  return Math.min(roughness / (maxSize < 10 ? 3 : 2), 2.5);
-}
-
 export const generateRoughOptions = (
   element: ExcalidrawElement,
   continuousPath = false,
@@ -241,10 +214,11 @@ export const generateRoughOptions = (
     // calculate them (and we don't want the fills to be modified)
     fillWeight: element.strokeWidth / 2,
     hachureGap: element.strokeWidth * 4,
-    roughness: adjustRoughness(element),
+    // All elements use the precise, architect-style rendering. Keep reading
+    roughness: 0,
     stroke: applyDarkModeFilter(element.strokeColor, isDarkMode),
     preserveVertices:
-      continuousPath || element.roughness < ROUGHNESS.cartoonist,
+      true,
   };
 
   switch (element.type) {
@@ -386,7 +360,7 @@ const getArrowheadLineOptions = (
     // for solid/dashed, keep solid arrow cap
     delete lineOptions.strokeLineDash;
   }
-  lineOptions.roughness = Math.min(1, lineOptions.roughness || 0);
+  lineOptions.roughness = 0;
 
   return lineOptions;
 };
@@ -409,7 +383,7 @@ const generateArrowheadOutlineCircle = (
     fill,
     fillStyle: "solid" as const,
     stroke: strokeColor,
-    roughness: Math.min(0.5, options.roughness || 0),
+    roughness: 0,
   };
 
   delete circleOptions.strokeLineDash;
@@ -469,7 +443,7 @@ const getArrowheadShapes = (
         fill:
           arrowhead === "triangle_outline" ? backgroundFillColor : strokeColor,
         fillStyle: "solid" as const,
-        roughness: Math.min(1, options.roughness || 0),
+        roughness: 0,
       };
 
       // always use solid stroke for arrowhead
@@ -506,7 +480,7 @@ const getArrowheadShapes = (
         fill:
           arrowhead === "diamond_outline" ? backgroundFillColor : strokeColor,
         fillStyle: "solid" as const,
-        roughness: Math.min(1, options.roughness || 0),
+        roughness: 0,
       };
 
       // always use solid stroke for arrowhead
