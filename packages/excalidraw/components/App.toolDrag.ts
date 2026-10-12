@@ -7,7 +7,11 @@ import {
   viewportCoordsToSceneCoords,
 } from "@excalidraw/common";
 
-import { isStickyNoteElement, newStickyNoteElement } from "@excalidraw/element";
+import {
+  getStickyNoteCreationInk,
+  isStickyNoteElement,
+  newStickyNoteElement,
+} from "@excalidraw/element";
 
 import type {
   ExcalidrawNonSelectionElement,
@@ -56,7 +60,11 @@ export const DRAGGABLE_TOOLS: Partial<Record<ToolType, DraggableTool>> = {
         type: "stickynote",
         ...centered(center, size, size),
         baseHeight: size,
-        strokeColor: state.currentItemStickynoteStrokeColor,
+        // the default yellow paper pairs with its own ink
+        strokeColor: getStickyNoteCreationInk(
+          state.currentItemStickynoteBackgroundColor,
+          state.currentItemStickynoteStrokeColor,
+        ),
         backgroundColor: state.currentItemStickynoteBackgroundColor,
         fillStyle: state.currentItemFillStyle,
         strokeWidth: app.getCurrentItemStrokeWidth("stickynote"),

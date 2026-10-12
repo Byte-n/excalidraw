@@ -1205,7 +1205,7 @@ const _generateElementShape = (
       return shapes;
     }
     // sticky notes are painted directly (canvas + SVG) from
-    // `getStickyNoteRenderPoints`, never through roughjs.
+    // `getStickyNotePathCommands`, never through roughjs.
     // tables paint themselves from `drawTableGridOnCanvas` for the same
     // reason — caching `null` keeps `element.canvas` from regenerating
     case "stickynote":

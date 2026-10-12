@@ -20,7 +20,7 @@ import {
   normalizeStickyNoteStrokeColor,
 } from "@excalidraw/element";
 
-import type { ColorPaletteCustom, ColorTuple } from "@excalidraw/common";
+import type { ColorPaletteCustom } from "@excalidraw/common";
 import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
 
 import { getSelectedElements } from "../scene";
@@ -55,7 +55,8 @@ export type ColorTarget = {
   /** the default shown when no element is targeted */
   currentValue: string;
   palette: ColorPaletteCustom;
-  topPicks: ColorTuple;
+  /** the strip's picks — five in every domain but the sticky paper's six */
+  topPicks: readonly string[];
   customizableTopPicks: keyof AppState["colorTopPicks"];
   excludedColors: readonly string[] | undefined;
 };

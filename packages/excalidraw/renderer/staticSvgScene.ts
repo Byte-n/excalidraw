@@ -12,10 +12,9 @@ import {
   getVerticalOffset,
   applyDarkModeFilter,
   MIME_TYPES,
-  STICKY_NOTE_EDGE_SHADOW_OPACITY,
-  STICKY_NOTE_EDGE_SHADOW_WIDTH,
   STICKY_NOTE_FOOTER,
-  STICKY_NOTE_SHADOW_OPACITY,
+  STICKY_NOTE_SHADOW,
+  STICKY_NOTE_SHADOW_COLOR,
 } from "@excalidraw/common";
 import { normalizeLink, toValidURL } from "@excalidraw/common";
 import { hashString } from "@excalidraw/element";
@@ -207,17 +206,10 @@ const renderElementToSvg = (
           .join(" ")
           .concat(" Z");
 
-      const createPath = (
-        commands: StickyNotePathCommand[],
-        fill: string,
-        fillOpacity?: number,
-      ) => {
+      const createPath = (commands: StickyNotePathCommand[], fill: string) => {
         const path = svgRoot.ownerDocument.createElementNS(SVG_NS, "path");
         path.setAttribute("d", getPathData(commands));
         path.setAttribute("fill", fill);
-        if (typeof fillOpacity !== "undefined") {
-          path.setAttribute("fill-opacity", `${fillOpacity}`);
-        }
         path.setAttribute("stroke", "none");
         return path;
       };
@@ -225,51 +217,65 @@ const renderElementToSvg = (
       const group = svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
       group.setAttribute(
         "transform",
-        `translate(${offsetX || 0} ${
-          offsetY || 0
-        }) rotate(${degree} ${cx} ${cy})`,
+        `translate(${offsetX || 0} ${offsetY || 0})`,
       );
       if (opacity !== 1) {
         group.setAttribute("opacity", `${opacity}`);
       }
 
-      const shadow = createPath(
-        getStickyNotePathCommands(element, { shadow: true }),
-        "#000",
-        STICKY_NOTE_SHADOW_OPACITY,
+      // the paper's soft drop shadow (two feDropShadow layers; stdDeviation
+      // is half the blur). It wraps the paper unrotated — the rotate lives on
+      // an inner group — so the light direction stays constant on rotated
+      // notes, like the canvas renderers' untransformed shadow space.
+      const shadowFilter = svgRoot.ownerDocument.createElementNS(
+        SVG_NS,
+        "filter",
       );
-      const commands = getStickyNotePathCommands(element);
-      const rect = createPath(
-        commands,
+      shadowFilter.setAttribute("id", `sticky-note-shadow-${element.id}`);
+      shadowFilter.setAttribute("x", "-30%");
+      shadowFilter.setAttribute("y", "-30%");
+      shadowFilter.setAttribute("width", "160%");
+      shadowFilter.setAttribute("height", "180%");
+      for (const layer of STICKY_NOTE_SHADOW.rest) {
+        const dropShadow = svgRoot.ownerDocument.createElementNS(
+          SVG_NS,
+          "feDropShadow",
+        );
+        dropShadow.setAttribute("dx", "0");
+        dropShadow.setAttribute("dy", `${layer.offsetY}`);
+        dropShadow.setAttribute("stdDeviation", `${layer.blur / 2}`);
+        dropShadow.setAttribute(
+          "flood-color",
+          applyDarkModeFilter(
+            STICKY_NOTE_SHADOW_COLOR,
+            renderConfig.theme === THEME.DARK,
+          ),
+        );
+        dropShadow.setAttribute("flood-opacity", `${layer.opacity}`);
+        shadowFilter.appendChild(dropShadow);
+      }
+      group.appendChild(shadowFilter);
+
+      const rotated = svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
+      rotated.setAttribute(
+        "transform",
+        `rotate(${degree} ${cx} ${cy})`,
+      );
+
+      const paper = createPath(
+        getStickyNotePathCommands(element),
         applyDarkModeFilter(
           element.backgroundColor,
           renderConfig.theme === THEME.DARK,
         ),
       );
-      const clipPath = svgRoot.ownerDocument.createElementNS(
-        SVG_NS,
-        "clipPath",
+      const shadowed = svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
+      shadowed.setAttribute(
+        "filter",
+        `url(#sticky-note-shadow-${element.id})`,
       );
-      clipPath.setAttribute("id", `sticky-note-clipPath-${element.id}`);
-      clipPath.setAttribute("clipPathUnits", "userSpaceOnUse");
-      clipPath.appendChild(createPath(commands, "#000"));
-      addToRoot(clipPath, element);
-
-      const edgeShadow = createPath(commands, "none");
-      edgeShadow.setAttribute("stroke", "#000");
-      edgeShadow.setAttribute(
-        "stroke-opacity",
-        `${STICKY_NOTE_EDGE_SHADOW_OPACITY}`,
-      );
-      edgeShadow.setAttribute(
-        "stroke-width",
-        `${STICKY_NOTE_EDGE_SHADOW_WIDTH * 2}`,
-      );
-      edgeShadow.setAttribute("clip-path", `url(#${clipPath.id})`);
-
-      group.appendChild(shadow);
-      group.appendChild(rect);
-      group.appendChild(edgeShadow);
+      shadowed.appendChild(paper);
+      rotated.appendChild(shadowed);
 
       const footer = getStickyNoteFooter(element);
       if (footer) {
@@ -291,8 +297,10 @@ const renderElementToSvg = (
         );
         dateText.setAttribute("fill-opacity", `${STICKY_NOTE_FOOTER.opacity}`);
         dateText.textContent = footer.text;
-        group.appendChild(dateText);
+        rotated.appendChild(dateText);
       }
+
+      group.appendChild(rotated);
 
       const g = maybeWrapNodesInFrameClipPath(
         element,

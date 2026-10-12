@@ -267,7 +267,15 @@ export const BUCKET_FILL_BACKGROUND_PICKS = [
 ] as ColorTuple;
 
 // sticky notes are their own color domain (own defaults, own picks)
-export const DEFAULT_STICKY_NOTE_BG = "#ffdf6b";
+export const DEFAULT_STICKY_NOTE_BG = "#ffe58f";
+
+/**
+ * The ink (text + footer) of a note on the default yellow paper — dark brown
+ * instead of the default ink. Applied by `syncStickyNoteInk` when the paper
+ * becomes yellow, and the default `currentItemStickynoteStrokeColor`. Dark
+ * themes run it through `applyDarkModeFilter`, like every element color.
+ */
+export const STICKY_NOTE_YELLOW_INK = "#5c4200";
 
 // 便签描边快捷色保持独立取值，不随元素描边快捷色变化
 export const STICKY_NOTE_STROKE_PICKS = [
@@ -278,15 +286,17 @@ export const STICKY_NOTE_STROKE_PICKS = [
   COLOR_PALETTE.yellow[DEFAULT_ELEMENT_STROKE_COLOR_INDEX],
 ] as ColorTuple;
 
-// ORDER matters for positioning in quick picker. Classic note colors; the
-// first one is `DEFAULT_STICKY_NOTE_BG`. Never transparent.
+// ORDER matters for positioning in quick picker. Low-saturation paper colors;
+// the first one is `DEFAULT_STICKY_NOTE_BG`. Never transparent. Six slots —
+// the only strip wider than `COLOR_TOP_PICKS_SLOTS`.
 export const STICKY_NOTE_BACKGROUND_PICKS = [
   DEFAULT_STICKY_NOTE_BG,
-  COLOR_PALETTE.pink[1],
-  COLOR_PALETTE.green[1],
-  COLOR_PALETTE.blue[1],
-  COLOR_PALETTE.orange[1],
-] as ColorTuple;
+  "#c6efd9",
+  "#cde3fc",
+  "#fcd5dd",
+  "#e2d8fb",
+  "#e5e6eb",
+] as const;
 
 // ORDER matters for positioning in quick picker
 export const DEFAULT_CANVAS_BACKGROUND_PICKS = [

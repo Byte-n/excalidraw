@@ -240,28 +240,24 @@ export const STICKY_NOTE_FALLBACK_FONT_SIZE = 28;
 export const STICKY_NOTE_FONT_STEP = 2;
 export const STICKY_NOTE_PADDING = 16;
 /**
- * The creation-date footer: a 20px text row under the label body plus a 12px
- * gap above it, inside the note's bottom padding. Reserved for every note —
- * also when `created` is unknown — so geometry never depends on data
- * availability. The label is chosen by width bucket, never measured, so
- * painting stays measurement-free (the server has no text measurer):
- * `minBodyWidthForYear` is the worst case ("30 May 2026") in the system sans
- * stack at 12px, with margin for wider fallbacks such as DejaVu Sans.
- */
-/**
  * The creation-date footer of a sticky note. The label body ends `height`
  * above the note's bottom padding, and the date's baseline sits
- * `baselineFromBottom` above the note's bottom edge — so the 12px glyphs
- * (~9px above the baseline, ~3px below) end up roughly 11px from the edge
- * with a ~13px gap to the label body above them.
+ * `baselineFromBottom` above the note's bottom edge. Reserved for every note —
+ * also when `created` is unknown — so geometry never depends on data
+ * availability. The label ("10月11日", "2025年10月11日" across a year
+ * boundary) is chosen by width bucket, never measured, so painting stays
+ * measurement-free (the server has no text measurer): `minBodyWidthForYear`
+ * is the worst case ("2025年10月11日") in the system sans stack at 11px —
+ * 8 digits (~0.55em) plus 3 full-width glyphs (1em) — with margin for wider
+ * fallbacks such as DejaVu Sans.
  */
 export const STICKY_NOTE_FOOTER = {
   height: 20,
-  fontSize: 12,
+  fontSize: 11,
   fontFamily: "Helvetica, Arial, sans-serif",
   baselineFromBottom: 14,
-  opacity: 1,
-  minBodyWidthForYear: 80,
+  opacity: 0.55,
+  minBodyWidthForYear: 92,
 } as const;
 /**
  * outer height → label body height: top + bottom padding + footer. The body
@@ -274,10 +270,28 @@ export const DEFAULT_STICKY_NOTE_SIZE = 250;
 // floor for a finalized note's width and base height; the UI floor is font-aware
 // on top of it (see `getStickyNoteMinSize`)
 export const STICKY_NOTE_MIN_SIZE = 75;
-export const STICKY_NOTE_SHADOW_OFFSET = 3;
-export const STICKY_NOTE_SHADOW_OPACITY = 0.16;
-export const STICKY_NOTE_EDGE_SHADOW_WIDTH = 0.5;
-export const STICKY_NOTE_EDGE_SHADOW_OPACITY = 0.08;
+export const STICKY_NOTE_CORNER_RADIUS = 4;
+/**
+ * The paper's soft drop shadow: two stacked layers in CSS box-shadow
+ * semantics (`offsetY`, `blur`, `opacity` of `STICKY_NOTE_SHADOW_COLOR`),
+ * `rest` by default and `lift` while hovered or dragged. Canvas renderers
+ * scale the values by the current transform's magnitude (canvas shadow
+ * offsets and blur live in the untransformed bitmap space); the SVG export
+ * uses `feDropShadow` (`stdDeviation = blur / 2`). The color is the light
+ * theme value — dark themes run it through `applyDarkModeFilter`, like every
+ * element color.
+ */
+export const STICKY_NOTE_SHADOW_COLOR = "#1f2329";
+export const STICKY_NOTE_SHADOW = {
+  rest: [
+    { offsetY: 1, blur: 2, opacity: 0.08 },
+    { offsetY: 3, blur: 8, opacity: 0.1 },
+  ],
+  lift: [
+    { offsetY: 2, blur: 3, opacity: 0.08 },
+    { offsetY: 8, blur: 20, opacity: 0.14 },
+  ],
+} as const;
 export const DEFAULT_FONT_FAMILY: FontFamilyValues = FONT_FAMILY.Excalifont;
 export const DEFAULT_TEXT_ALIGN = "left";
 export const DEFAULT_VERTICAL_ALIGN = "top";

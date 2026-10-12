@@ -25,10 +25,10 @@ import {
   invariant,
   applyDarkModeFilter,
   isSafari,
-  STICKY_NOTE_EDGE_SHADOW_OPACITY,
-  STICKY_NOTE_EDGE_SHADOW_WIDTH,
+  setColorAlpha,
   STICKY_NOTE_FOOTER,
-  STICKY_NOTE_SHADOW_OPACITY,
+  STICKY_NOTE_SHADOW,
+  STICKY_NOTE_SHADOW_COLOR,
   VERTICAL_ALIGN,
 } from "@excalidraw/common";
 
@@ -88,6 +88,7 @@ import type {
   NonDeletedExcalidrawElement,
   ExcalidrawFreeDrawElement,
   ExcalidrawImageElement,
+  ExcalidrawStickyNoteElement,
   ExcalidrawTextElementWithContainer,
   NonDeletedSceneElementsMap,
   ElementsMap,
@@ -455,19 +456,67 @@ const fillStickyNoteShape = (
   context.fill();
 };
 
-const strokeStickyNoteEdge = (
+/**
+ * The paper's soft drop shadow — the two `STICKY_NOTE_SHADOW` layers, painted
+ * as fills of the paper's own shape that the paper covers right after. Canvas
+ * shadow offsets and blur live in the untransformed bitmap space, so they are
+ * scaled by the current transform's magnitude; the offset staying
+ * untransformed also keeps the light direction constant on rotated notes.
+ *
+ * The caller has transformed the context into the paper's local frame
+ * ((0, 0) = its top-left corner, rotation applied).
+ */
+const paintStickyNoteShadow = (
   context: CanvasRenderingContext2D,
-  commands: StickyNotePathCommand[],
+  element: NonDeleted<ExcalidrawStickyNoteElement>,
+  theme: StaticCanvasRenderConfig["theme"],
+  lifted: boolean,
 ) => {
+  if (element.width <= 0 || element.height <= 0) {
+    return;
+  }
+  const transform = context.getTransform();
+  const bitmapScale = Math.hypot(transform.a, transform.b);
+  if (!bitmapScale) {
+    return;
+  }
+  const shadowColor = applyDarkModeFilter(
+    STICKY_NOTE_SHADOW_COLOR,
+    theme === THEME.DARK,
+  );
+  const commands = getStickyNotePathCommands(element);
   context.save();
-  drawStickyNotePath(context, commands);
-  context.clip();
-  context.lineWidth = STICKY_NOTE_EDGE_SHADOW_WIDTH * 2;
-  context.strokeStyle = `rgba(0, 0, 0, ${STICKY_NOTE_EDGE_SHADOW_OPACITY})`;
-  drawStickyNotePath(context, commands);
-  context.stroke();
+  context.fillStyle = applyDarkModeFilter(
+    element.backgroundColor,
+    theme === THEME.DARK,
+  );
+  for (const layer of lifted
+    ? STICKY_NOTE_SHADOW.lift
+    : STICKY_NOTE_SHADOW.rest) {
+    context.shadowColor = setColorAlpha(shadowColor, layer.opacity);
+    context.shadowBlur = layer.blur * bitmapScale;
+    context.shadowOffsetX = 0;
+    context.shadowOffsetY = layer.offsetY * bitmapScale;
+    drawStickyNotePath(context, commands);
+    context.fill();
+  }
   context.restore();
 };
+
+/**
+ * Hover lifts the paper's shadow instead of drawing a hover outline, and a
+ * drag keeps the lift. (Editing goes through the wysiwyg: the note keeps its
+ * resting shadow and the interactive scene draws the edit ring.)
+ */
+const isStickyNoteLifted = (
+  element: NonDeleted<ExcalidrawStickyNoteElement>,
+  appState: StaticCanvasAppState | InteractiveCanvasAppState,
+) =>
+  appState.hoveredElementId === element.id ||
+  !!appState.hoveredElementIds[element.id] ||
+  ("selectedElementsAreBeingDragged" in appState &&
+    !!appState.selectedElementsAreBeingDragged &&
+    !!appState.selectedElementIds[element.id]);
 
 /** Returns the content-box offset for a text element's vertical alignment. */
 export const getTextVerticalOffset = (
@@ -498,11 +547,14 @@ const drawElementOnCanvas = (
   switch (element.type) {
     case "stickynote": {
       context.save();
-      context.fillStyle = `rgba(0, 0, 0, ${STICKY_NOTE_SHADOW_OPACITY})`;
-      fillStickyNoteShape(
-        context,
-        getStickyNotePathCommands(element, { shadow: true }),
-      );
+
+      // vector exports draw on the scene canvas directly, so the paper's
+      // shadow is painted here; the interactive app caches just the paper in
+      // the element canvas and paints the shadow per frame in `drawElement`
+      // (hover/drag lifts it)
+      if (renderConfig.isExporting) {
+        paintStickyNoteShadow(context, element, renderConfig.theme, false);
+      }
 
       const commands = getStickyNotePathCommands(element);
       context.fillStyle = applyDarkModeFilter(
@@ -510,7 +562,6 @@ const drawElementOnCanvas = (
         renderConfig.theme === THEME.DARK,
       );
       fillStickyNoteShape(context, commands);
-      strokeStickyNoteEdge(context, commands);
 
       // the label is absolute, so this cached canvas only goes stale at a
       // year boundary — and is regenerated on the next zoom, theme or
@@ -1360,6 +1411,27 @@ const drawElement = (
         // not exporting → optimized rendering (cache & render from element
         // canvases)
       } else {
+        // a note's shadow is not part of its cached bitmap: painting it here,
+        // per frame, lets hover and drag lift it (and keeps the lift out of
+        // the cache key)
+        if (element.type === "stickynote") {
+          context.save();
+          context.translate(
+            element.x + renderState.offset.x + appState.scrollX,
+            element.y + renderState.offset.y + appState.scrollY,
+          );
+          context.translate(element.width / 2, element.height / 2);
+          context.rotate(element.angle);
+          context.translate(-element.width / 2, -element.height / 2);
+          paintStickyNoteShadow(
+            context,
+            element,
+            renderConfig.theme,
+            isStickyNoteLifted(element, appState),
+          );
+          context.restore();
+        }
+
         const elementWithCanvas = generateElementWithCanvas(
           element,
           allElementsMap,

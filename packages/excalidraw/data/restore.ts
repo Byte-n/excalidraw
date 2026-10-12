@@ -30,6 +30,7 @@ import {
   STROKE_WIDTH,
   STROKE_WIDTH_KEYS,
   type StrokeWidthKey,
+  STICKY_NOTE_BACKGROUND_PICKS,
   isTransparent,
 } from "@excalidraw/common";
 import {
@@ -1348,7 +1349,10 @@ const LegacyAppStateMigrations: {
   },
 };
 
-const restoreColorTopPicksList = (value: unknown): readonly string[] | null => {
+const restoreColorTopPicksList = (
+  value: unknown,
+  slots: number = COLOR_TOP_PICKS_SLOTS,
+): readonly string[] | null => {
   if (!Array.isArray(value)) {
     return null;
   }
@@ -1367,7 +1371,7 @@ const restoreColorTopPicksList = (value: unknown): readonly string[] | null => {
     }
     // the strip layout fits exactly this many slots — longer lists (hostile
     // or hand-edited storage) would overflow the properties island
-    if (colors.size >= COLOR_TOP_PICKS_SLOTS) {
+    if (colors.size >= slots) {
       break;
     }
   }
@@ -1436,6 +1440,8 @@ export const restoreAppState = (
     ),
     stickyNoteBackground: restoreColorTopPicksList(
       nextAppState.colorTopPicks?.stickyNoteBackground,
+      // the sticky paper strip has six default picks, not five
+      STICKY_NOTE_BACKGROUND_PICKS.length,
     ),
   };
 

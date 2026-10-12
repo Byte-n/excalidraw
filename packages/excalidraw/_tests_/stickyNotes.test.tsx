@@ -1168,11 +1168,11 @@ describe("sticky notes", () => {
       );
       expect(
         [...svg.querySelectorAll("text")].map((text) => text.textContent),
-      ).toEqual(["7 Mar 2025"]);
+      ).toEqual(["2025年3月7日"]);
 
       const canvas = await exportToCanvas({ elements, files: {} });
       expect(canvas.getContext("2d")?.fillText).toHaveBeenCalledWith(
-        "7 Mar 2025",
+        "2025年3月7日",
         expect.any(Number),
         expect.any(Number),
       );

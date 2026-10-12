@@ -49,6 +49,8 @@ import {
   isLineElement,
   isMindmapEdgeElement,
   isMindmapNodeElement,
+  isStickyNoteElement,
+  getStickyNoteCornerRadius,
   isTableElement,
   isTableCellBackgroundText,
   getTableCellBounds,
@@ -96,6 +98,7 @@ import type {
   ExcalidrawLinearElement,
   ExcalidrawMindmapEdgeElement,
   ExcalidrawMindmapNodeElement,
+  ExcalidrawStickyNoteElement,
   ExcalidrawTableElement,
   ExcalidrawTextElement,
   GroupId,
@@ -2661,6 +2664,42 @@ const renderTextBox = (
   context.restore();
 };
 
+/**
+ * The primary ring a sticky note wears while its label is being edited — the
+ * paper's own outline (a note has no visible stroke of its own), replacing
+ * the selection box for the editing session.
+ */
+const renderStickyNoteEditRing = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  note: NonDeleted<ExcalidrawStickyNoteElement>,
+  selectionColor: InteractiveCanvasRenderConfig["selectionColor"],
+) => {
+  context.save();
+  context.translate(
+    note.x + note.width / 2 + appState.scrollX,
+    note.y + note.height / 2 + appState.scrollY,
+  );
+  context.rotate(note.angle);
+  context.lineWidth = 1.5 / appState.zoom.value;
+  context.strokeStyle = selectionColor;
+  context.beginPath();
+  const radius = getStickyNoteCornerRadius(note);
+  if (radius && context.roundRect) {
+    context.roundRect(
+      -note.width / 2,
+      -note.height / 2,
+      note.width,
+      note.height,
+      radius,
+    );
+  } else {
+    context.rect(-note.width / 2, -note.height / 2, note.width, note.height);
+  }
+  context.stroke();
+  context.restore();
+};
+
 const renderResetAutoResizeHandle = (
   text: ExcalidrawTextElement,
   context: CanvasRenderingContext2D,
@@ -2815,6 +2854,22 @@ const _renderInteractiveScene = ({
         );
       }
     }
+    const editingContainerId = appState.editingTextElement.containerId;
+    const editingContainer = editingContainerId
+      ? allElementsMap.get(editingContainerId)
+      : null;
+    if (
+      editingContainer &&
+      !editingContainer.isDeleted &&
+      isStickyNoteElement(editingContainer)
+    ) {
+      renderStickyNoteEditRing(
+        context,
+        appState,
+        editingContainer,
+        renderConfig.selectionColor || getSelectionColor(app.interactiveCanvas),
+      );
+    }
   }
 
   if (appState.isBindingEnabled && appState.suggestedBinding) {
@@ -2906,6 +2961,9 @@ const _renderInteractiveScene = ({
       !hoveredElement.isDeleted &&
       !isLinearElement(hoveredElement) &&
       !isMindmapEdgeElement(hoveredElement) &&
+      // a note's hover feedback is its lifted paper shadow (painted by the
+      // static scene), not the generic outline
+      !isStickyNoteElement(hoveredElement) &&
       !selectedElements.some((element) => element.id === hoveredElement.id) &&
       appState.activeLockedId !== hoveredElement.id
     ) {
@@ -3210,6 +3268,15 @@ const _renderInteractiveScene = ({
               element,
               selectionColors[0],
             );
+            continue;
+          }
+          // while a note's label is edited, the note wears the primary edit
+          // ring (rendered with the wysiwyg chrome) instead of the selection
+          // box
+          if (
+            isStickyNoteElement(element) &&
+            appState.editingTextElement?.containerId === element.id
+          ) {
             continue;
           }
           const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(

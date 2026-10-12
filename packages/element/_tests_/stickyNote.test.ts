@@ -1,8 +1,11 @@
 import {
+  DEFAULT_ELEMENT_PROPS,
+  DEFAULT_STICKY_NOTE_BG,
   DEFAULT_STICKY_NOTE_SIZE,
   FONT_FAMILY,
   MIN_FONT_SIZE,
   ROUNDNESS,
+  STICKY_NOTE_CORNER_RADIUS,
   STICKY_NOTE_FALLBACK_FONT_SIZE,
   STICKY_NOTE_MAX_FONT_SIZE,
   STICKY_NOTE_MIN_FONT_SIZE,
@@ -10,6 +13,7 @@ import {
   STICKY_NOTE_FOOTER,
   STICKY_NOTE_MIN_SIZE,
   STICKY_NOTE_PADDING,
+  STICKY_NOTE_YELLOW_INK,
   VERTICAL_ALIGN,
   arrayToMap,
 } from "@excalidraw/common";
@@ -108,7 +112,7 @@ const createStickyWithText = (
 };
 
 describe("sticky note text layout", () => {
-  it("preserves rounded corners with reduced radius", () => {
+  it("rounds a round note's corners at the fixed paper radius", () => {
     const sticky = newStickyNoteElement({
       type: "stickynote",
       x: 0,
@@ -118,13 +122,20 @@ describe("sticky note text layout", () => {
       roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
     });
 
-    expect(sticky.roundness).toEqual({ type: ROUNDNESS.PROPORTIONAL_RADIUS });
-    expect(getStickyNoteCornerRadius(sticky)).toBeLessThan(
-      DEFAULT_STICKY_NOTE_SIZE * 0.25,
-    );
+    expect(getStickyNoteCornerRadius(sticky)).toBe(STICKY_NOTE_CORNER_RADIUS);
+
+    const sharp = newStickyNoteElement({
+      type: "stickynote",
+      x: 0,
+      y: 0,
+      width: DEFAULT_STICKY_NOTE_SIZE,
+      height: DEFAULT_STICKY_NOTE_SIZE,
+      roundness: null,
+    });
+    expect(getStickyNoteCornerRadius(sharp)).toBe(0);
   });
 
-  it("uses reduced rounded corners for binding intersections", () => {
+  it("uses the paper's corner radius for binding intersections", () => {
     const sticky = newStickyNoteElement({
       type: "stickynote",
       x: 0,
@@ -987,16 +998,18 @@ describe("sticky note creation date", () => {
     new Date(year, month, day, 12).getTime();
 
   it("formats an absolute date, short while the year is the current one", () => {
-    expect(getStickyNoteDateLabel(at(2026, 8, 7), { now: NOW })).toBe("7 Sep");
+    expect(getStickyNoteDateLabel(at(2026, 8, 7), { now: NOW })).toBe(
+      "9月7日",
+    );
     expect(getStickyNoteDateLabel(at(2025, 11, 31), { now: NOW })).toBe(
-      "31 Dec 2025",
+      "2025年12月31日",
     );
     expect(
       getStickyNoteDateLabel(at(2025, 11, 31), { now: NOW, short: true }),
-    ).toBe("31 Dec");
+    ).toBe("12月31日");
     // a creator's clock ahead of ours is still a date
     expect(getStickyNoteDateLabel(at(2027, 0, 1), { now: NOW })).toBe(
-      "1 Jan 2027",
+      "2027年1月1日",
     );
   });
 
@@ -1015,15 +1028,15 @@ describe("sticky note creation date", () => {
       STICKY_NOTE_PADDING * 2 + STICKY_NOTE_FOOTER.minBodyWidthForYear;
 
     expect(footer(DEFAULT_STICKY_NOTE_SIZE)).toEqual({
-      text: "30 May 2025",
+      text: "2025年5月30日",
       x: DEFAULT_STICKY_NOTE_SIZE - STICKY_NOTE_PADDING,
       y: DEFAULT_STICKY_NOTE_SIZE - STICKY_NOTE_FOOTER.baselineFromBottom,
     });
-    expect(footer(yearWidth)?.text).toBe("30 May 2025");
-    expect(footer(yearWidth - 1)?.text).toBe("30 May");
+    expect(footer(yearWidth)?.text).toBe("2025年5月30日");
+    expect(footer(yearWidth - 1)?.text).toBe("5月30日");
     // the data floor always fits the short form
     expect(footer(STICKY_NOTE_MIN_SIZE, STICKY_NOTE_MIN_SIZE)?.text).toBe(
-      "30 May",
+      "5月30日",
     );
     // the 0×0 creation draft paints no footer, nor does an unknown date
     expect(footer(0, 0)).toBeNull();
@@ -1112,5 +1125,66 @@ describe("sticky note ink", () => {
     expect(
       inks(syncStickyNoteInk(pair(RED, "transparent"), new Map())),
     ).toEqual([RED, RED]);
+  });
+
+  it("forces the yellow ink when the paper becomes the default yellow", () => {
+    const [container, label] = pair(RED, RED);
+    const green = newElementWith(container, { backgroundColor: "#c6efd9" });
+    const prev = arrayToMap([green, label]);
+
+    expect(
+      inks(
+        syncStickyNoteInk(
+          [
+            newElementWith(green, { backgroundColor: DEFAULT_STICKY_NOTE_BG }),
+            label,
+          ],
+          prev,
+        ),
+      ),
+    ).toEqual([STICKY_NOTE_YELLOW_INK, STICKY_NOTE_YELLOW_INK]);
+  });
+
+  it("releases an untouched yellow ink back to the default when leaving yellow", () => {
+    const [container, label] = pair(
+      STICKY_NOTE_YELLOW_INK,
+      STICKY_NOTE_YELLOW_INK,
+    );
+    const prev = arrayToMap([container, label]);
+    const recolored = newElementWith(container, { backgroundColor: "#c6efd9" });
+
+    expect(inks(syncStickyNoteInk([recolored, label], prev))).toEqual([
+      DEFAULT_ELEMENT_PROPS.strokeColor,
+      DEFAULT_ELEMENT_PROPS.strokeColor,
+    ]);
+  });
+
+  it("keeps a custom ink when leaving yellow", () => {
+    const [container, label] = pair(RED, RED);
+    const prev = arrayToMap([container, label]);
+    const recolored = newElementWith(container, { backgroundColor: "#c6efd9" });
+
+    expect(inks(syncStickyNoteInk([recolored, label], prev))).toEqual([
+      RED,
+      RED,
+    ]);
+  });
+
+  it("respects an explicit ink pick on a yellow note", () => {
+    const [container, label] = pair(
+      STICKY_NOTE_YELLOW_INK,
+      STICKY_NOTE_YELLOW_INK,
+    );
+    const prev = arrayToMap([container, label]);
+
+    // the paper stayed yellow, so the recolor syncs normally
+    expect(
+      inks(
+        syncStickyNoteInk(
+          [newElementWith(container, { strokeColor: BLUE }), label],
+          prev,
+        ),
+      ),
+    ).toEqual([BLUE, BLUE]);
   });
 });

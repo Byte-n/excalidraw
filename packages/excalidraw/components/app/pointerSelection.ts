@@ -22,6 +22,7 @@ import {
   newEmbeddableElement,
   newMagicFrameElement,
   newStickyNoteElement,
+  getStickyNoteCreationInk,
   newArrowElement,
   newElement,
   newLinearElement,
@@ -1597,7 +1598,11 @@ export const createGenericElementOnPointerDown = (
     y: gridY,
     strokeColor:
       elementType === "stickynote"
-        ? app.state.currentItemStickynoteStrokeColor
+        ? // the default yellow paper pairs with its own ink
+          getStickyNoteCreationInk(
+            app.state.currentItemStickynoteBackgroundColor,
+            app.state.currentItemStickynoteStrokeColor,
+          )
         : app.state.currentItemStrokeColor,
     backgroundColor:
       elementType === "stickynote"

@@ -506,7 +506,13 @@ export const actionChangeBackgroundColor = register<
     }
 
     return {
-      elements: nextElements,
+      // the default yellow paper carries its own ink: the sync forces it on
+      // a switch onto yellow and releases an untouched one when leaving. Ink
+      // reconciliation stays with the stroke actions — a background pick
+      // leaves unrelated notes untouched.
+      elements: syncStickyNoteInk(nextElements, elementsMap, {
+        reconcileInk: false,
+      }),
       appState: {
         ...appState,
         ...appStateUpdates,

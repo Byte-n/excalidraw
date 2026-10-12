@@ -4,6 +4,7 @@ import {
   MIN_FONT_SIZE,
   arrayToMap,
   STICKY_NOTE_BODY_INSET_Y,
+  STICKY_NOTE_CORNER_RADIUS,
   STICKY_NOTE_FALLBACK_FONT_SIZE,
   STICKY_NOTE_FOOTER,
   STICKY_NOTE_FONT_STEP,
@@ -11,11 +12,10 @@ import {
   STICKY_NOTE_MIN_SIZE,
   STICKY_NOTE_MIN_FONT_SIZE,
   STICKY_NOTE_PADDING,
-  STICKY_NOTE_SHADOW_OFFSET,
+  STICKY_NOTE_YELLOW_INK,
   getFontString,
   getLineHeight,
   isTransparent,
-  seededRandom,
 } from "@excalidraw/common";
 
 import { clamp } from "@excalidraw/math";
@@ -59,9 +59,6 @@ export type StickyNotePathCommand =
       control: StickyNoteRenderPoint;
       point: StickyNoteRenderPoint;
     };
-
-const STICKY_NOTE_CORNER_RADIUS_RATIO = 0.04;
-const STICKY_NOTE_MAX_CORNER_RADIUS = 16;
 
 export const normalizeStickyNoteStrokeColor = (
   strokeColor: string | null | undefined,
@@ -135,17 +132,52 @@ export const getColorUpdate = (
 };
 
 /**
+ * Whether the paper is the default yellow, which pairs with its own ink
+ * (`STICKY_NOTE_YELLOW_INK`). Compared case-insensitively: the value is
+ * user-visible data, not confined to the factory constant's casing.
+ */
+export const isDefaultYellowStickyNote = (backgroundColor: string) =>
+  backgroundColor.toLowerCase() === DEFAULT_STICKY_NOTE_BG;
+
+/**
+ * The ink a newly created note starts with: the default yellow paper pairs
+ * with `STICKY_NOTE_YELLOW_INK`, any other paper takes the sticky ink
+ * default. (Recolors of an existing note go through `syncStickyNoteInk`.)
+ */
+export const getStickyNoteCreationInk = (
+  backgroundColor: string,
+  stickyStrokeColor: string,
+) =>
+  isDefaultYellowStickyNote(normalizeStickyNoteBackgroundColor(backgroundColor))
+    ? STICKY_NOTE_YELLOW_INK
+    : normalizeStickyNoteStrokeColor(stickyStrokeColor);
+
+/**
  * A note's ink is one color: the container's `strokeColor` — the seed for a
  * new label and what the creation-date footer paints with — and its label's.
  * Run after a property write to copy the side that changed onto the other;
  * when both changed, or neither (data that drifted), the label wins: it is
  * the text the user styled. A transparent label always takes the note's
  * color. Returns the same array when nothing needs to change.
+ *
+ * The default yellow paper carries its own ink: a background switch onto it
+ * forces both sides to `STICKY_NOTE_YELLOW_INK`, and a switch away releases a
+ * still-untouched one back to the default ink. An explicit ink pick on a
+ * yellow note (no background change in the same pass) is left alone.
  */
 export const syncStickyNoteInk = <T extends ExcalidrawElement>(
   elements: readonly T[],
   prevElementsMap: ElementsMap,
+  opts?: {
+    /**
+     * Also reconcile a note's ink with its label's (stroke picks, paste
+     * styles). Paper pairing (the yellow ink) always runs; background picks
+     * pass `false` so unrelated notes keep their identity.
+     */
+    reconcileInk?: boolean;
+  },
 ): readonly T[] => {
+  const reconcileInk = opts?.reconcileInk ?? true;
   const elementsMap = arrayToMap(elements);
   const inkById = new Map<string, string>();
   for (const container of elements) {
@@ -153,6 +185,31 @@ export const syncStickyNoteInk = <T extends ExcalidrawElement>(
       continue;
     }
     const label = getBoundTextElement(container, elementsMap);
+    const prevContainer = prevElementsMap.get(container.id);
+    if (
+      prevContainer &&
+      isDefaultYellowStickyNote(container.backgroundColor) !==
+        isDefaultYellowStickyNote(prevContainer.backgroundColor)
+    ) {
+      if (isDefaultYellowStickyNote(container.backgroundColor)) {
+        inkById.set(container.id, STICKY_NOTE_YELLOW_INK);
+        if (label) {
+          inkById.set(label.id, STICKY_NOTE_YELLOW_INK);
+        }
+      } else if (
+        container.strokeColor.toLowerCase() === STICKY_NOTE_YELLOW_INK &&
+        (!label || label.strokeColor.toLowerCase() === STICKY_NOTE_YELLOW_INK)
+      ) {
+        inkById.set(container.id, DEFAULT_ELEMENT_PROPS.strokeColor);
+        if (label) {
+          inkById.set(label.id, DEFAULT_ELEMENT_PROPS.strokeColor);
+        }
+      }
+      continue;
+    }
+    if (!reconcileInk) {
+      continue;
+    }
     if (!label || label.strokeColor === container.strokeColor) {
       continue;
     }
@@ -186,29 +243,12 @@ export const syncStickyNoteInk = <T extends ExcalidrawElement>(
   });
 };
 
-const jitter = (random: () => number, amount: number) =>
-  (random() * 2 - 1) * amount;
-
-const pointAtDistance = (
-  from: StickyNoteRenderPoint,
-  to: StickyNoteRenderPoint,
-  distance: number,
-) => {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const length = Math.hypot(dx, dy);
-
-  if (!length) {
-    return from;
-  }
-
-  const ratio = Math.min(distance / length, 1);
-  return {
-    x: from.x + dx * ratio,
-    y: from.y + dy * ratio,
-  };
-};
-
+/**
+ * The paper is a plain rect with a fixed small radius (a rounded index card,
+ * not a rough sketch): `STICKY_NOTE_CORNER_RADIUS` when the element is round,
+ * 0 when it is sharp. Also used for collision geometry
+ * (`deconstructRectanguloidElement`).
+ */
 export const getStickyNoteCornerRadius = (
   element: ExcalidrawStickyNoteElement,
 ) => {
@@ -217,154 +257,58 @@ export const getStickyNoteCornerRadius = (
   }
 
   return Math.min(
-    Math.min(element.width, element.height) * STICKY_NOTE_CORNER_RADIUS_RATIO,
-    STICKY_NOTE_MAX_CORNER_RADIUS,
+    STICKY_NOTE_CORNER_RADIUS,
+    Math.min(element.width, element.height) / 2,
   );
 };
 
-export const getStickyNoteRenderPoints = (
-  element: ExcalidrawStickyNoteElement,
-  {
-    offsetX = 0,
-    offsetY = 0,
-    seedOffset = 0,
-  }: {
-    offsetX?: number;
-    offsetY?: number;
-    seedOffset?: number;
-  } = {},
-): StickyNoteRenderPoint[] => {
-  const amount = Math.min(
-    0,
-    Math.min(element.width, element.height) * 0.012,
-  );
-
-  if (!amount) {
-    return [
-      { x: offsetX, y: offsetY },
-      { x: offsetX + element.width, y: offsetY },
-      { x: offsetX + element.width, y: offsetY + element.height },
-      { x: offsetX, y: offsetY + element.height },
-    ];
-  }
-
-  const random = seededRandom(element.seed + seedOffset);
-
-  return [
-    {
-      x: offsetX + jitter(random, amount),
-      y: offsetY + jitter(random, amount),
-    },
-    {
-      x: offsetX + element.width + jitter(random, amount),
-      y: offsetY + jitter(random, amount),
-    },
-    {
-      x: offsetX + element.width + jitter(random, amount),
-      y: offsetY + element.height + jitter(random, amount),
-    },
-    {
-      x: offsetX + jitter(random, amount),
-      y: offsetY + element.height + jitter(random, amount),
-    },
-  ];
-};
-
+/**
+ * The paper outline in note-local coordinates: a rounded rectangle traced
+ * clockwise from just past the top-left corner. Shared by the canvas and SVG
+ * renderers, which fill it (and never stroke it — the paper has no border).
+ */
 export const getStickyNotePathCommands = (
   element: ExcalidrawStickyNoteElement,
-  { shadow = false }: { shadow?: boolean } = {},
 ): StickyNotePathCommand[] => {
-  const points = getStickyNoteRenderPoints(
-    element,
-    shadow
-      ? {
-          offsetX: STICKY_NOTE_SHADOW_OFFSET,
-          offsetY: STICKY_NOTE_SHADOW_OFFSET,
-          seedOffset: 1,
-        }
-      : undefined,
-  );
   const radius = getStickyNoteCornerRadius(element);
-  // The note's seed keeps the same corner for the paper and shadow through
-  // redraws and resizes.
-  const liftedCorner =
-    false
-      ? Math.floor(seededRandom(element.seed)() * points.length)
-      : -1;
+  const { width, height } = element;
 
-  if (!radius && liftedCorner === -1) {
+  if (!radius) {
     return [
-      { type: "move", point: points[0] },
-      ...points.slice(1).map(
-        (point): StickyNotePathCommand => ({
-          type: "line",
-          point,
-        }),
-      ),
+      { type: "move", point: { x: 0, y: 0 } },
+      { type: "line", point: { x: width, y: 0 } },
+      { type: "line", point: { x: width, y: height } },
+      { type: "line", point: { x: 0, y: height } },
     ];
   }
 
-  const corners = points.map((point, index): StickyNotePathCommand[] => {
-    const prev = points[(index + points.length - 1) % points.length];
-    const next = points[(index + 1) % points.length];
-    const cornerRadius = Math.min(
-      radius,
-      Math.hypot(point.x - prev.x, point.y - prev.y) / 2,
-      Math.hypot(point.x - next.x, point.y - next.y) / 2,
-    );
-
-    if (index === liftedCorner) {
-      const size = Math.min(element.width, element.height);
-      const reach = Math.min(size * 0.18, 40);
-      // The shadow follows the paper inward at half the bend, keeping its
-      // usual down-right offset from the light at the top left.
-      const lift = Math.min(size * 0.02, 5) * (shadow ? 0.5 : 1);
-      // The bend joins the straight edges before the corner, keeping it local.
-      const tip = {
-        x: point.x + (index === 1 || index === 2 ? -lift : lift),
-        y: point.y + (index >= 2 ? -lift : lift),
-      };
-      const start = pointAtDistance(point, prev, reach);
-      const end = pointAtDistance(point, next, reach);
-      return [
-        { type: "line", point: start },
-        {
-          type: "quadratic",
-          control: pointAtDistance(point, prev, reach / 2),
-          point: pointAtDistance(tip, start, cornerRadius),
-        },
-        {
-          type: "quadratic",
-          control: tip,
-          point: pointAtDistance(tip, end, cornerRadius),
-        },
-        {
-          type: "quadratic",
-          control: pointAtDistance(point, next, reach / 2),
-          point: end,
-        },
-      ];
-    }
-
-    return [
-      { type: "line", point: pointAtDistance(point, prev, cornerRadius) },
-      {
-        type: "quadratic",
-        control: point,
-        point: pointAtDistance(point, next, cornerRadius),
-      },
-    ];
-  });
-
-  const commands: StickyNotePathCommand[] = [
-    { type: "move", point: corners[0][corners[0].length - 1].point },
+  return [
+    { type: "move", point: { x: radius, y: 0 } },
+    { type: "line", point: { x: width - radius, y: 0 } },
+    {
+      type: "quadratic",
+      control: { x: width, y: 0 },
+      point: { x: width, y: radius },
+    },
+    { type: "line", point: { x: width, y: height - radius } },
+    {
+      type: "quadratic",
+      control: { x: width, y: height },
+      point: { x: width - radius, y: height },
+    },
+    { type: "line", point: { x: radius, y: height } },
+    {
+      type: "quadratic",
+      control: { x: 0, y: height },
+      point: { x: 0, y: height - radius },
+    },
+    { type: "line", point: { x: 0, y: radius } },
+    {
+      type: "quadratic",
+      control: { x: 0, y: 0 },
+      point: { x: radius, y: 0 },
+    },
   ];
-
-  for (let index = 1; index <= corners.length; index++) {
-    commands.push(...corners[index % corners.length]);
-  }
-
-  return commands;
 };
 
 // -----------------------------------------------------------------------------
@@ -420,27 +364,13 @@ export const getBaseFontSizeUpdate = (
     : { fontSize };
 };
 
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
 /**
  * The creation-date label: absolute, so painting needs no clock and exports
- * don't go stale, and short ("7 Sep") while the year is the current one.
+ * don't go stale. Chinese format "M月D日", with the year prepended when the
+ * note's year differs from the viewer's current one ("2025年10月11日").
  * `null` when the note has no usable timestamp (files restored without one).
- * Fixed English in the viewer's local time zone — the element package has no
- * locale, and the footer is chosen by width bucket rather than measured.
+ * The viewer's local time zone — the element package has no locale, and the
+ * footer is chosen by width bucket rather than measured.
  */
 export const getStickyNoteDateLabel = (
   created: ExcalidrawStickyNoteElement["created"],
@@ -453,11 +383,10 @@ export const getStickyNoteDateLabel = (
   if (Number.isNaN(date.getTime())) {
     return null;
   }
-  const label = `${date.getDate()} ${MONTHS[date.getMonth()]}`;
-  const year = date.getFullYear();
-  return short || year === new Date(now).getFullYear()
+  const label = `${date.getMonth() + 1}月${date.getDate()}日`;
+  return short || date.getFullYear() === new Date(now).getFullYear()
     ? label
-    : `${label} ${year}`;
+    : `${date.getFullYear()}年${label}`;
 };
 
 /**
