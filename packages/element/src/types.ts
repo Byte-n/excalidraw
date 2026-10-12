@@ -280,7 +280,12 @@ export type ExcalidrawStickyNoteElement = _ExcalidrawElementBase &
   }>;
 
 export type MindmapNodeRole = "root" | "node";
-export type MindmapNodeShape = "rectangle" | "ellipse" | "diamond" | "pill";
+export type MindmapNodeShape =
+  | "rectangle"
+  | "ellipse"
+  | "diamond"
+  | "pill"
+  | "text";
 export type MindmapShapeData = Readonly<{
   id: MindmapNodeShape;
   schemaVersion: 1;
@@ -520,6 +525,11 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
      *  with font size (using `getLineHeightInPx` helper).
      */
     lineHeight: number & { _brand: "unitlessLineHeight" };
+    /**
+     * CSS font weight (e.g. 600). Absent means the family default (400).
+     * Mindmap root labels use it for the inverted-color headline style.
+     */
+    fontWeight?: number;
     /**
      * Position of text bound to a linear element (such as an arrow),
      * expressed as a normalized arc-length parameter (0–1) along the

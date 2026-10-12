@@ -1,5 +1,8 @@
 import clsx from "clsx";
-import { POINTER_EVENTS } from "@excalidraw/common";
+import {
+  POINTER_EVENTS,
+  sceneCoordsToViewportCoords,
+} from "@excalidraw/common";
 import {
   isIframeElement,
   isMagicFrameElement,
@@ -96,18 +99,32 @@ export const AppView = ({ app }: { app: App }) => {
           app.state.cursorButton === "down");
 
   const firstSelectedElement = selectedElements[0];
-  const hoveredMindmapNode = Object.keys(app.state.hoveredElementIds)
-    .map((id) => app.scene.getNonDeletedElement(id))
-    .find(isMindmapNodeElement);
-  const mindmapNodeForControls = hoveredMindmapNode
-    ? hoveredMindmapNode
-    : selectedElements.length === 1 &&
-      isMindmapNodeElement(firstSelectedElement)
-    ? firstSelectedElement
-    : null;
+  // 「+」按钮只挂选中态；悬停态的折叠「−」由画布覆盖层承担
+  const mindmapNodeForControls =
+    selectedElements.length === 1 && isMindmapNodeElement(firstSelectedElement)
+      ? firstSelectedElement
+      : null;
 
   const showShapeSwitchPanel =
     editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
+
+  // 编辑态快捷键提示：文字编辑器挂在思维导图节点上时，在节点下方提示
+  const editingTextContainer = app.state.editingTextElement?.containerId
+    ? app.scene.getNonDeletedElement(app.state.editingTextElement.containerId)
+    : null;
+  const mindmapEditingNode =
+    editingTextContainer && isMindmapNodeElement(editingTextContainer)
+      ? editingTextContainer
+      : null;
+  const mindmapEditHintPoint = mindmapEditingNode
+    ? sceneCoordsToViewportCoords(
+        {
+          sceneX: mindmapEditingNode.x + mindmapEditingNode.width / 2,
+          sceneY: mindmapEditingNode.y + mindmapEditingNode.height + 8,
+        },
+        app.state,
+      )
+    : null;
 
   return (
     <div
@@ -259,55 +276,72 @@ export const AppView = ({ app }: { app: App }) => {
                           mindmapNodeForControls &&
                           app.mindmap.canEditNode(mindmapNodeForControls.id) &&
                           !app.state.openDialog && (
-                            <ElementCanvasButtons
-                              element={mindmapNodeForControls}
-                              elementsMap={renderableElementsMap}
-                              layoutDirection={app.mindmap.getLayoutDirection(
-                                mindmapNodeForControls.graphId,
-                              )}
-                            >
-                              <ElementCanvasButton
-                                isMobile={
-                                  app.editorInterface.formFactor !== "desktop"
-                                }
-                                title={t("labels.addMindmapChild")}
-                                icon={PlusIcon}
-                                checked={false}
-                                onChange={() =>
-                                  app.mindmap.createChild(
-                                    mindmapNodeForControls.id,
-                                  )
-                                }
-                              />
-                              {app.mindmap.hasChildren(
-                                mindmapNodeForControls.id,
-                              ) && (
+                            <>
+                              <ElementCanvasButtons
+                                element={mindmapNodeForControls}
+                                elementsMap={renderableElementsMap}
+                                layoutDirection={app.mindmap.getLayoutDirection(
+                                  mindmapNodeForControls.graphId,
+                                )}
+                                anchor="mindmap-child"
+                              >
                                 <ElementCanvasButton
                                   isMobile={
                                     app.editorInterface.formFactor !== "desktop"
                                   }
-                                  title={t(
-                                    mindmapNodeForControls.collapsed
-                                      ? "labels.expandMindmap"
-                                      : "labels.collapseMindmap",
-                                  )}
-                                  icon={
-                                    <span aria-hidden="true">
-                                      {mindmapNodeForControls.collapsed
-                                        ? "▸"
-                                        : "▾"}
-                                    </span>
-                                  }
-                                  checked={mindmapNodeForControls.collapsed}
+                                  title={t("labels.addMindmapChild")}
+                                  icon={PlusIcon}
+                                  checked={false}
                                   onChange={() =>
-                                    app.mindmap.executeTreeCommand(
-                                      { type: "toggleCollapse" },
+                                    app.mindmap.createChild(
                                       mindmapNodeForControls.id,
                                     )
                                   }
                                 />
+                              </ElementCanvasButtons>
+                              {mindmapNodeForControls.role !== "root" && (
+                                <ElementCanvasButtons
+                                  element={mindmapNodeForControls}
+                                  elementsMap={renderableElementsMap}
+                                  layoutDirection={app.mindmap.getLayoutDirection(
+                                    mindmapNodeForControls.graphId,
+                                  )}
+                                  anchor="mindmap-sibling"
+                                >
+                                  <ElementCanvasButton
+                                    isMobile={
+                                      app.editorInterface.formFactor !==
+                                      "desktop"
+                                    }
+                                    title={t("labels.addMindmapSibling")}
+                                    icon={PlusIcon}
+                                    checked={false}
+                                    onChange={() =>
+                                      app.mindmap.createSibling(
+                                        mindmapNodeForControls.id,
+                                      )
+                                    }
+                                  />
+                                </ElementCanvasButtons>
                               )}
-                            </ElementCanvasButtons>
+                            </>
+                          )}
+                        {app.isDefaultUIEnabled() &&
+                          mindmapEditHintPoint &&
+                          mindmapEditingNode && (
+                            <div
+                              className="mindmap-edit-hint"
+                              style={{
+                                left: `${
+                                  mindmapEditHintPoint.x - app.state.offsetLeft
+                                }px`,
+                                top: `${
+                                  mindmapEditHintPoint.y - app.state.offsetTop
+                                }px`,
+                              }}
+                            >
+                              {t("labels.mindmapEditHint")}
+                            </div>
                           )}
                         {app.isDefaultUIEnabled() &&
                           app.props.aiEnabled !== false &&

@@ -1,9 +1,15 @@
-import { DRAGGING_THRESHOLD, getFontString, KEYS } from "@excalidraw/common";
+import {
+  DRAGGING_THRESHOLD,
+  CURSOR_TYPE,
+  getFontString,
+  KEYS,
+} from "@excalidraw/common";
 import { generateNKeysBetween } from "@excalidraw/fractional-indexing";
 import { pointFrom } from "@excalidraw/math";
 import { flushSync } from "react-dom";
 
 import {
+  applyMindmapBranchTheme,
   applyMindmapTreeCommand,
   applyMindmapOperation,
   layoutMindmapScene,
@@ -20,6 +26,9 @@ import {
   getMindmapSubtreeIds,
   getMindmapEdgeGeometry,
   getMindmapLayoutConfig,
+  getMindmapCollapseAffordance,
+  getMindmapNodeTheme,
+  MINDMAP_SIBLING_DISTANCE,
   navigateMindmap,
   newElement,
   newElementWith,
@@ -27,6 +36,8 @@ import {
   newMindmapNodeElement,
   newTextElement,
   reparentMindmapNodes,
+  repairMindmapElements,
+  traceMindmapEdgePath,
 } from "@excalidraw/element";
 
 import type { LocalPoint } from "@excalidraw/math";
@@ -48,6 +59,8 @@ import type { MindmapTreeCommand } from "@excalidraw/element";
 import { t } from "../i18n";
 import { validateMindmapTextTree } from "../data/mindmapText";
 
+import { getSelectionColor } from "../renderer/helpers";
+
 import type { MindmapTextNode } from "../data/mindmapText";
 
 import type App from "./App";
@@ -59,6 +72,8 @@ type NewNodeKind = "child" | "sibling";
 type MindmapDropTarget = {
   parentId: string;
   beforeId: string | null;
+  /** child：挂为子节点（画虚线预览连线）；sibling：兄弟位次插入（画插入线） */
+  kind: "child" | "sibling";
 };
 
 type MindmapDragSession = {
@@ -173,6 +188,104 @@ export class AppMindmap {
     this.hoveredNodeId = null;
   };
 
+  getHoveredNodeId = () => this.hoveredNodeId;
+
+  /**
+   * 命中折叠 affordance（计数徽标或「−」按钮）时返回节点 id。
+   * 只命中当前可见的 affordance：徽标常驻，「−」只在悬停/单选时出现。
+   */
+  hitTestCollapseAffordance = (
+    sceneX: number,
+    sceneY: number,
+  ): string | null => {
+    const collapsedCounts = this.app.scene.getMindmapCollapsedCounts();
+    const selectedIds = Object.keys(this.app.state.selectedElementIds);
+    const singleSelectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+    // 快路径：没有徽标、也没有悬停/单选节点时不可能命中
+    if (
+      collapsedCounts.size === 0 &&
+      !this.hoveredNodeId &&
+      !singleSelectedId
+    ) {
+      return null;
+    }
+    const elements = this.app.scene.getNonDeletedElements();
+    const hiddenIds = this.app.scene.getMindmapHiddenElementIds();
+    const slack = 2 / this.app.state.zoom.value;
+    const hasChildren = new Set<string>();
+    const rootByGraph = new Map<string, ExcalidrawMindmapNodeElement>();
+    for (const element of elements) {
+      if (isMindmapNodeElement(element)) {
+        if (element.parentId) {
+          hasChildren.add(element.parentId);
+        }
+        if (element.role === "root") {
+          rootByGraph.set(element.graphId, element);
+        }
+      }
+    }
+    let hitId: string | null = null;
+    let hitDistance = Infinity;
+    for (const element of elements) {
+      if (!isMindmapNodeElement(element) || hiddenIds.has(element.id)) {
+        continue;
+      }
+      const count = collapsedCounts.get(element.id) ?? 0;
+      const showBadge = element.collapsed && count > 0;
+      const showMinus =
+        !element.collapsed &&
+        !this.app.state.viewModeEnabled &&
+        hasChildren.has(element.id) &&
+        (this.hoveredNodeId === element.id || singleSelectedId === element.id);
+      if (!showBadge && !showMinus) {
+        continue;
+      }
+      const direction = getMindmapLayoutConfig(
+        rootByGraph.get(element.graphId),
+      ).direction;
+      const affordance = getMindmapCollapseAffordance(element, direction);
+      const target = showBadge ? affordance.badge : affordance.minus;
+      const distance = Math.hypot(
+        sceneX - target.center[0],
+        sceneY - target.center[1],
+      );
+      if (distance <= target.radius + slack && distance < hitDistance) {
+        hitDistance = distance;
+        hitId = element.id;
+      }
+    }
+    return hitId;
+  };
+
+  /** 折叠 affordance 点击：立即切换折叠并吞掉本次手势。 */
+  private handleCollapseAffordancePointerDown = (
+    pointerDownState: PointerDownState,
+  ): boolean => {
+    if (
+      !this.app.isInteractionEnabled() ||
+      this.app.state.viewModeEnabled ||
+      this.app.state.editingTextElement
+    ) {
+      return false;
+    }
+    const nodeId = this.hitTestCollapseAffordance(
+      pointerDownState.origin.x,
+      pointerDownState.origin.y,
+    );
+    if (!nodeId) {
+      return false;
+    }
+    this.cancelledPointerDown = pointerDownState;
+    pointerDownState.drag.blockDragging = true;
+    pointerDownState.resize.handleType = false;
+    pointerDownState.resize.isResizing = false;
+    if (this.app.state.resizingElement || this.app.state.isResizing) {
+      this.app.setState({ resizingElement: null, isResizing: false });
+    }
+    this.executeTreeCommand({ type: "toggleCollapse" }, nodeId);
+    return true;
+  };
+
   handlePointerMove = (sceneX: number, sceneY: number) => {
     if (this.dragSession) {
       return;
@@ -198,19 +311,31 @@ export class AppMindmap {
     const hoveredNode = node && isMindmapNodeElement(node) ? node : null;
     const hoveredNodeId = hoveredNode?.id ?? null;
     if (
-      hoveredNodeId === this.hoveredNodeId &&
-      (!hoveredNode || this.app.state.hoveredElementIds[hoveredNode.id])
+      hoveredNodeId !== this.hoveredNodeId ||
+      (hoveredNode && !this.app.state.hoveredElementIds[hoveredNode.id])
     ) {
-      return;
+      this.hoveredNodeId = hoveredNodeId;
+      this.app.setState({
+        hoveredElementIds: hoveredNode ? { [hoveredNode.id]: true } : {},
+      });
     }
-    this.hoveredNodeId = hoveredNodeId;
-    this.app.setState({
-      hoveredElementIds: hoveredNode ? { [hoveredNode.id]: true } : {},
-    });
+
+    // 折叠 affordance 悬停指针（在 pointerCanvas 的工具光标之后运行，不被覆盖）
+    if (
+      this.hitTestCollapseAffordance(sceneX, sceneY) &&
+      !this.app.state.viewModeEnabled &&
+      this.app.isInteractionEnabled()
+    ) {
+      this.app.cursor.set(CURSOR_TYPE.POINTER);
+    }
   };
 
   handlePointerDown = (pointerDownState: PointerDownState) => {
     if (this.app.state.editingTextElement) {
+      return;
+    }
+    // 折叠 affordance 已在 preparePointerDown 中处理
+    if (this.cancelledPointerDown === pointerDownState) {
       return;
     }
     const pointerHit =
@@ -428,9 +553,31 @@ export class AppMindmap {
       );
       if (shadowNodes.some((node) => node !== index.nodes.get(node.id))) {
         const shadowMap = new Map(shadowNodes.map((node) => [node.id, node]));
-        const nextElements = this.app.scene
-          .getElementsIncludingDeleted()
-          .map((element) => shadowMap.get(element.id) ?? element);
+        const currentElements = this.app.scene.getElementsIncludingDeleted();
+        let nextElements: readonly ExcalidrawElement[] = currentElements.map(
+          (element) => shadowMap.get(element.id) ?? element,
+        );
+        // 重挂（父节点变化）触及被移动子树过比较门重派生；纯重排不动样式
+        const touchedIds = session.nodeIds
+          .filter((id) => {
+            const before = index.nodes.get(id);
+            const after = shadowMap.get(id);
+            return !!before && !!after && before.parentId !== after.parentId;
+          })
+          .flatMap((id) => getMindmapSubtreeIds(index, id));
+        if (touchedIds.length) {
+          nextElements = applyMindmapBranchTheme(
+            repairMindmapElements(nextElements),
+            session.graphIds[0],
+            touchedIds,
+            {
+              index,
+              elements: new Map(
+                currentElements.map((element) => [element.id, element]),
+              ),
+            },
+          );
+        }
         this.app.syncActionResult({
           elements: this.getLaidOutElements(nextElements, session.graphIds),
           appState: { hoveredElementIds: {} },
@@ -551,6 +698,46 @@ export class AppMindmap {
   getDragPreview = () => this.dragSession;
   isReparenting = () => this.dragSession?.mode === "reparent";
 
+  /** sibling 插入线几何：跨参照兄弟节点主轴范围 +8px，位于同级间距中线 */
+  private getSiblingInsertionLine = (
+    session: MindmapDragSession,
+  ): { from: [number, number]; to: [number, number] } | null => {
+    const index = session.dropIndex;
+    const target = session.target;
+    if (!index || !target || target.kind !== "sibling") {
+      return null;
+    }
+    const siblings = (index.childrenById.get(target.parentId) ?? []).filter(
+      (id) => !session.elementIds.has(id),
+    );
+    const referenceId =
+      target.beforeId ?? siblings[siblings.length - 1] ?? null;
+    const reference = referenceId ? index.nodes.get(referenceId) : null;
+    if (!reference) {
+      return null;
+    }
+    const { direction } = getMindmapLayoutConfig(index.nodes.get(index.rootId));
+    const isVertical =
+      direction === "top-to-bottom" || direction === "bottom-to-top";
+    const halfGap = MINDMAP_SIBLING_DISTANCE / 2;
+    if (isVertical) {
+      const x = target.beforeId
+        ? reference.x - halfGap
+        : reference.x + reference.width + halfGap;
+      return {
+        from: [x, reference.y - 4],
+        to: [x, reference.y + reference.height + 4],
+      };
+    }
+    const y = target.beforeId
+      ? reference.y - halfGap
+      : reference.y + reference.height + halfGap;
+    return {
+      from: [reference.x - 4, y],
+      to: [reference.x + reference.width + 4, y],
+    };
+  };
+
   /** Drawn by the interactive canvas; never inserted into Scene. */
   renderPreview = (
     context: CanvasRenderingContext2D,
@@ -563,33 +750,26 @@ export class AppMindmap {
     }
     context.save();
     context.translate(scrollX, scrollY);
-    context.globalAlpha = 0.9;
     const preview = session.previewElements;
+    const selectionColor = getSelectionColor(this.app.interactiveCanvas);
+    const showInsertionLine = session.target?.kind === "sibling";
     preview.filter(isMindmapEdgeElement).forEach((element) => {
-      context.strokeStyle = "#4f83e7";
-      context.lineWidth = element.strokeWidth;
-      const [start, ...points] = element.points;
-      if (!start) {
+      // sibling 插入改画插入线，不画虚线预览连线
+      if (showInsertionLine) {
         return;
       }
-      context.beginPath();
-      context.moveTo(element.x + start[0], element.y + start[1]);
-      if (element.routing === "curved" && points.length === 3) {
-        context.bezierCurveTo(
-          element.x + points[0][0],
-          element.y + points[0][1],
-          element.x + points[1][0],
-          element.y + points[1][1],
-          element.x + points[2][0],
-          element.y + points[2][1],
-        );
-      } else {
-        points.forEach((point) =>
-          context.lineTo(element.x + point[0], element.y + point[1]),
-        );
-      }
+      context.save();
+      context.translate(element.x, element.y);
+      context.strokeStyle = selectionColor;
+      context.lineWidth = 2;
+      context.setLineDash([4, 3]);
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      traceMindmapEdgePath(context, element);
       context.stroke();
+      context.restore();
     });
+    context.globalAlpha = 0.55;
     preview
       .filter(
         (element) =>
@@ -637,6 +817,15 @@ export class AppMindmap {
           } else {
             context.rect(element.x, element.y, element.width, element.height);
           }
+        } else if (shape === "text") {
+          // 文字形态：只画底部下划线
+          context.moveTo(element.x, element.y + element.height - 1);
+          context.lineTo(
+            element.x + element.width,
+            element.y + element.height - 1,
+          );
+          context.stroke();
+          return;
         } else {
           context.rect(element.x, element.y, element.width, element.height);
         }
@@ -651,6 +840,7 @@ export class AppMindmap {
       context.font = getFontString({
         fontSize: element.fontSize,
         fontFamily: element.fontFamily,
+        fontWeight: element.fontWeight,
       });
       context.textBaseline = "top";
       context.textAlign =
@@ -671,6 +861,24 @@ export class AppMindmap {
         );
       });
     });
+    context.globalAlpha = 1;
+    if (showInsertionLine) {
+      const line = this.getSiblingInsertionLine(session);
+      if (line) {
+        context.strokeStyle = selectionColor;
+        context.lineWidth = 2;
+        context.lineCap = "round";
+        context.setLineDash([]);
+        context.beginPath();
+        context.moveTo(line.from[0], line.from[1]);
+        context.lineTo(line.to[0], line.to[1]);
+        context.stroke();
+        context.fillStyle = selectionColor;
+        context.beginPath();
+        context.arc(line.from[0], line.from[1], 3, 0, 2 * Math.PI);
+        context.fill();
+      }
+    }
     context.restore();
   };
 
@@ -720,6 +928,10 @@ export class AppMindmap {
       selectedElementIdsBeforePointerDown: Readonly<Record<string, true>>;
     },
   ) => {
+    // 折叠 affordance（徽标/「−」）优先于节点选择与拖拽手势
+    if (this.handleCollapseAffordancePointerDown(pointerDownState)) {
+      return;
+    }
     const hit = this.getMindmapNodeFromPointerDown(pointerDownState);
     if (
       modifiers.pointerType === "touch" &&
@@ -1008,6 +1220,19 @@ export class AppMindmap {
         ? newElementWith(element, { shape: mindmapShapeData(shape) })
         : element,
     );
+  };
+
+  /** 节点当前位置的层级默认形态（「自动」项）：根矩形 / 一级胶囊 / 二级起文字 */
+  getDerivedNodeShape = (nodeId: string): MindmapNodeShape | null => {
+    const node = this.app.scene.getNonDeletedElement(nodeId);
+    if (!node || !isMindmapNodeElement(node)) {
+      return null;
+    }
+    const index = buildMindmapGraphIndex(
+      this.app.scene.getNonDeletedElements(),
+      node.graphId,
+    );
+    return getMindmapNodeTheme(index, nodeId).shape;
   };
 
   setIncomingEdgeStyle = (style: {
@@ -1581,7 +1806,7 @@ export class AppMindmap {
         const distance = childDistance + crossDistance;
         if (!closest || distance < closest.distance) {
           closest = {
-            target: { parentId: node.id, beforeId: null },
+            target: { parentId: node.id, beforeId: null, kind: "child" },
             distance,
           };
         }
@@ -1613,6 +1838,7 @@ export class AppMindmap {
             beforeId: above
               ? node.id
               : session.nextSiblingById.get(node.id) ?? null,
+            kind: "sibling",
           },
           distance,
         };
@@ -2232,11 +2458,18 @@ export class AppMindmap {
       );
     };
     add(tree, null, null);
+    // 导入即创建：整树无基线，直接派生分支主题；布局期补建的入边再派生一次（幂等）
+    const createdNodeIds = created
+      .filter(isMindmapNodeElement)
+      .map((element) => element.id);
+    const themed = applyMindmapBranchTheme(
+      [...currentElements, ...created],
+      graphId,
+      createdNodeIds,
+    );
+    const laidOut = this.getLaidOutElements(themed, [graphId]);
     this.app.syncActionResult({
-      elements: this.getLaidOutElements(
-        [...currentElements, ...created],
-        [graphId],
-      ),
+      elements: applyMindmapBranchTheme(laidOut, graphId, createdNodeIds),
       appState: {
         selectedElementIds: { [root.id]: true },
         selectedGroupIds: {},

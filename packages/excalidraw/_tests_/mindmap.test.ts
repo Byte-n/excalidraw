@@ -1,9 +1,11 @@
-import { arrayToMap } from "@excalidraw/common";
+import { arrayToMap, applyDarkModeFilter, THEME } from "@excalidraw/common";
 import {
+  applyMindmapBranchTheme,
   buildMindmapGraphIndex,
   computeBoundTextPosition,
   getNonDeletedElements,
   isMindmapEdgeElement,
+  isMindmapNodeElement,
   newElement,
   newMindmapNodeElement,
   newTextElement,
@@ -316,5 +318,125 @@ describe("mindmap 场景恢复与渲染基础", () => {
     );
     expect(collapsedCanvas.width).toBeLessThan(canvas.width);
     expect(collapsedCanvas.height).toBeGreaterThan(0);
+  });
+});
+
+describe("mindmap P12 分支主题导出", () => {
+  /** root → a（一级）→ b（二级），恢复后整图派生 */
+  const themedFixture = () => {
+    const base = fixture();
+    const rootNode = base[0] as ExcalidrawElement;
+    const child = base[1] as ExcalidrawElement;
+    const rootText = newTextElement({
+      x: 0,
+      y: 0,
+      text: "根",
+      containerId: rootNode.id,
+      textAlign: "center",
+      verticalAlign: "middle",
+    });
+    const grandchild = newMindmapNodeElement({
+      x: 0,
+      y: 0,
+      graphId: "graph",
+      role: "node",
+      parentId: child.id,
+      order: "a0" as FractionalIndex,
+    });
+    const grandText = newTextElement({
+      x: 0,
+      y: 0,
+      text: "叶",
+      containerId: grandchild.id,
+      textAlign: "center",
+      verticalAlign: "middle",
+    });
+    const elements = restore([
+      {
+        ...rootNode,
+        boundElements: [{ type: "text" as const, id: rootText.id }],
+      },
+      rootText,
+      ...base.slice(1),
+      {
+        ...grandchild,
+        boundElements: [{ type: "text" as const, id: grandText.id }],
+      },
+      grandText,
+    ]);
+    return applyMindmapBranchTheme(
+      elements,
+      "graph",
+      elements.filter(isMindmapNodeElement).map((element) => element.id),
+    );
+  };
+
+  it("text 形态与 fontWeight 随 JSON 往返保留", () => {
+    const themed = themedFixture();
+    const nodes = themed.filter(isMindmapNodeElement);
+    const rootNode = nodes.find((element) => element.role === "root")!;
+    const childNode = nodes.find(
+      (element) => element.parentId === rootNode.id,
+    )!;
+    const grandchild = nodes.find(
+      (element) => element.parentId === childNode.id,
+    )!;
+    expect(grandchild.shape.id).toBe("text");
+    const json = serializeAsJSON(themed, getDefaultAppState(), {}, "local");
+    const reopened = restore(JSON.parse(json).elements as ExcalidrawElement[]);
+    expect(
+      reopened.find((element) => element.id === grandchild.id),
+    ).toMatchObject({ shape: { id: "text", schemaVersion: 1 } });
+    const rootText = reopened.find(
+      (element) =>
+        element.type === "text" && element.containerId === rootNode.id,
+    );
+    expect(rootText).toMatchObject({ fontWeight: 600 });
+  });
+
+  it("SVG 导出层级形态与分支色，暗色走统一滤镜", async () => {
+    const themed = themedFixture();
+    const state = {
+      ...getDefaultAppState(),
+      width: 1000,
+      height: 1000,
+      offsetLeft: 0,
+      offsetTop: 0,
+    };
+    const svg = await exportToSvg(
+      getNonDeletedElements(themed),
+      state,
+      {},
+      { skipInliningFonts: true },
+    );
+    const html = svg.outerHTML;
+    // 根：实心墨色 + 16px 600 反色文字
+    expect(html).toContain('fill="#1f2329"');
+    expect(html).toContain('font-weight="600"');
+    // 一级分支（teal）胶囊与连线
+    expect(html).toContain('stroke="#0e8c7e"');
+    expect(html).toContain('fill="#e6f4f1"');
+    // 二级 text 节点：只画下划线（无填充）
+    const grandchild = themed.find(
+      (element) =>
+        isMindmapNodeElement(element) && element.shape.id === "text",
+    )!;
+    const group = svg.querySelector(`[data-id='${grandchild.id}']`);
+    expect(group).not.toBeNull();
+    const underlinePath = group!.querySelector("path");
+    expect(underlinePath?.getAttribute("d")).toMatch(/^M\s?0 \d/);
+    expect(underlinePath?.getAttribute("stroke")).toBe("#0e8c7e");
+    expect(underlinePath?.getAttribute("fill")).toBe("none");
+
+    // 暗色：元素色经全 app 统一滤镜
+    const darkSvg = await exportToSvg(
+      getNonDeletedElements(themed),
+      { ...state, exportWithDarkMode: true },
+      {},
+      { skipInliningFonts: true },
+    );
+    expect(darkSvg.outerHTML).toContain(
+      `fill="${applyDarkModeFilter("#1f2329", true)}"`,
+    );
   });
 });

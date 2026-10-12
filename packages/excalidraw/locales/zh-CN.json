@@ -138,6 +138,8 @@
     "addToLibrary": "添加到素材库中",
     "addMindmapChild": "添加子节点",
     "addMindmapSibling": "添加同级节点（根节点添加子节点）",
+    "mindmapEditHint": "Enter 完成 · Tab 新建子节点",
+    "mindmapShapeAuto": "自动（跟随层级默认形态）",
     "collapseMindmap": "折叠分支",
     "expandMindmap": "展开分支",
     "deleteMindmapSubtree": "删除完整子树",

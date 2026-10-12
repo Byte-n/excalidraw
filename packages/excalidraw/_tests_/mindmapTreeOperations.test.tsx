@@ -1,7 +1,9 @@
 import {
   buildMindmapGraphIndex,
+  getMindmapCollapseAffordance,
   getMindmapHiddenElementIds,
   getBoundTextElement,
+  getTransformHandles,
   isMindmapNodeElement,
   newMindmapNodeElement,
   newTextElement,
@@ -183,18 +185,62 @@ describe("Mindmap P02 树操作界面", () => {
     select("a1");
     const hidden = { ...node("a1") };
     const parent = node("a");
-    new Pointer("mouse").moveTo(parent.x + 20, parent.y + 20);
-    fireEvent.click(screen.getByRole("button", { name: "Collapse branch" }));
+    const pointer = new Pointer("mouse");
+    // 悬停展开的父节点，点击子侧「−」折叠按钮
+    pointer.moveTo(parent.x + 20, parent.y + 20);
+    const minus = getMindmapCollapseAffordance(parent, "left-to-right").minus;
+    pointer.clickAt(minus.center[0], minus.center[1]);
     expect(node("a").collapsed).toBe(true);
     expect(h.state.selectedElementIds).toEqual({ a: true });
     expect(h.state.hoveredElementIds).toEqual({});
     expect(
       h.app.getElementAtPosition(hidden.x + 20, hidden.y + 20)?.id,
     ).not.toBe("a1");
-    fireEvent.click(screen.getByRole("button", { name: "Expand branch" }));
+    // 折叠徽标点击展开
+    const badge = getMindmapCollapseAffordance(node("a"), "left-to-right").badge;
+    pointer.clickAt(badge.center[0], badge.center[1]);
     expect(
       getMindmapHiddenElementIds(h.app.scene.getNonDeletedElements()).size,
     ).toBe(0);
+  });
+
+  it("折叠 affordance 在 selection 与 mindmap 两种工具下都能切换折叠", () => {
+    const pointer = new Pointer("mouse");
+    UI.clickExtraTool("mindmap");
+    select("a");
+    Keyboard.keyPress(" ");
+    expect(node("a").collapsed).toBe(true);
+    // mindmap 工具：徽标常驻，点击展开
+    let affordance = getMindmapCollapseAffordance(node("a"), "left-to-right");
+    pointer.clickAt(affordance.badge.center[0], affordance.badge.center[1]);
+    expect(node("a").collapsed).toBe(false);
+    // mindmap 工具：悬停出现「−」，点击折叠
+    const target = node("a");
+    pointer.moveTo(target.x + target.width / 2, target.y + target.height / 2);
+    affordance = getMindmapCollapseAffordance(node("a"), "left-to-right");
+    pointer.clickAt(affordance.minus.center[0], affordance.minus.center[1]);
+    expect(node("a").collapsed).toBe(true);
+    // 切回 selection 工具：徽标点击展开
+    UI.clickExtraTool("selection");
+    affordance = getMindmapCollapseAffordance(node("a"), "left-to-right");
+    pointer.clickAt(affordance.badge.center[0], affordance.badge.center[1]);
+    expect(node("a").collapsed).toBe(false);
+    expect(
+      getMindmapHiddenElementIds(h.app.scene.getNonDeletedElements()).size,
+    ).toBe(0);
+  });
+
+  it("单个 mindmap 节点选中无旋转手柄，保留 resize 手柄", () => {
+    select("a");
+    const handles = getTransformHandles(
+      node("a"),
+      h.state.zoom,
+      h.app.scene.getNonDeletedElementsMap(),
+      "mouse",
+    );
+    expect(handles.rotation).toBeUndefined();
+    expect(handles.se).toBeDefined();
+    expect(handles.nw).toBeDefined();
   });
 
   it.each(["Delete", "Backspace"])(

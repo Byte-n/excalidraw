@@ -252,7 +252,7 @@ export const setMindmapDragOpacity = (
   app["mindmapDragOpacityIds"].forEach((id) => {
     const previous = next.get(id);
     app["mindmapDragOpacityPrevious"].set(id, previous);
-    next.set(id, { ...(previous ?? {}), opacity: 24 });
+    next.set(id, { ...(previous ?? {}), opacity: 35 });
   });
   app.setElementRenderOverrides(next.size ? next : null);
 };

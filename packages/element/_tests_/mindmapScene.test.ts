@@ -337,3 +337,128 @@ describe("脑图完整纯场景操作", () => {
     expect(result.elements.filter(isMindmapNodeElement)).toHaveLength(1);
   });
 });
+
+describe("脑图分支主题派生（场景操作收口）", () => {
+  const elementMap = (elements: readonly ExcalidrawElement[]) =>
+    new Map(elements.map((element) => [element.id, element]));
+
+  it("创建即派生：根实心墨色，一级胶囊分支色，二级起文字下划线色", () => {
+    const fixture = tree();
+    const map = elementMap(fixture.elements);
+    const root = map.get(fixture.root.nodeId)!;
+    expect(root).toMatchObject({
+      backgroundColor: "#1f2329",
+      strokeColor: "#1f2329",
+    });
+    expect(isMindmapNodeElement(root) && root.shape.id).toBe("rectangle");
+    const rootText = getBoundTextElement(root as any, map)!;
+    expect(rootText).toMatchObject({
+      fontSize: 16,
+      fontWeight: 600,
+      strokeColor: "#ffffff",
+    });
+
+    const child = map.get(fixture.child.nodeId)!;
+    expect(isMindmapNodeElement(child) && child.shape.id).toBe("pill");
+    expect(child).toMatchObject({
+      backgroundColor: "#e6f4f1",
+      strokeColor: "#0e8c7e",
+    });
+
+    const leaf = map.get(fixture.leaf.nodeId)!;
+    expect(isMindmapNodeElement(leaf) && leaf.shape.id).toBe("text");
+    expect(leaf).toMatchObject({
+      backgroundColor: "transparent",
+      strokeColor: "#0e8c7e",
+    });
+
+    // 第二个一级分支：位次 1 琥珀
+    const other = map.get(fixture.other.nodeId)!;
+    expect(other.strokeColor).toBe("#b86e00");
+
+    const index = checkGraph(fixture.elements, fixture.root.graphId);
+    expect(index.edgeByChildId.get(fixture.child.nodeId)).toMatchObject({
+      strokeColor: "#0e8c7e",
+      strokeWidth: 2,
+    });
+    expect(index.edgeByChildId.get(fixture.leaf.nodeId)).toMatchObject({
+      strokeColor: "#0e8c7e",
+      strokeWidth: 1.5,
+    });
+  });
+
+  it("同级插入的新分支按落位位次取色，既有分支保持既有色", () => {
+    const fixture = tree();
+    const sibling = applyMindmapOperation(fixture.elements, {
+      action: "addSibling",
+      target: fixture.child,
+      text: "紧邻",
+    });
+    if (sibling.references.domain !== "mindmap") {
+      throw new Error("缺少脑图引用");
+    }
+    const map = elementMap(sibling.elements);
+    // 新分支落在 child(0) 之后 → 位次 1 琥珀；原 other 保持既有琥珀（位次色不再对齐）
+    expect(map.get(sibling.references.nodeId)!.strokeColor).toBe("#b86e00");
+    expect(map.get(fixture.other.nodeId)!.strokeColor).toBe("#b86e00");
+  });
+
+  it("纯重排不动样式，重挂才按新位置重派生", () => {
+    const fixture = tree();
+    const reordered = applyMindmapOperation(fixture.elements, {
+      action: "reparent",
+      target: fixture.other,
+      parentNodeId: fixture.root.nodeId,
+      beforeNodeId: fixture.child.nodeId,
+    });
+    const beforeMap = elementMap(fixture.elements);
+    for (const element of reordered.elements) {
+      const old = beforeMap.get(element.id);
+      if (
+        old &&
+        isMindmapNodeElement(old) &&
+        isMindmapNodeElement(element)
+      ) {
+        expect(element.strokeColor).toBe(old.strokeColor);
+        expect(element.backgroundColor).toBe(old.backgroundColor);
+        expect(element.shape).toEqual(old.shape);
+      }
+    }
+
+    // 重挂：leaf 移到根下 → 新一级分支，落位位次 2 → 紫罗兰
+    const moved = applyMindmapOperation(fixture.elements, {
+      action: "reparent",
+      target: fixture.leaf,
+      parentNodeId: fixture.root.nodeId,
+    });
+    const movedMap = elementMap(moved.elements);
+    const leaf = movedMap.get(fixture.leaf.nodeId)!;
+    expect(isMindmapNodeElement(leaf) && leaf.shape.id).toBe("pill");
+    expect(leaf.strokeColor).toBe("#7146d6");
+    expect(leaf.backgroundColor).toBe("#f0ebfc");
+    const index = checkGraph(moved.elements, fixture.root.graphId);
+    expect(index.edgeByChildId.get(fixture.leaf.nodeId)).toMatchObject({
+      strokeColor: "#7146d6",
+      strokeWidth: 2,
+    });
+  });
+
+  it("比较门：手动改色的节点重挂后样式全留，入边也保留", () => {
+    const fixture = tree();
+    const customized = fixture.elements.map((element) =>
+      element.id === fixture.leaf.nodeId
+        ? { ...element, backgroundColor: "#ffee00" }
+        : element,
+    );
+    const moved = applyMindmapOperation(customized, {
+      action: "reparent",
+      target: fixture.leaf,
+      parentNodeId: fixture.root.nodeId,
+    });
+    const leaf = elementMap(moved.elements).get(fixture.leaf.nodeId)!;
+    expect(isMindmapNodeElement(leaf) && leaf.shape.id).toBe("text");
+    expect(leaf.backgroundColor).toBe("#ffee00");
+    // 未跟随一级位次色
+    expect(leaf.strokeColor).toBe("#0e8c7e");
+  });
+});

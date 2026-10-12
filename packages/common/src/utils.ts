@@ -13,6 +13,7 @@ import type {
 } from "@excalidraw/excalidraw/types";
 
 import {
+  DEFAULT_FONT_SIZE,
   DEFAULT_VERSION,
   ENV,
   FONT_FAMILY,
@@ -139,11 +140,25 @@ export const getFontFamilyString = ({
 export const getFontString = ({
   fontSize,
   fontFamily,
+  fontWeight,
 }: {
   fontSize: number;
   fontFamily: FontFamilyValues;
+  fontWeight?: number;
 }) => {
-  return `${fontSize}px ${getFontFamilyString({ fontFamily })}` as FontString;
+  const weight = fontWeight ? `${fontWeight} ` : "";
+  return `${weight}${fontSize}px ${getFontFamilyString({
+    fontFamily,
+  })}` as FontString;
+};
+
+/**
+ * extracts the px font size from a FontString produced by getFontString
+ * (`[weight ]<size>px <family>`); a plain parseFloat would read the weight
+ */
+export const getFontSizeFromFontString = (font: FontString): number => {
+  const match = /(\d+(?:\.\d+)?)px/.exec(font);
+  return match ? parseFloat(match[1]) : DEFAULT_FONT_SIZE;
 };
 
 /** executes callback in the frame that's after the current one */

@@ -868,6 +868,14 @@ const _generateElementShape = (
           generateRoughOptions(element, true, isDarkMode),
         );
       }
+      if (getMindmapShapeId(element) === "text") {
+        // 二级及以下：无边框文字 + 底部 1.5px 分支色下划线（strokeColor）
+        const { width: w, height: h } = element;
+        return generator.path(`M 0 ${h - 1} L ${w} ${h - 1}`, {
+          ...generateRoughOptions(element, true, isDarkMode),
+          fill: undefined,
+        });
+      }
       return _generateElementShape(getMindmapNodeGeometry(element), generator, {
         isExporting,
         canvasBackgroundColor,

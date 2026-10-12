@@ -4,9 +4,12 @@ import {
 } from "@excalidraw/fractional-indexing";
 import { pointFrom } from "@excalidraw/math";
 
+import { ROUNDNESS } from "@excalidraw/common";
+
 import type { LocalPoint, Radians } from "@excalidraw/math";
 
 import type { Bounds } from "@excalidraw/common";
+import type { Mutable } from "@excalidraw/common/utility-types";
 
 import { isMindmapEdgeElement, isMindmapNodeElement } from "./typeChecks";
 import { baseShapeData } from "./compositeShape";
@@ -15,6 +18,7 @@ import type {
   ExcalidrawElement,
   ExcalidrawMindmapEdgeElement,
   ExcalidrawMindmapNodeElement,
+  ExcalidrawTextElement,
   FractionalIndex,
   ExcalidrawCompositeShapeElement,
   ElementsMap,
@@ -28,10 +32,36 @@ import type {
 export const DEFAULT_MINDMAP_LAYOUT_DIRECTION: MindmapLayoutDirection =
   "left-to-right";
 const MINDMAP_LEVEL_DISTANCE = 80;
-const MINDMAP_SIBLING_DISTANCE = 24;
-export const DEFAULT_MINDMAP_EDGE_ROUTING: MindmapEdgeRouting = "orthogonal";
+export const MINDMAP_SIBLING_DISTANCE = 24;
+export const DEFAULT_MINDMAP_EDGE_ROUTING: MindmapEdgeRouting = "curved";
 export const DEFAULT_MINDMAP_EDGE_STROKE_WIDTH = 2;
 export const DEFAULT_MINDMAP_EDGE_STROKE_STYLE: StrokeStyle = "solid";
+
+/** 正交连线的内角圆角半径上限，与普通折线箭头一致。 */
+export const MINDMAP_EDGE_CORNER_RADIUS = 10;
+
+/**
+ * 分支五色循环（青绿/琥珀/紫罗兰/玫红/靛蓝）：一级分支按落位位次取色，
+ * 子孙继承所在分支。与颜色选择器的快捷色取值一致，但独立维护。
+ */
+export const MINDMAP_BRANCH_PALETTE = [
+  { stroke: "#0e8c7e", fill: "#e6f4f1" },
+  { stroke: "#b86e00", fill: "#fff3dc" },
+  { stroke: "#7146d6", fill: "#f0ebfc" },
+  { stroke: "#d83a52", fill: "#fdecee" },
+  { stroke: "#2f6fb0", fill: "#e8f0f8" },
+] as const;
+
+/** 根节点：实心墨色 + 反色 16px/600 文字。 */
+export const MINDMAP_ROOT_NODE_COLOR = "#1f2329";
+export const MINDMAP_ROOT_TEXT_COLOR = "#ffffff";
+export const MINDMAP_NODE_TEXT_COLOR = "#1f2329";
+export const MINDMAP_ROOT_FONT_SIZE = 16;
+export const MINDMAP_ROOT_FONT_WEIGHT = 600;
+export const MINDMAP_NODE_FONT_SIZE = 14;
+export const MINDMAP_BRANCH_NODE_STROKE_WIDTH = 1.5;
+export const MINDMAP_ROOT_EDGE_STROKE_WIDTH = 2;
+export const MINDMAP_BRANCH_EDGE_STROKE_WIDTH = 1.5;
 
 export type MindmapLayoutConfig = {
   direction?: MindmapLayoutDirection;
@@ -59,7 +89,8 @@ const isMindmapNodeShape = (value: unknown): value is MindmapNodeShape =>
   value === "rectangle" ||
   value === "ellipse" ||
   value === "diamond" ||
-  value === "pill";
+  value === "pill" ||
+  value === "text";
 
 export const mindmapShapeData = (id: MindmapNodeShape): MindmapShapeData => {
   if (!isMindmapNodeShape(id)) {
@@ -168,8 +199,45 @@ export const getMindmapNodeGeometry = (
   return {
     ...node,
     type: "composite_shape",
-    shape: baseShapeData(shapeId === "pill" ? "rectangle" : shapeId),
+    // "text" 形态用完整包围盒做命中测试与文字度量，下划线仅参与绘制
+    shape: baseShapeData(
+      shapeId === "pill" || shapeId === "text" ? "rectangle" : shapeId,
+    ),
   };
+};
+
+/**
+ * 正交折线的内角圆角化：r 取 min(拐角半径上限, 相邻两段长度各半)。
+ * 三个回调分别对应 path 的 M/L/Q，SVG 字符串与 Canvas 描边共用同一份几何。
+ */
+const traceRoundedOrthogonalPath = (
+  points: readonly (readonly [number, number])[],
+  moveTo: (x: number, y: number) => void,
+  lineTo: (x: number, y: number) => void,
+  quadraticTo: (cx: number, cy: number, x: number, y: number) => void,
+) => {
+  moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length - 1; i++) {
+    const [px, py] = points[i - 1];
+    const [cx, cy] = points[i];
+    const [nx, ny] = points[i + 1];
+    const lengthIn = Math.hypot(cx - px, cy - py);
+    const lengthOut = Math.hypot(nx - cx, ny - cy);
+    const r = Math.min(MINDMAP_EDGE_CORNER_RADIUS, lengthIn / 2, lengthOut / 2);
+    if (r <= 0) {
+      lineTo(cx, cy);
+      continue;
+    }
+    lineTo(cx - ((cx - px) / lengthIn) * r, cy - ((cy - py) / lengthIn) * r);
+    quadraticTo(
+      cx,
+      cy,
+      cx + ((nx - cx) / lengthOut) * r,
+      cy + ((ny - cy) / lengthOut) * r,
+    );
+  }
+  const last = points[points.length - 1];
+  lineTo(last[0], last[1]);
 };
 
 export const getMindmapEdgePath = (
@@ -184,9 +252,47 @@ export const getMindmapEdgePath = (
       .map((p) => `${p[0]} ${p[1]}`)
       .join(", ")}`;
   }
-  return `M ${start[0]} ${start[1]} ${rest
-    .map((p) => `L ${p[0]} ${p[1]}`)
-    .join(" ")}`;
+  const segments: string[] = [];
+  traceRoundedOrthogonalPath(
+    edge.points.map((point) => [point[0], point[1]] as const),
+    (x, y) => segments.push(`M ${x} ${y}`),
+    (x, y) => segments.push(`L ${x} ${y}`),
+    (cx, cy, x, y) => segments.push(`Q ${cx} ${cy} ${x} ${y}`),
+  );
+  return segments.join(" ");
+};
+
+/**
+ * 在 Canvas 上描出连线路径（边局部坐标，调用方负责平移）。
+ * 渲染、选中高亮与拖拽预览共用，保证三线一致。
+ */
+export const traceMindmapEdgePath = (
+  context: CanvasRenderingContext2D,
+  edge: ExcalidrawMindmapEdgeElement,
+) => {
+  const [start, ...rest] = edge.points;
+  if (!start) {
+    return;
+  }
+  context.beginPath();
+  if (edge.routing === "curved" && edge.points.length === 4) {
+    context.moveTo(start[0], start[1]);
+    context.bezierCurveTo(
+      rest[0][0],
+      rest[0][1],
+      rest[1][0],
+      rest[1][1],
+      rest[2][0],
+      rest[2][1],
+    );
+    return;
+  }
+  traceRoundedOrthogonalPath(
+    edge.points.map((point) => [point[0], point[1]] as const),
+    (x, y) => context.moveTo(x, y),
+    (x, y) => context.lineTo(x, y),
+    (cx, cy, x, y) => context.quadraticCurveTo(cx, cy, x, y),
+  );
 };
 
 export type MindmapGraphIndex = {
@@ -360,6 +466,276 @@ export const getMindmapSubtreeIds = (
   return ids;
 };
 
+// -----------------------------------------------------------------------------
+// 分支主题派生：层级定形态（根实心 / 一级胶囊 / 二级起下划线文字），分支定色。
+// 派生只在结构命令落定时写入具体属性；样式即数据，不设持久化标记。
+// -----------------------------------------------------------------------------
+
+export type MindmapNodeTheme = {
+  shape: MindmapNodeShape;
+  backgroundColor: string;
+  strokeColor: string;
+  strokeWidth: number;
+  roundness: ExcalidrawMindmapNodeElement["roundness"];
+  text: {
+    fontSize: number;
+    fontWeight?: number;
+    strokeColor: string;
+  };
+  /** 根节点没有入边。 */
+  edge: {
+    strokeColor: string;
+    strokeWidth: number;
+  } | null;
+};
+
+const MINDMAP_ROOT_ROUNDNESS = { type: ROUNDNESS.PROPORTIONAL_RADIUS } as const;
+
+/** 分支描边色：一级分支按其在根子节点中的位次循环取色，更深层级读一级祖先的存储色。 */
+export const getMindmapBranchStroke = (
+  index: MindmapGraphIndex,
+  nodeId: string,
+  nodes: ReadonlyMap<
+    string,
+    Pick<ExcalidrawMindmapNodeElement, "strokeColor">
+  > = index.nodes,
+): string => {
+  const depth = index.depthById.get(nodeId) ?? 0;
+  if (depth <= 1) {
+    const siblings = index.childrenById.get(index.rootId) ?? [];
+    const position = Math.max(0, siblings.indexOf(nodeId));
+    return MINDMAP_BRANCH_PALETTE[position % MINDMAP_BRANCH_PALETTE.length]
+      .stroke;
+  }
+  let branchId = nodeId;
+  while ((index.depthById.get(branchId) ?? 0) > 1) {
+    branchId = index.parentById.get(branchId)!;
+  }
+  return (nodes.get(branchId) ?? index.nodes.get(branchId)!).strokeColor;
+};
+
+/** 节点在其当前位置的派生样式。`nodes` 可传入含未提交改动的表，让子孙读到新落位的一级分支色。 */
+export const getMindmapNodeTheme = (
+  index: MindmapGraphIndex,
+  nodeId: string,
+  nodes: ReadonlyMap<
+    string,
+    Pick<ExcalidrawMindmapNodeElement, "strokeColor">
+  > = index.nodes,
+): MindmapNodeTheme => {
+  const depth = index.depthById.get(nodeId) ?? 0;
+  if (depth === 0) {
+    return {
+      shape: "rectangle",
+      backgroundColor: MINDMAP_ROOT_NODE_COLOR,
+      strokeColor: MINDMAP_ROOT_NODE_COLOR,
+      strokeWidth: 2,
+      roundness: MINDMAP_ROOT_ROUNDNESS,
+      text: {
+        fontSize: MINDMAP_ROOT_FONT_SIZE,
+        fontWeight: MINDMAP_ROOT_FONT_WEIGHT,
+        strokeColor: MINDMAP_ROOT_TEXT_COLOR,
+      },
+      edge: null,
+    };
+  }
+  const branchStroke = getMindmapBranchStroke(index, nodeId, nodes);
+  if (depth === 1) {
+    const branch = MINDMAP_BRANCH_PALETTE.find(
+      (entry) => entry.stroke === branchStroke,
+    )!;
+    return {
+      shape: "pill",
+      backgroundColor: branch.fill,
+      strokeColor: branch.stroke,
+      strokeWidth: MINDMAP_BRANCH_NODE_STROKE_WIDTH,
+      roundness: null,
+      text: {
+        fontSize: MINDMAP_NODE_FONT_SIZE,
+        strokeColor: MINDMAP_NODE_TEXT_COLOR,
+      },
+      edge: {
+        strokeColor: branch.stroke,
+        strokeWidth: MINDMAP_ROOT_EDGE_STROKE_WIDTH,
+      },
+    };
+  }
+  return {
+    shape: "text",
+    backgroundColor: "transparent",
+    strokeColor: branchStroke,
+    strokeWidth: MINDMAP_BRANCH_NODE_STROKE_WIDTH,
+    roundness: null,
+    text: {
+      fontSize: MINDMAP_NODE_FONT_SIZE,
+      strokeColor: MINDMAP_NODE_TEXT_COLOR,
+    },
+    edge: {
+      strokeColor: branchStroke,
+      strokeWidth: MINDMAP_BRANCH_EDGE_STROKE_WIDTH,
+    },
+  };
+};
+
+const getMindmapBoundText = (
+  node: ExcalidrawMindmapNodeElement,
+  elementsById: ReadonlyMap<string, ExcalidrawElement>,
+): ExcalidrawTextElement | null => {
+  const binding = node.boundElements?.find((bound) => bound.type === "text");
+  const element = binding ? elementsById.get(binding.id) : undefined;
+  return element && element.type === "text" && !element.isDeleted
+    ? (element as ExcalidrawTextElement)
+    : null;
+};
+
+const roundnessEquals = (
+  a: ExcalidrawMindmapNodeElement["roundness"],
+  b: ExcalidrawMindmapNodeElement["roundness"],
+): boolean =>
+  a === b || (!!a && !!b && a.type === b.type && a.value === b.value);
+
+/**
+ * 「与默认一致即未修改」比较门：逐属性对比节点/绑定文字/入边与指定位置的
+ * 派生值。比较集 = 派生写入集；派生不写的属性（opacity 等）不参与判定。
+ * 文字或边缺失时跳过对应比较（视为未被用户修改）。
+ */
+export const matchesMindmapNodeTheme = (
+  node: ExcalidrawMindmapNodeElement,
+  text: ExcalidrawTextElement | null,
+  edge: ExcalidrawMindmapEdgeElement | null,
+  theme: MindmapNodeTheme,
+): boolean =>
+  node.shape.id === theme.shape &&
+  node.backgroundColor === theme.backgroundColor &&
+  node.strokeColor === theme.strokeColor &&
+  node.strokeWidth === theme.strokeWidth &&
+  roundnessEquals(node.roundness, theme.roundness) &&
+  (!text ||
+    (text.fontSize === theme.text.fontSize &&
+      (text.fontWeight ?? undefined) === (theme.text.fontWeight ?? undefined) &&
+      text.strokeColor === theme.text.strokeColor)) &&
+  (!theme.edge ||
+    !edge ||
+    (edge.strokeColor === theme.edge.strokeColor &&
+      edge.strokeWidth === theme.edge.strokeWidth));
+
+const applyMindmapTextTheme = (
+  text: ExcalidrawTextElement,
+  theme: MindmapNodeTheme["text"],
+): ExcalidrawTextElement => {
+  if (
+    text.fontSize === theme.fontSize &&
+    text.strokeColor === theme.strokeColor &&
+    (text.fontWeight ?? undefined) === (theme.fontWeight ?? undefined)
+  ) {
+    return text;
+  }
+  const next: Mutable<ExcalidrawTextElement> = {
+    ...text,
+    fontSize: theme.fontSize,
+    strokeColor: theme.strokeColor,
+  };
+  if (theme.fontWeight === undefined) {
+    delete next.fontWeight;
+  } else {
+    next.fontWeight = theme.fontWeight;
+  }
+  return next;
+};
+
+/**
+ * 对触及子树写入派生样式。提供 `before`（命令前的图索引与元素表）时逐节点过
+ * 比较门：当前样式与移动前位置的派生值完全一致才按新位置重派生，任一受管
+ * 属性不同则全部样式原样保留；未提供的节点（新建）直接派生。幂等。
+ */
+export const applyMindmapBranchTheme = (
+  elements: readonly ExcalidrawElement[],
+  graphId: string,
+  nodeIds: readonly string[],
+  before?: {
+    index: MindmapGraphIndex;
+    elements: ReadonlyMap<string, ExcalidrawElement>;
+  },
+): readonly ExcalidrawElement[] => {
+  if (!nodeIds.length) {
+    return elements;
+  }
+  const index = buildMindmapGraphIndex(elements, graphId);
+  const working = new Map(elements.map((element) => [element.id, element]));
+  // 浅层先派生，深层节点读取的一级分支色即为落位后的新值
+  const orderedNodeIds = [...nodeIds].sort(
+    (a, b) => (index.depthById.get(a) ?? 0) - (index.depthById.get(b) ?? 0),
+  );
+  let changed = false;
+  for (const nodeId of orderedNodeIds) {
+    const element = working.get(nodeId);
+    if (
+      !element ||
+      element.isDeleted ||
+      !isMindmapNodeElement(element) ||
+      !index.nodes.has(nodeId)
+    ) {
+      continue;
+    }
+    let node = element;
+    if (before) {
+      const oldNode = before.elements.get(nodeId);
+      if (oldNode && isMindmapNodeElement(oldNode)) {
+        const oldTheme = getMindmapNodeTheme(before.index, nodeId);
+        if (
+          !matchesMindmapNodeTheme(
+            oldNode,
+            getMindmapBoundText(oldNode, before.elements),
+            before.index.edgeByChildId.get(nodeId) ?? null,
+            oldTheme,
+          )
+        ) {
+          continue;
+        }
+      }
+    }
+    const theme = getMindmapNodeTheme(index, nodeId, working);
+    const nextNode = withUpdates(node, {
+      shape:
+        node.shape.id === theme.shape
+          ? node.shape
+          : mindmapShapeData(theme.shape),
+      backgroundColor: theme.backgroundColor,
+      strokeColor: theme.strokeColor,
+      strokeWidth: theme.strokeWidth,
+      roundness: theme.roundness,
+    });
+    if (nextNode !== node) {
+      working.set(nodeId, nextNode);
+      node = nextNode;
+      changed = true;
+    }
+    const text = getMindmapBoundText(node, working);
+    if (text) {
+      const nextText = applyMindmapTextTheme(text, theme.text);
+      if (nextText !== text) {
+        working.set(text.id, nextText);
+        changed = true;
+      }
+    }
+    const edge = index.edgeByChildId.get(nodeId);
+    if (edge && theme.edge) {
+      const liveEdge = working.get(edge.id) ?? edge;
+      const nextEdge = withUpdates(
+        liveEdge as ExcalidrawMindmapEdgeElement,
+        theme.edge,
+      );
+      if (nextEdge !== liveEdge) {
+        working.set(edge.id, nextEdge);
+        changed = true;
+      }
+    }
+  }
+  return changed
+    ? elements.map((element) => working.get(element.id) ?? element)
+    : elements;
+};
+
 /**
  * Expands a selection containing Mindmap nodes to complete subtrees while
  * keeping ordinary elements selected. Only edges whose two endpoints are in
@@ -421,20 +797,28 @@ export const getMindmapElementsForSelection = (
 };
 
 /** 折叠是派生的可见性，不修改 isDeleted、透明度或文本绑定。 */
-export const getMindmapHiddenElementIds = (
+export const computeMindmapVisibility = (
   elements: readonly ExcalidrawElement[],
-): ReadonlySet<string> => {
+): {
+  hiddenIds: ReadonlySet<string>;
+  /** 每个折叠节点隐藏的子孙节点数（嵌套折叠时计入全部后代）。 */
+  collapsedCounts: ReadonlyMap<string, number>;
+} => {
   const nodes = elements.filter(
     (element): element is ExcalidrawMindmapNodeElement =>
       !element.isDeleted && isMindmapNodeElement(element),
   );
   const hidden = new Set<string>();
-  const queue = nodes.filter((node) => node.collapsed).map((node) => node.id);
-  if (!queue.length) {
-    return hidden;
+  const collapsedCounts = new Map<string, number>();
+  const collapsedIds = nodes
+    .filter((node) => node.collapsed)
+    .map((node) => node.id);
+  if (!collapsedIds.length) {
+    return { hiddenIds: hidden, collapsedCounts };
   }
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
   const children = getChildren(nodes);
+  const queue = [...collapsedIds];
   for (let i = 0; i < queue.length; i++) {
     const parent = nodeMap.get(queue[i])!;
     for (const child of children.get(parent.id) ?? []) {
@@ -443,6 +827,42 @@ export const getMindmapHiddenElementIds = (
         queue.push(child.id);
       }
     }
+  }
+  // 计数 = 子树节点数 - 1：自底向上一次遍历，嵌套折叠的外层自然计入内层子树。
+  // 对每个折叠节点 O(其子树)，全图摊还 O(N)
+  const subtreeSize = new Map<string, number>();
+  const seen = new Set<string>();
+  const stack: [string, boolean][] = [];
+  for (const node of nodes) {
+    if ((!node.parentId || !nodeMap.has(node.parentId)) && !seen.has(node.id)) {
+      seen.add(node.id);
+      stack.push([node.id, false]);
+    }
+  }
+  const postOrder: string[] = [];
+  while (stack.length) {
+    const [id, processed] = stack.pop()!;
+    if (processed) {
+      postOrder.push(id);
+      continue;
+    }
+    stack.push([id, true]);
+    for (const child of children.get(id) ?? []) {
+      if (!seen.has(child.id)) {
+        seen.add(child.id);
+        stack.push([child.id, false]);
+      }
+    }
+  }
+  for (const id of postOrder) {
+    let size = 1;
+    for (const child of children.get(id) ?? []) {
+      size += subtreeSize.get(child.id) ?? 0;
+    }
+    subtreeSize.set(id, size);
+  }
+  for (const id of collapsedIds) {
+    collapsedCounts.set(id, (subtreeSize.get(id) ?? 1) - 1);
   }
   for (const element of elements) {
     if (
@@ -454,8 +874,12 @@ export const getMindmapHiddenElementIds = (
       hidden.add(element.id);
     }
   }
-  return hidden;
+  return { hiddenIds: hidden, collapsedCounts };
 };
+
+export const getMindmapHiddenElementIds = (
+  elements: readonly ExcalidrawElement[],
+): ReadonlySet<string> => computeMindmapVisibility(elements).hiddenIds;
 
 export const isMindmapElementHidden = (
   element: ExcalidrawElement,
@@ -975,6 +1399,9 @@ export const applyMindmapTreeCommand = (
   const deletedIds = new Set<string>();
   const graphIds = [node.graphId];
   let selectedNodeId: string | null = node.id;
+  /** 结构命令直接触及、需要过比较门重派生的子树节点 */
+  let themedNodeIds: readonly string[] = [];
+  let themedGraphId: string = node.graphId;
   const update = (
     id: string,
     updates: Partial<ExcalidrawMindmapNodeElement>,
@@ -1042,6 +1469,8 @@ export const applyMindmapTreeCommand = (
         }
       }
       graphIds.push(command.newGraphId);
+      themedGraphId = command.newGraphId;
+      themedNodeIds = [...subtree];
     } else {
       const siblings = index.childrenById.get(parent.parentId)!;
       const next = siblings[siblings.indexOf(parent.id) + 1];
@@ -1051,6 +1480,7 @@ export const applyMindmapTreeCommand = (
         parent.order,
         next ? index.nodes.get(next)!.order : null,
       );
+      themedNodeIds = getMindmapSubtreeIds(index, node.id);
     }
   } else {
     const siblings = index.childrenById.get(node.parentId ?? "") ?? [];
@@ -1116,6 +1546,7 @@ export const applyMindmapTreeCommand = (
         selectedNodeId = children[0] ?? selectedNodeId;
       }
       deletedIds.add(node.id);
+      themedNodeIds = children.flatMap((id) => getMindmapSubtreeIds(index, id));
     }
   }
   const nextElements = elements.map((element) => {
@@ -1144,8 +1575,16 @@ export const applyMindmapTreeCommand = (
       buildMindmapGraphIndex(nodes, graphId);
     }
   }
+  let result = repairMindmapElements(nextElements);
+  // 样式派生收口：结构命令落定后，对触及子树过比较门重派生分支主题
+  if (themedNodeIds.length) {
+    result = applyMindmapBranchTheme(result, themedGraphId, themedNodeIds, {
+      index,
+      elements: new Map(elements.map((element) => [element.id, element])),
+    });
+  }
   return {
-    elements: repairMindmapElements(nextElements),
+    elements: result,
     graphIds,
     selectedNodeId,
   };
@@ -1246,4 +1685,69 @@ export const reparentMindmapNodes = (
     const update = updates.get(element.id);
     return update ? withUpdates(element, update) : element;
   });
+};
+
+// -----------------------------------------------------------------------------
+// 折叠 affordance 几何：子侧边中点 + 外法线偏移。画布覆盖层按场景坐标绘制。
+// -----------------------------------------------------------------------------
+
+export const MINDMAP_COLLAPSE_BADGE_RADIUS = 9;
+export const MINDMAP_COLLAPSE_BADGE_OFFSET = 12;
+export const MINDMAP_COLLAPSE_STUB_LENGTH = 3;
+export const MINDMAP_COLLAPSE_MINUS_RADIUS = 7;
+export const MINDMAP_COLLAPSE_MINUS_OFFSET = 10;
+
+export type MindmapCollapseAffordance = {
+  /** 子侧边中点（场景坐标） */
+  edgeMidpoint: [number, number];
+  /** 子侧外法线单位向量 */
+  normal: [number, number];
+  /** 折叠计数徽标（折叠时展示） */
+  badge: { center: [number, number]; radius: number };
+  /** 「−」折叠按钮（悬停/选中已展开节点时展示） */
+  minus: { center: [number, number]; radius: number };
+};
+
+export const getMindmapCollapseAffordance = (
+  node: Pick<ExcalidrawMindmapNodeElement, "x" | "y" | "width" | "height">,
+  direction: MindmapLayoutDirection,
+): MindmapCollapseAffordance => {
+  const centerX = node.x + node.width / 2;
+  const centerY = node.y + node.height / 2;
+  let edgeMidpoint: [number, number];
+  let normal: [number, number];
+  switch (direction) {
+    case "right-to-left":
+      edgeMidpoint = [node.x, centerY];
+      normal = [-1, 0];
+      break;
+    case "top-to-bottom":
+      edgeMidpoint = [centerX, node.y + node.height];
+      normal = [0, 1];
+      break;
+    case "bottom-to-top":
+      edgeMidpoint = [centerX, node.y];
+      normal = [0, -1];
+      break;
+    default:
+      edgeMidpoint = [node.x + node.width, centerY];
+      normal = [1, 0];
+      break;
+  }
+  const offset = (distance: number): [number, number] => [
+    edgeMidpoint[0] + normal[0] * distance,
+    edgeMidpoint[1] + normal[1] * distance,
+  ];
+  return {
+    edgeMidpoint,
+    normal,
+    badge: {
+      center: offset(MINDMAP_COLLAPSE_BADGE_OFFSET),
+      radius: MINDMAP_COLLAPSE_BADGE_RADIUS,
+    },
+    minus: {
+      center: offset(MINDMAP_COLLAPSE_MINUS_OFFSET),
+      radius: MINDMAP_COLLAPSE_MINUS_RADIUS,
+    },
+  };
 };

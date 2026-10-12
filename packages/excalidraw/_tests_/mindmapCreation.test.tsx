@@ -113,12 +113,9 @@ describe("mindmap creation tool", () => {
               const before = getSceneSnapshot();
               const historyLength = API.getUndoStack().length;
               if (createWith === "button") {
-                const pointer = new Pointer("mouse");
                 UI.clickExtraTool("mindmap");
-                pointer.moveTo(
-                  root.x + root.width / 2,
-                  root.y + root.height / 2,
-                );
+                // 「+」按钮只在选中时出现
+                API.setSelectedElements([root]);
                 fireEvent.click(
                   screen.getByRole("button", { name: "Add child node" }),
                 );
@@ -307,10 +304,8 @@ describe("mindmap creation tool", () => {
               historyLength = API.getUndoStack().length;
               if (createWith === "button") {
                 const root = getNodes()[0];
-                pointer.moveTo(
-                  root.x + root.width / 2,
-                  root.y + root.height / 2,
-                );
+                // 「+」按钮只在选中时出现
+                API.setSelectedElements([root]);
                 fireEvent.click(
                   screen.getByRole("button", { name: "Add child node" }),
                 );
@@ -456,7 +451,7 @@ describe("mindmap creation tool", () => {
     }
   });
 
-  it("opens existing node text on double click and exposes the hover add control", async () => {
+  it("opens existing node text on double click and exposes the selected add control", async () => {
     UI.clickExtraTool("mindmap");
     const pointer = new Pointer("mouse");
     pointer.clickAt(260, 220);
@@ -467,7 +462,13 @@ describe("mindmap creation tool", () => {
     const root = h.app.scene
       .getNonDeletedElements()
       .find(isMindmapNodeElement)!;
+    // 「+」按钮只在选中时出现，悬停不再显示
+    API.setSelectedElements([]);
     pointer.moveTo(root.x + root.width / 2, root.y + root.height / 2);
+    expect(
+      screen.queryByRole("button", { name: "Add child node" }),
+    ).not.toBeInTheDocument();
+    API.setSelectedElements([root]);
     expect(
       screen.getByRole("button", { name: "Add child node" }),
     ).toBeInTheDocument();

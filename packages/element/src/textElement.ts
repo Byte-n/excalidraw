@@ -7,6 +7,7 @@ import {
   STICKY_NOTE_PADDING,
   TEXT_ALIGN,
   VERTICAL_ALIGN,
+  getFontSizeFromFontString,
   getFontString,
   isProdEnv,
   invariant,
@@ -87,7 +88,7 @@ export const truncateTextToBounds = (
   const lines = wrapText(text, font, maxWidth).split("\n");
   const maxLines = Math.max(
     1,
-    Math.floor(maxHeight / (lineHeight * parseFloat(font))),
+    Math.floor(maxHeight / (lineHeight * getFontSizeFromFontString(font))),
   );
   if (lines.length <= maxLines) {
     return lines.join("\n");

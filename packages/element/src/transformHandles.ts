@@ -323,6 +323,22 @@ export const getTransformHandles = (
     );
   }
 
+  // Mindmap 节点的位置与角度由布局驱动，单节点旋转手柄无意义
+  if (element.type === "mindmap-node") {
+    return getTransformHandlesFromCoords(
+      getElementAbsoluteCoords(element, elementsMap, true),
+      element.angle,
+      zoom,
+      pointerType,
+      {
+        ...omitSides,
+        ...DEFAULT_OMIT_SIDES,
+        rotation: true,
+      },
+      DEFAULT_TRANSFORM_HANDLE_SPACING,
+    );
+  }
+
   if (element.type === "freedraw" || isLinearElement(element)) {
     if (element.points.length === 2) {
       // only check the last point because starting point is always (0,0)

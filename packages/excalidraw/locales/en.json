@@ -148,6 +148,8 @@
     "addMindmapChild": "Add child node",
     "editMindmapNode": "Edit node",
     "addMindmapSibling": "Add sibling node (child for root)",
+    "mindmapEditHint": "Enter to finish · Tab for child node",
+    "mindmapShapeAuto": "Auto (follows level default)",
     "collapseMindmap": "Collapse branch",
     "expandMindmap": "Expand branch",
     "deleteMindmapSubtree": "Delete subtree",

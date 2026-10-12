@@ -2,6 +2,7 @@ import { getFontString } from "@excalidraw/common";
 import { generateKeyBetween } from "@excalidraw/fractional-indexing";
 
 import {
+  applyMindmapBranchTheme,
   applyMindmapTreeCommand,
   buildMindmapGraphIndex,
   getMindmapSubtreeIds,
@@ -40,6 +41,7 @@ import type {
   CanvasElementOperationResult,
   ScenePoint,
 } from "./sceneOperations";
+import type { MindmapGraphIndex } from "./mindmap";
 import type {
   ExcalidrawElement,
   ExcalidrawMindmapNodeElement,
@@ -133,8 +135,13 @@ export const layoutMindmapScene = (
           getFontString(text),
           text.lineHeight,
         );
+        const shapeId = getMindmapShapeId(node);
         const shape =
-          getMindmapShapeId(node) === "pill" ? "ellipse" : node.shape.id;
+          shapeId === "pill"
+            ? "ellipse"
+            : shapeId === "text"
+            ? "rectangle"
+            : shapeId;
         const maxHeight = getBoundTextMaxHeight(node, text);
         // 表格缩放后冻结的节点保持现有几何，文字仅在边界内折行。
         const nextNode = isMindmapLayoutFrozen(node)
@@ -221,10 +228,13 @@ export const applyMindmapOperation = (
       order: null,
     });
     const graphId = `mindmap:${root.id}`;
-    const elements = layoutMindmapScene(
+    // 新建无基线，直接派生根节点主题
+    const themed = applyMindmapBranchTheme(
       appendNode(input, { ...root, graphId }, operation.text),
-      [graphId],
+      graphId,
+      [root.id],
     );
+    const elements = layoutMindmapScene(themed, [graphId]);
     return finishSceneOperation(input, elements, {
       domain: "mindmap",
       action: operation.action,
@@ -248,6 +258,14 @@ export const applyMindmapOperation = (
   let nodeId = node.id;
   let rootNodeId: string | null = index.rootId;
   let needsLayout = true;
+  /** 结构命令直接触及、需要派生分支主题的子树节点（新建节点无基线） */
+  let themedNodeIds: readonly string[] | null = null;
+  let themeBefore:
+    | {
+        index: MindmapGraphIndex;
+        elements: ReadonlyMap<string, ExcalidrawElement>;
+      }
+    | undefined;
   switch (operation.action) {
     case "addChild":
     case "addSibling": {
@@ -278,6 +296,7 @@ export const applyMindmapOperation = (
       });
       elements = appendNode(input, created, operation.text);
       nodeId = created.id;
+      themedNodeIds = [created.id];
       break;
     }
     case "rename": {
@@ -331,6 +350,14 @@ export const applyMindmapOperation = (
         updates.set(parent.id, { ...parent, collapsed: false });
       }
       elements = input.map((element) => updates.get(element.id) ?? element);
+      // 纯重排（父节点不变）不动样式；重挂/落位才触及被移动子树
+      if (node.parentId !== parent.id) {
+        themedNodeIds = getMindmapSubtreeIds(index, node.id);
+        themeBefore = {
+          index,
+          elements: new Map(input.map((element) => [element.id, element])),
+        };
+      }
       break;
     }
     case "move": {
@@ -410,6 +437,16 @@ export const applyMindmapOperation = (
       }
       break;
     }
+  }
+  if (themedNodeIds) {
+    // 先修复（补/正入边）再派生，保证索引可建、入边随子树一并着色；
+    // 随后的重布局/测量自然使用最终字号
+    elements = applyMindmapBranchTheme(
+      repairMindmapElements(elements),
+      node.graphId,
+      themedNodeIds,
+      themeBefore,
+    );
   }
   if (needsLayout) {
     elements = layoutMindmapScene(elements, [node.graphId]);

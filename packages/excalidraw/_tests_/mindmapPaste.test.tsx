@@ -140,4 +140,103 @@ describe("pasting a standalone mindmap pill", () => {
       id: pastedText?.id,
     });
   });
+
+  it("preserves the text shape and fontWeight through paste", async () => {
+    h.app.ownerDocument.dispatchEvent(
+      createPasteEvent({
+        types: {
+          "text/plain": JSON.stringify({
+            type: "excalidraw/clipboard",
+            elements: [
+              {
+                id: "leaf",
+                type: "mindmap-node",
+                x: 0,
+                y: 0,
+                width: 120,
+                height: 32,
+                graphId: "leafgraph",
+                role: "root",
+                parentId: null,
+                order: null,
+                collapsed: false,
+                shape: { id: "text", schemaVersion: 1 },
+                backgroundColor: "transparent",
+                fillStyle: "solid",
+                strokeWidth: 1.5,
+                boundElements: [{ type: "text", id: "leaf-text" }],
+                version: 1,
+                versionNonce: 1,
+                index: "a1",
+                isDeleted: false,
+                strokeStyle: "solid",
+                opacity: 100,
+                angle: 0,
+                strokeColor: "#0e8c7e",
+                seed: 1,
+                groupIds: [],
+                roundness: null,
+                updated: 1,
+                created: 1,
+                link: null,
+                locked: false,
+              },
+              {
+                id: "leaf-text",
+                type: "text",
+                x: 0,
+                y: 0,
+                width: 40,
+                height: 25,
+                text: "下划线节点",
+                originalText: "下划线节点",
+                fontSize: 16,
+                fontWeight: 600,
+                fontFamily: 1,
+                textAlign: "center",
+                verticalAlign: "middle",
+                containerId: "leaf",
+                lineHeight: 1.25,
+                version: 1,
+                versionNonce: 2,
+                index: "a2",
+                isDeleted: false,
+                fillStyle: "solid",
+                strokeWidth: 1.5,
+                strokeStyle: "solid",
+                opacity: 100,
+                angle: 0,
+                strokeColor: "#ffffff",
+                backgroundColor: "transparent",
+                seed: 1,
+                groupIds: [],
+                roundness: null,
+                boundElements: [],
+                updated: 1,
+                created: 1,
+                link: null,
+                locked: false,
+                autoResize: true,
+              },
+            ],
+            files: {},
+          }),
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(h.app.scene.getNonDeletedElements()).toHaveLength(2);
+    });
+
+    const elements = h.app.scene.getNonDeletedElements();
+    const pastedNode = elements.find(isMindmapNodeElement);
+    const pastedText = elements.find(isTextElement);
+    expect(pastedNode).toMatchObject({
+      shape: { id: "text", schemaVersion: 1 },
+      strokeColor: "#0e8c7e",
+      backgroundColor: "transparent",
+    });
+    expect(pastedText).toMatchObject({ fontWeight: 600 });
+  });
 });

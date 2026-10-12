@@ -45,7 +45,7 @@ import {
   getCompositeShapeTextFitMode,
   isCompositeShapeOpen,
 } from "./compositeShape";
-import { mindmapShapeData } from "./mindmap";
+import { DEFAULT_MINDMAP_EDGE_ROUTING, mindmapShapeData } from "./mindmap";
 import { createTableData, getTableHeight, getTableWidth } from "./tableStruct";
 
 import type {
@@ -321,7 +321,7 @@ export const newMindmapNodeElement = (
   ..._newElementBase<ExcalidrawMindmapNodeElement>("mindmap-node", {
     width: 160,
     height: 56,
-    backgroundColor: opts.role === "root" ? "#d0bfff" : "#e5dbff",
+    backgroundColor: opts.role === "root" ? "#1f2329" : "#e5dbff",
     fillStyle: "solid",
     roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
     ...opts,
@@ -334,7 +334,8 @@ export const newMindmapNodeElement = (
     ? {
         layoutDirection: opts.layoutDirection ?? "left-to-right",
         defaultNodeShape: opts.defaultNodeShape ?? "rectangle",
-        defaultEdgeRouting: opts.defaultEdgeRouting ?? "orthogonal",
+        defaultEdgeRouting:
+          opts.defaultEdgeRouting ?? DEFAULT_MINDMAP_EDGE_ROUTING,
         defaultEdgeStrokeColor:
           opts.defaultEdgeStrokeColor ?? opts.strokeColor ?? "#1b1b1f",
         defaultEdgeStrokeWidth: opts.defaultEdgeStrokeWidth ?? 2,
@@ -361,7 +362,7 @@ export const newMindmapEdgeElement = (
   parentId: opts.parentId,
   childId: opts.childId,
   points: opts.points ?? [],
-  routing: opts.routing ?? "orthogonal",
+  routing: opts.routing ?? DEFAULT_MINDMAP_EDGE_ROUTING,
 });
 
 export const newEmbeddableElement = (

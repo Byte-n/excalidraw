@@ -341,7 +341,7 @@ describe("Mindmap P03 drag preview", () => {
     mouse.moveTo(destination.x, destination.y);
 
     const preview = h.app.mindmap.getDragPreview();
-    expect(preview?.target).toEqual({ parentId: "b", beforeId: null });
+    expect(preview?.target).toEqual({ parentId: "b", beforeId: null, kind: "child" });
     expect(preview?.previewElements.map((element) => element.id)).toEqual([
       expect.any(String),
       "a",
@@ -350,15 +350,15 @@ describe("Mindmap P03 drag preview", () => {
     expect(
       preview?.previewElements.find((element) => element.id === "a")?.x,
     ).toBe(node("a").x + destination.x - (node("a").x + 20));
-    expect(renderOpacity("a1")).toBe(24);
-    expect(renderOpacity("a1-text")).toBe(24);
+    expect(renderOpacity("a1")).toBe(35);
+    expect(renderOpacity("a1-text")).toBe(35);
     expect(renderOpacity("b1")).toBeUndefined();
     expect(
       preview?.previewElements.filter(
         (element) => isMindmapEdgeElement(element) && element.childId === "a",
       ),
     ).toEqual([expect.objectContaining({ parentId: "b", childId: "a" })]);
-    expect(renderOpacity("a")).toBe(24);
+    expect(renderOpacity("a")).toBe(35);
     expect(snapshot()).toBe(before);
     expect(API.getUndoStack()).toHaveLength(historyLength);
 
@@ -412,6 +412,7 @@ describe("Mindmap P03 drag preview", () => {
     expect(h.app.mindmap.getDragPreview()?.target).toEqual({
       parentId: "root",
       beforeId: "b",
+      kind: "sibling",
     });
     mouse.moveTo(
       node("b").x + node("b").width / 2,
@@ -420,6 +421,7 @@ describe("Mindmap P03 drag preview", () => {
     expect(h.app.mindmap.getDragPreview()?.target).toEqual({
       parentId: "root",
       beforeId: null,
+      kind: "sibling",
     });
     mouse.upAt();
     expect(
@@ -444,7 +446,11 @@ describe("Mindmap P03 drag preview", () => {
     const preview = h.app.mindmap.getDragPreview();
     expect(preview?.mode).toBe("reparent");
     expect(preview?.nodeIds).toEqual(["a1", "b1"]);
-    expect(preview?.target).toEqual({ parentId: "root", beforeId: null });
+    expect(preview?.target).toEqual({
+      parentId: "root",
+      beforeId: null,
+      kind: "child",
+    });
     expect(
       preview?.previewElements.some((element) => element.id === "a1"),
     ).toBe(true);
@@ -476,6 +482,7 @@ describe("Mindmap P03 drag preview", () => {
     expect(h.app.mindmap.getDragPreview()?.target).toEqual({
       parentId: "b",
       beforeId: null,
+      kind: "child",
     });
     mouse.upAt();
 

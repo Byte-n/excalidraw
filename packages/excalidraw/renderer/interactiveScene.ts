@@ -62,6 +62,12 @@ import {
   getSelectedGroupIds,
   isSelectedViaGroup,
   selectGroupsFromGivenElements,
+  traceMindmapEdgePath,
+  getMindmapCollapseAffordance,
+  getMindmapLayoutConfig,
+  getMindmapShapeId,
+  getCornerRadius,
+  MINDMAP_COLLAPSE_STUB_LENGTH,
 } from "@excalidraw/element";
 
 import { renderSelectionElement } from "@excalidraw/element";
@@ -89,6 +95,7 @@ import type {
   ExcalidrawImageElement,
   ExcalidrawLinearElement,
   ExcalidrawMindmapEdgeElement,
+  ExcalidrawMindmapNodeElement,
   ExcalidrawTableElement,
   ExcalidrawTextElement,
   GroupId,
@@ -1207,8 +1214,7 @@ const renderMindmapEdgeSelection = (
   edge: ExcalidrawMindmapEdgeElement,
   color: string,
 ) => {
-  const [start, ...rest] = edge.points;
-  if (!start) {
+  if (!edge.points.length) {
     return;
   }
 
@@ -1219,22 +1225,116 @@ const renderMindmapEdgeSelection = (
   context.lineCap = "round";
   context.lineJoin = "round";
   context.setLineDash([]);
-  context.beginPath();
-  context.moveTo(start[0], start[1]);
-  if (edge.routing === "curved" && edge.points.length === 4) {
-    context.bezierCurveTo(
-      rest[0][0],
-      rest[0][1],
-      rest[1][0],
-      rest[1][1],
-      rest[2][0],
-      rest[2][1],
-    );
-  } else {
-    rest.forEach((point) => context.lineTo(point[0], point[1]));
-  }
+  traceMindmapEdgePath(context, edge);
   context.stroke();
   context.restore();
+};
+
+/** 思维导图折叠 affordance：折叠徽标（计数）常驻，「−」按钮随悬停/单选出现。 */
+const renderMindmapCollapseAffordances = (
+  context: CanvasRenderingContext2D,
+  app: AppClassProperties,
+  appState: InteractiveCanvasAppState,
+  allElementsMap: ElementsMap,
+  selectedElements: readonly NonDeletedExcalidrawElement[],
+) => {
+  const collapsedCounts = app.scene.getMindmapCollapsedCounts();
+  const hiddenIds = app.scene.getMindmapHiddenElementIds();
+  const hasChildren = new Set<string>();
+  const rootByGraph = new Map<string, ExcalidrawMindmapNodeElement>();
+  for (const element of allElementsMap.values()) {
+    if (isMindmapNodeElement(element)) {
+      if (element.parentId) {
+        hasChildren.add(element.parentId);
+      }
+      if (element.role === "root") {
+        rootByGraph.set(element.graphId, element);
+      }
+    }
+  }
+  const hoveredNodeId = app.mindmap.getHoveredNodeId();
+  const singleSelectedNodeId =
+    selectedElements.length === 1 && isMindmapNodeElement(selectedElements[0])
+      ? selectedElements[0].id
+      : null;
+  const isDark = appState.theme === THEME.DARK;
+
+  for (const element of allElementsMap.values()) {
+    if (!isMindmapNodeElement(element) || hiddenIds.has(element.id)) {
+      continue;
+    }
+    const count = collapsedCounts.get(element.id) ?? 0;
+    const showBadge = element.collapsed && count > 0;
+    const showMinus =
+      !element.collapsed &&
+      !appState.viewModeEnabled &&
+      hasChildren.has(element.id) &&
+      (hoveredNodeId === element.id || singleSelectedNodeId === element.id);
+    if (!showBadge && !showMinus) {
+      continue;
+    }
+    const direction = getMindmapLayoutConfig(
+      rootByGraph.get(element.graphId),
+    ).direction;
+    const affordance = getMindmapCollapseAffordance(element, direction);
+    const branchColor = applyDarkModeFilter(element.strokeColor, isDark);
+    const fillColor = applyDarkModeFilter("#ffffff", isDark);
+
+    context.save();
+    context.translate(appState.scrollX, appState.scrollY);
+    if (showBadge) {
+      const { edgeMidpoint, normal, badge } = affordance;
+      context.strokeStyle = branchColor;
+      context.lineWidth = 1.5;
+      context.lineCap = "round";
+      context.beginPath();
+      context.moveTo(edgeMidpoint[0], edgeMidpoint[1]);
+      context.lineTo(
+        edgeMidpoint[0] + normal[0] * MINDMAP_COLLAPSE_STUB_LENGTH,
+        edgeMidpoint[1] + normal[1] * MINDMAP_COLLAPSE_STUB_LENGTH,
+      );
+      context.stroke();
+      context.beginPath();
+      context.arc(
+        badge.center[0],
+        badge.center[1],
+        badge.radius,
+        0,
+        Math.PI * 2,
+      );
+      context.fillStyle = fillColor;
+      context.fill();
+      context.lineWidth = 1.25;
+      context.stroke();
+      context.fillStyle = branchColor;
+      context.font = "600 11px sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(String(count), badge.center[0], badge.center[1] + 0.5);
+    } else {
+      const { minus } = affordance;
+      context.beginPath();
+      context.arc(
+        minus.center[0],
+        minus.center[1],
+        minus.radius,
+        0,
+        Math.PI * 2,
+      );
+      context.fillStyle = fillColor;
+      context.fill();
+      context.lineWidth = 1.25;
+      context.strokeStyle = branchColor;
+      context.stroke();
+      context.lineWidth = 1.5;
+      context.lineCap = "round";
+      context.beginPath();
+      context.moveTo(minus.center[0] - 3, minus.center[1]);
+      context.lineTo(minus.center[0] + 3, minus.center[1]);
+      context.stroke();
+    }
+    context.restore();
+  }
 };
 
 const renderFrameHighlight = (
@@ -2465,7 +2565,96 @@ const renderTextBox = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
   selectionColor: InteractiveCanvasRenderConfig["selectionColor"],
+  elementsMap?: ElementsMap,
 ) => {
+  // 思维导图节点编辑态：1.5px 实心主色环（rx 跟随节点形态）；
+  // "text" 形态画下划线下方的主色线
+  const container =
+    text.containerId && elementsMap ? elementsMap.get(text.containerId) : null;
+  if (container && isMindmapNodeElement(container)) {
+    const shape = getMindmapShapeId(container);
+    context.save();
+    context.translate(appState.scrollX, appState.scrollY);
+    context.strokeStyle = selectionColor;
+    context.lineWidth = 1.5;
+    context.setLineDash([]);
+    if (shape === "text") {
+      const y = container.y + container.height + 2;
+      context.lineCap = "round";
+      context.beginPath();
+      context.moveTo(container.x, y);
+      context.lineTo(container.x + container.width, y);
+      context.stroke();
+    } else {
+      context.beginPath();
+      if (shape === "ellipse") {
+        context.ellipse(
+          container.x + container.width / 2,
+          container.y + container.height / 2,
+          container.width / 2,
+          container.height / 2,
+          0,
+          0,
+          2 * Math.PI,
+        );
+      } else if (shape === "diamond") {
+        context.moveTo(container.x + container.width / 2, container.y);
+        context.lineTo(
+          container.x + container.width,
+          container.y + container.height / 2,
+        );
+        context.lineTo(
+          container.x + container.width / 2,
+          container.y + container.height,
+        );
+        context.lineTo(container.x, container.y + container.height / 2);
+        context.closePath();
+      } else if (shape === "pill") {
+        context.beginPath();
+        if (context.roundRect) {
+          context.roundRect(
+            container.x,
+            container.y,
+            container.width,
+            container.height,
+            container.height / 2,
+          );
+        } else {
+          context.rect(
+            container.x,
+            container.y,
+            container.width,
+            container.height,
+          );
+        }
+      } else {
+        context.beginPath();
+        const radius = getCornerRadius(
+          Math.min(container.width, container.height),
+          container,
+        );
+        if (context.roundRect) {
+          context.roundRect(
+            container.x,
+            container.y,
+            container.width,
+            container.height,
+            radius,
+          );
+        } else {
+          context.rect(
+            container.x,
+            container.y,
+            container.width,
+            container.height,
+          );
+        }
+      }
+      context.stroke();
+    }
+    context.restore();
+    return;
+  }
   context.save();
   const padding = getTextBoxPadding(appState.zoom.value);
   const width = text.width + padding * 2;
@@ -2628,17 +2817,20 @@ const _renderInteractiveScene = ({
     const textElement = allElementsMap.get(appState.editingTextElement.id) as
       | ExcalidrawTextElement
       | undefined;
-    if (
-      textElement &&
-      !textElement.autoResize &&
-      !isTableCellBackgroundText(textElement)
-    ) {
-      renderTextBox(
-        textElement,
-        context,
-        appState,
-        renderConfig.selectionColor,
-      );
+    if (textElement && !isTableCellBackgroundText(textElement)) {
+      // 思维导图节点编辑态画实心主色环（节点无原生虚线框）
+      const isMindmapBound =
+        !!textElement.containerId &&
+        isMindmapNodeElement(allElementsMap.get(textElement.containerId));
+      if (!textElement.autoResize || isMindmapBound) {
+        renderTextBox(
+          textElement,
+          context,
+          appState,
+          renderConfig.selectionColor,
+          allElementsMap,
+        );
+      }
     }
   }
 
@@ -3214,6 +3406,15 @@ const _renderInteractiveScene = ({
       );
     }
   }
+
+  // 折叠徽标/「−」按钮：画布覆盖层，按场景坐标缩放，不进导出
+  renderMindmapCollapseAffordances(
+    context,
+    app,
+    appState,
+    allElementsMap,
+    selectedElements,
+  );
 
   appState.searchMatches?.matches.forEach(({ id, focus, matchedLines }) => {
     const element = elementsMap.get(id);

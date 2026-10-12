@@ -709,6 +709,7 @@ const drawElementOnCanvas = (
         context.font = getFontString({
           fontSize,
           fontFamily: element.fontFamily,
+          fontWeight: element.fontWeight,
         });
         context.fillStyle = applyDarkModeFilter(
           element.strokeColor,

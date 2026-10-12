@@ -216,6 +216,7 @@ const MindmapNodeStylePanel = ({ app }: { app: AppClassProperties }) => {
   if (!node) {
     return null;
   }
+  const derivedShape = app.mindmap.getDerivedNodeShape(node.id);
   const incomingEdge = app.scene
     .getNonDeletedElements()
     .find(
@@ -226,12 +227,25 @@ const MindmapNodeStylePanel = ({ app }: { app: AppClassProperties }) => {
       <fieldset>
         <legend>Mindmap node</legend>
         <div className="buttonList">
+          {derivedShape && (
+            <IconButton
+              type="toggle"
+              icon={<span aria-hidden="true">A</span>}
+              checked={getMindmapShapeId(node) === derivedShape}
+              title={t("labels.mindmapShapeAuto")}
+              aria-label={t("labels.mindmapShapeAuto")}
+              data-testid="mindmap-shape-auto"
+              onSelect={() => app.mindmap.setNodeShape(derivedShape)}
+            />
+          )}
           {MINDMAP_SHAPES.map(([shape, icon]) => (
             <IconButton
               key={shape}
               type="toggle"
               icon={icon}
-              checked={getMindmapShapeId(node) === shape}
+              checked={
+                getMindmapShapeId(node) === shape && shape !== derivedShape
+              }
               title={shape}
               aria-label={shape}
               data-testid={`mindmap-shape-${shape}`}
@@ -470,7 +484,6 @@ export const SelectedShapeActions = ({
       {predicates.strokeStyle && <>{renderAction("changeStrokeStyle")}</>}
 
       {predicates.freedrawMode && renderAction("changeFreedrawMode")}
-
 
       {predicates.roundness && <>{renderAction("changeRoundness")}</>}
 

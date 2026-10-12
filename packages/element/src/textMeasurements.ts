@@ -2,6 +2,7 @@ import {
   BOUND_TEXT_PADDING,
   DEFAULT_FONT_SIZE,
   DEFAULT_FONT_FAMILY,
+  getFontSizeFromFontString,
   getFontString,
   isTestEnv,
   normalizeEOL,
@@ -20,7 +21,7 @@ export const measureText = (
     // lines would be stripped from computation
     .map((x) => x || " ")
     .join("\n");
-  const fontSize = parseFloat(font);
+  const fontSize = getFontSizeFromFontString(font);
   const height = getTextHeight(_text, fontSize, lineHeight);
   const width = getTextWidth(_text, font);
   return { width, height };

@@ -1,11 +1,15 @@
-import { arrayToMap, BOUND_TEXT_PADDING } from "@excalidraw/common";
+import { arrayToMap, BOUND_TEXT_PADDING, ROUNDNESS } from "@excalidraw/common";
 import { bezierEquation, curve, pointFrom } from "@excalidraw/math";
 
 import type { GlobalPoint, Radians } from "@excalidraw/math";
 
 import {
+  applyMindmapBranchTheme,
   applyMindmapTreeCommand,
   assertMindmapShapeData,
+  computeMindmapVisibility,
+  getMindmapNodeTheme,
+  MINDMAP_BRANCH_PALETTE,
   navigateMindmap,
   buildMindmapGraphIndex,
   compareMindmapNodes,
@@ -744,7 +748,7 @@ describe("mindmap 纯布局与影子树", () => {
       expect(firstCross).toBeLessThanOrEqual(secondCross);
       for (const edge of layout.edges) {
         expect(edge.points).toHaveLength(4);
-        expect(edge.routing).toBe("orthogonal");
+        expect(edge.routing).toBe("curved");
       }
     },
   );
@@ -886,25 +890,26 @@ describe("mindmap 纯布局与影子树", () => {
 
   it("orthogonal 与 curved 连线按各自路径命中", () => {
     const edge = layoutMindmap(indexOf(graph())).edges[0];
-    expect(getMindmapEdgePath(edge)).toContain("L ");
-    const curved = { ...edge, routing: "curved" as const };
-    expect(getMindmapEdgePath(curved)).toContain("C ");
+    // 默认曲线
+    expect(getMindmapEdgePath(edge)).toContain("C ");
+    const orthogonal = { ...edge, routing: "orthogonal" as const };
+    expect(getMindmapEdgePath(orthogonal)).toContain("L ");
     expect(ShapeCache.generateElementShape(edge, null)).toBeTruthy();
     const points = edge.points.map(([x, y]) =>
       pointFrom<GlobalPoint>(edge.x + x, edge.y + y),
     );
     expect(
       hitElementItself({
-        element: edge,
-        elementsMap: arrayToMap([edge]),
+        element: orthogonal,
+        elementsMap: arrayToMap([orthogonal]),
         point: points[1],
         threshold: 10,
       }),
     ).toBe(true);
     expect(
       hitElementItself({
-        element: curved,
-        elementsMap: arrayToMap([curved]),
+        element: edge,
+        elementsMap: arrayToMap([edge]),
         point: bezierEquation(
           curve(points[0], points[1], points[2], points[3]),
           0.5,
@@ -1049,6 +1054,319 @@ describe("mindmap 表格缩放冻结（phase-1 固定布局适配）", () => {
       const nextLabel = after.get("label") as ExcalidrawTextElement;
       // 自适应管线按宽度换行，不截断
       expect(nextLabel.text).toBe(SOURCE_TEXT);
+    });
+  });
+});
+
+describe("mindmap 分支主题派生", () => {
+  const withText = (
+    nodes: ExcalidrawMindmapNodeElement[],
+  ): ExcalidrawElement[] =>
+    nodes.flatMap((n) => {
+      const text = {
+        ...newTextElement({
+          x: n.x,
+          y: n.y,
+          text: `text-${n.id}`,
+          containerId: n.id,
+          textAlign: "center" as const,
+          verticalAlign: "middle" as const,
+        }),
+        id: `${n.id}-text`,
+      };
+      return [
+        {
+          ...n,
+          boundElements: [{ type: "text" as const, id: text.id }],
+        } as ExcalidrawElement,
+        text,
+      ];
+    });
+
+  /** root → a, b；a → c，先整图派生一轮（等价于新建成形后的状态） */
+  const themedGraph = () => {
+    const elements = repairMindmapElements(withText(graph()));
+    return applyMindmapBranchTheme(elements, "graph", ["root", "a", "b", "c"]);
+  };
+
+  it("层级定形态：根实心墨色 / 一级胶囊分支色 / 二级起下划线文字", () => {
+    const themed = themedGraph();
+    const map = arrayToMap(themed);
+    const root = map.get("root") as ExcalidrawMindmapNodeElement;
+    expect(root).toMatchObject({
+      shape: { id: "rectangle", schemaVersion: 1 },
+      backgroundColor: "#1f2329",
+      strokeColor: "#1f2329",
+      strokeWidth: 2,
+      roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
+    });
+    expect(map.get("root-text")).toMatchObject({
+      fontSize: 16,
+      fontWeight: 600,
+      strokeColor: "#ffffff",
+    });
+
+    const a = map.get("a") as ExcalidrawMindmapNodeElement;
+    expect(a).toMatchObject({
+      shape: { id: "pill" },
+      backgroundColor: MINDMAP_BRANCH_PALETTE[0].fill,
+      strokeColor: MINDMAP_BRANCH_PALETTE[0].stroke,
+      strokeWidth: 1.5,
+      roundness: null,
+    });
+    const aText = map.get("a-text") as ExcalidrawTextElement;
+    expect(aText).toMatchObject({ fontSize: 14, strokeColor: "#1f2329" });
+    expect(aText.fontWeight).toBeUndefined();
+
+    const c = map.get("c") as ExcalidrawMindmapNodeElement;
+    expect(c).toMatchObject({
+      shape: { id: "text" },
+      backgroundColor: "transparent",
+      strokeColor: MINDMAP_BRANCH_PALETTE[0].stroke,
+      strokeWidth: 1.5,
+      roundness: null,
+    });
+
+    const index = indexOf(themed);
+    expect(index.edgeByChildId.get("a")).toMatchObject({
+      strokeColor: MINDMAP_BRANCH_PALETTE[0].stroke,
+      strokeWidth: 2,
+    });
+    expect(index.edgeByChildId.get("c")).toMatchObject({
+      strokeColor: MINDMAP_BRANCH_PALETTE[0].stroke,
+      strokeWidth: 1.5,
+    });
+  });
+
+  it("一级分支按落位位次循环取色（五色循环）", () => {
+    const elements = repairMindmapElements(
+      withText([
+        node("root"),
+        ...["a", "b", "c", "d", "e", "f"].map((id, i) =>
+          node(id, "root", { order: `a${i}` as FractionalIndex }),
+        ),
+      ]),
+    );
+    const themed = applyMindmapBranchTheme(elements, "graph", [
+      "root",
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+      "f",
+    ]);
+    const map = arrayToMap(themed);
+    ["a", "b", "c", "d", "e", "f"].forEach((id, i) => {
+      expect((map.get(id) as ExcalidrawMindmapNodeElement).strokeColor).toBe(
+        MINDMAP_BRANCH_PALETTE[i % MINDMAP_BRANCH_PALETTE.length].stroke,
+      );
+    });
+  });
+
+  it("子孙继承一级祖先的存储色（含手动改色）", () => {
+    const elements = repairMindmapElements(withText(graph())).map((element) =>
+      element.id === "a" ? { ...element, strokeColor: "#123456" } : element,
+    );
+    const themed = applyMindmapBranchTheme(elements, "graph", ["c"]);
+    const c = arrayToMap(themed).get("c") as ExcalidrawMindmapNodeElement;
+    expect(c.shape.id).toBe("text");
+    expect(c.strokeColor).toBe("#123456");
+    expect(indexOf(themed).edgeByChildId.get("c")).toMatchObject({
+      strokeColor: "#123456",
+      strokeWidth: 1.5,
+    });
+  });
+
+  it("派生幂等：重复运行返回同一数组引用", () => {
+    const once = themedGraph();
+    const twice = applyMindmapBranchTheme(once, "graph", [
+      "root",
+      "a",
+      "b",
+      "c",
+    ]);
+    expect(twice).toBe(once);
+  });
+
+  it("提升拆图：只重派生被移动子树，未触及节点保持引用", () => {
+    const before = themedGraph();
+    const result = applyMindmapTreeCommand(before, "a", {
+      type: "promote",
+      newGraphId: "graph2",
+    })!;
+    const beforeMap = arrayToMap(before);
+    const afterMap = arrayToMap(result.elements);
+    expect(afterMap.get("b")).toBe(beforeMap.get("b"));
+    expect(afterMap.get("b-text")).toBe(beforeMap.get("b-text"));
+    const promoted = afterMap.get("a") as ExcalidrawMindmapNodeElement;
+    expect(promoted.role).toBe("root");
+    expect(promoted).toMatchObject({
+      shape: { id: "rectangle" },
+      backgroundColor: "#1f2329",
+      strokeColor: "#1f2329",
+    });
+    expect(afterMap.get("a-text")).toMatchObject({
+      fontSize: 16,
+      fontWeight: 600,
+      strokeColor: "#ffffff",
+    });
+    const c = afterMap.get("c") as ExcalidrawMindmapNodeElement;
+    expect(c.shape.id).toBe("pill");
+    expect(c.strokeColor).toBe(MINDMAP_BRANCH_PALETTE[0].stroke);
+    expect(
+      buildMindmapGraphIndex(result.elements, "graph2").edgeByChildId.get("c"),
+    ).toMatchObject({
+      strokeColor: MINDMAP_BRANCH_PALETTE[0].stroke,
+      strokeWidth: 2,
+    });
+  });
+
+  it("提升一级：未修改节点按新位置重派生", () => {
+    const before = themedGraph();
+    const result = applyMindmapTreeCommand(before, "c", {
+      type: "promote",
+      newGraphId: "unused",
+    })!;
+    const afterMap = arrayToMap(result.elements);
+    const c = afterMap.get("c") as ExcalidrawMindmapNodeElement;
+    expect(c.parentId).toBe("root");
+    expect(c.shape.id).toBe("pill");
+    // c 落在 a 之后 → 位次 1
+    expect(c.strokeColor).toBe(MINDMAP_BRANCH_PALETTE[1].stroke);
+    expect(c.backgroundColor).toBe(MINDMAP_BRANCH_PALETTE[1].fill);
+    expect(indexOf(result.elements).edgeByChildId.get("c")).toMatchObject({
+      strokeColor: MINDMAP_BRANCH_PALETTE[1].stroke,
+      strokeWidth: 2,
+    });
+    expect(afterMap.get("c-text")).toMatchObject({ fontSize: 14 });
+  });
+
+  it("比较门：手动改过受管属性的节点全部样式保留", () => {
+    const before = themedGraph().map((element) =>
+      element.id === "c" ? { ...element, strokeColor: "#ff0000" } : element,
+    );
+    const result = applyMindmapTreeCommand(before, "c", {
+      type: "promote",
+      newGraphId: "unused",
+    })!;
+    const afterMap = arrayToMap(result.elements);
+    const c = afterMap.get("c") as ExcalidrawMindmapNodeElement;
+    // 结构仍生效，全部样式保留
+    expect(c.parentId).toBe("root");
+    expect(c.shape.id).toBe("text");
+    expect(c.strokeColor).toBe("#ff0000");
+    expect(afterMap.get("c-text")).toMatchObject({ fontSize: 14 });
+    expect(indexOf(result.elements).edgeByChildId.get("c")).toMatchObject({
+      strokeColor: MINDMAP_BRANCH_PALETTE[0].stroke,
+      strokeWidth: 1.5,
+    });
+  });
+
+  it("比较门：子树内逐节点独立判定，未修改的后代跟随新一级祖先的存储色", () => {
+    // root → a → c → d
+    const elements = repairMindmapElements(
+      withText([
+        node("root"),
+        node("a", "root"),
+        node("c", "a", { order: "a1" as FractionalIndex }),
+        node("d", "c"),
+      ]),
+    );
+    const themed = applyMindmapBranchTheme(elements, "graph", [
+      "root",
+      "a",
+      "c",
+      "d",
+    ]).map((element) =>
+      element.id === "c" ? { ...element, strokeColor: "#ff0000" } : element,
+    );
+    const result = applyMindmapTreeCommand(themed, "c", {
+      type: "promote",
+      newGraphId: "unused",
+    })!;
+    const afterMap = arrayToMap(result.elements);
+    const c = afterMap.get("c") as ExcalidrawMindmapNodeElement;
+    // c 被手动改过：结构提升但样式全留
+    expect(c.parentId).toBe("root");
+    expect(c.strokeColor).toBe("#ff0000");
+    expect(c.shape.id).toBe("text");
+    // d 未修改：按新位置重派生，分支色读新一级祖先 c 的存储色
+    const d = afterMap.get("d") as ExcalidrawMindmapNodeElement;
+    expect(d.shape.id).toBe("text");
+    expect(d.strokeColor).toBe("#ff0000");
+  });
+
+  it("比较门：手改值恰与派生值相同按未修改处理（文档化边界）", () => {
+    const before = themedGraph();
+    const beforeC = arrayToMap(before).get("c") as ExcalidrawMindmapNodeElement;
+    // 模拟用户手动写入与派生值完全相同的新对象
+    const overwritten = before.map((element) =>
+      element.id === "c"
+        ? {
+            ...element,
+            strokeColor: beforeC.strokeColor,
+            backgroundColor: beforeC.backgroundColor,
+          }
+        : element,
+    );
+    const result = applyMindmapTreeCommand(overwritten, "c", {
+      type: "promote",
+      newGraphId: "unused",
+    })!;
+    const c = arrayToMap(result.elements).get("c") as ExcalidrawMindmapNodeElement;
+    expect(c.shape.id).toBe("pill");
+    expect(c.strokeColor).toBe(MINDMAP_BRANCH_PALETTE[1].stroke);
+  });
+
+  it("删除保留子节点：子上移后按新位置重派生", () => {
+    const before = themedGraph();
+    const result = applyMindmapTreeCommand(before, "a", {
+      type: "deletePreservingChildren",
+    })!;
+    const afterMap = arrayToMap(result.elements);
+    const c = afterMap.get("c") as ExcalidrawMindmapNodeElement;
+    expect(c.parentId).toBe("root");
+    expect(c.shape.id).toBe("pill");
+    // c 接替 a 的位次 0
+    expect(c.strokeColor).toBe(MINDMAP_BRANCH_PALETTE[0].stroke);
+    expect(indexOf(result.elements).edgeByChildId.get("c")).toMatchObject({
+      strokeColor: MINDMAP_BRANCH_PALETTE[0].stroke,
+      strokeWidth: 2,
+    });
+  });
+
+  it("折叠计数：嵌套折叠统计全部隐藏子孙", () => {
+    const elements = [
+      node("root"),
+      node("a", "root", { collapsed: true }),
+      node("b", "a"),
+      node("c", "b", { collapsed: true }),
+      node("d", "c"),
+    ];
+    const { hiddenIds, collapsedCounts } = computeMindmapVisibility(elements);
+    expect(collapsedCounts.get("a")).toBe(3);
+    expect(collapsedCounts.get("c")).toBe(1);
+    expect(hiddenIds.has("b")).toBe(true);
+    expect(hiddenIds.has("c")).toBe(true);
+    expect(hiddenIds.has("d")).toBe(true);
+    expect(hiddenIds.has("root")).toBe(false);
+  });
+
+  it("getMindmapNodeTheme 按层级返回派生样式", () => {
+    const index = indexOf(graph());
+    expect(getMindmapNodeTheme(index, "root")).toMatchObject({
+      shape: "rectangle",
+      text: { fontSize: 16, fontWeight: 600 },
+      edge: null,
+    });
+    expect(getMindmapNodeTheme(index, "a")).toMatchObject({
+      shape: "pill",
+      edge: { strokeWidth: 2 },
+    });
+    expect(getMindmapNodeTheme(index, "c")).toMatchObject({
+      shape: "text",
+      edge: { strokeWidth: 1.5 },
     });
   });
 });

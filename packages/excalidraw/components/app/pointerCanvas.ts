@@ -739,8 +739,6 @@ export const handleCanvasPointerMove = (
     return;
   }
 
-  app.mindmap.handlePointerMove(scenePointerX, scenePointerY);
-
   if (
     app.pan.isSpaceHeld() ||
     app.pan.isActive() ||
@@ -768,6 +766,9 @@ export const handleCanvasPointerMove = (
       app.cursor.applyForTool();
     }
   }
+
+  // 在工具光标落定之后运行：思维导图折叠 affordance 的悬停指针不被覆盖
+  app.mindmap.handlePointerMove(scenePointerX, scenePointerY);
 
   app.maybeUpdateFrameToHighlightOnPointerMove(
     {

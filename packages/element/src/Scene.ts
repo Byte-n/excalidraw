@@ -56,7 +56,7 @@ import {
   registerTableChildrenIndex,
   unregisterTableChildrenIndex,
 } from "./tableChildrenIndex";
-import { getMindmapHiddenElementIds } from "./mindmap";
+import { computeMindmapVisibility } from "./mindmap";
 
 import type { AppState } from "../../excalidraw/types";
 
@@ -159,7 +159,10 @@ export class Scene {
    * cache-invalidation nonce at the moment.
    */
   private sceneNonce: number | undefined;
-  private hiddenMindmapElementIds: ReadonlySet<string> | null = null;
+  private mindmapVisibility: {
+    hiddenIds: ReadonlySet<string>;
+    collapsedCounts: ReadonlyMap<string, number>;
+  } | null = null;
 
   getSceneNonce() {
     return this.sceneNonce;
@@ -181,13 +184,21 @@ export class Scene {
     return this.nonDeletedElements;
   }
 
-  getMindmapHiddenElementIds() {
-    if (!this.hiddenMindmapElementIds) {
-      this.hiddenMindmapElementIds = getMindmapHiddenElementIds(
+  private getMindmapVisibility() {
+    if (!this.mindmapVisibility) {
+      this.mindmapVisibility = computeMindmapVisibility(
         this.nonDeletedElements,
       );
     }
-    return this.hiddenMindmapElementIds;
+    return this.mindmapVisibility;
+  }
+
+  getMindmapHiddenElementIds() {
+    return this.getMindmapVisibility().hiddenIds;
+  }
+
+  getMindmapCollapsedCounts() {
+    return this.getMindmapVisibility().collapsedCounts;
   }
 
   getFramesIncludingDeleted() {
@@ -371,7 +382,7 @@ export class Scene {
 
   triggerUpdate() {
     this.sceneNonce = randomInteger();
-    this.hiddenMindmapElementIds = null;
+    this.mindmapVisibility = null;
 
     for (const callback of Array.from(this.callbacks)) {
       callback();
@@ -414,7 +425,7 @@ export class Scene {
     this.selectedElementsCache.selectedElementIds = null;
     this.selectedElementsCache.elements = null;
     this.selectedElementsCache.cache.clear();
-    this.hiddenMindmapElementIds = null;
+    this.mindmapVisibility = null;
 
     // done not for memory leaks, but to guard against possible late fires
     // (I guess?)
