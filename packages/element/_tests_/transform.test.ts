@@ -160,7 +160,7 @@ describe("Test Transform", () => {
         type: "arrow",
         x: 450,
         y: 20,
-        startArrowhead: "dot",
+        startArrowhead: "circle",
         endArrowhead: "triangle",
         strokeColor: "#1971c2",
         strokeWidth: 2,

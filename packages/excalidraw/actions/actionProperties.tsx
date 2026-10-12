@@ -14,7 +14,6 @@ import {
   STROKE_WIDTH_KEYS,
   VERTICAL_ALIGN,
   KEYS,
-  randomInteger,
   arrayToMap,
   getFontFamilyString,
   getLineHeight,
@@ -43,7 +42,6 @@ import {
 import { LinearElementEditor } from "@excalidraw/element";
 
 import { newElementWith } from "@excalidraw/element";
-import { getArrowheadForPicker } from "@excalidraw/element";
 
 import {
   getBoundTextElement,
@@ -122,9 +120,6 @@ import {
   FillHachureIcon,
   FillCrossHatchIcon,
   FillSolidIcon,
-  SloppinessArchitectIcon,
-  SloppinessArtistIcon,
-  SloppinessCartoonistIcon,
   StrokeWidthBaseIcon,
   StrokeWidthBoldIcon,
   StrokeWidthExtraBoldIcon,
@@ -1954,7 +1949,7 @@ export const actionChangeArrowhead = register<{
               app,
               (element) =>
                 isLinearElement(element) && canHaveArrowheads(element.type)
-                  ? getArrowheadForPicker(element.startArrowhead)
+                  ? element.startArrowhead
                   : appState.currentItemStartArrowhead,
               true,
               (hasSelection) =>
@@ -1971,7 +1966,7 @@ export const actionChangeArrowhead = register<{
               app,
               (element) =>
                 isLinearElement(element) && canHaveArrowheads(element.type)
-                  ? getArrowheadForPicker(element.endArrowhead)
+                  ? element.endArrowhead
                   : appState.currentItemEndArrowhead,
               true,
               (hasSelection) =>

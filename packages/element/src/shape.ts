@@ -68,7 +68,6 @@ import {
   isEmbeddableElement,
   isIframeElement,
   isIframeLikeElement,
-  isLinearElement,
 } from "./typeChecks";
 import { getCornerRadius, isPathALoop } from "./utils";
 import { headingForPointIsHorizontal } from "./heading";
@@ -183,9 +182,12 @@ export class ShapeCache {
   };
 }
 
-const getDashArrayDashed = (strokeWidth: number) => [8, 8 + strokeWidth];
+// Connector dashes follow the canvas connector spec: 6px on, 4px off.
+// Keep the width adjustment so thicker strokes retain a readable gap.
+const getDashArrayDashed = (strokeWidth: number) => [6, 4 + strokeWidth];
 
-const getDashArrayDotted = (strokeWidth: number) => [1.5, 6 + strokeWidth];
+// Dots are rendered as short round marks with a 5px rhythm.
+const getDashArrayDotted = (strokeWidth: number) => [2, 5 + strokeWidth];
 
 export const generateRoughOptions = (
   element: ExcalidrawElement,
@@ -217,8 +219,7 @@ export const generateRoughOptions = (
     // All elements use the precise, architect-style rendering. Keep reading
     roughness: 0,
     stroke: applyDarkModeFilter(element.strokeColor, isDarkMode),
-    preserveVertices:
-      true,
+    preserveVertices: true,
   };
 
   switch (element.type) {
@@ -347,19 +348,15 @@ const generateArrowheadLinesToTip = (
 };
 
 const getArrowheadLineOptions = (
-  element: ExcalidrawLinearElement,
+  _element: ExcalidrawLinearElement,
   options: Options,
 ) => {
   const lineOptions = { ...options };
 
-  if (element.strokeStyle === "dotted") {
-    // for dotted arrows caps, reduce gap to make it more legible
-    const dash = getDashArrayDotted(element.strokeWidth - 1);
-    lineOptions.strokeLineDash = [dash[0], dash[1] - 1];
-  } else {
-    // for solid/dashed, keep solid arrow cap
-    delete lineOptions.strokeLineDash;
-  }
+  // Arrowheads are always drawn with a solid stroke, regardless of the
+  // connector's line style, so the head stays legible on dashed/dotted lines.
+  delete lineOptions.strokeLineDash;
+
   lineOptions.roughness = 0;
 
   return lineOptions;

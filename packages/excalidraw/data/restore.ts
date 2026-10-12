@@ -35,7 +35,6 @@ import {
 import {
   calculateFixedPointForNonElbowArrowBinding,
   getNonDeletedElements,
-  normalizeArrowhead,
   isPointInElement,
   isValidPolygon,
   projectFixedPointOntoDiagonal,
@@ -632,8 +631,8 @@ export const restoreElement = (
     // @ts-ignore LEGACY type
     // eslint-disable-next-line no-fallthrough
     case "draw":
-      const startArrowhead = normalizeArrowhead(element.startArrowhead);
-      const endArrowhead = normalizeArrowhead(element.endArrowhead);
+      const startArrowhead = element.startArrowhead ?? null;
+      const endArrowhead = element.endArrowhead ?? null;
       let x = element.x;
       let y = element.y;
       let points = restoreLinearElementPoints(
@@ -685,11 +684,11 @@ export const restoreElement = (
 
       return handleOversizedLinearElements(restoredLine);
     case "arrow": {
-      const startArrowhead = normalizeArrowhead(element.startArrowhead);
+      const startArrowhead = element.startArrowhead ?? null;
       const endArrowhead =
         element.endArrowhead === undefined
           ? "arrow"
-          : normalizeArrowhead(element.endArrowhead);
+          : element.endArrowhead ?? null;
       const x = element.x as number | undefined;
       const y = element.y as number | undefined;
       const points = restoreLinearElementPoints(

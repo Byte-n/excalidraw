@@ -509,9 +509,26 @@ export const getStrokeWidthByKey = (
   elementType: ExcalidrawElement["type"] | ToolType,
   strokeWidthKey: StrokeWidthKey,
 ): ExcalidrawElement["strokeWidth"] => {
-  return elementType === "freedraw"
-    ? FREEDRAW_STROKE_WIDTH[strokeWidthKey]
-    : STROKE_WIDTH[strokeWidthKey];
+  if (elementType === "freedraw") {
+    return FREEDRAW_STROKE_WIDTH[strokeWidthKey];
+  }
+  // Connectors (arrows) use a lighter stroke ramp than shapes — the default
+  // "medium" is 1.5px, one step below the 2px shape default.
+  if (elementType === "arrow") {
+    return ARROW_STROKE_WIDTH[strokeWidthKey];
+  }
+  return STROKE_WIDTH[strokeWidthKey];
+};
+
+// Connector (arrow) stroke ramp: 0.75× the shape widths so a default arrow
+// reads as one level lighter than a shape outline.
+export const ARROW_STROKE_WIDTH: Readonly<
+  Record<StrokeWidthKey | "extraBold", ExcalidrawElement["strokeWidth"]>
+> = {
+  thin: 0.75,
+  medium: 1.5,
+  bold: 3,
+  extraBold: 6,
 };
 
 export const DEFAULT_ELEMENT_STROKE_WIDTH_KEY: StrokeWidthKey = "medium";

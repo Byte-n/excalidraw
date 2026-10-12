@@ -199,7 +199,7 @@ exports[`move element > rectangles with binding arrow 7`] = `
   "created": 1,
   "customData": undefined,
   "elbowed": false,
-  "endArrowhead": "arrow",
+  "endArrowhead": "triangle",
   "endBinding": {
     "elementId": "id3",
     "fixedPoint": [
@@ -241,9 +241,9 @@ exports[`move element > rectangles with binding arrow 7`] = `
     ],
     "mode": "orbit",
   },
-  "strokeColor": "#1f2329",
+  "strokeColor": "#646a73",
   "strokeStyle": "solid",
-  "strokeWidth": 2,
+  "strokeWidth": "1.50000",
   "type": "arrow",
   "updated": 1,
   "version": 13,

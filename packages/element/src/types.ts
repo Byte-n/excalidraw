@@ -584,12 +584,6 @@ export type CardinalityArrowhead =
   | "cardinality_zero_or_one"
   | "cardinality_zero_or_many";
 
-export type ArrowheadLegacy =
-  | "dot"
-  | "crowfoot_one"
-  | "crowfoot_many"
-  | "crowfoot_one_or_many";
-
 export type Arrowhead =
   | "arrow"
   | "bar"
@@ -600,8 +594,6 @@ export type Arrowhead =
   | "diamond"
   | "diamond_outline"
   | CardinalityArrowhead;
-
-export type AnyArrowhead = Arrowhead | ArrowheadLegacy;
 
 export type ExcalidrawLinearElement = _ExcalidrawElementBase &
   Readonly<{

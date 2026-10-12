@@ -142,13 +142,20 @@ import type {
 // ---------------------------------------------------------------------------
 
 const BINDING_HIGHLIGHT_RGB = {
-  [THEME.LIGHT]: "106, 189, 252",
-  [THEME.DARK]: "104, 182, 240",
+  [THEME.LIGHT]: "22, 119, 255",
+  [THEME.DARK]: "64, 150, 255",
+} as const;
+
+// alpha for the unified binding "glow" outline (subtle, drawn over the
+// bindable element instead of a hard full-opacity stroke)
+const BINDING_GLOW_ALPHA = {
+  [THEME.LIGHT]: 0.22,
+  [THEME.DARK]: 0.24,
 } as const;
 
 const BINDING_MIDPOINT_COLOR = {
-  [THEME.LIGHT]: "rgba(65, 65, 65, 0.5)",
-  [THEME.DARK]: "rgba(237, 237, 237, 0.8)",
+  [THEME.LIGHT]: "rgba(22, 119, 255, 0.35)",
+  [THEME.DARK]: "rgba(64, 150, 255, 0.4)",
 } as const;
 
 const SEARCH_MATCH_COLOR = {
@@ -171,12 +178,53 @@ const getThemedColor = (
 const renderElbowArrowMidPointHighlight = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
+  elementsMap?: ElementsMap,
 ) => {
   invariant(appState.selectedLinearElement, "selectedLinearElement is null");
 
   const { segmentMidPointHoveredCoords } = appState.selectedLinearElement;
 
   invariant(segmentMidPointHoveredCoords, "midPointCoords is null");
+
+  // When the selected elbow arrow can be resolved, render the hovered segment
+  // as a 2px primary stroke with a solid primary capsule on its midpoint.
+  // Otherwise fall back to the circular highlight.
+  const element = elementsMap
+    ? LinearElementEditor.getElement(
+        appState.selectedLinearElement.elementId,
+        elementsMap,
+      )
+    : null;
+
+  if (element && isElbowArrow(element)) {
+    const points = LinearElementEditor.getPointsGlobalCoordinates(
+      element,
+      elementsMap!,
+    );
+    const zoom = appState.zoom.value;
+    for (let idx = 0; idx < points.length - 1; idx++) {
+      const segStart = points[idx];
+      const segEnd = points[idx + 1];
+      const mid = pointFrom<GlobalPoint>(
+        (segStart[0] + segEnd[0]) / 2,
+        (segStart[1] + segEnd[1]) / 2,
+      );
+      if (pointsEqual(mid, segmentMidPointHoveredCoords, 2 / zoom)) {
+        context.save();
+        context.translate(appState.scrollX, appState.scrollY);
+        drawElbowSegmentMidpointHandle(
+          context,
+          appState,
+          mid,
+          segStart,
+          segEnd,
+          { isHovered: true, isPhantom: false },
+        );
+        context.restore();
+        return;
+      }
+    }
+  }
 
   highlightPoint(segmentMidPointHoveredCoords, context, appState);
 };
@@ -220,10 +268,7 @@ const highlightPoint = <Point extends LocalPoint | GlobalPoint>(
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
 
-  context.fillStyle = getThemedColor(
-    "rgba(105, 101, 219, 0.4)",
-    appState.theme,
-  );
+  context.fillStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, 0.4)`;
 
   fillCircle(
     context,
@@ -279,35 +324,146 @@ const renderSingleLinearPoint = <Point extends GlobalPoint | LocalPoint>(
   isSelected: boolean,
   isPhantomPoint: boolean,
   isOverlappingPoint: boolean,
+  isBound = false,
 ) => {
-  context.strokeStyle = getThemedColor("#5e5ad8", appState.theme);
   context.setLineDash([]);
-  context.fillStyle = getThemedColor(
-    "rgba(255, 255, 255, 0.9)",
-    appState.theme,
-  );
-  if (isSelected) {
-    context.fillStyle = getThemedColor(
-      "rgba(134, 131, 226, 0.9)",
-      appState.theme,
-    );
-  } else if (isPhantomPoint) {
-    context.fillStyle = getThemedColor(
-      "rgba(177, 151, 252, 0.7)",
-      appState.theme,
-    );
+  const zoom = appState.zoom.value;
+  const primaryRGB = BINDING_HIGHLIGHT_RGB[appState.theme];
+
+  if (isPhantomPoint) {
+    // midpoint add-point handle: 6px/zoom translucent primary circle
+    context.fillStyle = `rgba(${primaryRGB}, 0.5)`;
+    fillCircle(context, point[0], point[1], 6 / zoom, false, true);
+    return;
   }
 
-  fillCircle(
-    context,
-    point[0],
-    point[1],
+  // Endpoint handle. Bound endpoints render as a solid primary disc; free
+  // endpoints render as a hollow primary ring (a selected free endpoint
+  // renders solid so the selection stays visible while editing). The radius
+  // is bumped when this point overlaps a neighbour so both stays grabbable.
+  const r =
     (isOverlappingPoint
       ? radius * (appState.selectedLinearElement?.isEditing ? 1.5 : 2)
-      : radius) / appState.zoom.value,
-    !isPhantomPoint,
-    !isOverlappingPoint || isSelected,
+      : radius) / zoom;
+
+  const solid = isBound || isSelected;
+  context.lineWidth = 1.5 / zoom;
+  context.strokeStyle = `rgba(${primaryRGB}, 1)`;
+  context.fillStyle = `rgba(${primaryRGB}, 1)`;
+  fillCircle(context, point[0], point[1], r, true, solid);
+};
+
+/**
+ * Elbow segment-midpoint handle drawn as a 16×5 rounded capsule oriented
+ * along the segment. The dragged/hovered segment gets a 2px primary segment
+ * stroke and a solid primary capsule; non-fixed (add-point) segments get a
+ * translucent primary capsule; fixed-vertex segments get a hollow primary
+ * capsule.
+ *
+ * The caller must apply the scroll transform — the points passed in are in
+ * scene coordinates.
+ */
+const drawElbowSegmentMidpointHandle = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  midPoint: GlobalPoint,
+  segStart: GlobalPoint,
+  segEnd: GlobalPoint,
+  opts: { isHovered: boolean; isPhantom: boolean },
+) => {
+  const { isHovered, isPhantom } = opts;
+  const zoom = appState.zoom.value;
+  const primaryRGB = BINDING_HIGHLIGHT_RGB[appState.theme];
+  const angle = Math.atan2(segEnd[1] - segStart[1], segEnd[0] - segStart[0]);
+
+  context.save();
+  context.setLineDash([]);
+
+  if (isHovered) {
+    // stroke the dragged/hovered segment in 2px primary
+    context.strokeStyle = `rgba(${primaryRGB}, 1)`;
+    context.lineWidth = 2 / zoom;
+    context.beginPath();
+    context.moveTo(segStart[0], segStart[1]);
+    context.lineTo(segEnd[0], segEnd[1]);
+    context.stroke();
+  }
+
+  // 16 × 5 rounded capsule centered on the midpoint, oriented along segment
+  const capsuleLen = 16 / zoom;
+  const capsuleW = 5 / zoom;
+  const cornerR = 2.5 / zoom;
+
+  context.translate(midPoint[0], midPoint[1]);
+  context.rotate(angle);
+  context.beginPath();
+  if (context.roundRect) {
+    context.roundRect(
+      -capsuleLen / 2,
+      -capsuleW / 2,
+      capsuleLen,
+      capsuleW,
+      cornerR,
+    );
+  } else {
+    context.rect(-capsuleLen / 2, -capsuleW / 2, capsuleLen, capsuleW);
+  }
+
+  if (isHovered) {
+    context.fillStyle = `rgba(${primaryRGB}, 1)`;
+    context.fill();
+  } else if (isPhantom) {
+    context.fillStyle = `rgba(${primaryRGB}, 0.35)`;
+    context.fill();
+  } else {
+    context.strokeStyle = `rgba(${primaryRGB}, 1)`;
+    context.lineWidth = 1.5 / zoom;
+    context.stroke();
+  }
+
+  context.restore();
+};
+
+/**
+ * Hover trace for a hovered-but-unselected linear element: an 8px/zoom
+ * translucent primary stroke painted along the element's point polyline. The
+ * points returned by `getPointsGlobalCoordinates` already carry the element's
+ * rotation, so the trace follows the path. This replaces the rectangular box
+ * highlight that non-linear hovered elements receive.
+ */
+const renderHoveredLinearTrace = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  element: NonDeleted<ExcalidrawLinearElement>,
+  elementsMap: RenderableElementsMap,
+) => {
+  const points = LinearElementEditor.getPointsGlobalCoordinates(
+    element,
+    elementsMap,
   );
+  if (points.length < 2) {
+    return;
+  }
+  const zoom = appState.zoom.value;
+  const alpha = appState.theme === THEME.DARK ? 0.24 : 0.18;
+
+  context.save();
+  context.translate(appState.scrollX, appState.scrollY);
+  context.strokeStyle = `rgba(${
+    BINDING_HIGHLIGHT_RGB[appState.theme]
+  }, ${alpha})`;
+  context.lineWidth = 8 / zoom;
+  context.lineJoin = "round";
+  context.lineCap = "round";
+  context.setLineDash([]);
+
+  context.beginPath();
+  context.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) {
+    context.lineTo(points[i][0], points[i][1]);
+  }
+  context.stroke();
+  context.restore();
 };
 
 const strokeCompositeShapeOutline = (
@@ -397,8 +553,10 @@ const renderBindingHighlightForBindableElement_simple = (
 
       context.translate(suggestedBinding.element.x, suggestedBinding.element.y);
 
-      context.lineWidth = FRAME_STYLE.strokeWidth / appState.zoom.value;
-      context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, 1)`;
+      context.lineWidth = 6 / Math.max(0.25, appState.zoom.value);
+      context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, ${
+        BINDING_GLOW_ALPHA[appState.theme]
+      })`;
 
       if (FRAME_STYLE.radius && context.roundRect) {
         context.beginPath();
@@ -426,12 +584,10 @@ const renderBindingHighlightForBindableElement_simple = (
       context.save();
 
       if (isCompositeShapeElement(suggestedBinding.element)) {
-        context.lineWidth =
-          clamp(1.75, suggestedBinding.element.strokeWidth, 4) /
-          Math.max(0.25, appState.zoom.value);
-        context.strokeStyle = `rgba(${
-          BINDING_HIGHLIGHT_RGB[appState.theme]
-        }, 1)`;
+        context.lineWidth = 6 / Math.max(0.25, appState.zoom.value);
+        context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, ${
+          BINDING_GLOW_ALPHA[appState.theme]
+        })`;
         strokeCompositeShapeOutline(context, suggestedBinding.element);
         context.restore();
         break;
@@ -445,10 +601,10 @@ const renderBindingHighlightForBindableElement_simple = (
 
       context.translate(suggestedBinding.element.x, suggestedBinding.element.y);
 
-      context.lineWidth =
-        clamp(1.75, suggestedBinding.element.strokeWidth, 4) /
-        Math.max(0.25, appState.zoom.value);
-      context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, 1)`;
+      context.lineWidth = 6 / Math.max(0.25, appState.zoom.value);
+      context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, ${
+        BINDING_GLOW_ALPHA[appState.theme]
+      })`;
 
       const [segments, curves] = deconstructRectanguloidElement(
         suggestedBinding.element,
@@ -576,10 +732,13 @@ const renderBindingHighlightForBindableElement_simple = (
           },
         );
 
-      const midpointRadius = 4 / appState.zoom.value;
+      const hitRadius = 9 / appState.zoom.value;
+      const anchorRadius = 6 / appState.zoom.value;
       const highlightThreshold =
         maxBindingDistance_simple(appState.zoom) +
         suggestedBinding.element.strokeWidth / 2;
+
+      context.lineWidth = 1.5 / appState.zoom.value;
 
       midpoints.forEach((midpoint, idx) => {
         const isHighlighted =
@@ -596,18 +755,22 @@ const renderBindingHighlightForBindableElement_simple = (
               hoveredMidpoint.distance <= highlightThreshold * 2));
 
         if (isHighlighted) {
+          // HIT anchor: solid primary filled
           context.fillStyle = `rgba(${
             BINDING_HIGHLIGHT_RGB[appState.theme]
           }, 1)`;
-
-          context.beginPath();
-          context.arc(midpoint[0], midpoint[1], midpointRadius, 0, 2 * Math.PI);
-          context.fill();
+          fillCircle(context, midpoint[0], midpoint[1], hitRadius, false, true);
         } else if (isShown) {
-          context.fillStyle = BINDING_MIDPOINT_COLOR[appState.theme];
-          context.beginPath();
-          context.arc(midpoint[0], midpoint[1], midpointRadius, 0, 2 * Math.PI);
-          context.fill();
+          // non-hit: hollow primary ring
+          context.strokeStyle = BINDING_MIDPOINT_COLOR[appState.theme];
+          fillCircle(
+            context,
+            midpoint[0],
+            midpoint[1],
+            anchorRadius,
+            true,
+            false,
+          );
         }
       });
 
@@ -666,7 +829,7 @@ const renderBindingHighlightForBindableElement_complex = (
 
       context.translate(element.x, element.y);
 
-      context.lineWidth = FRAME_STYLE.strokeWidth / appState.zoom.value;
+      context.lineWidth = 6 / Math.max(0.25, appState.zoom.value);
       context.strokeStyle = `rgba(${
         BINDING_HIGHLIGHT_RGB[appState.theme]
       }, ${opacity})`;
@@ -693,9 +856,7 @@ const renderBindingHighlightForBindableElement_complex = (
 
       if (isCompositeShapeElement(element)) {
         context.translate(appState.scrollX, appState.scrollY);
-        context.lineWidth =
-          clamp(2.5, element.strokeWidth * 1.75, 4) /
-          Math.max(0.25, appState.zoom.value);
+        context.lineWidth = 6 / Math.max(0.25, appState.zoom.value);
         context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, ${
           opacity / 2
         })`;
@@ -717,9 +878,7 @@ const renderBindingHighlightForBindableElement_complex = (
         element.y + appState.scrollY - offset,
       );
 
-      context.lineWidth =
-        clamp(2.5, element.strokeWidth * 1.75, 4) /
-        Math.max(0.25, appState.zoom.value);
+      context.lineWidth = 6 / Math.max(0.25, appState.zoom.value);
       context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, ${
         opacity / 2
       })`;
@@ -830,9 +989,11 @@ const renderBindingHighlightForBindableElement_complex = (
         element.y + appState.scrollY,
       );
 
-      const midpointRadius = 5 / appState.zoom.value;
-      const cutoutPadding = 5 / appState.zoom.value;
-      const cutoutRadius = midpointRadius + cutoutPadding;
+      const midpointRadius = 6 / appState.zoom.value;
+      context.lineWidth = 1.5 / appState.zoom.value;
+      context.strokeStyle = `rgba(${
+        BINDING_HIGHLIGHT_RGB[appState.theme]
+      }, ${opacity})`;
 
       let midpoints;
       if (isCompositeShapeElement(element)) {
@@ -865,24 +1026,16 @@ const renderBindingHighlightForBindableElement_complex = (
         });
       }
 
-      // Clear cutouts around midpoints
+      // Hollow primary anchor rings (stroke-only, so no clearout is needed)
       midpoints.forEach((midpoint) => {
-        context.clearRect(
-          midpoint.x - cutoutRadius,
-          midpoint.y - cutoutRadius,
-          cutoutRadius * 2,
-          cutoutRadius * 2,
+        fillCircle(
+          context,
+          midpoint.x,
+          midpoint.y,
+          midpointRadius,
+          true,
+          false,
         );
-      });
-
-      context.fillStyle = `rgba(${
-        BINDING_HIGHLIGHT_RGB[appState.theme]
-      }, ${opacity})`;
-
-      midpoints.forEach((midpoint) => {
-        context.beginPath();
-        context.arc(midpoint.x, midpoint.y, midpointRadius, 0, 2 * Math.PI);
-        context.fill();
       });
 
       context.restore();
@@ -1832,6 +1985,13 @@ const renderLinearPointHandles = (
       isSelected = true;
     }
 
+    const isBound =
+      idx === 0
+        ? !!element.startBinding
+        : idx === points.length - 1
+        ? !!element.endBinding
+        : false;
+
     renderSingleLinearPoint(
       context,
       appState,
@@ -1840,6 +2000,7 @@ const renderLinearPointHandles = (
       isSelected,
       false,
       isOverlappingPoint,
+      isBound,
     );
   });
 
@@ -1847,29 +2008,31 @@ const renderLinearPointHandles = (
   if (isElbowArrow(element)) {
     const fixedSegments =
       element.fixedSegments?.map((segment) => segment.index) || [];
+    const hoveredCoords =
+      appState.selectedLinearElement?.segmentMidPointHoveredCoords ?? null;
     points.slice(0, -1).forEach((p, idx) => {
+      const segEnd = points[idx + 1];
       if (
         !LinearElementEditor.isSegmentTooShort(
           element,
-          points[idx + 1],
-          points[idx],
+          segEnd,
+          p,
           idx,
           appState.zoom,
           elementsMap,
         )
       ) {
-        renderSingleLinearPoint(
-          context,
-          appState,
-          pointFrom<GlobalPoint>(
-            (p[0] + points[idx + 1][0]) / 2,
-            (p[1] + points[idx + 1][1]) / 2,
-          ),
-          POINT_HANDLE_SIZE / 2,
-          false,
-          !fixedSegments.includes(idx + 1),
-          false,
+        const mid = pointFrom<GlobalPoint>(
+          (p[0] + segEnd[0]) / 2,
+          (p[1] + segEnd[1]) / 2,
         );
+        const isHovered =
+          hoveredCoords != null &&
+          pointsEqual(mid, hoveredCoords, 2 / appState.zoom.value);
+        drawElbowSegmentMidpointHandle(context, appState, mid, p, segEnd, {
+          isHovered,
+          isPhantom: !fixedSegments.includes(idx + 1),
+        });
       }
     });
   } else {
@@ -1914,10 +2077,7 @@ const renderFocusPointConnectionLine = (
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
 
-  context.strokeStyle = getThemedColor(
-    "rgba(134, 131, 226, 0.6)",
-    appState.theme,
-  );
+  context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, 0.6)`;
   context.lineWidth = 1 / appState.zoom.value;
   context.setLineDash([4 / appState.zoom.value, 4 / appState.zoom.value]);
 
@@ -1936,18 +2096,13 @@ const renderFocusPointCicle = (
   radius: number,
   isHovered: boolean,
 ) => {
+  const primaryRGB = BINDING_HIGHLIGHT_RGB[appState.theme];
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
-  context.strokeStyle = getThemedColor(
-    "rgba(134, 131, 226, 0.6)",
-    appState.theme,
-  );
+  context.strokeStyle = `rgba(${primaryRGB}, 0.6)`;
   context.lineWidth = 1 / appState.zoom.value;
   context.setLineDash([]);
-  context.fillStyle = getThemedColor(
-    isHovered ? "rgba(134, 131, 226, 0.9)" : "rgba(255, 255, 255, 0.9)",
-    appState.theme,
-  );
+  context.fillStyle = `rgba(${primaryRGB}, ${isHovered ? 0.9 : 0.6})`;
 
   fillCircle(
     context,
@@ -2046,7 +2201,7 @@ const renderFocusPointIndicator = ({
       context,
       appState,
       focusPoint,
-      FOCUS_POINT_SIZE / 1.5,
+      FOCUS_POINT_SIZE,
       isHovered,
     );
   }
@@ -2594,6 +2749,16 @@ const _renderInteractiveScene = ({
           padding: ELEMENT_OUTLINE_PADDING,
         },
       );
+    } else if (
+      hoveredElement &&
+      !hoveredElement.isDeleted &&
+      isLinearElement(hoveredElement) &&
+      !selectedElements.some((element) => element.id === hoveredElement.id) &&
+      appState.activeLockedId !== hoveredElement.id
+    ) {
+      // Linear elements get a path-following hover trace instead of the
+      // rectangular box highlight used for non-linear elements.
+      renderHoveredLinearTrace(context, appState, hoveredElement, elementsMap);
     }
   }
 
@@ -2669,7 +2834,7 @@ const _renderInteractiveScene = ({
   if (selectedLinearElement && isSelectedLinearElement) {
     if (!appState.selectedLinearElement.isDragging) {
       if (linearState.segmentMidPointHoveredCoords) {
-        renderElbowArrowMidPointHighlight(context, appState);
+        renderElbowArrowMidPointHighlight(context, appState, allElementsMap);
       } else if (
         isElbowArrow(selectedLinearElement)
           ? linearState.hoverPointIndex === 0 ||

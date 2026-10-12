@@ -1,5 +1,6 @@
 import {
   DEFAULT_ELEMENT_PROPS,
+  DEFAULT_NEW_ELEMENT_STROKE_COLOR,
   DEFAULT_FONT_FAMILY,
   DEFAULT_FONT_SIZE,
   DEFAULT_TEXT_ALIGN,
@@ -770,6 +771,9 @@ export const newLinearElement = (
   return element;
 };
 
+/** Default connector stroke — one level lighter than shape outlines. */
+const ARROW_DEFAULT_STROKE_COLOR = "#646a73";
+
 export const newArrowElement = <T extends boolean>(
   opts: {
     type: ExcalidrawArrowElement["type"];
@@ -782,9 +786,19 @@ export const newArrowElement = <T extends boolean>(
 ): T extends true
   ? NonDeleted<ExcalidrawElbowArrowElement>
   : NonDeleted<ExcalidrawArrowElement> => {
+  // Connectors default to a lighter stroke color than shapes (#646a73 vs
+  // #1f2329); a user-chosen color is preserved unchanged.
+  const arrowStrokeColor =
+    opts.strokeColor && opts.strokeColor !== DEFAULT_NEW_ELEMENT_STROKE_COLOR
+      ? opts.strokeColor
+      : ARROW_DEFAULT_STROKE_COLOR;
+  const arrowOpts = { ...opts, strokeColor: arrowStrokeColor };
   if (opts.elbowed) {
     return {
-      ..._newElementBase<ExcalidrawElbowArrowElement>(opts.type, opts),
+      ..._newElementBase<ExcalidrawElbowArrowElement>(
+        arrowOpts.type,
+        arrowOpts,
+      ),
       points: opts.points || [],
       startBinding: null,
       endBinding: null,
@@ -798,7 +812,7 @@ export const newArrowElement = <T extends boolean>(
   }
 
   return {
-    ..._newElementBase<ExcalidrawArrowElement>(opts.type, opts),
+    ..._newElementBase<ExcalidrawArrowElement>(arrowOpts.type, arrowOpts),
     points: opts.points || [],
     startBinding: null,
     endBinding: null,

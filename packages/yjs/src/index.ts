@@ -116,7 +116,7 @@ export type {
   CanvasSceneCommands,
 } from "./canvas-scene-commands";
 export { BASE_SHAPE_IDS, ARROWHEAD_VALUES } from "@excalidraw/element";
-export type { AnyArrowhead, BaseShapeId } from "@excalidraw/element/types";
+export type { BaseShapeId } from "@excalidraw/element/types";
 export {
   createSceneElement,
   createSceneTextElement,

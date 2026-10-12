@@ -3,7 +3,6 @@ import { pointFrom } from "@excalidraw/math";
 
 import type { LocalPoint, Radians } from "@excalidraw/math";
 
-import { normalizeArrowhead } from "./arrowheads";
 import {
   bindBindingElement,
   unbindBindingElement,
@@ -23,7 +22,7 @@ import { isBindableElement, isLinearElement } from "./typeChecks";
 
 import type { Scene } from "./Scene";
 import type {
-  AnyArrowhead,
+  Arrowhead,
   ExcalidrawBindableElement,
   ExcalidrawElement,
   ExcalidrawLinearElement,
@@ -49,8 +48,8 @@ export type ConnectorOperation =
       end: ConnectorEndpoint;
       routing?: ConnectorRouting;
       label?: string;
-      startArrowhead?: AnyArrowhead | null;
-      endArrowhead?: AnyArrowhead | null;
+      startArrowhead?: Arrowhead | null;
+      endArrowhead?: Arrowhead | null;
       style?: ConnectorStyle;
       textStyle?: SceneTextStyle;
     }>
@@ -59,8 +58,8 @@ export type ConnectorOperation =
       target: SceneElementTarget;
       routing?: ConnectorRouting;
       label?: string;
-      startArrowhead?: AnyArrowhead | null;
-      endArrowhead?: AnyArrowhead | null;
+      startArrowhead?: Arrowhead | null;
+      endArrowhead?: Arrowhead | null;
       style?: ConnectorStyle;
       textStyle?: SceneTextStyle;
     }>
@@ -291,10 +290,10 @@ export const applyConnectorOperation = (
         }
         scene.mutateElement(connector, {
           ...(operation.startArrowhead !== undefined && {
-            startArrowhead: normalizeArrowhead(operation.startArrowhead),
+            startArrowhead: operation.startArrowhead,
           }),
           ...(operation.endArrowhead !== undefined && {
-            endArrowhead: normalizeArrowhead(operation.endArrowhead),
+            endArrowhead: operation.endArrowhead,
           }),
         });
         applySceneElementStyle(connector, operation.style, scene);

@@ -355,7 +355,13 @@ const generateElementCanvas = (
 
   const rc = rough.canvas(canvas);
 
-  drawElementOnCanvas(element, rc, context, renderConfig);
+  drawElementOnCanvas(
+    element,
+    rc,
+    context,
+    renderConfig,
+    isTextElement(element) ? getContainerElement(element, elementsMap) : null,
+  );
 
   context.restore();
 
@@ -485,6 +491,9 @@ const drawElementOnCanvas = (
   rc: RoughCanvas,
   context: CanvasRenderingContext2D,
   renderConfig: StaticCanvasRenderConfig,
+  // the container a text element is bound to (null for free text). Used only
+  // to restyle arrow labels at draw time without mutating element data.
+  boundContainerElement: ExcalidrawElement | null = null,
 ) => {
   switch (element.type) {
     case "stickynote": {
@@ -690,11 +699,26 @@ const drawElementOnCanvas = (
         }
         context.canvas.setAttribute("dir", rtl ? "rtl" : "ltr");
         context.save();
-        context.font = getFontString(element);
+        // arrow labels render at a smaller, dimmer size than free or
+        // shape-bound text (design spec). Applied render-only here, so the
+        // element's own fontSize/width/height are never mutated.
+        const isArrowLabel = isLinearElement(boundContainerElement);
+        const fontSize = isArrowLabel
+          ? ARROW_LABEL_FONT_SIZE
+          : element.fontSize;
+        context.font = getFontString({
+          fontSize,
+          fontFamily: element.fontFamily,
+        });
         context.fillStyle = applyDarkModeFilter(
           element.strokeColor,
           renderConfig.theme === THEME.DARK,
         );
+        if (isArrowLabel) {
+          // multiply (not set) so an already-faded label — erase/selection —
+          // stays faded rather than snapping back to full opacity
+          context.globalAlpha *= ARROW_LABEL_ALPHA;
+        }
         context.textAlign = element.textAlign as CanvasTextAlign;
 
         // Canvas does not support multiline text by default
@@ -707,10 +731,7 @@ const drawElementOnCanvas = (
             ? element.width
             : 0;
 
-        const lineHeightPx = getLineHeightInPx(
-          element.fontSize,
-          element.lineHeight,
-        );
+        const lineHeightPx = getLineHeightInPx(fontSize, element.lineHeight);
 
         const verticalOffset =
           getTextVerticalOffset(
@@ -718,8 +739,7 @@ const drawElementOnCanvas = (
             element.height,
             lines.length,
             lineHeightPx,
-          ) +
-          getVerticalOffset(element.fontFamily, element.fontSize, lineHeightPx);
+          ) + getVerticalOffset(element.fontFamily, fontSize, lineHeightPx);
 
         for (let index = 0; index < lines.length; index++) {
           context.fillText(
@@ -823,6 +843,38 @@ const canSnapElement = (
  */
 const SNAP_TIE_BIAS = 1e-6;
 
+/**
+ * Horizontal padding (scene px) of the rounded hole cut out of an arrow/line
+ * behind its bound label, plus that hole's corner radius. Vertical padding
+ * keeps using BOUND_TEXT_PADDING, so only the label's left/right inset widens.
+ */
+const LABEL_HPAD = 8;
+const LABEL_CORNER_RADIUS = 4;
+
+/** arrow-label text renders smaller and dimmer than other bound text */
+const ARROW_LABEL_FONT_SIZE = 12;
+const ARROW_LABEL_ALPHA = 0.85;
+
+/**
+ * Trace the axis-aligned label hole: rounded where the canvas supports it,
+ * otherwise a plain rect. `CanvasRenderingContext2D.roundRect` is optional in
+ * our TS lib target, so it degrades rather than throwing.
+ */
+const traceLabelHole = (
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) => {
+  if (context.roundRect) {
+    context.roundRect(x, y, width, height, radius);
+  } else {
+    context.rect(x, y, width, height);
+  }
+};
+
 const drawElementFromCanvas = (
   elementWithCanvas: ExcalidrawElementWithCanvas,
   context: CanvasRenderingContext2D,
@@ -860,23 +912,35 @@ const drawElementFromCanvas = (
     const outerHalf =
       Math.max(distance(x1, x2), distance(y1, y2)) * devicePixelRatio +
       padding * 10;
-    context.beginPath();
-    context.rect(cx - outerHalf, cy - outerHalf, outerHalf * 2, outerHalf * 2);
-    context.rect(
+    const holeX =
       (boundTextCx -
         boundTextElement.width / 2 -
-        BOUND_TEXT_PADDING +
+        LABEL_HPAD +
         positionOffset.x +
         appState.scrollX) *
-        devicePixelRatio,
+      devicePixelRatio;
+    const holeY =
       (boundTextCy -
         boundTextElement.height / 2 -
         BOUND_TEXT_PADDING +
         positionOffset.y +
         appState.scrollY) *
-        devicePixelRatio,
-      (boundTextElement.width + BOUND_TEXT_PADDING * 2) * devicePixelRatio,
-      (boundTextElement.height + BOUND_TEXT_PADDING * 2) * devicePixelRatio,
+      devicePixelRatio;
+    const holeWidth =
+      (boundTextElement.width + LABEL_HPAD * 2) * devicePixelRatio;
+    const holeHeight =
+      (boundTextElement.height + BOUND_TEXT_PADDING * 2) * devicePixelRatio;
+
+    // even-odd clip the arrow's blit out of the rounded label hole
+    context.beginPath();
+    context.rect(cx - outerHalf, cy - outerHalf, outerHalf * 2, outerHalf * 2);
+    traceLabelHole(
+      context,
+      holeX,
+      holeY,
+      holeWidth,
+      holeHeight,
+      LABEL_CORNER_RADIUS * devicePixelRatio,
     );
     context.clip("evenodd");
   }
@@ -1239,16 +1303,13 @@ const drawElement = (
             elementsMap,
           );
           const holeX =
-            boundTextCx -
-            centerX -
-            boundTextElement.width / 2 -
-            BOUND_TEXT_PADDING;
+            boundTextCx - centerX - boundTextElement.width / 2 - LABEL_HPAD;
           const holeY =
             boundTextCy -
             centerY -
             boundTextElement.height / 2 -
             BOUND_TEXT_PADDING;
-          const holeWidth = boundTextElement.width + BOUND_TEXT_PADDING * 2;
+          const holeWidth = boundTextElement.width + LABEL_HPAD * 2;
           const holeHeight = boundTextElement.height + BOUND_TEXT_PADDING * 2;
 
           // generously covers the arrow's painted extent at any rotation
@@ -1258,9 +1319,17 @@ const drawElement = (
             getCanvasPadding(element) * 10;
 
           context.save();
+          // even-odd clip the arrow's strokes out of the rounded label hole
           context.beginPath();
           context.rect(-outerHalf, -outerHalf, outerHalf * 2, outerHalf * 2);
-          context.rect(holeX, holeY, holeWidth, holeHeight);
+          traceLabelHole(
+            context,
+            holeX,
+            holeY,
+            holeWidth,
+            holeHeight,
+            LABEL_CORNER_RADIUS,
+          );
           context.clip("evenodd");
           context.rotate(element.angle);
           context.translate(-shiftX, -shiftY);
@@ -1275,7 +1344,15 @@ const drawElement = (
           }
 
           context.translate(-shiftX, -shiftY);
-          drawElementOnCanvas(element, rc, context, renderConfig);
+          drawElementOnCanvas(
+            element,
+            rc,
+            context,
+            renderConfig,
+            isTextElement(element)
+              ? getContainerElement(element, allElementsMap)
+              : null,
+          );
         }
 
         context.restore();

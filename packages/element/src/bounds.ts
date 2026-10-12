@@ -711,17 +711,29 @@ const getFreeDrawElementAbsoluteCoords = (
   return [x1, y1, x2, y2, (x1 + x2) / 2, (y1 + y2) / 2];
 };
 
-const CARDINALITY_MARKER_SIZE = 20;
-const CROWFOOT_ARROWHEAD_SIZE = 15;
+// Base sizes are calibrated to the connector design spec at the default 1.5px
+// stroke; getArrowheadPoints scales them by strokeWidth so thicker connectors
+// get proportionally larger heads (≈1.5× at 3px).
+const CARDINALITY_MARKER_SIZE = 6; // perpendicular bar half-height → length 12
+const CROWFOOT_ARROWHEAD_SIZE = 12.6; // crow's-foot arm → 11×6
 
-/** @returns number in pixels */
+/** @returns number in pixels (base, pre stroke-width scaling) */
 export const getArrowheadSize = (arrowhead: Arrowhead): number => {
   switch (arrowhead) {
     case "arrow":
-      return 25;
+    case "triangle":
+      return 10.3; // 9×10
+    case "triangle_outline":
+      return 11.4; // 10×11
+    case "circle":
+      return 9; // diameter 9 → r 4.5
+    case "circle_outline":
+      return 8; // diameter 8 → r 4
     case "diamond":
     case "diamond_outline":
-      return 12;
+      return 6.5; // length 13, width 9
+    case "bar":
+      return 6; // height 12
     case "cardinality_many":
     case "cardinality_one_or_many":
     case "cardinality_zero_or_many":
@@ -731,19 +743,27 @@ export const getArrowheadSize = (arrowhead: Arrowhead): number => {
     case "cardinality_zero_or_one":
       return CARDINALITY_MARKER_SIZE;
     default:
-      return 15;
+      return 10.3;
   }
 };
 
-/** @returns number in degrees */
+/** @returns number in degrees (half-angle from the line direction) */
 export const getArrowheadAngle = (arrowhead: Arrowhead): Degrees => {
   switch (arrowhead) {
+    // Perpendicular bars: the two rotated points land directly above/below
+    // the tip, so the head height equals 2 × minSize.
     case "bar":
+    case "cardinality_one":
+    case "cardinality_exactly_one":
+    case "cardinality_zero_or_one":
       return 90 as Degrees;
-    case "arrow":
-      return 20 as Degrees;
+    // Diamond: wider half-angle so width ≈ 9 at length 13.
+    case "diamond":
+    case "diamond_outline":
+      return 44 as Degrees;
+    // Chevron / triangle / crow's-foot family: 9×10 proportions.
     default:
-      return 25 as Degrees;
+      return 29 as Degrees;
   }
 };
 
@@ -837,14 +857,18 @@ export const getArrowheadPoints = (
   // This value is selected by minimizing a minimum size with the last segment of the arrowhead
   const lengthMultiplier =
     arrowhead === "diamond" || arrowhead === "diamond_outline" ? 0.25 : 0.5;
-  const minSize = Math.min(size, length * lengthMultiplier);
+  // Scale heads with stroke width: 1× at the 1.5px default, ≈1.5× at 3px.
+  const strokeScale = (element.strokeWidth + 1.5) / 3;
+  const minSize = Math.min(size * strokeScale, length * lengthMultiplier);
   const tx = x2 - nx * minSize * offsetMultiplier;
   const ty = y2 - ny * minSize * offsetMultiplier;
   const xs = tx - nx * minSize;
   const ys = ty - ny * minSize;
 
   if (arrowhead === "circle" || arrowhead === "circle_outline") {
-    const diameter = Math.hypot(ys - ty, xs - tx) + element.strokeWidth - 2;
+    // minSize already carries the stroke scaling, so the diameter needs no
+    // extra stroke-width term.
+    const diameter = Math.hypot(ys - ty, xs - tx);
     return [tx, ty, diameter];
   }
 

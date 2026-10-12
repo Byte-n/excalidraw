@@ -31,7 +31,7 @@ export const getDefaultAppState = (): Omit<
     theme: THEME.LIGHT,
     collaborators: new Map(),
     currentItemBackgroundColor: DEFAULT_ELEMENT_PROPS.backgroundColor,
-    currentItemEndArrowhead: "arrow",
+    currentItemEndArrowhead: "triangle",
     currentItemFillStyle: DEFAULT_ELEMENT_PROPS.fillStyle,
     currentItemFontFamily: FONT_FAMILY.Nunito,
     currentItemFontSize: DEFAULT_FONT_SIZE,

@@ -3,7 +3,6 @@ import rough from "roughjs/bin/rough";
 
 import * as Element from "@excalidraw/element";
 import {
-  BOUND_TEXT_PADDING,
   DEFAULT_REDUCED_GLOBAL_ALPHA,
   ELEMENT_READY_TO_ERASE_OPACITY,
 } from "@excalidraw/common";
@@ -1145,23 +1144,37 @@ describe("render override geometry", () => {
       });
       const { context, draw } = setup([arrow, label]);
       const holes: number[] = [];
+      // The label hole is now a rounded rect (traceLabelHole → roundRect with
+      // a rect fallback) using 8px horizontal padding. Force the rect fallback
+      // so the hole is observable via context.rect; detect it by size
+      // (hole ≈ label-width, outer ≫) to stay decoupled from the exact padding.
+      const roundRectOrig = context.roundRect;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (context as any).roundRect = undefined;
+      const isHole = (width: number) =>
+        width > label.width && width < label.width * 10;
       const rect = vi.mocked(context.rect).getMockImplementation()!;
       vi.spyOn(context, "rect").mockImplementation((x, y, width, height) => {
-        if (width === label.width + BOUND_TEXT_PADDING * 2) {
+        if (isHole(width)) {
           const transform = context.getTransform();
           holes.push(transform.a * x + transform.c * y + transform.e);
         }
         rect.call(context, x, y, width, height);
       });
-      draw(new Map());
-      draw(
-        new Map([
-          [arrow.id, { offset: { x: arrowX, y: 0 } }],
-          [label.id, { offset: { x: labelX, y: 0 } }],
-        ]),
-      );
-      expect(holes).toHaveLength(2);
-      expect(holes[1] - holes[0]).toBeCloseTo(arrowX, 8);
+      try {
+        draw(new Map());
+        draw(
+          new Map([
+            [arrow.id, { offset: { x: arrowX, y: 0 } }],
+            [label.id, { offset: { x: labelX, y: 0 } }],
+          ]),
+        );
+        expect(holes).toHaveLength(2);
+        expect(holes[1] - holes[0]).toBeCloseTo(arrowX, 8);
+      } finally {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (context as any).roundRect = roundRectOrig;
+      }
     },
   );
 
