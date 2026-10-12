@@ -5,7 +5,11 @@ import {
 } from "@excalidraw/excalidraw/actions/actionHistory";
 import { syncInvalidIndices } from "@excalidraw/element";
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
-import { act, render, waitFor } from "@excalidraw/excalidraw/_tests_/test-utils";
+import {
+  act,
+  render,
+  waitFor,
+} from "@excalidraw/excalidraw/_tests_/test-utils";
 import { vi } from "vitest";
 
 import { StoreIncrement } from "@excalidraw/element";
