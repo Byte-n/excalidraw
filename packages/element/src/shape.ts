@@ -101,7 +101,11 @@ export class ShapeCache {
   private static rg = new RoughGenerator();
   private static cache = new WeakMap<
     ExcalidrawElement,
-    { shape: ElementShape; theme: AppState["theme"] }
+    {
+      shape: ElementShape;
+      theme: AppState["theme"];
+      canvasBackgroundColor: AppState["viewBackgroundColor"];
+    }
   >();
 
   /**
@@ -111,9 +115,15 @@ export class ShapeCache {
   public static get = <T extends ExcalidrawElement>(
     element: T,
     theme: AppState["theme"] | null,
+    canvasBackgroundColor?: AppState["viewBackgroundColor"],
   ) => {
     const cached = ShapeCache.cache.get(element);
-    if (cached && (theme === null || cached.theme === theme)) {
+    if (
+      cached &&
+      (theme === null || cached.theme === theme) &&
+      (canvasBackgroundColor === undefined ||
+        cached.canvasBackgroundColor === canvasBackgroundColor)
+    ) {
       return cached.shape as T["type"] extends keyof ElementShapes
         ? ElementShapes[T["type"]] | undefined
         : ElementShape | undefined;
@@ -148,7 +158,11 @@ export class ShapeCache {
     // when exporting, always regenerated to guarantee the latest shape
     const cachedShape = renderConfig?.isExporting
       ? undefined
-      : ShapeCache.get(element, renderConfig ? renderConfig.theme : null);
+      : ShapeCache.get(
+          element,
+          renderConfig ? renderConfig.theme : null,
+          renderConfig?.canvasBackgroundColor,
+        );
 
     // `null` indicates no rc shape applicable for this element type,
     // but it's considered a valid cache value (= do not regenerate)
@@ -175,6 +189,8 @@ export class ShapeCache {
       ShapeCache.cache.set(element, {
         shape,
         theme: renderConfig?.theme || THEME.LIGHT,
+        canvasBackgroundColor:
+          renderConfig?.canvasBackgroundColor || COLOR_PALETTE.white,
       });
     }
 
@@ -368,7 +384,6 @@ const generateArrowheadOutlineCircle = (
   strokeColor: string,
   arrowheadPoints: number[] | null,
   fill: string,
-  diameterScale = 1,
 ) => {
   if (arrowheadPoints === null) {
     return [];
@@ -385,7 +400,7 @@ const generateArrowheadOutlineCircle = (
 
   delete circleOptions.strokeLineDash;
 
-  return [generator.circle(x, y, diameter * diameterScale, circleOptions)];
+  return [generator.circle(x, y, diameter, circleOptions)];
 };
 
 const getArrowheadShapes = (
@@ -407,8 +422,6 @@ const getArrowheadShapes = (
     canvasBackgroundColor,
     isDarkMode,
   );
-  const cardinalityOneOrManyOffset = -0.25;
-  const cardinalityZeroCircleScale = 0.8;
 
   switch (arrowhead) {
     case "circle":
@@ -509,44 +522,59 @@ const getArrowheadShapes = (
         getArrowheadLineOptions(element, options),
       );
     case "cardinality_one_or_many": {
+      const arrowheadPoints = getArrowheadPoints(
+        element,
+        shape,
+        position,
+        arrowhead,
+      );
+
+      if (arrowheadPoints === null) {
+        return [];
+      }
+
+      const [bx, by, ax1, ay1, ax2, ay2, bx1, by1, bx2, by2] = arrowheadPoints;
       const lineOptions = getArrowheadLineOptions(element, options);
 
       return [
-        ...generateArrowheadLinesToTip(
-          generator,
-          getArrowheadPoints(element, shape, position, "cardinality_many"),
-          lineOptions,
-        ),
-        ...generateArrowheadCardinalityOne(
-          generator,
-          getArrowheadPoints(
-            element,
-            shape,
-            position,
-            "cardinality_one",
-            cardinalityOneOrManyOffset,
-          ),
-          lineOptions,
-        ),
+        generator.line(ax1, ay1, bx, by, lineOptions),
+        generator.line(ax2, ay2, bx, by, lineOptions),
+        generator.line(bx1, by1, bx2, by2, lineOptions),
       ];
     }
     case "cardinality_exactly_one": {
+      const arrowheadPoints = getArrowheadPoints(
+        element,
+        shape,
+        position,
+        arrowhead,
+      );
+
+      if (arrowheadPoints === null) {
+        return [];
+      }
+
+      const [ax1, ay1, ax2, ay2, bx1, by1, bx2, by2] = arrowheadPoints;
       const lineOptions = getArrowheadLineOptions(element, options);
 
       return [
-        ...generateArrowheadCardinalityOne(
-          generator,
-          getArrowheadPoints(element, shape, position, "cardinality_one", -0.5),
-          lineOptions,
-        ),
-        ...generateArrowheadCardinalityOne(
-          generator,
-          getArrowheadPoints(element, shape, position, "cardinality_one"),
-          lineOptions,
-        ),
+        generator.line(ax1, ay1, ax2, ay2, lineOptions),
+        generator.line(bx1, by1, bx2, by2, lineOptions),
       ];
     }
     case "cardinality_zero_or_one": {
+      const arrowheadPoints = getArrowheadPoints(
+        element,
+        shape,
+        position,
+        arrowhead,
+      );
+
+      if (arrowheadPoints === null) {
+        return [];
+      }
+
+      const [cx, cy, diameter, bx1, by1, bx2, by2] = arrowheadPoints;
       const lineOptions = getArrowheadLineOptions(element, options);
 
       return [
@@ -554,34 +582,57 @@ const getArrowheadShapes = (
           generator,
           options,
           strokeColor,
-          getArrowheadPoints(element, shape, position, "circle_outline", 1.5),
+          [cx, cy, diameter],
           backgroundFillColor,
-          cardinalityZeroCircleScale,
         ),
-        ...generateArrowheadCardinalityOne(
-          generator,
-          getArrowheadPoints(element, shape, position, "cardinality_one", -0.5),
-          lineOptions,
-        ),
+        generator.line(bx1, by1, bx2, by2, lineOptions),
       ];
     }
     case "cardinality_zero_or_many": {
+      const arrowheadPoints = getArrowheadPoints(
+        element,
+        shape,
+        position,
+        arrowhead,
+      );
+
+      if (arrowheadPoints === null) {
+        return [];
+      }
+
+      const [bx, by, ax1, ay1, ax2, ay2, cx, cy, diameter] = arrowheadPoints;
       const lineOptions = getArrowheadLineOptions(element, options);
 
       return [
-        ...generateArrowheadLinesToTip(
-          generator,
-          getArrowheadPoints(element, shape, position, "cardinality_many"),
-          lineOptions,
-        ),
+        generator.line(ax1, ay1, bx, by, lineOptions),
+        generator.line(ax2, ay2, bx, by, lineOptions),
         ...generateArrowheadOutlineCircle(
           generator,
           options,
           strokeColor,
-          getArrowheadPoints(element, shape, position, "circle_outline", 1.5),
+          [cx, cy, diameter],
           backgroundFillColor,
-          cardinalityZeroCircleScale,
         ),
+      ];
+    }
+    case "x_arrow": {
+      const arrowheadPoints = getArrowheadPoints(
+        element,
+        shape,
+        position,
+        arrowhead,
+      );
+
+      if (arrowheadPoints === null) {
+        return [];
+      }
+
+      const [ax1, ay1, ax2, ay2, bx1, by1, bx2, by2] = arrowheadPoints;
+      const lineOptions = getArrowheadLineOptions(element, options);
+
+      return [
+        generator.line(ax1, ay1, ax2, ay2, lineOptions),
+        generator.line(bx1, by1, bx2, by2, lineOptions),
       ];
     }
     case "bar":

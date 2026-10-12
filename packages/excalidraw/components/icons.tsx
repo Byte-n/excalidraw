@@ -1547,6 +1547,22 @@ export const ArrowheadBarIcon = React.memo(
     ),
 );
 
+export const ArrowheadXArrowIcon = React.memo(
+  ({ flip = false }: { flip?: boolean }) =>
+    createIcon(
+      <g
+        transform={flip ? "translate(40, 0) scale(-1, 1)" : ""}
+        stroke="currentColor"
+        strokeWidth={2}
+        fill="none"
+        strokeLinecap="round"
+      >
+        <path d="M7,11 H33 M18.6,6.5 L27.6,15.5 M18.6,15.5 L27.6,6.5" />
+      </g>,
+      arrowheadPreviewIconProps,
+    ),
+);
+
 export const ArrowheadCardinalityOneIcon = React.memo(
   ({ flip = false }: { flip?: boolean }) =>
     createIcon(
@@ -1557,7 +1573,7 @@ export const ArrowheadCardinalityOneIcon = React.memo(
         strokeLinejoin="round"
         strokeWidth={2}
       >
-        <path d="M35,11 H7 M15,5 V17" />
+        <path d="M35,11 H7 M7,5 V17" />
       </g>,
       arrowheadPreviewIconProps,
     ),
@@ -1573,7 +1589,7 @@ export const ArrowheadCardinalityManyIcon = React.memo(
         strokeLinejoin="round"
         strokeWidth={2}
       >
-        <path d="M35,11 H7 M15,11 L7,5 M15,11 L7,17" />
+        <path d="M35,11 H7 M18,11 L7,5 M18,11 L7,17" />
       </g>,
       arrowheadPreviewIconProps,
     ),
@@ -1589,7 +1605,7 @@ export const ArrowheadCardinalityOneOrManyIcon = React.memo(
         strokeLinejoin="round"
         strokeWidth={2}
       >
-        <path d="M35,11 H7 M23,5 V17 M15,11 L7,5 M15,11 L7,17" />
+        <path d="M35,11 H7 M22,5 V17 M18,11 L7,5 M18,11 L7,17" />
       </g>,
       arrowheadPreviewIconProps,
     ),
@@ -1605,7 +1621,7 @@ export const ArrowheadCardinalityExactlyOneIcon = React.memo(
         strokeLinejoin="round"
         strokeWidth={2}
       >
-        <path d="M35,11 H7 M15,5 V17 M7,5 V17" />
+        <path d="M35,11 H7 M7,5 V17 M12,5 V17" />
       </g>,
       arrowheadPreviewIconProps,
     ),
@@ -1621,8 +1637,8 @@ export const ArrowheadCardinalityZeroOrOneIcon = React.memo(
         strokeLinejoin="round"
         strokeWidth={2}
       >
-        <path d="M35,11 H19 M11,11 H7 M7,5 V17" />
-        <circle cx="15" cy="11" r="4" />
+        <path d="M35,11 H18 M11,11 H7 M7,5 V17" />
+        <circle cx="14.5" cy="11" r="3.5" />
       </g>,
       arrowheadPreviewIconProps,
     ),
@@ -1638,8 +1654,8 @@ export const ArrowheadCardinalityZeroOrManyIcon = React.memo(
         strokeLinejoin="round"
         strokeWidth={2}
       >
-        <path d="M35,11 H27 M19,11 H7 M15,11 L7,5 M15,11 L7,17" />
-        <circle cx="23" cy="11" r="4" />
+        <path d="M35,11 H29 M22,11 H7 M18,11 L7,5 M18,11 L7,17" />
+        <circle cx="25.5" cy="11" r="3.5" />
       </g>,
       arrowheadPreviewIconProps,
     ),

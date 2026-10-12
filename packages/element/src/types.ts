@@ -593,6 +593,7 @@ export type Arrowhead =
   | "triangle_outline"
   | "diamond"
   | "diamond_outline"
+  | "x_arrow"
   | CardinalityArrowhead;
 
 export type ExcalidrawLinearElement = _ExcalidrawElementBase &

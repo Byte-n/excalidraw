@@ -9,6 +9,7 @@ export const ARROWHEAD_VALUES: readonly [Arrowhead, ...Arrowhead[]] = [
   "triangle_outline",
   "diamond",
   "diamond_outline",
+  "x_arrow",
   "cardinality_one",
   "cardinality_many",
   "cardinality_one_or_many",

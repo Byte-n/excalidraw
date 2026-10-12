@@ -715,7 +715,8 @@ const getFreeDrawElementAbsoluteCoords = (
 // stroke; getArrowheadPoints scales them by strokeWidth so thicker connectors
 // get proportionally larger heads (≈1.5× at 3px).
 const CARDINALITY_MARKER_SIZE = 6; // perpendicular bar half-height → length 12
-const CROWFOOT_ARROWHEAD_SIZE = 12.6; // crow's-foot arm → 11×6
+const CROWFOOT_ARROWHEAD_SIZE = 12; // crow's-foot arm spread ±6, base 11 deep
+const X_ARROWHEAD_SIZE = 14.4; // 9×9 cross, far edge 14.4 behind the tip
 
 /** @returns number in pixels (base, pre stroke-width scaling) */
 export const getArrowheadSize = (arrowhead: Arrowhead): number => {
@@ -734,13 +735,15 @@ export const getArrowheadSize = (arrowhead: Arrowhead): number => {
       return 6.5; // length 13, width 9
     case "bar":
       return 6; // height 12
+    case "x_arrow":
+      return X_ARROWHEAD_SIZE;
     case "cardinality_many":
     case "cardinality_one_or_many":
+    case "cardinality_zero_or_one":
     case "cardinality_zero_or_many":
       return CROWFOOT_ARROWHEAD_SIZE;
     case "cardinality_one":
     case "cardinality_exactly_one":
-    case "cardinality_zero_or_one":
       return CARDINALITY_MARKER_SIZE;
     default:
       return 10.3;
@@ -754,14 +757,8 @@ export const getArrowheadAngle = (arrowhead: Arrowhead): Degrees => {
     // the tip, so the head height equals 2 × minSize.
     case "bar":
     case "cardinality_one":
-    case "cardinality_exactly_one":
-    case "cardinality_zero_or_one":
       return 90 as Degrees;
-    // Diamond: wider half-angle so width ≈ 9 at length 13.
-    case "diamond":
-    case "diamond_outline":
-      return 44 as Degrees;
-    // Chevron / triangle / crow's-foot family: 9×10 proportions.
+    // Chevron / triangle family: 9×10 proportions.
     default:
       return 29 as Degrees;
   }
@@ -772,7 +769,6 @@ export const getArrowheadPoints = (
   shape: Drawable[],
   position: "start" | "end",
   arrowhead: Arrowhead,
-  offsetMultiplier = 0,
 ) => {
   if (arrowhead === null) {
     return null;
@@ -860,80 +856,118 @@ export const getArrowheadPoints = (
   // Scale heads with stroke width: 1× at the 1.5px default, ≈1.5× at 3px.
   const strokeScale = (element.strokeWidth + 1.5) / 3;
   const minSize = Math.min(size * strokeScale, length * lengthMultiplier);
-  const tx = x2 - nx * minSize * offsetMultiplier;
-  const ty = y2 - ny * minSize * offsetMultiplier;
-  const xs = tx - nx * minSize;
-  const ys = ty - ny * minSize;
 
-  if (arrowhead === "circle" || arrowhead === "circle_outline") {
-    // minSize already carries the stroke scaling, so the diameter needs no
-    // extra stroke-width term.
-    const diameter = Math.hypot(ys - ty, xs - tx);
-    return [tx, ty, diameter];
+  // Heads below are specified in a tip-local frame: the tip (x2, y2) is the
+  // origin, `distance` runs along -n̂ (into the line) and `perpendicular`
+  // along p̂ = (-ny, nx). All numbers are design values at the 1.5px
+  // reference stroke; multiplying by `scale` (= minSize / size) applies the
+  // stroke-width scaling and shrinks heads proportionally on short segments.
+  const scale = minSize / size;
+  const at = (axialDistance: number, perpendicular = 0): [number, number] => [
+    x2 - nx * axialDistance * scale - ny * perpendicular * scale,
+    y2 - ny * axialDistance * scale + nx * perpendicular * scale,
+  ];
+
+  switch (arrowhead) {
+    case "circle":
+    case "circle_outline": {
+      // Design: center at (-4.5, 0) — the solid circle touches the tip, the
+      // outline variant (r 4) leaves a hairline 0.5 gap.
+      const [cx, cy] = at(4.5);
+      // minSize already carries the stroke scaling, so the diameter needs no
+      // extra stroke-width term.
+      return [cx, cy, minSize];
+    }
+    case "diamond":
+    case "diamond_outline": {
+      const [sideAx, sideAy] = at(6.5, 4.5);
+      const [backX, backY] = at(13);
+      const [sideBx, sideBy] = at(6.5, -4.5);
+      return [x2, y2, sideAx, sideAy, backX, backY, sideBx, sideBy];
+    }
+    case "cardinality_many": {
+      const [baseX, baseY] = at(11);
+      const [armAx, armAy] = at(0, 6);
+      const [armBx, armBy] = at(0, -6);
+      return [baseX, baseY, armAx, armAy, armBx, armBy];
+    }
+    case "cardinality_exactly_one": {
+      const [barATopX, barATopY] = at(0, 6);
+      const [barABotX, barABotY] = at(0, -6);
+      const [barBTopX, barBTopY] = at(5, 6);
+      const [barBBotX, barBBotY] = at(5, -6);
+      return [
+        barATopX,
+        barATopY,
+        barABotX,
+        barABotY,
+        barBTopX,
+        barBTopY,
+        barBBotX,
+        barBBotY,
+      ];
+    }
+    case "cardinality_zero_or_one": {
+      const [cx, cy] = at(7.5);
+      const [barTopX, barTopY] = at(0, 6);
+      const [barBotX, barBotY] = at(0, -6);
+      return [cx, cy, 7 * scale, barTopX, barTopY, barBotX, barBotY];
+    }
+    case "cardinality_one_or_many": {
+      const [baseX, baseY] = at(11);
+      const [armAx, armAy] = at(0, 6);
+      const [armBx, armBy] = at(0, -6);
+      const [barTopX, barTopY] = at(15, 6);
+      const [barBotX, barBotY] = at(15, -6);
+      return [
+        baseX,
+        baseY,
+        armAx,
+        armAy,
+        armBx,
+        armBy,
+        barTopX,
+        barTopY,
+        barBotX,
+        barBotY,
+      ];
+    }
+    case "cardinality_zero_or_many": {
+      const [baseX, baseY] = at(11);
+      const [armAx, armAy] = at(0, 6);
+      const [armBx, armBy] = at(0, -6);
+      const [cx, cy] = at(18.5);
+      return [baseX, baseY, armAx, armAy, armBx, armBy, cx, cy, 7 * scale];
+    }
+    case "x_arrow": {
+      const [farAx, farAy] = at(14.4, -4.5);
+      const [nearAx, nearAy] = at(5.4, 4.5);
+      const [farBx, farBy] = at(14.4, 4.5);
+      const [nearBx, nearBy] = at(5.4, -4.5);
+      return [farAx, farAy, nearAx, nearAy, farBx, farBy, nearBx, nearBy];
+    }
+    default:
+      break;
   }
 
+  // Chevron / triangle / perpendicular bar heads follow the rotation scheme.
   const angle = getArrowheadAngle(arrowhead);
-
-  if (
-    arrowhead === "cardinality_many" ||
-    arrowhead === "cardinality_one_or_many"
-  ) {
-    // swap (xs, ys) with (x2, y2)
-    const [x3, y3] = pointRotateRads(
-      pointFrom(tx, ty),
-      pointFrom(xs, ys),
-      degreesToRadians(-angle as Degrees),
-    );
-    const [x4, y4] = pointRotateRads(
-      pointFrom(tx, ty),
-      pointFrom(xs, ys),
-      degreesToRadians(angle),
-    );
-    return [xs, ys, x3, y3, x4, y4];
-  }
+  const xs = x2 - nx * minSize;
+  const ys = y2 - ny * minSize;
 
   // Return points
   const [x3, y3] = pointRotateRads(
     pointFrom(xs, ys),
-    pointFrom(tx, ty),
+    pointFrom(x2, y2),
     ((-angle * Math.PI) / 180) as Radians,
   );
   const [x4, y4] = pointRotateRads(
     pointFrom(xs, ys),
-    pointFrom(tx, ty),
+    pointFrom(x2, y2),
     degreesToRadians(angle),
   );
 
-  if (arrowhead === "diamond" || arrowhead === "diamond_outline") {
-    // point opposite to the arrowhead point
-    let ox;
-    let oy;
-
-    if (position === "start") {
-      const [px, py] = element.points.length > 1 ? element.points[1] : [0, 0];
-
-      [ox, oy] = pointRotateRads(
-        pointFrom(tx + minSize * 2, ty),
-        pointFrom(tx, ty),
-        Math.atan2(py - ty, px - tx) as Radians,
-      );
-    } else {
-      const [px, py] =
-        element.points.length > 1
-          ? element.points[element.points.length - 2]
-          : [0, 0];
-
-      [ox, oy] = pointRotateRads(
-        pointFrom(tx - minSize * 2, ty),
-        pointFrom(tx, ty),
-        Math.atan2(ty - py, tx - px) as Radians,
-      );
-    }
-
-    return [tx, ty, x3, y3, ox, oy, x4, y4];
-  }
-
-  return [tx, ty, x3, y3, x4, y4];
+  return [x2, y2, x3, y3, x4, y4];
 };
 
 // TODO reuse shape.ts
