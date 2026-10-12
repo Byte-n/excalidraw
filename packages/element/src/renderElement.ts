@@ -1222,7 +1222,13 @@ const drawElement = (
           element.x + appState.scrollX,
           element.y + appState.scrollY,
         );
-        context.fillStyle = "rgba(0, 0, 200, 0.04)";
+        // A frame is a board: the opaque fill hides the canvas grid and any
+        // elements passing underneath; it paints below the frame's children
+        // because the frame precedes them in z-order.
+        context.fillStyle = applyDarkModeFilter(
+          FRAME_STYLE.backgroundColor,
+          appState.theme === THEME.DARK,
+        );
 
         context.lineWidth = FRAME_STYLE.strokeWidth / appState.zoom.value;
         context.strokeStyle = applyDarkModeFilter(
@@ -1247,9 +1253,11 @@ const drawElement = (
             element.height,
             FRAME_STYLE.radius / appState.zoom.value,
           );
+          context.fill();
           context.stroke();
           context.closePath();
         } else {
+          context.fillRect(0, 0, element.width, element.height);
           context.strokeRect(0, 0, element.width, element.height);
         }
 

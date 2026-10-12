@@ -1417,34 +1417,61 @@ const renderMindmapAddButtons = (
   context.restore();
 };
 
+/**
+ * The frame's own rounded border reused as interaction feedback (hover ring,
+ * drop-target highlight): strokes the border path in place, optionally with a
+ * translucent fill washed over the board.
+ */
+const renderFrameBorderFeedback = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  frame: NonDeleted<ExcalidrawFrameLikeElement>,
+  elementsMap: ElementsMap,
+  strokeStyle: string,
+  fillStyle: string | null,
+) => {
+  const [x1, y1, x2, y2] = getElementAbsoluteCoords(frame, elementsMap);
+  const width = x2 - x1;
+  const height = y2 - y1;
+
+  context.save();
+  context.translate(appState.scrollX, appState.scrollY);
+  context.translate(x1 + width / 2, y1 + height / 2);
+  context.rotate(frame.angle);
+
+  context.beginPath();
+  const radius = FRAME_STYLE.radius / appState.zoom.value;
+  if (radius && context.roundRect) {
+    context.roundRect(-width / 2, -height / 2, width, height, radius);
+  } else {
+    context.rect(-width / 2, -height / 2, width, height);
+  }
+  if (fillStyle) {
+    context.fillStyle = fillStyle;
+    context.fill();
+  }
+  context.strokeStyle = strokeStyle;
+  context.lineWidth = 1.5 / appState.zoom.value;
+  context.stroke();
+  context.restore();
+};
+
 const renderFrameHighlight = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
   frame: NonDeleted<ExcalidrawFrameLikeElement>,
   elementsMap: ElementsMap,
 ) => {
-  const [x1, y1, x2, y2] = getElementAbsoluteCoords(frame, elementsMap);
-  const width = x2 - x1;
-  const height = y2 - y1;
-
-  context.strokeStyle = getThemedColor("rgb(0,118,255)", appState.theme);
-  context.lineWidth = FRAME_STYLE.strokeWidth / appState.zoom.value;
-
-  context.save();
-  context.translate(appState.scrollX, appState.scrollY);
-  strokeRectWithRotation_simple(
+  // drop target (design: 拖入目标) — 6% primary over the board, 1.5px primary
+  // border
+  renderFrameBorderFeedback(
     context,
-    x1,
-    y1,
-    width,
-    height,
-    x1 + width / 2,
-    y1 + height / 2,
-    frame.angle,
-    false,
-    FRAME_STYLE.radius / appState.zoom.value,
+    appState,
+    frame,
+    elementsMap,
+    getThemedColor("rgb(22,119,255)", appState.theme),
+    getThemedColor("rgba(22,119,255,0.06)", appState.theme),
   );
-  context.restore();
 };
 
 /**
@@ -2959,6 +2986,25 @@ const _renderInteractiveScene = ({
     if (
       hoveredElement &&
       !hoveredElement.isDeleted &&
+      isFrameLikeElement(hoveredElement) &&
+      !hoveredElement.locked &&
+      !selectedElements.some((element) => element.id === hoveredElement.id) &&
+      appState.activeLockedId !== hoveredElement.id
+    ) {
+      // a frame's hover feedback is its own border in 55% primary (design:
+      // 悬停) — the generic padded outline would read as selection on a
+      // board. Locked frames keep the generic dashed box below.
+      renderFrameBorderFeedback(
+        context,
+        appState,
+        hoveredElement,
+        elementsMap,
+        getThemedColor("rgba(22,119,255,0.55)", appState.theme),
+        null,
+      );
+    } else if (
+      hoveredElement &&
+      !hoveredElement.isDeleted &&
       !isLinearElement(hoveredElement) &&
       !isMindmapEdgeElement(hoveredElement) &&
       // a note's hover feedback is its lifted paper shadow (painted by the
@@ -3301,7 +3347,10 @@ const _renderInteractiveScene = ({
               appState.activeEmbeddable.state === "active",
             padding:
               element.id === appState.croppingElementId ||
-              isImageElement(element)
+              isImageElement(element) ||
+              // a selected frame's selection border coincides with the
+              // frame's own border (design: 选中 — 选中框与边框重合)
+              isFrameLikeElement(element)
                 ? 0
                 : undefined,
           });

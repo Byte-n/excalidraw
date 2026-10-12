@@ -23,6 +23,9 @@ import type {
 import type { FrameNameBoundsCache } from "../../types";
 import type App from "../App";
 
+/** Size of the board glyph left of the frame title (design: 10px box). */
+const FRAME_NAME_GLYPH_SIZE = 10;
+
 export class AppFrames {
   constructor(private app: App) {}
 
@@ -184,13 +187,11 @@ export class AppFrames {
               display: "block",
               padding: `${FRAME_NAME_EDIT_PADDING}px`,
               borderRadius: 4,
-              boxShadow: "inset 0 0 0 1px var(--color-primary)",
+              boxShadow: "inset 0 0 0 1px var(--color-selection)",
               fontFamily: "Assistant",
               fontSize: `${FRAME_STYLE.nameFontSize}px`,
               transform: `translate(-${FRAME_NAME_EDIT_PADDING}px, ${FRAME_NAME_EDIT_PADDING}px)`,
-              color: isDarkTheme
-                ? FRAME_STYLE.nameColorDarkTheme
-                : FRAME_STYLE.nameColorLightTheme,
+              color: "var(--color-on-surface)",
               overflow: "hidden",
               maxWidth: `${
                 this.app.ownerDocument.body.clientWidth -
@@ -206,8 +207,52 @@ export class AppFrames {
           />
         );
       } else {
-        frameNameJSX = frameName;
+        frameNameJSX = (
+          <>
+            {/* the board glyph of the design's frame title: two vertical +
+                two horizontal strokes in a 10px box, colored with the title */}
+            <svg
+              width={FRAME_NAME_GLYPH_SIZE}
+              height={FRAME_NAME_GLYPH_SIZE}
+              viewBox={`0 0 ${FRAME_NAME_GLYPH_SIZE} ${FRAME_NAME_GLYPH_SIZE}`}
+              style={{ flex: "none", overflow: "visible" }}
+              aria-hidden
+            >
+              <path
+                d="M3 0v10M7 0v10M0 3h10M0 7h10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.2}
+                strokeLinecap="round"
+              />
+            </svg>
+            <span
+              style={{
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {frameName}
+            </span>
+          </>
+        );
       }
+
+      // The title's state colors (design: 交互状态): the default is the muted
+      // frame-title tone; hovering the title or the frame's border inks it;
+      // a selected frame or an active drop target turns it primary.
+      const isHovered = this.app.state.hoveredElementId === f.id;
+      const isSelected = !!this.app.state.selectedElementIds[f.id];
+      const isDropTarget = this.app.state.frameToHighlight?.id === f.id;
+      const frameNameColor =
+        isDropTarget || isSelected
+          ? "var(--color-selection)"
+          : isHovered
+          ? "var(--color-on-surface)"
+          : isDarkTheme
+          ? FRAME_STYLE.nameColorDarkTheme
+          : FRAME_STYLE.nameColorLightTheme;
 
       return (
         <div
@@ -216,6 +261,9 @@ export class AppFrames {
           key={f.id}
           style={{
             position: "absolute",
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
             opacity: renderState.opacity,
             // Positioning from bottom so that we don't to either
             // calculate text height or adjust using transform (which)
@@ -231,9 +279,8 @@ export class AppFrames {
             left: `${x1 - this.app.state.offsetLeft}px`,
             zIndex: 2,
             fontSize: FRAME_STYLE.nameFontSize,
-            color: isDarkTheme
-              ? FRAME_STYLE.nameColorDarkTheme
-              : FRAME_STYLE.nameColorLightTheme,
+            fontWeight: 500,
+            color: frameNameColor,
             lineHeight: FRAME_STYLE.nameLineHeight,
             width: "max-content",
             maxWidth:
@@ -250,6 +297,25 @@ export class AppFrames {
               : POINTER_EVENTS.enabled,
           }}
           onPointerDown={(event) => this.app.handleCanvasPointerDown(event)}
+          // The title is DOM, so hovering it never reaches the canvas's
+          // pointermove hit-testing; bridge it into `hoveredElementId` so the
+          // frame gets the same hover feedback as when its border is hovered
+          // (and this title inks via the color above). Not while renaming or
+          // mid-drag (pointer capture keeps these from firing then anyway).
+          onPointerEnter={() => {
+            if (
+              f.id !== this.app.state.editingFrame &&
+              this.app.state.cursorButton !== "down" &&
+              this.app.state.hoveredElementId !== f.id
+            ) {
+              this.app.setState({ hoveredElementId: f.id });
+            }
+          }}
+          onPointerLeave={() => {
+            if (this.app.state.hoveredElementId === f.id) {
+              this.app.setState({ hoveredElementId: null });
+            }
+          }}
           onContextMenu={this.app.handleCanvasContextMenu}
           onDoubleClick={() => {
             this.app.setState({

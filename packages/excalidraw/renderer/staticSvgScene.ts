@@ -808,7 +808,15 @@ const renderElementToSvg = (
         rect.setAttribute("rx", FRAME_STYLE.radius.toString());
         rect.setAttribute("ry", FRAME_STYLE.radius.toString());
 
-        rect.setAttribute("fill", "none");
+        // the board's opaque background exports with the frame, same as the
+        // canvas renderer paints it
+        rect.setAttribute(
+          "fill",
+          applyDarkModeFilter(
+            FRAME_STYLE.backgroundColor,
+            renderConfig.theme === THEME.DARK,
+          ),
+        );
         rect.setAttribute(
           "stroke",
           applyDarkModeFilter(
