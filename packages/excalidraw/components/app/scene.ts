@@ -30,6 +30,7 @@ import {
 import { withBatchedUpdates } from "../../reactUtils";
 
 import type { AppState, SceneData, ElementRenderOverrides } from "../../types";
+import type { ElementRenderOverride } from "../../types";
 import type { ActionResult } from "../../actions/types";
 import type App from "../App";
 
@@ -254,6 +255,58 @@ export const setMindmapDragOpacity = (
     app["mindmapDragOpacityPrevious"].set(id, previous);
     next.set(id, { ...(previous ?? {}), opacity: 35 });
   });
+  app.setElementRenderOverrides(next.size ? next : null);
+};
+
+/**
+ * Table row/column move fade (phase-6): while a grip drag is in flight, the
+ * source band's members (background texts and content subtrees) dim to 35%
+ * and the ghost card carries their preview; the table element itself is never
+ * dimmed, so the grid stays put. Same snapshot/restore semantics as
+ * `setMindmapDragOpacity`, with the per-app state kept here (a WeakMap) rather
+ * than on App fields. A repeated call with the same id set is a no-op, so the
+ * per-frame pointer move can re-assert the fade for free.
+ */
+const tableMoveDragOpacityState = new WeakMap<
+  object,
+  {
+    ids: Set<string>;
+    previous: Map<string, ElementRenderOverride | undefined>;
+  }
+>();
+
+export const setTableMoveDragOpacity = (
+  app: Pick<App, "elementRenderOverrides" | "setElementRenderOverrides">,
+  ids: readonly string[] | null,
+) => {
+  let state = tableMoveDragOpacityState.get(app);
+  if (!state) {
+    state = { ids: new Set(), previous: new Map() };
+    tableMoveDragOpacityState.set(app, state);
+  }
+  const nextIds = new Set(ids ?? []);
+  if (
+    nextIds.size === state.ids.size &&
+    [...nextIds].every((id) => state.ids.has(id))
+  ) {
+    return;
+  }
+  const next = new Map(app.elementRenderOverrides);
+  state.ids.forEach((id) => {
+    const previous = state.previous.get(id);
+    if (previous) {
+      next.set(id, previous);
+    } else {
+      next.delete(id);
+    }
+  });
+  state.previous.clear();
+  nextIds.forEach((id) => {
+    const previous = next.get(id);
+    state.previous.set(id, previous);
+    next.set(id, { ...(previous ?? {}), opacity: 35 });
+  });
+  state.ids = nextIds;
   app.setElementRenderOverrides(next.size ? next : null);
 };
 

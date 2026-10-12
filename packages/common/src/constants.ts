@@ -226,19 +226,37 @@ export const FRAME_STYLE = {
 /**
  * Static grid chrome of a table element. Values are light-theme colors —
  * renderers pass them through `applyDarkModeFilter` for the dark theme, the
- * same way `FRAME_STYLE` consumers do.
+ * same way `FRAME_STYLE` consumers do. The two `token:` backgrounds are the
+ * exception: they resolve per-theme in `resolveTableColor` because the dark
+ * values are not filter derivations of the light ones.
  */
 export const TABLE_STYLE = {
   /** Outer border, kept low-contrast: the grid is content chrome, not an
       interaction affordance. */
-  strokeColor: "#b3b3b3" as ExcalidrawElement["strokeColor"],
+  strokeColor: "#D0D3D9" as ExcalidrawElement["strokeColor"],
   /** Interior grid lines, lighter than the border. */
-  gridColor: "#d6d6d6" as ExcalidrawElement["strokeColor"],
+  gridColor: "#E5E6EB" as ExcalidrawElement["strokeColor"],
   strokeWidth: 1 as ExcalidrawElement["strokeWidth"],
   gridStrokeWidth: 1 as ExcalidrawElement["strokeWidth"],
-  /** Cells without a `style.backgroundColor` override stay unpainted. */
-  backgroundColor: "transparent" as ExcalidrawElement["backgroundColor"],
+  /**
+   * Table body base, painted as a rounded rect under the cells. Cells without
+   * a `style.backgroundColor` override (and outside the header band) emit no
+   * rect of their own — this base shows through.
+   */
+  backgroundColor: "token:surface" as ExcalidrawElement["backgroundColor"],
+  /** First-row header band fill (default on, `TableStyle.header` opts out). */
+  headerFill: "token:header" as ExcalidrawElement["backgroundColor"],
+  /** Corner radius of the body base and outer border, in scene units. */
+  radius: 6,
 };
+
+/**
+ * Factory default inset of a cell's background text (all four sides). Also
+ * read by the clipboard paste offset — import from `@excalidraw/common`.
+ */
+export const TABLE_CELL_TEXT_PADDING = 12;
+/** Factory default font size of a cell's background text. */
+export const TABLE_CELL_TEXT_FONT_SIZE = 13;
 
 export const MIN_FONT_SIZE = 1;
 export const DEFAULT_FONT_SIZE = 20;

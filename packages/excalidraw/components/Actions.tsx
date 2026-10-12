@@ -56,6 +56,7 @@ import { PropertiesPopover } from "./PropertiesPopover";
 import { ColorPicker } from "./ColorPicker/ColorPicker";
 import { RadioSelection } from "./RadioSelection";
 import { Range } from "./Range";
+import { CheckboxItem } from "./CheckboxItem";
 import {
   sharpArrowIcon,
   roundArrowIcon,
@@ -71,6 +72,9 @@ import {
   StrokeWidthBaseIcon,
   StrokeStyleDashedIcon,
   StrokeStyleDottedIcon,
+  TextAlignLeftIcon,
+  TextAlignCenterIcon,
+  TextAlignRightIcon,
   tableCellSelectIcon,
   tableCellMultiSelectIcon,
   tableCellMergeIcon,
@@ -1186,6 +1190,26 @@ const TableStyleActions = ({
       icon: StrokeStyleDottedIcon,
     },
   ];
+  const titleAlignOptions = [
+    {
+      value: "start" as const,
+      text: t("labels.left"),
+      icon: TextAlignLeftIcon,
+      testId: "table-title-align-start",
+    },
+    {
+      value: "center" as const,
+      text: t("labels.center"),
+      icon: TextAlignCenterIcon,
+      testId: "table-title-align-center",
+    },
+    {
+      value: "end" as const,
+      text: t("labels.right"),
+      icon: TextAlignRightIcon,
+      testId: "table-title-align-end",
+    },
+  ];
   const colorPicker = (
     <ColorPicker
       key="fill"
@@ -1210,7 +1234,7 @@ const TableStyleActions = ({
       color={
         table.table.style?.borderColor ??
         table.table.style?.gridColor ??
-        "#b3b3b3"
+        "#D0D3D9"
       }
       onChange={(nextColor) =>
         update({ borderColor: nextColor, gridColor: nextColor })
@@ -1285,6 +1309,23 @@ const TableStyleActions = ({
             max={100}
             step={1}
           />
+          <CheckboxItem
+            checked={table.table.style?.header !== false}
+            onChange={(checked) => update({ header: checked })}
+          >
+            {t("labels.tableHeaderRow")}
+          </CheckboxItem>
+          <fieldset>
+            <legend>{t("labels.tableTitleAlign")}</legend>
+            <div className="buttonList">
+              <RadioSelection
+                group="table-title-align"
+                options={titleAlignOptions}
+                value={table.table.style?.title?.align ?? "start"}
+                onChange={(value) => update({ title: { align: value } })}
+              />
+            </div>
+          </fieldset>
         </>
       )}
     </div>

@@ -133,6 +133,12 @@ export type TableStyle = Readonly<{
   gridWidth?: number;
   gridStyle?: "solid" | "dashed" | "dotted";
   clipContent?: boolean;
+  /**
+   * First-row header band. Absent means on — only `header: false` opts out.
+   * Purely a render derivation (band fill + 600 weight): writing it never
+   * rewrites cells or texts, and clearing it restores the plain first row.
+   */
+  header?: boolean;
   title?: Readonly<{ gap?: number; align?: "start" | "center" | "end" }>;
 }>;
 

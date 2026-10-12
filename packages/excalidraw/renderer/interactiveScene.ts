@@ -17,10 +17,14 @@ import {
   DEFAULT_FONT_SIZE,
   TABLE_STRUCTURE_RAIL_OFFSET,
   TABLE_STRUCTURE_INSERTION_OFFSET,
+  TABLE_STYLE,
   FRAME_STYLE,
   getFeatureFlag,
   getFontFamilyString,
+  getFontString,
+  getVerticalOffset,
   invariant,
+  setColorAlpha,
   shouldRotateWithDiscreteAngle,
   THEME,
   applyDarkModeFilter,
@@ -53,8 +57,15 @@ import {
   getStickyNoteCornerRadius,
   isTableElement,
   isTableCellBackgroundText,
+  getTableAxisBlockRange,
   getTableCellBounds,
+  getTableCellFillColor,
   getTableCellRange,
+  getCellBackgroundTextLayout,
+  getLineHeightInPx,
+  getTextVerticalOffset,
+  resolveTableBackgroundTextFontWeight,
+  resolveTableColor,
   maxBindingDistance_simple,
   isTextElement,
   getContainingFrame,
@@ -1475,6 +1486,26 @@ const renderFrameHighlight = (
 };
 
 /**
+ * Table interaction feedback accent — the design's `--color-selection`
+ * (#1677ff; the dark theme is derived by `getThemedColor`, phase-6 D.1) — and
+ * its precomputed fills. Every table hover/selection/structure channel reads
+ * from this one source.
+ */
+const TABLE_STRUCTURE_ACCENT = "rgb(22,119,255)";
+/** 10% accent — hovered cell fill (the drop-target preview reuses it). */
+const TABLE_CELL_HOVER_FILL = "rgba(22,119,255,0.10)";
+/** 8% accent — cell range selection fill. */
+const TABLE_RANGE_SELECTION_FILL = "rgba(22,119,255,0.08)";
+/** 12% accent — selected row/column band fill. */
+const TABLE_ROW_COL_SELECTION_FILL = "rgba(22,119,255,0.12)";
+/** Idle grip bar fill (the design's `--tbl-grip`). */
+const TABLE_RAIL_IDLE_FILL = "#E5E6EB";
+/** Hover grip bar fill — the design's 45% accent over `--tbl-grip`. */
+const TABLE_RAIL_HOVER_FILL = "#88b4f4";
+/** Idle grip dot and resting insertion dot fill (the design's `--page-muted`). */
+const TABLE_STRUCTURE_DOT_FILL = "#8F959E";
+
+/**
  * Light-blue fill of the hovered table cell (phase-1.md:78). The cell bounds
  * are table-local offsets applied directly in scene space.
  */
@@ -1497,7 +1528,7 @@ const renderTableCellHighlight = (
 
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
-  context.fillStyle = getThemedColor("rgba(0,118,255,0.12)", appState.theme);
+  context.fillStyle = getThemedColor(TABLE_CELL_HOVER_FILL, appState.theme);
   context.fillRect(
     table.x + bounds.x,
     table.y + bounds.y,
@@ -1534,16 +1565,33 @@ const renderTableCellSelection = (
   )!;
   const start = getTableCellBounds(table.table, first.id)!;
   const end = getTableCellBounds(table.table, last.id)!;
+  const unionX = table.x + start.x;
+  const unionY = table.y + start.y;
+  const unionWidth = end.x + end.width - start.x;
+  const unionHeight = end.y + end.height - start.y;
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
-  context.strokeStyle = getThemedColor("rgb(0,118,255)", appState.theme);
-  context.lineWidth = 2 / appState.zoom.value;
-  context.strokeRect(
-    table.x + start.x,
-    table.y + start.y,
-    end.x + end.width - start.x,
-    end.y + end.height - start.y,
+  // 8% accent fill + 1px accent frame (设计稿 cell-range)
+  context.fillStyle = getThemedColor(
+    TABLE_RANGE_SELECTION_FILL,
+    appState.theme,
   );
+  context.fillRect(unionX, unionY, unionWidth, unionHeight);
+  context.strokeStyle = getThemedColor(TABLE_STRUCTURE_ACCENT, appState.theme);
+  context.lineWidth = 1 / appState.zoom.value;
+  context.strokeRect(unionX, unionY, unionWidth, unionHeight);
+  // the anchor cell keeps a 2px inner stroke, inset 1px to clear the frame
+  const anchor = getTableCellBounds(table.table, selection.anchorId);
+  if (anchor) {
+    const inset = 1 / appState.zoom.value;
+    context.lineWidth = 2 / appState.zoom.value;
+    context.strokeRect(
+      table.x + anchor.x + inset,
+      table.y + anchor.y + inset,
+      anchor.width - inset * 2,
+      anchor.height - inset * 2,
+    );
+  }
   context.restore();
 };
 
@@ -1559,8 +1607,6 @@ const withTableLocalTransform = (
   context.restore();
 };
 
-const TABLE_STRUCTURE_ACCENT = "rgb(0,118,255)";
-
 // Keep structure indicators outside the selection border while leaving room
 // for the insertion plus mark.
 const getTableStructureIndicatorOffset = (zoom: number) =>
@@ -1568,40 +1614,38 @@ const getTableStructureIndicatorOffset = (zoom: number) =>
 const getTableStructureInsertionOffset = (zoom: number) =>
   TABLE_STRUCTURE_INSERTION_OFFSET / zoom;
 
-/** A plus mark on an insertion boundary (phase-1.md:82), in local coords. */
+/** A plus mark on a hovered insertion boundary (16px accent disc, white +). */
 const drawInsertPlusMark = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
   x: number,
   y: number,
-  orientation: "row" | "column",
 ) => {
-  const radius = 11 / appState.zoom.value;
+  const radius = 8 / appState.zoom.value;
   context.save();
   context.beginPath();
   context.arc(x, y, radius, 0, Math.PI * 2);
   context.fillStyle = getThemedColor(TABLE_STRUCTURE_ACCENT, appState.theme);
   context.fill();
-  context.strokeStyle = "#ffffff";
-  const arm = radius * 0.55;
+  context.strokeStyle = getThemedColor("#ffffff", appState.theme);
+  const arm = 3.5 / appState.zoom.value;
   context.beginPath();
-  if (orientation === "row") {
-    context.moveTo(x - arm, y);
-    context.lineTo(x + arm, y);
-    context.moveTo(x, y - arm);
-    context.lineTo(x, y + arm);
-  } else {
-    // a column boundary's line runs vertically, so the plus rotates
-    context.moveTo(x - arm, y);
-    context.lineTo(x + arm, y);
-    context.moveTo(x, y - arm);
-    context.lineTo(x, y + arm);
-  }
-  context.lineWidth = 2 / appState.zoom.value;
+  context.moveTo(x - arm, y);
+  context.lineTo(x + arm, y);
+  context.moveTo(x, y - arm);
+  context.lineTo(x, y + arm);
+  context.lineWidth = 1.5 / appState.zoom.value;
+  context.lineCap = "round";
   context.stroke();
   context.restore();
 };
 
+/**
+ * One row/column grip: a 6px rounded bar (rx 3) with a centered 2×3 dot
+ * grid. Three states (设计稿 tbl-grip): idle `--tbl-grip`, hover 45% accent,
+ * selected full accent; the dots turn white on hover/selected. All chrome
+ * metrics are CSS px, zoom-compensated.
+ */
 const drawStructureRail = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
@@ -1611,34 +1655,49 @@ const drawStructureRail = (
   orientation: "row" | "column",
   state: "idle" | "hover" | "selected" = "idle",
 ) => {
-  const thickness = 9 / appState.zoom.value;
-  const dot = 1 / appState.zoom.value;
+  const zoom = appState.zoom.value;
+  const thickness = 6 / zoom;
+  const radius = 3 / zoom;
+  const dot = 0.75 / zoom;
+  const spacing = 3.2 / zoom;
+  // the bar hugs the table edge: for columns it grows upwards from (x, y),
+  // for rows leftwards — same anchoring the 9px bar used
+  const barX = orientation === "column" ? x : x - thickness;
+  const barY = orientation === "column" ? y - thickness : y;
+  const barWidth = orientation === "column" ? length : thickness;
+  const barHeight = orientation === "column" ? thickness : length;
   context.save();
   context.fillStyle = getThemedColor(
     state === "selected"
       ? TABLE_STRUCTURE_ACCENT
       : state === "hover"
-      ? "#91caff"
-      : "#b3b3b3",
+      ? TABLE_RAIL_HOVER_FILL
+      : TABLE_RAIL_IDLE_FILL,
     appState.theme,
   );
-  if (orientation === "column") {
-    context.fillRect(x, y - thickness, length, thickness);
+  context.beginPath();
+  if (context.roundRect) {
+    context.roundRect(barX, barY, barWidth, barHeight, radius);
   } else {
-    context.fillRect(x - thickness, y, thickness, length);
+    context.rect(barX, barY, barWidth, barHeight);
   }
+  context.fill();
   context.fillStyle = getThemedColor(
-    state === "idle" ? "#6b6f76" : "#ffffff",
+    state === "idle" ? TABLE_STRUCTURE_DOT_FILL : "#ffffff",
     appState.theme,
   );
-  for (let row = 0; row < 2; row++) {
-    for (let column = 0; column < 3; column++) {
-      const dx = ((column - 1) * 4) / appState.zoom.value;
-      const dy = ((row - 0.5) * 4) / appState.zoom.value;
+  for (let a = 0; a < 3; a++) {
+    for (let b = 0; b < 2; b++) {
+      const d1 = (a - 1) * spacing;
+      const d2 = (b - 0.5) * spacing;
       context.beginPath();
       context.arc(
-        orientation === "column" ? x + length / 2 + dx : x - thickness / 2 + dy,
-        orientation === "column" ? y - thickness / 2 + dy : y + length / 2 + dx,
+        orientation === "column"
+          ? barX + barWidth / 2 + d1
+          : barX + barWidth / 2 + d2,
+        orientation === "column"
+          ? barY + barHeight / 2 + d2
+          : barY + barHeight / 2 + d1,
         dot,
         0,
         Math.PI * 2,
@@ -1749,7 +1808,10 @@ const renderTableStructureAffordances = (
     const insertionOffset = getTableStructureInsertionOffset(
       appState.zoom.value,
     );
-    context.fillStyle = getThemedColor("#6b6f76", appState.theme);
+    context.fillStyle = getThemedColor(
+      TABLE_STRUCTURE_DOT_FILL,
+      appState.theme,
+    );
     const drawInsertionPoint = (x: number, y: number) => {
       context.beginPath();
       context.arc(x, y, 2 / appState.zoom.value, 0, Math.PI * 2);
@@ -1788,7 +1850,7 @@ const renderTableRowColSelection = (
       for (const row of table.table.rows) {
         if (row.id === selection.id) {
           context.fillStyle = getThemedColor(
-            "rgba(0,118,255,0.14)",
+            TABLE_ROW_COL_SELECTION_FILL,
             appState.theme,
           );
           context.fillRect(table.x, table.y + offset, table.width, row.height);
@@ -1796,7 +1858,7 @@ const renderTableRowColSelection = (
             TABLE_STRUCTURE_ACCENT,
             appState.theme,
           );
-          context.lineWidth = 2 / appState.zoom.value;
+          context.lineWidth = 1.5 / appState.zoom.value;
           context.strokeRect(
             table.x,
             table.y + offset,
@@ -1812,7 +1874,7 @@ const renderTableRowColSelection = (
       for (const column of table.table.columns) {
         if (column.id === selection.id) {
           context.fillStyle = getThemedColor(
-            "rgba(0,118,255,0.14)",
+            TABLE_ROW_COL_SELECTION_FILL,
             appState.theme,
           );
           context.fillRect(
@@ -1825,7 +1887,7 @@ const renderTableRowColSelection = (
             TABLE_STRUCTURE_ACCENT,
             appState.theme,
           );
-          context.lineWidth = 2 / appState.zoom.value;
+          context.lineWidth = 1.5 / appState.zoom.value;
           context.strokeRect(
             table.x + offset,
             table.y,
@@ -1836,6 +1898,88 @@ const renderTableRowColSelection = (
         }
         offset += column.width;
       }
+    }
+  });
+};
+
+/**
+ * Editing a cell's background text keeps two location cues (phase-6 D.4): a
+ * 2px accent inner stroke on the edited cell (inset 1px so it clears the grid
+ * lines) and the accent rails of its row and column. Every other table
+ * overlay stays suppressed while editing, and no edit-mode hit behavior is
+ * added — clicking a rail or outside the table still just ends the edit.
+ */
+const renderTableEditingIndicator = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  elementsMap: ElementsMap,
+) => {
+  const editing = appState.editingTextElement;
+  if (!editing || !isTableCellBackgroundText(editing)) {
+    return;
+  }
+  const ref = editing.containerRef;
+  if (ref?.kind !== "tableCell") {
+    return;
+  }
+  const table = elementsMap.get(ref.elementId);
+  if (!table || !isTableElement(table) || table.isDeleted) {
+    return;
+  }
+  // the edited text belongs to the merge anchor's cell
+  const rawCell = table.table.cells.find((cell) => cell.id === ref.cellId);
+  const cell = rawCell?.mergedInto
+    ? table.table.cells.find((candidate) => candidate.id === rawCell.mergedInto)
+    : rawCell;
+  const bounds = cell && getTableCellBounds(table.table, cell.id);
+  if (!cell || !bounds) {
+    return;
+  }
+
+  withTableLocalTransform(context, appState, () => {
+    const zoom = appState.zoom.value;
+    const inset = 1 / zoom;
+    context.strokeStyle = getThemedColor(
+      TABLE_STRUCTURE_ACCENT,
+      appState.theme,
+    );
+    context.lineWidth = 2 / zoom;
+    context.strokeRect(
+      table.x + bounds.x + inset,
+      table.y + bounds.y + inset,
+      bounds.width - inset * 2,
+      bounds.height - inset * 2,
+    );
+    const railOffset = getTableStructureIndicatorOffset(zoom);
+    let offset = 0;
+    for (const column of table.table.columns) {
+      if (column.id === cell.columnId) {
+        drawStructureRail(
+          context,
+          appState,
+          table.x + offset,
+          table.y - railOffset,
+          column.width,
+          "column",
+          "selected",
+        );
+      }
+      offset += column.width;
+    }
+    offset = 0;
+    for (const row of table.table.rows) {
+      if (row.id === cell.rowId) {
+        drawStructureRail(
+          context,
+          appState,
+          table.x - railOffset,
+          table.y + offset,
+          row.height,
+          "row",
+          "selected",
+        );
+      }
+      offset += row.height;
     }
   });
 };
@@ -1860,6 +2004,45 @@ const getTableStructureVisual = (
         };
   }
   return appState.tableStructureHover;
+};
+
+/**
+ * The dimension label of an active row/column resize gesture (phase-6): the
+ * same bubble as `renderTransformStatusLabel` (11px, height 20, rx 5, ink
+ * background, white text), pinned to the dragged separator — above the line
+ * for a column width, left of the line for a row height. Shown only while the
+ * gesture runs, never on a bare hover.
+ */
+const renderTableResizeSizeLabel = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  text: string,
+  anchor: { x: number; y: number },
+  placement: "above" | "left",
+) => {
+  const zoom = appState.zoom.value;
+  context.save();
+  context.font = "11px sans-serif";
+  const width = context.measureText(text).width + 12 / zoom;
+  const height = 20 / zoom;
+  const gap = 6 / zoom;
+  const left =
+    placement === "above" ? anchor.x - width / 2 : anchor.x - gap - width;
+  const top =
+    placement === "above" ? anchor.y - gap - height : anchor.y - height / 2;
+  context.fillStyle = getThemedColor("#1f2329", appState.theme);
+  context.beginPath();
+  if (context.roundRect) {
+    context.roundRect(left, top, width, height, 5 / zoom);
+  } else {
+    context.rect(left, top, width, height);
+  }
+  context.fill();
+  context.fillStyle = getThemedColor("#ffffff", appState.theme);
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, left + width / 2, top + height / 2);
+  context.restore();
 };
 
 /** Paint hover or active resize using the current table geometry. */
@@ -1903,6 +2086,15 @@ const renderTableStructureHover = (
         context.lineWidth = lineWidth;
         context.strokeStyle = accent;
         context.stroke();
+        if (appState.containerGestureVisual?.container === "table") {
+          renderTableResizeSizeLabel(
+            context,
+            appState,
+            `${Math.round(table.table.rows[rowIndex].height)}`,
+            { x: table.x, y: table.y + offset },
+            "left",
+          );
+        }
         break;
       }
       case "columnResize": {
@@ -1926,6 +2118,15 @@ const renderTableStructureHover = (
         context.lineWidth = lineWidth;
         context.strokeStyle = accent;
         context.stroke();
+        if (appState.containerGestureVisual?.container === "table") {
+          renderTableResizeSizeLabel(
+            context,
+            appState,
+            `${Math.round(table.table.columns[columnIndex].width)}`,
+            { x: table.x + offset, y: table.y },
+            "above",
+          );
+        }
         break;
       }
       case "rowInsert": {
@@ -1947,7 +2148,6 @@ const renderTableStructureHover = (
           appState,
           table.x - indicatorOffset,
           boundaryY,
-          "row",
         );
         break;
       }
@@ -1970,7 +2170,6 @@ const renderTableStructureHover = (
           appState,
           boundaryX,
           table.y - indicatorOffset,
-          "column",
         );
         break;
       }
@@ -1979,7 +2178,7 @@ const renderTableStructureHover = (
         for (const row of table.table.rows) {
           if (row.id === hover.rowId) {
             context.fillStyle = getThemedColor(
-              "rgba(0,118,255,0.08)",
+              TABLE_CELL_HOVER_FILL,
               appState.theme,
             );
             context.fillRect(
@@ -1999,7 +2198,7 @@ const renderTableStructureHover = (
         for (const column of table.table.columns) {
           if (column.id === hover.columnId) {
             context.fillStyle = getThemedColor(
-              "rgba(0,118,255,0.08)",
+              TABLE_CELL_HOVER_FILL,
               appState.theme,
             );
             context.fillRect(
@@ -2019,8 +2218,206 @@ const renderTableStructureHover = (
 };
 
 /**
+ * Cross-axis offset of the move ghost card from the table edge (CSS px) —
+ * the design keeps the floating card slightly off the faded source band so
+ * both stay readable.
+ */
+const TABLE_MOVE_GHOST_OFFSET = 16;
+
+/** The ghost card's drop shadow, in CSS box-shadow semantics (phase-6). */
+const TABLE_MOVE_GHOST_SHADOW = [
+  { offsetY: 1, blur: 2, opacity: 0.08 },
+  { offsetY: 3, blur: 8, opacity: 0.1 },
+] as const;
+
+/**
+ * The floating card that follows the pointer while a row/column is dragged
+ * (phase-6): a white rounded card with the source band's cell fills and
+ * background texts. Content elements are not copied into the ghost — they
+ * stay behind, faded, at the source position.
+ */
+const renderTableMoveGhost = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  table: ExcalidrawTableElement,
+  preview: NonNullable<InteractiveCanvasAppState["tableStructurePreview"]>,
+  elementsMap: ElementsMap,
+) => {
+  const { sourceId, pointer, kind } = preview;
+  if (!sourceId || !pointer) {
+    return;
+  }
+  let block: { start: number; end: number };
+  try {
+    block = getTableAxisBlockRange(table.table, kind, sourceId);
+  } catch {
+    return;
+  }
+  const entries = kind === "row" ? table.table.rows : table.table.columns;
+  const blockEntries = entries.slice(block.start, block.end + 1);
+  if (!blockEntries.length) {
+    return;
+  }
+  const sizeOf = (entry: typeof entries[number]) =>
+    "height" in entry ? entry.height : entry.width;
+  const blockOffset = entries
+    .slice(0, block.start)
+    .reduce((sum, entry) => sum + sizeOf(entry), 0);
+  const blockSize = blockEntries.reduce((sum, entry) => sum + sizeOf(entry), 0);
+
+  const zoom = appState.zoom.value;
+  const isDark = appState.theme === THEME.DARK;
+  const ghostWidth = kind === "row" ? table.width : blockSize;
+  const ghostHeight = kind === "row" ? blockSize : table.height;
+  // the drag axis centers on the pointer; the cross axis rides the table edge
+  const ghostX =
+    kind === "row"
+      ? table.x + TABLE_MOVE_GHOST_OFFSET / zoom
+      : pointer.x - ghostWidth / 2;
+  const ghostY =
+    kind === "row"
+      ? pointer.y - ghostHeight / 2
+      : table.y + TABLE_MOVE_GHOST_OFFSET / zoom;
+
+  const traceCard = () => {
+    context.beginPath();
+    if (context.roundRect) {
+      context.roundRect(
+        ghostX,
+        ghostY,
+        ghostWidth,
+        ghostHeight,
+        TABLE_STYLE.radius,
+      );
+    } else {
+      context.rect(ghostX, ghostY, ghostWidth, ghostHeight);
+    }
+  };
+
+  // shadow: canvas shadow offsets/blur live in the untransformed bitmap
+  // space, so they scale by the current transform's magnitude (same treatment
+  // as the sticky note shadow in renderElement)
+  const transform = context.getTransform?.();
+  const bitmapScale = transform ? Math.hypot(transform.a, transform.b) : 0;
+  context.save();
+  context.fillStyle = resolveTableColor(TABLE_STYLE.backgroundColor, isDark);
+  if (bitmapScale) {
+    const shadowColor = applyDarkModeFilter("#1f2329", isDark);
+    for (const layer of TABLE_MOVE_GHOST_SHADOW) {
+      context.shadowColor = setColorAlpha(shadowColor, layer.opacity);
+      context.shadowBlur = layer.blur * bitmapScale;
+      context.shadowOffsetX = 0;
+      context.shadowOffsetY = layer.offsetY * bitmapScale;
+      traceCard();
+      context.fill();
+    }
+  } else {
+    traceCard();
+    context.fill();
+  }
+  context.restore();
+
+  // cell fills and background texts of the source band, clipped to the card
+  const blockIds = new Set(blockEntries.map((entry) => entry.id));
+  const textsByCell = new Map<string, ExcalidrawTextElement[]>();
+  for (const element of elementsMap.values()) {
+    const ref = element.containerRef;
+    if (
+      ref?.kind === "tableCell" &&
+      ref.elementId === table.id &&
+      ref.role === "backgroundText" &&
+      isTextElement(element)
+    ) {
+      const list = textsByCell.get(ref.cellId);
+      if (list) {
+        list.push(element);
+      } else {
+        textsByCell.set(ref.cellId, [element]);
+      }
+    }
+  }
+  context.save();
+  traceCard();
+  context.clip();
+  for (const cell of table.table.cells) {
+    if (cell.mergedInto) {
+      continue;
+    }
+    if (!blockIds.has(kind === "row" ? cell.rowId : cell.columnId)) {
+      continue;
+    }
+    const bounds = getTableCellBounds(table.table, cell.id);
+    if (!bounds) {
+      continue;
+    }
+    // table-local cell origin, rebased onto the ghost card
+    const cellX = ghostX + bounds.x - (kind === "column" ? blockOffset : 0);
+    const cellY = ghostY + bounds.y - (kind === "row" ? blockOffset : 0);
+    const fill = getTableCellFillColor(cell, isDark, table.table);
+    if (fill) {
+      context.fillStyle = fill;
+      context.fillRect(cellX, cellY, bounds.width, bounds.height);
+    }
+    for (const text of textsByCell.get(cell.id) ?? []) {
+      const layout = getCellBackgroundTextLayout(
+        text,
+        table,
+        bounds,
+        elementsMap,
+      );
+      const layoutX =
+        ghostX + (layout.x - table.x) - (kind === "column" ? blockOffset : 0);
+      const layoutY =
+        ghostY + (layout.y - table.y) - (kind === "row" ? blockOffset : 0);
+      context.save();
+      context.font = getFontString({
+        fontSize: text.fontSize,
+        fontFamily: text.fontFamily,
+        fontWeight: resolveTableBackgroundTextFontWeight(text, elementsMap),
+      });
+      context.fillStyle = getThemedColor(text.strokeColor, appState.theme);
+      context.textAlign = layout.textAlign as CanvasTextAlign;
+      context.textBaseline = "alphabetic";
+      const lines = layout.text.replace(/\r\n?/g, "\n").split("\n");
+      const lineHeightPx = getLineHeightInPx(text.fontSize, text.lineHeight);
+      const verticalOffset =
+        getTextVerticalOffset(
+          layout.verticalAlign,
+          layout.height,
+          lines.length,
+          lineHeightPx,
+        ) + getVerticalOffset(text.fontFamily, text.fontSize, lineHeightPx);
+      const horizontalOffset =
+        layout.textAlign === "center"
+          ? layout.width / 2
+          : layout.textAlign === "right"
+          ? layout.width
+          : 0;
+      for (let index = 0; index < lines.length; index++) {
+        context.fillText(
+          lines[index],
+          layoutX + horizontalOffset,
+          layoutY + index * lineHeightPx + verticalOffset,
+        );
+      }
+      context.restore();
+    }
+  }
+  context.restore();
+
+  // card frame on top of the fills
+  context.save();
+  context.strokeStyle = getThemedColor(TABLE_STYLE.strokeColor, appState.theme);
+  context.lineWidth = 1 / zoom;
+  traceCard();
+  context.stroke();
+  context.restore();
+};
+
+/**
  * The blue boundary line of an in-flight insertion or row/column reorder —
- * the exact spot the commit will land on (phase-1.md:82, :87).
+ * the exact spot the commit will land on (phase-1.md:82, :87). A reorder
+ * additionally floats the ghost card along the pointer.
  */
 const renderTableStructurePreview = (
   context: CanvasRenderingContext2D,
@@ -2052,6 +2449,9 @@ const renderTableStructurePreview = (
       context.lineWidth = lineWidth;
       context.strokeStyle = accent;
       context.stroke();
+    }
+    if (preview.source === "move") {
+      renderTableMoveGhost(context, appState, table, preview, elementsMap);
     }
   });
 };
@@ -3204,6 +3604,10 @@ const _renderInteractiveScene = ({
         getTableTitle(app.scene.getNonDeletedElements(), table.id),
       );
     }
+  } else {
+    // while a cell's background text is edited, only its location cues
+    // (cell inner stroke + the row/column rails) survive the suppression
+    renderTableEditingIndicator(context, appState, elementsMap);
   }
 
   if (tableVisual && !editingTableBackgroundText) {

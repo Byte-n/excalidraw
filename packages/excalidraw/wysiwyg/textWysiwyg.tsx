@@ -50,6 +50,7 @@ import {
   isStickyNoteElement,
   isTableCellBackgroundText,
   isTextElement,
+  resolveTableBackgroundTextFontWeight,
 } from "@excalidraw/element";
 
 import type {
@@ -508,7 +509,16 @@ export const textWysiwyg = ({
         height *= 1.05;
       }
 
-      const font = getFontString(updatedTextElement);
+      const font = getFontString({
+        ...updatedTextElement,
+        // table header rows render their background text at 600 even though
+        // the element itself carries no explicit weight; mirror that here so
+        // the editor matches the canvas
+        fontWeight: resolveTableBackgroundTextFontWeight(
+          updatedTextElement,
+          elementsMap,
+        ),
+      });
       const angle = getTextElementAngle(updatedTextElement, container);
 
       // Make sure text editor height doesn't go beyond viewport
@@ -609,6 +619,20 @@ export const textWysiwyg = ({
     boxSizing: "content-box",
   });
   const isTableTitle = element.containerRef?.kind === "tableTitle";
+  if (isTableTitle) {
+    // design (phase-6): the title editor is a filled box with a 1px
+    // selection-color outline; negative margins cancel the padding/border so
+    // the glyphs stay exactly on their canvas position
+    const padX = 6;
+    const padY = 2;
+    Object.assign(editable.style, {
+      background: "var(--input-bg-color, #ffffff)",
+      border: "1px solid var(--color-selection)",
+      borderRadius: "4px",
+      padding: `${padY}px ${padX}px`,
+      margin: `-${padY + 1}px 0 0 -${padX + 1}px`,
+    });
+  }
   editable.value = isTableTitle
     ? element.originalText.replace(/\s*[\r\n]+\s*/g, " ")
     : element.originalText;

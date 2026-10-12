@@ -3,6 +3,7 @@ import {
   cloneJSON,
   getLineHeight,
   randomId,
+  TABLE_CELL_TEXT_PADDING,
 } from "@excalidraw/common";
 import {
   assertValidTableData,
@@ -603,10 +604,10 @@ export const pasteTSVIntoCell = (
       const bounds = getTableCellBounds(nextTable, cell.id)!;
       const fontFamily = app.state.currentItemFontFamily;
       return newTextElement({
-        x: target.x + bounds.x + 4,
-        y: target.y + bounds.y + 4,
-        width: Math.max(1, bounds.width - 8),
-        height: Math.max(1, bounds.height - 8),
+        x: target.x + bounds.x + TABLE_CELL_TEXT_PADDING,
+        y: target.y + bounds.y + TABLE_CELL_TEXT_PADDING,
+        width: Math.max(1, bounds.width - TABLE_CELL_TEXT_PADDING * 2),
+        height: Math.max(1, bounds.height - TABLE_CELL_TEXT_PADDING * 2),
         text: value,
         originalText: value,
         fontFamily,

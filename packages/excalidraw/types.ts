@@ -603,6 +603,13 @@ export interface AppState {
     /** insertion array index, or the final index for a reorder */
     boundaryIndex: number;
     source: "insert" | "move";
+    /**
+     * Move-gesture payload (phase-6): the dragged row/column id and the
+     * pointer's scene coordinates — the ghost card floats along the pointer
+     * while the source band fades in place. Absent for insert previews.
+     */
+    sourceId?: string;
+    pointer?: { x: number; y: number };
   } | null;
   frameRendering: {
     enabled: boolean;

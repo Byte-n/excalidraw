@@ -12,6 +12,10 @@ import type {
   ExcalidrawTextElement,
 } from "@excalidraw/element/types";
 
+import { act } from "react-dom/test-utils";
+
+import { vi } from "vitest";
+
 import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
@@ -67,6 +71,15 @@ const getTable = () =>
   )!;
 
 const mouse = new Pointer("mouse");
+
+/** lets the rAF-throttled pointer session run its pending frame */
+const nextFrame = () =>
+  act(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => resolve(null));
+      }),
+  );
 
 const getBackgroundTexts = () =>
   h.elements.filter(
@@ -458,7 +471,9 @@ describe("table tool", () => {
       expect(text.containerId).toBeNull();
       expect(text.autoResize).toBe(false);
       expect(text.width).toBeLessThan(160);
-      expect(text.x + text.width / 2).toBe(80);
+      // factory default: left-aligned with the 12px cell padding,
+      // vertically centered in the 56px row
+      expect(text.x).toBe(12);
       expect(text.y + text.height / 2).toBe(28);
       expect(editor.style.width).toBe(`${text.width}px`);
       expect(editor.style.height).toBe(`${text.height}px`);
@@ -475,8 +490,35 @@ describe("table tool", () => {
       expect(committed.text).toBe("hello");
       expect(committed.autoResize).toBe(false);
       expect(committed.width).toBeLessThan(160);
-      expect(committed.x + committed.width / 2).toBe(80);
+      expect(committed.x).toBe(12);
       expect(committed.y + committed.height / 2).toBe(28);
+    });
+
+    it("marks the edited cell and its row/column rails with the accent color", async () => {
+      const center = cellCenter(table, 1, 1);
+      doubleClickAt(center.x, center.y);
+      const editor = await getTextEditor();
+
+      const context = GlobalTestState.interactiveCanvas.getContext("2d")!;
+      const strokeRects: unknown[][] = [];
+      vi.spyOn(context, "strokeRect").mockImplementation((...args) => {
+        strokeRects.push([...args, context.lineWidth, context.strokeStyle]);
+      });
+      const fillStyle = vi.spyOn(context, "fillStyle", "set");
+      const arc = vi.spyOn(context, "arc");
+      act(() => h.app.setState({ scrollX: h.state.scrollX + 1 }));
+      await nextFrame();
+
+      // the edited cell (row 1, column 1: 160..320 x 56..112) gets a 2px
+      // accent inner stroke, inset 1px so it clears the grid lines
+      expect(strokeRects).toContainEqual([161, 57, 158, 54, 2, "#1677ff"]);
+      // its row and column rails render in the accent color
+      expect(fillStyle).toHaveBeenCalledWith("rgb(22,119,255)");
+      // every other table overlay stays suppressed while editing: no r2
+      // insertion dots, only the rails' 0.75 grip dots
+      expect(arc.mock.calls.some((call) => call[2] === 2)).toBe(false);
+
+      Keyboard.exitTextEditor(editor);
     });
 
     it("keeps the measured editor width near the viewport edge", async () => {
@@ -658,9 +700,10 @@ describe("table tool", () => {
       Keyboard.exitTextEditor(editor);
 
       // the background text covers the whole cell, the click still reaches
-      // the content rectangle above it
-      mouseDown(40, 40);
-      mouseUp(40, 40);
+      // the content rectangle above it — (40,28) sits inside both the
+      // rectangle (20..60) and the left-aligned text box (x≥12, y≈20..36)
+      mouseDown(40, 28);
+      mouseUp(40, 28);
       expect(h.state.selectedElementIds).toEqual({ [content.id]: true });
 
       // and a click on the background text alone selects the table, not the

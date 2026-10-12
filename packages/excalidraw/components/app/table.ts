@@ -8,6 +8,7 @@ import {
   getGridPoint,
   getLineHeight,
   isSelectionLikeTool,
+  TABLE_CELL_TEXT_FONT_SIZE,
   TABLE_STRUCTURE_INSERTION_OFFSET,
 } from "@excalidraw/common";
 import { pointDistance, pointFrom } from "@excalidraw/math";
@@ -82,6 +83,8 @@ import type { CanvasElementOperationResult } from "@excalidraw/element/sceneOper
 import { snapNewElement } from "../../snapping";
 
 import { commitCanvasElementOperation } from "./sceneOperations";
+
+import { setTableMoveDragOpacity } from "./scene";
 
 import {
   getTableTitle,
@@ -971,11 +974,13 @@ const createTableCellBackgroundText = (
     strokeStyle: app.state.currentItemStrokeStyle,
     opacity: app.state.currentItemOpacity,
     text: "",
-    fontSize: app.state.currentItemFontSize,
+    // the cell text's factory defaults are table-owned (phase-6): 13px and
+    // left-aligned, not whatever the canvas tool last used
+    fontSize: TABLE_CELL_TEXT_FONT_SIZE,
     fontFamily,
     lineHeight: getLineHeight(fontFamily),
     // The row grows for wrapped text; the column width stays table-controlled.
-    textAlign: "center",
+    textAlign: "left",
     verticalAlign: VERTICAL_ALIGN.MIDDLE,
     containerId: null,
     autoResize: false,
@@ -1606,6 +1611,38 @@ const resolveTableMoveTarget = (
 };
 
 /**
+ * The members a move gesture fades at the source position (phase-6): every
+ * member of the dragged block's cells — background texts, content shapes and
+ * nested subtrees. The block is fixed for the gesture's lifetime (the scene
+ * only mutates at commit), so the id list is computed once per gesture.
+ */
+const moveFadeMemberIds = new WeakMap<TablePointerGesture, string[]>();
+
+const getMoveFadeMemberIds = (
+  app: TableApp,
+  gesture: Extract<TablePointerGesture, { kind: "moveRow" | "moveColumn" }>,
+  table: NonDeleted<ExcalidrawTableElement>,
+): string[] => {
+  const cached = moveFadeMemberIds.get(gesture);
+  if (cached) {
+    return cached;
+  }
+  const kind = gesture.kind === "moveRow" ? "row" : "column";
+  const id = gesture.kind === "moveRow" ? gesture.rowId : gesture.columnId;
+  const block = getTableAxisBlockRange(table.table, kind, id);
+  const entries = kind === "row" ? table.table.rows : table.table.columns;
+  const blockIds = new Set(
+    entries.slice(block.start, block.end + 1).map((entry) => entry.id),
+  );
+  const cellIds = table.table.cells
+    .filter((cell) => blockIds.has(kind === "row" ? cell.rowId : cell.columnId))
+    .map((cell) => cell.id);
+  const ids = collectCellMemberIds(app, table.id, cellIds);
+  moveFadeMemberIds.set(gesture, ids);
+  return ids;
+};
+
+/**
  * Arms the whole-table scale gesture for a selected table's frame handle:
  * any corner scales the subtree uniformly from the opposite corner, any
  * side stretches one axis from the opposite side (that axis's fonts stay
@@ -1945,17 +1982,34 @@ export const handleTableGestureMove = (
   }
   const table = app.scene.getNonDeletedElement(gesture.tableId);
   if (!table || !isTableElement(table)) {
+    // the table vanished mid-gesture (delete/undo/collaborator): the drag
+    // never mutates the scene before commit, so cancel semantics are just
+    // dropping the gesture and its overlays — preview/ghost and the fade
     pointerDownState.tableGesture.active = null;
+    setTableMoveDragOpacity(app, null);
+    app.setState({ tableStructurePreview: null });
     return false;
   }
 
   switch (gesture.kind) {
     case "moveRow":
     case "moveColumn": {
+      const sourceId =
+        gesture.kind === "moveRow" ? gesture.rowId : gesture.columnId;
+      const entries =
+        gesture.kind === "moveRow" ? table.table.rows : table.table.columns;
+      if (!entries.some((entry) => entry.id === sourceId)) {
+        // the dragged row/column was deleted mid-gesture (Delete key or a
+        // collaborator): same cancel semantics — the scene is untouched
+        pointerDownState.tableGesture.active = null;
+        setTableMoveDragOpacity(app, null);
+        app.setState({ tableStructurePreview: null });
+        return true;
+      }
       const { offset, boundaryIndex } = resolveTableMoveTarget(
         table,
         gesture.kind,
-        gesture.kind === "moveRow" ? gesture.rowId : gesture.columnId,
+        sourceId,
         getTableLocalPoint(table, pointerCoords.x, pointerCoords.y),
       );
       app.setState({
@@ -1965,8 +2019,13 @@ export const handleTableGestureMove = (
           offset,
           boundaryIndex,
           source: "move",
+          // the ghost card floats along the pointer while the source band's
+          // members fade in place (phase-6)
+          sourceId,
+          pointer: { x: pointerCoords.x, y: pointerCoords.y },
         },
       });
+      setTableMoveDragOpacity(app, getMoveFadeMemberIds(app, gesture, table));
       return true;
     }
     case "resizeRow":
@@ -2181,8 +2240,14 @@ export const cancelTableGesture = (
 ): boolean => {
   const gesture = pointerDownState.tableGesture.active;
   if (!gesture) {
-    if (app.state.containerGestureVisual) {
-      app.setState({ containerGestureVisual: null });
+    if (app.state.containerGestureVisual || app.state.tableStructurePreview) {
+      // gesture state is already gone but its overlays leaked (e.g. the table
+      // was deleted mid-gesture) — clear the visuals and any leftover fade
+      app.setState({
+        containerGestureVisual: null,
+        tableStructurePreview: null,
+      });
+      setTableMoveDragOpacity(app, null);
       return true;
     }
     return false;
@@ -2193,6 +2258,8 @@ export const cancelTableGesture = (
     tableStructurePreview: null,
     containerGestureVisual: null,
   });
+  // the move fade survives neither Esc nor a pointer-cancel
+  setTableMoveDragOpacity(app, null);
 
   if (gesture.kind === "resizeRow" || gesture.kind === "resizeColumn") {
     // Live elements mutate during preview; restore the pointer session's
@@ -2222,8 +2289,14 @@ export const finalizeTableGestureOnPointerUp = (
 ): boolean => {
   const gesture = pointerDownState.tableGesture.active;
   if (!gesture) {
-    if (app.state.containerGestureVisual) {
-      app.setState({ containerGestureVisual: null });
+    if (app.state.containerGestureVisual || app.state.tableStructurePreview) {
+      // gesture state is already gone but its overlays leaked (e.g. the table
+      // was deleted mid-gesture) — clear the visuals and any leftover fade
+      app.setState({
+        containerGestureVisual: null,
+        tableStructurePreview: null,
+      });
+      setTableMoveDragOpacity(app, null);
       return true;
     }
     return false;
@@ -2234,6 +2307,8 @@ export const finalizeTableGestureOnPointerUp = (
     tableStructurePreview: null,
     containerGestureVisual: null,
   });
+  // the move fade ends with the gesture, whether the commit lands or not
+  setTableMoveDragOpacity(app, null);
 
   const table = app.scene.getNonDeletedElement(gesture.tableId);
   if (!table || !isTableElement(table)) {

@@ -429,6 +429,117 @@ describe("table row/column structure", () => {
     });
   });
 
+  describe("move ghost and source fade (phase-6)", () => {
+    it("carries the source row and pointer in the preview and fades its members", async () => {
+      const { table, content0, backgroundText0, content2 } = createFixture();
+      const grip = { x: table.x - 12, y: table.y + ROW_HEIGHT / 2 };
+      mouseMove(grip.x, grip.y);
+      mouseDown(grip.x, grip.y);
+      const target = { x: grip.x, y: table.y + 2 * ROW_HEIGHT + 10 };
+      mouseMove(target.x, target.y);
+      await nextFrame();
+
+      // the preview carries everything the ghost card needs
+      expect(h.state.tableStructurePreview).toMatchObject({
+        tableId: table.id,
+        kind: "row",
+        source: "move",
+        sourceId: table.table.rows[0].id,
+        pointer: { x: target.x, y: target.y },
+      });
+      // the source row's members fade to 35%; the grid itself and other rows
+      // stay untouched
+      expect(h.app.elementRenderOverrides.get(content0.id)?.opacity).toBe(35);
+      expect(
+        h.app.elementRenderOverrides.get(backgroundText0.id)?.opacity,
+      ).toBe(35);
+      expect(h.app.elementRenderOverrides.has(content2.id)).toBe(false);
+      expect(h.app.elementRenderOverrides.has(table.id)).toBe(false);
+
+      // commit restores every override
+      mouseUp(target.x, target.y);
+      expect(h.app.elementRenderOverrides.size).toBe(0);
+    });
+
+    it("restores the fade when escape cancels the drag", async () => {
+      const { table, content0 } = createFixture();
+      const grip = { x: table.x - 12, y: table.y + ROW_HEIGHT / 2 };
+      mouseMove(grip.x, grip.y);
+      mouseDown(grip.x, grip.y);
+      mouseMove(grip.x, table.y + 2 * ROW_HEIGHT);
+      await nextFrame();
+      expect(h.app.elementRenderOverrides.get(content0.id)?.opacity).toBe(35);
+
+      Keyboard.keyPress(KEYS.ESCAPE);
+      expect(h.app.elementRenderOverrides.size).toBe(0);
+      expect(h.state.tableStructurePreview).toBeNull();
+      mouseUp(grip.x, table.y + 2 * ROW_HEIGHT);
+      expect(h.app.elementRenderOverrides.size).toBe(0);
+    });
+
+    it("does not fade on a bare grip click without a drag", async () => {
+      const { table } = createFixture();
+      const grip = { x: table.x - 12, y: table.y + ROW_HEIGHT / 2 };
+      mouseMove(grip.x, grip.y);
+      mouseDown(grip.x, grip.y);
+      await nextFrame();
+      expect(h.app.elementRenderOverrides.size).toBe(0);
+      mouseUp(grip.x, grip.y);
+      expect(h.app.elementRenderOverrides.size).toBe(0);
+    });
+
+    it("cancels cleanly when the dragged row is deleted mid-gesture", async () => {
+      const { table, content0, snapshot } = createFixture();
+      const grip = { x: table.x - 12, y: table.y + ROW_HEIGHT / 2 };
+      mouseMove(grip.x, grip.y);
+      mouseDown(grip.x, grip.y);
+      mouseMove(grip.x, table.y + 2 * ROW_HEIGHT);
+      await nextFrame();
+      expect(h.app.elementRenderOverrides.get(content0.id)?.opacity).toBe(35);
+      expect(h.state.tableStructurePreview).not.toBeNull();
+
+      // the grip click selected the row, so Delete removes it mid-drag
+      Keyboard.keyPress(KEYS.DELETE);
+      expect(getTable().table.rows.map((row) => row.id)).not.toContain(
+        snapshot.rowIds[0],
+      );
+
+      // the next drag frame must not throw, and must drop the gesture's
+      // overlays: preview line/ghost and the source fade
+      mouseMove(grip.x, table.y + 2 * ROW_HEIGHT + 10);
+      await nextFrame();
+      expect(h.state.tableStructurePreview).toBeNull();
+      expect(h.app.elementRenderOverrides.size).toBe(0);
+
+      mouseUp(grip.x, table.y + 2 * ROW_HEIGHT + 10);
+      expect(h.app.elementRenderOverrides.size).toBe(0);
+      expect(h.state.tableStructurePreview).toBeNull();
+    });
+
+    it("restores the fade when the table is deleted mid-drag", async () => {
+      const { table, content0 } = createFixture();
+      const grip = { x: table.x - 12, y: table.y + ROW_HEIGHT / 2 };
+      mouseMove(grip.x, grip.y);
+      mouseDown(grip.x, grip.y);
+      mouseMove(grip.x, table.y + 2 * ROW_HEIGHT);
+      await nextFrame();
+      expect(h.app.elementRenderOverrides.get(content0.id)?.opacity).toBe(35);
+
+      act(() =>
+        h.scene.mutateElement(table as ExcalidrawTableElement, {
+          isDeleted: true,
+        }),
+      );
+      mouseMove(grip.x, table.y + 2 * ROW_HEIGHT + 10);
+      await nextFrame();
+
+      expect(h.state.tableStructurePreview).toBeNull();
+      expect(h.app.elementRenderOverrides.size).toBe(0);
+      mouseUp(grip.x, table.y + 2 * ROW_HEIGHT + 10);
+      expect(h.app.elementRenderOverrides.size).toBe(0);
+    });
+  });
+
   describe("row height / column width", () => {
     it.each([
       { axis: "row", index: 0, edge: "start", x: 280, y: 210 },
@@ -442,10 +553,17 @@ describe("table row/column structure", () => {
         const context = GlobalTestState.interactiveCanvas.getContext("2d")!;
         const moveTo = vi.spyOn(context, "moveTo");
         const lineTo = vi.spyOn(context, "lineTo");
-        const fillRect = vi.spyOn(context, "fillRect");
+        const rect = vi.spyOn(context, "rect");
+        // roundRect is optional on the context type (polyfill-provided)
+        const roundRect = vi.spyOn(context as any, "roundRect");
+        // the rail bar's rectangle regardless of the roundRect fallback path
+        const railRects = () => [
+          ...rect.mock.calls,
+          ...roundRect.mock.calls.map((call) => call.slice(0, 4)),
+        ];
         const lines: unknown[][] = [];
         const stroke = vi.spyOn(context, "stroke").mockImplementation(() => {
-          if (context.strokeStyle === "#0076ff" && context.lineWidth === 2) {
+          if (context.strokeStyle === "#1677ff" && context.lineWidth === 2) {
             lines.push([
               moveTo.mock.calls[moveTo.mock.calls.length - 1],
               lineTo.mock.calls[lineTo.mock.calls.length - 1],
@@ -467,12 +585,13 @@ describe("table row/column structure", () => {
         expect(h.state.selectedElementIds).toEqual({});
         expect(h.state.tableStructureHover).toBeNull();
         await nextFrame();
-        expect(fillRect).toHaveBeenCalledWith(
+        // the 6px rounded rail bar
+        expect(railRects()).toContainEqual([
           table.x,
-          table.y - TABLE_STRUCTURE_RAIL_OFFSET - 9,
+          table.y - TABLE_STRUCTURE_RAIL_OFFSET - 6,
           COLUMN_WIDTH,
-          9,
-        );
+          6,
+        ]);
 
         // An unexpected hover must not override the active resize visual.
         act(() =>
@@ -533,7 +652,8 @@ describe("table row/column structure", () => {
         stroke.mockRestore();
         moveTo.mockRestore();
         lineTo.mockRestore();
-        fillRect.mockRestore();
+        rect.mockRestore();
+        roundRect.mockRestore();
       },
     );
 
@@ -645,6 +765,58 @@ describe("table row/column structure", () => {
       mouseUp(300, 256);
       expect(h.state.containerGestureVisual).toBeNull();
       expect(h.history.undoStack.length).toBe(undoCount);
+    });
+
+    it("shows the live width label only while a column resize drag runs", async () => {
+      const { table } = createFixture();
+      const context = GlobalTestState.interactiveCanvas.getContext("2d")!;
+      const fillText = vi.spyOn(context, "fillText");
+
+      // a bare hover of the separator shows no label (gesture-only)
+      const separator = { x: table.x + COLUMN_WIDTH, y: table.y + 28 };
+      mouseMove(separator.x, separator.y);
+      await nextFrame();
+      expect(h.state.tableStructureHover).toMatchObject({
+        kind: "columnResize",
+        columnId: table.table.columns[0].id,
+      });
+      expect(fillText.mock.calls.some((call) => call[0] === "160")).toBe(false);
+
+      // dragging the first column's end separator 24px wider: the label reads
+      // the live width, centered above the indicator line's top
+      mouseDown(separator.x, separator.y);
+      mouseMove(separator.x + 24, separator.y);
+      await nextFrame();
+      const lineX = table.x + COLUMN_WIDTH + 24;
+      expect(fillText).toHaveBeenCalledWith("184", lineX, table.y - 16);
+      mouseUp(separator.x + 24, separator.y);
+
+      // once released, the gesture is over and the label is gone
+      fillText.mockClear();
+      mouseMove(separator.x + 100, separator.y);
+      await nextFrame();
+      expect(fillText.mock.calls.some((call) => call[0] === "184")).toBe(false);
+    });
+
+    it("shows the live height label left of the line while dragging a row separator", async () => {
+      const { table } = createFixture();
+      const context = GlobalTestState.interactiveCanvas.getContext("2d")!;
+      const fillText = vi.spyOn(context, "fillText");
+
+      const separator = { x: table.x + 100, y: table.y + ROW_HEIGHT };
+      mouseDown(separator.x, separator.y);
+      mouseMove(separator.x, separator.y + 24);
+      await nextFrame();
+      const lineY = table.y + ROW_HEIGHT + 24;
+      // row height 56 + 24 = 80; the label's right edge sits 6px left of the
+      // table's left edge, vertically centered on the indicator line
+      const labelWidth = context.measureText("80").width + 12;
+      expect(fillText).toHaveBeenCalledWith(
+        "80",
+        table.x - 6 - labelWidth / 2,
+        lineY,
+      );
+      mouseUp(separator.x, separator.y + 24);
     });
 
     it.each([
@@ -917,6 +1089,15 @@ describe("table row/column structure", () => {
       "keeps the %s rails visible after clicking an unselected table's grip",
       async (kind) => {
         const { table, snapshot } = createFixture();
+        const context = GlobalTestState.interactiveCanvas.getContext("2d")!;
+        const rect = vi.spyOn(context, "rect");
+        // roundRect is optional on the context type (polyfill-provided)
+        const roundRect = vi.spyOn(context as any, "roundRect");
+        // the rail bar's rectangle regardless of the roundRect fallback path
+        const railRects = () => [
+          ...rect.mock.calls,
+          ...roundRect.mock.calls.map((call) => call.slice(0, 4)),
+        ];
         const point =
           kind === "row"
             ? { x: table.x - 12, y: table.y + ROW_HEIGHT / 2 }
@@ -927,25 +1108,24 @@ describe("table row/column structure", () => {
           tableId: table.id,
           kind,
         });
-        const context = GlobalTestState.interactiveCanvas.getContext("2d")!;
-        const fillRect = vi.spyOn(context, "fillRect");
         await nextFrame();
-        expect(fillRect).toHaveBeenCalledWith(
+        expect(railRects()).toContainEqual([
           table.x,
-          table.y - TABLE_STRUCTURE_RAIL_OFFSET - 9,
+          table.y - TABLE_STRUCTURE_RAIL_OFFSET - 6,
           COLUMN_WIDTH,
-          9,
-        );
-        fillRect.mockClear();
+          6,
+        ]);
+        rect.mockClear();
+        roundRect.mockClear();
         mouseUp(point.x, point.y);
         act(() => h.app.setState({ scrollX: h.state.scrollX + 1 }));
         await nextFrame();
-        expect(fillRect).toHaveBeenCalledWith(
+        expect(railRects()).toContainEqual([
           table.x,
-          table.y - TABLE_STRUCTURE_RAIL_OFFSET - 9,
+          table.y - TABLE_STRUCTURE_RAIL_OFFSET - 6,
           COLUMN_WIDTH,
-          9,
-        );
+          6,
+        ]);
         expect(getTable().table.rows.map(({ id }) => id)).toEqual(
           snapshot.rowIds,
         );
@@ -962,8 +1142,11 @@ describe("table row/column structure", () => {
       const arc = vi.spyOn(context, "arc");
       API.setSelectedElements([table]);
       await nextFrame();
-      expect(fillStyle).toHaveBeenCalledWith("#b3b3b3");
-      expect(fillStyle).not.toHaveBeenCalledWith("rgb(0,118,255)");
+      // idle rails #E5E6EB, idle dots #8F959E — no accent while nothing is
+      // hovered or row/column-selected
+      expect(fillStyle).toHaveBeenCalledWith("#E5E6EB");
+      expect(fillStyle).toHaveBeenCalledWith("#8F959E");
+      expect(fillStyle).not.toHaveBeenCalledWith("rgb(22,119,255)");
       expect(arc).toHaveBeenCalledWith(
         table.x + COLUMN_WIDTH,
         table.y - TABLE_STRUCTURE_INSERTION_OFFSET,
@@ -1432,7 +1615,7 @@ describe("table row/column structure", () => {
       const { table } = scaleFixture();
       const bar = getTableTitleBar(table, undefined, 1, 20);
       expect(bar.y + bar.height).toBe(
-        table.y - TABLE_STRUCTURE_RAIL_OFFSET - 9 - 2,
+        table.y - TABLE_STRUCTURE_RAIL_OFFSET - 9 - 8,
       );
       const gripX = bar.grip.x + bar.grip.width / 2;
       const gripY = bar.grip.y + bar.grip.height / 2;

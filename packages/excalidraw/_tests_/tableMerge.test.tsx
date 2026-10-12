@@ -125,7 +125,7 @@ describe("table cell merge", () => {
     expect(splitText.x + splitText.width).toBeLessThanOrEqual(
       splitTable.x + splitTable.table.columns[0].width,
     );
-    expect(splitText.x).toBe(100);
+    expect(splitText.x).toBe(112);
     expect(splitText.originalText).toBe("first\nsecond");
   });
 

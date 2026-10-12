@@ -13,12 +13,14 @@ import {
 import { applyTableOperation, getTableSceneTitle } from "../src/tableScene";
 import { CanvasSceneError } from "../src/sceneOperations";
 import { setCustomTextMetricsProvider } from "../src/textMeasurements";
+import { resolveTableBackgroundTextFontWeight } from "../src/tableRender";
 import { isTableElement } from "../src/typeChecks";
 
 import type {
   ExcalidrawElement,
   ExcalidrawArrowElement,
   ExcalidrawTableElement,
+  ExcalidrawTextElement,
   NonDeleted,
 } from "../src/types";
 import type { TableOperation } from "../src/tableScene";
@@ -306,6 +308,51 @@ describe("完整表格纯场景操作", () => {
     ).toMatchObject({ originalText: "", isDeleted: false });
   });
 
+  it("背景文字出厂为 13px 左对齐垂直居中并带默认内边距", () => {
+    const table = fixture();
+    // 非首行单元格，隔离表头字重对测量的影响
+    const cell = cellAt(table, 1, 0);
+    const result = applyTableOperation([table], {
+      action: "setCellText",
+      target: { tableId: table.id },
+      cellId: cell.id,
+      text: "标签",
+    });
+    const text = result.elements.find((element) => element.type === "text")!;
+    expect(text).toMatchObject({
+      fontSize: 13,
+      textAlign: "left",
+      verticalAlign: "middle",
+    });
+    // 左对齐把文字压在默认内边距（12）处
+    expect(text.x).toBe(table.x + 12);
+    // 单行短文字不撑行高，垂直居中在带内边距的格子里
+    const next = tableIn(result.elements, table.id);
+    expect(next.table.rows[1].height).toBe(56);
+    expect(text.y).toBeCloseTo(table.y + 56 + (56 - text.height) / 2, 5);
+  });
+
+  it("首行背景文字按表头派生 600 字重且不写回元素", () => {
+    const table = fixture();
+    const result = applyTableOperation([table], {
+      action: "setCellText",
+      target: { tableId: table.id },
+      cellId: cellAt(table, 0, 0).id,
+      text: "表头",
+    });
+    const headerText = result.elements.find(
+      (element) => element.type === "text",
+    )! as ExcalidrawTextElement;
+    // 纯渲染派生：元素自身不落 fontWeight
+    expect(headerText.fontWeight).toBe(undefined);
+    const elementsMap = new Map(
+      result.elements.map((element) => [element.id, element]),
+    );
+    expect(resolveTableBackgroundTextFontWeight(headerText, elementsMap)).toBe(
+      600,
+    );
+  });
+
   it("文字自动增长行高并平移后续行成员和绑定文字", () => {
     const table = fixture();
     const member = newElement({
@@ -536,7 +583,7 @@ describe("完整表格纯场景操作", () => {
     });
     const nextTitle = getTableSceneTitle(cleared.elements, table.id)!;
     expect(nextTitle.x).toBe(table.x);
-    expect(nextTitle.y).toBe(table.y - nextTitle.height - 2);
+    expect(nextTitle.y).toBe(table.y - nextTitle.height - 8);
     expect(nextTitle.version).toBe(title.version);
     const empty = applyTableOperation(cleared.elements, {
       action: "setTitle",

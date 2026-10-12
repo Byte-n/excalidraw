@@ -45,6 +45,8 @@
     "tableCopyFormat": "复制单元格格式",
     "tablePasteFormat": "粘贴单元格格式",
     "tableCenterContent": "居中单元格内容",
+    "tableHeaderRow": "首行表头",
+    "tableTitleAlign": "标题对齐",
     "copyStyles": "拷贝样式",
     "pasteStyles": "粘贴样式",
     "stroke": "描边",

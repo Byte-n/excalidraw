@@ -79,7 +79,10 @@ import {
   getStickyNotePathCommands,
   type StickyNotePathCommand,
 } from "./stickyNote";
-import { drawTableGridOnCanvas } from "./tableRender";
+import {
+  drawTableGridOnCanvas,
+  resolveTableBackgroundTextFontWeight,
+} from "./tableRender";
 
 import type {
   ExcalidrawElement,
@@ -247,6 +250,13 @@ export interface ExcalidrawElementWithCanvas {
   canvasOffsetY: number;
   imageCrop: ExcalidrawImageElement["crop"] | null;
   containingFrameOpacity: number;
+  /**
+   * Font weight derived from the owning table (header band) at cache time,
+   * `null` for non-table texts. Compared on every render: the table element
+   * is not part of the cache key, so a header toggle must regenerate the
+   * bitmap even though the text element itself is untouched.
+   */
+  derivedFontWeight: number | null;
 }
 
 const cappedElementCanvasSize = (
@@ -310,6 +320,7 @@ const generateElementCanvas = (
   zoom: Zoom,
   renderConfig: StaticCanvasRenderConfig,
   appState: StaticCanvasAppState | InteractiveCanvasAppState,
+  derivedFontWeight: number | null,
 ): ExcalidrawElementWithCanvas | null => {
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d")!;
@@ -362,6 +373,7 @@ const generateElementCanvas = (
     context,
     renderConfig,
     isTextElement(element) ? getContainerElement(element, elementsMap) : null,
+    derivedFontWeight,
   );
 
   context.restore();
@@ -377,6 +389,7 @@ const generateElementCanvas = (
     containingFrameOpacity:
       getContainingFrame(element, elementsMap)?.opacity || 100,
     imageCrop: isImageElement(element) ? element.crop : null,
+    derivedFontWeight,
   };
 };
 
@@ -543,6 +556,9 @@ const drawElementOnCanvas = (
   // the container a text element is bound to (null for free text). Used only
   // to restyle arrow labels at draw time without mutating element data.
   boundContainerElement: ExcalidrawElement | null = null,
+  // the weight a table cell's background text derives from its owning table
+  // (header band) — null/undefined keeps the element's own `fontWeight`
+  resolvedFontWeight: number | null = null,
 ) => {
   switch (element.type) {
     case "stickynote": {
@@ -760,7 +776,7 @@ const drawElementOnCanvas = (
         context.font = getFontString({
           fontSize,
           fontFamily: element.fontFamily,
-          fontWeight: element.fontWeight,
+          fontWeight: resolvedFontWeight ?? element.fontWeight,
         });
         context.fillStyle = applyDarkModeFilter(
           element.strokeColor,
@@ -837,12 +853,17 @@ const generateElementWithCanvas = (
   const containingFrameOpacity =
     getContainingFrame(element, elementsMap)?.opacity || 100;
 
+  const derivedFontWeight = isTextElement(element)
+    ? resolveTableBackgroundTextFontWeight(element, elementsMap) ?? null
+    : null;
+
   if (
     !prevElementWithCanvas ||
     shouldRegenerateBecauseZoom ||
     prevElementWithCanvas.theme !== appState.theme ||
     prevElementWithCanvas.imageCrop !== imageCrop ||
-    prevElementWithCanvas.containingFrameOpacity !== containingFrameOpacity
+    prevElementWithCanvas.containingFrameOpacity !== containingFrameOpacity ||
+    prevElementWithCanvas.derivedFontWeight !== derivedFontWeight
   ) {
     const elementWithCanvas = generateElementCanvas(
       element,
@@ -850,6 +871,7 @@ const generateElementWithCanvas = (
       zoom,
       renderConfig,
       appState,
+      derivedFontWeight,
     );
 
     if (!elementWithCanvas) {
@@ -1412,6 +1434,10 @@ const drawElement = (
             isTextElement(element)
               ? getContainerElement(element, allElementsMap)
               : null,
+            isTextElement(element)
+              ? resolveTableBackgroundTextFontWeight(element, allElementsMap) ??
+                  null
+              : null,
           );
         }
 
@@ -1483,6 +1509,8 @@ const drawElement = (
             appState.zoom,
             renderConfig,
             appState,
+            // image-only path — text font weight derivation does not apply
+            null,
           );
 
           if (uncroppedElementCanvas) {

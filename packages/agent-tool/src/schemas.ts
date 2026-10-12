@@ -270,6 +270,7 @@ const tableStyle = z
     gridWidth: finite.nonnegative().nullable().optional(),
     gridStyle: z.enum(["solid", "dashed", "dotted"]).nullable().optional(),
     clipContent: z.boolean().nullable().optional(),
+    header: z.boolean().nullable().optional(),
     title: tableStyleTitle.optional(),
   })
   .strict()

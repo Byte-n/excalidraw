@@ -1,4 +1,8 @@
-import { getFontString, invariant } from "@excalidraw/common";
+import {
+  getFontString,
+  invariant,
+  TABLE_CELL_TEXT_FONT_SIZE,
+} from "@excalidraw/common";
 
 import { newTableElement, newTextElement } from "./newElement";
 import { getIndexedTableCellChildren } from "./tableChildrenIndex";
@@ -142,7 +146,7 @@ export const getTableSceneTitlePosition = (
         : align === "end"
         ? table.width - title.width
         : 0),
-    y: table.y - (table.table.style?.title?.gap ?? 2) - title.height,
+    y: table.y - (table.table.style?.title?.gap ?? 8) - title.height,
   };
 };
 
@@ -259,7 +263,10 @@ export const setTableSceneCellText = (
       x: table.x,
       y: table.y,
       text,
-      textAlign: "center",
+      fontSize: TABLE_CELL_TEXT_FONT_SIZE,
+      // platform-document defaults: left/middle at 13px with the shared cell
+      // padding (applied at layout time, not stored here)
+      textAlign: "left",
       verticalAlign: "middle",
       autoResize: false,
       containerRef: {

@@ -32,6 +32,7 @@ const TABLE_STYLE_KEYS = new Set<string>([
   "gridWidth",
   "gridStyle",
   "clipContent",
+  "header",
   "title",
 ]);
 const BACKGROUND_TEXT_STYLE_KEYS = new Set<string>([
@@ -96,7 +97,13 @@ const assertStyle = (
         throw new Error(`Invalid ${label} ${key}`);
       }
     } else if (
-      ["clipContent", "italic", "underline", "strikethrough"].includes(key)
+      [
+        "clipContent",
+        "italic",
+        "underline",
+        "strikethrough",
+        "header",
+      ].includes(key)
     ) {
       if (typeof value !== "boolean") {
         throw new Error(`Invalid ${label} ${key}`);

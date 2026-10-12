@@ -1,7 +1,9 @@
-import { TABLE_STRUCTURE_RAIL_OFFSET } from "@excalidraw/common";
+import { TABLE_STRUCTURE_RAIL_OFFSET, getFontString } from "@excalidraw/common";
+import { measureText } from "@excalidraw/element";
 import {
   getTableSceneTitle,
   getTableSceneTitlePosition,
+  positionTableSceneTitle,
   setTableSceneTitle,
 } from "@excalidraw/element/tableScene";
 
@@ -12,6 +14,10 @@ import type {
 
 import type App from "../App";
 
+/** Design spec (phase-6): table titles are created at 12px / weight 500. */
+const TABLE_TITLE_FONT_SIZE = 12;
+const TABLE_TITLE_FONT_WEIGHT = 500;
+
 export const getTableTitle = getTableSceneTitle;
 
 export const getTableTitleBar = (
@@ -21,7 +27,7 @@ export const getTableTitleBar = (
   fontSize: number,
 ) => {
   const lineHeight = title?.height ?? fontSize * 1.25;
-  const gap = table.table.style?.title?.gap ?? 2;
+  const gap = table.table.style?.title?.gap ?? 8;
   const y = title
     ? getTableSceneTitlePosition(table, title).y
     : table.y - (TABLE_STRUCTURE_RAIL_OFFSET + 9 + gap) / zoom - lineHeight;
@@ -77,6 +83,23 @@ export const startTableTitleEditing = (
     title = setTableSceneTitle(app.scene, table, "Title", {
       fontFamily: app.state.currentItemFontFamily,
     });
+    // setTableSceneTitle only takes a fontFamily option; the design-spec
+    // 12px/500 title look is applied here and the title re-positioned for
+    // its new measured height
+    app.scene.mutateElement(title, {
+      fontSize: TABLE_TITLE_FONT_SIZE,
+      fontWeight: TABLE_TITLE_FONT_WEIGHT,
+      ...measureText(
+        title.text,
+        getFontString({
+          fontFamily: title.fontFamily,
+          fontSize: TABLE_TITLE_FONT_SIZE,
+          fontWeight: TABLE_TITLE_FONT_WEIGHT,
+        }),
+        title.lineHeight,
+      ),
+    });
+    positionTableSceneTitle(app.scene, table);
     app.scene.triggerUpdate();
   }
   app.setState({ editingTextElement: title });

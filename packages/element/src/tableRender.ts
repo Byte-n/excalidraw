@@ -11,9 +11,12 @@ import type {
 } from "@excalidraw/excalidraw/types";
 
 import { getTableCellBounds } from "./tableStruct";
+import { isTableElement } from "./typeChecks";
 
 import type {
+  ElementsMap,
   ExcalidrawTableElement,
+  ExcalidrawTextElement,
   TableDataV1,
   TableCellData,
 } from "./types";
@@ -47,33 +50,100 @@ export const getTableHorizontalGridOffsets = (
 };
 
 /**
+ * Whether the cell renders as part of the first-row header band: the table
+ * has the band enabled (absent `style.header` means on) and the cell — always
+ * a merge anchor, covered cells are skipped by callers — sits in the first
+ * row. A merge anchored in the first row keeps the band fill across its whole
+ * span.
+ */
+export const isTableHeaderRowCell = (
+  table: Pick<TableDataV1, "rows" | "style">,
+  cell: Pick<TableCellData, "rowId">,
+): boolean => table.style?.header !== false && cell.rowId === table.rows[0]?.id;
+
+/** Header-band text weight — applied only when nothing explicit overrides. */
+const TABLE_HEADER_ROW_FONT_WEIGHT = 600;
+
+/**
+ * Effective font weight of a cell's background text: an explicit row or
+ * column `backgroundText.fontWeight`, else the text element's own
+ * `fontWeight`, else 600 inside the header band. Pure derivation — nothing is
+ * written back to the element, so toggling `TableStyle.header` is
+ * side-effect free. Falls back to the element's own weight for non-cell texts
+ * (e.g. arrow labels), so callers can use it unconditionally.
+ */
+export const resolveTableBackgroundTextFontWeight = (
+  element: ExcalidrawTextElement,
+  elementsMap: ElementsMap,
+): number | undefined => {
+  const ref = element.containerRef;
+  if (!ref || ref.kind !== "tableCell" || ref.role !== "backgroundText") {
+    return element.fontWeight;
+  }
+  const tableElement = elementsMap.get(ref.elementId);
+  if (!tableElement || !isTableElement(tableElement)) {
+    return element.fontWeight;
+  }
+  const { table } = tableElement;
+  const raw = table.cells.find((candidate) => candidate.id === ref.cellId);
+  // a stale ref may point at a covered cell; the anchor owns the merged block
+  const cell = raw?.mergedInto
+    ? table.cells.find((candidate) => candidate.id === raw.mergedInto) ?? raw
+    : raw;
+  if (!cell) {
+    return element.fontWeight;
+  }
+  return (
+    table.rows.find((row) => row.id === cell.rowId)?.style?.backgroundText
+      ?.fontWeight ??
+    table.columns.find((column) => column.id === cell.columnId)?.style
+      ?.backgroundText?.fontWeight ??
+    element.fontWeight ??
+    (isTableHeaderRowCell(table, cell)
+      ? TABLE_HEADER_ROW_FONT_WEIGHT
+      : undefined)
+  );
+};
+
+/**
  * Resolved cell fill: the cell's `style.backgroundColor` override, else the
- * table default. Returns `null` when the cell paints no background — the
- * default, so the canvas shows through and the default state stays
- * low-contrast. Colors are light-theme values transformed for the dark theme
- * the same way element and `FRAME_STYLE` colors are.
+ * row/column/table background, else the header band fill for first-row cells.
+ * Returns `null` when the cell paints no rect of its own — either because the
+ * override is transparent or because it resolves to the body base color,
+ * which `drawTableGridOnCanvas` already paints as one rounded rect. Colors
+ * are light-theme values transformed for the dark theme the same way element
+ * and `FRAME_STYLE` colors are.
  */
 export const getTableCellFillColor = (
   cell: TableCellData,
   isDark: boolean,
   table?: TableDataV1,
 ): string | null => {
-  const color =
+  const override =
     cell.style.backgroundColor ??
     table?.rows.find((row) => row.id === cell.rowId)?.style?.backgroundColor ??
     table?.columns.find((column) => column.id === cell.columnId)?.style
       ?.backgroundColor ??
     table?.style?.backgroundColor ??
-    TABLE_STYLE.backgroundColor;
-  if (isTransparent(color)) {
+    // lowest-priority non-default: the header band fill
+    (table && isTableHeaderRowCell(table, cell)
+      ? TABLE_STYLE.headerFill
+      : undefined);
+  if (!override || isTransparent(override)) {
     return null;
   }
-  return resolveTableColor(color, isDark);
+  const color = resolveTableColor(override, isDark);
+  return color === resolveTableColor(TABLE_STYLE.backgroundColor, isDark)
+    ? null
+    : color;
 };
 
 export const resolveTableColor = (color: string, isDark: boolean): string => {
   if (color === "token:surface") {
     return isDark ? "#262626" : "#ffffff";
+  }
+  if (color === "token:header") {
+    return isDark ? "#2A2B30" : "#F5F6F7";
   }
   if (color === "token:text") {
     return isDark ? "#f5f5f5" : "#1e1e1e";
@@ -99,7 +169,10 @@ const getTableRenderData = (table: TableDataV1) => {
   const hasFill = (color?: string) => !!color && !isTransparent(color);
   const data = {
     segments: buildTableGridSegments(table),
+    // the header band always fills the first row, so an enabled header turns
+    // the cell-fill pass on even without any explicit background
     hasCellFill:
+      table.style?.header !== false ||
       hasFill(table.style?.backgroundColor) ||
       table.rows.some((row) => hasFill(row.style?.backgroundColor)) ||
       table.columns.some((column) => hasFill(column.style?.backgroundColor)) ||
@@ -187,6 +260,24 @@ const getVisibleLocalBounds = (context: CanvasRenderingContext2D) => {
 };
 
 /**
+ * Traces the table body outline (rounded when the context supports it) into
+ * the current path. `CanvasRenderingContext2D.roundRect` is optional in our
+ * TS lib target, so it degrades to a plain rect rather than throwing.
+ */
+const traceTableBodyPath = (
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+) => {
+  context.beginPath();
+  if (context.roundRect) {
+    context.roundRect(0, 0, width, height, TABLE_STYLE.radius);
+  } else {
+    context.rect(0, 0, width, height);
+  }
+};
+
+/**
  * Paints the table grid in table-local coordinates — the caller positions the
  * context at the element beforehand. Like frames, tables bypass the roughjs
  * shape cache and draw themselves directly.
@@ -210,6 +301,15 @@ export const drawTableGridOnCanvas = (
     appState.zoom.value;
   const visible = getVisibleLocalBounds(context);
   const renderData = getTableRenderData(table);
+
+  // (0) body base: the rounded surface every cell shows through. The same
+  // path becomes the clip for cell fills, so corner cells (and the header
+  // band's top corners) follow the body radius instead of overflowing it.
+  context.save();
+  traceTableBodyPath(context, width, height);
+  context.fillStyle = resolveTableColor(TABLE_STYLE.backgroundColor, isDark);
+  context.fill();
+  context.clip();
 
   // (1) cell backgrounds, so grid lines stay visible above them
   for (const cell of renderData.hasCellFill ? table.cells : []) {
@@ -237,6 +337,8 @@ export const drawTableGridOnCanvas = (
     context.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
   }
 
+  context.restore();
+
   // (2) interior grid lines
   context.lineWidth = gridLineWidth;
   context.strokeStyle = table.style?.gridColor
@@ -262,7 +364,7 @@ export const drawTableGridOnCanvas = (
   }
   context.stroke();
 
-  // (3) outer border
+  // (3) outer border, rounded like the body base
   context.lineWidth = lineWidth;
   context.strokeStyle = table.style?.borderColor
     ? resolveTableColor(table.style.borderColor, isDark)
@@ -271,6 +373,7 @@ export const drawTableGridOnCanvas = (
   context.setLineDash(
     borderDash === "dashed" ? [6, 4] : borderDash === "dotted" ? [1, 3] : [],
   );
-  context.strokeRect(0, 0, width, height);
+  traceTableBodyPath(context, width, height);
+  context.stroke();
   context.setLineDash([]);
 };

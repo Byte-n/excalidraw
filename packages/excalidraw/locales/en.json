@@ -53,6 +53,8 @@
     "tableCopyFormat": "Copy cell format",
     "tablePasteFormat": "Paste cell format",
     "tableCenterContent": "Center cell content",
+    "tableHeaderRow": "Header row",
+    "tableTitleAlign": "Title align",
     "copyStyles": "Copy styles",
     "pasteStyles": "Paste styles",
     "stroke": "Stroke",

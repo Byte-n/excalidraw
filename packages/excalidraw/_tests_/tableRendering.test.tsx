@@ -204,7 +204,7 @@ describe("table canvas rendering", () => {
     expect(callsOf(draw(), "clip").length).toBeGreaterThan(0);
   });
 
-  it("renders the grid without throwing and paints no default cell fills", () => {
+  it("renders the rounded body and the default header band", () => {
     const table = API.createElement({ type: "table" });
     const { draw } = setup([table]);
 
@@ -213,12 +213,15 @@ describe("table canvas rendering", () => {
       calls = draw() as any;
     }).not.toThrow();
 
-    // interior grid lines and the outer border; the only fillRect is the
-    // canvas background (transparent cell default keeps the grid
-    // low-contrast)
+    // interior grid lines; the body base and the border are traced rounded
+    // paths (roundRect degrades to rect under the canvas mock)
     expect(callsOf(calls, "lineTo").length).toBeGreaterThan(0);
-    expect(callsOf(calls, "strokeRect").length).toBe(1);
-    expect(callsOf(calls, "fillRect").length).toBe(1);
+    expect(callsOf(calls, "strokeRect").length).toBe(0);
+    expect(callsOf(calls, "rect")).toContainEqual([0, 0, 480, 168]);
+    // canvas background + the three header-band cells; data cells show the
+    // body base through and paint no rects of their own
+    expect(callsOf(calls, "fillRect").length).toBe(4);
+    expect(callsOf(calls, "set:fillStyle")).toContainEqual(["#F5F6F7"]);
   });
 
   it("draws the 3x3 grid lines at the row/column boundaries", () => {
@@ -254,7 +257,13 @@ describe("table canvas rendering", () => {
     const calls = draw();
 
     const fills = callsOf(calls, "fillRect").filter((args) => args[2] === 160);
-    expect(fills).toEqual([[0, 0, 160, 56]]);
+    // the overridden cell plus the two other header-band cells of the first
+    // row (the header band fill is on by default)
+    expect(fills).toEqual([
+      [0, 0, 160, 56],
+      [160, 0, 160, 56],
+      [320, 0, 160, 56],
+    ]);
     expect(callsOf(calls, "set:fillStyle")).toContainEqual(["#ffc9c9"]);
     // the grid strokes after the fills, so lines stay visible above them
     const firstFill = calls.findIndex(
@@ -354,16 +363,18 @@ describe("table canvas rendering", () => {
 
     // both the table (oversized) and the cell member (overlapping the frame
     // edge) clip against the frame's 100x100 rect — resolving the cell member
-    // to the table instead would clip to the table's 480x168 bounds
+    // to the table instead would clip to the table's 480x168 bounds. The third
+    // clip is the table's own body clip (cell fills clipped into the rounded
+    // body outline)
     const clipShapes = callsOf(calls, "rect").concat(
       callsOf(calls, "roundRect"),
     );
     expect(clipShapes).toEqual(
       expect.arrayContaining([expect.arrayContaining([0, 0, 100, 100])]),
     );
-    expect(clipShapes.every((args) => args[2] === 100 && args[3] === 100)).toBe(
-      true,
-    );
-    expect(callsOf(calls, "clip").length).toBe(2);
+    expect(
+      clipShapes.filter((args) => args[2] === 100 && args[3] === 100).length,
+    ).toBe(2);
+    expect(callsOf(calls, "clip").length).toBe(3);
   });
 });

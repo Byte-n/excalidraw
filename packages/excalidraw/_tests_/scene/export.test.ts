@@ -843,12 +843,18 @@ describe("exporting tables", () => {
     });
 
     const group = svg.querySelector(`g[data-id="${table.id}"]`)!;
-    const fill = group.querySelector('rect[fill]:not([fill="none"])')!;
-    expect(fill.getAttribute("fill")).toBe("#ffc9c9");
-    // exactly one painted cell
-    expect(group.querySelectorAll('rect[fill]:not([fill="none"])').length).toBe(
-      1,
+    const fills = Array.from(
+      group.querySelectorAll('rect[fill]:not([fill="none"])'),
     );
+    // the white body base + the overridden cell + the two other header-band
+    // cells of the first row (the header band fill is on by default)
+    expect(fills.length).toBe(4);
+    expect(fills.map((rect) => rect.getAttribute("fill"))).toEqual([
+      "#ffffff",
+      "#ffc9c9",
+      "#F5F6F7",
+      "#F5F6F7",
+    ]);
   });
 
   it("themes the grid for dark mode like the canvas", async () => {
@@ -874,8 +880,10 @@ describe("exporting tables", () => {
     expect(line.getAttribute("stroke")).toBe(
       applyDarkModeFilter(TABLE_STYLE.gridColor, true),
     );
-    const fill = group.querySelector('rect[fill]:not([fill="none"])')!;
-    expect(fill.getAttribute("fill")).toBe("#ffc9c9");
+    const fill = Array.from(
+      group.querySelectorAll('rect[fill]:not([fill="none"])'),
+    ).find((rect) => rect.getAttribute("fill") === "#ffc9c9");
+    expect(fill).not.toBeUndefined();
   });
 
   it("keeps the grid unrotated when an angle is supplied", async () => {

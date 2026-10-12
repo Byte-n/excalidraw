@@ -42,6 +42,7 @@ import {
   getTableGridSegments,
   getTableHeight,
   getTableWidth,
+  resolveTableBackgroundTextFontWeight,
   resolveTableColor,
 } from "@excalidraw/element";
 
@@ -850,7 +851,43 @@ const renderElementToSvg = (
         group.setAttribute("opacity", `${tableOpacity}`);
       }
 
+      // (0) body base: the rounded surface every cell shows through, mirroring
+      // `drawTableGridOnCanvas`; cell fills are clipped into the same rounded
+      // outline so corner cells follow the body radius
+      const body = svgRoot.ownerDocument.createElementNS(SVG_NS, "rect");
+      body.setAttribute("x", "0");
+      body.setAttribute("y", "0");
+      body.setAttribute("width", `${width}`);
+      body.setAttribute("height", `${height}`);
+      body.setAttribute("rx", `${TABLE_STYLE.radius}`);
+      body.setAttribute(
+        "fill",
+        resolveTableColor(TABLE_STYLE.backgroundColor, isDark),
+      );
+      body.setAttribute("stroke", "none");
+      group.appendChild(body);
+
+      const bodyClipId = `table-body-clip-${element.id}`;
+      const bodyClip = svgRoot.ownerDocument.createElementNS(
+        SVG_NS,
+        "clipPath",
+      );
+      bodyClip.setAttribute("id", bodyClipId);
+      const bodyClipRect = svgRoot.ownerDocument.createElementNS(
+        SVG_NS,
+        "rect",
+      );
+      bodyClipRect.setAttribute("x", "0");
+      bodyClipRect.setAttribute("y", "0");
+      bodyClipRect.setAttribute("width", `${width}`);
+      bodyClipRect.setAttribute("height", `${height}`);
+      bodyClipRect.setAttribute("rx", `${TABLE_STYLE.radius}`);
+      bodyClip.appendChild(bodyClipRect);
+      svgRoot.appendChild(bodyClip);
+
       // (1) cell backgrounds, so grid lines stay visible above them
+      const cellFills = svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
+      cellFills.setAttribute("clip-path", `url(#${bodyClipId})`);
       for (const cell of table.cells) {
         if (cell.mergedInto) {
           continue;
@@ -870,8 +907,9 @@ const renderElementToSvg = (
         rect.setAttribute("height", `${bounds.height}`);
         rect.setAttribute("fill", fill);
         rect.setAttribute("stroke", "none");
-        group.appendChild(rect);
+        cellFills.appendChild(rect);
       }
+      group.appendChild(cellFills);
 
       // (2) interior grid lines
       const createGridLine = (
@@ -906,12 +944,13 @@ const renderElementToSvg = (
         createGridLine(x1, y1, x2, y2);
       }
 
-      // (3) outer border
+      // (3) outer border, rounded like the body base
       const border = svgRoot.ownerDocument.createElementNS(SVG_NS, "rect");
       border.setAttribute("x", "0");
       border.setAttribute("y", "0");
       border.setAttribute("width", `${width}`);
       border.setAttribute("height", `${height}`);
+      border.setAttribute("rx", `${TABLE_STYLE.radius}`);
       border.setAttribute("fill", "none");
       border.setAttribute(
         "stroke",
@@ -981,6 +1020,12 @@ const renderElementToSvg = (
             : element.textAlign === "right" || direction === "rtl"
             ? "end"
             : "start";
+        // a table cell's background text derives its weight from the header
+        // band / row / column styles, like the canvas renderer does
+        const fontWeight = resolveTableBackgroundTextFontWeight(
+          element,
+          elementsMap,
+        );
         for (let i = 0; i < lines.length; i++) {
           const text = svgRoot.ownerDocument.createElementNS(SVG_NS, "text");
           text.textContent = lines[i];
@@ -988,8 +1033,8 @@ const renderElementToSvg = (
           text.setAttribute("y", `${i * lineHeightPx + verticalOffset}`);
           text.setAttribute("font-family", getFontFamilyString(element));
           text.setAttribute("font-size", `${element.fontSize}px`);
-          if (element.fontWeight) {
-            text.setAttribute("font-weight", `${element.fontWeight}`);
+          if (fontWeight) {
+            text.setAttribute("font-weight", `${fontWeight}`);
           }
           text.setAttribute(
             "fill",

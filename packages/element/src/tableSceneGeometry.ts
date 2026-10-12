@@ -1,4 +1,4 @@
-import { getFontString } from "@excalidraw/common";
+import { getFontString, TABLE_CELL_TEXT_PADDING } from "@excalidraw/common";
 
 import { getBoundTextElement } from "./textElement";
 import { getIndexedTableCellChildren } from "./tableChildrenIndex";
@@ -7,6 +7,7 @@ import {
   getTableSubtreeElements,
 } from "./tableContainer";
 import { getMemberTranslationsForRows } from "./tableOps";
+import { resolveTableBackgroundTextFontWeight } from "./tableRender";
 import { getTableCellBounds, getTableHeight } from "./tableStruct";
 import {
   isTableElement,
@@ -144,9 +145,15 @@ export const getCellBackgroundTextLayout = (
   elementsMap: ElementsMap,
 ) => {
   const style = getTableBackgroundTextStyle(text, elementsMap);
-  const padding = style?.padding ?? 0;
+  const padding = style?.padding ?? TABLE_CELL_TEXT_PADDING;
   const availableWidth = Math.max(bounds.width - padding * 2, 1);
-  const font = getFontString(text);
+  // measurement must use the same weight the renderer derives (header band
+  // gets 600), otherwise wrapped width and row growth disagree with painting
+  const font = getFontString({
+    fontSize: text.fontSize,
+    fontFamily: text.fontFamily,
+    fontWeight: resolveTableBackgroundTextFontWeight(text, elementsMap),
+  });
   const wrapped = wrapText(text.originalText, font, availableWidth);
   const measured = measureText(wrapped, font, text.lineHeight);
   const width = Math.min(measured.width, availableWidth);
@@ -229,7 +236,8 @@ export const refitCellBackgroundTexts = (
         elementsMap,
       );
       const padding =
-        getTableBackgroundTextStyle(backgroundText, elementsMap)?.padding ?? 0;
+        getTableBackgroundTextStyle(backgroundText, elementsMap)?.padding ??
+        TABLE_CELL_TEXT_PADDING;
       requiredHeights.set(
         row.id,
         Math.max(

@@ -293,4 +293,88 @@ describe("table style controls", () => {
       ).table.cells[0].style.backgroundColor,
     ).toBe(fill);
   });
+
+  it("toggles the first-row header from the table style panel", async () => {
+    await render(<Excalidraw />);
+    const table = API.createElement({ type: "table" });
+    API.setElements([table]);
+    act(() => {
+      API.setAppState({ selectedElementIds: { [table.id]: true } });
+    });
+
+    const panel = document.querySelector(".table-style-actions")!;
+    const toggle = panel.querySelector<HTMLButtonElement>('[role="checkbox"]');
+    expect(toggle).not.toBeNull();
+    expect(panel.textContent).toContain("Header row");
+    // header defaults to on
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+
+    const getStyle = () =>
+      (
+        window.h.elements.find((element) => element.id === table.id) as
+          | typeof table
+          | undefined
+      )?.table.style;
+
+    fireEvent.click(toggle!);
+    expect(getStyle()?.header).toBe(false);
+
+    fireEvent.click(
+      panel.querySelector<HTMLButtonElement>('[role="checkbox"]')!,
+    );
+    expect(getStyle()?.header).toBe(true);
+  });
+
+  it("sets the table title alignment from the table style panel", async () => {
+    await render(<Excalidraw />);
+    const table = API.createElement({ type: "table" });
+    API.setElements([table]);
+    act(() => {
+      API.setAppState({ selectedElementIds: { [table.id]: true } });
+    });
+
+    const panel = document.querySelector(".table-style-actions")!;
+    expect(panel.textContent).toContain("Title align");
+    // start (left) is the default alignment
+    expect(
+      panel.querySelector<HTMLInputElement>(
+        'input[name="table-title-align"]:checked',
+      )?.parentElement,
+    ).toHaveAttribute("title", "Left");
+
+    const getStyle = () =>
+      (
+        window.h.elements.find((element) => element.id === table.id) as
+          | typeof table
+          | undefined
+      )?.table.style;
+
+    // the align patch must merge into the existing style, not replace it
+    fireEvent.click(
+      panel.querySelector<HTMLButtonElement>('[role="checkbox"]')!,
+    );
+    expect(getStyle()?.header).toBe(false);
+
+    fireEvent.click(
+      panel.querySelector<HTMLInputElement>(
+        '[data-testid="table-title-align-center"]',
+      )!.parentElement!,
+    );
+    expect(getStyle()?.title?.align).toBe("center");
+    expect(getStyle()?.header).toBe(false);
+
+    fireEvent.click(
+      panel.querySelector<HTMLInputElement>(
+        '[data-testid="table-title-align-end"]',
+      )!.parentElement!,
+    );
+    expect(getStyle()?.title?.align).toBe("end");
+
+    fireEvent.click(
+      panel.querySelector<HTMLInputElement>(
+        '[data-testid="table-title-align-start"]',
+      )!.parentElement!,
+    );
+    expect(getStyle()?.title?.align).toBe("start");
+  });
 });
