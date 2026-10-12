@@ -15,66 +15,6 @@
       width: 44px;
       height: 44px;
     }
-
-    // 思维导图节点旁的 16px 圆钮：白底主色描边，悬停实心
-    &--mindmap {
-      box-shadow: none;
-      background: transparent;
-      border-radius: 0;
-      padding: 0;
-      gap: 0;
-      width: 16px;
-      height: 16px;
-      transform-origin: center;
-
-      .ToolIcon__MagicButton {
-        display: block;
-
-        &:focus-visible {
-          box-shadow: none;
-        }
-
-        &:active {
-          background-color: transparent;
-        }
-      }
-
-      .ToolIcon__MagicButton .ToolIcon__icon {
-        box-sizing: border-box;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--island-bg-color);
-        border: 1.25px solid var(--color-selection);
-        color: var(--color-selection);
-
-        svg {
-          width: 10px;
-          height: 10px;
-          color: var(--color-selection);
-        }
-      }
-
-      .ToolIcon__MagicButton:hover .ToolIcon__icon,
-      .ToolIcon__MagicButton:active .ToolIcon__icon {
-        background: var(--color-selection);
-        border-color: var(--color-selection);
-
-        svg {
-          color: #fff;
-        }
-      }
-
-      .ToolIcon__MagicButton.is-mobile .ToolIcon__icon {
-        width: 44px;
-        height: 44px;
-
-        svg {
-          width: 18px;
-          height: 18px;
-        }
-      }
-    }
   }
 
   // 思维导图编辑态快捷键提示（节点下方，不响应指针）

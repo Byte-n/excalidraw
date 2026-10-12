@@ -2,6 +2,7 @@ import { syncInvalidIndices } from "@excalidraw/element";
 
 import {
   buildMindmapGraphIndex,
+  MINDMAP_LEVEL_DISTANCE,
   newMindmapEdgeElement,
   newMindmapNodeElement,
 } from "@excalidraw/element";
@@ -55,7 +56,9 @@ describe("Mindmap collaboration reconciliation", () => {
     const index = buildMindmapGraphIndex(result.elements, "graph");
 
     expect(index.edgeByChildId.get(child.id)?.parentId).toBe(root.id);
-    expect(index.nodes.get(child.id)?.x).toBe(root.x + root.width + 80);
+    expect(index.nodes.get(child.id)?.x).toBe(
+      root.x + root.width + MINDMAP_LEVEL_DISTANCE,
+    );
     expect(result.conflicts).toEqual([
       { graphId: "graph", nodeIds: [child.id] },
     ]);

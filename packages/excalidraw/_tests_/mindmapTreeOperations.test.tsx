@@ -197,7 +197,10 @@ describe("Mindmap P02 树操作界面", () => {
       h.app.getElementAtPosition(hidden.x + 20, hidden.y + 20)?.id,
     ).not.toBe("a1");
     // 折叠徽标点击展开
-    const badge = getMindmapCollapseAffordance(node("a"), "left-to-right").badge;
+    const badge = getMindmapCollapseAffordance(
+      node("a"),
+      "left-to-right",
+    ).badge;
     pointer.clickAt(badge.center[0], badge.center[1]);
     expect(
       getMindmapHiddenElementIds(h.app.scene.getNonDeletedElements()).size,
@@ -420,9 +423,22 @@ describe("Mindmap P02 树操作界面", () => {
 
   it("圈选整图和普通图形时保留选区外的思维导图", () => {
     const mouse = new Pointer("mouse");
-    mouse.downAt(50, 50);
-    mouse.moveTo(60, 60);
-    mouse.moveTo(930, 500);
+    // 圈选框随布局常量（层级/同级间距）动态计算，foreign（y=800）保持在外
+    const boxed = h.app.scene
+      .getNonDeletedElements()
+      .filter(
+        (element) =>
+          element.id === "rectangle" ||
+          (isMindmapNodeElement(element) && element.graphId === "graph"),
+      );
+    const minX = Math.min(...boxed.map((element) => element.x)) - 30;
+    const minY = Math.min(...boxed.map((element) => element.y)) - 30;
+    mouse.downAt(minX, minY);
+    mouse.moveTo(minX + 10, minY + 10);
+    mouse.moveTo(
+      Math.max(...boxed.map((element) => element.x + element.width)) + 30,
+      Math.max(...boxed.map((element) => element.y + element.height)) + 30,
+    );
     mouse.upAt();
     expect(h.state.selectedElementIds.root).toBe(true);
     expect(h.state.selectedElementIds.rectangle).toBe(true);

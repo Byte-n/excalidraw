@@ -2484,11 +2484,17 @@ class App extends React.Component<AppProps, AppState> {
     pointerDownState: PointerDownState,
     event: MouseEvent | KeyboardEvent,
   ): boolean => {
-    return pointerSelectionController.maybeHandleResize(
+    const handled = pointerSelectionController.maybeHandleResize(
       this,
       pointerDownState,
       event,
     );
+    if (handled) {
+      // 脑图节点尺寸每帧变化后实时重排：锚定被拖节点（对位不动），
+      // 兄弟/子孙/派生边围绕它让位。不写历史，释放时统一捕获。
+      this.mindmap.relayoutResizedNode(true);
+    }
+    return handled;
   };
   private getContextMenuItems = (type: "canvas" | "element") =>
     contextMenuController.getContextMenuItems(this, type);

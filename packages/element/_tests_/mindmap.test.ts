@@ -10,6 +10,8 @@ import {
   computeMindmapVisibility,
   getMindmapNodeTheme,
   MINDMAP_BRANCH_PALETTE,
+  MINDMAP_LEVEL_DISTANCE,
+  MINDMAP_SIBLING_DISTANCE,
   navigateMindmap,
   buildMindmapGraphIndex,
   compareMindmapNodes,
@@ -242,6 +244,29 @@ describe("mindmap 正式元素模型", () => {
     const pill = mindmapShapeData("pill");
     expect(assertMindmapShapeData(pill)).toBe(pill);
     expect(assertBaseShapeData(pill)).toBe(pill);
+  });
+
+  it("根节点矩形按 roundness 渲染圆角，未设置时保持直角", () => {
+    const rounded = node("root", null, {
+      shape: mindmapShapeData("rectangle"),
+      roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
+    });
+    const sharp = node("root", null, {
+      shape: mindmapShapeData("rectangle"),
+      roundness: null,
+    });
+    const roundedShape = ShapeCache.generateElementShape(rounded, null);
+    const sharpShape = ShapeCache.generateElementShape(sharp, null);
+    if (
+      !roundedShape ||
+      Array.isArray(roundedShape) ||
+      !sharpShape ||
+      Array.isArray(sharpShape)
+    ) {
+      throw new Error("Expected one drawable");
+    }
+    expect(roundedShape.shape).toBe("path");
+    expect(sharpShape.shape).toBe("rectangle");
   });
 });
 
@@ -641,10 +666,11 @@ describe("mindmap 纯布局与影子树", () => {
     const layout = layoutMindmap(indexOf(elements));
     const map = arrayToMap(layout.elements);
     expect(map.get("root")).toMatchObject({ x: 100, y: 100 });
-    expect(map.get("a")!.x).toBe(280);
-    expect(map.get("a")!.y + map.get("a")!.height + 24).toBeLessThanOrEqual(
-      map.get("b")!.y,
-    );
+    const root = map.get("root")!;
+    expect(map.get("a")!.x).toBe(root.x + root.width + MINDMAP_LEVEL_DISTANCE);
+    expect(
+      map.get("a")!.y + map.get("a")!.height + MINDMAP_SIBLING_DISTANCE,
+    ).toBeLessThanOrEqual(map.get("b")!.y);
     expect(layout.edges).toHaveLength(3);
     for (const edge of layout.edges) {
       const parent = map.get(edge.parentId)!;
@@ -682,7 +708,7 @@ describe("mindmap 纯布局与影子树", () => {
     );
     expect(
       layout.elements.find((element) => element.id === "b")!.y,
-    ).toBeGreaterThanOrEqual(bottom + 24);
+    ).toBeGreaterThanOrEqual(bottom + MINDMAP_SIBLING_DISTANCE);
   });
 
   it("折叠只影响可见布局，隐藏节点、文字和 edge 保留在输入中", () => {
@@ -787,7 +813,7 @@ describe("mindmap 纯布局与影子树", () => {
           sign > 0
             ? childStart - (parentStart + parentSize)
             : parentStart - (childStart + childSize);
-        expect(gap).toBe(80);
+        expect(gap).toBe(MINDMAP_LEVEL_DISTANCE);
       }
     },
   );
@@ -968,7 +994,10 @@ describe("mindmap 表格缩放冻结（phase-1 固定布局适配）", () => {
     // 钉住节点的几何原样保留（引用不变，布局不重排）
     expect(map.get("a")).toBe(pinned.find((element) => element.id === "a"));
     // 未冻结的兄弟仍按常规布局定位
-    expect(map.get("b")!.x).toBe(280);
+    const pinnedRoot = map.get("root")!;
+    expect(map.get("b")!.x).toBe(
+      pinnedRoot.x + pinnedRoot.width + MINDMAP_LEVEL_DISTANCE,
+    );
     // 连接线端点跟随钉住位置
     const edge = layout.edges.find((candidate) => candidate.childId === "a")!;
     expect(edge.x + edge.points[3][0]).toBe(500);
@@ -987,6 +1016,29 @@ describe("mindmap 表格缩放冻结（phase-1 固定布局适配）", () => {
       expect(element).toBe(frozen.find((c) => c.id === element.id));
     }
     expect(second.edges).toEqual(first.edges);
+  });
+
+  it("live resize 锚定节点时兄弟从真实边缘让位", () => {
+    // 模拟拖右下角 resize：a 锚定左上角，y 不变、高度增大
+    const resized = { ...node("a", "root"), height: 70 };
+    const elements = [
+      node("root"),
+      resized,
+      node("b", "root", { order: "a1" as FractionalIndex }),
+      node("c", "a"),
+    ];
+    const layout = layoutMindmap(indexOf(elements), {}, new Set(["a"]));
+    const map = arrayToMap(layout.elements);
+    // 被 pin 节点几何原样保留
+    expect(map.get("a")).toBe(resized);
+    // 兄弟 b 从 a 的真实下边缘让位，而不是按假想槽位重叠
+    expect(map.get("b")!.y).toBe(
+      resized.y + resized.height + MINDMAP_SIBLING_DISTANCE,
+    );
+    // a 的子孙相对 a 的真实位置布局
+    expect(map.get("c")!.x).toBe(
+      resized.x + resized.width + MINDMAP_LEVEL_DISTANCE,
+    );
   });
 
   describe("冻结节点的文字固定管线", () => {

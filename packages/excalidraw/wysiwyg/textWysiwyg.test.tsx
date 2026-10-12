@@ -1785,7 +1785,6 @@ describe("textWysiwyg", () => {
           link: null,
           locked: false,
           opacity: 100,
-          roughness: 0,
           roundness: null,
           strokeColor: "#1f2329",
           strokeStyle: "solid",

@@ -197,6 +197,10 @@ const handleDimensionChange: DragInputCallbackType<
         },
       );
 
+      // 脑图节点位置由布局决定：尺寸输入后重排所在图，让兄弟让位并刷新
+      // 派生边。先于 DragInput 的提交捕获执行，与尺寸变更并入同一条历史。
+      app.mindmap.relayoutResizedNode();
+
       // Handle frame membership update for resized frames
       if (isFrameLikeElement(latestElement)) {
         const nextElementsInFrame = getElementsInResizingFrame(
@@ -264,6 +268,9 @@ const handleDimensionChange: DragInputCallbackType<
           shouldMaintainAspectRatio: keepAspectRatio,
         },
       );
+
+      // 同输入提交分支：脑图节点尺寸变化后重排所在图
+      app.mindmap.relayoutResizedNode();
 
       // Handle highlighting frame element candidates
       if (isFrameLikeElement(latestElement)) {

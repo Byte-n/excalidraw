@@ -63,10 +63,10 @@ import {
   isSelectedViaGroup,
   selectGroupsFromGivenElements,
   traceMindmapEdgePath,
+  getCompletelySelectedMindmapGraphElementIds,
   getMindmapCollapseAffordance,
+  getMindmapAddButtonAffordances,
   getMindmapLayoutConfig,
-  getMindmapShapeId,
-  getCornerRadius,
   MINDMAP_COLLAPSE_STUB_LENGTH,
 } from "@excalidraw/element";
 
@@ -1337,6 +1337,83 @@ const renderMindmapCollapseAffordances = (
   }
 };
 
+/**
+ * 思维导图「+」新增节点按钮：子侧/同级侧，仅随单选出现。
+ * 目标节点与显隐判定由 app.mindmap.getAddButtonTargetNode() 统一收口，
+ * 与指针命中（hitTestAddButton）共用，保证所见即可点。
+ */
+const renderMindmapAddButtons = (
+  context: CanvasRenderingContext2D,
+  app: AppClassProperties,
+  appState: InteractiveCanvasAppState,
+  allElementsMap: ElementsMap,
+) => {
+  const node = app.mindmap.getAddButtonTargetNode();
+  if (!node || !allElementsMap.has(node.id)) {
+    return;
+  }
+  let root: ExcalidrawMindmapNodeElement | undefined;
+  let hasChildren = false;
+  for (const element of allElementsMap.values()) {
+    if (!isMindmapNodeElement(element)) {
+      continue;
+    }
+    if (element.parentId === node.id) {
+      hasChildren = true;
+    }
+    if (element.graphId === node.graphId && element.role === "root") {
+      root = element;
+    }
+  }
+  const { direction } = getMindmapLayoutConfig(root);
+  const collapsedCount =
+    app.scene.getMindmapCollapsedCounts().get(node.id) ?? 0;
+  const childSideAffordance =
+    node.collapsed && collapsedCount > 0
+      ? ("badge" as const)
+      : hasChildren
+      ? ("minus" as const)
+      : null;
+  const affordances = getMindmapAddButtonAffordances(
+    node,
+    direction,
+    childSideAffordance,
+  );
+  const hovered = app.mindmap.getHoveredAddButton();
+  const isDark = appState.theme === THEME.DARK;
+  const branchColor = applyDarkModeFilter(node.strokeColor, isDark);
+  const fillColor = applyDarkModeFilter("#ffffff", isDark);
+
+  const kinds =
+    node.role === "root"
+      ? (["child"] as const)
+      : (["child", "sibling"] as const);
+  context.save();
+  context.translate(appState.scrollX, appState.scrollY);
+  for (const kind of kinds) {
+    const { center, radius } = affordances[kind];
+    const isHovered = hovered === kind;
+    context.beginPath();
+    context.arc(center[0], center[1], radius, 0, Math.PI * 2);
+    context.fillStyle = isHovered ? branchColor : fillColor;
+    context.fill();
+    context.lineWidth = 1.25;
+    context.strokeStyle = branchColor;
+    context.stroke();
+    // 「+」两笔
+    context.lineWidth = 1.5;
+    context.lineCap = "round";
+    context.strokeStyle = isHovered ? fillColor : branchColor;
+    context.beginPath();
+    context.moveTo(center[0] - 3.5, center[1]);
+    context.lineTo(center[0] + 3.5, center[1]);
+    context.moveTo(center[0], center[1] - 3.5);
+    context.lineTo(center[0], center[1] + 3.5);
+    context.stroke();
+  }
+  context.restore();
+};
+
 const renderFrameHighlight = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
@@ -2565,96 +2642,7 @@ const renderTextBox = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
   selectionColor: InteractiveCanvasRenderConfig["selectionColor"],
-  elementsMap?: ElementsMap,
 ) => {
-  // 思维导图节点编辑态：1.5px 实心主色环（rx 跟随节点形态）；
-  // "text" 形态画下划线下方的主色线
-  const container =
-    text.containerId && elementsMap ? elementsMap.get(text.containerId) : null;
-  if (container && isMindmapNodeElement(container)) {
-    const shape = getMindmapShapeId(container);
-    context.save();
-    context.translate(appState.scrollX, appState.scrollY);
-    context.strokeStyle = selectionColor;
-    context.lineWidth = 1.5;
-    context.setLineDash([]);
-    if (shape === "text") {
-      const y = container.y + container.height + 2;
-      context.lineCap = "round";
-      context.beginPath();
-      context.moveTo(container.x, y);
-      context.lineTo(container.x + container.width, y);
-      context.stroke();
-    } else {
-      context.beginPath();
-      if (shape === "ellipse") {
-        context.ellipse(
-          container.x + container.width / 2,
-          container.y + container.height / 2,
-          container.width / 2,
-          container.height / 2,
-          0,
-          0,
-          2 * Math.PI,
-        );
-      } else if (shape === "diamond") {
-        context.moveTo(container.x + container.width / 2, container.y);
-        context.lineTo(
-          container.x + container.width,
-          container.y + container.height / 2,
-        );
-        context.lineTo(
-          container.x + container.width / 2,
-          container.y + container.height,
-        );
-        context.lineTo(container.x, container.y + container.height / 2);
-        context.closePath();
-      } else if (shape === "pill") {
-        context.beginPath();
-        if (context.roundRect) {
-          context.roundRect(
-            container.x,
-            container.y,
-            container.width,
-            container.height,
-            container.height / 2,
-          );
-        } else {
-          context.rect(
-            container.x,
-            container.y,
-            container.width,
-            container.height,
-          );
-        }
-      } else {
-        context.beginPath();
-        const radius = getCornerRadius(
-          Math.min(container.width, container.height),
-          container,
-        );
-        if (context.roundRect) {
-          context.roundRect(
-            container.x,
-            container.y,
-            container.width,
-            container.height,
-            radius,
-          );
-        } else {
-          context.rect(
-            container.x,
-            container.y,
-            container.width,
-            container.height,
-          );
-        }
-      }
-      context.stroke();
-    }
-    context.restore();
-    return;
-  }
   context.save();
   const padding = getTextBoxPadding(appState.zoom.value);
   const width = text.width + padding * 2;
@@ -2818,17 +2806,12 @@ const _renderInteractiveScene = ({
       | ExcalidrawTextElement
       | undefined;
     if (textElement && !isTableCellBackgroundText(textElement)) {
-      // 思维导图节点编辑态画实心主色环（节点无原生虚线框）
-      const isMindmapBound =
-        !!textElement.containerId &&
-        isMindmapNodeElement(allElementsMap.get(textElement.containerId));
-      if (!textElement.autoResize || isMindmapBound) {
+      if (!textElement.autoResize) {
         renderTextBox(
           textElement,
           context,
           appState,
           renderConfig.selectionColor,
-          allElementsMap,
         );
       }
     }
@@ -2958,19 +2941,33 @@ const _renderInteractiveScene = ({
   // the pointer moves. Keep the same border treatment as a committed
   // selection until the selection is committed, instead of painting handles.
   if (appState.selectionElement && selectedElements.length) {
-    renderElementsBoxHighlight(
-      context,
-      appState,
-      selectedElements,
-      elementsMap,
-      {
-        colors: [
-          renderConfig.selectionColor ||
-            getSelectionColor(app.interactiveCanvas),
-        ],
-        padding: ELEMENT_OUTLINE_PADDING,
-      },
+    // 与下方提交态选中描边同一策略：整图选中的 Mindmap 不逐元素描边。
+    // 按住根节点尚未拖动时 selectionElement 仍在（开始拖动才清空），而
+    // 主选中渲染被 !appState.selectionElement 门控跳过；缺少这条过滤的
+    // 话，整树节点/文本/边会在这里被逐个描边。
+    const suppressedMindmapSelectionIds =
+      getCompletelySelectedMindmapGraphElementIds(
+        allElementsMap.values(),
+        appState.selectedElementIds,
+      );
+    const elementsToBoxHighlight = selectedElements.filter(
+      (element) => !suppressedMindmapSelectionIds.has(element.id),
     );
+    if (elementsToBoxHighlight.length) {
+      renderElementsBoxHighlight(
+        context,
+        appState,
+        elementsToBoxHighlight,
+        elementsMap,
+        {
+          colors: [
+            renderConfig.selectionColor ||
+              getSelectionColor(app.interactiveCanvas),
+          ],
+          padding: ELEMENT_OUTLINE_PADDING,
+        },
+      );
+    }
   }
 
   if (appState.activeLockedId) {
@@ -3153,12 +3150,15 @@ const _renderInteractiveScene = ({
     if (showBoundingBox) {
       // Optimisation for finding quickly relevant element ids
       const locallySelectedIds = arrayToMap(visibleSelectedElements);
-      const selectedMindmapRootGraphIds = new Set(
-        visibleSelectedElements
-          .filter(isMindmapNodeElement)
-          .filter((node) => node.role === "root")
-          .map((node) => node.graphId),
-      );
+
+      // 整图选中的 Mindmap 已由下方共同虚线外框 + 变换手柄表达（如按住根
+      // 节点拖整树）；再逐节点/文本/边描边只是视觉噪音，这里一次性算出并
+      // 抑制。部分选中（仅根、子树、框选未覆盖全图）不受影响。
+      const suppressedMindmapSelectionIds =
+        getCompletelySelectedMindmapGraphElementIds(
+          allElementsMap.values(),
+          appState.selectedElementIds,
+        );
 
       const selections: ElementSelectionBorder[] = [];
 
@@ -3182,10 +3182,9 @@ const _renderInteractiveScene = ({
         ) {
           // local user
           if (
-            (locallySelectedIds.has(element.id) ||
-              (isMindmapEdgeElement(element) &&
-                selectedMindmapRootGraphIds.has(element.graphId))) &&
-            !isSelectedViaGroup(appState, element)
+            locallySelectedIds.has(element.id) &&
+            !isSelectedViaGroup(appState, element) &&
+            !suppressedMindmapSelectionIds.has(element.id)
           ) {
             selectionColors.push(selectionColor);
           }
@@ -3415,6 +3414,9 @@ const _renderInteractiveScene = ({
     allElementsMap,
     selectedElements,
   );
+
+  // 「+」新增节点按钮：单选节点的子侧/同级侧
+  renderMindmapAddButtons(context, app, appState, allElementsMap);
 
   appState.searchMatches?.matches.forEach(({ id, focus, matchedLines }) => {
     const element = elementsMap.get(id);

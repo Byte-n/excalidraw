@@ -3,12 +3,15 @@ import {
   applyMindmapBranchTheme,
   buildMindmapGraphIndex,
   computeBoundTextPosition,
+  getCompletelySelectedMindmapGraphElementIds,
   getNonDeletedElements,
   isMindmapEdgeElement,
   isMindmapNodeElement,
   newElement,
+  newMindmapEdgeElement,
   newMindmapNodeElement,
   newTextElement,
+  MINDMAP_LEVEL_DISTANCE,
   Scene,
 } from "@excalidraw/element";
 
@@ -68,7 +71,7 @@ describe("mindmap 场景恢复与渲染基础", () => {
     expect(index.nodes.size).toBe(2);
     expect(index.edgeByChildId.size).toBe(1);
     const child = index.nodes.get(input[1].id)!;
-    expect(child.x).toBe(input[0].x + input[0].width + 80);
+    expect(child.x).toBe(input[0].x + input[0].width + MINDMAP_LEVEL_DISTANCE);
     const text = restored.find(
       (element) => element.type === "text",
     ) as ExcalidrawTextElementWithContainer;
@@ -418,8 +421,7 @@ describe("mindmap P12 分支主题导出", () => {
     expect(html).toContain('fill="#e6f4f1"');
     // 二级 text 节点：只画下划线（无填充）
     const grandchild = themed.find(
-      (element) =>
-        isMindmapNodeElement(element) && element.shape.id === "text",
+      (element) => isMindmapNodeElement(element) && element.shape.id === "text",
     )!;
     const group = svg.querySelector(`[data-id='${grandchild.id}']`);
     expect(group).not.toBeNull();
@@ -437,6 +439,145 @@ describe("mindmap P12 分支主题导出", () => {
     );
     expect(darkSvg.outerHTML).toContain(
       `fill="${applyDarkModeFilter("#1f2329", true)}"`,
+    );
+  });
+});
+
+describe("getCompletelySelectedMindmapGraphElementIds", () => {
+  const graphFixture = () => {
+    const root = {
+      ...newMindmapNodeElement({
+        x: 100,
+        y: 80,
+        graphId: "graph",
+        role: "root",
+        parentId: null,
+        order: null,
+      }),
+      id: "root",
+    };
+    const child = {
+      ...newMindmapNodeElement({
+        x: 500,
+        y: 300,
+        graphId: "graph",
+        role: "node",
+        parentId: "root",
+        order: "a0" as FractionalIndex,
+      }),
+      id: "child",
+    };
+    const rootText = {
+      ...newTextElement({
+        x: 0,
+        y: 0,
+        text: "根",
+        containerId: "root",
+        textAlign: "center",
+        verticalAlign: "middle",
+      }),
+      id: "root-text",
+    };
+    const childText = {
+      ...newTextElement({
+        x: 0,
+        y: 0,
+        text: "子",
+        containerId: "child",
+        textAlign: "center",
+        verticalAlign: "middle",
+      }),
+      id: "child-text",
+    };
+    const edge = {
+      ...newMindmapEdgeElement({
+        x: 0,
+        y: 0,
+        graphId: "graph",
+        parentId: "root",
+        childId: "child",
+      }),
+      id: "edge",
+    };
+    return [root, child, rootText, childText, edge];
+  };
+
+  const select = (...ids: string[]) =>
+    Object.fromEntries(ids.map((id) => [id, true as const]));
+
+  it("整图选中（节点+边+文本）时返回全部成员", () => {
+    const elements = graphFixture();
+    const suppressed = getCompletelySelectedMindmapGraphElementIds(
+      elements,
+      select("root", "child", "root-text", "child-text", "edge"),
+    );
+    expect([...suppressed].sort()).toEqual(
+      ["root", "child", "root-text", "child-text", "edge"].sort(),
+    );
+  });
+
+  it("绑定文本随容器视为选中，无需显式选中", () => {
+    const elements = graphFixture();
+    const suppressed = getCompletelySelectedMindmapGraphElementIds(
+      elements,
+      select("root", "child", "edge"),
+    );
+    expect([...suppressed].sort()).toEqual(
+      ["root", "child", "root-text", "child-text", "edge"].sort(),
+    );
+  });
+
+  it("仅根节点选中（部分选中）时返回空集", () => {
+    const elements = graphFixture();
+    expect(
+      getCompletelySelectedMindmapGraphElementIds(elements, select("root"))
+        .size,
+    ).toBe(0);
+  });
+
+  it("缺一条边时不算完整选中", () => {
+    const elements = graphFixture();
+    expect(
+      getCompletelySelectedMindmapGraphElementIds(
+        elements,
+        select("root", "child", "root-text", "child-text"),
+      ).size,
+    ).toBe(0);
+  });
+
+  it("图外元素的选中不混入结果，也不影响完整性判定", () => {
+    const rect = { ...newElement({ type: "rectangle", x: 0, y: 0 }), id: "r" };
+    const elements = [...graphFixture(), rect];
+    const suppressed = getCompletelySelectedMindmapGraphElementIds(
+      elements,
+      select("root", "child", "root-text", "child-text", "edge", "r"),
+    );
+    expect(suppressed.has("r")).toBe(false);
+    expect(suppressed.size).toBe(5);
+  });
+
+  it("已删除的图成员被忽略，不影响完整性判定", () => {
+    const [root, child, rootText, childText, edge] = graphFixture();
+    const elements = [
+      root,
+      child,
+      rootText,
+      { ...childText, isDeleted: true as const },
+      edge,
+    ];
+    const suppressed = getCompletelySelectedMindmapGraphElementIds(
+      elements,
+      select("root", "child", "root-text", "edge"),
+    );
+    expect([...suppressed].sort()).toEqual(
+      ["root", "child", "root-text", "edge"].sort(),
+    );
+  });
+
+  it("没有任何选中时返回空集", () => {
+    const elements = graphFixture();
+    expect(getCompletelySelectedMindmapGraphElementIds(elements, {}).size).toBe(
+      0,
     );
   });
 });

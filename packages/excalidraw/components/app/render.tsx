@@ -27,7 +27,7 @@ import { SVGLayer } from "../SVGLayer";
 import { StaticCanvas, InteractiveCanvas } from "../canvases";
 import NewElementCanvas from "../canvases/NewElementCanvas";
 import { CursorHint } from "../CursorHint";
-import { MagicIcon, PlusIcon, copyIcon, fullscreenIcon } from "../icons";
+import { MagicIcon, copyIcon, fullscreenIcon } from "../icons";
 import UnlockPopup from "../UnlockPopup";
 
 import {
@@ -99,11 +99,6 @@ export const AppView = ({ app }: { app: App }) => {
           app.state.cursorButton === "down");
 
   const firstSelectedElement = selectedElements[0];
-  // 「+」按钮只挂选中态；悬停态的折叠「−」由画布覆盖层承担
-  const mindmapNodeForControls =
-    selectedElements.length === 1 && isMindmapNodeElement(firstSelectedElement)
-      ? firstSelectedElement
-      : null;
 
   const showShapeSwitchPanel =
     editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
@@ -271,60 +266,6 @@ export const AppView = ({ app }: { app: App }) => {
                                 app.updateEmbedValidationStatus
                               }
                             />
-                          )}
-                        {app.isDefaultUIEnabled() &&
-                          mindmapNodeForControls &&
-                          app.mindmap.canEditNode(mindmapNodeForControls.id) &&
-                          !app.state.openDialog && (
-                            <>
-                              <ElementCanvasButtons
-                                element={mindmapNodeForControls}
-                                elementsMap={renderableElementsMap}
-                                layoutDirection={app.mindmap.getLayoutDirection(
-                                  mindmapNodeForControls.graphId,
-                                )}
-                                anchor="mindmap-child"
-                              >
-                                <ElementCanvasButton
-                                  isMobile={
-                                    app.editorInterface.formFactor !== "desktop"
-                                  }
-                                  title={t("labels.addMindmapChild")}
-                                  icon={PlusIcon}
-                                  checked={false}
-                                  onChange={() =>
-                                    app.mindmap.createChild(
-                                      mindmapNodeForControls.id,
-                                    )
-                                  }
-                                />
-                              </ElementCanvasButtons>
-                              {mindmapNodeForControls.role !== "root" && (
-                                <ElementCanvasButtons
-                                  element={mindmapNodeForControls}
-                                  elementsMap={renderableElementsMap}
-                                  layoutDirection={app.mindmap.getLayoutDirection(
-                                    mindmapNodeForControls.graphId,
-                                  )}
-                                  anchor="mindmap-sibling"
-                                >
-                                  <ElementCanvasButton
-                                    isMobile={
-                                      app.editorInterface.formFactor !==
-                                      "desktop"
-                                    }
-                                    title={t("labels.addMindmapSibling")}
-                                    icon={PlusIcon}
-                                    checked={false}
-                                    onChange={() =>
-                                      app.mindmap.createSibling(
-                                        mindmapNodeForControls.id,
-                                      )
-                                    }
-                                  />
-                                </ElementCanvasButtons>
-                              )}
-                            </>
                           )}
                         {app.isDefaultUIEnabled() &&
                           mindmapEditHintPoint &&

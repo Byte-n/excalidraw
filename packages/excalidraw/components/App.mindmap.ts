@@ -27,8 +27,10 @@ import {
   getMindmapEdgeGeometry,
   getMindmapLayoutConfig,
   getMindmapCollapseAffordance,
+  getMindmapAddButtonAffordances,
   getMindmapNodeTheme,
   MINDMAP_SIBLING_DISTANCE,
+  MINDMAP_LEVEL_DISTANCE,
   navigateMindmap,
   newElement,
   newElementWith,
@@ -55,6 +57,7 @@ import type {
 } from "@excalidraw/element/types";
 
 import type { MindmapTreeCommand } from "@excalidraw/element";
+import type { MindmapAddButtonKind } from "@excalidraw/element";
 
 import { t } from "../i18n";
 import { validateMindmapTextTree } from "../data/mindmapText";
@@ -72,7 +75,7 @@ type NewNodeKind = "child" | "sibling";
 type MindmapDropTarget = {
   parentId: string;
   beforeId: string | null;
-  /** child：挂为子节点（画虚线预览连线）；sibling：兄弟位次插入（画插入线） */
+  /** child：挂为子节点（末尾追加）；sibling：兄弟位次插入；两种落点都画插入线 + 父级虚线连线 */
   kind: "child" | "sibling";
 };
 
@@ -166,6 +169,7 @@ const relayoutAfterStyleActions = new Set<ActionName>([
 export class AppMindmap {
   private readonly pendingTextNodeIds = new Set<string>();
   private hoveredNodeId: string | null = null;
+  private hoveredAddButton: MindmapAddButtonKind | null = null;
   private consumedSpace = false;
   private dragSession: MindmapDragSession | null = null;
   private dragOpacityApplied = false;
@@ -186,9 +190,128 @@ export class AppMindmap {
 
   clearHover = () => {
     this.hoveredNodeId = null;
+    this.hoveredAddButton = null;
   };
 
   getHoveredNodeId = () => this.hoveredNodeId;
+
+  getHoveredAddButton = () => this.hoveredAddButton;
+
+  /**
+   * 当前应挂「+」按钮的节点：单选、可编辑、无遮挡 UI。渲染与命中共用此判定，
+   * 保证所见即可点。
+   */
+  getAddButtonTargetNode = (): ExcalidrawMindmapNodeElement | null => {
+    const { selectedElementIds, openDialog, contextMenu, openMenu } =
+      this.app.state;
+    const selectedIds = Object.keys(selectedElementIds);
+    if (selectedIds.length !== 1) {
+      return null;
+    }
+    if (
+      openDialog ||
+      contextMenu ||
+      openMenu ||
+      this.dragSession ||
+      this.app.state.newElement ||
+      this.app.state.resizingElement ||
+      this.app.state.isRotating ||
+      this.app.state.selectedElementsAreBeingDragged
+    ) {
+      return null;
+    }
+    const node = this.app.scene.getNonDeletedElement(selectedIds[0]);
+    if (!node || !isMindmapNodeElement(node) || !this.canEditNode(node.id)) {
+      return null;
+    }
+    return node;
+  };
+
+  /**
+   * 命中单选节点的「+」按钮时返回按钮类型。按钮位置与画布覆盖层渲染一致。
+   */
+  hitTestAddButton = (
+    sceneX: number,
+    sceneY: number,
+  ): MindmapAddButtonKind | null => {
+    const node = this.getAddButtonTargetNode();
+    if (!node) {
+      return null;
+    }
+    let root: ExcalidrawMindmapNodeElement | null = null;
+    for (const element of this.app.scene.getNonDeletedElements()) {
+      if (
+        isMindmapNodeElement(element) &&
+        element.graphId === node.graphId &&
+        element.role === "root"
+      ) {
+        root = element;
+        break;
+      }
+    }
+    const { direction } = getMindmapLayoutConfig(root);
+    const collapsedCount =
+      this.app.scene.getMindmapCollapsedCounts().get(node.id) ?? 0;
+    const childSideAffordance =
+      node.collapsed && collapsedCount > 0
+        ? ("badge" as const)
+        : this.hasChildren(node.id)
+        ? ("minus" as const)
+        : null;
+    const affordances = getMindmapAddButtonAffordances(
+      node,
+      direction,
+      childSideAffordance,
+    );
+    const slack = 2 / this.app.state.zoom.value;
+    const kinds: MindmapAddButtonKind[] =
+      node.role === "root" ? ["child"] : ["child", "sibling"];
+    let hit: MindmapAddButtonKind | null = null;
+    let hitDistance = Infinity;
+    for (const kind of kinds) {
+      const { center, radius } = affordances[kind];
+      const distance = Math.hypot(sceneX - center[0], sceneY - center[1]);
+      if (distance <= radius + slack && distance < hitDistance) {
+        hitDistance = distance;
+        hit = kind;
+      }
+    }
+    return hit;
+  };
+
+  /** 「+」按钮点击：立即建节点并吞掉本次手势。 */
+  private handleAddButtonPointerDown = (
+    pointerDownState: PointerDownState,
+  ): boolean => {
+    if (
+      !this.app.isInteractionEnabled() ||
+      this.app.state.viewModeEnabled ||
+      this.app.state.editingTextElement
+    ) {
+      return false;
+    }
+    const button = this.hitTestAddButton(
+      pointerDownState.origin.x,
+      pointerDownState.origin.y,
+    );
+    const node = button ? this.getAddButtonTargetNode() : null;
+    if (!button || !node) {
+      return false;
+    }
+    this.cancelledPointerDown = pointerDownState;
+    pointerDownState.drag.blockDragging = true;
+    pointerDownState.resize.handleType = false;
+    pointerDownState.resize.isResizing = false;
+    if (this.app.state.resizingElement || this.app.state.isResizing) {
+      this.app.setState({ resizingElement: null, isResizing: false });
+    }
+    if (button === "child") {
+      this.createChild(node.id);
+    } else {
+      this.createSibling(node.id);
+    }
+    return true;
+  };
 
   /**
    * 命中折叠 affordance（计数徽标或「−」按钮）时返回节点 id。
@@ -288,6 +411,10 @@ export class AppMindmap {
 
   handlePointerMove = (sceneX: number, sceneY: number) => {
     if (this.dragSession) {
+      if (this.hoveredAddButton) {
+        this.hoveredAddButton = null;
+        this.app.setState({});
+      }
       return;
     }
     if (
@@ -297,6 +424,10 @@ export class AppMindmap {
       if (this.hoveredNodeId) {
         this.hoveredNodeId = null;
         this.app.setState({ hoveredElementIds: {} });
+      }
+      if (this.hoveredAddButton) {
+        this.hoveredAddButton = null;
+        this.app.setState({});
       }
       return;
     }
@@ -320,9 +451,16 @@ export class AppMindmap {
       });
     }
 
-    // 折叠 affordance 悬停指针（在 pointerCanvas 的工具光标之后运行，不被覆盖）
+    // 「+」按钮悬停态（驱动画布反色重绘）
+    const hoveredAddButton = this.hitTestAddButton(sceneX, sceneY);
+    if (hoveredAddButton !== this.hoveredAddButton) {
+      this.hoveredAddButton = hoveredAddButton;
+      this.app.setState({});
+    }
+
+    // 折叠 affordance/「+」悬停指针（在 pointerCanvas 的工具光标之后运行，不被覆盖）
     if (
-      this.hitTestCollapseAffordance(sceneX, sceneY) &&
+      (hoveredAddButton || this.hitTestCollapseAffordance(sceneX, sceneY)) &&
       !this.app.state.viewModeEnabled &&
       this.app.isInteractionEnabled()
     ) {
@@ -519,6 +657,16 @@ export class AppMindmap {
     if (this.blockedTouchPointerDown === pointerDownState) {
       this.blockedTouchPointerDown = null;
     }
+    // 手动 resize 只拥有节点尺寸，位置由布局决定；释放时重排所在图，
+    // 让兄弟让位并刷新派生边。replaceAllElements 不单独捕获，由调用方
+    // 的释放捕获把尺寸与布局并入同一条历史。
+    if (
+      event.type === "pointerup" &&
+      pointerDownState.resize.isResizing &&
+      pointerDownState.resize.handleType !== "rotation"
+    ) {
+      this.relayoutResizedNode();
+    }
     if (this.cancelledPointerDown === pointerDownState) {
       this.cancelledPointerDown = null;
       return true;
@@ -698,44 +846,89 @@ export class AppMindmap {
   getDragPreview = () => this.dragSession;
   isReparenting = () => this.dragSession?.mode === "reparent";
 
-  /** sibling 插入线几何：跨参照兄弟节点主轴范围 +8px，位于同级间距中线 */
-  private getSiblingInsertionLine = (
+  /**
+   * 插入线几何：sibling 位次插入或 child 末尾追加均有线。
+   * 跨参照兄弟节点主轴范围 +8px，位于同级间距中线；child 追加到无子节点的
+   * 父级时按层级间距在父级子侧合成第一条线。from 恒为靠父级一端（圆点与
+   * 虚线连线锚点）。
+   */
+  private getInsertionLine = (
     session: MindmapDragSession,
   ): { from: [number, number]; to: [number, number] } | null => {
     const index = session.dropIndex;
     const target = session.target;
-    if (!index || !target || target.kind !== "sibling") {
+    if (!index || !target) {
       return null;
     }
     const siblings = (index.childrenById.get(target.parentId) ?? []).filter(
       (id) => !session.elementIds.has(id),
     );
     const referenceId =
-      target.beforeId ?? siblings[siblings.length - 1] ?? null;
+      target.kind === "sibling" && target.beforeId
+        ? target.beforeId
+        : siblings[siblings.length - 1] ?? null;
     const reference = referenceId ? index.nodes.get(referenceId) : null;
-    if (!reference) {
-      return null;
-    }
     const { direction } = getMindmapLayoutConfig(index.nodes.get(index.rootId));
     const isVertical =
       direction === "top-to-bottom" || direction === "bottom-to-top";
+    // from 恒为靠父级一端：圆点与虚线连线锚点都落在父级侧
+    const mainSign =
+      direction === "right-to-left" || direction === "bottom-to-top" ? -1 : 1;
+    if (!reference) {
+      if (target.kind !== "child") {
+        return null;
+      }
+      const parent = index.nodes.get(target.parentId);
+      const source = this.app.scene.getNonDeletedElement(session.nodeIds[0]);
+      if (!parent || !source || !isMindmapNodeElement(source)) {
+        return null;
+      }
+      if (isVertical) {
+        const x = parent.x + parent.width / 2;
+        const y =
+          mainSign > 0
+            ? parent.y + parent.height + MINDMAP_LEVEL_DISTANCE
+            : parent.y - MINDMAP_LEVEL_DISTANCE - source.height;
+        return mainSign > 0
+          ? { from: [x, y - 4], to: [x, y + source.height + 4] }
+          : { from: [x, y + source.height + 4], to: [x, y - 4] };
+      }
+      const y = parent.y + parent.height / 2;
+      const x =
+        mainSign > 0
+          ? parent.x + parent.width + MINDMAP_LEVEL_DISTANCE
+          : parent.x - MINDMAP_LEVEL_DISTANCE - source.width;
+      return mainSign > 0
+        ? { from: [x - 4, y], to: [x + source.width + 4, y] }
+        : { from: [x + source.width + 4, y], to: [x - 4, y] };
+    }
     const halfGap = MINDMAP_SIBLING_DISTANCE / 2;
     if (isVertical) {
       const x = target.beforeId
         ? reference.x - halfGap
         : reference.x + reference.width + halfGap;
-      return {
-        from: [x, reference.y - 4],
-        to: [x, reference.y + reference.height + 4],
-      };
+      return mainSign > 0
+        ? {
+            from: [x, reference.y - 4],
+            to: [x, reference.y + reference.height + 4],
+          }
+        : {
+            from: [x, reference.y + reference.height + 4],
+            to: [x, reference.y - 4],
+          };
     }
     const y = target.beforeId
       ? reference.y - halfGap
       : reference.y + reference.height + halfGap;
-    return {
-      from: [reference.x - 4, y],
-      to: [reference.x + reference.width + 4, y],
-    };
+    return mainSign > 0
+      ? {
+          from: [reference.x - 4, y],
+          to: [reference.x + reference.width + 4, y],
+        }
+      : {
+          from: [reference.x + reference.width + 4, y],
+          to: [reference.x - 4, y],
+        };
   };
 
   /** Drawn by the interactive canvas; never inserted into Scene. */
@@ -752,12 +945,9 @@ export class AppMindmap {
     context.translate(scrollX, scrollY);
     const preview = session.previewElements;
     const selectionColor = getSelectionColor(this.app.interactiveCanvas);
-    const showInsertionLine = session.target?.kind === "sibling";
+    // 虚线预览连线：从目标父级指向插入线锚点（无插入线时跟随拖拽预览节点），
+    // sibling 与 child 两种落点都画，配合插入线共同指示挂载位置
     preview.filter(isMindmapEdgeElement).forEach((element) => {
-      // sibling 插入改画插入线，不画虚线预览连线
-      if (showInsertionLine) {
-        return;
-      }
       context.save();
       context.translate(element.x, element.y);
       context.strokeStyle = selectionColor;
@@ -862,22 +1052,20 @@ export class AppMindmap {
       });
     });
     context.globalAlpha = 1;
-    if (showInsertionLine) {
-      const line = this.getSiblingInsertionLine(session);
-      if (line) {
-        context.strokeStyle = selectionColor;
-        context.lineWidth = 2;
-        context.lineCap = "round";
-        context.setLineDash([]);
-        context.beginPath();
-        context.moveTo(line.from[0], line.from[1]);
-        context.lineTo(line.to[0], line.to[1]);
-        context.stroke();
-        context.fillStyle = selectionColor;
-        context.beginPath();
-        context.arc(line.from[0], line.from[1], 3, 0, 2 * Math.PI);
-        context.fill();
-      }
+    const line = this.getInsertionLine(session);
+    if (line) {
+      context.strokeStyle = selectionColor;
+      context.lineWidth = 2;
+      context.lineCap = "round";
+      context.setLineDash([]);
+      context.beginPath();
+      context.moveTo(line.from[0], line.from[1]);
+      context.lineTo(line.to[0], line.to[1]);
+      context.stroke();
+      context.fillStyle = selectionColor;
+      context.beginPath();
+      context.arc(line.from[0], line.from[1], 3, 0, 2 * Math.PI);
+      context.fill();
     }
     context.restore();
   };
@@ -930,6 +1118,10 @@ export class AppMindmap {
   ) => {
     // 折叠 affordance（徽标/「−」）优先于节点选择与拖拽手势
     if (this.handleCollapseAffordancePointerDown(pointerDownState)) {
+      return;
+    }
+    // 「+」新增节点按钮同理：命中即建节点，不进入选择/拖拽
+    if (this.handleAddButtonPointerDown(pointerDownState)) {
       return;
     }
     const hit = this.getMindmapNodeFromPointerDown(pointerDownState);
@@ -1886,9 +2078,21 @@ export class AppMindmap {
         edge &&
         isMindmapEdgeElement(edge)
       ) {
+        // 连线锚定到插入线圆点，使虚线、圆点、横线构成同一落点指示；
+        // 无插入线时退化为跟随拖拽位置的预览节点
+        const line = this.getInsertionLine(session);
+        const anchorNode = line
+          ? {
+              ...previewNode,
+              x: line.from[0],
+              y: line.from[1],
+              width: 0,
+              height: 0,
+            }
+          : previewNode;
         const geometry = getMindmapEdgeGeometry(
           parent,
-          previewNode,
+          anchorNode,
           edge.routing,
           direction,
         );
@@ -2773,12 +2977,42 @@ export class AppMindmap {
     });
   }
 
+  /**
+   * 单个脑图节点被手动 resize（画布角手柄或 Stats 尺寸输入）后重排所在图。
+   * 仅处理单选节点：多选/整图缩放走均匀变换，是另一套语义。直接改写
+   * scene 而不捕获历史——由调用方的提交边界把尺寸与布局合成一条记录。
+   *
+   * pinResizedNode=true（拖拽手势进行中）：锚定被拖节点——布局不移动它，
+   * 拖动方向的对位在画板中保持不动，兄弟/子孙/派生边随新尺寸实时让位；
+   * pinResizedNode=false（手势/输入提交）：布局完全接管，节点归位到
+   * 标准布局位置。
+   */
+  relayoutResizedNode = (pinResizedNode = false) => {
+    const selected = this.app.scene.getSelectedElements(this.app.state);
+    const node =
+      selected.length === 1 && isMindmapNodeElement(selected[0])
+        ? selected[0]
+        : null;
+    if (!node) {
+      return;
+    }
+    const elements = this.app.scene.getElementsIncludingDeleted();
+    this.app.scene.replaceAllElements(
+      this.getLaidOutElements(
+        elements,
+        [node.graphId],
+        pinResizedNode ? new Set([node.id]) : undefined,
+      ),
+    );
+  };
+
   getLaidOutElements(
     elements: readonly ExcalidrawElement[],
     graphIds: readonly string[],
+    pinnedNodeIds?: ReadonlySet<string>,
   ) {
     const previous = this.app.scene.getElementsMapIncludingDeleted();
-    const repaired = layoutMindmapScene(elements, graphIds);
+    const repaired = layoutMindmapScene(elements, graphIds, pinnedNodeIds);
     return repaired.map((element) => {
       const next = element;
       const prev = previous.get(element.id);

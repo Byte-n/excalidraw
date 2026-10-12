@@ -1,15 +1,21 @@
 import {
   getBoundTextElement,
+  getMindmapAddButtonAffordances,
+  getMindmapLayoutConfig,
+  getTransformHandles,
   isMindmapEdgeElement,
   isMindmapNodeElement,
 } from "@excalidraw/element";
+
+import { arrayToMap } from "@excalidraw/common";
 
 import { Excalidraw } from "../index";
 
 import { getTextEditor, updateTextEditor } from "./queries/dom";
 import { Keyboard, Pointer, UI } from "./helpers/ui";
 import { API } from "./helpers/api";
-import { act, fireEvent, render, screen, waitFor } from "./test-utils";
+import { act, fireEvent, GlobalTestState, render, waitFor } from "./test-utils";
+import { queryByTestId } from "@testing-library/react";
 
 const { h } = window;
 
@@ -35,6 +41,18 @@ describe("mindmap creation tool", () => {
     act(() => editor.blur());
     expect(h.state.editingTextElement).toBeNull();
     expect(editor).not.toBeInTheDocument();
+  };
+  // 「+」按钮是画布覆盖层（非 DOM）：按几何中心模拟指针点击
+  const clickAddChildButton = (node: ReturnType<typeof getNodes>[number]) => {
+    const hasChildren = getNodes().some(
+      (element) => element.parentId === node.id,
+    );
+    const { child } = getMindmapAddButtonAffordances(
+      node,
+      getMindmapLayoutConfig(node).direction,
+      hasChildren ? "minus" : null,
+    );
+    new Pointer("mouse").clickAt(child.center[0], child.center[1]);
   };
 
   beforeEach(async () => {
@@ -116,9 +134,7 @@ describe("mindmap creation tool", () => {
                 UI.clickExtraTool("mindmap");
                 // 「+」按钮只在选中时出现
                 API.setSelectedElements([root]);
-                fireEvent.click(
-                  screen.getByRole("button", { name: "Add child node" }),
-                );
+                clickAddChildButton(root);
               } else {
                 // 在非根节点上按 Enter，确保覆盖真正的兄弟节点创建。
                 API.setSelectedElements([child]);
@@ -243,6 +259,124 @@ describe("mindmap creation tool", () => {
       }
     });
 
+    it("手动 resize 节点后重排布局：兄弟让位，与 resize 并入同一条历史", async () => {
+      const [, child] = getNodes();
+      API.setSelectedElements([child]);
+      Keyboard.keyPress("Enter");
+      const editor = await getTextEditor();
+      updateTextEditor(editor, "兄弟节点");
+      Keyboard.exitTextEditor(editor);
+
+      const siblingBefore = getNodes()[2];
+      const before = getSceneSnapshot();
+      const historyLength = API.getUndoStack().length;
+
+      UI.resize(h.app.scene.getNonDeletedElement(child.id)!, "se", [0, 80]);
+
+      const resized = h.app.scene.getNonDeletedElement(child.id)!;
+      expect(resized.height).toBeGreaterThan(child.height);
+      const siblingAfter = h.app.scene.getNonDeletedElement(siblingBefore.id)!;
+      expect(siblingAfter.y).not.toBe(siblingBefore.y);
+      expect(API.getUndoStack()).toHaveLength(historyLength + 1);
+      Keyboard.undo();
+      expect(getSceneSnapshot()).toEqual(before);
+      Keyboard.redo();
+      expect(resized.height).toBe(
+        h.app.scene.getNonDeletedElement(child.id)!.height,
+      );
+    });
+
+    it("Stats 输入节点尺寸后重排布局：兄弟让位，与输入并入同一条历史", async () => {
+      const [, child] = getNodes();
+      API.setSelectedElements([child]);
+      Keyboard.keyPress("Enter");
+      const editor = await getTextEditor();
+      updateTextEditor(editor, "兄弟节点");
+      Keyboard.exitTextEditor(editor);
+
+      const siblingBefore = getNodes()[2];
+      const historyLength = API.getUndoStack().length;
+
+      fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
+        button: 2,
+        clientX: 1,
+        clientY: 1,
+      });
+      UI.openContextMenuSubmenus();
+      fireEvent.click(
+        queryByTestId(UI.queryContextMenu()!, "stats")! as HTMLElement,
+      );
+
+      API.setSelectedElements([h.app.scene.getNonDeletedElement(child.id)!]);
+      const input = UI.queryStatsProperty("H")?.querySelector(
+        ".drag-input",
+      ) as HTMLInputElement;
+      expect(input).toBeDefined();
+      UI.updateInput(input, String(child.height + 80));
+
+      expect(
+        h.app.scene.getNonDeletedElement(child.id)!.height,
+      ).toBeGreaterThan(child.height);
+      expect(h.app.scene.getNonDeletedElement(siblingBefore.id)!.y).not.toBe(
+        siblingBefore.y,
+      );
+      expect(API.getUndoStack()).toHaveLength(historyLength + 1);
+    });
+
+    it("resize 拖拽中实时重排：兄弟实时让位，被拖节点对位稳定", async () => {
+      const [, child] = getNodes();
+      API.setSelectedElements([child]);
+      Keyboard.keyPress("Enter");
+      const editor = await getTextEditor();
+      updateTextEditor(editor, "兄弟节点");
+      Keyboard.exitTextEditor(editor);
+
+      const siblingBefore = getNodes()[2];
+      const siblingBeforeY = siblingBefore.y;
+      const resized = h.app.scene.getNonDeletedElement(child.id)!;
+      // mutateElement 原地改元素，断言前先把基准几何拷贝为值
+      const beforeGeom = {
+        x: resized.x,
+        y: resized.y,
+        height: resized.height,
+      };
+      const historyLength = API.getUndoStack().length;
+
+      API.setSelectedElements([resized]);
+      const handleCoords = getTransformHandles(
+        resized,
+        h.state.zoom,
+        arrayToMap(h.elements),
+        "mouse",
+        {},
+      ).se!;
+      const mouse = new Pointer("mouse");
+      mouse.reset();
+      mouse.down(
+        handleCoords[0] + handleCoords[2] / 2,
+        handleCoords[1] + handleCoords[3] / 2,
+      );
+      mouse.move(0, 80);
+
+      // 拖拽过程中：尺寸已变、兄弟已实时让位
+      const during = h.app.scene.getNonDeletedElement(child.id)!;
+      expect(during.height).toBeGreaterThan(beforeGeom.height);
+      expect(h.app.scene.getNonDeletedElement(siblingBefore.id)!.y).not.toBe(
+        siblingBeforeY,
+      );
+      // 被拖节点锚定：se 拖拽保持左上对位在画板中不动
+      expect(during.x).toBe(beforeGeom.x);
+      expect(during.y).toBe(beforeGeom.y);
+
+      mouse.up();
+
+      // 释放后布局完全接管，与 resize 并入同一条历史
+      expect(API.getUndoStack()).toHaveLength(historyLength + 1);
+      expect(h.app.scene.getNonDeletedElement(siblingBefore.id)!.y).not.toBe(
+        siblingBeforeY,
+      );
+    });
+
     it("撤销后分叉创建不会恢复旧连线，连续撤销重做保持布局", async () => {
       const before = getSceneSnapshot();
       const historyLength = API.getUndoStack().length;
@@ -306,9 +440,7 @@ describe("mindmap creation tool", () => {
                 const root = getNodes()[0];
                 // 「+」按钮只在选中时出现
                 API.setSelectedElements([root]);
-                fireEvent.click(
-                  screen.getByRole("button", { name: "Add child node" }),
-                );
+                clickAddChildButton(root);
               } else {
                 Keyboard.keyPress(createWith);
               }
@@ -462,16 +594,25 @@ describe("mindmap creation tool", () => {
     const root = h.app.scene
       .getNonDeletedElements()
       .find(isMindmapNodeElement)!;
-    // 「+」按钮只在选中时出现，悬停不再显示
+    // 「+」按钮只在选中时出现（画布覆盖层，非 DOM），悬停不显示
     API.setSelectedElements([]);
     pointer.moveTo(root.x + root.width / 2, root.y + root.height / 2);
-    expect(
-      screen.queryByRole("button", { name: "Add child node" }),
-    ).not.toBeInTheDocument();
+    expect(h.app.mindmap.getAddButtonTargetNode()).toBeNull();
     API.setSelectedElements([root]);
+    expect(h.app.mindmap.getAddButtonTargetNode()?.id).toBe(root.id);
+    // 命中测试与渲染共用同一几何
+    const { child, sibling } = getMindmapAddButtonAffordances(
+      root,
+      getMindmapLayoutConfig(root).direction,
+      null,
+    );
     expect(
-      screen.getByRole("button", { name: "Add child node" }),
-    ).toBeInTheDocument();
+      h.app.mindmap.hitTestAddButton(child.center[0], child.center[1]),
+    ).toBe("child");
+    // 根节点没有同级按钮
+    expect(
+      h.app.mindmap.hitTestAddButton(sibling.center[0], sibling.center[1]),
+    ).toBeNull();
 
     pointer.doubleClickAt(root.x + root.width / 2, root.y + root.height / 2);
     expect(await getTextEditor()).toBeInTheDocument();

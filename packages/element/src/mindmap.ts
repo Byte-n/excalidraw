@@ -31,8 +31,8 @@ import type {
 
 export const DEFAULT_MINDMAP_LAYOUT_DIRECTION: MindmapLayoutDirection =
   "left-to-right";
-const MINDMAP_LEVEL_DISTANCE = 80;
-export const MINDMAP_SIBLING_DISTANCE = 24;
+export const MINDMAP_LEVEL_DISTANCE = 120;
+export const MINDMAP_SIBLING_DISTANCE = 40;
 export const DEFAULT_MINDMAP_EDGE_ROUTING: MindmapEdgeRouting = "curved";
 export const DEFAULT_MINDMAP_EDGE_STROKE_WIDTH = 2;
 export const DEFAULT_MINDMAP_EDGE_STROKE_STYLE: StrokeStyle = "solid";
@@ -796,6 +796,71 @@ export const getMindmapElementsForSelection = (
   });
 };
 
+/**
+ * 返回所有「被完整选中」的 graph 的全部成员元素 id（节点 + 边 + 绑定文本，
+ * 含折叠隐藏元素）。判定与 App.mindmap.isCompleteMindmapSelection 一致：
+ * 绑定文本随其容器一并视为选中。整图选中在交互画布上由共同虚线外框表达，
+ * 逐元素的选中描边由调用方据此抑制。
+ */
+export const getCompletelySelectedMindmapGraphElementIds = (
+  elements: Iterable<ExcalidrawElement>,
+  selectedElementIds: Readonly<Record<string, true>>,
+): ReadonlySet<string> => {
+  const allElements = [...elements].filter((element) => !element.isDeleted);
+  const candidateGraphIds = new Set<string>();
+  for (const element of allElements) {
+    if (
+      selectedElementIds[element.id] &&
+      (isMindmapNodeElement(element) || isMindmapEdgeElement(element))
+    ) {
+      candidateGraphIds.add(element.graphId);
+    }
+  }
+  const suppressed = new Set<string>();
+  for (const graphId of candidateGraphIds) {
+    const nodeIds = new Set(
+      allElements
+        .filter(
+          (element) =>
+            isMindmapNodeElement(element) && element.graphId === graphId,
+        )
+        .map((element) => element.id),
+    );
+    if (!nodeIds.size) {
+      continue;
+    }
+    const graphElementIds: string[] = [];
+    let isComplete = true;
+    for (const element of allElements) {
+      const isGraphElement =
+        ((isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+          element.graphId === graphId) ||
+        (element.type === "text" &&
+          !!element.containerId &&
+          nodeIds.has(element.containerId));
+      if (!isGraphElement) {
+        continue;
+      }
+      graphElementIds.push(element.id);
+      if (
+        !selectedElementIds[element.id] &&
+        !(
+          element.type === "text" &&
+          !!element.containerId &&
+          selectedElementIds[element.containerId]
+        )
+      ) {
+        isComplete = false;
+        break;
+      }
+    }
+    if (isComplete) {
+      graphElementIds.forEach((id) => suppressed.add(id));
+    }
+  }
+  return suppressed;
+};
+
 /** 折叠是派生的可见性，不修改 isDeleted、透明度或文本绑定。 */
 export const computeMindmapVisibility = (
   elements: readonly ExcalidrawElement[],
@@ -1199,6 +1264,7 @@ export const getMindmapEdgeGeometry = (
 export const layoutMindmap = (
   index: MindmapGraphIndex,
   config: MindmapLayoutConfig = {},
+  pinnedNodeIds?: ReadonlySet<string>,
 ): MindmapLayoutResult => {
   const root = index.nodes.get(index.rootId)!;
   const { direction } = getMindmapLayoutConfig(root, config);
@@ -1281,13 +1347,25 @@ export const layoutMindmap = (
       // persisted position and angle: the layout still reserves its slot via
       // `subtreeCrossSizes` and lays out its descendants relative to the
       // pinned position, so a scaled graph never re-arranges itself back.
-      const next = isMindmapLayoutFrozen(child)
-        ? child
-        : withUpdates(child, {
-            x: isVertical ? childCross : childMain,
-            y: isVertical ? childMain : childCross,
-            angle: 0 as Radians,
-          });
+      // A transiently pinned node (live relayout while its resize gesture is
+      // in flight) behaves the same: the anchor opposite the drag direction
+      // stays put in the scene while siblings make room around it.
+      const pinnedTransient = !!pinnedNodeIds?.has(child.id);
+      const next =
+        isMindmapLayoutFrozen(child) || pinnedTransient
+          ? child
+          : withUpdates(child, {
+              x: isVertical ? childCross : childMain,
+              y: isVertical ? childMain : childCross,
+              angle: 0 as Radians,
+            });
+      if (pinnedTransient) {
+        // 缩放手势锚定的是角/边而非中心，被 pin 节点的实际交叉轴坐标与槽位
+        // 坐标相差半个尺寸增量；把整行槽位对齐到它的真实位置，兄弟才能从
+        // 它的真实边缘向外让位，而不是按假想的槽位重叠/留缝。
+        const actualCross = isVertical ? child.x : child.y;
+        crossStart += actualCross - childCross;
+      }
       positions.set(childId, next);
       bounds[0] = Math.min(bounds[0], next.x);
       bounds[1] = Math.min(bounds[1], next.y);
@@ -1692,10 +1770,10 @@ export const reparentMindmapNodes = (
 // -----------------------------------------------------------------------------
 
 export const MINDMAP_COLLAPSE_BADGE_RADIUS = 9;
-export const MINDMAP_COLLAPSE_BADGE_OFFSET = 12;
-export const MINDMAP_COLLAPSE_STUB_LENGTH = 3;
+export const MINDMAP_COLLAPSE_BADGE_OFFSET = 22;
+export const MINDMAP_COLLAPSE_STUB_LENGTH = 6;
 export const MINDMAP_COLLAPSE_MINUS_RADIUS = 7;
-export const MINDMAP_COLLAPSE_MINUS_OFFSET = 10;
+export const MINDMAP_COLLAPSE_MINUS_OFFSET = 18;
 
 export type MindmapCollapseAffordance = {
   /** 子侧边中点（场景坐标） */
@@ -1748,6 +1826,74 @@ export const getMindmapCollapseAffordance = (
     minus: {
       center: offset(MINDMAP_COLLAPSE_MINUS_OFFSET),
       radius: MINDMAP_COLLAPSE_MINUS_RADIUS,
+    },
+  };
+};
+
+// -----------------------------------------------------------------------------
+// 「+」新增节点按钮几何：子侧（布局方向远边中点）+ 同级侧（垂直方向远边中点）。
+// 与折叠 affordance 一样按场景坐标绘制在画布覆盖层。子侧需给可见的折叠
+// affordance（徽标或「−」）让位。
+// -----------------------------------------------------------------------------
+
+export const MINDMAP_ADD_BUTTON_RADIUS = 8;
+/** 无折叠 affordance 时按钮中心相对节点边缘的外偏 */
+export const MINDMAP_ADD_BUTTON_OFFSET = 14;
+/** 折叠徽标外缘（22+9=31）+ 7 间距 + 半径 8 */
+export const MINDMAP_ADD_BUTTON_OFFSET_AFTER_BADGE = 46;
+/** 「−」外缘（18+7=25）+ 7 间距 + 半径 8 */
+export const MINDMAP_ADD_BUTTON_OFFSET_AFTER_MINUS = 40;
+
+export type MindmapAddButtonKind = "child" | "sibling";
+
+export type MindmapAddButtonAffordances = Record<
+  MindmapAddButtonKind,
+  { center: [number, number]; radius: number }
+>;
+
+export const getMindmapAddButtonAffordances = (
+  node: Pick<ExcalidrawMindmapNodeElement, "x" | "y" | "width" | "height">,
+  direction: MindmapLayoutDirection,
+  /** 子侧当前可见的折叠 affordance（决定让位距离） */
+  childSideAffordance: "badge" | "minus" | null,
+): MindmapAddButtonAffordances => {
+  const isVertical =
+    direction === "top-to-bottom" || direction === "bottom-to-top";
+  const isReverse =
+    direction === "right-to-left" || direction === "bottom-to-top";
+  const centerX = node.x + node.width / 2;
+  const centerY = node.y + node.height / 2;
+  const childOffset =
+    childSideAffordance === "badge"
+      ? MINDMAP_ADD_BUTTON_OFFSET_AFTER_BADGE
+      : childSideAffordance === "minus"
+      ? MINDMAP_ADD_BUTTON_OFFSET_AFTER_MINUS
+      : MINDMAP_ADD_BUTTON_OFFSET;
+
+  // 子侧：布局方向远边中点外偏
+  const childX = isVertical
+    ? centerX
+    : isReverse
+    ? node.x - childOffset
+    : node.x + node.width + childOffset;
+  const childY = isVertical
+    ? isReverse
+      ? node.y - childOffset
+      : node.y + node.height + childOffset
+    : centerY;
+  // 同级侧：垂直于布局方向的远边中点（横向布局取下方，纵向布局取右方）
+  const siblingX = isVertical
+    ? node.x + node.width + MINDMAP_ADD_BUTTON_OFFSET
+    : centerX;
+  const siblingY = isVertical
+    ? centerY
+    : node.y + node.height + MINDMAP_ADD_BUTTON_OFFSET;
+
+  return {
+    child: { center: [childX, childY], radius: MINDMAP_ADD_BUTTON_RADIUS },
+    sibling: {
+      center: [siblingX, siblingY],
+      radius: MINDMAP_ADD_BUTTON_RADIUS,
     },
   };
 };

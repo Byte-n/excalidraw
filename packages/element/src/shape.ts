@@ -49,6 +49,7 @@ import { elementWithCanvasCache } from "./renderElement";
 import { supportsFill } from "./comparisons";
 import {
   compositeShapePathToSvg,
+  getCompositeShapeCornerRadius,
   getCompositeShapeGeometry,
   getCompositeShapePoints,
   getCompositeShapeGlobalPoints,
@@ -875,6 +876,24 @@ const _generateElementShape = (
           ...generateRoughOptions(element, true, isDarkMode),
           fill: undefined,
         });
+      }
+      if (getMindmapShapeId(element) === "rectangle" && element.roundness) {
+        // 根节点圆角矩形：复合矩形本体保持直角，圆角仅按设计稿落在根节点
+        // （PROPORTIONAL_RADIUS ≈ 高度的 1/4）
+        const { width: w, height: h } = element;
+        const r = Math.min(
+          getCompositeShapeCornerRadius(Math.min(w, h), element.roundness),
+          w / 2,
+          h / 2,
+        );
+        if (r > 0) {
+          return generator.path(
+            `M ${r} 0 L ${w - r} 0 Q ${w} 0, ${w} ${r} L ${w} ${h - r}
+             Q ${w} ${h}, ${w - r} ${h} L ${r} ${h} Q 0 ${h}, 0 ${h - r}
+             L 0 ${r} Q 0 0, ${r} 0`,
+            generateRoughOptions(element, true, isDarkMode),
+          );
+        }
       }
       return _generateElementShape(getMindmapNodeGeometry(element), generator, {
         isExporting,

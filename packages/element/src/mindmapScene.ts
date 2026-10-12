@@ -74,9 +74,12 @@ export type MindmapOperationReferences = Extract<
 >;
 
 // 浏览器交互与无 DOM 场景命令共用文字、派生边和布局计算。
+// pinnedNodeIds：瞬态锚定（如 resize 手势进行中），这些节点保持当前
+// 位置，布局只让兄弟/子孙围绕它们重排——与持久化的 layoutFrozen 同机制。
 export const layoutMindmapScene = (
   elements: readonly ExcalidrawElement[],
   graphIds: readonly string[],
+  pinnedNodeIds?: ReadonlySet<string>,
 ): readonly ExcalidrawElement[] => {
   const selected = new Set(graphIds);
   const affected = elements.filter(
@@ -114,6 +117,8 @@ export const layoutMindmapScene = (
       );
       const layout = layoutMindmap(
         buildMindmapGraphIndex(currentGraph, graphId),
+        {},
+        pinnedNodeIds,
       );
       for (const element of [...layout.elements, ...layout.edges]) {
         updated.set(element.id, element);
@@ -144,8 +149,11 @@ export const layoutMindmapScene = (
             : shapeId;
         const maxHeight = getBoundTextMaxHeight(node, text);
         // 表格缩放后冻结的节点保持现有几何，文字仅在边界内折行。
-        const nextNode = isMindmapLayoutFrozen(node)
-          ? node
+        // live resize 期间被 pin 的节点同理：尺寸由手势决定，不能被文字
+        // 重测改写，否则锚点与尺寸都会被布局抢回。
+        const nextNode =
+          isMindmapLayoutFrozen(node) || pinnedNodeIds?.has(node.id)
+            ? node
           : {
               ...node,
               ...(metrics.width > maxWidth && {
