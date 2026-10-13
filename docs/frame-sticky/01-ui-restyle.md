@@ -1,7 +1,7 @@
 # Frame 与便签 UI/UX 重设计
 
 - 状态：已实施。
-- 设计依据：`.tmp/design/excalidraw-canvas-frame.html`、`.tmp/design/excalidraw-canvas-sticky.html`（含亮/暗双主题令牌与交互状态图）。
+- 设计依据：`docs/design-ui/excalidraw-canvas-frame.html`、`docs/design-ui/excalidraw-canvas-sticky.html`（含亮/暗双主题令牌与交互状态图）。
 - 参考先例：[表格 P06 UI 重设计](../table-container/phase-6.md)、[思维导图 P12 UI 重设计](../mindmap-plan/12-mindmap-ui-restyle.md)。
 
 ## Context

@@ -201,7 +201,7 @@ export const THEME = {
 export const DARK_THEME_FILTER = "invert(93%) hue-rotate(180deg)";
 
 /**
- * Frame chrome (design: `.tmp/design/excalidraw-canvas-frame.html`). A frame
+ * Frame chrome (design: `docs/design-ui/excalidraw-canvas-frame.html`). A frame
  * is a board, not a decorative rectangle: an opaque background hides the
  * canvas dot grid, with a 1px low-contrast border. Values are light-theme —
  * canvas renderers pass them through `applyDarkModeFilter` for the dark

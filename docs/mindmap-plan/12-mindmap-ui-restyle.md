@@ -2,7 +2,7 @@
 
 - 期次：P12。
 - 状态：待实施。
-- 设计依据：`.tmp/design/excalidraw-canvas-mindmap.html`（内容在 `excalidraw-canvas-elements-style.html` 的 `#mindmap` 节）。
+- 设计依据：`docs/design-ui/excalidraw-canvas-mindmap.html`（`#mindmap` 节）。
 
 ## Context
 

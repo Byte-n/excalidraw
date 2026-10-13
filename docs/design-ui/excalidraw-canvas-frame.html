@@ -1,0 +1,2283 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>白板复合元素 · Frame设计稿</title>
+    <style>
+      /* 设计令牌：沿用白板画布样式设计稿，新增 frame、表格、便签与连接线令牌 */
+      :root {
+        --font: -apple-system, BlinkMacSystemFont, "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+
+        --page: #ffffff;
+        --page-ink: #1f2329;
+        --page-ink-2: #4e5969;
+        --page-muted: #8f959e;
+        --page-line: #e5e6eb;
+
+        --canvas: #f7f8fa;
+        --grid-dot: #d5d8de;
+
+        --ink: #1f2329;
+        --ink-soft: #646a73;
+
+        --sel: #1677ff;
+        --sel-soft: rgba(22, 119, 255, 0.08);
+        --sel-hover: rgba(22, 119, 255, 0.55);
+        --sel-glow: rgba(22, 119, 255, 0.22);
+        --sel-trace: rgba(22, 119, 255, 0.18);
+        --handle-fill: #ffffff;
+        --shadow: #1f2329;
+
+        --teal: #0e8c7e;
+        --teal-fill: #e6f4f1;
+        --amber: #b86e00;
+        --amber-fill: #fff3dc;
+        --violet: #7146d6;
+        --violet-fill: #f0ebfc;
+        --rose: #d83a52;
+        --rose-fill: #fdecee;
+        --denim: #2f6fb0;
+        --denim-fill: #e8f0f8;
+        --neutral-fill: #f2f3f5;
+
+        --frame-fill: #ffffff;
+        --frame-line: #d0d3d9;
+        --frame-title: #646a73;
+
+        --tbl-bg: #ffffff;
+        --tbl-head: #f5f6f7;
+        --tbl-line: #e5e6eb;
+        --tbl-border: #d0d3d9;
+        --tbl-grip: #e5e6eb;
+
+        --sticky-ink: #5c4200;
+        --st-yellow: #ffe58f;
+        --st-green: #c6efd9;
+        --st-blue: #cde3fc;
+        --st-pink: #fcd5dd;
+        --st-violet: #e2d8fb;
+        --st-gray: #e5e6eb;
+
+        --old-line: #bbbbbb;
+        --old-title: #999999;
+      }
+
+      [data-theme="dark"] {
+        --page: #17181b;
+        --page-ink: #e6e8eb;
+        --page-ink-2: #b4b9c1;
+        --page-muted: #7d838c;
+        --page-line: #2b2d32;
+
+        --canvas: #1d1e22;
+        --grid-dot: #34363c;
+
+        --ink: #e6e8eb;
+        --ink-soft: #a3a9b2;
+
+        --sel: #4096ff;
+        --sel-soft: rgba(64, 150, 255, 0.12);
+        --sel-hover: rgba(64, 150, 255, 0.6);
+        --sel-glow: rgba(64, 150, 255, 0.3);
+        --sel-trace: rgba(64, 150, 255, 0.24);
+        --handle-fill: #1d1e22;
+        --shadow: #000000;
+
+        --teal: #3cc4b2;
+        --teal-fill: #163330;
+        --amber: #f0a73a;
+        --amber-fill: #36290f;
+        --violet: #a98bff;
+        --violet-fill: #2a2340;
+        --rose: #ff7a8c;
+        --rose-fill: #3a1d23;
+        --denim: #6ea8e8;
+        --denim-fill: #1a2a3b;
+        --neutral-fill: #313237;
+
+        --frame-fill: #222327;
+        --frame-line: #3a3c42;
+        --frame-title: #a3a9b2;
+
+        --tbl-bg: #222327;
+        --tbl-head: #2a2b30;
+        --tbl-line: #34363c;
+        --tbl-border: #3f4148;
+        --tbl-grip: #3a3c42;
+
+        --sticky-ink: #fff1c2;
+        --st-yellow: #6b5612;
+        --st-green: #1f4a3a;
+        --st-blue: #1f3a5c;
+        --st-pink: #5a2533;
+        --st-violet: #3b2f63;
+        --st-gray: #3a3c42;
+
+        --old-line: #6a6a6a;
+        --old-title: #7a7a7a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--page-ink);
+        font: 14px/1.6 var(--font);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap {
+        max-width: 1248px;
+        margin: 0 auto;
+        padding: 32px 24px 80px;
+      }
+
+      header.top {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--page-line);
+      }
+      header.top h1 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+      header.top p {
+        margin: 6px 0 0;
+        color: var(--page-ink-2);
+        max-width: 72ch;
+      }
+      header.top a {
+        color: var(--sel);
+        text-decoration: none;
+      }
+
+      .theme-switch {
+        display: inline-flex;
+        padding: 3px;
+        border-radius: 8px;
+        background: var(--neutral-fill);
+        border: 1px solid var(--page-line);
+      }
+      .theme-switch button {
+        font: inherit;
+        font-size: 13px;
+        color: var(--page-ink-2);
+        background: transparent;
+        border: 0;
+        border-radius: 6px;
+        padding: 4px 14px;
+        cursor: pointer;
+      }
+      .theme-switch button[aria-pressed="true"] {
+        background: var(--page);
+        color: var(--page-ink);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      }
+      .theme-switch button:focus-visible {
+        outline: 2px solid var(--sel);
+        outline-offset: 1px;
+      }
+
+      nav.toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      nav.toc a {
+        font-size: 13px;
+        color: var(--page-ink-2);
+        text-decoration: none;
+        padding: 3px 10px;
+        border: 1px solid var(--page-line);
+        border-radius: 999px;
+      }
+      nav.toc a:hover {
+        color: var(--sel);
+        border-color: var(--sel-hover);
+      }
+
+      section {
+        margin-top: 48px;
+      }
+      section > h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      section > h3 {
+        margin: 28px 0 0;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      section > .lede {
+        margin: 4px 0 16px;
+        color: var(--page-ink-2);
+        max-width: 76ch;
+      }
+
+      /* 画布容器 */
+      .canvas {
+        position: relative;
+        background-color: var(--canvas);
+        background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
+        background-size: 20px 20px;
+        border: 1px solid var(--page-line);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .scene-scroll {
+        overflow-x: auto;
+      }
+      .scene {
+        width: 1200px;
+        height: 680px;
+      }
+      .scene svg {
+        display: block;
+      }
+      .defs {
+        position: absolute;
+        width: 0;
+        height: 0;
+      }
+
+      /* 基础元素：与画布样式设计稿一致 */
+      svg text {
+        font-family: var(--font);
+      }
+      .t {
+        fill: var(--ink);
+        font-size: 14px;
+      }
+      .t-soft {
+        fill: var(--ink-soft);
+        font-size: 12px;
+      }
+      .el {
+        stroke-width: 1.5;
+        stroke-linejoin: round;
+      }
+      .el-teal {
+        fill: var(--teal-fill);
+        stroke: var(--teal);
+      }
+      .el-amber {
+        fill: var(--amber-fill);
+        stroke: var(--amber);
+      }
+      .el-violet {
+        fill: var(--violet-fill);
+        stroke: var(--violet);
+      }
+      .el-rose {
+        fill: var(--rose-fill);
+        stroke: var(--rose);
+      }
+      .el-denim {
+        fill: var(--denim-fill);
+        stroke: var(--denim);
+      }
+      .conn {
+        fill: none;
+        stroke: var(--ink-soft);
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .conn-dash {
+        stroke-dasharray: 6 4;
+      }
+      .arrowhead {
+        fill: var(--ink-soft);
+      }
+      .label-bg {
+        fill: var(--canvas);
+      }
+
+      /* 选择效果：与画布样式设计稿一致 */
+      .sel-box {
+        fill: none;
+        stroke: var(--sel);
+        stroke-width: 1;
+      }
+      .sel-member {
+        fill: none;
+        stroke: var(--sel-hover);
+        stroke-width: 1;
+        stroke-dasharray: 3 3;
+      }
+      .hover-ring {
+        fill: none;
+        stroke: var(--sel-hover);
+        stroke-width: 1.5;
+      }
+      .handle {
+        fill: var(--handle-fill);
+        stroke: var(--sel);
+        stroke-width: 1.25;
+      }
+      .handle-solid {
+        fill: var(--sel);
+        stroke: var(--handle-fill);
+        stroke-width: 1.5;
+      }
+      .bind-glow {
+        fill: none;
+        stroke: var(--sel-glow);
+        stroke-width: 6;
+      }
+      .size-tag rect {
+        fill: var(--sel);
+      }
+      .size-tag text {
+        fill: #fff;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+      .angle-tag rect {
+        fill: var(--ink);
+      }
+      .angle-tag text {
+        fill: var(--canvas);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+      .rot-band-outer {
+        fill: none;
+        stroke: var(--sel);
+        stroke-width: 3.5;
+        stroke-linecap: round;
+      }
+      .rot-band-inner {
+        fill: none;
+        stroke: var(--handle-fill);
+        stroke-width: 1.5;
+        stroke-linecap: round;
+      }
+      .rot-head {
+        fill: var(--handle-fill);
+        stroke: var(--sel);
+        stroke-width: 1.25;
+        stroke-linejoin: round;
+      }
+      .caret {
+        stroke: var(--sel);
+        stroke-width: 1.5;
+      }
+      .edit-ring {
+        fill: none;
+        stroke: var(--sel);
+        stroke-width: 1.5;
+      }
+      .cursor {
+        fill: var(--ink);
+        stroke: var(--canvas);
+        stroke-width: 1;
+      }
+
+      /* Frame */
+      .frame {
+        fill: var(--frame-fill);
+        stroke: var(--frame-line);
+        stroke-width: 1;
+      }
+      .frame-hover {
+        stroke: var(--sel-hover);
+        stroke-width: 1.5;
+      }
+      .frame-drop {
+        fill: color-mix(in srgb, var(--sel) 6%, var(--frame-fill));
+        stroke: var(--sel);
+        stroke-width: 1.5;
+      }
+      .frame-title {
+        fill: var(--frame-title);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .frame-glyph {
+        fill: none;
+        stroke: var(--frame-title);
+        stroke-width: 1.2;
+        stroke-linecap: round;
+      }
+      .is-hover .frame-title {
+        fill: var(--ink);
+      }
+      .is-hover .frame-glyph {
+        stroke: var(--ink);
+      }
+      .is-active .frame-title {
+        fill: var(--sel);
+      }
+      .is-active .frame-glyph {
+        stroke: var(--sel);
+      }
+      .frame-input {
+        fill: var(--handle-fill);
+        stroke: var(--sel);
+        stroke-width: 1;
+      }
+
+      /* 表格 */
+      .tbl-bg {
+        fill: var(--tbl-bg);
+      }
+      .tbl-head {
+        fill: var(--tbl-head);
+      }
+      .tbl-line {
+        fill: none;
+        stroke: var(--tbl-line);
+        stroke-width: 1;
+      }
+      .tbl-border {
+        fill: none;
+        stroke: var(--tbl-border);
+        stroke-width: 1;
+      }
+      .t-cell {
+        fill: var(--ink);
+        font-size: 13px;
+      }
+      .t-head {
+        fill: var(--ink);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .t-tag {
+        font-size: 12px;
+      }
+      .cell-active {
+        fill: none;
+        stroke: var(--sel);
+        stroke-width: 2;
+      }
+      .cell-range {
+        fill: var(--sel-soft);
+        stroke: var(--sel);
+        stroke-width: 1;
+      }
+      .grip {
+        fill: var(--tbl-grip);
+      }
+      .grip-on {
+        fill: var(--sel);
+      }
+      .insert-line {
+        stroke: var(--sel);
+        stroke-width: 2;
+        stroke-linecap: round;
+      }
+      .plus-solid circle {
+        fill: var(--sel);
+      }
+      .plus-solid path {
+        stroke: #fff;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+      }
+
+      /* 思维导图 */
+      .mm-root {
+        fill: var(--ink);
+      }
+      .mm-root-t {
+        fill: var(--canvas);
+        font-weight: 600;
+      }
+      .mm-edge {
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .mm-badge {
+        fill: var(--handle-fill);
+        stroke-width: 1.25;
+      }
+      .mm-badge-t {
+        font-size: 11px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .add-btn circle {
+        fill: var(--handle-fill);
+        stroke: var(--sel);
+        stroke-width: 1.25;
+      }
+      .add-btn path {
+        stroke: var(--sel);
+        stroke-width: 1.5;
+        stroke-linecap: round;
+      }
+      .add-btn.is-hover circle {
+        fill: var(--sel);
+      }
+      .add-btn.is-hover path {
+        stroke: #fff;
+      }
+
+      .mml-stage {
+        min-height: 236px;
+        padding: 20px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .mml-panel {
+        background: var(--page);
+        border: 1px solid var(--page-line);
+        border-radius: 10px;
+        box-shadow: 0 8px 28px
+          color-mix(in srgb, var(--shadow) 12%, transparent);
+        color: var(--page-ink);
+        font-size: 13px;
+        line-height: 1.5;
+        text-align: left;
+      }
+      .mml-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 9px 13px;
+        font-weight: 600;
+        border-bottom: 1px solid var(--page-line);
+      }
+      .mml-group {
+        padding: 7px 10px 1px;
+        font-size: 11px;
+        color: var(--page-muted);
+      }
+      .mml-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        white-space: nowrap;
+      }
+      .mml-row .mml-name {
+        color: var(--page-ink);
+      }
+      .mml-row.is-active {
+        background: var(--sel-soft);
+      }
+      .mml-row.is-active .mml-name {
+        color: var(--sel);
+      }
+      .mml-toggle {
+        width: 14px;
+        flex: none;
+        text-align: center;
+        font-size: 10px;
+        color: var(--page-muted);
+      }
+      .mml-acts {
+        margin-left: auto;
+        padding-left: 18px;
+        color: var(--page-muted);
+      }
+      .mml-menu {
+        padding: 5px;
+        min-width: 224px;
+      }
+      .mml-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 5px 9px;
+        border-radius: 6px;
+        white-space: nowrap;
+      }
+      .mml-item.is-hover {
+        background: var(--sel-soft);
+      }
+      .mml-sep {
+        height: 1px;
+        margin: 5px 4px;
+        background: var(--page-line);
+      }
+      .mml-kbd {
+        display: inline-block;
+        padding: 0 5px;
+        border: 1px solid var(--page-line);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        background: var(--page);
+        color: var(--page-ink-2);
+        font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .mml-field {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 7px 13px;
+        color: var(--page-ink-2);
+      }
+      .mml-seg {
+        display: inline-flex;
+        gap: 2px;
+        padding: 2px;
+        border-radius: 7px;
+        background: var(--neutral-fill);
+      }
+      .mml-seg span {
+        padding: 2px 9px;
+        border-radius: 5px;
+        font-size: 12px;
+        color: var(--page-ink-2);
+        white-space: nowrap;
+      }
+      .mml-seg span.is-on {
+        background: var(--page);
+        color: var(--sel);
+        box-shadow: 0 1px 3px color-mix(in srgb, var(--shadow) 18%, transparent);
+      }
+      .mml-swatch {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+      }
+      .mml-bar {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 10px;
+      }
+      .mml-bar-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        padding: 5px 11px;
+        border-radius: 8px;
+        font-size: 11px;
+        color: var(--page-ink-2);
+      }
+      .mml-bar-btn .mml-ico {
+        font-size: 14px;
+        line-height: 1.2;
+        color: var(--page-ink);
+      }
+      .mml-bar-btn.is-on {
+        background: var(--sel-soft);
+        color: var(--sel);
+      }
+      .mml-bar-btn.is-on .mml-ico {
+        color: var(--sel);
+      }
+      .mml-keep {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 0 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 400;
+        line-height: 18px;
+        color: var(--page-ink-2);
+        background: var(--neutral-fill);
+        vertical-align: 1px;
+      }
+      .mml-dim {
+        stroke: var(--page-muted);
+        stroke-width: 1;
+      }
+
+      /* 便签 */
+      .st-t {
+        font-size: 14px;
+      }
+      .st-foot {
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        opacity: 0.55;
+      }
+
+      /* 连接线 */
+      .conn-trace {
+        fill: none;
+        stroke: var(--sel-trace);
+        stroke-width: 8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .conn-active {
+        fill: none;
+        stroke: var(--sel);
+        stroke-width: 2;
+        stroke-linecap: round;
+      }
+      .anchor {
+        fill: var(--handle-fill);
+        stroke: var(--sel);
+        stroke-width: 1;
+      }
+      .ah-fill {
+        fill: var(--ink-soft);
+      }
+      .ah-line {
+        fill: none;
+        stroke: var(--ink-soft);
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .ah-hollow {
+        fill: var(--canvas);
+        stroke: var(--ink-soft);
+        stroke-width: 1.5;
+        stroke-linejoin: round;
+      }
+
+      /* 当前风格示意 */
+      .rough-text {
+        font-family: "Comic Sans MS", "Chalkboard SE", "Kaiti SC", cursive;
+        fill: var(--ink);
+      }
+      .helv {
+        font-family: Helvetica, Arial, sans-serif;
+      }
+
+      /* 对比与状态网格 */
+      .compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .states {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+      .heads {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 12px;
+      }
+      .compare figure,
+      .states figure,
+      .heads figure,
+      figure.wide {
+        margin: 0;
+      }
+      figure.wide {
+        margin-top: 16px;
+      }
+      .compare figcaption,
+      .states figcaption,
+      .heads figcaption,
+      figure.wide figcaption {
+        margin-top: 8px;
+        font-size: 13px;
+        color: var(--page-ink-2);
+      }
+      .compare figcaption b,
+      .states figcaption b,
+      .heads figcaption b,
+      figure.wide figcaption b {
+        color: var(--page-ink);
+        font-weight: 600;
+        margin-right: 6px;
+      }
+      .compare .canvas svg,
+      .states .canvas svg,
+      .heads .canvas svg,
+      figure.wide .canvas svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .badge-new {
+        display: inline-block;
+        margin-left: 4px;
+        padding: 0 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        line-height: 18px;
+        color: var(--sel);
+        background: var(--sel-soft);
+        vertical-align: 1px;
+      }
+
+      table.spec {
+        width: 100%;
+        margin-top: 20px;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      table.spec th,
+      table.spec td {
+        text-align: left;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--page-line);
+        vertical-align: top;
+      }
+      table.spec th {
+        font-weight: 600;
+        color: var(--page-ink-2);
+        background: color-mix(in srgb, var(--neutral-fill) 60%, transparent);
+      }
+      table.spec td:first-child {
+        color: var(--page-ink);
+        white-space: nowrap;
+      }
+      table.spec td {
+        color: var(--page-ink-2);
+      }
+      .sw {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        vertical-align: -1px;
+        margin-right: 6px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+      }
+
+      @media (max-width: 900px) {
+        .compare,
+        .states {
+          grid-template-columns: 1fr;
+        }
+        .heads {
+          grid-template-columns: repeat(3, 1fr);
+        }
+        header.top {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+        </style>
+  </head>
+  <body>
+    <!-- 全局滤镜：手绘抖动示意与便签阴影 -->
+    <svg class="defs" aria-hidden="true">
+      <defs>
+        <filter id="rough" x="-10%" y="-10%" width="120%" height="120%">
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.035"
+            numOctaves="2"
+            seed="4"
+          />
+          <feDisplacementMap in="SourceGraphic" scale="4" />
+        </filter>
+        <filter id="rough-soft" x="-10%" y="-10%" width="120%" height="120%">
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.02"
+            numOctaves="2"
+            seed="9"
+          />
+          <feDisplacementMap in="SourceGraphic" scale="3" />
+        </filter>
+        <filter id="st-shadow" x="-20%" y="-20%" width="140%" height="150%">
+          <feDropShadow
+            dx="0"
+            dy="1"
+            stdDeviation="1"
+            style="flood-color: var(--shadow)"
+            flood-opacity="0.08"
+          />
+          <feDropShadow
+            dx="0"
+            dy="3"
+            stdDeviation="4"
+            style="flood-color: var(--shadow)"
+            flood-opacity="0.1"
+          />
+        </filter>
+        <filter id="st-lift" x="-30%" y="-30%" width="160%" height="170%">
+          <feDropShadow
+            dx="0"
+            dy="2"
+            stdDeviation="1.5"
+            style="flood-color: var(--shadow)"
+            flood-opacity="0.08"
+          />
+          <feDropShadow
+            dx="0"
+            dy="8"
+            stdDeviation="10"
+            style="flood-color: var(--shadow)"
+            flood-opacity="0.14"
+          />
+        </filter>
+      </defs>
+    </svg>
+
+    <div class="wrap">
+      <header class="top">
+        <div>
+          <h1>白板复合元素 · Frame</h1>
+          <p>
+            Frame 的容器、标题、选中、悬停、拖入与裁剪状态。
+          </p>
+          <nav class="toc" aria-label="目录">
+            <a href="./excalidraw-canvas-table.html">表格</a>
+            <a href="./excalidraw-canvas-mindmap.html">思维导图</a>
+            <a href="./excalidraw-canvas-sticky.html">便签</a>
+            <a href="./excalidraw-canvas-connector.html">连接线与箭头</a>
+            <a href="./excalidraw-canvas-toolbar.html">工具栏</a>
+          </nav>
+        </div>
+        <div class="theme-switch" role="group" aria-label="主题">
+          <button type="button" data-theme-set="light" aria-pressed="true">
+            亮色
+          </button>
+          <button type="button" data-theme-set="dark" aria-pressed="false">
+            暗色
+          </button>
+        </div>
+      </header>
+
+      <!-- Frame -->
+      <section id="frame">
+        <h2>Frame</h2>
+        <p class="lede">
+          Frame
+          是画板而不是装饰框：用实色背景遮住点阵，让内容区与画布明确分层；边框减到
+          1px 浅灰，标题缩小并加上画板图标，交互时标题与边框跟随主色。
+        </p>
+        <div class="compare">
+          <figure>
+            <div class="canvas">
+              <svg viewBox="0 0 560 260" aria-label="当前 frame 示意">
+                <text
+                  class="helv"
+                  x="60"
+                  y="44"
+                  style="fill: var(--old-title); font-size: 14px"
+                >
+                  增长策略
+                </text>
+                <rect
+                  x="60"
+                  y="52"
+                  width="440"
+                  height="176"
+                  rx="8"
+                  fill="none"
+                  stroke="var(--old-line)"
+                  stroke-width="2"
+                />
+                <g
+                  filter="url(#rough)"
+                  fill="none"
+                  stroke="var(--ink)"
+                  stroke-width="1.6"
+                >
+                  <rect x="104" y="100" width="140" height="72" rx="4" />
+                  <ellipse cx="390" cy="136" rx="70" ry="38" />
+                  <path d="M246 136 C 280 132, 300 140, 316 136" />
+                  <path d="M304 128 L318 136 L305 145" />
+                </g>
+                <text
+                  class="rough-text"
+                  x="174"
+                  y="142"
+                  text-anchor="middle"
+                  style="font-size: 16px"
+                >
+                  拉新
+                </text>
+                <text
+                  class="rough-text"
+                  x="390"
+                  y="142"
+                  text-anchor="middle"
+                  style="font-size: 16px"
+                >
+                  留存
+                </text>
+              </svg>
+            </div>
+            <figcaption>
+              <b>当前</b>2px #BBB 透明框，点阵穿透到内容区；标题 14px
+              灰色、与边框距离过近，视觉上像一个普通矩形。
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="canvas">
+              <svg viewBox="0 0 560 260" aria-label="新 frame 风格">
+                <g data-frame="60,52,440,176" data-name="增长策略"></g>
+                <rect
+                  class="el el-teal"
+                  x="104"
+                  y="100"
+                  width="140"
+                  height="72"
+                  rx="10"
+                />
+                <text class="t" x="174" y="141" text-anchor="middle">拉新</text>
+                <path class="conn" d="M246 136 H308" />
+                <path class="arrowhead" d="M316 136 l-9 -5 v10 z" />
+                <ellipse
+                  class="el el-violet"
+                  cx="390"
+                  cy="136"
+                  rx="70"
+                  ry="38"
+                />
+                <text class="t" x="390" y="141" text-anchor="middle">留存</text>
+              </svg>
+            </div>
+            <figcaption>
+              <b>新风格</b>1px 浅灰边框 + 实色背景，圆角 8px；标题 12px
+              中粗、左侧 # 图标，位于边框上方 8px。
+            </figcaption>
+          </figure>
+        </div>
+
+        <h3>交互状态</h3>
+        <div class="states" style="margin-top: 12px">
+          <figure>
+            <div class="canvas">
+              <svg viewBox="0 0 300 180">
+                <g data-frame="40,44,220,116" data-name="流程草图"></g>
+                <rect
+                  class="el el-teal"
+                  x="68"
+                  y="80"
+                  width="72"
+                  height="44"
+                  rx="10"
+                />
+                <ellipse
+                  class="el el-violet"
+                  cx="204"
+                  cy="102"
+                  rx="34"
+                  ry="22"
+                />
+              </svg>
+            </div>
+            <figcaption>
+              <b>默认</b>标题与边框均为弱化灰色，不抢内容的注意力。
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="canvas">
+              <svg viewBox="0 0 300 180">
+                <g
+                  data-frame="40,44,220,116"
+                  data-name="流程草图"
+                  data-state="hover"
+                ></g>
+                <rect
+                  class="el el-teal"
+                  x="68"
+                  y="80"
+                  width="72"
+                  height="44"
+                  rx="10"
+                />
+                <ellipse
+                  class="el el-violet"
+                  cx="204"
+                  cy="102"
+                  rx="34"
+                  ry="22"
+                />
+              </svg>
+            </div>
+            <figcaption>
+              <b>悬停</b>悬停标题或边框时，边框变为主色
+              55%，标题变为墨色；悬停内部内容不触发。
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="canvas">
+              <svg viewBox="0 0 300 180">
+                <g
+                  data-frame="40,44,220,116"
+                  data-name="流程草图"
+                  data-state="active"
+                ></g>
+                <rect
+                  class="el el-teal"
+                  x="68"
+                  y="80"
+                  width="72"
+                  height="44"
+                  rx="10"
+                />
+                <ellipse
+                  class="el el-violet"
+                  cx="204"
+                  cy="102"
+                  rx="34"
+                  ry="22"
+                />
+                <g
+                  data-select="40,44,220,116"
+                  data-pad="0"
+                  data-rot="hidden"
+                ></g>
+              </svg>
+            </div>
+            <figcaption>
+              <b>选中</b>选中框与边框重合，标题变为主色；frame
+              不可旋转，不显示旋转手柄。
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="canvas">
+              <svg viewBox="0 0 300 180">
+                <g
+                  data-frame="40,44,220,116"
+                  data-name="流程草图"
+                  data-state="editing"
+                ></g>
+                <rect
+                  class="el el-teal"
+                  x="68"
+                  y="80"
+                  width="72"
+                  height="44"
+                  rx="10"
+                />
+                <ellipse
+                  class="el el-violet"
+                  cx="204"
+                  cy="102"
+                  rx="34"
+                  ry="22"
+                />
+              </svg>
+            </div>
+            <figcaption>
+              <b>重命名</b>双击标题原位变为输入框，1px
+              主色边框，回车或失焦提交。
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="canvas">
+              <svg viewBox="0 0 300 180">
+                <g
+                  data-frame="40,44,220,116"
+                  data-name="流程草图"
+                  data-state="drop"
+                ></g>
+                <rect
+                  class="el el-teal"
+                  x="68"
+                  y="80"
+                  width="72"
+                  height="44"
+                  rx="10"
+                />
+                <g opacity="0.85">
+                  <rect
+                    class="el el-amber"
+                    x="170"
+                    y="96"
+                    width="72"
+                    height="44"
+                    rx="10"
+                  />
+                  <rect
+                    class="hover-ring"
+                    x="165"
+                    y="91"
+                    width="82"
+                    height="54"
+                    rx="13"
+                  />
+                </g>
+                <path
+                  class="cursor"
+                  d="M222 122 l0 14 l4 -4 l2.6 5.6 l2.2 -1 l-2.6 -5.5 l5.2 0 z"
+                />
+              </svg>
+            </div>
+            <figcaption>
+              <b>拖入</b>元素拖进 frame 时，frame 显示主色浅底与 1.5px
+              主色边框，松手即归属。
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="canvas">
+              <svg viewBox="0 0 300 180">
+                <defs>
+                  <clipPath id="clip-frame-crop">
+                    <rect x="40" y="44" width="220" height="116" rx="8" />
+                  </clipPath>
+                </defs>
+                <g data-frame="40,44,220,116" data-name="流程草图"></g>
+                <rect
+                  class="el el-teal"
+                  x="68"
+                  y="80"
+                  width="72"
+                  height="44"
+                  rx="10"
+                />
+                <g clip-path="url(#clip-frame-crop)">
+                  <rect
+                    class="el el-rose"
+                    x="196"
+                    y="86"
+                    width="90"
+                    height="44"
+                    rx="10"
+                  />
+                  <text class="t" x="241" y="113" text-anchor="middle">
+                    超出部分
+                  </text>
+                </g>
+                <rect
+                  class="sel-member"
+                  x="196"
+                  y="86"
+                  width="90"
+                  height="44"
+                  rx="10"
+                />
+                <g data-select="196,86,90,44" data-rot="hidden"></g>
+              </svg>
+            </div>
+            <figcaption>
+              <b>内容裁剪</b
+              >超出边界的内容被裁剪；选中被裁剪元素时以虚线显示完整轮廓。
+            </figcaption>
+          </figure>
+        </div>
+
+        <table class="spec">
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>新值</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>边框</td>
+              <td>
+                <span class="sw" style="background: #d0d3d9"></span>1px #D0D3D9
+                / 暗色 #3A3C42
+              </td>
+              <td>当前为 2px #BBB；圆角 8px 不变</td>
+            </tr>
+            <tr>
+              <td>背景</td>
+              <td>
+                <span class="sw" style="background: #ffffff"></span>#FFFFFF /
+                暗色 #222327
+              </td>
+              <td>当前透明；实色背景遮住点阵，导出时保留</td>
+            </tr>
+            <tr>
+              <td>标题</td>
+              <td>12px 中粗，#646A73 / 暗色 #A3A9B2，基线在边框上方 8px</td>
+              <td>左侧 10px # 画板图标；当前 14px #999、距边框 3px</td>
+            </tr>
+            <tr>
+              <td>悬停</td>
+              <td>边框 1.5px 主色 55%，标题墨色</td>
+              <td>只响应标题与边框，悬停内部元素时不触发</td>
+            </tr>
+            <tr>
+              <td>选中</td>
+              <td>选中框与边框重合（间距 0），标题主色</td>
+              <td>沿用标准手柄，不显示旋转手柄</td>
+            </tr>
+            <tr>
+              <td>拖入目标</td>
+              <td>背景混入 6% 主色，边框 1.5px 主色，标题主色</td>
+              <td>取代当前无反馈的归属判断</td>
+            </tr>
+            <tr>
+              <td>重命名</td>
+              <td>原位输入框：白底、1px 主色边框、圆角 4</td>
+              <td>输入期间隐藏 # 图标</td>
+            </tr>
+            <tr>
+              <td>裁剪</td>
+              <td>超出内容按圆角边框裁剪</td>
+              <td>选中被裁剪元素时以 1px 3/3 虚线显示完整轮廓</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <script>
+      const NS = "http://www.w3.org/2000/svg";
+      const make = (tag, attrs, parent) => {
+        const node = document.createElementNS(NS, tag);
+        for (const [key, value] of Object.entries(attrs))
+          node.setAttribute(key, value);
+        parent.appendChild(node);
+        return node;
+      };
+      const label = (attrs, text, parent) => {
+        const node = make("text", attrs, parent);
+        node.textContent = text;
+        return node;
+      };
+      // 估算文字宽度：中文按整字宽，其余按 0.58 字宽
+      const textWidth = (text, size) =>
+        [...text].reduce(
+          (sum, char) => sum + (char.charCodeAt(0) > 255 ? size : size * 0.58),
+          0,
+        );
+
+      // 选中框与手柄：规格与白板画布样式设计稿一致
+      const ROTATION_SIZE = 16;
+      const ROTATION_GAP = 16;
+      const rotationGlyph = (parent, hx, hy, size) => {
+        const r = size * 0.75;
+        const ox = hx - r * Math.SQRT1_2,
+          oy = hy + r * Math.SQRT1_2;
+        const head = size * 0.32;
+        const arc = `M${ox} ${oy - r} A${r} ${r} 0 0 1 ${ox + r} ${oy}`;
+        make("path", { class: "rot-band-outer", d: arc }, parent);
+        make("path", { class: "rot-band-inner", d: arc }, parent);
+        for (const [angle, dir] of [
+          [-Math.PI / 2, -1],
+          [0, 1],
+        ]) {
+          const px = ox + r * Math.cos(angle),
+            py = oy + r * Math.sin(angle);
+          const t = angle + (dir * Math.PI) / 2;
+          const tx = Math.cos(t),
+            ty = Math.sin(t);
+          make(
+            "path",
+            {
+              class: "rot-head",
+              d: `M${px + tx * head} ${py + ty * head} L${
+                px - ty * head * 0.8
+              } ${py + tx * head * 0.8} L${px + ty * head * 0.8} ${
+                py - tx * head * 0.8
+              } Z`,
+            },
+            parent,
+          );
+        }
+      };
+
+      const drawSelection = (
+        group,
+        x,
+        y,
+        w,
+        h,
+        { pad = 6, rot, size } = {},
+      ) => {
+        const bx = x - pad,
+          by = y - pad,
+          bw = w + pad * 2,
+          bh = h + pad * 2;
+        make(
+          "rect",
+          { class: "sel-box", x: bx, y: by, width: bw, height: bh, rx: 2 },
+          group,
+        );
+        if (Math.min(w, h) >= 48) {
+          const pill = (cx, cy, horizontal) =>
+            make(
+              "rect",
+              {
+                class: "handle",
+                x: horizontal ? cx - 8 : cx - 2.5,
+                y: horizontal ? cy - 2.5 : cy - 8,
+                width: horizontal ? 16 : 5,
+                height: horizontal ? 5 : 16,
+                rx: 2.5,
+              },
+              group,
+            );
+          pill(bx + bw / 2, by, true);
+          pill(bx + bw / 2, by + bh, true);
+          pill(bx, by + bh / 2, false);
+          pill(bx + bw, by + bh / 2, false);
+        }
+        for (const [cx, cy] of [
+          [bx, by],
+          [bx + bw, by],
+          [bx, by + bh],
+          [bx + bw, by + bh],
+        ]) {
+          make("circle", { class: "handle", cx, cy, r: 4.5 }, group);
+        }
+        if (rot !== "hidden") {
+          rotationGlyph(
+            make("g", {}, group),
+            bx + bw + ROTATION_GAP,
+            by - ROTATION_GAP,
+            ROTATION_SIZE,
+          );
+        }
+        if (size) {
+          const tag = make("g", { class: "size-tag" }, group);
+          const tw = size.length * 6.4 + 12;
+          make(
+            "rect",
+            {
+              x: bx + bw / 2 - tw / 2,
+              y: by + bh + 12,
+              width: tw,
+              height: 20,
+              rx: 5,
+            },
+            tag,
+          );
+          label(
+            { x: bx + bw / 2, y: by + bh + 26, "text-anchor": "middle" },
+            size,
+            tag,
+          );
+        }
+        return { bx, by, bw, bh };
+      };
+
+      // Frame：背景、标题与状态
+      document.querySelectorAll("[data-frame]").forEach((group) => {
+        const [x, y, w, h] = group.dataset.frame.split(",").map(Number);
+        const name = group.dataset.name;
+        const state = group.dataset.state;
+        if (state === "hover") group.classList.add("is-hover");
+        if (state === "active" || state === "drop")
+          group.classList.add("is-active");
+        const cls =
+          { hover: "frame frame-hover", drop: "frame frame-drop" }[state] ??
+          "frame";
+        make("rect", { class: cls, x, y, width: w, height: h, rx: 8 }, group);
+        if (state === "editing") {
+          const tw = textWidth(name, 12);
+          make(
+            "rect",
+            {
+              class: "frame-input",
+              x: x - 4,
+              y: y - 24,
+              width: tw + 20,
+              height: 20,
+              rx: 4,
+            },
+            group,
+          );
+          label(
+            {
+              class: "frame-title",
+              x: x + 4,
+              y: y - 9,
+              style: "fill: var(--ink)",
+            },
+            name,
+            group,
+          );
+          make(
+            "path",
+            { class: "caret", d: `M${x + 5 + tw} ${y - 20} V${y - 8}` },
+            group,
+          );
+          return;
+        }
+        make(
+          "path",
+          {
+            class: "frame-glyph",
+            d: `M${x + 3} ${y - 18}v10M${x + 7} ${y - 18}v10M${x} ${
+              y - 15
+            }h10M${x} ${y - 11}h10`,
+          },
+          group,
+        );
+        label({ class: "frame-title", x: x + 15, y: y - 8 }, name, group);
+      });
+
+      // 表格：data-rows 用分号分行、竖线分列，@色名:文字 表示状态标签
+      const TAG = {
+        teal: ["var(--teal-fill)", "var(--teal)"],
+        amber: ["var(--amber-fill)", "var(--amber)"],
+        violet: ["var(--violet-fill)", "var(--violet)"],
+        rose: ["var(--rose-fill)", "var(--rose)"],
+        neutral: ["var(--neutral-fill)", "var(--ink-soft)"],
+      };
+      document.querySelectorAll("[data-table]").forEach((group) => {
+        const [x, y] = group.dataset.table.split(",").map(Number);
+        const cols = group.dataset.cols.split(",").map(Number);
+        const rows = group.dataset.rows.split(";").map((row) => row.split("|"));
+        const rh = Number(group.dataset.rh ?? 36);
+        const old = group.dataset.variant === "old";
+        const W = cols.reduce((a, b) => a + b, 0);
+        const H = rows.length * rh;
+        const colX = cols.reduce(
+          (acc, c) => [...acc, acc[acc.length - 1] + c],
+          [x],
+        );
+
+        if (old) {
+          make(
+            "rect",
+            { x, y, width: W, height: H, fill: "none", stroke: "#b3b3b3" },
+            group,
+          );
+        } else {
+          make(
+            "rect",
+            { class: "tbl-bg", x, y, width: W, height: H, rx: 6 },
+            group,
+          );
+          make(
+            "path",
+            {
+              class: "tbl-head",
+              d: `M${x} ${y + rh} V${y + 6} Q${x} ${y} ${x + 6} ${y} H${
+                x + W - 6
+              } Q${x + W} ${y} ${x + W} ${y + 6} V${y + rh} Z`,
+            },
+            group,
+          );
+        }
+        const lineAttrs = old
+          ? { fill: "none", stroke: "#d6d6d6" }
+          : { class: "tbl-line" };
+        for (let i = 1; i < rows.length; i++)
+          make(
+            "path",
+            { ...lineAttrs, d: `M${x} ${y + i * rh} H${x + W}` },
+            group,
+          );
+        for (let j = 1; j < cols.length; j++)
+          make(
+            "path",
+            { ...lineAttrs, d: `M${colX[j]} ${y} V${y + H}` },
+            group,
+          );
+        if (!old)
+          make(
+            "rect",
+            { class: "tbl-border", x, y, width: W, height: H, rx: 6 },
+            group,
+          );
+
+        rows.forEach((row, i) => {
+          const cy = y + i * rh + rh / 2;
+          row.forEach((cell, j) => {
+            const cx = colX[j] + 12;
+            const tag = cell.match(/^@(\w+):(.+)$/);
+            if (old) {
+              label(
+                {
+                  class: "rough-text",
+                  x: cx,
+                  y: cy + 5,
+                  style: "font-size: 15px",
+                },
+                tag ? tag[2] : cell,
+                group,
+              );
+            } else if (tag) {
+              const [fill, ink] = TAG[tag[1]];
+              const tw = textWidth(tag[2], 12);
+              make(
+                "rect",
+                {
+                  x: cx,
+                  y: cy - 10,
+                  width: tw + 16,
+                  height: 20,
+                  rx: 10,
+                  style: `fill: ${fill}`,
+                },
+                group,
+              );
+              label(
+                { class: "t-tag", x: cx + 8, y: cy + 4, style: `fill: ${ink}` },
+                tag[2],
+                group,
+              );
+            } else {
+              label(
+                { class: i === 0 ? "t-head" : "t-cell", x: cx, y: cy + 4.5 },
+                cell,
+                group,
+              );
+            }
+          });
+        });
+
+        // 行列把手：data-grips="选中列|选中行"，序号从 0 开始
+        if (group.dataset.grips !== undefined) {
+          const [onCols, onRows] = group.dataset.grips
+            .split("|")
+            .map((part) => (part ? part.split(",").map(Number) : []));
+          cols.forEach((c, j) =>
+            make(
+              "rect",
+              {
+                class: onCols.includes(j) ? "grip-on" : "grip",
+                x: colX[j] + 3,
+                y: y - 12,
+                width: c - 6,
+                height: 6,
+                rx: 3,
+              },
+              group,
+            ),
+          );
+          rows.forEach((_, i) =>
+            make(
+              "rect",
+              {
+                class: onRows.includes(i) ? "grip-on" : "grip",
+                x: x - 12,
+                y: y + i * rh + 3,
+                width: 6,
+                height: rh - 6,
+                rx: 3,
+              },
+              group,
+            ),
+          );
+        }
+      });
+
+      // 思维导图：横向布局，叶子等距排布，父节点取子节点中心
+      const MINDMAPS = {
+        overview: {
+          root: "用户增长",
+          branches: [
+            {
+              text: "拉新",
+              color: "teal",
+              children: [
+                { text: "渠道投放" },
+                { text: "裂变邀请", state: "selected" },
+              ],
+            },
+            {
+              text: "促活",
+              color: "amber",
+              children: [{ text: "签到任务" }, { text: "消息推送" }],
+            },
+            {
+              text: "留存",
+              color: "violet",
+              children: [{ text: "会员体系" }, { text: "流失召回" }],
+            },
+          ],
+        },
+        compare: {
+          root: "用户增长",
+          branches: [
+            {
+              text: "拉新",
+              color: "teal",
+              children: [{ text: "渠道投放" }, { text: "裂变邀请" }],
+            },
+            {
+              text: "促活",
+              color: "amber",
+              children: [{ text: "签到任务" }, { text: "消息推送" }],
+            },
+            {
+              text: "留存",
+              color: "violet",
+              children: [{ text: "会员体系" }, { text: "流失召回" }],
+            },
+          ],
+        },
+        levels: {
+          compact: true,
+          root: "增长",
+          branches: [
+            {
+              text: "拉新",
+              color: "teal",
+              children: [{ text: "渠道投放" }, { text: "裂变邀请" }],
+            },
+            {
+              text: "促活",
+              color: "amber",
+              children: [{ text: "签到任务" }, { text: "消息推送" }],
+            },
+          ],
+        },
+        select: {
+          compact: true,
+          root: "增长",
+          branches: [
+            {
+              text: "拉新",
+              color: "teal",
+              children: [{ text: "渠道投放" }, { text: "裂变邀请" }],
+            },
+            { text: "促活", color: "amber", children: [], state: "selected" },
+          ],
+        },
+        collapse: {
+          compact: true,
+          root: "增长",
+          branches: [
+            { text: "拉新", color: "teal", collapsed: 2, children: [] },
+            {
+              text: "促活",
+              color: "amber",
+              toggle: true,
+              children: [{ text: "签到任务" }, { text: "消息推送" }],
+            },
+            { text: "留存", color: "violet", children: [] },
+          ],
+        },
+        drag: {
+          compact: true,
+          root: "增长",
+          branches: [
+            {
+              text: "拉新",
+              color: "teal",
+              children: [
+                { text: "渠道投放" },
+                { text: "裂变邀请", state: "origin" },
+              ],
+            },
+            { text: "促活", color: "amber", children: [{ text: "签到任务" }] },
+          ],
+        },
+        editing: {
+          compact: true,
+          root: "增长",
+          branches: [
+            { text: "拉新", color: "teal", children: [{ text: "渠道投放" }] },
+            {
+              text: "促活转化",
+              color: "amber",
+              children: [],
+              state: "editing",
+            },
+          ],
+        },
+      };
+
+      const addButton = (parent, cx, cy, hover) => {
+        const g = make(
+          "g",
+          { class: hover ? "add-btn is-hover" : "add-btn" },
+          parent,
+        );
+        make("circle", { cx, cy, r: 8 }, g);
+        make(
+          "path",
+          {
+            d: `M${cx - 3.5} ${cy} H${cx + 3.5} M${cx} ${cy - 3.5} V${
+              cy + 3.5
+            }`,
+          },
+          g,
+        );
+      };
+
+      const nodeState = (group, node, box, fontSize) => {
+        if (node.state === "selected") {
+          const { bx, by, bw, bh } = drawSelection(
+            group,
+            box.x,
+            box.y,
+            box.w,
+            box.h,
+            { rot: "hidden" },
+          );
+          addButton(group, bx + bw + 14, by + bh / 2, true);
+          addButton(group, bx + bw / 2, by + bh + 14, false);
+        }
+        if (node.state === "editing") {
+          make(
+            "rect",
+            {
+              class: "edit-ring",
+              x: box.x,
+              y: box.y,
+              width: box.w,
+              height: box.h,
+              rx: box.rx,
+            },
+            group,
+          );
+          const end =
+            box.x + box.w / 2 + textWidth(node.text, fontSize) / 2 + 2;
+          make(
+            "path",
+            { class: "caret", d: `M${end} ${box.y + 7} V${box.y + box.h - 7}` },
+            group,
+          );
+        }
+      };
+
+      document.querySelectorAll("[data-mindmap]").forEach((group) => {
+        const spec = MINDMAPS[group.dataset.mindmap];
+        const { x, cy, l1x, l2x, gap } = Object.fromEntries(
+          ["x", "cy", "l1x", "l2x", "gap"].map((key) => [
+            key,
+            Number(group.dataset[key]),
+          ]),
+        );
+        const size = spec.compact
+          ? {
+              rootH: 40,
+              rootFs: 14,
+              rootPad: 28,
+              rootRx: 10,
+              l1H: 30,
+              l1Fs: 13,
+              l1Pad: 24,
+              l2Fs: 12,
+            }
+          : {
+              rootH: 48,
+              rootFs: 16,
+              rootPad: 40,
+              rootRx: 12,
+              l1H: 36,
+              l1Fs: 14,
+              l1Pad: 32,
+              l2Fs: 14,
+            };
+        const slots = spec.branches.map((b) =>
+          b.collapsed || b.children.length === 0 ? 1 : b.children.length,
+        );
+        const total = slots.reduce((a, b) => a + b, 0);
+        let leafY = cy - ((total - 1) * gap) / 2;
+
+        const edges = make("g", {}, group);
+        const nodes = make("g", {}, group);
+        const overlays = make("g", {}, group);
+
+        const rootW = textWidth(spec.root, size.rootFs) + size.rootPad;
+        const rootRight = x + rootW;
+        make(
+          "rect",
+          {
+            class: "mm-root",
+            x,
+            y: cy - size.rootH / 2,
+            width: rootW,
+            height: size.rootH,
+            rx: size.rootRx,
+          },
+          nodes,
+        );
+        label(
+          {
+            class: "mm-root-t",
+            x: x + rootW / 2,
+            y: cy + size.rootFs * 0.36,
+            "text-anchor": "middle",
+            style: `font-size: ${size.rootFs}px`,
+          },
+          spec.root,
+          nodes,
+        );
+
+        spec.branches.forEach((branch, index) => {
+          const ys = Array.from(
+            { length: slots[index] },
+            (_, k) => leafY + k * gap,
+          );
+          leafY += slots[index] * gap;
+          const by = ys.reduce((a, b) => a + b, 0) / ys.length;
+          const color = `var(--${branch.color})`;
+          const w = textWidth(branch.text, size.l1Fs) + size.l1Pad;
+          const box = {
+            x: l1x,
+            y: by - size.l1H / 2,
+            w,
+            h: size.l1H,
+            rx: size.l1H / 2,
+          };
+          const right = l1x + w;
+          const mid = (rootRight + l1x) / 2;
+
+          make(
+            "path",
+            {
+              class: "mm-edge",
+              d: `M${rootRight} ${cy} C${mid} ${cy}, ${mid} ${by}, ${l1x} ${by}`,
+              stroke: color,
+              "stroke-width": 2,
+            },
+            edges,
+          );
+          make(
+            "rect",
+            {
+              class: `el el-${branch.color}`,
+              x: box.x,
+              y: box.y,
+              width: w,
+              height: box.h,
+              rx: box.rx,
+            },
+            nodes,
+          );
+          label(
+            {
+              class: "t",
+              x: l1x + w / 2,
+              y: by + size.l1Fs * 0.36,
+              "text-anchor": "middle",
+              style: `font-size: ${size.l1Fs}px`,
+            },
+            branch.text,
+            nodes,
+          );
+          nodeState(overlays, branch, box, size.l1Fs);
+
+          if (branch.collapsed) {
+            make(
+              "path",
+              {
+                class: "mm-edge",
+                d: `M${right} ${by} H${right + 3}`,
+                stroke: color,
+                "stroke-width": 1.5,
+              },
+              edges,
+            );
+            make(
+              "circle",
+              {
+                class: "mm-badge",
+                cx: right + 12,
+                cy: by,
+                r: 9,
+                stroke: color,
+              },
+              nodes,
+            );
+            label(
+              {
+                class: "mm-badge-t",
+                x: right + 12,
+                y: by + 4,
+                "text-anchor": "middle",
+                style: `fill: ${color}`,
+              },
+              String(branch.collapsed),
+              nodes,
+            );
+            return;
+          }
+
+          let start = right;
+          if (branch.toggle) {
+            make(
+              "circle",
+              {
+                class: "mm-badge",
+                cx: right + 10,
+                cy: by,
+                r: 7,
+                stroke: color,
+              },
+              nodes,
+            );
+            make(
+              "path",
+              {
+                d: `M${right + 7} ${by} H${right + 13}`,
+                stroke: color,
+                "stroke-width": 1.5,
+                "stroke-linecap": "round",
+              },
+              nodes,
+            );
+            start = right + 17;
+          }
+
+          branch.children.forEach((child, k) => {
+            const yy = ys[k];
+            const tw = textWidth(child.text, size.l2Fs);
+            const target = yy + 12;
+            const cmid = (start + l2x) / 2;
+            const g = make(
+              "g",
+              child.state === "origin" ? { opacity: 0.35 } : {},
+              nodes,
+            );
+            make(
+              "path",
+              {
+                class: "mm-edge",
+                d: `M${start} ${by} C${cmid} ${by}, ${cmid} ${target}, ${l2x} ${target}`,
+                stroke: color,
+                "stroke-width": 1.5,
+                opacity: child.state === "origin" ? 0.35 : 1,
+              },
+              edges,
+            );
+            label(
+              {
+                class: "t",
+                x: l2x + 8,
+                y: yy + size.l2Fs * 0.36,
+                style: `font-size: ${size.l2Fs}px`,
+              },
+              child.text,
+              g,
+            );
+            make(
+              "path",
+              {
+                d: `M${l2x} ${target} H${l2x + tw + 16}`,
+                stroke: color,
+                "stroke-width": 1.5,
+              },
+              g,
+            );
+            nodeState(
+              overlays,
+              child,
+              { x: l2x, y: yy - 14, w: tw + 16, h: 28, rx: 4 },
+              size.l2Fs,
+            );
+          });
+        });
+      });
+
+      // 便签：圆角纸片 + 投影，黄色使用专属深棕文字
+      document.querySelectorAll("[data-sticky]").forEach((group) => {
+        const [x, y, w, h] = group.dataset.sticky.split(",").map(Number);
+        const color = group.dataset.color;
+        const fs = Number(group.dataset.fs ?? 14);
+        const ink = color === "yellow" ? "var(--sticky-ink)" : "var(--ink)";
+        make(
+          "rect",
+          {
+            x,
+            y,
+            width: w,
+            height: h,
+            rx: 4,
+            style: `fill: var(--st-${color})`,
+            filter: group.dataset.lift ? "url(#st-lift)" : "url(#st-shadow)",
+          },
+          group,
+        );
+        group.dataset.lines.split("|").forEach((line, i) =>
+          label(
+            {
+              class: "st-t",
+              x: x + 16,
+              y: y + 16 + fs + i * fs * 1.55,
+              style: `fill: ${ink}; font-size: ${fs}px`,
+            },
+            line,
+            group,
+          ),
+        );
+        if (group.dataset.date) {
+          label(
+            {
+              class: "st-foot",
+              x: x + w - 14,
+              y: y + h - 14,
+              "text-anchor": "end",
+              style: `fill: ${ink}`,
+            },
+            group.dataset.date,
+            group,
+          );
+        }
+      });
+
+      document.querySelectorAll("[data-select]").forEach((group) => {
+        const [x, y, w, h] = group.dataset.select.split(",").map(Number);
+        drawSelection(group, x, y, w, h, {
+          pad: Number(group.dataset.pad ?? 6),
+          rot: group.dataset.rot,
+          size: group.dataset.size,
+        });
+      });
+
+      // 箭头样式：每个图形以箭头尖端为原点、朝右绘制，inset 为连线需要让出的长度
+      const HEADS = [
+        [
+          "实心三角",
+          "默认",
+          8,
+          (g) =>
+            make("path", { class: "ah-fill", d: "M0 0 L-9 -5 L-9 5 Z" }, g),
+        ],
+        [
+          "空心三角",
+          "",
+          10,
+          (g) =>
+            make(
+              "path",
+              { class: "ah-hollow", d: "M0 0 L-10 -5.5 L-10 5.5 Z" },
+              g,
+            ),
+        ],
+        [
+          "开放箭头",
+          "",
+          1,
+          (g) => make("path", { class: "ah-line", d: "M-9 -5 L0 0 L-9 5" }, g),
+        ],
+        [
+          "圆点",
+          "",
+          4,
+          (g) =>
+            make("circle", { class: "ah-fill", cx: -4.5, cy: 0, r: 4.5 }, g),
+        ],
+        [
+          "空心圆",
+          "",
+          9,
+          (g) =>
+            make("circle", { class: "ah-hollow", cx: -4.5, cy: 0, r: 4 }, g),
+        ],
+        [
+          "菱形",
+          "",
+          6,
+          (g) =>
+            make(
+              "path",
+              { class: "ah-fill", d: "M0 0 L-6.5 -4.5 L-13 0 L-6.5 4.5 Z" },
+              g,
+            ),
+        ],
+        [
+          "空心菱形",
+          "",
+          13,
+          (g) =>
+            make(
+              "path",
+              { class: "ah-hollow", d: "M0 0 L-6.5 -4.5 L-13 0 L-6.5 4.5 Z" },
+              g,
+            ),
+        ],
+        [
+          "叉",
+          "新增 · x_arrow",
+          0,
+          (g) =>
+            make(
+              "path",
+              {
+                class: "ah-line",
+                d: "M-14.4 -4.5 L-5.4 4.5 M-14.4 4.5 L-5.4 -4.5",
+              },
+              g,
+            ),
+        ],
+        [
+          "竖线",
+          "",
+          0,
+          (g) => make("path", { class: "ah-line", d: "M0 -6 V6" }, g),
+        ],
+        [
+          "仅一",
+          "关系",
+          0,
+          (g) => make("path", { class: "ah-line", d: "M0 -6 V6" }, g),
+        ],
+        [
+          "恰好一",
+          "关系",
+          0,
+          (g) => make("path", { class: "ah-line", d: "M0 -6 V6 M-5 -6 V6" }, g),
+        ],
+        [
+          "零或一",
+          "关系",
+          0,
+          (g) => {
+            make("path", { class: "ah-line", d: "M0 -6 V6" }, g);
+            make("circle", { class: "ah-hollow", cx: -7.5, cy: 0, r: 3.5 }, g);
+          },
+        ],
+        [
+          "多",
+          "关系",
+          0,
+          (g) =>
+            make(
+              "path",
+              { class: "ah-line", d: "M-11 0 L0 -6 M-11 0 L0 6" },
+              g,
+            ),
+        ],
+        [
+          "一或多",
+          "关系",
+          0,
+          (g) =>
+            make(
+              "path",
+              { class: "ah-line", d: "M-11 0 L0 -6 M-11 0 L0 6 M-15 -6 V6" },
+              g,
+            ),
+        ],
+        [
+          "零或多",
+          "关系",
+          0,
+          (g) => {
+            make(
+              "path",
+              { class: "ah-line", d: "M-11 0 L0 -6 M-11 0 L0 6" },
+              g,
+            );
+            make("circle", { class: "ah-hollow", cx: -18.5, cy: 0, r: 3.5 }, g);
+          },
+        ],
+      ];
+      const headsRoot = document.getElementById("heads");
+      if (headsRoot)
+        HEADS.forEach(([name, note, inset, draw]) => {
+        const figure = document.createElement("figure");
+        const box = document.createElement("div");
+        box.className = "canvas";
+        const svg = make(
+          "svg",
+          { viewBox: "0 0 120 40", "aria-label": name },
+          box,
+        );
+        make("path", { class: "conn", d: `M16 20 H${100 - inset}` }, svg);
+        draw(make("g", { transform: "translate(100 20)" }, svg));
+        const caption = document.createElement("figcaption");
+        caption.innerHTML = `<b>${name}</b>${note}`;
+        figure.append(box, caption);
+        headsRoot.appendChild(figure);
+      });
+
+      // 主题切换
+      document.querySelectorAll("[data-theme-set]").forEach((button) => {
+        button.addEventListener("click", () => {
+          document.documentElement.dataset.theme = button.dataset.themeSet;
+          document
+            .querySelectorAll("[data-theme-set]")
+            .forEach((b) =>
+              b.setAttribute("aria-pressed", String(b === button)),
+            );
+        });
+      });
+        </script>
+  </body>
+</html>

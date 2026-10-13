@@ -2,7 +2,7 @@
 
 - 期次：P06。
 - 状态：已完成实施与自动化验收（全量测试 + 逐项核对）；人工界面验收按文末清单执行。
-- 设计依据：`.tmp/design/excalidraw-canvas-table.html`（含亮/暗双主题令牌与交互状态图）。
+- 设计依据：`docs/design-ui/excalidraw-canvas-table.html`（含亮/暗双主题令牌与交互状态图）。
 - 前置：[P05 协作、移动端与大表可用性](phase-5.md)；总体门槛见 [全功能分期总览](00-overview.md)。
 
 ## Context
