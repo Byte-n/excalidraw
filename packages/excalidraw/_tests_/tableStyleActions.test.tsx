@@ -5,7 +5,7 @@ import {
   DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX,
   DEFAULT_ELEMENT_BACKGROUND_PICKS,
   DEFAULT_ELEMENT_STROKE_COLOR_INDEX,
-  DEFAULT_ELEMENT_STROKE_PICKS,
+  TABLE_LINE_PICKS,
 } from "@excalidraw/common";
 
 import { Excalidraw } from "../index";
@@ -36,7 +36,7 @@ describe("table style controls", () => {
       Array.from(panel!.querySelectorAll(":scope > div > h3")).map(
         (heading) => heading.textContent,
       ),
-    ).toEqual(["Stroke", "Background"]);
+    ).toEqual(["Stroke", "Grid lines", "Background"]);
     expect(
       Array.from(panel!.querySelectorAll(":scope > div > h3")).every(
         (heading) =>
@@ -87,7 +87,7 @@ describe("table style controls", () => {
         (item) =>
           item.querySelector(".properties-trigger")?.getAttribute("aria-label"),
       ),
-    ).toEqual(["Stroke", "Background"]);
+    ).toEqual(["Stroke", "Grid lines", "Background"]);
     expect(panel).toHaveClass("table-style-actions--fill-only");
 
     fireEvent.click(
@@ -205,7 +205,7 @@ describe("table style controls", () => {
     ).toBe("Background");
   });
 
-  it("uses one border color for the frame and grid", async () => {
+  it("keeps the border and grid colors independent, transparent included", async () => {
     await render(<Excalidraw />);
     const table = API.createElement({ type: "table" });
     API.setElements([table]);
@@ -214,30 +214,68 @@ describe("table style controls", () => {
     });
 
     const panel = document.querySelector(".table-style-actions")!;
-    const border = DEFAULT_ELEMENT_STROKE_PICKS[1];
+    const sections = panel.querySelectorAll(":scope > div");
+    const borderSection = sections[0];
+    const gridSection = sections[1];
+
+    const getStyle = () =>
+      (
+        window.h.elements.find((element) => element.id === table.id) as
+          | typeof table
+          | undefined
+      )?.table.style;
+
+    // transparent heads both line strips
+    expect(TABLE_LINE_PICKS[0]).toBe("transparent");
+    const border = TABLE_LINE_PICKS[2];
     fireEvent.click(
-      panel.querySelector<HTMLButtonElement>(
+      borderSection.querySelector<HTMLButtonElement>(
         `[data-testid='color-top-pick-${border}']`,
       )!,
     );
-
-    const style = (
-      window.h.elements.find((element) => element.id === table.id) as
-        | typeof table
-        | undefined
-    )?.table.style;
-    expect(style?.borderColor).toBe(border);
-    expect(style?.gridColor).toBe(border);
+    expect(getStyle()?.borderColor).toBe(border);
+    expect(getStyle()?.gridColor).toBeUndefined();
     expect(
-      panel.querySelector(`[data-testid='color-top-pick-${border}']`),
+      borderSection.querySelector(`[data-testid='color-top-pick-${border}']`),
     ).toHaveClass("active");
+
+    // a transparent grid leaves the border alone
+    fireEvent.click(
+      gridSection.querySelector<HTMLButtonElement>(
+        "[data-testid='color-top-pick-transparent']",
+      )!,
+    );
+    expect(getStyle()?.gridColor).toBe("transparent");
+    expect(getStyle()?.borderColor).toBe(border);
     expect(
-      Array.from(panel.querySelectorAll(".table-style-actions__target")).map(
-        (button) => button.textContent,
-      ),
-    ).not.toContain("Grid");
+      gridSection.querySelector("[data-testid='color-top-pick-transparent']"),
+    ).toHaveClass("active");
     expect(panel.textContent).not.toContain("Grid width");
     expect(panel.textContent).not.toContain("Grid style");
+  });
+
+  it("applies a transparent background from the top picks", async () => {
+    await render(<Excalidraw />);
+    const table = API.createElement({ type: "table" });
+    API.setElements([table]);
+    act(() => {
+      API.setAppState({ selectedElementIds: { [table.id]: true } });
+    });
+
+    const panel = document.querySelector(".table-style-actions")!;
+    const backgroundSection = panel.querySelectorAll(":scope > div")[2];
+    fireEvent.click(
+      backgroundSection.querySelector<HTMLButtonElement>(
+        "[data-testid='color-top-pick-transparent']",
+      )!,
+    );
+    expect(
+      (
+        window.h.elements.find((element) => element.id === table.id) as
+          | typeof table
+          | undefined
+      )?.table.style?.backgroundColor,
+    ).toBe("transparent");
   });
 
   it("updates table controls and the selected cell fill", async () => {

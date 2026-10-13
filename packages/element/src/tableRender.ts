@@ -154,11 +154,43 @@ export const resolveTableColor = (color: string, isDark: boolean): string => {
   return color;
 };
 
+/**
+ * Whether the cell's resolved background is transparent: the first explicit
+ * background along the cell → row → column → table chain is transparent. The
+ * header band and the body base only apply when the chain is silent, so they
+ * never turn a cell into a hole. A transparent cell punches through the body
+ * base (`drawTableGridOnCanvas` cuts it out of the base fill), revealing the
+ * canvas beneath.
+ */
+export const isTableCellTransparent = (
+  table: TableDataV1,
+  cell: TableCellData,
+): boolean => {
+  const override =
+    cell.style.backgroundColor ??
+    table.rows.find((row) => row.id === cell.rowId)?.style?.backgroundColor ??
+    table.columns.find((column) => column.id === cell.columnId)?.style
+      ?.backgroundColor ??
+    table.style?.backgroundColor;
+  return override !== undefined && isTransparent(override);
+};
+
 export type TableGridSegment = readonly [number, number, number, number];
+
+export type TableCellBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
 const tableRenderCache = new WeakMap<
   TableDataV1,
-  { segments: TableGridSegment[]; hasCellFill: boolean }
+  {
+    segments: TableGridSegment[];
+    hasCellFill: boolean;
+    transparentHoles: TableCellBounds[];
+  }
 >();
 
 const getTableRenderData = (table: TableDataV1) => {
@@ -167,6 +199,18 @@ const getTableRenderData = (table: TableDataV1) => {
     return cached;
   }
   const hasFill = (color?: string) => !!color && !isTransparent(color);
+  // cells whose resolved background is transparent punch holes in the body
+  // base, so the canvas (or whatever sits under the table) shows through
+  const transparentHoles: TableCellBounds[] = [];
+  for (const cell of table.cells) {
+    if (cell.mergedInto || !isTableCellTransparent(table, cell)) {
+      continue;
+    }
+    const bounds = getTableCellBounds(table, cell.id);
+    if (bounds) {
+      transparentHoles.push(bounds);
+    }
+  }
   const data = {
     segments: buildTableGridSegments(table),
     // the header band always fills the first row, so an enabled header turns
@@ -177,6 +221,7 @@ const getTableRenderData = (table: TableDataV1) => {
       table.rows.some((row) => hasFill(row.style?.backgroundColor)) ||
       table.columns.some((column) => hasFill(column.style?.backgroundColor)) ||
       table.cells.some((cell) => hasFill(cell.style.backgroundColor)),
+    transparentHoles,
   };
   tableRenderCache.set(table, data);
   return data;
@@ -184,6 +229,11 @@ const getTableRenderData = (table: TableDataV1) => {
 
 export const getTableGridSegments = (table: TableDataV1): TableGridSegment[] =>
   getTableRenderData(table).segments;
+
+/** Bounds of the cells punched out of the body base (transparent fills). */
+export const getTableTransparentHoles = (
+  table: TableDataV1,
+): readonly TableCellBounds[] => getTableRenderData(table).transparentHoles;
 
 const buildTableGridSegments = (table: TableDataV1): TableGridSegment[] => {
   if (!table.cells.some((cell) => cell.mergedInto)) {
@@ -302,13 +352,18 @@ export const drawTableGridOnCanvas = (
   const visible = getVisibleLocalBounds(context);
   const renderData = getTableRenderData(table);
 
-  // (0) body base: the rounded surface every cell shows through. The same
-  // path becomes the clip for cell fills, so corner cells (and the header
-  // band's top corners) follow the body radius instead of overflowing it.
+  // (0) body base: the rounded surface every cell shows through. Cells whose
+  // resolved background is transparent are punched out with the even-odd
+  // rule, so whatever sits under the table shows through them. The body
+  // outline also becomes the clip for cell fills (nonzero winding keeps the
+  // holes inside the clip), so corner cells follow the body radius.
   context.save();
   traceTableBodyPath(context, width, height);
+  for (const hole of renderData.transparentHoles) {
+    context.rect(hole.x, hole.y, hole.width, hole.height);
+  }
   context.fillStyle = resolveTableColor(TABLE_STYLE.backgroundColor, isDark);
-  context.fill();
+  context.fill(renderData.transparentHoles.length ? "evenodd" : "nonzero");
   context.clip();
 
   // (1) cell backgrounds, so grid lines stay visible above them

@@ -257,6 +257,16 @@ export const DEFAULT_ELEMENT_BACKGROUND_PICKS = [
 ] as ColorTuple;
 
 // ORDER matters for positioning in quick picker.
+// 表格边框/网格快捷色：透明打头（无边框/无网格是常见诉求），后四位沿用元素描边快捷色
+export const TABLE_LINE_PICKS = [
+  COLOR_PALETTE.transparent,
+  DEFAULT_ELEMENT_STROKE_PICKS[0],
+  DEFAULT_ELEMENT_STROKE_PICKS[1],
+  DEFAULT_ELEMENT_STROKE_PICKS[2],
+  DEFAULT_ELEMENT_STROKE_PICKS[3],
+] as ColorTuple;
+
+// ORDER matters for positioning in quick picker.
 // 油漆桶快捷色：元素填充快捷色的四个浅色（去掉对油漆桶无效的透明）加浅蓝
 export const BUCKET_FILL_BACKGROUND_PICKS = [
   "#e6f4f1",

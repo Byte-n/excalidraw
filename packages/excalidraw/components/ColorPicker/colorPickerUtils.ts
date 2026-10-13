@@ -104,4 +104,8 @@ export const activeColorPickerSectionAtom =
 export type ColorPickerType =
   | "canvasBackground"
   | "elementBackground"
-  | "elementStroke";
+  | "elementStroke"
+  // the table grid picker needs its own popup identity: `openPopup` is keyed
+  // by picker type, and sharing "elementStroke" with the table border picker
+  // would open both popovers at once
+  | "tableGrid";

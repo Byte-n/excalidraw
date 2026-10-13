@@ -268,7 +268,8 @@ const isColorPickerPopup = (
 ): popup is ColorPickerType =>
   popup === "elementStroke" ||
   popup === "elementBackground" ||
-  popup === "canvasBackground";
+  popup === "canvasBackground" ||
+  popup === "tableGrid";
 
 const ColorPickerTrigger = ({
   label,
@@ -323,7 +324,7 @@ const ColorPickerTrigger = ({
       aria-label={label}
       style={displayColor ? { "--swatch-color": displayColor } : undefined}
       title={
-        type === "elementStroke"
+        type === "elementStroke" || type === "tableGrid"
           ? t("labels.showStroke")
           : t("labels.showBackground")
       }
@@ -471,7 +472,11 @@ const ColorPickerComponent = ({
             label={label}
             type={type}
             theme={appState.theme}
-            mode={type === "elementStroke" ? "stroke" : "background"}
+            mode={
+              type === "elementStroke" || type === "tableGrid"
+                ? "stroke"
+                : "background"
+            }
             editingTextElement={!!appState.editingTextElement}
             compact={compact}
             onToggle={() => {

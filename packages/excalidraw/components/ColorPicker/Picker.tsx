@@ -77,7 +77,12 @@ export const Picker = React.forwardRef(
       if (type === "canvasBackground") {
         return [];
       }
-      return getMostUsedCustomColors(elements, type, palette);
+      // the table grid picker samples the same stroke-color domain
+      return getMostUsedCustomColors(
+        elements,
+        type === "tableGrid" ? "elementStroke" : type,
+        palette,
+      );
     });
 
     const [activeColorPickerSection, setActiveColorPickerSection] = useAtom(

@@ -41,6 +41,7 @@ import {
   getTableContentClipRects,
   getTableGridSegments,
   getTableHeight,
+  getTableTransparentHoles,
   getTableWidth,
   resolveTableBackgroundTextFontWeight,
   resolveTableColor,
@@ -258,10 +259,7 @@ const renderElementToSvg = (
       group.appendChild(shadowFilter);
 
       const rotated = svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
-      rotated.setAttribute(
-        "transform",
-        `rotate(${degree} ${cx} ${cy})`,
-      );
+      rotated.setAttribute("transform", `rotate(${degree} ${cx} ${cy})`);
 
       const paper = createPath(
         getStickyNotePathCommands(element),
@@ -271,10 +269,7 @@ const renderElementToSvg = (
         ),
       );
       const shadowed = svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
-      shadowed.setAttribute(
-        "filter",
-        `url(#sticky-note-shadow-${element.id})`,
-      );
+      shadowed.setAttribute("filter", `url(#sticky-note-shadow-${element.id})`);
       shadowed.appendChild(paper);
       rotated.appendChild(shadowed);
 
@@ -853,13 +848,43 @@ const renderElementToSvg = (
 
       // (0) body base: the rounded surface every cell shows through, mirroring
       // `drawTableGridOnCanvas`; cell fills are clipped into the same rounded
-      // outline so corner cells follow the body radius
-      const body = svgRoot.ownerDocument.createElementNS(SVG_NS, "rect");
-      body.setAttribute("x", "0");
-      body.setAttribute("y", "0");
-      body.setAttribute("width", `${width}`);
-      body.setAttribute("height", `${height}`);
-      body.setAttribute("rx", `${TABLE_STYLE.radius}`);
+      // outline so corner cells follow the body radius. Transparent cells are
+      // punched out of the base with an even-odd path (the canvas renderer
+      // uses the same fill rule), so whatever sits under the table shows
+      // through them.
+      const transparentHoles = getTableTransparentHoles(table);
+      const body = svgRoot.ownerDocument.createElementNS(
+        SVG_NS,
+        transparentHoles.length ? "path" : "rect",
+      );
+      if (transparentHoles.length) {
+        const radius = Math.min(TABLE_STYLE.radius, width / 2, height / 2);
+        const rounded =
+          `M${radius} 0h${width - 2 * radius}` +
+          `a${radius} ${radius} 0 0 1 ${radius} ${radius}` +
+          `v${height - 2 * radius}` +
+          `a${radius} ${radius} 0 0 1 ${-radius} ${radius}` +
+          `h${2 * radius - width}` +
+          `a${radius} ${radius} 0 0 1 ${-radius} ${-radius}` +
+          `v${2 * radius - height}` +
+          `a${radius} ${radius} 0 0 1 ${radius} ${-radius}Z`;
+        const holes = transparentHoles
+          .map(
+            (hole) =>
+              `M${hole.x} ${hole.y}h${hole.width}v${
+                hole.height
+              }h${-hole.width}Z`,
+          )
+          .join("");
+        body.setAttribute("d", rounded + holes);
+        body.setAttribute("fill-rule", "evenodd");
+      } else {
+        body.setAttribute("x", "0");
+        body.setAttribute("y", "0");
+        body.setAttribute("width", `${width}`);
+        body.setAttribute("height", `${height}`);
+        body.setAttribute("rx", `${TABLE_STYLE.radius}`);
+      }
       body.setAttribute(
         "fill",
         resolveTableColor(TABLE_STYLE.backgroundColor, isDark),

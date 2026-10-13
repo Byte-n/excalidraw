@@ -2,6 +2,7 @@ import { exportToCanvas, exportToSvg } from "@excalidraw/utils";
 
 import { newElementWith, type ElementUpdate } from "@excalidraw/element";
 import { newElement } from "@excalidraw/element";
+import { getTableCellBounds } from "@excalidraw/element";
 
 import {
   applyDarkModeFilter,
@@ -855,6 +856,61 @@ describe("exporting tables", () => {
       "#F5F6F7",
       "#F5F6F7",
     ]);
+  });
+
+  it("punches transparent cells out of the exported body base", async () => {
+    const table = withCellColors(API.createElement({ type: "table" }), {
+      0: "transparent",
+    });
+
+    const svg = await exportToSvg({
+      elements: [table],
+      files: null,
+      exportPadding: 0,
+    });
+
+    const group = svg.querySelector(`g[data-id="${table.id}"]`)!;
+    // the body base becomes an even-odd path with the transparent cell cut out
+    const body = group.querySelector('path[fill-rule="evenodd"]')!;
+    expect(body).not.toBeNull();
+    expect(body.getAttribute("fill")).toBe("#ffffff");
+    const hole = getTableCellBounds(table.table, table.table.cells[0].id)!;
+    expect(body.getAttribute("d")).toContain(
+      `M${hole.x} ${hole.y}h${hole.width}v${hole.height}h${-hole.width}Z`,
+    );
+    // the transparent header cell paints no fill; its two band siblings do
+    const fills = Array.from(
+      group.querySelectorAll('rect[fill]:not([fill="none"])'),
+    );
+    expect(fills.map((rect) => rect.getAttribute("fill"))).toEqual([
+      "#F5F6F7",
+      "#F5F6F7",
+    ]);
+  });
+
+  it("exports transparent border and grid strokes as-is", async () => {
+    const original = API.createElement({ type: "table" });
+    const table = newElementWith(original, {
+      table: {
+        ...original.table,
+        style: { borderColor: "transparent", gridColor: "transparent" },
+      },
+    });
+
+    const svg = await exportToSvg({
+      elements: [table],
+      files: null,
+      exportPadding: 0,
+    });
+
+    const group = svg.querySelector(`g[data-id="${table.id}"]`)!;
+    const border = Array.from(group.querySelectorAll("rect")).find(
+      (rect) => rect.getAttribute("fill") === "none",
+    )!;
+    expect(border.getAttribute("stroke")).toBe("transparent");
+    for (const line of Array.from(group.querySelectorAll("line"))) {
+      expect(line.getAttribute("stroke")).toBe("transparent");
+    }
   });
 
   it("themes the grid for dark mode like the canvas", async () => {

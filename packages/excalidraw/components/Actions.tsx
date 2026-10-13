@@ -12,7 +12,9 @@ import {
   DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE,
   DEFAULT_ELEMENT_STROKE_COLOR_PALETTE,
   DEFAULT_ELEMENT_BACKGROUND_PICKS,
-  DEFAULT_ELEMENT_STROKE_PICKS,
+  TABLE_LINE_PICKS,
+  TABLE_STYLE,
+  THEME,
 } from "@excalidraw/common";
 
 import {
@@ -20,8 +22,11 @@ import {
   isArrowElement,
   isMindmapEdgeElement,
   isTableElement,
+  getTableCellFillColor,
   getTableCellRange,
   getCellsInTableRange,
+  isTableCellTransparent,
+  resolveTableColor,
 } from "@excalidraw/element";
 
 import type {
@@ -1078,21 +1083,22 @@ const TableStyleActions = ({
     (axisSelection.kind === "row"
       ? table.table.rows.find((row) => row.id === axisSelection.id)
       : table.table.columns.find((column) => column.id === axisSelection.id));
+  // the picker shows what the cell actually renders: the painted fill, the
+  // body base when the fill chain is silent, or transparent when the chain
+  // resolves transparent (such cells punch through the body base)
+  const isDark = appState.theme === THEME.DARK;
+  const bodyBase = resolveTableColor(TABLE_STYLE.backgroundColor, isDark);
   const getCellFill = (cell: typeof targetCells[number]) =>
-    cell.style.backgroundColor ??
-    table.table.rows.find((row) => row.id === cell.rowId)?.style
-      ?.backgroundColor ??
-    table.table.columns.find((column) => column.id === cell.columnId)?.style
-      ?.backgroundColor ??
-    table.table.style?.backgroundColor ??
-    "transparent";
+    isTableCellTransparent(table.table, cell)
+      ? "transparent"
+      : getTableCellFillColor(cell, isDark, table.table) ?? bodyBase;
   const color = cellSelection
     ? targetCells[0] && getCellFill(targetCells[0])
     : axisSelection
     ? axis?.style?.backgroundColor ??
       table.table.style?.backgroundColor ??
-      "transparent"
-    : table.table.style?.backgroundColor ?? "transparent";
+      bodyBase
+    : table.table.style?.backgroundColor ?? bodyBase;
   const update = (patch: Partial<NonNullable<typeof table.table.style>>) => {
     const currentCellSelection = app.state.tableCellSelection;
     const currentAxisSelection = app.state.tableRowColSelection;
@@ -1226,22 +1232,34 @@ const TableStyleActions = ({
       updateData={updatePickerState}
     />
   );
+  // the border and grid pickers are deliberately decoupled (a transparent
+  // border must not kill the grid, and vice versa). Their top-picks strips
+  // are fixed — `transparent` heads them, and they don't share the element
+  // stroke picker's drag customization
   const borderColorPicker = (
     <ColorPicker
       key="border"
       type="elementStroke"
       label={t("labels.stroke")}
-      color={
-        table.table.style?.borderColor ??
-        table.table.style?.gridColor ??
-        "#D0D3D9"
-      }
-      onChange={(nextColor) =>
-        update({ borderColor: nextColor, gridColor: nextColor })
-      }
+      color={table.table.style?.borderColor ?? TABLE_STYLE.strokeColor}
+      onChange={(nextColor) => update({ borderColor: nextColor })}
       palette={DEFAULT_ELEMENT_STROKE_COLOR_PALETTE}
-      topPicks={DEFAULT_ELEMENT_STROKE_PICKS}
-      customizableTopPicks="elementStroke"
+      topPicks={TABLE_LINE_PICKS}
+      compact={variant === "fill"}
+      elements={app.scene.getNonDeletedElements()}
+      appState={appState}
+      updateData={updatePickerState}
+    />
+  );
+  const gridColorPicker = (
+    <ColorPicker
+      key="grid"
+      type="tableGrid"
+      label={t("labels.tableGridLines")}
+      color={table.table.style?.gridColor ?? TABLE_STYLE.gridColor}
+      onChange={(nextColor) => update({ gridColor: nextColor })}
+      palette={DEFAULT_ELEMENT_STROKE_COLOR_PALETTE}
+      topPicks={TABLE_LINE_PICKS}
       compact={variant === "fill"}
       elements={app.scene.getNonDeletedElements()}
       appState={appState}
@@ -1262,6 +1280,14 @@ const TableStyleActions = ({
             <h3 aria-hidden="true">{t("labels.stroke")}</h3>
           )}
           {borderColorPicker}
+        </div>
+      )}
+      {variant !== "details" && tableOnly && (
+        <div className={variant === "fill" ? "compact-action-item" : undefined}>
+          {variant === "full" && (
+            <h3 aria-hidden="true">{t("labels.tableGridLines")}</h3>
+          )}
+          {gridColorPicker}
         </div>
       )}
       {variant !== "details" && (

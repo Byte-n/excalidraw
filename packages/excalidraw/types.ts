@@ -682,6 +682,7 @@ export interface AppState {
     | "canvasBackground"
     | "elementBackground"
     | "elementStroke"
+    | "tableGrid"
     | "fontFamily"
     | "compactTextProperties"
     | "compactStrokeStyles"

@@ -12,6 +12,8 @@ import { getTableCellAtPoint } from "../src/tableStruct";
 import {
   drawTableGridOnCanvas,
   getTableCellFillColor,
+  getTableTransparentHoles,
+  isTableCellTransparent,
   isTableHeaderRowCell,
   resolveTableColor,
 } from "../src/tableRender";
@@ -225,6 +227,86 @@ describe("drawTableGridOnCanvas", () => {
       ["#2A2B30", 80, 0, 120, 100],
     ]);
   });
+
+  it("punches transparent cells out of the body base with an even-odd fill", () => {
+    const element = createNonUniformTable();
+    const cells = element.table.cells.map((cell, index) =>
+      index === 3
+        ? { ...cell, style: { backgroundColor: "transparent" } }
+        : cell,
+    );
+    const table = newElementWith(element, {
+      table: { ...element.table, cells },
+    });
+    const context = createMockContext();
+    let bodyFill: unknown;
+    let fillRule: unknown;
+    vi.mocked(context.fill).mockImplementation((...args: unknown[]) => {
+      bodyFill = context.fillStyle;
+      fillRule = args[0];
+    });
+    const fillRects: Array<[unknown, number, number, number, number]> = [];
+    vi.mocked(context.fillRect).mockImplementation((x, y, width, height) => {
+      fillRects.push([context.fillStyle, x, y, width, height]);
+    });
+
+    drawTableGridOnCanvas(table, context, {
+      theme: THEME.LIGHT,
+      zoom: { value: 1 },
+    } as StaticCanvasAppState);
+
+    expect(bodyFill).toBe("#ffffff");
+    expect(fillRule).toBe("evenodd");
+    // the transparent cell (second row, second column) is cut out of the
+    // body path
+    expect(context.rect).toHaveBeenCalledTimes(1);
+    expect(context.rect).toHaveBeenCalledWith(80, 100, 120, 50);
+    // and paints no fill of its own — only the header band cells fill
+    expect(fillRects).toEqual([
+      ["#F5F6F7", 0, 0, 80, 100],
+      ["#F5F6F7", 80, 0, 120, 100],
+    ]);
+  });
+
+  it("keeps the body path plain when nothing is transparent", () => {
+    const table = createNonUniformTable();
+    const context = createMockContext();
+    let fillRule: unknown;
+    vi.mocked(context.fill).mockImplementation((...args: unknown[]) => {
+      fillRule = args[0];
+    });
+
+    drawTableGridOnCanvas(table, context, {
+      theme: THEME.LIGHT,
+      zoom: { value: 1 },
+    } as StaticCanvasAppState);
+
+    expect(fillRule).toBe("nonzero");
+    expect(context.rect).not.toHaveBeenCalled();
+  });
+
+  it("strokes the border and the grid with their own colors, transparent included", () => {
+    const element = createNonUniformTable();
+    const table = newElementWith(element, {
+      table: {
+        ...element.table,
+        style: { borderColor: "transparent", gridColor: "#123456" },
+      },
+    });
+    const context = createMockContext();
+    const strokes: unknown[] = [];
+    vi.mocked(context.stroke).mockImplementation(() => {
+      strokes.push(context.strokeStyle);
+    });
+
+    drawTableGridOnCanvas(table, context, {
+      theme: THEME.LIGHT,
+      zoom: { value: 1 },
+    } as StaticCanvasAppState);
+
+    // grid first, then the border
+    expect(strokes).toEqual(["#123456", "transparent"]);
+  });
 });
 
 describe("resolveTableColor", () => {
@@ -373,6 +455,143 @@ describe("getTableCellFillColor", () => {
     expect(getTableCellFillColor(mergedAnchor, false, table.table)).toBe(
       "#F5F6F7",
     );
+  });
+});
+
+describe("isTableCellTransparent", () => {
+  const withTable = (
+    element: ExcalidrawTableElement,
+    overrides: {
+      cells?: ExcalidrawTableElement["table"]["cells"];
+      rows?: ExcalidrawTableElement["table"]["rows"];
+      columns?: ExcalidrawTableElement["table"]["columns"];
+      style?: ExcalidrawTableElement["table"]["style"];
+    },
+  ) =>
+    newElementWith(element, {
+      table: { ...element.table, ...overrides },
+    });
+
+  it("resolves transparency along the cell → row → column → table chain", () => {
+    const base = createNonUniformTable();
+
+    // a silent chain is not transparent — the body base paints the cell
+    for (const cell of base.table.cells) {
+      expect(isTableCellTransparent(base.table, cell)).toBe(false);
+    }
+
+    const byCell = withTable(base, {
+      cells: base.table.cells.map((cell, index) =>
+        index === 3
+          ? { ...cell, style: { backgroundColor: "transparent" } }
+          : cell,
+      ),
+    });
+    expect(isTableCellTransparent(byCell.table, byCell.table.cells[3])).toBe(
+      true,
+    );
+    expect(isTableCellTransparent(byCell.table, byCell.table.cells[0])).toBe(
+      false,
+    );
+
+    const byRow = withTable(base, {
+      rows: base.table.rows.map((row, index) =>
+        index === 1
+          ? { ...row, style: { backgroundColor: "transparent" } }
+          : row,
+      ),
+    });
+    expect(isTableCellTransparent(byRow.table, byRow.table.cells[2])).toBe(
+      true,
+    );
+    expect(isTableCellTransparent(byRow.table, byRow.table.cells[0])).toBe(
+      false,
+    );
+
+    const byColumn = withTable(base, {
+      columns: base.table.columns.map((column, index) =>
+        index === 0
+          ? { ...column, style: { backgroundColor: "transparent" } }
+          : column,
+      ),
+    });
+    expect(
+      isTableCellTransparent(byColumn.table, byColumn.table.cells[0]),
+    ).toBe(true);
+    expect(
+      isTableCellTransparent(byColumn.table, byColumn.table.cells[1]),
+    ).toBe(false);
+
+    const byTable = withTable(base, {
+      style: { backgroundColor: "transparent" },
+    });
+    for (const cell of byTable.table.cells) {
+      expect(isTableCellTransparent(byTable.table, cell)).toBe(true);
+    }
+
+    // an explicit cell color wins over a transparent row
+    const cellOverRow = withTable(byRow, {
+      cells: byRow.table.cells.map((cell, index) =>
+        index === 2 ? { ...cell, style: { backgroundColor: "#123456" } } : cell,
+      ),
+    });
+    expect(
+      isTableCellTransparent(cellOverRow.table, cellOverRow.table.cells[2]),
+    ).toBe(false);
+  });
+
+  it("turns an explicitly transparent header cell into a hole, band or not", () => {
+    const base = createNonUniformTable();
+    const cells = base.table.cells.map((cell, index) =>
+      index === 0
+        ? { ...cell, style: { backgroundColor: "transparent" } }
+        : cell,
+    );
+    const table = withTable(base, { cells });
+
+    expect(isTableCellTransparent(table.table, table.table.cells[0])).toBe(
+      true,
+    );
+    expect(
+      getTableCellFillColor(table.table.cells[0], false, table.table),
+    ).toBe(null);
+  });
+});
+
+describe("getTableTransparentHoles", () => {
+  it("is empty when nothing resolves transparent", () => {
+    const table = createNonUniformTable();
+    expect(getTableTransparentHoles(table.table)).toEqual([]);
+  });
+
+  it("spans the whole merge when the anchor is transparent", () => {
+    const base = createNonUniformTable();
+    const anchor = base.table.cells[0];
+    const covered = base.table.cells.find(
+      (cell) =>
+        cell.rowId === base.table.rows[1].id &&
+        cell.columnId === anchor.columnId,
+    )!;
+    const cells = base.table.cells.map((cell) => {
+      if (cell.id === anchor.id) {
+        return {
+          ...cell,
+          rowSpan: 2,
+          style: { backgroundColor: "transparent" },
+        };
+      }
+      if (cell.id === covered.id) {
+        return { ...cell, mergedInto: anchor.id };
+      }
+      return cell;
+    });
+    const table = newElementWith(base, {
+      table: { ...base.table, cells },
+    });
+
+    expect(getTableTransparentHoles(table.table)).toEqual([
+      { x: 0, y: 0, width: 80, height: 150 },
+    ]);
   });
 });
 
