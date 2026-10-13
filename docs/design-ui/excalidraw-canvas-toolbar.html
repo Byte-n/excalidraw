@@ -1282,7 +1282,7 @@
       table.matrix {
         border-collapse: collapse;
         font-size: 12px;
-        min-width: 1160px;
+        min-width: 1280px;
         width: 100%;
       }
       table.matrix th,
@@ -1397,6 +1397,50 @@
         height: 24px;
       }
 
+      /* 画布悬浮按钮：贴元素边缘外侧的胶囊按钮（MagicFrame / 生成 iframe 等） */
+      .tb-canvasbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 12px;
+        border: 1px solid var(--menu-border);
+        border-radius: 999px;
+        background: var(--menu-bg);
+        box-shadow: var(--menu-shadow);
+        color: var(--page-ink);
+        font: inherit;
+        font-size: 12px;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .tb-canvasbtn:hover {
+        border-color: var(--sel-hover);
+        color: var(--sel);
+      }
+      .tb-canvasbtn:focus-visible {
+        outline: 2px solid var(--sel);
+        outline-offset: 2px;
+      }
+      .tb-canvasbtn svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .tb-canvasbtn.primary {
+        background: var(--sel);
+        border-color: var(--sel);
+        color: #fff;
+      }
+      .tb-canvasbtn.primary:hover {
+        filter: brightness(1.08);
+        color: #fff;
+      }
+
       @media (max-width: 900px) {
         .prins,
         .ctl-grid,
@@ -1443,8 +1487,9 @@
           <p>
             选中元素后的属性工具栏（样式面板）：统一桌面 full 面板、平板 compact
             图标岛、手机底部条三种容器的 DOM 结构与控件样式，覆盖普通图形、多选、
-            文本、线性元素、图片、Frame、便签、表格、思维导图（整树 / 节点 /
-            连线）、嵌入元素、锁定与只读等全部场景。令牌与「白板画布样式设计稿」
+            文本、线性元素、图片、Frame / MagicFrame、便签、表格、思维导图（整树 /
+            节点 / 连线）、嵌入元素、复合形状、工具配置（无选中）、锁定与只读等全部场景，
+            并含元素画布悬浮按钮。令牌与「白板画布样式设计稿」
             及复合元素系列一致。
           </p>
           <nav class="toc" aria-label="目录">
@@ -1560,6 +1605,16 @@
               </td>
             </tr>
             <tr>
+              <td>无选中 · 工具配置<span class="badge-new">新增</span></td>
+              <td>
+                激活绘制工具（矩形 / 箭头 / 文本 / 自由绘制等）且无选区时，浮动栏固定于视口顶部居中（主工具条下方
+                12px），用于配置下一个元素的默认样式；分组 =
+                该工具产出元素的对应场景（场景矩阵同一序列）。桶填充（bucketfill）为变体：背景色板（不含透明）+
+                填充样式 + 透明度。切回选择 / 套索 / 橡皮 / 抓手 /
+                激光笔工具即隐藏；手机端同规则，以底部条呈现
+              </td>
+            </tr>
+            <tr>
               <td>键盘</td>
               <td>
                 Tab / Shift+Tab 在浮动栏与弹层分组间移动；← → ↑ ↓
@@ -1605,8 +1660,8 @@
       <section>
         <h2>通用控件</h2>
         <p class="lede">
-          全部场景只使用以下七种控件：色板、分段选择器、图标按钮、滑杆 +
-          数值、下拉触发器、复选项、弹层容器。同一控件在所有场景共用一套尺寸与状态；
+          全部场景只使用以下八种控件：色板、分段选择器、图标按钮、滑杆 +
+          数值、下拉触发器、复选项、弹层容器、画布悬浮按钮。同一控件在所有场景共用一套尺寸与状态；
           触控容器（平板浮动栏 / 手机底部条 / sheet）按「响应式」一节整体放大。
         </p>
         <div class="ctl-grid">
@@ -1769,6 +1824,24 @@
               15px 圆角 4；选中主色底 + 白色对勾；标签 12px 墨色。
             </div>
           </div>
+          <div class="ctl">
+            <b>画布悬浮按钮 · tb-canvasbtn</b>
+            <div class="demo">
+              <button type="button" class="tb-canvasbtn primary">
+                <svg viewBox="0 0 16 16"><path d="M5.5 5 3 8l2.5 3M10.5 5 13 8l-2.5 3M8.8 3.5l-1.6 9" /></svg>
+                转换为代码
+              </button>
+              <button type="button" class="tb-canvasbtn">
+                <svg viewBox="0 0 16 16"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 10.5V3.5A1 1 0 0 1 4 2.5h6.5"/></svg>
+                复制源码
+              </button>
+            </div>
+            <div class="cap">
+              贴元素边缘外侧的胶囊按钮（高 28、圆角 999），随元素定位；拖动 /
+              旋转 / 缩放 / 菜单打开时隐藏。用于 MagicFrame「转换为代码」、生成
+              iframe「复制源码 / 全屏」等画布内动作；主行动作用 primary 主色底。
+            </div>
+          </div>
         </div>
         <table class="spec">
           <thead>
@@ -1848,6 +1921,7 @@
                 <th>导图·节点</th>
                 <th>导图·连线</th>
                 <th>嵌入</th>
+                <th>复合形状<span class="badge-new">新增</span></th>
               </tr>
             </thead>
             <tbody>
@@ -1862,11 +1936,12 @@
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="on">文字色²</span></td>
-                <td><span class="on">边框色⁵</span></td>
+                <td><span class="on">边框·网格⁵</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="on">●</span></td>
                 <td><span class="off">—</span></td>
+                <td><span class="on">●²²</span></td>
                 <td><span class="on">●</span></td>
               </tr>
               <tr>
@@ -1874,9 +1949,9 @@
                 <td><span class="on">●</span></td>
                 <td><span class="part">◐³</span></td>
                 <td><span class="off">—</span></td>
+                <td><span class="on">●</span></td>
                 <td><span class="off">—</span></td>
-                <td><span class="off">—</span></td>
-                <td><span class="off">—</span></td>
+                <td><span class="on">●</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="on">纸色⁴</span></td>
@@ -1886,24 +1961,26 @@
                 <td><span class="on">●</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="on">●</span></td>
+                <td><span class="part">◐¹⁰</span></td>
               </tr>
               <tr>
-                <td>填充样式</td>
+                <td>填充样式²¹</td>
                 <td><span class="on">●</span></td>
                 <td><span class="part">◐³</span></td>
                 <td><span class="off">—</span></td>
+                <td><span class="on">●</span></td>
+                <td><span class="off">—</span></td>
+                <td><span class="on">●</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
+                <td><span class="on">●</span></td>
                 <td><span class="off">—</span></td>
-                <td><span class="off">—</span></td>
-                <td><span class="off">—</span></td>
-                <td><span class="off">—</span></td>
-                <td><span class="off">—</span></td>
-                <td><span class="off">—</span></td>
+                <td><span class="on">●</span></td>
+                <td><span class="part">◐¹⁰</span></td>
               </tr>
               <tr>
                 <td>描边宽度</td>
@@ -1921,6 +1998,7 @@
                 <td><span class="off">—</span></td>
                 <td><span class="on">●</span></td>
                 <td><span class="off">—</span></td>
+                <td><span class="on">●</span></td>
                 <td><span class="on">●</span></td>
               </tr>
               <tr>
@@ -1940,6 +2018,7 @@
                 <td><span class="on">●</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="on">●</span></td>
+                <td><span class="on">●</span></td>
               </tr>
               <tr>
                 <td>压感</td>
@@ -1949,6 +2028,7 @@
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="on">●</span></td>
+                <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
@@ -1976,6 +2056,7 @@
                 <td><span class="on">●</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="on">●</span></td>
+                <td><span class="off">—</span></td>
               </tr>
               <tr>
                 <td>箭头类型</td>
@@ -1984,6 +2065,7 @@
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="on">●⁸</span></td>
+                <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
@@ -2012,6 +2094,7 @@
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
+                <td><span class="off">—</span></td>
               </tr>
               <tr>
                 <td>字体 / 字号 / 文字对齐</td>
@@ -2023,10 +2106,11 @@
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
+                <td><span class="on">●²³</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
-                <td><span class="off">—</span></td>
+                <td><span class="on">●²³</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
@@ -2036,6 +2120,7 @@
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="part">◐⁹</span></td>
+                <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
@@ -2060,11 +2145,12 @@
                 <td><span class="on">●</span></td>
                 <td><span class="on">●</span></td>
                 <td><span class="on">●</span></td>
-                <td><span class="off">—¹⁰</span></td>
+                <td><span class="on">●</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="on">●</span></td>
                 <td><span class="off">—</span></td>
+                <td><span class="on">●</span></td>
                 <td><span class="on">●</span></td>
               </tr>
               <tr>
@@ -2084,6 +2170,7 @@
                 <td><span class="off">—¹¹</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="on">●</span></td>
+                <td><span class="on">●</span></td>
               </tr>
               <tr>
                 <td>对齐 / 分布</td>
@@ -2102,9 +2189,10 @@
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
                 <td><span class="off">—</span></td>
+                <td><span class="off">—</span></td>
               </tr>
               <tr>
-                <td>操作</td>
+                <td>操作²⁰</td>
                 <td><span class="on">●</span></td>
                 <td><span class="on">●¹³</span></td>
                 <td><span class="on">●</span></td>
@@ -2120,6 +2208,7 @@
                 <td><span class="on">●¹⁸</span></td>
                 <td><span class="on">●¹⁸</span></td>
                 <td><span class="on">●¹⁹</span></td>
+                <td><span class="on">●</span></td>
               </tr>
               <tr>
                 <td>专属分组</td>
@@ -2132,12 +2221,13 @@
                 <td class="on">裁剪</td>
                 <td class="on">名称</td>
                 <td class="on">纸色·文字色</td>
-                <td class="on">边框·表头·标题</td>
+                <td class="on">边框·网格·表头·标题</td>
                 <td class="on">模式·合并·填充</td>
                 <td class="on">方向·默认连线</td>
                 <td class="on">形状·入边</td>
-                <td class="on">连线样式</td>
+                <td class="on">颜色·线型·路径</td>
                 <td class="on">链接</td>
+                <td class="on">文本适配·形态</td>
               </tr>
             </tbody>
           </table>
@@ -2147,13 +2237,17 @@
           部分成员具备时显示　<span class="off">—</span> 隐藏　¹
           文本的标签为「颜色」　² 便签的标签为「文字颜色」　³
           多选时取成员能力并集　⁴ 便签背景为六色纸专用色板　⁵
-          表格的描边系分组改名为「边框」　⁶ 矩形 / 菱形有，椭圆无　⁷
-          线条为折角（直角 / 圆角）　⁸ 直线 / 曲线 / 折线　⁹ 仅容器绑定文本　¹⁰
-          表格选中时隐藏透明度（现状如此，保留）　¹¹
-          导图节点走专属面板，图层进「更多」　¹² 超过 2 个元素时追加分布　¹³
-          多选追加成组 / 取消成组　¹⁴ 含「编辑节点」入口　¹⁵ 含裁剪　¹⁶
-          重命名在画布标题上进行，面板给入口　¹⁷ 含合并 / 拆分　¹⁸
-          手机端为底部动作条（加子节点等）　¹⁹ 含「编辑链接」
+          表格描边系改名为「边框」，边框与网格线为两个独立色板　⁶ 矩形 /
+          菱形有，椭圆无　⁷ 线条为折角（直角 /
+          圆角），边角组含「闭合多边形」开关，闭合后支持背景与填充　⁸ 直线 / 曲线 /
+          折线　⁹ 仅容器绑定文本　¹⁰ 复合形状开放形态（分栏 /
+          列表等）无背景与填充　¹¹ 导图节点走专属面板，图层进「更多」　¹² 超过 2
+          个元素时追加分布　¹³ 多选追加成组 / 取消成组　¹⁴ 含「编辑节点」入口　¹⁵
+          含裁剪　¹⁶ 重命名在画布标题上进行，面板给入口　¹⁷ 含合并 / 拆分　¹⁸
+          手机端为底部动作条（加子节点等）　¹⁹ 含「编辑链接」　²⁰
+          单选（含容器绑定文本伪单选）时操作组追加「链接」按钮　²¹ Alt +
+          点击填充样式切换隐藏的 zigzag 纹理　²² 生成的 iframe 无描边颜色组　²³
+          便签 / 导图节点经绑定文本获得字体、字号、文字对齐三组
         </p>
       </section>
 
@@ -2166,6 +2260,44 @@
           渲染）——桌面 / 平板从浮动栏弹层打开，手机从底部 sheet
           打开，三者内容完全一致；右侧为要点。便签、表格、思维导图的画布选中态详见各自设计稿。
         </p>
+
+        <h3>工具配置（无选中）<span class="badge-new">新增</span></h3>
+        <div class="scn">
+          <div class="canvas">
+            <svg viewBox="0 0 300 200" aria-label="无选中的画布">
+              <rect
+                class="el el-teal"
+                x="104"
+                y="96"
+                width="92"
+                height="56"
+                rx="10"
+              />
+            </svg>
+            <div class="tb-floatbar" style="left: 150px; top: 8px; transform: translateX(-50%)" role="toolbar" aria-label="工具默认样式">
+              <button type="button" class="tb-swatch is-on" style="--c: #0e8c7e" aria-label="描边颜色"></button>
+              <button type="button" class="tb-swatch" style="--c: #e6f4f1" aria-label="背景颜色"></button>
+              <span class="sep"></span>
+              <button type="button" class="tb-iconbtn" data-ic="adjust" aria-label="样式"></button>
+            </div>
+          </div>
+          <div class="tb-panel" data-pp="stroke|bg|fill|width|style|opa"></div>
+          <div class="scn-note">
+            <b>激活绘制工具、尚未选中元素</b>
+            <ul>
+              <li>
+                浮动栏固定于视口顶部居中（主工具条下方
+                12px，不跟随元素），配置下一个元素的默认样式
+              </li>
+              <li>分组序列 = 该工具产出元素的对应场景，图示为矩形工具</li>
+              <li>
+                桶填充变体 <code>bg（无透明）|fill|opa</code>；切回选择 / 套索 /
+                橡皮 / 抓手 / 激光笔即隐藏
+              </li>
+              <li>手机端以底部条呈现同一序列</li>
+            </ul>
+          </div>
+        </div>
 
         <h3>单个普通图形</h3>
         <div class="scn">
@@ -2193,17 +2325,18 @@
           </div>
           <div
             class="tb-panel"
-            data-pp="stroke|bg|fill|width|style|round|opa|layers|actions"
+            data-pp="stroke|bg|fill|width|style|round|opa|layers|actions:link"
           ></div>
           <div class="scn-note">
             <b>矩形 / 椭圆 / 菱形</b>
             <ul>
               <li>
                 分组序列
-                <code>stroke|bg|fill|width|style|round|opa|layers|actions</code>
+                <code>stroke|bg|fill|width|style|round|opa|layers|actions:link</code>
               </li>
               <li>椭圆没有「边角」组，其余相同</li>
               <li>填充样式 = 斜线 / 网格 / 纯色；无填充 = 背景选「透明」</li>
+              <li>单选时操作组追加「链接」按钮（弹层：编辑 / 访问两态）</li>
             </ul>
           </div>
         </div>
@@ -2348,7 +2481,7 @@
           </div>
           <div
             class="tb-panel"
-            data-pp="stroke:text|font|fsize|talign|opa|layers|actions"
+            data-pp="stroke:text|font|fsize|talign|opa|layers|actions:link"
           ></div>
           <div class="scn-note">
             <b>独立文本与标签</b>
@@ -2402,7 +2535,7 @@
           </div>
           <div
             class="tb-panel"
-            data-pp="stroke|width|style|atype|heads|opa|layers|actions:edit"
+            data-pp="stroke|width|style|atype|heads|opa|layers|actions:edit,link"
           ></div>
           <div class="scn-note">
             <b>普通箭头与绑定连接线共用</b>
@@ -2410,6 +2543,50 @@
               <li>「箭头类型」= 直线 / 曲线 / 折线；「端点」打开端点库</li>
               <li>操作组含「编辑节点」（elbow 除外）</li>
               <li>绑定开关保持在右键菜单，不进面板</li>
+              <li>
+                线条（非箭头）无类型 / 端点组；「边角」组含「闭合多边形」开关，闭合后的线条支持背景颜色与填充样式
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>线条 · 编辑节点模式<span class="badge-new">新增</span></h3>
+        <div class="scn">
+          <div class="canvas">
+            <svg viewBox="0 0 300 200" aria-label="编辑节点模式">
+              <path class="conn" d="M60 150 L150 60 L240 120" />
+              <circle class="anchor" cx="60" cy="150" r="4.5" />
+              <circle
+                cx="150"
+                cy="60"
+                r="5"
+                fill="var(--sel)"
+                stroke="var(--handle-fill)"
+                stroke-width="1.5"
+              />
+              <circle class="anchor" cx="240" cy="120" r="4.5" />
+              <circle cx="105" cy="105" r="3" fill="var(--sel)" opacity="0.35" />
+              <circle cx="195" cy="90" r="3" fill="var(--sel)" opacity="0.35" />
+            </svg>
+            <div class="tb-floatbar" style="left: 150px; top: 8px; transform: translateX(-50%)" role="toolbar" aria-label="编辑节点">
+              <span style="font-size: 12px; color: var(--page-ink-2); padding: 0 6px">编辑节点</span>
+              <button type="button" class="tb-btn-primary">完成</button>
+            </div>
+          </div>
+          <div class="scn-note" style="align-self: center">
+            进入「编辑节点」后，属性浮动栏<b>整体替换</b>为模式条：模式名 +
+            「完成」主按钮（Enter / Esc
+            同效）；属性分组在此模式下不可用，退出后回到正常浮动栏。手机端底部条同样替换。
+          </div>
+          <div class="scn-note">
+            <b>逐点编辑线条 / 箭头（elbow 除外）</b>
+            <ul>
+              <li>
+                顶点 = 实心锚点，选中点主色填充；中点 = 6px
+                半透明加点手柄（画布规格详见连接线设计稿）
+              </li>
+              <li>底部提示条沿用 HintViewer 现状文案（选点 / 加点 / 删点 / 拖点）</li>
+              <li>「闭合多边形」开关在属性面板边角组（场景矩阵⁷），模式条不重复提供</li>
             </ul>
           </div>
         </div>
@@ -2430,6 +2607,7 @@
             </svg>
             <div class="tb-floatbar" style="left: 150px; top: 8px; transform: translateX(-50%)" role="toolbar" aria-label="选中自由绘制属性">
               <button type="button" class="tb-swatch is-on" style="--c: #d83a52" aria-label="描边颜色"></button>
+              <button type="button" class="tb-swatch" style="--c: transparent" aria-label="背景颜色"></button>
               <span class="sep"></span>
               <button type="button" class="tb-iconbtn" data-ic="adjust" aria-label="样式"></button>
               <span class="sep"></span>
@@ -2439,13 +2617,13 @@
           </div>
           <div
             class="tb-panel"
-            data-pp="stroke|width|pressure|opa|layers|actions"
+            data-pp="stroke|bg|fill|width|pressure|opa|layers|actions:link"
           ></div>
           <div class="scn-note">
             <b>画笔笔迹</b>
             <ul>
-              <li>无背景 / 填充 / 描边样式；「压感」= 固定 / 压感</li>
-              <li>其余分组与图形一致</li>
+              <li>闭合笔迹支持背景颜色与填充样式；无描边样式</li>
+              <li>「压感」= 固定 / 压感；其余分组与图形一致</li>
             </ul>
           </div>
         </div>
@@ -2482,13 +2660,69 @@
           </div>
           <div
             class="tb-panel"
-            data-pp="round|opa|layers|actions:crop"
+            data-pp="round|opa|layers|actions:crop,link"
           ></div>
           <div class="scn-note">
             <b>位图与贴纸</b>
             <ul>
               <li>无描边 / 背景 / 填充；保留「边角」「透明度」</li>
               <li>操作组含「裁剪」，进入裁剪模式后面板让位给裁剪确认条</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>图片 · 裁剪模式<span class="badge-new">新增</span></h3>
+        <div class="scn">
+          <div class="canvas">
+            <svg viewBox="0 0 300 200" aria-label="裁剪模式">
+              <g opacity="0.35">
+                <rect
+                  x="50"
+                  y="36"
+                  width="200"
+                  height="128"
+                  rx="8"
+                  fill="var(--denim-fill)"
+                />
+                <path
+                  d="M62 140l40-48 30 30 26-20 46 36"
+                  fill="none"
+                  stroke="var(--denim)"
+                  stroke-width="1.5"
+                />
+                <circle cx="208" cy="62" r="9" fill="var(--denim)" />
+              </g>
+              <rect x="86" y="60" width="128" height="80" fill="var(--denim-fill)" />
+              <path
+                d="M94 128l32-38 24 24 20-16 36 28"
+                fill="none"
+                stroke="var(--denim)"
+                stroke-width="1.5"
+              />
+              <circle cx="192" cy="80" r="7" fill="var(--denim)" />
+              <rect class="sel-box" x="86" y="60" width="128" height="80" />
+              <circle class="handle" cx="86" cy="60" r="4.5" />
+              <circle class="handle" cx="214" cy="60" r="4.5" />
+              <circle class="handle" cx="86" cy="140" r="4.5" />
+              <circle class="handle" cx="214" cy="140" r="4.5" />
+            </svg>
+            <div class="tb-floatbar" style="left: 150px; top: 8px; transform: translateX(-50%)" role="toolbar" aria-label="裁剪图片">
+              <span style="font-size: 12px; color: var(--page-ink-2); padding: 0 6px">裁剪图片</span>
+              <button type="button" class="tb-iconbtn" data-ic="x" aria-label="取消"></button>
+              <button type="button" class="tb-btn-primary">应用</button>
+            </div>
+          </div>
+          <div class="scn-note" style="align-self: center">
+            属性浮动栏<b>整体替换</b>为确认条：模式名 + 取消（✕ / Esc
+            还原到进入时状态）+ 应用（主按钮 / Enter /
+            双击画布）。定位同浮动栏锚定规则；拖动裁剪框时确认条<b>不</b>隐藏。手机端底部条同样替换。
+          </div>
+          <div class="scn-note">
+            <b>单选图片 → 操作组「裁剪」</b>
+            <ul>
+              <li>画布规格：保留区正常渲染，裁掉区 35% 透明，四角裁剪手柄</li>
+              <li>底部提示条沿用 HintViewer；确认条动效同浮动栏（120ms）</li>
+              <li>Stats 面板此时 W / H 显示未裁剪原始尺寸（见「属性统计面板」）</li>
             </ul>
           </div>
         </div>
@@ -2524,7 +2758,7 @@
           </div>
           <div
             class="tb-panel"
-            data-pp="opa|layers|actions"
+            data-pp="opa|layers|actions:link"
           ></div>
           <div class="scn-note">
             <b>Frame 本体</b>
@@ -2532,6 +2766,10 @@
               <li>无描边 / 背景（样式固定，见 Frame 设计稿）</li>
               <li>浮动栏「重命名」按钮聚焦画布标题输入框（双击标题同效）</li>
               <li>「更多」内含导出 Frame 为图片</li>
+              <li>
+                MagicFrame 分组同 Frame；选中时元素边缘外侧悬浮「转换为代码」画布按钮（tb-canvasbtn，拖动
+                / 旋转 / 菜单打开时隐藏）
+              </li>
             </ul>
           </div>
         </div>
@@ -2570,6 +2808,7 @@
               <button type="button" class="tb-swatch" style="--c: #5c4200" aria-label="文字颜色"></button>
               <button type="button" class="tb-swatch is-on" style="--c: #ffe58f" aria-label="纸色"></button>
               <span class="sep"></span>
+              <button type="button" class="tb-iconbtn" data-ic="font" aria-label="字体与字号"></button>
               <button type="button" class="tb-iconbtn" data-ic="adjust" aria-label="边角与透明度"></button>
               <span class="sep"></span>
               <button type="button" class="tb-iconbtn" data-ic="layers" aria-label="图层"></button>
@@ -2578,13 +2817,16 @@
           </div>
           <div
             class="tb-panel"
-            data-pp="stroke:word|bg:paper|round|opa|layers|actions"
+            data-pp="stroke:word|bg:paper|font|fsize|talign|round|opa|layers|actions:link"
           ></div>
           <div class="scn-note">
             <b>纸片便签</b>
             <ul>
               <li>「文字颜色」走墨色板；「纸色」为六色专用纸色板</li>
               <li>无描边宽度 / 样式 / 填充（纸片无描边）</li>
+              <li>
+                字体 / 字号 / 文字对齐经便签文字（绑定文本）生效，控件与文本场景一致
+              </li>
               <li>日期页脚不可编辑，不在面板出现</li>
             </ul>
           </div>
@@ -2629,14 +2871,17 @@
           </div>
           <div
             class="tb-panel"
-            data-pp="tbcolor|tbbg|tbwidth|tbstyle|tbhead|tbtitle|layers|actions"
+            data-pp="tbcolor|tbgrid|tbbg|tbwidth|tbstyle|opa|tbhead|tbtitle|layers|actions"
           ></div>
           <div class="scn-note">
             <b>表格整体（P06 风格）</b>
             <ul>
-              <li>描边系分组改名「边框颜色 / 宽度 / 样式」，顺序不变</li>
+              <li>
+                描边系分组改名「边框」，「边框颜色」与「网格线颜色」为两个独立色板（互不影响，透明边框不影响网格）
+              </li>
               <li>「表头」为复选项；「标题对齐」作用于表格标题</li>
-              <li>选中表格时隐藏透明度（保持现状）</li>
+              <li>透明度与图形一致（滑杆 0–100）</li>
+              <li>行 / 列选中时面板仅保留边框色 + 背景色两组（作用于该行 / 列）</li>
             </ul>
           </div>
         </div>
@@ -2773,7 +3018,10 @@
             <b>选中根节点 = 操作整棵树</b>
             <ul>
               <li>「布局方向」四选一：向右 / 向左 / 向下 / 向上</li>
-              <li>「默认连线」作用于整树未单独设置的分支</li>
+              <li>
+                「默认连线」= 颜色 / 宽度 / 线型 / 路径（曲线 /
+                正交）四子组，作用于整树未单独设置的分支
+              </li>
               <li>「更多」含一键整理布局、展开 / 折叠全部</li>
             </ul>
           </div>
@@ -2857,20 +3105,24 @@
               <span class="sep"></span>
               <button type="button" class="tb-iconbtn" data-ic="shpill" aria-label="节点形状"></button>
               <button type="button" class="tb-iconbtn" data-ic="edge" aria-label="入边样式"></button>
+              <button type="button" class="tb-iconbtn" data-ic="font" aria-label="文字属性"></button>
               <span class="sep"></span>
               <button type="button" class="tb-iconbtn" data-ic="more" aria-label="更多"></button>
             </div>
           </div>
           <div
             class="tb-panel"
-            data-pp="mshape|inedge|stroke|bg|round|opa|actions"
+            data-pp="mshape|inedge|stroke|bg|fill|width|style|round|font|fsize|talign|opa|actions:link"
           ></div>
           <div class="scn-note">
             <b>分支 / 叶子节点</b>
             <ul>
               <li>「节点形状」= 自动 / 矩形 / 椭圆 / 菱形 / 胶囊</li>
               <li>「入边样式」= 跟随分支 / 实线 / 虚线 / 点线</li>
-              <li>通用描边 / 背景 / 边角 / 透明度照常出现在弹层；图层进「更多」</li>
+              <li>
+                通用描边 / 背景 / 填充 / 描边宽度 / 描边样式 / 边角 /
+                透明度照常出现在弹层；字体 / 字号 / 文字对齐经节点文本生效；图层进「更多」
+              </li>
               <li>手机端此浮动栏替换为底部动作条（见「响应式」）</li>
             </ul>
           </div>
@@ -2942,7 +3194,8 @@
             <ul>
               <li>
                 <span class="badge-new">统一</span>
-                弃用原生 color / number 输入，改为色板 + 分段选择器
+                弃用原生 color / number 输入；「连线样式」= 颜色 / 宽度 / 线型 /
+                路径（曲线 / 正交）四子组，色板 + 分段选择器
               </li>
               <li>颜色默认为分支色，可单独覆盖</li>
               <li>「更多」含重置为默认连线样式</li>
@@ -2996,16 +3249,111 @@
               <button type="button" class="tb-iconbtn" data-ic="layers" aria-label="图层"></button>
               <button type="button" class="tb-iconbtn" data-ic="more" aria-label="更多"></button>
             </div>
+            <div style="position: absolute; right: 8px; top: 52px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px">
+              <button type="button" class="tb-canvasbtn">
+                <svg viewBox="0 0 16 16"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 10.5V3.5A1 1 0 0 1 4 2.5h6.5"/></svg>
+                复制源码
+              </button>
+              <button type="button" class="tb-canvasbtn">
+                <svg viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg>
+                进入全屏
+              </button>
+            </div>
           </div>
           <div
             class="tb-panel"
-            data-pp="stroke|bg|width|style|round|opa|layers|actions:link"
+            data-pp="stroke|bg|fill|width|style|round|opa|layers|actions:elink"
           ></div>
           <div class="scn-note">
             <b>嵌入网页 / iframe</b>
             <ul>
-              <li>描边 / 背景 / 宽度 / 样式 / 边角可配</li>
+              <li>描边 / 背景 / 填充 / 宽度 / 样式 / 边角可配</li>
               <li>操作组含「编辑链接」</li>
+              <li>
+                生成完成的 iframe 无描边颜色组；元素边缘外侧悬浮「复制源码 /
+                进入全屏」画布按钮（tb-canvasbtn，见「通用控件」）
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>复合形状<span class="badge-new">新增</span></h3>
+        <div class="scn">
+          <div class="canvas">
+            <svg viewBox="0 0 300 200" aria-label="选中复合形状">
+              <rect
+                class="el el-denim"
+                x="70"
+                y="56"
+                width="160"
+                height="88"
+                rx="10"
+              />
+              <circle
+                cx="96"
+                cy="92"
+                r="12"
+                fill="var(--menu-bg)"
+                stroke="var(--denim)"
+                stroke-width="1.5"
+              />
+              <rect
+                x="116"
+                y="78"
+                width="84"
+                height="8"
+                rx="4"
+                fill="var(--denim)"
+                opacity="0.45"
+              />
+              <rect
+                x="116"
+                y="94"
+                width="56"
+                height="8"
+                rx="4"
+                fill="var(--denim)"
+                opacity="0.25"
+              />
+              <path class="tbl-line" d="M82 120 H218" />
+              <rect
+                x="82"
+                y="126"
+                width="120"
+                height="6"
+                rx="3"
+                fill="var(--denim)"
+                opacity="0.18"
+              />
+              <g data-selbox="70,56,160,88"></g>
+            </svg>
+            <div class="tb-floatbar" style="left: 150px; top: 8px; transform: translateX(-50%)" role="toolbar" aria-label="选中复合形状属性">
+              <button type="button" class="tb-swatch is-on" style="--c: #2f6fb0" aria-label="描边颜色"></button>
+              <button type="button" class="tb-swatch" style="--c: #e8f0f8" aria-label="背景颜色"></button>
+              <span class="sep"></span>
+              <button type="button" class="tb-iconbtn" data-ic="adjust" aria-label="样式"></button>
+              <span class="sep"></span>
+              <button type="button" class="tb-iconbtn" data-ic="layers" aria-label="图层"></button>
+              <button type="button" class="tb-iconbtn" data-ic="more" aria-label="更多"></button>
+            </div>
+          </div>
+          <div
+            class="tb-panel"
+            data-pp="stroke|bg|fill|width|style|opa|layers|actions:link"
+          ></div>
+          <div class="scn-note">
+            <b>复合形状（卡片 / 分栏 / 列表等 Lark 映射形状）</b>
+            <ul>
+              <li>
+                通用分组与图形一致：描边 / 背景 / 填充 / 宽度 / 样式 / 透明度 /
+                图层 / 操作；无「边角」组
+              </li>
+              <li>开放形态（分栏 / 列表等）无背景与填充分组</li>
+              <li>
+                文本适配在「更多 · 文字和容器」子菜单：自适应文字 /
+                固定尺寸（超出省略）
+              </li>
+              <li>形状映射与结构详见 composite-shape 系列文档</li>
             </ul>
           </div>
         </div>
@@ -3243,8 +3591,18 @@
                   <path d="M3 8h10" /><path data-fill d="M21 8 15.5 4 10 8l5.5 4Z" />
                 </svg>
               </button>
+              <button type="button" aria-label="空心菱形">
+                <svg viewBox="0 0 28 16">
+                  <path d="M3 8h10" /><path d="M21 8 15.5 4 10 8l5.5 4Z" />
+                </svg>
+              </button>
               <button type="button" aria-label="竖线">
                 <svg viewBox="0 0 28 16"><path d="M3 8h14M19 3.5v9" /></svg>
+              </button>
+              <button type="button" aria-label="X 形">
+                <svg viewBox="0 0 28 16">
+                  <path d="M3 8h12" /><path d="M15.5 3.5l7 9M22.5 3.5l-7 9" />
+                </svg>
               </button>
             </div>
             <div class="tb-sub">关系型（连接线专用）</div>
@@ -3254,6 +3612,18 @@
               </button>
               <button type="button" aria-label="恰好一">
                 <svg viewBox="0 0 28 16"><path d="M3 8h16M17 3.5v9M21 3.5v9" /></svg>
+              </button>
+              <button type="button" aria-label="零或一">
+                <svg viewBox="0 0 28 16">
+                  <path d="M3 8h6" /><circle cx="10.5" cy="8" r="2.4" />
+                  <path d="M13 8h5M18 3.5v9" />
+                </svg>
+              </button>
+              <button type="button" aria-label="一或多">
+                <svg viewBox="0 0 28 16">
+                  <path d="M3 8h9M9 3.5v9" />
+                  <path d="M12 8l6.5-4.5M12 8l6.5 4.5M12 8h6.5" />
+                </svg>
               </button>
               <button type="button" aria-label="零或多">
                 <svg viewBox="0 0 28 16">
@@ -3266,7 +3636,8 @@
               </button>
             </div>
             <div class="tb-note" style="margin-top: 8px">
-              顶部切换起点 / 终点；关系型端点收进二级区，默认折叠的记忆态
+              顶部切换起点 / 终点；常用 10 枚（含空心菱形、X 形），关系型 6
+              枚收进二级区，默认折叠的记忆态
             </div>
           </div>
         </div>
@@ -3305,11 +3676,127 @@
           悬停实时预览画布文本；当前字体行尾对勾；行高 34，预览 14px 用字体本身渲染。
         </p>
 
+        <h3>链接弹层与联动态<span class="badge-new">新增</span></h3>
+        <div class="canvas" style="height: 300px">
+          <div class="tb-floatbar" style="left: 24px; top: 24px" role="toolbar" aria-label="选中元素属性">
+            <button type="button" class="tb-swatch is-on" style="--c: #1f2329" aria-label="描边颜色"></button>
+            <button type="button" class="tb-swatch" style="--c: transparent" aria-label="背景颜色"></button>
+            <span class="sep"></span>
+            <button type="button" class="tb-iconbtn" data-ic="adjust" aria-label="样式"></button>
+            <span class="sep"></span>
+            <button type="button" class="tb-iconbtn is-on" data-ic="link" aria-label="链接"></button>
+            <button type="button" class="tb-iconbtn" data-ic="layers" aria-label="图层"></button>
+            <button type="button" class="tb-iconbtn" data-ic="more" aria-label="更多"></button>
+          </div>
+          <div
+            class="tb-pop"
+            style="position: absolute; left: 130px; top: 74px; width: 252px"
+            role="dialog"
+            aria-label="编辑链接"
+          >
+            <span class="tb-pop-arrow" style="left: 112px"></span>
+            <div class="tb-pop-title">链接 · 编辑态</div>
+            <div class="tb-row">
+              <span class="tb-input" style="flex: 1">https://…</span>
+            </div>
+            <div class="tb-row" style="margin-top: 8px">
+              <button type="button" class="tb-select" style="flex: 1">
+                <span>链接到元素…</span>
+                <svg viewBox="0 0 16 16"><path d="M4.5 6.5 8 10l3.5-3.5" /></svg>
+              </button>
+            </div>
+            <div
+              class="tb-row"
+              style="margin-top: 8px; justify-content: flex-end"
+            >
+              <button
+                type="button"
+                class="tb-iconbtn"
+                data-ic="trash"
+                aria-label="移除链接"
+              ></button>
+              <button type="button" class="tb-btn-primary">保存</button>
+            </div>
+          </div>
+        </div>
+        <div class="canvas" style="height: 200px; margin-top: 16px">
+          <div
+            class="tb-pop"
+            style="position: absolute; left: 24px; top: 40px; width: 252px"
+            role="dialog"
+            aria-label="访问链接"
+          >
+            <span class="tb-pop-arrow"></span>
+            <div class="tb-pop-title">链接 · 访问态</div>
+            <div class="tb-row">
+              <button
+                type="button"
+                class="tb-iconbtn is-on"
+                data-ic="link"
+                aria-label="链接"
+              ></button>
+              <span
+                style="flex: 1; font-size: 12px; color: var(--sel); overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+                >example.com/spec</span
+              >
+            </div>
+            <div
+              class="tb-row"
+              style="margin-top: 8px; justify-content: flex-end"
+            >
+              <button
+                type="button"
+                class="tb-iconbtn"
+                data-ic="edit"
+                aria-label="编辑"
+              ></button>
+              <button type="button" class="tb-btn-primary">访问</button>
+            </div>
+          </div>
+        </div>
+        <table class="spec">
+          <thead>
+            <tr>
+              <th>项</th>
+              <th>规则</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>触发</td>
+              <td>
+                操作组 / 右键菜单「链接」打开编辑态；选中已带链接的元素时自动出现访问态（嵌入元素为「编辑嵌入链接」）
+              </td>
+            </tr>
+            <tr>
+              <td>链接到元素</td>
+              <td>
+                打开 elementLinkSelector
+                对话框选择画布内元素；<b>对话框打开期间浮动栏整体隐藏</b>，关闭后恢复
+              </td>
+            </tr>
+            <tr>
+              <td>角标</td>
+              <td>
+                不另设持久角标：访问态弹层即链接标识；只读 /
+                查看模式下悬停带链接元素同样弹出访问态
+              </td>
+            </tr>
+            <tr>
+              <td>层级与关闭</td>
+              <td>
+                与颜色弹层同级（--zIndex-ui-styles-popup =
+                100）；Esc 关闭并焦点回到「链接」按钮；与其他弹层互斥
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
         <h3>更多操作菜单（面板「…」）</h3>
-        <div class="canvas" style="height: 330px">
+        <div class="canvas" style="height: 470px">
           <ul
             class="tb-menu"
-            style="position: absolute; left: 24px; top: 20px"
+            style="position: absolute; left: 24px; top: 16px"
             role="menu"
             aria-label="更多操作"
           >
@@ -3317,7 +3804,13 @@
               <i data-ic="dup"></i>复制<span class="kbd">⌘D</span>
             </li>
             <li role="menuitem" tabindex="-1">
-              <i data-ic="link"></i>复制链接<span></span>
+              <i data-ic="link"></i>链接<span class="sub">›</span>
+            </li>
+            <li role="menuitem" tabindex="-1">
+              <i data-ic="paint"></i>样式<span class="sub">›</span>
+            </li>
+            <li role="menuitem" tabindex="-1">
+              <i data-ic="img"></i>复制为<span class="sub">›</span>
             </li>
             <li class="sep" role="separator"></li>
             <li role="menuitem" tabindex="-1">
@@ -3325,6 +3818,18 @@
             </li>
             <li role="menuitem" tabindex="-1" class="is-hover">
               <i data-ic="flip"></i>翻转<span class="sub">›</span>
+            </li>
+            <li role="menuitem" tabindex="-1">
+              <i data-ic="edit"></i>编辑<span class="sub">›</span>
+            </li>
+            <li role="menuitem" tabindex="-1">
+              <i data-ic="font"></i>文字和容器<span class="sub">›</span>
+            </li>
+            <li role="menuitem" tabindex="-1">
+              <i data-ic="frameic"></i>画框<span class="sub">›</span>
+            </li>
+            <li role="menuitem" tabindex="-1">
+              <i data-ic="table"></i>表格<span class="sub">›</span>
             </li>
             <li role="menuitem" tabindex="-1">
               <i data-ic="lock"></i>锁定<span class="kbd">⌘L</span>
@@ -3336,7 +3841,7 @@
           </ul>
           <ul
             class="tb-menu"
-            style="position: absolute; left: 232px; top: 128px; width: 168px"
+            style="position: absolute; left: 256px; top: 190px; width: 168px"
             role="menu"
             aria-label="翻转"
           >
@@ -3350,8 +3855,59 @@
         </div>
         <p class="scn-note" style="margin-top: 8px">
           菜单规范与「白板画布样式设计稿 ·
-          右键菜单」完全一致（32px 行高、危险项置底、子菜单右展）；场景专属动作（裁剪、编辑链接、整理布局等）插在「成组」之后。
+          右键菜单」完全一致（32px 行高、危险项置底、子菜单右展）。项序固定如上；场景专属动作（裁剪、编辑节点、整理布局等）插在「成组」之后；无对应能力时该子菜单整体不渲染（如无文本能力不出现「文字和容器」）。
         </p>
+        <table class="spec">
+          <thead>
+            <tr>
+              <th>子菜单</th>
+              <th>内容</th>
+              <th>出现条件</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>链接</td>
+              <td>添加链接 / 编辑链接；复制此对象的链接</td>
+              <td>单选（含容器伪单选）；嵌入场景首项为「编辑嵌入链接」</td>
+            </tr>
+            <tr>
+              <td>样式</td>
+              <td>拷贝样式 ⌥⌘C、粘贴样式 ⌥⌘V</td>
+              <td>任意选中</td>
+            </tr>
+            <tr>
+              <td>复制为</td>
+              <td>PNG、SVG、复制文本</td>
+              <td>任意选中</td>
+            </tr>
+            <tr>
+              <td>编辑</td>
+              <td>裁剪、编辑节点、切换形状、添加到素材库</td>
+              <td>按能力：图片 / 线性元素 / 图形 · 复合形状</td>
+            </tr>
+            <tr>
+              <td>文字和容器</td>
+              <td>
+                启用文本自动缩放、自适应文字、固定尺寸（超出省略）、将文本绑定到容器、取消文本绑定、将文本包围在容器中
+              </td>
+              <td>含文本能力</td>
+            </tr>
+            <tr>
+              <td>画框</td>
+              <td>用选中的元素创建画框、选择画框中的所有元素、分离出画框中的所有元素</td>
+              <td>有选中；后两项需涉及 Frame</td>
+            </tr>
+            <tr>
+              <td>表格</td>
+              <td>
+                复制单元格格式、粘贴单元格格式、居中单元格内容；清空单元格内容 /
+                背景文本 / 样式
+              </td>
+              <td>表格 / 单元格选区</td>
+            </tr>
+          </tbody>
+        </table>
 
         <h3>手机端：思维导图节点「更多」（底部 sheet）</h3>
         <div class="canvas" style="width: 340px; height: 300px">
@@ -3364,24 +3920,26 @@
             <div class="grab"></div>
             <ul class="tb-menu" role="menu">
               <li role="menuitem" tabindex="-1">
-                <i data-ic="child"></i>添加子节点<span class="kbd">Tab</span>
-              </li>
-              <li role="menuitem" tabindex="-1">
                 <i data-ic="sib"></i>添加同级节点<span class="kbd">↵</span>
               </li>
               <li role="menuitem" tabindex="-1">
-                <i data-ic="fold"></i>折叠子树<span></span>
+                <i data-ic="promote"></i>提升节点 · 拆分导图<span></span>
               </li>
               <li class="sep" role="separator"></li>
               <li role="menuitem" tabindex="-1" class="danger">
-                <i data-ic="trash"></i>删除节点及子树<span class="kbd">⌫</span>
+                <i data-ic="trash"></i>删除完整子树<span class="kbd">⌫</span>
+              </li>
+              <li role="menuitem" tabindex="-1">
+                <i data-ic="trash"></i>删除节点，保留子节点<span></span>
               </li>
             </ul>
           </div>
         </div>
         <p class="scn-note" style="margin-top: 8px">
-          手机端不显示属性面板，思维导图选中节点后底部为动作条；「更多」打开底部
-          sheet，行高 44，危险项置底。
+          手机端不显示属性面板，思维导图选中节点后底部为动作条：直接按钮 =
+          添加子节点（Tab）、编辑文本、折叠 / 展开分支（有子节点时）；「…」打开底部
+          sheet（图示）：添加同级节点（↵）、提升节点 · 拆分导图（仅普通节点）、删除完整子树（⌫）、删除节点但保留子节点。行高
+          44，危险项置底。
         </p>
       </section>
 
@@ -3510,7 +4068,10 @@
             </div>
             <figcaption>
               <b>手机 · 底部条</b>横排可横滑：色板（纸色 /
-              文字色）直接外露，其余收进「更多」；宽度不足时复制 / 删除让位进溢出。
+              文字色）直接外露，其余收进「更多」；宽度不足时复制 /
+              删除让位进溢出。单元格选区时含撤销 /
+              重做；思维导图选中节点时替换为节点动作条（添加子节点 / 编辑文本 /
+              折叠展开 +「…」）。
             </figcaption>
           </figure>
           <figure class="dev" style="width: 300px">
@@ -3585,6 +4146,55 @@
         </table>
       </section>
 
+      <!-- 7.5 属性统计面板 -->
+      <section>
+        <h2>
+          属性统计面板（Stats）<span class="badge-new">保留并重绘</span>
+        </h2>
+        <p class="lede">
+          Stats（快捷键 Alt+/，或画布右键「视图 →
+          属性」）是唯一可精确查看与编辑坐标 / 尺寸 / 旋转角 /
+          字号的界面，予以保留；视觉并入本稿令牌与控件体系。结构不变：「概况」（画布尺寸
+          / 形状数 / 存储 / 版本，点击复制）+「形状属性」（位置 X·Y、尺寸
+          W·H、角度、字号；多选时切换为 Multi 变体，不一致字段显示「多值」）。
+        </p>
+        <div class="ctl-grid">
+          <div class="ctl">
+            <b>数字拖拽框 · DragInput</b>
+            <div class="demo">
+              <span class="tb-num" style="min-width: 56px">128.0</span>
+              <span class="tb-num" style="min-width: 56px">64.0</span>
+              <span class="tb-num" style="min-width: 56px">45°</span>
+            </div>
+            <div class="cap">
+              高 28、圆角 6、1px 控件描边；等宽数字 12px；标签 12px
+              弱化色居左；按住标签左右拖拽连续增减，点击输入精确值（Enter 提交 / Esc
+              还原）；焦点 2px 主色 outline。
+            </div>
+          </div>
+          <div class="ctl">
+            <b>多选 · 多值</b>
+            <div class="demo">
+              <span
+                class="tb-num"
+                style="min-width: 56px; color: var(--page-muted)"
+                >多值</span
+              >
+            </div>
+            <div class="cap">
+              多选属性不一致时显示「多值」占位（与色板 @mix 同语义），输入后统一。
+            </div>
+          </div>
+          <div class="ctl">
+            <b>容器与联动</b>
+            <div class="cap" style="margin-top: 0">
+              固定于视口右侧、与浮动栏同层；手机端不显示。裁剪模式下 W / H
+              显示未裁剪原始尺寸；「概况 / 形状属性」分组折叠态记忆。视觉仅换令牌，结构与交互保持现状。
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- 8 现状统一清单 -->
       <section>
         <h2>现状不统一 → 统一规则</h2>
@@ -3646,6 +4256,46 @@
             <tr>
               <td>箭头端点「更多」折叠区自绘样式</td>
               <td>并入端点库弹层底部「关系型」分区，同容器同网格</td>
+            </tr>
+            <tr>
+              <td>「更多」菜单项随容器与场景漂移</td>
+              <td>
+                项序固定（见「更多操作菜单」），子菜单与右键菜单同源，按能力渲染
+              </td>
+            </tr>
+            <tr>
+              <td>旧稿称「表格选中隐藏透明度」，与实际实现相反</td>
+              <td>表格透明度与图形一致，正常显示（滑杆 0–100）</td>
+            </tr>
+            <tr>
+              <td>复合形状 / 无选中工具配置 / 元素画布悬浮按钮未纳入设计</td>
+              <td>
+                补入场景矩阵（复合形状列）与场景设计稿（工具配置、复合形状、悬浮按钮）
+              </td>
+            </tr>
+            <tr>
+              <td>思维导图连线面板缺「路径」分组</td>
+              <td>连线样式 = 颜色 / 宽度 / 线型 / 路径四子组，整树默认连线同构</td>
+            </tr>
+            <tr>
+              <td>裁剪 / 编辑节点模式无确认 UI，退出方式仅靠快捷键与点击空白</td>
+              <td>
+                属性浮动栏整体替换为模式条：模式名 + 取消（Esc 还原）+
+                应用 / 完成（Enter、双击）；拖动裁剪框时不隐藏
+              </td>
+            </tr>
+            <tr>
+              <td>链接弹层两态、elementLinkSelector 联动态、角标策略未规范</td>
+              <td>
+                编辑 / 访问两态弹层统一容器；selector 打开时浮动栏隐藏；不另设持久角标
+              </td>
+            </tr>
+            <tr>
+              <td>Stats 统计面板未纳入令牌体系</td>
+              <td>
+                保留功能（唯一定位 / 尺寸 / 角度 / 字号精确编辑），DragInput
+                按本稿控件规格重绘
+              </td>
             </tr>
           </tbody>
         </table>
@@ -3747,6 +4397,13 @@
               <td>动效</td>
               <td>浮动栏 120ms 透明 + 位移；弹层 100ms；sheet 160ms 上滑</td>
               <td>同左</td>
+            </tr>
+            <tr>
+              <td>数字拖拽框（Stats · DragInput）</td>
+              <td>
+                高 28、圆角 6、描边 #E5E6EB；标签 12px #8F959E；等宽数字 12px
+              </td>
+              <td>描边 #2B2D32；标签 #7D838C</td>
             </tr>
           </tbody>
         </table>
@@ -3852,6 +4509,12 @@
         edge: '<path d="M2.5 12.5C7 12 9 4 13.5 3.5"/>',
         unlock:
           '<rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-1"/>',
+        paint:
+          '<path d="M10.5 2.5l3 3L7 12H4V9z"/><path d="M2.5 14h11"/>',
+        img: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><circle cx="5.5" cy="6" r="1"/><path d="M3 11.5l3-2.5 2.5 2 2-1.5 3 2.5"/>',
+        frameic: '<path d="M5 2.5v11M11 2.5v11M2.5 5h11M2.5 11h11"/>',
+        promote: '<path d="M8 13.5V6M4.5 9.5 8 6l3.5 3.5"/><path d="M3 2.5h10"/>',
+        x: '<path d="M4 4l8 8M12 4l-8 8"/>',
       };
 
       // data-ic → 注入内联 svg（保留宿主元素）
@@ -4133,7 +4796,8 @@
         actions: (arg) => {
           const map = {
             crop: ["crop", "裁剪"],
-            link: ["link", "复制链接"],
+            link: ["link", "链接"],
+            elink: ["link", "编辑链接"],
             edit: ["edit", "编辑节点"],
             group: ["group", "成组"],
           };
@@ -4148,6 +4812,7 @@
           );
         },
         tbcolor: (a, mix) => grp("边框颜色", sws(BORDER, 0, mix)),
+        tbgrid: (a, mix) => grp("网格线颜色", sws(BORDER, 0, mix)),
         tbbg: (a, mix) => grp("背景颜色", sws(FILL, 0, mix)),
         tbwidth: () => grp("边框宽度", range(25, "1", "边框宽度")),
         tbstyle: () =>
@@ -4258,6 +4923,13 @@
                 ["lsolid", "", "实线"],
                 ["ldash", "", "虚线"],
                 ["ldot", "", "点线"],
+              ],
+              0,
+            )}<div class="tb-sub">路径</div>${seg(
+              "连线路径",
+              [
+                ["around", "", "曲线"],
+                ["aelbow", "", "正交"],
               ],
               0,
             )}`,
