@@ -14,6 +14,7 @@ import {
   DEFAULT_GRID_STEP,
   isTestEnv,
   DEFAULT_STICKY_NOTE_BG,
+  STICKY_NOTE_INK,
 } from "@excalidraw/common";
 
 import type { AppState, InputDevice, NormalizedZoomValue } from "./types";
@@ -39,7 +40,7 @@ export const getDefaultAppState = (): Omit<
     currentItemStrokeVariability: "constant",
     currentItemStartArrowhead: null,
     currentItemStrokeColor: DEFAULT_NEW_ELEMENT_STROKE_COLOR,
-    currentItemStickynoteStrokeColor: DEFAULT_ELEMENT_PROPS.strokeColor,
+    currentItemStickynoteStrokeColor: STICKY_NOTE_INK,
     currentItemStickynoteBackgroundColor: DEFAULT_STICKY_NOTE_BG,
     currentItemRoundness: isTestEnv() ? "sharp" : "round",
     currentItemArrowType: ARROW_TYPE.round,

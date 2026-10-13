@@ -36,7 +36,7 @@ exports[`exportToSvg > with default arguments 1`] = `
   "currentItemRoundness": "sharp",
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffe58f",
-  "currentItemStickynoteStrokeColor": "#1e1e1e",
+  "currentItemStickynoteStrokeColor": "#1f2329",
   "currentItemStrokeColor": "#1f2329",
   "currentItemStrokeStyle": "solid",
   "currentItemStrokeVariability": "constant",

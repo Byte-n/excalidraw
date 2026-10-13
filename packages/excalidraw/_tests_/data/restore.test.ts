@@ -9,6 +9,7 @@ import {
   ROUNDNESS,
   STICKY_NOTE_MAX_FONT_SIZE,
   DEFAULT_STICKY_NOTE_BG,
+  STICKY_NOTE_INK,
   STICKY_NOTE_MIN_FONT_SIZE,
 } from "@excalidraw/common";
 
@@ -114,7 +115,7 @@ describe("restoreElements", () => {
     expect(restored[0].id).not.toBe(restored[1].id);
   });
 
-  it("should restore transparent sticky note stroke as black", () => {
+  it("should restore transparent sticky note stroke as the default ink", () => {
     const stickyNote = {
       ...API.createElement({ type: "stickynote" }),
       strokeColor: COLOR_PALETTE.transparent,
@@ -122,7 +123,7 @@ describe("restoreElements", () => {
 
     const restoredElement = restore.restoreElements([stickyNote], null)[0];
 
-    expect(restoredElement.strokeColor).toBe(COLOR_PALETTE.black);
+    expect(restoredElement.strokeColor).toBe(STICKY_NOTE_INK);
   });
 
   it("when imported data state is null it should return an empty array of elements", () => {
@@ -332,7 +333,7 @@ describe("restoreElements", () => {
     ) as ExcalidrawTextElement;
 
     expect(restoredLabel.baseFontSize).toBe(20);
-    expect(restoredLabel.strokeColor).toBe(COLOR_PALETTE.black);
+    expect(restoredLabel.strokeColor).toBe(STICKY_NOTE_INK);
   });
 
   it("should give a note its label's color when the two drifted apart", () => {
@@ -376,7 +377,7 @@ describe("restoreElements", () => {
     expect(restored.currentItemStickynoteBackgroundColor).toBe(
       DEFAULT_STICKY_NOTE_BG,
     );
-    expect(restored.currentItemStickynoteStrokeColor).toBe(COLOR_PALETTE.black);
+    expect(restored.currentItemStickynoteStrokeColor).toBe(STICKY_NOTE_INK);
     expect(restored.colorTopPicks.stickyNoteBackground).toEqual([
       "#fcc2d7",
       "#b2f2bb",
@@ -1074,7 +1075,7 @@ describe("restoreAppState", () => {
     expect(restoredAppState.currentItemStrokeWidthKey).toBe("bold");
   });
 
-  it("should restore transparent current sticky note stroke as black", () => {
+  it("should restore transparent current sticky note stroke as the default ink", () => {
     const restoredAppState = restore.restoreAppState(
       {
         currentItemStickynoteStrokeColor: COLOR_PALETTE.transparent,
@@ -1083,7 +1084,7 @@ describe("restoreAppState", () => {
     );
 
     expect(restoredAppState.currentItemStickynoteStrokeColor).toBe(
-      COLOR_PALETTE.black,
+      STICKY_NOTE_INK,
     );
   });
 

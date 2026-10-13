@@ -1,5 +1,4 @@
 import {
-  DEFAULT_ELEMENT_PROPS,
   DEFAULT_STICKY_NOTE_BG,
   MIN_FONT_SIZE,
   arrayToMap,
@@ -8,6 +7,7 @@ import {
   STICKY_NOTE_FALLBACK_FONT_SIZE,
   STICKY_NOTE_FOOTER,
   STICKY_NOTE_FONT_STEP,
+  STICKY_NOTE_INK,
   STICKY_NOTE_MAX_FONT_SIZE,
   STICKY_NOTE_MIN_SIZE,
   STICKY_NOTE_MIN_FONT_SIZE,
@@ -64,7 +64,7 @@ export const normalizeStickyNoteStrokeColor = (
   strokeColor: string | null | undefined,
 ) => {
   return !strokeColor || isTransparent(strokeColor)
-    ? DEFAULT_ELEMENT_PROPS.strokeColor
+    ? STICKY_NOTE_INK
     : strokeColor;
 };
 
@@ -200,9 +200,9 @@ export const syncStickyNoteInk = <T extends ExcalidrawElement>(
         container.strokeColor.toLowerCase() === STICKY_NOTE_YELLOW_INK &&
         (!label || label.strokeColor.toLowerCase() === STICKY_NOTE_YELLOW_INK)
       ) {
-        inkById.set(container.id, DEFAULT_ELEMENT_PROPS.strokeColor);
+        inkById.set(container.id, STICKY_NOTE_INK);
         if (label) {
-          inkById.set(label.id, DEFAULT_ELEMENT_PROPS.strokeColor);
+          inkById.set(label.id, STICKY_NOTE_INK);
         }
       }
       continue;

@@ -3,6 +3,7 @@ import {
   DEFAULT_ELEMENT_STROKE_PICKS,
   DEFAULT_STICKY_NOTE_BG,
   STICKY_NOTE_BACKGROUND_PICKS,
+  STICKY_NOTE_INK,
 } from "@excalidraw/common";
 
 import {
@@ -104,7 +105,7 @@ describe("resolveColorTarget", () => {
     );
     expect(
       getColorTargetAppStateUpdates(stickyStroke, COLOR_PALETTE.transparent),
-    ).toEqual({ currentItemStickynoteStrokeColor: COLOR_PALETTE.black });
+    ).toEqual({ currentItemStickynoteStrokeColor: STICKY_NOTE_INK });
 
     const stickyBackground = resolveColorTarget(
       appState({ selectedElementIds: { note: true } }),

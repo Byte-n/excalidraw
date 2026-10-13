@@ -37,7 +37,7 @@
 
 1. **形状**：当前带抖动 jitter 的轮廓 + 内描边 `rgba(0,0,0,0.08)`（`stickyNote.ts:225-368`、`renderElement.ts:499-533`）→ 圆角 4px 矩形，无描边。
 2. **投影**：当前 3px 硬偏移 16% 黑色阴影（`STICKY_NOTE_SHADOW_OFFSET/OPACITY`，`constants.ts:277-280`）→ 双层柔和投影 `0 1 2 / 8% + 0 3 8 / 10%`；悬停与拖动中抬升为 `0 2 3 / 8% + 0 8 20 / 14%`。
-3. **颜色**：当前默认 `#FFDF6B` + 5 个快捷色（`colors.ts:270,283-289`）→ 六色 `#FFE58F`（默认黄）`#C6EFD9` `#CDE3FC` `#FCD5DD` `#E2D8FB` `#E5E6EB`；黄色文字专属深棕 `#5C4200`，其余墨色（`syncStickyNoteInk`，`stickyNote.ts:145-187`）。
+3. **颜色**：当前默认 `#FFDF6B` + 5 个快捷色（`colors.ts:270,283-289`）→ 六色 `#FFE58F`（默认黄）`#C6EFD9` `#CDE3FC` `#FCD5DD` `#E2D8FB` `#E5E6EB`；黄色文字专属深棕 `#5C4200`，其余五色默认墨色 `#1F2329`（`STICKY_NOTE_INK`，`syncStickyNoteInk`，`stickyNote.ts:145-187`）。
 4. **文字**：内边距 16 已是现状；行高对齐 1.55；自动字号保留（短文本放大、长文本缩小、最小 12px）。
 5. **页脚**：当前 12px Helvetica「7 Sep」、不透明（`STICKY_NOTE_FOOTER`，`constants.ts:258-265`、`stickyNote.ts:423-493`）→ 11px、55% 透明、中文格式「10月11日」（跨年带年份），右下对齐不变。数据源用元素基类 `created` 字段（`types.ts:78-82`），不新增字段。
 6. **悬停**：当前通用悬停外框 → 便签不画悬停描边，只抬升投影；拖动过程中保持抬升。

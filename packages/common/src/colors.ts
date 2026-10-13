@@ -270,16 +270,25 @@ export const BUCKET_FILL_BACKGROUND_PICKS = [
 export const DEFAULT_STICKY_NOTE_BG = "#ffe58f";
 
 /**
+ * The default ink (text + footer) of a note on any non-yellow paper — the
+ * design-system ink #1F2329, not the generic element black #1e1e1e. Seeds
+ * `currentItemStickynoteStrokeColor`, and `syncStickyNoteInk` releases a note
+ * back to it when the paper leaves yellow. Dark themes run it through
+ * `applyDarkModeFilter`, like every element color.
+ */
+export const STICKY_NOTE_INK = "#1f2329";
+
+/**
  * The ink (text + footer) of a note on the default yellow paper — dark brown
  * instead of the default ink. Applied by `syncStickyNoteInk` when the paper
- * becomes yellow, and the default `currentItemStickynoteStrokeColor`. Dark
- * themes run it through `applyDarkModeFilter`, like every element color.
+ * becomes yellow, and by `getStickyNoteCreationInk` for a fresh yellow note.
+ * Dark themes run it through `applyDarkModeFilter`, like every element color.
  */
 export const STICKY_NOTE_YELLOW_INK = "#5c4200";
 
-// 便签描边快捷色保持独立取值，不随元素描边快捷色变化
+// 便签描边快捷色保持独立取值，不随元素描边快捷色变化；首格为便签默认墨色
 export const STICKY_NOTE_STROKE_PICKS = [
-  COLOR_PALETTE.black,
+  STICKY_NOTE_INK,
   COLOR_PALETTE.red[DEFAULT_ELEMENT_STROKE_COLOR_INDEX],
   COLOR_PALETTE.green[DEFAULT_ELEMENT_STROKE_COLOR_INDEX],
   COLOR_PALETTE.blue[DEFAULT_ELEMENT_STROKE_COLOR_INDEX],

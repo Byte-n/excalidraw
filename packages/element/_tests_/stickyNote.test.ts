@@ -1,5 +1,4 @@
 import {
-  DEFAULT_ELEMENT_PROPS,
   DEFAULT_STICKY_NOTE_BG,
   DEFAULT_STICKY_NOTE_SIZE,
   FONT_FAMILY,
@@ -11,6 +10,7 @@ import {
   STICKY_NOTE_MIN_FONT_SIZE,
   STICKY_NOTE_BODY_INSET_Y,
   STICKY_NOTE_FOOTER,
+  STICKY_NOTE_INK,
   STICKY_NOTE_MIN_SIZE,
   STICKY_NOTE_PADDING,
   STICKY_NOTE_YELLOW_INK,
@@ -34,7 +34,10 @@ import {
   newStickyNoteElement,
   newTextElement,
 } from "../src/newElement";
-import { resizeMultipleElements, resizeSingleElement } from "../src/resizeElements";
+import {
+  resizeMultipleElements,
+  resizeSingleElement,
+} from "../src/resizeElements";
 import {
   getStickyNoteLayout,
   getStickyNoteCornerRadius,
@@ -998,9 +1001,7 @@ describe("sticky note creation date", () => {
     new Date(year, month, day, 12).getTime();
 
   it("formats an absolute date, short while the year is the current one", () => {
-    expect(getStickyNoteDateLabel(at(2026, 8, 7), { now: NOW })).toBe(
-      "9月7日",
-    );
+    expect(getStickyNoteDateLabel(at(2026, 8, 7), { now: NOW })).toBe("9月7日");
     expect(getStickyNoteDateLabel(at(2025, 11, 31), { now: NOW })).toBe(
       "2025年12月31日",
     );
@@ -1154,8 +1155,8 @@ describe("sticky note ink", () => {
     const recolored = newElementWith(container, { backgroundColor: "#c6efd9" });
 
     expect(inks(syncStickyNoteInk([recolored, label], prev))).toEqual([
-      DEFAULT_ELEMENT_PROPS.strokeColor,
-      DEFAULT_ELEMENT_PROPS.strokeColor,
+      STICKY_NOTE_INK,
+      STICKY_NOTE_INK,
     ]);
   });
 
