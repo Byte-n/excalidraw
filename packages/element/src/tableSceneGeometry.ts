@@ -1,4 +1,8 @@
-import { getFontString, TABLE_CELL_TEXT_PADDING } from "@excalidraw/common";
+import {
+  getFontString,
+  TABLE_CELL_TEXT_PADDING_X,
+  TABLE_CELL_TEXT_PADDING_Y,
+} from "@excalidraw/common";
 
 import { getBoundTextElement } from "./textElement";
 import { getIndexedTableCellChildren } from "./tableChildrenIndex";
@@ -145,8 +149,10 @@ export const getCellBackgroundTextLayout = (
   elementsMap: ElementsMap,
 ) => {
   const style = getTableBackgroundTextStyle(text, elementsMap);
-  const padding = style?.padding ?? TABLE_CELL_TEXT_PADDING;
-  const availableWidth = Math.max(bounds.width - padding * 2, 1);
+  // an explicit style override is a single number applied to both axes
+  const paddingX = style?.padding ?? TABLE_CELL_TEXT_PADDING_X;
+  const paddingY = style?.padding ?? TABLE_CELL_TEXT_PADDING_Y;
+  const availableWidth = Math.max(bounds.width - paddingX * 2, 1);
   // measurement must use the same weight the renderer derives (header band
   // gets 600), otherwise wrapped width and row growth disagree with painting
   const font = getFontString({
@@ -160,8 +166,8 @@ export const getCellBackgroundTextLayout = (
   const height = measured.height;
   const horizontalAlign = style?.horizontalAlign ?? text.textAlign;
   const verticalAlign = style?.verticalAlign ?? text.verticalAlign;
-  const freeWidth = Math.max(0, bounds.width - padding * 2 - width);
-  const freeHeight = Math.max(0, bounds.height - padding * 2 - height);
+  const freeWidth = Math.max(0, bounds.width - paddingX * 2 - width);
+  const freeHeight = Math.max(0, bounds.height - paddingY * 2 - height);
   return {
     text: wrapped,
     width,
@@ -171,7 +177,7 @@ export const getCellBackgroundTextLayout = (
     x:
       table.x +
       bounds.x +
-      padding +
+      paddingX +
       (horizontalAlign === "center"
         ? freeWidth / 2
         : horizontalAlign === "right"
@@ -180,7 +186,7 @@ export const getCellBackgroundTextLayout = (
     y:
       table.y +
       bounds.y +
-      padding +
+      paddingY +
       (verticalAlign === "middle"
         ? freeHeight / 2
         : verticalAlign === "bottom"
@@ -235,14 +241,14 @@ export const refitCellBackgroundTexts = (
         bounds,
         elementsMap,
       );
-      const padding =
+      const paddingY =
         getTableBackgroundTextStyle(backgroundText, elementsMap)?.padding ??
-        TABLE_CELL_TEXT_PADDING;
+        TABLE_CELL_TEXT_PADDING_Y;
       requiredHeights.set(
         row.id,
         Math.max(
           requiredHeights.get(row.id) ?? 0,
-          layout.height + padding * 2 - (bounds.height - row.height),
+          layout.height + paddingY * 2 - (bounds.height - row.height),
         ),
       );
     }

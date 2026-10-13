@@ -16,7 +16,7 @@
 ### A. 设计稿重定义的视觉（当前有，形态/数值不同）
 
 1. **表体**：当前透明底 + `#B3B3B3` 直角外框 + `#D6D6D6` 网格（`constants.ts:223-233` `TABLE_STYLE`，`tableRender.ts:265-275` `strokeRect`）→ 白底 + `1px #D0D3D9` 圆角 6px 外框 + `#E5E6EB` 网格。
-2. **单元格默认排版**：当前 center/middle、padding 0、字号取 `currentItemFontSize`（`tableScene.ts:262-263`、`components/app/table.ts:978-980`、`tableSceneGeometry.ts:146-148`）→ 13px、左对齐垂直居中、左右内边距 12。
+2. **单元格默认排版**：当前 center/middle、padding 0、字号取 `currentItemFontSize`（`tableScene.ts:262-263`、`components/app/table.ts:978-980`、`tableSceneGeometry.ts:146-148`）→ 13px、左对齐垂直居中、内边距水平 12 / 垂直 10（`TABLE_CELL_TEXT_PADDING_X/Y`）。
 3. **悬停单元格**：当前 `rgba(0,118,255,0.12)`（`interactiveScene.ts:1374-1401`）→ 主色 10% 填充（拖入图形落点预览沿用同一通道，已复用，仅随动改色）。
 4. **区域选择**：当前 2px 描边无填充（`interactiveScene.ts:1403-1440`）→ 主色 8% 填充 + 1px 主色外框，起始格保留 2px 内描边。
 5. **整行/整列选中**：当前 `rgba(0,118,255,0.14)` 填充（`interactiveScene.ts:1667-1734`）→ 主色 12% 填充 + 1.5px 主色描边；把手选中态变主色（已有）。
@@ -48,7 +48,7 @@
 
 1. **暗色主题走全 app 统一的 `applyDarkModeFilter`**（与 P12 思维导图 D.3 一致），不逐像素复刻设计稿的暗色 hex；唯一例外是表体背景沿用已有 `token:surface` 解析（白/`#262626`，`tableRender.ts:74-85`），与单元格 `token:surface` 行为一致。
 2. **默认行高维持 56**：设计稿规格表写「默认行高 36」但创建规格写「单元格 160 × 56」，两者矛盾；取与现状一致的 160×56 创建默认，行高/列宽最小 24 不变。
-3. **单元格默认排版直接改出厂默认**（左对齐垂直居中、padding 12、13px）：`pasteTSVIntoCell` 的 4px 硬编码偏移（`tableClipboard.ts:606-609`）统一改走默认 padding。字体沿用当前默认字体族，不随本期切换「系统字体」——字体族切换影响文字测量与全部既有测试基线，留待单独决策。
+3. **单元格默认排版直接改出厂默认**（左对齐垂直居中、padding 水平 12 / 垂直 10、13px）：`pasteTSVIntoCell` 的 4px 硬编码偏移（`tableClipboard.ts:606-609`）统一改走默认 padding。字体沿用当前默认字体族，不随本期切换「系统字体」——字体族切换影响文字测量与全部既有测试基线，留待单独决策。
 4. **编辑中行列把手仅作位置提示**：渲染保留（所在行列主色），不新增编辑态手势；点击把手/表外按现状先退出编辑。
 5. **表头为纯渲染派生，不落数据**：`header !== false` 时首行背景与 600 字重作为**最低优先级默认**参与解析（显式行/列/格背景、显式字重一律覆盖它），开关切换零副作用、无历史写入。
 
@@ -121,7 +121,7 @@
 
 ## 测试
 
-- **更新**：`element/_tests_/tableRender.test.ts`（新令牌/白底/圆角/表头渲染与填充优先级）、`tableScene.test.ts` 与 `tableSceneGeometry` 相关断言（padding 12、对齐与 13px 默认、首行 600 派生）、`excalidraw/_tests_/tableRendering.test.tsx` 快照、`tableInteraction.test.tsx`（编辑态 overlay 变化）、`tableClipboard.test.tsx`（padding 影响粘贴偏移）。
+- **更新**：`element/_tests_/tableRender.test.ts`（新令牌/白底/圆角/表头渲染与填充优先级）、`tableScene.test.ts` 与 `tableSceneGeometry` 相关断言（padding 水平 12 / 垂直 10、对齐与 13px 默认、首行 600 派生）、`excalidraw/_tests_/tableRendering.test.tsx` 快照、`tableInteraction.test.tsx`（编辑态 overlay 变化）、`tableClipboard.test.tsx`（padding 影响粘贴偏移）。
 - **新增**：`header` 开关渲染与「显式覆盖优先」用例；编辑态内描边 + 所在行列把手主色；数值标签内容与位置；移动浮层预览状态生成。
 - **命令**：`yarn test:typecheck`、`yarn test:update`（提交前必跑）；测试代码不留调试打印。
 - **手工验证（由用户执行）**：`yarn start` 起 app —— ① 新建表格确认白底/圆角/浅网格/首行表头；② 单元格 hover、拖选区域、行列把手三态、插入点两态；③ 双击编辑看 2px 内描边与所在行列把手主色；④ 拖列宽看数值标签；⑤ 拖行把手看淡化 + 浮层 + 落点线、Esc 取消；⑥ 标题悬停占位/编辑/对齐切换；⑦ 切暗色主题整体过一遍；⑧ TSV 复制粘贴回归。

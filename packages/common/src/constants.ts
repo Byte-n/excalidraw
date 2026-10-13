@@ -251,10 +251,13 @@ export const TABLE_STYLE = {
 };
 
 /**
- * Factory default inset of a cell's background text (all four sides). Also
- * read by the clipboard paste offset — import from `@excalidraw/common`.
+ * Factory default inset of a cell's background text — horizontal 12, vertical
+ * 10 per the design spec. Also read by the clipboard paste offset — import
+ * from `@excalidraw/common`. An explicit `BackgroundTextStyle.padding`
+ * override stays a single number applied to both axes.
  */
-export const TABLE_CELL_TEXT_PADDING = 12;
+export const TABLE_CELL_TEXT_PADDING_X = 12;
+export const TABLE_CELL_TEXT_PADDING_Y = 10;
 /** Factory default font size of a cell's background text. */
 export const TABLE_CELL_TEXT_FONT_SIZE = 13;
 
