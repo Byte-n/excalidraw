@@ -30,7 +30,6 @@ import {
   isMindmapEdgeElement,
   isMindmapNodeElement,
   isElbowArrow,
-  isTextElement,
   isPathALoop,
   getContainerCenter,
   hitElementItself,
@@ -1304,12 +1303,10 @@ export const handleCanvasPointerMove = (
     ) {
       app.setState({ showHyperlinkPopup: "info" });
     } else if (app.state.activeTool.type === "text") {
+      // 文本工具整体就是「输入」光标：空画布、已有文字、可挂标签的图形，
+      // 点下去都是写字，只有箭头的文字锚点例外（那边是点选锚点）
       app.cursor.set(
-        hoveredArrowTextAnchor
-          ? CURSOR_TYPE.POINTER
-          : isTextElement(hitElement)
-          ? CURSOR_TYPE.TEXT
-          : CURSOR_TYPE.CROSSHAIR,
+        hoveredArrowTextAnchor ? CURSOR_TYPE.POINTER : CURSOR_TYPE.TEXT,
       );
     } else if (
       hitElement &&

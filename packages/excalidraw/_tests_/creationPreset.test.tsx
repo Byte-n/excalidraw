@@ -214,13 +214,54 @@ describe("creation preset placement", () => {
 });
 
 describe("text tool cursor", () => {
-  it("shows the text caret instead of the crosshair", async () => {
+  beforeEach(async () => {
     localStorage.clear();
     await render(<Excalidraw />);
+  });
+
+  const cursor = () => GlobalTestState.interactiveCanvas.style.cursor;
+
+  it("shows the text caret instead of the crosshair", async () => {
     UI.clickTool("text");
 
-    expect(GlobalTestState.interactiveCanvas.style.cursor).toBe(
-      CURSOR_TYPE.TEXT,
-    );
+    expect(cursor()).toBe(CURSOR_TYPE.TEXT);
+  });
+
+  it("keeps the caret while hovering the empty canvas", async () => {
+    UI.clickTool("text");
+    pointer().moveTo(400, 300);
+
+    // 悬停路径曾经把它改回 crosshair（只对「悬停在已有文字上」给 caret）
+    expect(cursor()).toBe(CURSOR_TYPE.TEXT);
+  });
+
+  it("keeps the caret over existing elements", async () => {
+    API.setElements([
+      API.createElement({ type: "text", x: 100, y: 100, text: "hello" }),
+      API.createElement({
+        type: "rectangle",
+        x: 600,
+        y: 400,
+        width: 200,
+        height: 120,
+      }),
+    ]);
+    UI.clickTool("text");
+    const mouse = pointer();
+
+    // 已有文字：点下去是继续编辑
+    mouse.moveTo(110, 110);
+    expect(cursor()).toBe(CURSOR_TYPE.TEXT);
+
+    // 图形：点下去是给它挂标签，同样是写字
+    mouse.moveTo(700, 460);
+    expect(cursor()).toBe(CURSOR_TYPE.TEXT);
+  });
+
+  it("keeps the crosshair for the other creating tools", async () => {
+    UI.clickTool("rectangle");
+    pointer().moveTo(400, 300);
+
+    expect(cursor()).toBe(CURSOR_TYPE.CROSSHAIR);
   });
 });
