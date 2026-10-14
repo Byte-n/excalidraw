@@ -304,20 +304,27 @@ export const DEFAULT_STICKY_NOTE_SIZE = 250;
 
 /**
  * 创建工具的**预设尺寸**：选中工具后跟随光标的半透明预览就是它，单击
- * （位移不到 `DRAGGING_THRESHOLD`、没有拖拽）落地时也按它成型、以光标为
- * 中心。按住拖拽仍按拖出的范围自定大小，与预设无关。
+ * （位移不到 `DRAGGING_THRESHOLD`、没有拖拽）落地时也按它成型，**左上角
+ * 落在光标处**（与按下拖拽的起点同一锚点，所以悬停 / 拖拽 / 单击三者不跳）。
+ * 按住拖拽仍按拖出的范围自定大小，与预设无关。
  *
  * 表格没有自己的条目——`newTableElement` 建出来的默认 3×3 就是预设，元素
  * 自带尺寸，不在这里重复推导，避免两处漂移。
  */
 export const DEFAULT_SHAPE_PRESET_SIZE = {
-  width: 200,
-  height: 120,
+  width: 120,
+  height: 80,
 } as const;
 export const DEFAULT_FRAME_PRESET_SIZE = {
-  width: 640,
-  height: 480,
+  width: 400,
+  height: 300,
 } as const;
+/**
+ * 便签的预设尺寸。**不等于 `DEFAULT_STICKY_NOTE_SIZE`**——那个是便签的固有
+ * 默认尺寸（`baseHeight` 初值、工具栏拖出、变换兜底都用它，见下方），预设
+ * 只管跟随光标与单击落地时画多大。
+ */
+export const DEFAULT_STICKY_NOTE_PRESET_SIZE = 160;
 // floor for a finalized note's width and base height; the UI floor is font-aware
 // on top of it (see `getStickyNoteMinSize`)
 export const STICKY_NOTE_MIN_SIZE = 75;

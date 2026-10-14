@@ -3,6 +3,7 @@ import React from "react";
 import {
   COLOR_PALETTE,
   DEFAULT_ELEMENT_STROKE_PICKS,
+  DEFAULT_STICKY_NOTE_PRESET_SIZE,
   DEFAULT_STICKY_NOTE_SIZE,
   KEYS,
   STICKY_NOTE_MIN_FONT_SIZE,
@@ -874,8 +875,9 @@ describe("sticky notes", () => {
       const note = h.elements.find(
         (element) => element.type === "stickynote" && !element.isDeleted,
       ) as ExcalidrawStickyNoteElement;
-      expect(note.width).toBe(DEFAULT_STICKY_NOTE_SIZE);
-      expect(note.height).toBe(DEFAULT_STICKY_NOTE_SIZE);
+      // 单击落地用工具的预设尺寸（不是便签的固有默认尺寸）
+      expect(note.width).toBe(DEFAULT_STICKY_NOTE_PRESET_SIZE);
+      expect(note.height).toBe(DEFAULT_STICKY_NOTE_PRESET_SIZE);
 
       // the placement is one entry; the empty editing session may add another
       const liveNotes = () =>

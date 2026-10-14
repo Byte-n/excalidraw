@@ -2,7 +2,7 @@ import React from "react";
 import { vi } from "vitest";
 
 import {
-  DEFAULT_STICKY_NOTE_SIZE,
+  DEFAULT_STICKY_NOTE_PRESET_SIZE,
   KEYS,
   STICKY_NOTE_BODY_INSET_Y,
   STICKY_NOTE_MIN_SIZE,
@@ -324,9 +324,10 @@ describe("Test dragCreate", () => {
       const stickyNote = h.elements.find(
         (element) => element.type === "stickynote",
       ) as ExcalidrawStickyNoteElement;
-      expect(stickyNote.width).toBe(DEFAULT_STICKY_NOTE_SIZE);
-      expect(stickyNote.height).toBe(DEFAULT_STICKY_NOTE_SIZE);
-      expect(stickyNote.baseHeight).toBe(DEFAULT_STICKY_NOTE_SIZE);
+      // 落地用工具的预设尺寸（不是便签的固有默认尺寸）
+      expect(stickyNote.width).toBe(DEFAULT_STICKY_NOTE_PRESET_SIZE);
+      expect(stickyNote.height).toBe(DEFAULT_STICKY_NOTE_PRESET_SIZE);
+      expect(stickyNote.baseHeight).toBe(DEFAULT_STICKY_NOTE_PRESET_SIZE);
     });
 
     it("previews a drag at its true size and snaps to the minimum on release", async () => {
@@ -489,13 +490,13 @@ describe("Test dragCreate", () => {
 
       expect(h.state.selectionElement).toBeNull();
 
-      // 左上角落在按下点，尺寸是预设的 200×120
+      // 左上角落在按下点，尺寸是预设的 120×80
       expect(h.elements.length).toEqual(1);
       expect(h.elements[0]).toMatchObject({
         x: 30,
         y: 20,
-        width: 200,
-        height: 120,
+        width: 120,
+        height: 80,
       });
     });
 
@@ -519,8 +520,8 @@ describe("Test dragCreate", () => {
         shape: { id: "ellipse", schemaVersion: 1 },
         x: 30,
         y: 20,
-        width: 200,
-        height: 120,
+        width: 120,
+        height: 80,
       });
     });
 
@@ -544,8 +545,8 @@ describe("Test dragCreate", () => {
         shape: { id: "diamond", schemaVersion: 1 },
         x: 30,
         y: 20,
-        width: 200,
-        height: 120,
+        width: 120,
+        height: 80,
       });
     });
 

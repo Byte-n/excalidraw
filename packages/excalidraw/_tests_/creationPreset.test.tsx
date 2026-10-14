@@ -26,13 +26,13 @@ describe("creation preset preview", () => {
   });
 
   const PRESETS: { tool: ToolType; width: number; height: number }[] = [
-    { tool: "rectangle", width: 200, height: 120 },
-    { tool: "diamond", width: 200, height: 120 },
-    { tool: "ellipse", width: 200, height: 120 },
-    { tool: "stickynote", width: 250, height: 250 },
+    { tool: "rectangle", width: 120, height: 80 },
+    { tool: "diamond", width: 120, height: 80 },
+    { tool: "ellipse", width: 120, height: 80 },
+    { tool: "stickynote", width: 160, height: 160 },
     // 表格没有单独的预设尺寸常量：newTableElement 建出来的默认 3×3 就是预设
     { tool: "table", width: 480, height: 168 },
-    { tool: "frame", width: 640, height: 480 },
+    { tool: "frame", width: 400, height: 300 },
   ];
 
   it.each(PRESETS)(
@@ -143,10 +143,10 @@ describe("creation preset placement", () => {
     height: number;
     type: string;
   }[] = [
-    { tool: "rectangle", width: 200, height: 120, type: "composite_shape" },
-    { tool: "stickynote", width: 250, height: 250, type: "stickynote" },
+    { tool: "rectangle", width: 120, height: 80, type: "composite_shape" },
+    { tool: "stickynote", width: 160, height: 160, type: "stickynote" },
     { tool: "table", width: 480, height: 168, type: "table" },
-    { tool: "frame", width: 640, height: 480, type: "frame" },
+    { tool: "frame", width: 400, height: 300, type: "frame" },
   ];
 
   it.each(PLACEMENTS)(
