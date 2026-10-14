@@ -15,6 +15,7 @@ import {
   STICKY_NOTE_PADDING,
   STICKY_NOTE_YELLOW_INK,
   VERTICAL_ALIGN,
+  STICKY_NOTE_BACKGROUND_PICKS,
   arrayToMap,
 } from "@excalidraw/common";
 import {
@@ -44,6 +45,8 @@ import {
   getStickyNoteDateLabel,
   getStickyNoteFooter,
   getStickyNoteMinSize,
+  getStickyNoteCreationInk,
+  STICKY_NOTE_PRESETS,
   syncStickyNoteInk,
   normalizeStickyNoteFontSize,
   updateStickyNoteLayout,
@@ -1187,5 +1190,32 @@ describe("sticky note ink", () => {
         ),
       ),
     ).toEqual([BLUE, BLUE]);
+  });
+});
+
+describe("sticky note presets", () => {
+  /**
+   * The preset table pairs ids to paper colors by position, which the type
+   * system cannot check (there is no `noUncheckedIndexedAccess`): a paper
+   * color added without an id would slip through as an `undefined` id and
+   * render an unnamed option. Pin both sides instead.
+   */
+  it("pairs each id with a paper pick, in order, and inks it by the creation rule", () => {
+    expect(STICKY_NOTE_PRESETS.map((preset) => preset.id)).toEqual([
+      "yellow",
+      "green",
+      "blue",
+      "pink",
+      "violet",
+      "gray",
+    ]);
+    expect(STICKY_NOTE_PRESETS.map((preset) => preset.backgroundColor)).toEqual(
+      [...STICKY_NOTE_BACKGROUND_PICKS],
+    );
+    for (const preset of STICKY_NOTE_PRESETS) {
+      expect(preset.strokeColor).toBe(
+        getStickyNoteCreationInk(preset.backgroundColor, STICKY_NOTE_INK),
+      );
+    }
   });
 });

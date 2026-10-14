@@ -2,7 +2,12 @@ import clsx from "clsx";
 import { useEffect, useState } from "react";
 
 import { KEYS, capitalizeString } from "@excalidraw/common";
-import { supportsFill } from "@excalidraw/element";
+import {
+  STICKY_NOTE_PRESETS,
+  findStickyNotePreset,
+  getStickyNoteCreationInk,
+  supportsFill,
+} from "@excalidraw/element";
 
 import type { BaseShapeId, PointerType } from "@excalidraw/element/types";
 
@@ -12,6 +17,7 @@ import { getShortcutKey } from "../shortcut";
 
 import { getCompositeShapeIcon } from "./CompositeShapeIcon";
 import { IconButton } from "./IconButton";
+import { getStickyNotePresetIcon } from "./StickyNotePresetIcon";
 import { ToolPopover } from "./ToolPopover";
 import {
   SelectionIcon,
@@ -352,10 +358,11 @@ export const ArrowToolButton = createToolButton("arrow");
 export const LineToolButton = createToolButton("line");
 export const FreedrawToolButton = createToolButton("freedraw");
 export const TextToolButton = createToolButton("text");
-export const StickyNoteToolButton = createToolButton("stickynote");
 export const ImageToolButton = createToolButton("image");
 export const EraserToolButton = createToolButton("eraser");
 export const FrameToolButton = createToolButton("frame");
+export const TableToolButton = createToolButton("table");
+export const MindmapToolButton = createToolButton("mindmap");
 
 /**
  * The selection tool button — pointer-clicking it while the selection tool
@@ -596,6 +603,88 @@ export const GenericShapeToolPopover = ({
       }
       ariaKeyshortcuts={hideShortcut ? undefined : getToolShortcut("rectangle")}
       shortcut={hideShortcut ? null : getToolShortcut("rectangle")}
+    />
+  );
+};
+
+/**
+ * 当前便签样式不匹配任何预设时的伪选项标识。它只让触发按钮显示「当前生效
+ * 样式」这张缩略图，不会出现在选项列表里，也就选不中。
+ */
+const CUSTOM_STICKY_NOTE_STYLE = "custom-style";
+
+/**
+ * 便签工具的内置样式 popover，与普通图形分组同一套交互：触发按钮显示当前
+ * 样式、点选项即选用该样式并激活便签工具。预设只写「新建便签的默认色」
+ * （`currentItemStickynote*`），画布上已有的便签一律不动。
+ */
+export const StickyNoteToolPopover = ({
+  app,
+  activeTool,
+  hideShortcut = false,
+}: {
+  app: AppClassProperties;
+  activeTool: UIAppState["activeTool"];
+  hideShortcut?: boolean;
+}) => {
+  const { theme } = app.state;
+  const backgroundColor = app.state.currentItemStickynoteBackgroundColor;
+  // 生效墨色按创建规则推导，缩略图与高亮因此对得上「照这个样式新建的便签」
+  const ink = getStickyNoteCreationInk(
+    backgroundColor,
+    app.state.currentItemStickynoteStrokeColor,
+  );
+  const current = findStickyNotePreset(
+    backgroundColor,
+    app.state.currentItemStickynoteStrokeColor,
+  );
+
+  const PRESET_TOOLS = STICKY_NOTE_PRESETS.map((preset) => ({
+    type: preset.id,
+    icon: getStickyNotePresetIcon(
+      preset.backgroundColor,
+      preset.strokeColor,
+      theme,
+    ),
+    // 预设由纸色唯一确定，配色族的既有译名（colors.*）就是它的名字
+    title: t(`colors.${preset.id}`),
+  }));
+
+  return (
+    <ToolPopover
+      app={app}
+      options={PRESET_TOOLS}
+      activeTool={activeTool}
+      activeOptionType={current?.id}
+      defaultOption={current?.id ?? CUSTOM_STICKY_NOTE_STYLE}
+      data-testid="toolbar-stickynote"
+      sharedToolType="stickynote"
+      isTriggerChecked={activeTool.type === "stickynote"}
+      onTriggerPointerDown={(event) => {
+        // 便签可以从工具栏拖到画布上放下（见 AppToolDrag）：按下即武装，
+        // 原地松开仍由触发按钮的点击负责开合弹层
+        app.toolDrag.handleButtonPointerDown("stickynote", event.nativeEvent);
+      }}
+      onToolChange={(type: string) => {
+        const preset = STICKY_NOTE_PRESETS.find((p) => p.id === type);
+        if (preset) {
+          app.setAppState({
+            currentItemStickynoteBackgroundColor: preset.backgroundColor,
+            currentItemStickynoteStrokeColor: preset.strokeColor,
+          });
+        }
+        app.setActiveTool({ type: "stickynote" });
+      }}
+      displayedOption={{
+        type: current?.id ?? CUSTOM_STICKY_NOTE_STYLE,
+        icon: getStickyNotePresetIcon(backgroundColor, ink, theme),
+        title: current ? t(`colors.${current.id}`) : t("toolBar.stickynote"),
+      }}
+      keyBindingLabel={hideShortcut ? undefined : getToolLetter("stickynote")}
+      ariaKeyshortcuts={
+        hideShortcut ? undefined : getToolShortcut("stickynote")
+      }
+      shortcut={hideShortcut ? null : getToolShortcut("stickynote")}
     />
   );
 };

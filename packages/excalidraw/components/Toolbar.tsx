@@ -17,28 +17,28 @@ import DropdownMenu from "./dropdownMenu/DropdownMenu";
 import {
   drawShapeToolIcon,
   EmbedIcon,
-  frameToolIcon,
   ImageIcon,
   laserPointerToolIcon,
   bucketFillIcon,
   MagicIcon,
   mermaidLogoIcon,
   DotsIcon,
-  mindmapIcon,
-  tableToolIcon,
 } from "./icons";
 import {
   ArrowToolButton,
   EraserToolButton,
   FreedrawToolPopover,
+  FrameToolButton,
   GenericShapeToolPopover,
   FreedrawToolButton,
   getToolShortcut,
   HandToolButton,
   isToolButtonDisabled,
   LineToolButton,
+  MindmapToolButton,
   SelectionToolPopover,
-  StickyNoteToolButton,
+  StickyNoteToolPopover,
+  TableToolButton,
   TextToolButton,
 } from "./Tools";
 
@@ -68,11 +68,9 @@ const ExtraToolsDropdown = ({
   const { TTDDialogTriggerTunnel } = useTunnels();
 
   const imageToolSelected = activeTool.type === "image";
-  const frameToolSelected = activeTool.type === "frame";
   const drawShapeToolSelected = activeTool.type === "autoshape";
   const laserToolSelected = activeTool.type === "laser";
   const bucketFillToolSelected = activeTool.type === "bucketfill";
-  const tableToolSelected = activeTool.type === "table";
   const embeddableToolSelected = activeTool.type === "embeddable";
 
   return (
@@ -81,11 +79,9 @@ const ExtraToolsDropdown = ({
         className={clsx("App-toolbar__extra-tools-trigger", {
           "App-toolbar__extra-tools-trigger--selected":
             imageToolSelected ||
-            frameToolSelected ||
             embeddableToolSelected ||
             (isFullStylesPanel && drawShapeToolSelected) ||
             bucketFillToolSelected ||
-            tableToolSelected ||
             // in collab we're already highlighting the laser button
             // outside toolbar, so let's not highlight extra-tools button
             // on top of it
@@ -99,8 +95,6 @@ const ExtraToolsDropdown = ({
       >
         {imageToolSelected
           ? ImageIcon
-          : frameToolSelected
-          ? frameToolIcon
           : embeddableToolSelected
           ? EmbedIcon
           : isFullStylesPanel && drawShapeToolSelected
@@ -109,8 +103,6 @@ const ExtraToolsDropdown = ({
           ? laserPointerToolIcon
           : bucketFillToolSelected
           ? bucketFillIcon
-          : tableToolSelected
-          ? tableToolIcon
           : DotsIcon}
       </DropdownMenu.Trigger>
       <DropdownMenu.Content
@@ -130,16 +122,6 @@ const ExtraToolsDropdown = ({
             {t("toolBar.image")}
           </DropdownMenu.Item>
         )}
-        <DropdownMenu.Item
-          onSelect={() => app.setActiveTool({ type: "frame" })}
-          icon={frameToolIcon}
-          shortcut={KEYS.F.toLocaleUpperCase()}
-          data-testid="toolbar-frame"
-          selected={frameToolSelected}
-          disabled={isToolButtonDisabled(app, "frame")}
-        >
-          {t("toolBar.frame")}
-        </DropdownMenu.Item>
         <DropdownMenu.Item
           onSelect={() => app.setActiveTool({ type: "embeddable" })}
           icon={EmbedIcon}
@@ -179,30 +161,6 @@ const ExtraToolsDropdown = ({
         >
           {t("toolBar.bucketfill")}
         </DropdownMenu.Item>
-        {UIOptions.tools?.mindmap !== false && (
-          <DropdownMenu.Item
-            onSelect={() => app.setActiveTool({ type: "mindmap" })}
-            icon={mindmapIcon}
-            shortcut={getToolShortcut("mindmap")}
-            data-testid="toolbar-mindmap"
-            selected={activeTool.type === "mindmap"}
-            disabled={isToolButtonDisabled(app, "mindmap")}
-          >
-            {t("toolBar.mindmap")}
-          </DropdownMenu.Item>
-        )}
-        {UIOptions.tools?.table !== false && (
-          <DropdownMenu.Item
-            onSelect={() => app.setActiveTool({ type: "table" })}
-            icon={tableToolIcon}
-            shortcut={getToolShortcut("table")}
-            data-testid="toolbar-table"
-            selected={tableToolSelected}
-            disabled={isToolButtonDisabled(app, "table")}
-          >
-            {t("toolBar.table")}
-          </DropdownMenu.Item>
-        )}
         <div style={{ margin: "6px 0", fontSize: 14, fontWeight: 600 }}>
           Generate
         </div>
@@ -305,7 +263,12 @@ export const Toolbar = ({
           <FreedrawToolButton {...toolProps} />
         )}
         <TextToolButton {...toolProps} />
-        <StickyNoteToolButton {...toolProps} />
+        <StickyNoteToolPopover {...toolProps} />
+        <FrameToolButton {...toolProps} />
+        {UIOptions.tools?.table !== false && <TableToolButton {...toolProps} />}
+        {UIOptions.tools?.mindmap !== false && (
+          <MindmapToolButton {...toolProps} />
+        )}
         <EraserToolButton {...toolProps} />
 
         <div

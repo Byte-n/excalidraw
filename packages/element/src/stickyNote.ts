@@ -2,6 +2,7 @@ import {
   DEFAULT_STICKY_NOTE_BG,
   MIN_FONT_SIZE,
   arrayToMap,
+  STICKY_NOTE_BACKGROUND_PICKS,
   STICKY_NOTE_BODY_INSET_Y,
   STICKY_NOTE_CORNER_RADIUS,
   STICKY_NOTE_FALLBACK_FONT_SIZE,
@@ -151,6 +152,56 @@ export const getStickyNoteCreationInk = (
   isDefaultYellowStickyNote(normalizeStickyNoteBackgroundColor(backgroundColor))
     ? STICKY_NOTE_YELLOW_INK
     : normalizeStickyNoteStrokeColor(stickyStrokeColor);
+
+/** 便签预设样式的标识，与 `STICKY_NOTE_BACKGROUND_PICKS` 同序同位 */
+const STICKY_NOTE_PRESET_IDS = [
+  "yellow",
+  "green",
+  "blue",
+  "pink",
+  "violet",
+  "gray",
+] as const;
+
+export type StickyNotePresetId = typeof STICKY_NOTE_PRESET_IDS[number];
+
+export type StickyNotePreset = {
+  id: StickyNotePresetId;
+  backgroundColor: string;
+  strokeColor: string;
+};
+
+/**
+ * 内置的便签预设样式：一条 = 一组纸色 + 墨色。纸色即
+ * `STICKY_NOTE_BACKGROUND_PICKS`（同序），墨色由创建规则推导 —— 一条预设
+ * 因此恒等于「照这张纸新建出来的便签长什么样」，两者不会各自漂移。
+ */
+export const STICKY_NOTE_PRESETS: readonly StickyNotePreset[] =
+  STICKY_NOTE_BACKGROUND_PICKS.map((backgroundColor, index) => ({
+    id: STICKY_NOTE_PRESET_IDS[index],
+    backgroundColor,
+    strokeColor: getStickyNoteCreationInk(backgroundColor, STICKY_NOTE_INK),
+  }));
+
+/**
+ * 一份便签样式（纸色 + 墨色）命中的预设，未命中返回 `null`。墨色先按创建
+ * 规则推导再比：默认黄纸的 `currentItemStickynoteStrokeColor` 停在通用墨色
+ * 上，而实际新建出来的是深棕墨，直接比原文值会让默认状态判成未命中。
+ */
+export const findStickyNotePreset = (
+  backgroundColor: string,
+  stickyStrokeColor: string,
+): StickyNotePreset | null => {
+  const ink = getStickyNoteCreationInk(backgroundColor, stickyStrokeColor);
+  return (
+    STICKY_NOTE_PRESETS.find(
+      (preset) =>
+        preset.backgroundColor.toLowerCase() ===
+          backgroundColor.toLowerCase() &&
+        preset.strokeColor.toLowerCase() === ink.toLowerCase(),
+    ) ?? null
+  );
+};
 
 /**
  * A note's ink is one color: the container's `strokeColor` — the seed for a
