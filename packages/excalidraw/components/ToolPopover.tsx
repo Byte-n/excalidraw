@@ -49,6 +49,13 @@ type ToolPopoverProps = {
   onTriggerPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void;
 };
 
+/**
+ * 悬停开合的延迟：移入后等这么久才展开（扫过工具栏不会连续弹层），移出后
+ * 等这么久才收起（留出穿过按钮与弹层间隙的时间）。测试按这两个值推进定时器。
+ */
+export const POPOVER_HOVER_OPEN_DELAY = 120;
+export const POPOVER_HOVER_CLOSE_DELAY = 250;
+
 export const ToolPopover = ({
   app,
   options,
@@ -107,7 +114,7 @@ export const ToolPopover = ({
       openTimeoutRef.current = window.setTimeout(() => {
         openTimeoutRef.current = null;
         setIsPopupOpen(true);
-      }, 120);
+      }, POPOVER_HOVER_OPEN_DELAY);
     }
   };
 
@@ -120,7 +127,7 @@ export const ToolPopover = ({
     closeTimeoutRef.current = window.setTimeout(() => {
       closeTimeoutRef.current = null;
       setIsPopupOpen(false);
-    }, 250);
+    }, POPOVER_HOVER_CLOSE_DELAY);
   };
 
   /** 选项标识之外，该选项实际激活的工具（见 `sharedToolType`） */

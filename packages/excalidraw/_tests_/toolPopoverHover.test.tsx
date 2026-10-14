@@ -2,7 +2,12 @@ import { reseed } from "@excalidraw/common";
 
 import { Excalidraw } from "../index";
 
-import { fireEvent, render, waitFor } from "./test-utils";
+import {
+  POPOVER_HOVER_CLOSE_DELAY,
+  POPOVER_HOVER_OPEN_DELAY,
+} from "../components/ToolPopover";
+
+import { act, fireEvent, render } from "./test-utils";
 
 const ownerDocument = () => window.document;
 
@@ -39,7 +44,26 @@ const hoverOut = (
   to: EventTarget | null = ownerDocument().body,
 ) => fireEvent(el, pointerMove("pointerout", { relatedTarget: to }));
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * 悬停开合由定时器驱动，这里用假定时器把延迟变成确定的时间推进：
+ * 断言不依赖真实时钟，全量测试跑满 CPU 时也不会超时。
+ * 每个测试自行推进、并在结束时还原真实定时器。
+ */
+const withFakeTimers = (fn: () => void) => {
+  vi.useFakeTimers();
+  try {
+    fn();
+  } finally {
+    vi.useRealTimers();
+  }
+};
+
+/** 推进假定时器，并冲刷由此触发的 React 更新 */
+const advance = (ms: number) => {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+};
 
 describe("toolbar option popover on hover", () => {
   beforeEach(async () => {
@@ -48,52 +72,71 @@ describe("toolbar option popover on hover", () => {
     await render(<Excalidraw />);
   });
 
-  it("shows the options when the pointer moves over the tool button", async () => {
-    expect(optionsPanel()).toBeNull();
+  it("shows the options when the pointer moves over the tool button", () => {
+    withFakeTimers(() => {
+      expect(optionsPanel()).toBeNull();
 
-    hoverIn(trigger());
+      hoverIn(trigger());
 
-    await waitFor(() => expect(optionsPanel()).not.toBeNull());
-    expect(option("toolbar-diamond")).not.toBeNull();
+      // 扫过工具栏不连弹：延迟未到之前是收起的
+      advance(POPOVER_HOVER_OPEN_DELAY - 1);
+      expect(optionsPanel()).toBeNull();
+
+      advance(1);
+      expect(optionsPanel()).not.toBeNull();
+      expect(option("toolbar-diamond")).not.toBeNull();
+    });
   });
 
-  it("keeps the options open once the pointer moves onto them", async () => {
-    hoverIn(trigger());
-    await waitFor(() => expect(optionsPanel()).not.toBeNull());
+  it("keeps the options open once the pointer moves onto them", () => {
+    withFakeTimers(() => {
+      hoverIn(trigger());
+      advance(POPOVER_HOVER_OPEN_DELAY);
+      expect(optionsPanel()).not.toBeNull();
 
-    // 离开触发按钮、移入弹层：弹层与按钮同属悬停容器，指针仍在容器内，
-    // 不触发关闭
-    const shapeOption = option("toolbar-diamond")!;
-    hoverOut(trigger(), shapeOption);
-    hoverIn(shapeOption);
+      // 离开触发按钮、移入弹层：弹层与按钮同属悬停容器，指针仍在容器内，
+      // 不触发关闭
+      const shapeOption = option("toolbar-diamond")!;
+      hoverOut(trigger(), shapeOption);
+      hoverIn(shapeOption);
 
-    await wait(400);
+      advance(POPOVER_HOVER_CLOSE_DELAY * 2);
+      expect(optionsPanel()).not.toBeNull();
+    });
+  });
+
+  it("closes the options when the pointer leaves them", () => {
+    withFakeTimers(() => {
+      hoverIn(trigger());
+      advance(POPOVER_HOVER_OPEN_DELAY);
+
+      const shapeOption = option("toolbar-diamond")!;
+      hoverIn(shapeOption);
+      hoverOut(shapeOption);
+
+      // 延迟收起：留出穿过按钮与弹层间隙的时间
+      advance(POPOVER_HOVER_CLOSE_DELAY - 1);
+      expect(optionsPanel()).not.toBeNull();
+
+      advance(1);
+      expect(optionsPanel()).toBeNull();
+    });
+  });
+
+  it("does not open on hover with a non-mouse pointer", () => {
+    withFakeTimers(() => {
+      hoverIn(trigger(), "touch");
+
+      advance(POPOVER_HOVER_OPEN_DELAY * 2);
+      expect(optionsPanel()).toBeNull();
+    });
+  });
+
+  it("still toggles the options on click", () => {
+    fireEvent.click(trigger());
     expect(optionsPanel()).not.toBeNull();
-  });
 
-  it("closes the options when the pointer leaves them", async () => {
-    hoverIn(trigger());
-    await waitFor(() => expect(optionsPanel()).not.toBeNull());
-
-    const shapeOption = option("toolbar-diamond")!;
-    hoverIn(shapeOption);
-    hoverOut(shapeOption);
-
-    await waitFor(() => expect(optionsPanel()).toBeNull());
-  });
-
-  it("does not open on hover with a non-mouse pointer", async () => {
-    hoverIn(trigger(), "touch");
-
-    await wait(400);
+    fireEvent.click(trigger());
     expect(optionsPanel()).toBeNull();
-  });
-
-  it("still toggles the options on click", async () => {
-    fireEvent.click(trigger());
-    await waitFor(() => expect(optionsPanel()).not.toBeNull());
-
-    fireEvent.click(trigger());
-    await waitFor(() => expect(optionsPanel()).toBeNull());
   });
 });
