@@ -1,4 +1,4 @@
-import { arrayToMap, applyDarkModeFilter, THEME } from "@excalidraw/common";
+import { arrayToMap, applyDarkModeFilter } from "@excalidraw/common";
 import {
   applyMindmapBranchTheme,
   buildMindmapGraphIndex,

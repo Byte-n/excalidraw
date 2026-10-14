@@ -9,3 +9,6 @@ packages/excalidraw/types
 examples
 dev-dist
 coverage
+.claude/
+.agents/
+.tmp/

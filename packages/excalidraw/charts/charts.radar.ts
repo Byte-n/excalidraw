@@ -5,7 +5,6 @@ import {
   FONT_SIZES,
   getFontString,
   getLineHeight,
-
 } from "@excalidraw/common";
 
 import {

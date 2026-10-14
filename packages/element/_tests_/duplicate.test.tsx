@@ -14,7 +14,11 @@ import { actionDuplicateSelection } from "@excalidraw/excalidraw/actions";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
 
-import { UI, Keyboard, Pointer } from "@excalidraw/excalidraw/_tests_/helpers/ui";
+import {
+  UI,
+  Keyboard,
+  Pointer,
+} from "@excalidraw/excalidraw/_tests_/helpers/ui";
 
 import {
   act,

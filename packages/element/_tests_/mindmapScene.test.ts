@@ -414,11 +414,7 @@ describe("脑图分支主题派生（场景操作收口）", () => {
     const beforeMap = elementMap(fixture.elements);
     for (const element of reordered.elements) {
       const old = beforeMap.get(element.id);
-      if (
-        old &&
-        isMindmapNodeElement(old) &&
-        isMindmapNodeElement(element)
-      ) {
+      if (old && isMindmapNodeElement(old) && isMindmapNodeElement(element)) {
         expect(element.strokeColor).toBe(old.strokeColor);
         expect(element.backgroundColor).toBe(old.backgroundColor);
         expect(element.shape).toEqual(old.shape);

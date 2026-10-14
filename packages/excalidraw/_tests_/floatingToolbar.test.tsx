@@ -660,7 +660,8 @@ describe("浮动工具栏（T2 容器与定位）", () => {
         bar.querySelector("[aria-label='Show font picker']"),
       ).not.toBeNull();
       expect(bar.querySelector("[aria-label='Text align']")).not.toBeNull();
-      expect(bar.querySelector("[aria-label='Color']")).not.toBeNull();
+      // 被编辑的是文本，取色域按文本场景命名为「字体颜色」
+      expect(bar.querySelector("[aria-label='Font color']")).not.toBeNull();
       // 单元格命令（选区模式/合并拆分）与单元格背景色板让位
       expect(
         bar.querySelector("[data-testid='table-cell-multi-select']"),

@@ -7,7 +7,11 @@ import { actionWrapTextInContainer } from "@excalidraw/excalidraw/actions/action
 import { Excalidraw, isLinearElement } from "@excalidraw/excalidraw";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
-import { UI, Pointer, Keyboard } from "@excalidraw/excalidraw/_tests_/helpers/ui";
+import {
+  UI,
+  Pointer,
+  Keyboard,
+} from "@excalidraw/excalidraw/_tests_/helpers/ui";
 import {
   act,
   fireEvent,

@@ -6,7 +6,11 @@ import { defaultLang, setLanguage } from "@excalidraw/excalidraw/i18n";
 import { Excalidraw } from "@excalidraw/excalidraw";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
-import { UI, Pointer, Keyboard } from "@excalidraw/excalidraw/_tests_/helpers/ui";
+import {
+  UI,
+  Pointer,
+  Keyboard,
+} from "@excalidraw/excalidraw/_tests_/helpers/ui";
 import {
   act,
   unmountComponent,

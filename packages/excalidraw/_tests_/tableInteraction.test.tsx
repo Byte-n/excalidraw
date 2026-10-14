@@ -5,16 +5,16 @@ import {
   getTransformHandlesFromCoords,
 } from "@excalidraw/element";
 
+import { act } from "react-dom/test-utils";
+
+import { vi } from "vitest";
+
 import type { Radians } from "@excalidraw/math";
 
 import type {
   ExcalidrawTableElement,
   ExcalidrawTextElement,
 } from "@excalidraw/element/types";
-
-import { act } from "react-dom/test-utils";
-
-import { vi } from "vitest";
 
 import { Excalidraw } from "../index";
 

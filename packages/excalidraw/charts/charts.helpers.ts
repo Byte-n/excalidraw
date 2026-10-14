@@ -10,7 +10,6 @@ import {
   getAllColorsSpecificShade,
   getFontString,
   getLineHeight,
-
 } from "@excalidraw/common";
 
 import {

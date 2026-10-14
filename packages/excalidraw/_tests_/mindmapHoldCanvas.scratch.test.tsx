@@ -134,7 +134,11 @@ describe("scratch: canvas calls while holding root with collapsed branch", () =>
       console.log(
         "INTERACTIVE strokeRect count:",
         strokeRects.length,
-        JSON.stringify(strokeRects.map((call) => call.args.map((n) => Math.round(Number(n))))),
+        JSON.stringify(
+          strokeRects.map((call) =>
+            call.args.map((n) => Math.round(Number(n))),
+          ),
+        ),
       );
       const summary: Record<string, number> = {};
       interactiveCalls().forEach((call) => {

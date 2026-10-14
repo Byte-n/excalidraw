@@ -4,7 +4,11 @@ import { Excalidraw } from "@excalidraw/excalidraw";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
 import { isCompositeShapeId } from "@excalidraw/element";
-import { UI, Keyboard, Pointer } from "@excalidraw/excalidraw/_tests_/helpers/ui";
+import {
+  UI,
+  Keyboard,
+  Pointer,
+} from "@excalidraw/excalidraw/_tests_/helpers/ui";
 import {
   render,
   unmountComponent,

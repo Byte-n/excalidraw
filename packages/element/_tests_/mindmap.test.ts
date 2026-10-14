@@ -1366,7 +1366,9 @@ describe("mindmap 分支主题派生", () => {
       type: "promote",
       newGraphId: "unused",
     })!;
-    const c = arrayToMap(result.elements).get("c") as ExcalidrawMindmapNodeElement;
+    const c = arrayToMap(result.elements).get(
+      "c",
+    ) as ExcalidrawMindmapNodeElement;
     expect(c.shape.id).toBe("pill");
     expect(c.strokeColor).toBe(MINDMAP_BRANCH_PALETTE[1].stroke);
   });

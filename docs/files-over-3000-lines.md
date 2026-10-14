@@ -15,14 +15,14 @@
 共 **18** 个文件符合条件。
 
 | 文件路径（相对于项目根目录） | 行数 |
-| --- | ---: |
+| --- | --: |
 | [packages/excalidraw/dist/dev/index.js](packages/excalidraw/dist/dev/index.js) | 56832 |
 | [packages/element/dist/dev/index.js](packages/element/dist/dev/index.js) | 26913 |
-| [packages/excalidraw/tests/__snapshots__/history.test.tsx.snap](packages/excalidraw/tests/__snapshots__/history.test.tsx.snap) | 23652 |
-| [packages/excalidraw/tests/__snapshots__/regressionTests.test.tsx.snap](packages/excalidraw/tests/__snapshots__/regressionTests.test.tsx.snap) | 15332 |
+| [packages/excalidraw/tests/**snapshots**/history.test.tsx.snap](packages/excalidraw/tests/__snapshots__/history.test.tsx.snap) | 23652 |
+| [packages/excalidraw/tests/**snapshots**/regressionTests.test.tsx.snap](packages/excalidraw/tests/__snapshots__/regressionTests.test.tsx.snap) | 15332 |
 | [packages/excalidraw/fonts/ComicShanns/ComicShanns-Regular.sfd](packages/excalidraw/fonts/ComicShanns/ComicShanns-Regular.sfd) | 12221 |
 | [yarn.lock](yarn.lock) | 10865 |
-| [packages/excalidraw/tests/__snapshots__/contextmenu.test.tsx.snap](packages/excalidraw/tests/__snapshots__/contextmenu.test.tsx.snap) | 10442 |
+| [packages/excalidraw/tests/**snapshots**/contextmenu.test.tsx.snap](packages/excalidraw/tests/__snapshots__/contextmenu.test.tsx.snap) | 10442 |
 | [dev-docs/yarn.lock](dev-docs/yarn.lock) | 9279 |
 | [packages/excalidraw/dist/dev/index.css](packages/excalidraw/dist/dev/index.css) | 8379 |
 | [docs/composite-shape/lark-examples-data.json](docs/composite-shape/lark-examples-data.json) | 6928 |

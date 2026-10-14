@@ -36,15 +36,6 @@
       "@excalidraw/utils/*": ["./packages/utils/src/*"]
     }
   },
-  "include": [
-    "packages",
-    "excalidraw-app",
-    "**/*.test.ts",
-    "**/*.test.tsx",
-    "**/*.spec.ts",
-    "**/*.spec.tsx",
-    "**/_tests_/**/*.ts",
-    "**/_tests_/**/*.tsx"
-  ],
+  "include": ["packages", "excalidraw-app", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/_tests_/**/*.ts", "**/_tests_/**/*.tsx"],
   "exclude": ["examples", "dist", "types", "node_modules"]
 }
