@@ -483,6 +483,8 @@
     "rectangle": "矩形",
     "diamond": "菱形",
     "ellipse": "椭圆",
+    "pie": "饼图",
+    "circular-ring": "圆环",
     "arrow": "箭头",
     "line": "线条",
     "freedraw": "自由书写",
@@ -491,6 +493,7 @@
     "group": "组",
     "frame": "画框",
     "magicframe": "线框图至代码",
+    "table": "表格",
     "embeddable": "嵌入网页",
     "selection": "选择",
     "iframe": "IFrame"

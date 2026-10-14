@@ -545,6 +545,8 @@
     "step": "Step",
     "cube": "Cube",
     "cylinder": "Cylinder",
+    "pie": "Pie",
+    "circular-ring": "Circular ring",
     "arrow": "Arrow",
     "line": "Line",
     "freedraw": "Freedraw",
@@ -554,6 +556,7 @@
     "frame": "Frame",
     "magicframe": "Wireframe to code",
     "stickynote": "Sticky note",
+    "table": "Table",
     "embeddable": "Web Embed",
     "selection": "Selection",
     "iframe": "IFrame"

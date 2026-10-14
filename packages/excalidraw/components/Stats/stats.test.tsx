@@ -5,7 +5,11 @@ import { vi } from "vitest";
 
 import { setDateTimeForTests, reseed } from "@excalidraw/common";
 
-import { isCompositeShapeId, isInGroup } from "@excalidraw/element";
+import {
+  isCompositeShapeId,
+  isInGroup,
+  TABLE_PRESET_IDS,
+} from "@excalidraw/element";
 
 import { isTextElement } from "@excalidraw/element";
 
@@ -931,5 +935,59 @@ describe("frame resizing behavior", () => {
       h.elements.find((el) => el.id === outsideRect.id)?.containerRef
         ?.elementId,
     ).toBeUndefined();
+  });
+});
+
+/**
+ * The panel labels the selection with `element.<type>` (composite shapes use
+ * their `shape.id`), so every element kind the editor can select needs a
+ * translation. Outside production `t()` throws on a missing key, which takes
+ * the whole canvas down — tables were the last kind without one: placing any
+ * table preset with this panel open crashed the editor.
+ */
+describe("element type labels", () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    renderStaticScene.mockClear();
+    reseed(7);
+    setDateTimeForTests("201933152653");
+
+    await render(<Excalidraw handleKeyboardGlobally={true} />);
+
+    API.setElements([]);
+    API.setAppState({ stats: { ...h.state.stats, open: true } });
+    stats = UI.queryStats();
+  });
+
+  beforeAll(() => {
+    mockBoundingClientRect();
+  });
+
+  afterAll(() => {
+    restoreOriginalGetBoundingClientRect();
+  });
+
+  const elementTypeLabel = () => {
+    elementStats = stats?.querySelector("#elementStats");
+    return queryByTestId(elementStats!, "stats-element-type")?.lastChild
+      ?.nodeValue;
+  };
+
+  it.each(TABLE_PRESET_IDS)("table preset %s", (preset) => {
+    API.setAppState({ currentTablePreset: preset });
+    UI.clickTool("table");
+    mouse.clickAt(200, 160);
+
+    // the swimlane presets come with their own labels in the scene
+    expect(h.elements).toHaveLength(preset === "plain" ? 1 : 4);
+    expect(elementTypeLabel()).toBe(t("element.table"));
+  });
+
+  it.each(["pie", "circular-ring"] as const)("composite shape %s", (type) => {
+    const shape = API.createElement({ type, width: 120 });
+    API.setElements([shape]);
+    API.setSelectedElements([shape]);
+
+    expect(elementTypeLabel()).toBe(t(`element.${type}`));
   });
 });
