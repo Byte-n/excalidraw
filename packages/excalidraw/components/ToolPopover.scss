@@ -1,6 +1,15 @@
 @use "../css/variables.module" as *;
 
 .excalidraw {
+  // 悬停容器：包住触发按钮与弹层，二者同属一个 DOM 子树，鼠标从按钮移到
+  // 弹层上时不会触发 pointerleave（见 ToolPopover.tsx）。自身不产生额外盒子
+  // 装饰，尺寸跟随触发按钮，不参与工具栏排布变化。
+  .tool-popover-root {
+    display: flex;
+    align-items: center;
+    flex: none;
+  }
+
   .tool-popover-content {
     display: flex;
     flex-direction: row;

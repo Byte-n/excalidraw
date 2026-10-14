@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { KEYS, capitalizeString } from "@excalidraw/common";
 import {
@@ -586,7 +586,8 @@ const FLOWCHART_SHAPE_TOOLS = FLOWCHART_SHAPE_IDS.map((type) => ({
 
 /**
  * The rectangle/diamond/ellipse popover used by the desktop and mobile
- * toolbars. The trigger displays the user's preferred generic shape.
+ * toolbars. The trigger displays this group's current shape and clicking it
+ * makes that shape — and thus this group — the active one (see `groupShape`).
  */
 export const GenericShapeToolPopover = ({
   app,
@@ -617,27 +618,37 @@ export const GenericShapeToolPopover = ({
     }
   }, [activeTool.type, app]);
 
-  const preferredGenericShape =
-    isGenericShapeType(activeTool.type) &&
-    app.state.preferredGenericShape === activeTool.type
-      ? activeTool.type
-      : app.state.preferredGenericShape;
+  // 本组最近选用的形状：当前形状若属于流程图组（preferredGenericShape 为
+  // fc-*），本组按钮仍显示并点开自己的那个形状——点按钮即可切回本组
+  const lastShapeRef = useRef<GenericShapeType>("rectangle");
+  useEffect(() => {
+    if (isGenericShapeType(app.state.preferredGenericShape)) {
+      lastShapeRef.current = app.state.preferredGenericShape;
+    }
+  }, [app.state.preferredGenericShape]);
+
+  const groupShape: GenericShapeType = isGenericShapeType(
+    app.state.preferredGenericShape,
+  )
+    ? app.state.preferredGenericShape
+    : lastShapeRef.current;
 
   const displayedOption =
-    SHAPE_TOOLS.find((tool) => tool.type === preferredGenericShape) ||
-    SHAPE_TOOLS[0];
+    SHAPE_TOOLS.find((tool) => tool.type === groupShape) || SHAPE_TOOLS[0];
 
   return (
     <ToolPopover
       app={app}
       options={SHAPE_TOOLS}
       activeTool={activeTool}
+      // 当前形状取自共享的 preferredGenericShape（而非本组形状）：本组不是
+      // 当前分组时不匹配任何选项，按钮与选项都不会显示为选中
       activeOptionType={
         activeTool.type === "rectangle"
-          ? preferredGenericShape
+          ? app.state.preferredGenericShape
           : activeTool.type
       }
-      defaultOption={preferredGenericShape}
+      defaultOption={displayedOption.type}
       data-testid="toolbar-rectangle"
       onToolChange={(type: string) => {
         if (isGenericShapeType(type)) {
@@ -803,9 +814,10 @@ export const TableToolPopover = ({
  * The flowchart-shape popover mounted next to GenericShapeToolPopover in the
  * desktop and mobile toolbars. It shares `preferredGenericShape` with the
  * generic popover (both activate the rectangle tool; the creation chain maps
- * it to the preferred composite shape), so the trigger shows the shared
- * "current shape" when it's a flowchart shape and falls back to the default
- * fc-diamond icon otherwise.
+ * it to the preferred composite shape), but only *displays* it while it is a
+ * flowchart shape — otherwise it falls back to this group's own last shape.
+ * Clicking the trigger makes that shape the current one, i.e. it switches the
+ * toolbar back to this group (see `displayedOption`).
  *
  * Options are shape ids rather than tool types, so the group declares the
  * rectangle tool as its shared tool: without it `ToolPopover` reads the
@@ -824,10 +836,23 @@ export const FlowchartShapeToolPopover = ({
     title: t(`toolBar.${tool.type}`),
   }));
 
-  const preferredGenericShape = app.state.preferredGenericShape;
+  // 本组最近选用的形状：当前形状属于普通图形组时，本组按钮仍显示并点开
+  // 自己的那个形状——点按钮即可切回本组
+  const lastShapeRef = useRef<FlowchartShapeId>("fc-diamond");
+  useEffect(() => {
+    if (isFlowchartShapeType(app.state.preferredGenericShape)) {
+      lastShapeRef.current = app.state.preferredGenericShape;
+    }
+  }, [app.state.preferredGenericShape]);
+
+  const groupShape: FlowchartShapeId = isFlowchartShapeType(
+    app.state.preferredGenericShape,
+  )
+    ? app.state.preferredGenericShape
+    : lastShapeRef.current;
 
   const displayedOption =
-    options.find((tool) => tool.type === preferredGenericShape) ||
+    options.find((tool) => tool.type === groupShape) ||
     options.find((tool) => tool.type === "fc-diamond")!;
 
   return (
@@ -836,9 +861,11 @@ export const FlowchartShapeToolPopover = ({
       options={options}
       activeTool={activeTool}
       sharedToolType="rectangle"
+      // 当前形状取自共享的 preferredGenericShape（而非本组形状）：本组不是
+      // 当前分组时不匹配任何选项，按钮与选项都不会显示为选中
       activeOptionType={
         activeTool.type === "rectangle"
-          ? preferredGenericShape
+          ? app.state.preferredGenericShape
           : activeTool.type
       }
       defaultOption={displayedOption.type}

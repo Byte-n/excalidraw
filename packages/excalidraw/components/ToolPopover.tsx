@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 
 import { capitalizeString } from "@excalidraw/common";
@@ -71,18 +71,72 @@ export const ToolPopover = ({
   const SIDE_OFFSET = 16;
   const { container } = useExcalidrawContainer();
 
+  const openTimeoutRef = useRef<number | null>(null);
+  const closeTimeoutRef = useRef<number | null>(null);
+
+  const clearOpenTimeout = () => {
+    if (openTimeoutRef.current != null) {
+      window.clearTimeout(openTimeoutRef.current);
+      openTimeoutRef.current = null;
+    }
+  };
+  const clearCloseTimeout = () => {
+    if (closeTimeoutRef.current != null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      clearOpenTimeout();
+      clearCloseTimeout();
+    };
+  }, []);
+
+  // 悬停即展开：鼠标（含触控板）移入触发按钮时延迟一点打开，扫过工具栏
+  // 不会连续弹层；移出后延迟关闭，留出穿过按钮与弹层的间隙、移入弹层的
+  // 时间（弹层是包裹层的后代，进入弹层即取消关闭）。触控/笔不做悬停，
+  // 保持原有「点按切换」行为。
+  const handlePointerEnter = (event: React.PointerEvent) => {
+    if (event.pointerType !== "mouse") {
+      return;
+    }
+    clearCloseTimeout();
+    if (!isPopupOpen && openTimeoutRef.current == null) {
+      openTimeoutRef.current = window.setTimeout(() => {
+        openTimeoutRef.current = null;
+        setIsPopupOpen(true);
+      }, 120);
+    }
+  };
+
+  const handlePointerLeave = (event: React.PointerEvent) => {
+    if (event.pointerType !== "mouse") {
+      return;
+    }
+    clearOpenTimeout();
+    clearCloseTimeout();
+    closeTimeoutRef.current = window.setTimeout(() => {
+      closeTimeoutRef.current = null;
+      setIsPopupOpen(false);
+    }, 250);
+  };
+
   /** 选项标识之外，该选项实际激活的工具（见 `sharedToolType`） */
   const optionToolType = (type: string) => sharedToolType ?? type;
 
-  // if the active tool left the group, close the popup
-  if (
-    !options.some(
-      (option) => optionToolType(option.type) === activeTool.type,
-    ) &&
-    isPopupOpen
-  ) {
-    setIsPopupOpen(false);
-  }
+  // 换到本组之外的其它工具时收起弹层。只在激活工具**发生变化**时判定：
+  // 悬停展开不要求先选中本组工具，此时激活工具本来就不在本组，按渲染期
+  // 无条件判定会把刚展开的弹层立刻关掉（见 handlePointerEnter）。
+  useEffect(() => {
+    if (
+      !options.some((option) => optionToolType(option.type) === activeTool.type)
+    ) {
+      setIsPopupOpen(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTool.type]);
 
   // Close popover when user starts interacting with the canvas (pointer down)
   useEffect(() => {
@@ -94,60 +148,68 @@ export const ToolPopover = ({
   }, [app]);
 
   return (
-    <Popover.Root open={isPopupOpen}>
-      <Popover.Trigger asChild>
-        <IconButton
-          className={clsx({ fillable: displayedOption.fillable })}
-          type="toggle"
-          icon={displayedOption.icon}
-          checked={isActive}
-          disabled={options.every((option) =>
-            isToolButtonDisabled(app, optionToolType(option.type)),
-          )}
-          title={`${capitalizeString(displayedOption.title)}${
-            shortcut ? ` — ${shortcut}` : ""
-          }`}
-          aria-label={capitalizeString(displayedOption.title)}
-          aria-keyshortcuts={ariaKeyshortcuts}
-          keyBindingLabel={keyBindingLabel}
-          data-testid={dataTestId}
-          onPointerDown={onTriggerPointerDown}
-          onSelect={() => {
-            setIsPopupOpen((v) => !v);
-            onToolChange(defaultOption);
-          }}
-        />
-      </Popover.Trigger>
-
-      <Popover.Content
-        className="tool-popover-content"
-        sideOffset={SIDE_OFFSET}
-        collisionBoundary={container ?? undefined}
-      >
-        {options.map(({ type, icon, title, fillable }) => (
+    // 包裹触发按钮与弹层：两者是同一 DOM 子树，鼠标从按钮移到弹层上时
+    // 不触发外层 pointerleave，弹层得以保持展开
+    <div
+      className="tool-popover-root"
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+    >
+      <Popover.Root open={isPopupOpen}>
+        <Popover.Trigger asChild>
           <IconButton
-            className={clsx({ fillable })}
-            key={type}
+            className={clsx({ fillable: displayedOption.fillable })}
             type="toggle"
-            icon={icon}
-            checked={currentType === type}
-            disabled={isToolButtonDisabled(app, optionToolType(type))}
-            title={capitalizeString(title)}
-            aria-label={capitalizeString(title)}
-            data-testid={`toolbar-${type}`}
+            icon={displayedOption.icon}
+            checked={isActive}
+            disabled={options.every((option) =>
+              isToolButtonDisabled(app, optionToolType(option.type)),
+            )}
+            title={`${capitalizeString(displayedOption.title)}${
+              shortcut ? ` — ${shortcut}` : ""
+            }`}
+            aria-label={capitalizeString(displayedOption.title)}
+            aria-keyshortcuts={ariaKeyshortcuts}
+            keyBindingLabel={keyBindingLabel}
+            data-testid={dataTestId}
+            onPointerDown={onTriggerPointerDown}
             onSelect={() => {
-              if (currentType !== type) {
-                trackEvent("toolbar", type, "ui");
-                // 选项标识不一定是工具类型（复合图形是一条形状 id），这里
-                // 按工具类型收窄；真正落定的工具由调用方在 `onToolChange`
-                // 里给出（见 GenericShapeToolPopover）
-                app.setActiveTool({ type: optionToolType(type) as ToolType });
-                onToolChange?.(type);
-              }
+              setIsPopupOpen((v) => !v);
+              onToolChange(defaultOption);
             }}
           />
-        ))}
-      </Popover.Content>
-    </Popover.Root>
+        </Popover.Trigger>
+
+        <Popover.Content
+          className="tool-popover-content"
+          sideOffset={SIDE_OFFSET}
+          collisionBoundary={container ?? undefined}
+        >
+          {options.map(({ type, icon, title, fillable }) => (
+            <IconButton
+              className={clsx({ fillable })}
+              key={type}
+              type="toggle"
+              icon={icon}
+              checked={currentType === type}
+              disabled={isToolButtonDisabled(app, optionToolType(type))}
+              title={capitalizeString(title)}
+              aria-label={capitalizeString(title)}
+              data-testid={`toolbar-${type}`}
+              onSelect={() => {
+                if (currentType !== type) {
+                  trackEvent("toolbar", type, "ui");
+                  // 选项标识不一定是工具类型（复合图形是一条形状 id），这里
+                  // 按工具类型收窄；真正落定的工具由调用方在 `onToolChange`
+                  // 里给出（见 GenericShapeToolPopover）
+                  app.setActiveTool({ type: optionToolType(type) as ToolType });
+                  onToolChange?.(type);
+                }
+              }}
+            />
+          ))}
+        </Popover.Content>
+      </Popover.Root>
+    </div>
   );
 };
