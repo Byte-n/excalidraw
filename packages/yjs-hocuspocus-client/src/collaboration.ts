@@ -33,6 +33,7 @@ export const createExcalidrawHocuspocusCollaboration = <
           typeof options.presence === "function"
             ? options.presence(session.provider)
             : options.presence,
+        policy: options.policy,
         validateScene: options.validateScene,
         onError: (error, operation) => options.onSceneError?.(error, operation),
       });

@@ -21,7 +21,12 @@ import type {
 
 import { createExcalidrawCollaboration } from "../src";
 
-import { element, presenceChannel, validateScene } from "./helpers";
+import {
+  element,
+  presenceChannel,
+  scenePolicy,
+  validateScene,
+} from "./helpers";
 
 import type { AssetTransport } from "../src";
 import type { TestAsset } from "./helpers";
@@ -56,6 +61,7 @@ const make = (
   const errors = vi.fn();
   const controller = createExcalidrawCollaboration({
     document,
+    policy: scenePolicy(),
     presence: presenceChannel().channel,
     state: { canEdit: true, synced: true, online: true, isCollaborating: true },
     assets: {

@@ -13,7 +13,7 @@ import {
 
 import { createHocuspocusHeadlessSession } from "@excalidraw/yjs-hocuspocus-client";
 
-import type { SceneSnapshot } from "@excalidraw/yjs";
+import type { ScenePolicy, SceneSnapshot } from "@excalidraw/yjs";
 import type { HocuspocusHeadlessSession } from "@excalidraw/yjs-hocuspocus-client";
 
 const element = z
@@ -39,6 +39,24 @@ class TestProvider extends HocuspocusProvider {
   }
 }
 
+/** 用例门槛显式给出；vendor 不提供默认值。 */
+const policy: ScenePolicy = {
+  maxElements: 1_000,
+  maxAssets: 100,
+  maxElementBytes: 256 * 1024,
+  maxSceneBytes: 16 * 1024 * 1024,
+  maxTextBytes: 64 * 1024,
+  maxAssetBytes: 20 * 1024 * 1024,
+  assetMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+  forbiddenPersistentFields: [
+    "dataURL",
+    "blob",
+    "signedUrl",
+    "frameId",
+    "files",
+  ],
+};
+
 /** 使用真实 headless 会话与场景校验；测试不建立网络连接。 */
 export const sessionFixture = () => {
   const doc = new Y.Doc();
@@ -63,6 +81,7 @@ export const sessionFixture = () => {
     provider,
     ownership: "borrowed",
     connectionManagedExternally: true,
+    policy,
     validateScene: (scene) => {
       for (const value of scene.elements) {
         element.parse(value);

@@ -1,10 +1,15 @@
 import * as Y from "yjs";
 import { expect, test, vi } from "vitest";
 
+import { YjsSceneError } from "@excalidraw/yjs";
+
+import { CanvasHookError } from "../src/index";
+
 import {
   canvasElement as element,
   deferred,
   hookRoom as room,
+  scenePolicy,
   startHookRoom as fixture,
 } from "./helpers";
 
@@ -137,6 +142,25 @@ test.each([
     await vi.waitFor(() => expect(f.accepted).toHaveBeenCalledTimes(2));
   },
 );
+
+test("场景门槛超限在权威文档落地前被拒绝，分类保留在错误 cause", async () => {
+  const f = await fixture({ policy: scenePolicy({ maxElements: 1 }) });
+  const writer = await f.client();
+  const first = element();
+  writer.applyCommand({ elements: [first] });
+  await vi.waitFor(() => expect(f.accepted).toHaveBeenCalledTimes(1));
+  const before = Y.encodeStateAsUpdate(f.authoritative);
+  const extra = { ...element(), id: "extra", index: "a2" };
+  writer.document.getMap("elements").set(extra.id, extra);
+  await vi.waitFor(() => expect(f.rejected).toHaveBeenCalledTimes(1));
+  await writer.close();
+  const error = f.rejected.mock.calls[0]![0].error;
+  expect(error).toBeInstanceOf(CanvasHookError);
+  const cause = (error as CanvasHookError).cause;
+  expect(cause).toBeInstanceOf(YjsSceneError);
+  expect((cause as YjsSceneError).code).toBe("scene_limit_exceeded");
+  expect(Y.encodeStateAsUpdate(f.authoritative)).toEqual(before);
+});
 
 test("a read-only client cannot bypass its local gate with a raw Yjs update", async () => {
   const f = await fixture();

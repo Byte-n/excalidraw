@@ -9,7 +9,7 @@ import WebSocket from "ws";
 import * as Y from "yjs";
 import { expect, test, vi } from "vitest";
 
-import type { ExcalidrawSceneElement } from "@excalidraw/yjs";
+import type { ExcalidrawSceneElement, ScenePolicy } from "@excalidraw/yjs";
 
 import { createHocuspocusHeadlessSession } from "../src/session";
 import { createExcalidrawHocuspocusCollaboration } from "../src/collaboration";
@@ -58,6 +58,24 @@ const startServer = async () => {
   };
 };
 
+/** 用例门槛显式给出；vendor 不提供默认值。 */
+const policy: ScenePolicy = {
+  maxElements: 1_000,
+  maxAssets: 100,
+  maxElementBytes: 256 * 1024,
+  maxSceneBytes: 16 * 1024 * 1024,
+  maxTextBytes: 64 * 1024,
+  maxAssetBytes: 20 * 1024 * 1024,
+  assetMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+  forbiddenPersistentFields: [
+    "dataURL",
+    "blob",
+    "signedUrl",
+    "frameId",
+    "files",
+  ],
+};
+
 const options = (
   url: string,
 ): HocuspocusHeadlessSessionOptions<ExcalidrawSceneElement, unknown> => ({
@@ -66,6 +84,7 @@ const options = (
   token: () => "writer",
   WebSocketPolyfill: WebSocket,
   syncTimeoutMs: 3_000,
+  policy,
   validateScene: () => {},
 });
 

@@ -7,6 +7,7 @@ import type {
 
 import { createSceneBinding } from "./binding";
 import { ExcalidrawSceneSession } from "./excalidraw-scene-session";
+import { assertScenePolicy } from "./scene-policy";
 import { orderExcalidrawSceneElements } from "./scene-projection";
 
 import type {
@@ -107,6 +108,7 @@ export const createExcalidrawSceneController = <
         }),
       },
       onRemoteSceneChange: () => refreshScene(),
+      policy: options.policy,
     });
   const unsubscribeBinding =
     options.borrowedBinding?.subscribeRemoteSceneChange(() => refreshScene());
@@ -146,7 +148,8 @@ export const createExcalidrawSceneController = <
       throw new Error("画板场景会话已销毁");
     }
     const scene = binding.getCanonical();
-    options.validateScene(scene);
+    assertScenePolicy(scene, options.policy);
+    options.validateScene?.(scene);
     return scene;
   };
   // 宿主验证过的 JSON 与 editor 的内部品牌/联合类型无法结构对齐，转换仅限该边界。

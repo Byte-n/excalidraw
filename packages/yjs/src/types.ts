@@ -1,5 +1,7 @@
 import type * as Y from "yjs";
 
+import type { ScenePolicy } from "./scene-policy";
+
 export type SceneElement = Readonly<{ id: string; version?: number }> &
   Readonly<Record<string, unknown>>;
 
@@ -55,6 +57,8 @@ export type SceneBindingOptions<
       ) => void);
   onRemoteSceneChange?: (scene: SceneSnapshot<TElement, TAsset>) => void;
   observeRemote?: boolean;
+  /** 宿主场景门槛；缺省时不执行场景级门槛与语义检查。 */
+  policy?: ScenePolicy;
 };
 
 export type SceneBinding<TElement extends SceneElement, TAsset = unknown> = {

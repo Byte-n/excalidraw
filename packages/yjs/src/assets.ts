@@ -1,3 +1,7 @@
+import { assertAssetPolicy } from "./scene-policy";
+
+import type { AssetPolicy } from "./scene-policy";
+
 export type AssetTransport<TRef> = {
   upload(fileId: string, blob: Blob, signal: AbortSignal): Promise<TRef>;
   authorize(fileId: string, signal: AbortSignal): Promise<string>;
@@ -47,6 +51,7 @@ export const createAssetCoordinator = <
   TRef extends { size: number; mimeType: string },
 >(
   transport: AssetTransport<TRef>,
+  policy?: AssetPolicy,
 ): AssetCoordinator<TRef> => {
   let disposed = false;
   let controller = new AbortController();
@@ -85,6 +90,12 @@ export const createAssetCoordinator = <
     const promise = (async () => {
       const blob = await transport.fetch(dataURL, signalForUpload);
       signalForUpload.throwIfAborted();
+      if (policy) {
+        assertAssetPolicy(policy, {
+          mimeType: dataURL.match(/^data:([^;,]+)/)?.[1] ?? blob.type,
+          bytes: blob.size,
+        });
+      }
       active(signal);
       const ref = await transport.upload(fileId, blob, signalForUpload);
       signalForUpload.throwIfAborted();

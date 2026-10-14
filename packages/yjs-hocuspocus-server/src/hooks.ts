@@ -1,6 +1,12 @@
 import * as Y from "yjs";
 
-import type { ExcalidrawSceneElement, SceneSnapshot } from "@excalidraw/yjs";
+import { assertScenePolicy, YjsSceneError } from "@excalidraw/yjs";
+
+import type {
+  ExcalidrawSceneElement,
+  ScenePolicy,
+  SceneSnapshot,
+} from "@excalidraw/yjs";
 
 import type { Connection } from "@hocuspocus/server";
 
@@ -24,6 +30,25 @@ export class CanvasHookError extends Error {
     this.name = "CanvasHookError";
   }
 }
+
+/**
+ * 场景门槛失败按 kind 归入 hook 错误通道；原始码保留在 cause，
+ * 宿主据此区分预算超限与结构非法。
+ */
+const assertSceneLimits = (
+  scene: SceneSnapshot<ExcalidrawSceneElement, unknown>,
+  policy: ScenePolicy,
+  kind: "scene" | "transition",
+): void => {
+  try {
+    assertScenePolicy(scene, policy);
+  } catch (error) {
+    if (error instanceof YjsSceneError) {
+      throw new CanvasHookError(error.message, 4400, error, kind);
+    }
+    throw error;
+  }
+};
 
 const assertData = (value: unknown, parents = new Set<object>()): void => {
   if (
@@ -233,11 +258,12 @@ export const createCanvasHocuspocusHooks = <
       }
     }
     const result = options.readScene?.(document) ?? {
-      // 泛型业务字段由宿主 validator 校验，通用结构已在上方完成运行时收窄。
+      // 泛型业务字段由 vendor 元素模型拥有，上面只做与模型无关的结构收窄。
       elements: [...elements.values()] as TElement[],
       assets: assets.toJSON() as Record<string, TAsset>,
     };
-    const validation: unknown = options.validator.validateScene(result);
+    assertSceneLimits(result, options.policy, "scene");
+    const validation: unknown = options.validator.validateScene?.(result);
     const documentValidation: unknown = options.validateDocument?.(
       document,
       room,
@@ -464,6 +490,7 @@ export const createCanvasHocuspocusHooks = <
         }
         await options.authorize(context);
         transition(before, scene);
+        assertSceneLimits(scene, options.policy, "transition");
         await options.validator.validateTransition({
           before,
           candidate: scene,

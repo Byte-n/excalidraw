@@ -20,7 +20,10 @@ export const createExcalidrawCollaboration = <
 >(
   options: CreateExcalidrawCollaborationOptions<TElement, TAsset>,
 ): ExcalidrawCollaborationController<TElement, TAsset> => {
-  const assetCoordinator = createAssetCoordinator(options.assets);
+  const assetCoordinator = createAssetCoordinator(options.assets, {
+    maxAssetBytes: options.policy.maxAssetBytes,
+    assetMimeTypes: options.policy.assetMimeTypes,
+  });
   const scene = createExcalidrawSceneController({
     ...options,
     assets: assetCoordinator,

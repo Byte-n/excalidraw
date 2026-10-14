@@ -4,6 +4,7 @@ import type {
   ExcalidrawPresenceChannel,
   ExcalidrawSceneCommand,
   ExcalidrawSceneElement,
+  ScenePolicy,
   SceneSnapshot,
   SceneBinding,
   SceneMutation,
@@ -90,7 +91,10 @@ export type HocuspocusHeadlessSessionOptions<
   allowOfflineEditing?: boolean;
   /** 仅新建且未同步的空文档延后 editor 初始接纳，首次同步仍完整校验。 */
   deferInitialSceneValidation?: boolean;
-  validateScene(scene: SceneSnapshot<TElement, TAsset>): void;
+  /** 宿主场景门槛；由调用端传入，vendor 不提供默认值。 */
+  policy: ScenePolicy;
+  /** 宿主业务钩子；门槛与语义不变量已由 policy 覆盖时无需传入。 */
+  validateScene?(scene: SceneSnapshot<TElement, TAsset>): void;
   onError?(error: HocuspocusSessionError): void;
   /** 本地副本加载后、首次网络接入前的宿主初始化；不持有连接。 */
   prepare?(input: {

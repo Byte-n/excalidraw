@@ -72,6 +72,12 @@ export type { Y };
 export * from "./types";
 export { createSceneBinding } from "./binding";
 export { createSceneSession } from "./session";
+export {
+  assertAssetPolicy,
+  assertScenePolicy,
+  jsonBytes,
+} from "./scene-policy";
+export type { AssetPolicy, ScenePolicy } from "./scene-policy";
 export { createAssetCoordinator } from "./assets";
 export {
   createFollowGraph,

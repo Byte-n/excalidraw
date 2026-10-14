@@ -6,9 +6,10 @@ import type {
 import type * as Y from "yjs";
 
 import type { AssetCoordinator } from "./assets";
+import type { ScenePolicy } from "./scene-policy";
 import type { SceneBinding, SceneSnapshot } from "./types";
 
-/** JSON 场景仅声明协作算法读取的结构；业务字段由宿主校验并完整保留。 */
+/** JSON 场景仅声明协作算法读取的结构；元素其余字段由 vendor 元素模型拥有。 */
 export type ExcalidrawSceneElement = {
   id: string;
   type: string;
@@ -76,7 +77,10 @@ export type ExcalidrawSceneControllerOptions<
   deferInitialSceneValidation?: boolean;
   state: ExcalidrawSceneState;
   assets?: AssetCoordinator<TAsset>;
-  validateScene(scene: SceneSnapshot<TElement, TAsset>): void;
+  /** 宿主场景门槛；由调用端传入，vendor 不提供默认值。 */
+  policy: ScenePolicy;
+  /** 宿主业务钩子；门槛与语义不变量已由 policy 覆盖时无需传入。 */
+  validateScene?(scene: SceneSnapshot<TElement, TAsset>): void;
   onError(error: unknown, operation: "restore" | "publish" | "command"): void;
 };
 

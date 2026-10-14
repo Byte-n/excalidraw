@@ -1,4 +1,8 @@
-import type { ExcalidrawSceneElement, SceneSnapshot } from "@excalidraw/yjs";
+import type {
+  ExcalidrawSceneElement,
+  ScenePolicy,
+  SceneSnapshot,
+} from "@excalidraw/yjs";
 
 import type { Connection, Extension } from "@hocuspocus/server";
 
@@ -66,8 +70,8 @@ export interface CanvasValidator<
   TActor,
   TFence = unknown,
 > {
-  /** 场景 schema、版本、预算和关系政策由宿主定义。 */
-  validateScene(scene: SceneSnapshot<TElement, TAsset>): void;
+  /** 场景 schema、版本、预算和关系政策由宿主定义；门槛已由 policy 覆盖时可省略。 */
+  validateScene?(scene: SceneSnapshot<TElement, TAsset>): void;
   validateTransition(input: {
     before: SceneSnapshot<TElement, TAsset>;
     candidate: SceneSnapshot<TElement, TAsset>;
@@ -93,6 +97,8 @@ export interface CanvasHocuspocusHooksOptions<
   initialize?(document: Y.Doc, room: CanvasRoom<TFence>): void | Promise<void>;
   validateDocument?(document: Y.Doc, room: CanvasRoom<TFence>): void;
   readScene?(document: Y.Doc): SceneSnapshot<TElement, TAsset>;
+  /** 宿主场景门槛；由调用端传入，vendor 不提供默认值。 */
+  policy: ScenePolicy;
   /** 空闲 WAL 刷新定时器只负责本进程；失败保队列等待下一次 flush/store/release。 */
   flushIntervalMs?: number;
   validator: CanvasValidator<TElement, TAsset, TContext, TActor, TFence>;

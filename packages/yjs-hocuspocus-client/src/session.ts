@@ -1,4 +1,5 @@
 import {
+  assertScenePolicy,
   createExcalidrawSceneCommands,
   createSceneBinding,
   orderExcalidrawSceneElements,
@@ -10,7 +11,7 @@ import {
 } from "@hocuspocus/provider";
 import * as Y from "yjs";
 
-import type { ExcalidrawSceneElement } from "@excalidraw/yjs";
+import type { ExcalidrawSceneElement, SceneSnapshot } from "@excalidraw/yjs";
 
 import { cloneCanonicalData } from "./snapshot";
 
@@ -83,6 +84,7 @@ export const createHocuspocusHeadlessSession = <
   void ready.catch(() => {});
   const binding = createSceneBinding<TElement, TAsset>({
     doc: document,
+    policy: options.policy,
     adapter: {
       validateCanonical: options.validateScene,
       sort: orderExcalidrawSceneElements,
@@ -95,6 +97,16 @@ export const createHocuspocusHeadlessSession = <
     },
   });
   const commands = createExcalidrawSceneCommands({ binding });
+  /** 本地写入与远端接纳场景都按同一份宿主门槛校验；宿主钩子保持可选。 */
+  const assertScene = (scene: SceneSnapshot<TElement, TAsset>): void => {
+    assertScenePolicy(scene, options.policy);
+    const validation: unknown = options.validateScene?.(scene);
+    if (validation !== undefined) {
+      throw new Error(
+        "scene validation must be synchronous and return undefined",
+      );
+    }
+  };
   const listeners = new Set<(next: HocuspocusSessionState) => void>();
   const update = (next: Partial<HocuspocusSessionState>) => {
     state = { ...state, ...next };
@@ -277,12 +289,7 @@ export const createHocuspocusHeadlessSession = <
     if (synced) {
       initiallySynced = true;
       try {
-        const validation: unknown = options.validateScene(
-          binding.getCanonical(),
-        );
-        if (validation !== undefined) {
-          throw new Error("scene validation must be synchronous");
-        }
+        assertScene(binding.getCanonical());
       } catch (cause) {
         session.reject({
           code: "rejected",
@@ -362,12 +369,7 @@ export const createHocuspocusHeadlessSession = <
       const scene = binding.getCanonical();
       const snapshot = cloneCanonicalData(scene);
       for (const candidate of [scene, snapshot]) {
-        const validation: unknown = options.validateScene(candidate);
-        if (validation !== undefined) {
-          throw new Error(
-            "scene validation must be synchronous and return undefined",
-          );
-        }
+        assertScene(candidate);
       }
       return snapshot;
     },
@@ -559,7 +561,7 @@ export const createHocuspocusHeadlessSession = <
       });
       controller.signal.throwIfAborted();
       if (provider.synced && provider.isAuthenticated) {
-        options.validateScene(binding.getCanonical());
+        assertScene(binding.getCanonical());
         initiallySynced = true;
         authorized = provider.authorizedScope === "read-write";
         update({

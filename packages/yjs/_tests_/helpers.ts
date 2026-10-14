@@ -7,6 +7,7 @@ import type {
   ExcalidrawSceneCommand,
   ExcalidrawSceneElement,
 } from "../src/excalidraw-scene-types";
+import type { ScenePolicy } from "../src/scene-policy";
 import type {
   ExcalidrawPresenceChannel,
   ExcalidrawPresencePeer,
@@ -54,6 +55,27 @@ export const element = (
   ...overrides,
 });
 
+/** 用例门槛显式给出；vendor 不提供默认值。 */
+export const scenePolicy = (
+  overrides: Partial<ScenePolicy> = {},
+): ScenePolicy => ({
+  maxElements: 1_000,
+  maxAssets: 100,
+  maxElementBytes: 256 * 1024,
+  maxSceneBytes: 16 * 1024 * 1024,
+  maxTextBytes: 64 * 1024,
+  maxAssetBytes: 20 * 1024 * 1024,
+  assetMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+  forbiddenPersistentFields: [
+    "dataURL",
+    "blob",
+    "signedUrl",
+    "frameId",
+    "files",
+  ],
+  ...overrides,
+});
+
 /** 测试模拟宿主业务接纳，只校验用例依赖的不变量，不复制业务 schema。 */
 export const validateScene = (
   scene: SceneSnapshot<ExcalidrawSceneElement, TestAsset>,
@@ -70,6 +92,7 @@ export class TestSceneBridge {
   constructor(document: Y.Doc, _schemaVersion = 2, onRemote?: () => void) {
     this.binding = createSceneBinding<ExcalidrawSceneElement, TestAsset>({
       doc: document,
+      policy: scenePolicy(),
       adapter: {
         sort: orderExcalidrawSceneElements,
         validateCanonical: validateScene,

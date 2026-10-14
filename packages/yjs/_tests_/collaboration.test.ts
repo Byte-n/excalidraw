@@ -6,7 +6,13 @@ import { Excalidraw, CaptureUpdateAction } from "@excalidraw/excalidraw";
 
 import { createExcalidrawCollaboration } from "../src";
 
-import { element, peer, presenceChannel, validateScene } from "./helpers";
+import {
+  element,
+  peer,
+  presenceChannel,
+  scenePolicy,
+  validateScene,
+} from "./helpers";
 
 afterEach(cleanup);
 
@@ -17,6 +23,7 @@ const setup = () => {
   const onError = vi.fn();
   const collaboration = createExcalidrawCollaboration({
     document,
+    policy: scenePolicy(),
     presence: channel.channel,
     assets: {
       upload: async () => ({ size: 3, mimeType: "image/png" }),
@@ -150,6 +157,7 @@ test("初始业务校验失败可观察且只读，立即释放文档监听并�
   const channel = presenceChannel();
   const collaboration = createExcalidrawCollaboration({
     document,
+    policy: scenePolicy(),
     presence: channel.channel,
     state: { canEdit: true, synced: true, online: true, isCollaborating: true },
     validateScene,

@@ -2,6 +2,8 @@ import { assertSceneValue, equalSceneValue } from "./scene-value";
 
 import { YjsSceneError } from "./errors";
 
+import { assertScenePolicy } from "./scene-policy";
+
 import { createYjsSceneBinding } from "./index";
 
 import type * as Y from "yjs";
@@ -34,6 +36,7 @@ export const createSceneBinding = <
   onRemoteChange,
   onRemoteSceneChange,
   observeRemote = true,
+  policy,
 }: SceneBindingOptions<TElement, TAsset>): SceneBinding<TElement, TAsset> => {
   const elementBinding = createYjsSceneBinding<TElement>({
     doc,
@@ -93,6 +96,12 @@ export const createSceneBinding = <
     ),
     assets: getAssets(),
   });
+  /** 未提供宿主门槛时跳过场景级检查；调用端入口一律要求传入。 */
+  const assertPolicy = (scene: SceneSnapshot<TElement, TAsset>) => {
+    if (policy) {
+      assertScenePolicy(scene, policy);
+    }
+  };
   const assertWritable = () => {
     if (disposed || doc.isDestroyed) {
       throw new Error("Yjs scene binding is disposed");
@@ -135,6 +144,10 @@ export const createSceneBinding = <
         "scene validation must be synchronous and return undefined",
       );
     }
+    assertPolicy({
+      elements: next,
+      assets: { ...getAssets(), ...clone(nextAssets) },
+    });
     const preparedElements = next.map(clone);
     const preparedAssets = prepareAssets(nextAssets);
     assertSceneValue(preparedElements);
@@ -213,6 +226,7 @@ export const createSceneBinding = <
         "scene validation must be synchronous and return undefined",
       );
     }
+    assertPolicy(scene);
     const preparedElements = [...changed].map(
       ([id, value]) => [id, clone(elementClone(value))] as const,
     );

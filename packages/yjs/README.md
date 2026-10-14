@@ -45,7 +45,7 @@ editor 解绑仅清除指针/选区/跟随、计时器、DOM 监听与在途资�
 
 锁定的 `@excalidraw/element 0.18.0` 公开根入口可在无 DOM 的 Node 中导入。公开 `newElement`、`newTextElement`、`newArrowElement` 支持 headless factory；文字需要宿主通过公开 `setCustomTextMetricsProvider` 注入度量。`calculateFixedPointForNonElbowArrowBinding` 和 `calculateFixedPointForElbowArrowBinding` 可用元素 Map 计算连接几何。高层 `convertToExcalidrawElements` 及 `bindBindingElement` 依赖 Scene/DOM，不能用于 headless 命令路径；core 根 Node 导入当前也受 roughjs 扩展名解析限制。场景命令使用公开 element factory/纯几何，在完整候选场景内同步维护反向关系，不扩展 core 或将软关系升级成全场景硬约束。
 
-Hocuspocus 会话与 hooks 契约分别位于 `@excalidraw/yjs-hocuspocus-client` 和 `@excalidraw/yjs-hocuspocus-server`，均锁定 Hocuspocus `4.6.0` 与 Yjs `13.6.32` peer；本包继续不依赖 Hocuspocus。通用场景结构和算法与宿主 schema、预算、资产授权及 epoch/replica 政策保持分离。
+Hocuspocus 会话与 hooks 契约分别位于 `@excalidraw/yjs-hocuspocus-client` 和 `@excalidraw/yjs-hocuspocus-server`，均锁定 Hocuspocus `4.6.0` 与 Yjs `13.6.32` peer；本包继续不依赖 Hocuspocus。通用场景结构和算法与资产授权及 epoch/replica 政策保持分离；场景门槛与持久化语义（数量、字节、文本、资产引用与就绪、禁止持久化字段）由本包按调用端传入的 `ScenePolicy` 统一执行，不提供默认值。
 
 ## Headless 场景命令
 

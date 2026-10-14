@@ -4,8 +4,30 @@ import {
   createSceneBinding,
   createSceneSession,
   createYjsSceneBinding,
+  YjsSceneError,
 } from "../src/index";
 import { createFollowGraph } from "../src/index";
+
+import { element, scenePolicy } from "./helpers";
+
+import type { TestAsset } from "./helpers";
+
+test("本地发布在写入前按宿主门槛拒绝，文档保持不变", () => {
+  const doc = new Y.Doc();
+  const binding = createSceneBinding<ReturnType<typeof element>, TestAsset>({
+    doc,
+    policy: scenePolicy({ maxElementBytes: 10 }),
+  });
+  binding.setGate({ initialized: true, synced: true, canEdit: true });
+  expect(() => binding.applyCommand({ elements: [element()] })).toThrow(
+    YjsSceneError,
+  );
+  expect(() => binding.applyCommand({ elements: [element()] })).toThrowError(
+    /byte limit/,
+  );
+  expect(doc.getMap("elements").size).toBe(0);
+  binding.dispose();
+});
 
 test("follow graph rejects arbitrary cycles and missing targets", () => {
   const graph = createFollowGraph("self");

@@ -10,7 +10,7 @@ import { createSceneBinding } from "../src/binding";
 
 import { createExcalidrawSceneController } from "../src/excalidraw-scene-controller";
 
-import { element, validateScene } from "./helpers";
+import { element, scenePolicy, validateScene } from "./helpers";
 
 import type {
   ExcalidrawSceneElement,
@@ -43,6 +43,7 @@ const mount = async (
   const controller = createExcalidrawSceneController({
     document: doc,
     borrowedBinding: binding,
+    policy: scenePolicy(),
     state: { canEdit: true, synced: true, online: true, ...state },
     validateScene,
     onError: errors,

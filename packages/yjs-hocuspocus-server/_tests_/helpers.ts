@@ -3,7 +3,7 @@ import { createSceneElement } from "@excalidraw/yjs";
 import WebSocket from "ws";
 import { onTestFinished, vi } from "vitest";
 
-import type { ExcalidrawSceneElement } from "@excalidraw/yjs";
+import type { ExcalidrawSceneElement, ScenePolicy } from "@excalidraw/yjs";
 
 import { createHocuspocusHeadlessSession } from "../../yjs-hocuspocus-client/src/session";
 import { createCanvasHocuspocusHooks } from "../src/index";
@@ -15,6 +15,27 @@ import type {
   CanvasPersistenceUpdate,
   CanvasRepository,
 } from "../src/index";
+
+/** 用例门槛显式给出；vendor 不提供默认值。 */
+export const scenePolicy = (
+  overrides: Partial<ScenePolicy> = {},
+): ScenePolicy => ({
+  maxElements: 1_000,
+  maxAssets: 100,
+  maxElementBytes: 256 * 1024,
+  maxSceneBytes: 16 * 1024 * 1024,
+  maxTextBytes: 64 * 1024,
+  maxAssetBytes: 20 * 1024 * 1024,
+  assetMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+  forbiddenPersistentFields: [
+    "dataURL",
+    "blob",
+    "signedUrl",
+    "frameId",
+    "files",
+  ],
+  ...overrides,
+});
 
 export const deferred = () => {
   let resolve!: () => void;
@@ -50,6 +71,7 @@ export const startPersistenceRoom = async (
   >({
     resolveRoom: (name) => ({ name, fence: 1 }),
     repository,
+    policy: scenePolicy(),
     validator: {
       validateScene: () => {},
       validateTransition: () => {},
@@ -86,6 +108,7 @@ export const startPersistenceRoom = async (
     token: () => "writer",
     WebSocketPolyfill: WebSocket,
     syncTimeoutMs: 3_000,
+    policy: scenePolicy(),
     validateScene: () => {},
   });
   await session.ready;
@@ -138,6 +161,7 @@ export const startHookRoom = async (
     release?: CanvasRepository<number>["release"];
     snapshot?: CanvasRepository<number>["snapshot"];
     validateAwareness?: HookOptions["validateAwareness"];
+    policy?: ScenePolicy;
   } = {},
 ) => {
   const wal: CanvasPersistenceUpdate[] = [];
@@ -171,6 +195,7 @@ export const startHookRoom = async (
   >({
     resolveRoom: (name) => ({ name, fence: 1 }),
     repository: { load: async () => [], append, snapshot, release },
+    policy: overrides.policy ?? scenePolicy(),
     extraRootMaps: ["canvasMeta", "extra"],
     initialize: (document) => {
       document.getMap("canvasMeta").set("version", 2);
@@ -240,6 +265,7 @@ export const startHookRoom = async (
       url: `ws://127.0.0.1:${server.address.port}`,
       token: () => token,
       WebSocketPolyfill: WebSocket,
+      policy: scenePolicy(),
       validateScene: () => {},
       syncTimeoutMs: 3_000,
     });
