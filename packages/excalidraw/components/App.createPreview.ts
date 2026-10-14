@@ -10,7 +10,7 @@ import type {
 import { getLanguage } from "../i18n";
 
 import {
-  buildPresetPreview,
+  buildPresetPreviewElements,
   getMindmapPresetTree,
   hasCreationPreview,
   PREVIEW_ELEMENT_ID,
@@ -136,13 +136,12 @@ export class AppCreatePreview {
         anchorId: rootId,
       };
     }
-    const element = buildPresetPreview(this.app, tool as ToolType, {
+    const elements = buildPresetPreviewElements(this.app, tool as ToolType, {
       x: 0,
       y: 0,
     });
-    return element
-      ? { tool, fingerprint, elements: [element], anchorId: element.id }
-      : null;
+    const anchor = elements[0];
+    return anchor ? { tool, fingerprint, elements, anchorId: anchor.id } : null;
   }
 
   /**
@@ -163,6 +162,9 @@ export class AppCreatePreview {
       state.preferredGenericShape,
       state.currentItemStickynoteBackgroundColor,
       state.currentItemStickynoteStrokeColor,
+      // 表格预设换一张、单元文字的字体换一个，预览里的表都得重建
+      state.currentTablePreset,
+      state.currentItemFontFamily,
       // 思维导图的占位文字随语言变化，预设图因此也要跟着重建
       getLanguage().code,
     ].join("|");

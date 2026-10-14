@@ -308,8 +308,8 @@ export const DEFAULT_STICKY_NOTE_SIZE = 250;
  * 落在光标处**（与按下拖拽的起点同一锚点，所以悬停 / 拖拽 / 单击三者不跳）。
  * 按住拖拽仍按拖出的范围自定大小，与预设无关。
  *
- * 表格没有自己的条目——`newTableElement` 建出来的默认 3×3 就是预设，元素
- * 自带尺寸，不在这里重复推导，避免两处漂移。
+ * 表格没有自己的条目——`newTableElement` 按当前预设（`currentTablePreset`）建
+ * 网格，尺寸就是行列之和，元素自带，不在这里重复推导，避免两处漂移。
  */
 export const DEFAULT_SHAPE_PRESET_SIZE = {
   width: 120,

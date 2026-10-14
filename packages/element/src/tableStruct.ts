@@ -3,7 +3,9 @@ import { randomId } from "@excalidraw/common";
 import type {
   ExcalidrawTableElement,
   TableCellData,
+  TableColumnData,
   TableDataV1,
+  TableRowData,
 } from "./types";
 
 /**
@@ -188,6 +190,235 @@ export const createTableData = ({
   );
 
   return { schemaVersion: 1, rows, columns, cells };
+};
+
+/**
+ * 表格预设：`plain` 是工具默认的均匀 3×3，两条泳道预设照搬平台表格模板
+ * （水平/垂直泳道）的结构与配色。
+ */
+export type TablePresetId =
+  | "plain"
+  | "swimlane-horizontal"
+  | "swimlane-vertical";
+
+export const TABLE_PRESET_IDS: readonly TablePresetId[] = [
+  "plain",
+  "swimlane-horizontal",
+  "swimlane-vertical",
+];
+
+export const isTablePresetId = (value: unknown): value is TablePresetId =>
+  typeof value === "string" && TABLE_PRESET_IDS.some((id) => id === value);
+
+/**
+ * 泳道预设的几何，取自平台样本（水平 `q21:4` / 垂直 `q21:6`）：整表
+ * 782 × 689.44，两条泳道各 344.72，标题带与泳道名带各 64，内容区 654。
+ * 样本里的小数是铺满容器留下的零头，这里一律取整——预设是创建起点不是格式
+ * 约束，整数让落点、网格吸附和尺寸断言都干净（总量差 0.2%，看不出来）。
+ */
+const SWIMLANE_TITLE_BAND = 64;
+const SWIMLANE_LABEL_BAND = 64;
+const SWIMLANE_CONTENT = 654;
+const SWIMLANE_LANE = 344;
+const SWIMLANE_LANE_COUNT = 2;
+
+/**
+ * 泳道预设标题带的底色。借表头带的主题色（浅色 `#F5F6F7` / 深色 `#2A2B30`）
+ * 而不是样本里写死的 `#f5f5f5`：两者几乎同色，但主题切换时跟着走，不会在深色
+ * 画布上留下一块固定的浅灰。工具弹层里的缩略图也解析同一个值。
+ */
+export const TABLE_PRESET_TITLE_FILL = "token:header";
+
+/**
+ * 泳道预设标签的字号（样本里单元格文字 18 / 表格默认 14）。元素层只声明这个
+ * 数并交给 app 层的装配读，标签文字的居中与竖排换行都由单元格布局算。
+ */
+export const TABLE_SWIMLANE_LABEL_FONT_SIZE = 18;
+
+type TableSwimlaneTitle = Readonly<{
+  row: number;
+  column: number;
+  rowSpan: number;
+  columnSpan: number;
+}>;
+
+type TableSwimlaneSpec = Readonly<{
+  /** 行/列轴上的尺寸，顺序即索引 */
+  rows: readonly number[];
+  columns: readonly number[];
+  /** 标题带：合并区的左上角锚点与跨度 */
+  title: TableSwimlaneTitle;
+  /**
+   * 泳道名格：每条泳道一格，**刻意不合并**——单条泳道被删掉或挪走时名字跟着
+   * 它走（样本的合并也只用在标题带上）。
+   */
+  laneLabels: readonly Readonly<{ row: number; column: number }>[];
+}>;
+
+/**
+ * 水平泳道：每条泳道是一**行**，标题带与泳道名带因此各占一**列**。
+ * 垂直泳道是它严格转置（样本数据也是转置的），所以只写这一份、另一份现推
+ * ——两份永远对得上，改一处不会漏改另一处。
+ */
+const SWIMLANE_HORIZONTAL: TableSwimlaneSpec = {
+  rows: [SWIMLANE_LANE, SWIMLANE_LANE],
+  columns: [SWIMLANE_TITLE_BAND, SWIMLANE_LABEL_BAND, SWIMLANE_CONTENT],
+  title: {
+    row: 0,
+    column: 0,
+    rowSpan: SWIMLANE_LANE_COUNT,
+    columnSpan: 1,
+  },
+  laneLabels: [
+    { row: 0, column: 1 },
+    { row: 1, column: 1 },
+  ],
+};
+
+const transposeSwimlaneSpec = (spec: TableSwimlaneSpec): TableSwimlaneSpec => ({
+  rows: spec.columns,
+  columns: spec.rows,
+  title: {
+    row: spec.title.column,
+    column: spec.title.row,
+    rowSpan: spec.title.columnSpan,
+    columnSpan: spec.title.rowSpan,
+  },
+  laneLabels: spec.laneLabels.map(({ row, column }) => ({
+    row: column,
+    column: row,
+  })),
+});
+
+const SWIMLANE_SPECS: Readonly<
+  Record<"swimlane-horizontal" | "swimlane-vertical", TableSwimlaneSpec>
+> = {
+  "swimlane-horizontal": SWIMLANE_HORIZONTAL,
+  "swimlane-vertical": transposeSwimlaneSpec(SWIMLANE_HORIZONTAL),
+};
+
+const isSwimlanePresetId = (
+  presetId: TablePresetId,
+): presetId is "swimlane-horizontal" | "swimlane-vertical" =>
+  presetId !== "plain";
+
+const isInsideTitle = (
+  rowIndex: number,
+  columnIndex: number,
+  title: TableSwimlaneTitle,
+): boolean =>
+  rowIndex >= title.row &&
+  rowIndex < title.row + title.rowSpan &&
+  columnIndex >= title.column &&
+  columnIndex < title.column + title.columnSpan;
+
+/**
+ * 预设的持久化网格。泳道预设带一个竖/横合并的标题带（底色 + 合并都是数据，
+ * 不是渲染期推导）与两条泳道；`plain` 就是既有的均匀 3×3。
+ */
+export const createTablePresetData = (
+  presetId: TablePresetId,
+  randomizer: () => string = randomId,
+): TableDataV1 => {
+  if (!isSwimlanePresetId(presetId)) {
+    return createTableData({ randomizer });
+  }
+
+  const spec = SWIMLANE_SPECS[presetId];
+  const rows: TableRowData[] = spec.rows.map((height) => ({
+    id: randomizer(),
+    height,
+  }));
+  const columns: TableColumnData[] = spec.columns.map((width) => ({
+    id: randomizer(),
+    width,
+  }));
+  // 单元格 id 先全部取好：被覆盖格要指回锚点，锚点得先有身份
+  const cellIds = rows.map(() => columns.map(() => randomizer()));
+  const anchorId = cellIds[spec.title.row][spec.title.column];
+
+  const cells: TableCellData[] = rows.flatMap((row, rowIndex) =>
+    columns.map((column, columnIndex) => {
+      const base = {
+        id: cellIds[rowIndex][columnIndex],
+        rowId: row.id,
+        columnId: column.id,
+        style: {},
+      };
+      if (rowIndex === spec.title.row && columnIndex === spec.title.column) {
+        return {
+          ...base,
+          style: { backgroundColor: TABLE_PRESET_TITLE_FILL },
+          rowSpan: spec.title.rowSpan,
+          columnSpan: spec.title.columnSpan,
+        };
+      }
+      if (isInsideTitle(rowIndex, columnIndex, spec.title)) {
+        // 被盖住的格保留自己的 id 并指向锚点（见 `assertValidTableData`）
+        return { ...base, mergedInto: anchorId };
+      }
+      return base;
+    }),
+  );
+
+  return {
+    schemaVersion: 1,
+    // 首行表头带关掉：水平泳道的首行是一条普通泳道，垂直泳道的首行是标题带
+    // （自带底色），都不该再叠一层派生出来的表头
+    style: { header: false },
+    rows,
+    columns,
+    cells,
+  };
+};
+
+export type TablePresetLabelCell = Readonly<{
+  /** `title` 是标题带（合并区锚点），`lane` 是泳道名格 */
+  kind: "title" | "lane";
+  rowIndex: number;
+  columnIndex: number;
+}>;
+
+/**
+ * 预设自带标签的**格位**：标题带一个 + 每条泳道一个。文案不在元素层——
+ * 它是 i18n 的（见 `getMindmapPresetTree` 的同一处理）。`plain` 没有标签。
+ */
+export const getTablePresetLabelCells = (
+  presetId: TablePresetId,
+): readonly TablePresetLabelCell[] => {
+  if (!isSwimlanePresetId(presetId)) {
+    return [];
+  }
+  const { title, laneLabels } = SWIMLANE_SPECS[presetId];
+  return [
+    { kind: "title", rowIndex: title.row, columnIndex: title.column },
+    ...laneLabels.map(({ row, column }) => ({
+      kind: "lane" as const,
+      rowIndex: row,
+      columnIndex: column,
+    })),
+  ];
+};
+
+/**
+ * 交点上的**可见**单元格 id（0-based 索引）。合并区的被覆盖格返回锚点 id，
+ * 标签因此挂在用户双击时编辑的那一格里（同 `getTableCellAtPoint`）。
+ */
+export const getTableCellIdAt = (
+  table: Pick<TableDataV1, "rows" | "columns" | "cells">,
+  rowIndex: number,
+  columnIndex: number,
+): string | null => {
+  const row = table.rows[rowIndex];
+  const column = table.columns[columnIndex];
+  if (!row || !column) {
+    return null;
+  }
+  const cell = table.cells.find(
+    (candidate) =>
+      candidate.rowId === row.id && candidate.columnId === column.id,
+  );
+  return cell ? cell.mergedInto ?? cell.id : null;
 };
 
 export const getTableWidth = (table: Pick<TableDataV1, "columns">): number =>

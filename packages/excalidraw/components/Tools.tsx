@@ -4,12 +4,15 @@ import { useEffect, useState } from "react";
 import { KEYS, capitalizeString } from "@excalidraw/common";
 import {
   STICKY_NOTE_PRESETS,
+  TABLE_PRESET_IDS,
   findStickyNotePreset,
   getStickyNoteCreationInk,
+  isTablePresetId,
   supportsFill,
 } from "@excalidraw/element";
 
 import type { BaseShapeId, PointerType } from "@excalidraw/element/types";
+import type { TablePresetId } from "@excalidraw/element";
 
 import { trackEvent } from "../analytics";
 import { t } from "../i18n";
@@ -18,6 +21,7 @@ import { getShortcutKey } from "../shortcut";
 import { getCompositeShapeIcon } from "./CompositeShapeIcon";
 import { IconButton } from "./IconButton";
 import { getStickyNotePresetIcon } from "./StickyNotePresetIcon";
+import { getTablePresetIcon } from "./TablePresetIcon";
 import { ToolPopover } from "./ToolPopover";
 import {
   SelectionIcon,
@@ -685,6 +689,64 @@ export const StickyNoteToolPopover = ({
         hideShortcut ? undefined : getToolShortcut("stickynote")
       }
       shortcut={hideShortcut ? null : getToolShortcut("stickynote")}
+    />
+  );
+};
+
+/**
+ * 表格预设的选项文案：`plain` 就是工具名本身，两条泳道用各自的预设名（也正是
+ * 新建出来的表里标题带上那行字）。
+ */
+const TABLE_PRESET_TITLES: Record<TablePresetId, Parameters<typeof t>[0]> = {
+  plain: "toolBar.table",
+  "swimlane-horizontal": "toolBar.swimlaneHorizontal",
+  "swimlane-vertical": "toolBar.swimlaneVertical",
+};
+
+/**
+ * 表格工具的内置预设 popover，与便签样式弹层同一套交互：触发按钮显示当前预设
+ * 的缩略图，点选项即换预设并激活表格工具。预设只决定**新建**的表长什么样
+ * （见 `app/createPresets`），画布上已有的表一律不动。
+ */
+export const TableToolPopover = ({
+  app,
+  activeTool,
+  hideShortcut = false,
+}: {
+  app: AppClassProperties;
+  activeTool: UIAppState["activeTool"];
+  hideShortcut?: boolean;
+}) => {
+  const current = app.state.currentTablePreset;
+  const PRESET_TOOLS = TABLE_PRESET_IDS.map((id) => ({
+    type: id,
+    icon: getTablePresetIcon(id, app.state.theme),
+    title: t(TABLE_PRESET_TITLES[id]),
+  }));
+  const displayedOption =
+    PRESET_TOOLS.find((option) => option.type === current) || PRESET_TOOLS[0];
+
+  return (
+    <ToolPopover
+      app={app}
+      options={PRESET_TOOLS}
+      activeTool={activeTool}
+      activeOptionType={current}
+      defaultOption={current}
+      data-testid="toolbar-table"
+      // 选项是预设不是工具：选哪一条都是激活表格工具（同便签样式）
+      sharedToolType="table"
+      isTriggerChecked={activeTool.type === "table"}
+      onToolChange={(type: string) => {
+        if (isTablePresetId(type)) {
+          app.setAppState({ currentTablePreset: type });
+        }
+        app.setActiveTool({ type: "table" });
+      }}
+      displayedOption={displayedOption}
+      keyBindingLabel={hideShortcut ? undefined : getToolLetter("table")}
+      ariaKeyshortcuts={hideShortcut ? undefined : getToolShortcut("table")}
+      shortcut={hideShortcut ? null : getToolShortcut("table")}
     />
   );
 };

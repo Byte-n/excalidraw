@@ -54,6 +54,7 @@ import type {
   DurableIncrement,
   EphemeralIncrement,
   OnDuplicateData,
+  TablePresetId,
 } from "@excalidraw/element";
 import type { GlobalPoint } from "@excalidraw/math";
 
@@ -644,6 +645,11 @@ export interface AppState {
     initialized: boolean;
   };
   preferredGenericShape: BaseShapeId | "right-triangle" | "left-triangle";
+  /**
+   * 表格工具当前选用的预设：工具弹层里选一个，触发按钮回显它，随后的新建
+   * 都按它成型。`plain` 是均匀 3×3，泳道预设自带合并标题带、底纹与标签。
+   */
+  currentTablePreset: TablePresetId;
 
   // Pen handling
   penMode: boolean;

@@ -3,12 +3,16 @@ import {
   DEFAULT_SHAPE_PRESET_SIZE,
   DEFAULT_STICKY_NOTE_PRESET_SIZE,
   FRAME_STYLE,
-  getGridPoint,
   KEYS,
+  VERTICAL_ALIGN,
+  getGridPoint,
 } from "@excalidraw/common";
 
 import {
+  TABLE_SWIMLANE_LABEL_FONT_SIZE,
   getStickyNoteCreationInk,
+  getTableCellIdAt,
+  getTablePresetLabelCells,
   newElement,
   newEmbeddableElement,
   newFrameElement,
@@ -27,9 +31,11 @@ import type {
   NonDeleted,
 } from "@excalidraw/element/types";
 
-import type { MindmapTreeSpec } from "@excalidraw/element";
+import type { MindmapTreeSpec, TablePresetId } from "@excalidraw/element";
 
 import { t } from "../../i18n";
+
+import { buildTableCellBackgroundText } from "./tableCellText";
 
 import type App from "../App";
 import type { KeyboardModifiersObject, ToolType } from "../../types";
@@ -178,15 +184,15 @@ export function newCreationDraft(
   }
 
   if (elementType === "table") {
-    return newTableElement({
-      type: "table",
-      x: at.x,
-      y: at.y,
-      opacity: state.currentItemOpacity,
-      locked: false,
+    // 表格的草稿可能不止一个元素（泳道预设自带标签文字）——「按下即拖」只用
+    // 表格本身，整份装配见 `createTablePresetDrafts`
+    return createTablePresetDrafts(
+      app,
+      state.currentTablePreset,
+      at,
       containerRef,
-      ...identity,
-    });
+      identity,
+    )[0] as NonDeleted<ExcalidrawTableElement>;
   }
 
   const baseElementAttributes = {
@@ -263,28 +269,140 @@ export function newCreationDraft(
 }
 
 /**
+ * 行列与单元格的 id 来源：从元素的固定身份派生，同一次构建里稳定、跨构建也
+ * 稳定。缺省（真实建表）不传，由构造函数生成随机 id。
+ */
+const gridRandomizer = (id: string) => {
+  let index = 0;
+  return () => `${id}:grid:${index++}`;
+};
+
+/** 泳道预设标题带的文案：预设名就是它的标题（样本里也是这么烘进去的） */
+const TABLE_PRESET_TITLE_KEYS: Record<
+  Exclude<TablePresetId, "plain">,
+  Parameters<typeof t>[0]
+> = {
+  "swimlane-horizontal": "toolBar.swimlaneHorizontal",
+  "swimlane-vertical": "toolBar.swimlaneVertical",
+};
+
+/**
+ * 表格预设的完整装配：**表格 + 自带标签文字**（`plain` 只有表格本身）。
+ *
+ * 标签文案走 i18n 且按调用时求值——语言可以在会话中切换，模块级常量会把当时
+ * 的语言冻住（同 `getMindmapPresetTree`）。格位来自元素层的
+ * `getTablePresetLabelCells`，文字居中、竖排换行、竖向居中都由单元格布局算，
+ * 因此标签与「双击单元格敲出来的文字」是同一类元素，落地点开就能改。
+ *
+ * `labelIdentity` 与表格的 `identity` 分开给：预览要求**每个**元素都有固定
+ * 身份（一个都不能漏，否则照样推进共享的 id 序列），建表时一个都不给。
+ *
+ * 网格自己的 id 也从表格身份派生（`gridRandomizer`）——行列与单元格同样消耗
+ * 共享的随机序列，只固定元素身份是不够的。
+ */
+export const createTablePresetDrafts = (
+  app: PresetApp,
+  presetId: TablePresetId,
+  at: { x: number; y: number },
+  containerRef?: DirectContainerRef,
+  identity?: CreationIdentity,
+  labelIdentity: (index: number) => CreationIdentity = () => ({}),
+): NonDeleted<ExcalidrawNonSelectionElement>[] => {
+  const table = newTableElement({
+    type: "table",
+    preset: presetId,
+    x: at.x,
+    y: at.y,
+    opacity: app.state.currentItemOpacity,
+    locked: false,
+    containerRef,
+    randomizer: identity?.id ? gridRandomizer(identity.id) : undefined,
+    ...identity,
+  });
+
+  if (presetId === "plain") {
+    return [table];
+  }
+
+  // 标签在表格进场景之前装配：布局只需要行列样式，给一份只含这张表的映射
+  const elementsMap = new Map([[table.id, table]]);
+
+  return [
+    table,
+    ...getTablePresetLabelCells(presetId).map((cell, index) => {
+      const cellId = getTableCellIdAt(
+        table.table,
+        cell.rowIndex,
+        cell.columnIndex,
+      );
+      if (!cellId) {
+        throw new Error(
+          `Table preset ${presetId} has no cell at (${cell.rowIndex}, ${cell.columnIndex})`,
+        );
+      }
+      return buildTableCellBackgroundText(app, table, cellId, {
+        text:
+          cell.kind === "title"
+            ? t(TABLE_PRESET_TITLE_KEYS[presetId])
+            : t("toolBar.swimlane"),
+        elementsMap,
+        fontSize: TABLE_SWIMLANE_LABEL_FONT_SIZE,
+        textAlign: "center",
+        verticalAlign: VERTICAL_ALIGN.MIDDLE,
+        identity: labelIdentity(index),
+      });
+    }),
+  ];
+};
+
+/**
  * 预览元素：与「按下即建」同源装配，再落到预设尺寸上。**鼠标点即元素左上角**
  * ——与按下拖拽的锚点一致，所以悬停、拖拽、单击三者的落点不会互相跳。表格用
- * 元素自带的 3×3 默认尺寸，其余读 `PRESET_SIZES`。
+ * 元素自带的默认尺寸（`plain` 是 3×3，泳道预设是自带行列尺寸与标签的整张表），
+ * 其余读 `PRESET_SIZES`。
+ *
+ * 表格可能不止一个元素：泳道预设自带标签文字，预览要把它们一起画出来，所以
+ * 这里返回数组（调用方只有 `AppCreatePreview`，锚点取第一个元素）。
  */
-export const buildPresetPreview = (
+export const buildPresetPreviewElements = (
   app: PresetApp,
   tool: ToolType,
   at: { x: number; y: number },
-): NonDeleted<ExcalidrawNonSelectionElement> | null => {
+): NonDeleted<ExcalidrawNonSelectionElement>[] => {
+  const containerRef = app.getContainerRefForDropAt(at);
+
+  if (tool === "table") {
+    // 固定身份：预览不得推进共享的 id / 随机序列（见 CreationIdentity）
+    return createTablePresetDrafts(
+      app,
+      app.state.currentTablePreset,
+      at,
+      containerRef,
+      { id: PREVIEW_ELEMENT_ID, seed: PREVIEW_ELEMENT_SEED },
+      (index) => ({
+        id: `${PREVIEW_ELEMENT_ID}:label:${index}`,
+        seed: PREVIEW_ELEMENT_SEED + index + 1,
+      }),
+    );
+  }
+
   const draft = newCreationDraft(
     app,
     tool as CreationDraftType,
     at,
-    app.getContainerRefForDropAt(at),
-    // 固定身份：预览不得推进共享的 id / 随机序列（见 CreationIdentity）
-    { id: PREVIEW_ELEMENT_ID, seed: PREVIEW_ELEMENT_SEED },
+    containerRef,
+    {
+      id: PREVIEW_ELEMENT_ID,
+      seed: PREVIEW_ELEMENT_SEED,
+    },
   ) as NonDeleted<ExcalidrawNonSelectionElement>;
   const size = PRESET_SIZES[tool] ?? {
     width: draft.width,
     height: draft.height,
   };
-  return { ...draft, x: at.x, y: at.y, width: size.width, height: size.height };
+  return [
+    { ...draft, x: at.x, y: at.y, width: size.width, height: size.height },
+  ];
 };
 
 /**

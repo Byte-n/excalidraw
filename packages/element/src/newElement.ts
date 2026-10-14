@@ -46,7 +46,14 @@ import {
   isCompositeShapeOpen,
 } from "./compositeShape";
 import { DEFAULT_MINDMAP_EDGE_ROUTING, mindmapShapeData } from "./mindmap";
-import { createTableData, getTableHeight, getTableWidth } from "./tableStruct";
+import {
+  createTableData,
+  createTablePresetData,
+  getTableHeight,
+  getTableWidth,
+} from "./tableStruct";
+
+import type { TablePresetId } from "./tableStruct";
 
 import type {
   ExcalidrawElement,
@@ -422,22 +429,36 @@ export const newMagicFrameElement = (
  * callers adjust them through the row/column structure commands afterwards.
  * The element size always follows the sums (`width` = column widths,
  * `height` = row heights), see `normalizeTableDimensions`.
+ *
+ * `preset` picks the whole starting grid: `plain`（缺省）用下面的数量/尺寸参数，
+ * 泳道预设则自带每行每列的尺寸、合并区与底色（见 `createTablePresetData`），
+ * 此时数量与尺寸参数一并忽略。
+ *
+ * `randomizer` 只给行列与单元格取 id，与元素自己的 id/seed 无关；离屏预览传一
+ * 份从固定身份派生的实现——网格 id 同样消耗共享的随机序列，漏掉它预览照样会
+ * 把同一会话里后续元素的 id 推后（见 `CreationIdentity`）。
  */
 export const newTableElement = (
   opts: {
     type: "table";
+    preset?: TablePresetId;
     rowCount?: number;
     columnCount?: number;
     rowHeight?: number;
     columnWidth?: number;
+    randomizer?: () => string;
   } & ElementConstructorOpts,
 ): NonDeleted<ExcalidrawTableElement> => {
-  const table = createTableData({
-    rowCount: opts.rowCount,
-    columnCount: opts.columnCount,
-    rowHeight: opts.rowHeight,
-    columnWidth: opts.columnWidth,
-  });
+  const table =
+    opts.preset && opts.preset !== "plain"
+      ? createTablePresetData(opts.preset, opts.randomizer)
+      : createTableData({
+          rowCount: opts.rowCount,
+          columnCount: opts.columnCount,
+          rowHeight: opts.rowHeight,
+          columnWidth: opts.columnWidth,
+          randomizer: opts.randomizer,
+        });
 
   const tableElement = newElementWith(
     {

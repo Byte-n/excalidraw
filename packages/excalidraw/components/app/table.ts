@@ -1,20 +1,18 @@
 import {
   CURSOR_TYPE,
   KEYS,
-  VERTICAL_ALIGN,
   distance,
   DRAGGING_THRESHOLD,
   DEFAULT_FONT_SIZE,
   getGridPoint,
-  getLineHeight,
   isSelectionLikeTool,
-  TABLE_CELL_TEXT_FONT_SIZE,
   TABLE_STRUCTURE_INSERTION_OFFSET,
 } from "@excalidraw/common";
 import { pointDistance, pointFrom } from "@excalidraw/math";
 import {
   MIN_TABLE_COLUMN_WIDTH,
   MIN_TABLE_ROW_HEIGHT,
+  CaptureUpdateAction,
   computeTableAxisScale,
   computeTableUniformScale,
   prepareTableUniformScale,
@@ -35,6 +33,7 @@ import {
   getTableRowOffset,
   getTableSubtreeElements,
   getTableWidth,
+  makeNextSelectedElementIds,
   resizeTest,
   isBelowTableMinimumPreset,
   isBoundToContainer,
@@ -44,8 +43,6 @@ import {
   getTableAxisBlockRange,
   moveTableAxisBlock,
   getCellsInTableRange,
-  newElementWith,
-  newTextElement,
   tableDefaultSizes,
 } from "@excalidraw/element";
 
@@ -54,7 +51,6 @@ import {
   collectCellMemberIds as collectSceneCellMemberIds,
   getRowOrColumnCellIds,
   applyMemberTranslations as translateSceneMembers,
-  getCellBackgroundTextLayout,
   refitCellBackgroundTexts as refitSceneCellBackgroundTexts,
 } from "@excalidraw/element/tableSceneGeometry";
 import {
@@ -66,9 +62,11 @@ import { splitTableSceneCells } from "@excalidraw/element/tableScene";
 import type {
   ElementUpdate,
   MaybeTransformHandleType,
+  TablePresetId,
 } from "@excalidraw/element";
 
 import type {
+  DirectContainerRef,
   ExcalidrawElement,
   ExcalidrawTableElement,
   ExcalidrawTextElement,
@@ -81,9 +79,11 @@ import type { CanvasElementOperationResult } from "@excalidraw/element/sceneOper
 
 import { snapNewElement } from "../../snapping";
 
-import { newCreationDraft } from "./createPresets";
+import { newCreationDraft, createTablePresetDrafts } from "./createPresets";
 
 import { commitCanvasElementOperation } from "./sceneOperations";
+
+import { buildTableCellBackgroundText } from "./tableCellText";
 
 import { setTableMoveDragOpacity } from "./scene";
 
@@ -134,8 +134,16 @@ export const createTableElementOnPointerDown = (
     y: gridY,
   });
 
-  // 装配与「跟随光标的预设预览」共用一份（见 `app/createPresets`）；表格的
-  // 默认 3×3 就是它的预设尺寸，由 `newTableElement` 自带，不另设常量
+  // 装配与「跟随光标的预设预览」共用一份（见 `app/createPresets`）：`plain` 走
+  // 下面这条「按下即拖」的路，默认 3×3 由 `newTableElement` 自带；泳道预设是
+  // 整份装配（表格 + 标签）、单击落地，见 `createTablePresetAt`
+  const preset = app.state.currentTablePreset;
+
+  if (preset !== "plain") {
+    createTablePresetAt(app, preset, { x: gridX, y: gridY }, containerRef);
+    return;
+  }
+
   const table = newCreationDraft(
     app,
     "table",
@@ -149,6 +157,41 @@ export const createTableElementOnPointerDown = (
     multiElement: null,
     newElement: table,
   });
+};
+
+/**
+ * 泳道预设的落地：表格与自带标签**一次进场景、一条撤销**（同「思维导图落一张
+ * 图」），不走 `newElement` 那条「按下即拖」的路——拖拽会把每条行列平均分开，
+ * 标题带与泳道名的比例会就此散掉，标签也得跟着重排。
+ *
+ * 选中与工具回退沿用普通表格的效果：这里补上选中（`newElement` 为空，指针抬起
+ * 时那条通用逻辑不会替我们选），工具回退由指针抬起时的通用逻辑负责。
+ */
+const createTablePresetAt = (
+  app: TableApp,
+  preset: TablePresetId,
+  at: { x: number; y: number },
+  containerRef?: DirectContainerRef,
+): void => {
+  const elements = createTablePresetDrafts(app, preset, at, containerRef);
+  const table = elements[0];
+
+  app.createPreview.clear();
+  app.syncActionResult({
+    elements: [...app.scene.getElementsIncludingDeleted(), ...elements],
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  });
+
+  app.setState((prevState) => ({
+    newElement: null,
+    multiElement: null,
+    selectedElementIds: app.isToolLocked()
+      ? prevState.selectedElementIds
+      : makeNextSelectedElementIds(
+          { ...prevState.selectedElementIds, [table.id]: true },
+          prevState,
+        ),
+  }));
 };
 
 /**
@@ -959,50 +1002,9 @@ const createTableCellBackgroundText = (
   table: NonDeleted<ExcalidrawTableElement>,
   cellId: string,
 ): NonDeleted<ExcalidrawTextElement> => {
-  const bounds = getTableCellBounds(table.table, cellId);
-  if (!bounds) {
-    throw new Error(`Unknown table cell: ${cellId}`);
-  }
-
-  const fontFamily = app.state.currentItemFontFamily;
-
-  let text = newTextElement({
-    x: 0,
-    y: 0,
-    strokeColor: app.state.currentItemStrokeColor,
-    backgroundColor: app.state.currentItemBackgroundColor,
-    fillStyle: app.state.currentItemFillStyle,
-    strokeWidth: app.getCurrentItemStrokeWidth("text"),
-    strokeStyle: app.state.currentItemStrokeStyle,
-    opacity: app.state.currentItemOpacity,
+  const text = buildTableCellBackgroundText(app, table, cellId, {
     text: "",
-    // the cell text's factory defaults are table-owned (phase-6): 13px and
-    // left-aligned, not whatever the canvas tool last used
-    fontSize: TABLE_CELL_TEXT_FONT_SIZE,
-    fontFamily,
-    lineHeight: getLineHeight(fontFamily),
-    // The row grows for wrapped text; the column width stays table-controlled.
-    textAlign: "left",
-    verticalAlign: VERTICAL_ALIGN.MIDDLE,
-    containerId: null,
-    autoResize: false,
-    locked: false,
-    containerRef: {
-      kind: "tableCell",
-      elementId: table.id,
-      cellId,
-      role: "backgroundText",
-    },
-  });
-
-  const layout = getCellBackgroundTextLayout(
-    text,
-    table,
-    bounds,
-    app.scene.getNonDeletedElementsMap(),
-  );
-  text = newElementWith(text, {
-    ...layout,
+    elementsMap: app.scene.getNonDeletedElementsMap(),
   });
 
   app.scene.insertElementsAtIndex(

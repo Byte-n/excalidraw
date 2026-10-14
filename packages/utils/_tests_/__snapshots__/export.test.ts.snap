@@ -42,6 +42,7 @@ exports[`exportToSvg > with default arguments 1`] = `
   "currentItemStrokeVariability": "constant",
   "currentItemStrokeWidthKey": "medium",
   "currentItemTextAlign": "left",
+  "currentTablePreset": "plain",
   "cursorButton": "up",
   "defaultSidebarDockedPreference": false,
   "editingFrame": null,

@@ -38,7 +38,7 @@ import {
   MindmapToolButton,
   SelectionToolPopover,
   StickyNoteToolPopover,
-  TableToolButton,
+  TableToolPopover,
   TextToolButton,
 } from "./Tools";
 
@@ -265,7 +265,9 @@ export const Toolbar = ({
         <TextToolButton {...toolProps} />
         <StickyNoteToolPopover {...toolProps} />
         <FrameToolButton {...toolProps} />
-        {UIOptions.tools?.table !== false && <TableToolButton {...toolProps} />}
+        {UIOptions.tools?.table !== false && (
+          <TableToolPopover {...toolProps} />
+        )}
         {UIOptions.tools?.mindmap !== false && (
           <MindmapToolButton {...toolProps} />
         )}
