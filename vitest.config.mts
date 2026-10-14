@@ -99,6 +99,7 @@ export default defineConfig({
       "**/node_modules/**",
       "**/dist/**",
       "**/worktrees/**",
+      "**/examples/**",
       "packages/agent-tool/_tests_/**",
       "packages/yjs-hocuspocus-client/_tests_/**",
       "packages/yjs-hocuspocus-server/_tests_/**",

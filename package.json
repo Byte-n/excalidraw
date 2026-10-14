@@ -71,7 +71,7 @@
     "test:app": "vitest",
     "test:code": "eslint --max-warnings=0 --ext .js,.ts,.tsx .",
     "test:other": "yarn prettier --list-different",
-    "test:typecheck": "tsc --noEmit && yarn workspaces run typecheck",
+    "test:typecheck": "tsc --noEmit && for dir in excalidraw-app packages/*/; do yarn --cwd \"$dir\" typecheck || exit 1; done",
     "test:update": "yarn test:app --update --watch=false",
     "test": "yarn test:app",
     "test:coverage": "vitest --coverage",
