@@ -10,7 +10,8 @@ import type { AppState } from "../../types";
  * 浮动工具栏（tb-floatbar）定位规则，设计稿
  * docs/design-ui/excalidraw-canvas-toolbar.html §2「交互通则」：
  * 选区包围盒上方居中、间距 12px；上方空间不足翻到下方；左右出界时
- * 水平收敛（边距 8）；画布缩放 <50% 时按 50% 渲染保证可读。
+ * 水平收敛（边距 8）；尺寸固定不随画布缩放变化（始终按 100% 渲染），
+ * 仅位置随缩放/滚动换算。
  *
  * 坐标换算复用 ElementCanvasButtons/UnlockPopup 的既有路径：
  * sceneCoordsToViewportCoords 得到视口坐标，再减 offsetLeft/offsetTop
@@ -21,18 +22,14 @@ import type { AppState } from "../../types";
 export const FLOATBAR_GAP = 12;
 /** 浮动栏距视口边缘的最小边距 */
 export const FLOATBAR_MARGIN = 8;
-/** 缩放下限：画布 zoom 更小时浮动栏也按 50% 等效渲染 */
-export const FLOATBAR_MIN_SCALE = 0.5;
 
 export type FloatbarPlacement = "above" | "below";
 
 export type FloatbarLayout = {
-  /** 容器坐标（已按 scale 折算后的落点） */
+  /** 容器坐标 */
   left: number;
   top: number;
   placement: FloatbarPlacement;
-  /** transform: scale() 的取值（zoom 低于 50% 时钳制到 50%） */
-  scale: number;
 };
 
 type Size = { width: number; height: number };
@@ -45,10 +42,6 @@ export type ContainerRect = {
   bottom: number;
 };
 
-/** 浮动栏渲染缩放：跟随画布缩放，但钳制在 [50%, 100%] 保证可读 */
-export const getFloatbarScale = (zoomValue: number) =>
-  clamp(zoomValue, FLOATBAR_MIN_SCALE, 1);
-
 const clampLeft = (left: number, width: number, containerWidth: number) =>
   clamp(
     left,
@@ -60,8 +53,7 @@ const rectsIntersect = (a: ContainerRect, b: ContainerRect) =>
   a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 
 /**
- * 选中态/模式条：锚定选区包围盒。barSize 为未缩放尺寸（transform: scale
- * 不影响 offsetWidth 量测），返回的 left/top 已按 scale 折算。
+ * 选中态/模式条：锚定选区包围盒。
  */
 export const getSelectionFloatbarLayout = ({
   selectionBounds,
@@ -72,7 +64,7 @@ export const getSelectionFloatbarLayout = ({
 }: {
   /** 选区包围盒（场景坐标） */
   selectionBounds: Bounds;
-  /** 浮动栏未缩放尺寸 */
+  /** 浮动栏尺寸（固定 100%） */
   barSize: Size;
   /** 容器（.layer-ui__wrapper）尺寸 */
   containerSize: Size;
@@ -83,9 +75,7 @@ export const getSelectionFloatbarLayout = ({
   /** 顶部 UI（主工具条）占用区（容器坐标），用于翻转避让；无则 null */
   topUIRect: ContainerRect | null;
 }): FloatbarLayout => {
-  const scale = getFloatbarScale(appState.zoom.value);
-  const width = barSize.width * scale;
-  const height = barSize.height * scale;
+  const { width, height } = barSize;
 
   const [x1, y1, x2, y2] = selectionBounds;
   const topLeft = sceneCoordsToViewportCoords(
@@ -120,7 +110,7 @@ export const getSelectionFloatbarLayout = ({
     top = containerY2 + FLOATBAR_GAP;
   }
 
-  return { left, top, placement, scale };
+  return { left, top, placement };
 };
 
 /**
@@ -129,17 +119,14 @@ export const getSelectionFloatbarLayout = ({
 export const getToolConfigFloatbarLayout = ({
   barSize,
   containerSize,
-  zoomValue,
   topUIBottom,
 }: {
   barSize: Size;
   containerSize: Size;
-  zoomValue: number;
   /** 顶部主工具条下沿（容器坐标），未测得时为 0 */
   topUIBottom: number;
 }): FloatbarLayout => {
-  const scale = getFloatbarScale(zoomValue);
-  const width = barSize.width * scale;
+  const { width } = barSize;
 
   const left = clampLeft(
     containerSize.width / 2 - width / 2,
@@ -147,5 +134,5 @@ export const getToolConfigFloatbarLayout = ({
     containerSize.width,
   );
 
-  return { left, top: topUIBottom + FLOATBAR_GAP, placement: "below", scale };
+  return { left, top: topUIBottom + FLOATBAR_GAP, placement: "below" };
 };

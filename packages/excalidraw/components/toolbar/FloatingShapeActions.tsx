@@ -73,7 +73,7 @@ export const FloatingShapeActions = () => {
   const { container } = useExcalidrawContainer();
 
   const barRef = useRef<HTMLDivElement | null>(null);
-  // 浮动栏未缩放尺寸（transform: scale 不影响量测）
+  // 浮动栏尺寸（固定 100%，不随画布缩放变化）
   const [barSize, setBarSize] = useState({ width: 0, height: 0 });
   // 顶部主工具条占用区（容器坐标）：无选中态锚点 + 翻转避让
   const [topUIRect, setTopUIRect] = useState<ContainerRect | null>(null);
@@ -228,7 +228,6 @@ export const FloatingShapeActions = () => {
     : getToolConfigFloatbarLayout({
         barSize,
         containerSize,
-        zoomValue: appState.zoom.value,
         topUIBottom: topUIRect?.bottom ?? 0,
       });
 
@@ -324,8 +323,6 @@ export const FloatingShapeActions = () => {
       style={{
         left: layout.left,
         top: layout.top,
-        transform: `scale(${layout.scale})`,
-        transformOrigin: "top left",
       }}
     >
       {content}
