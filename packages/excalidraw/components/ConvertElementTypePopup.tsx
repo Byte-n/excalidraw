@@ -89,13 +89,11 @@ import { trackEvent } from "../analytics";
 import { atom } from "../editor-jotai";
 
 import "./ConvertElementTypePopup.scss";
+import { getCompositeShapeIcon } from "./CompositeShapeIcon";
 import { IconButton } from "./IconButton";
 import {
-  DiamondIcon,
   elbowArrowIcon,
-  EllipseIcon,
   LineIcon,
-  RectangleIcon,
   roundArrowIcon,
   sharpArrowIcon,
 } from "./icons";
@@ -142,6 +140,20 @@ const GENERIC_TYPES: readonly BaseShapeId[] = [
   "cylinder",
   "pie",
   "circular-ring",
+  "fc-round-rect",
+  "fc-terminator",
+  "fc-diamond",
+  "fc-document",
+  "fc-parallelogram",
+  "fc-cylinder",
+  "fc-horiz-cylinder",
+  "fc-predefined-process",
+  "fc-manual-input",
+  "fc-trapezoid",
+  "fc-delay",
+  "fc-hexagon",
+  "fc-off-page-connector",
+  "fc-circle",
 ];
 // indicates order of switching
 const LINEAR_TYPES = [
@@ -345,14 +357,8 @@ const Panel = ({
           ["elbowArrow", elbowArrowIcon],
         ]
       : conversionType === "generic"
-      ? GENERIC_TYPES.map((type) => [
-          type,
-          type === "diamond"
-            ? DiamondIcon
-            : type === "ellipse"
-            ? EllipseIcon
-            : RectangleIcon,
-        ])
+      ? // every generic shape's icon is derived from its geometry
+        GENERIC_TYPES.map((type) => [type, getCompositeShapeIcon(type)])
       : [];
 
   return (

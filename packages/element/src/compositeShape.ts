@@ -56,6 +56,20 @@ export const BASE_SHAPE_IDS: readonly BaseShapeId[] = [
   "cylinder",
   "pie",
   "circular-ring",
+  "fc-round-rect",
+  "fc-terminator",
+  "fc-diamond",
+  "fc-document",
+  "fc-parallelogram",
+  "fc-cylinder",
+  "fc-horiz-cylinder",
+  "fc-predefined-process",
+  "fc-manual-input",
+  "fc-trapezoid",
+  "fc-delay",
+  "fc-hexagon",
+  "fc-off-page-connector",
+  "fc-circle",
 ] as const;
 
 export const isBaseShapeId = (id: unknown): id is BaseShapeId =>
@@ -361,6 +375,23 @@ export const baseShapeData = (id: BaseShapeId): BaseShapeData => {
     case "step":
     case "cylinder":
       return { id, schemaVersion: 1 };
+    // separate group: TypeScript stops distributing the union-typed `id`
+    // discriminant into BaseShapeData once a case group grows too large
+    case "fc-round-rect":
+    case "fc-terminator":
+    case "fc-diamond":
+    case "fc-document":
+    case "fc-parallelogram":
+    case "fc-cylinder":
+    case "fc-horiz-cylinder":
+    case "fc-predefined-process":
+    case "fc-manual-input":
+    case "fc-trapezoid":
+    case "fc-delay":
+    case "fc-hexagon":
+    case "fc-off-page-connector":
+    case "fc-circle":
+      return { id, schemaVersion: 1 };
     default:
       return assertNever(id, "Unsupported composite shape");
   }
@@ -652,6 +683,34 @@ export const getCompositeShapePoints = (
       return flattenCompositeShapePath(
         getCircularSectorOutline(w, h, element.shape.circularRing, true),
       );
+    case "fc-round-rect":
+      return flattenCompositeShapePath(getFcRoundRectOutline(w, h));
+    case "fc-terminator":
+      return flattenCompositeShapePath(getFcTerminatorOutline(w, h));
+    case "fc-diamond":
+      return flattenCompositeShapePath(getFcDiamondOutline(w, h));
+    case "fc-document":
+      return flattenCompositeShapePath(getFcDocumentOutline(w, h));
+    case "fc-parallelogram":
+      return flattenCompositeShapePath(getFcParallelogramOutline(w, h));
+    case "fc-cylinder":
+      return flattenCompositeShapePath(getFcCylinderOutline(w, h));
+    case "fc-horiz-cylinder":
+      return flattenCompositeShapePath(getFcHorizCylinderOutline(w, h));
+    case "fc-predefined-process":
+      return flattenCompositeShapePath(getFcPredefinedProcessOutline(w, h));
+    case "fc-manual-input":
+      return flattenCompositeShapePath(getFcManualInputOutline(w, h));
+    case "fc-trapezoid":
+      return flattenCompositeShapePath(getFcTrapezoidOutline(w, h));
+    case "fc-delay":
+      return flattenCompositeShapePath(getFcDelayOutline(w, h));
+    case "fc-hexagon":
+      return flattenCompositeShapePath(getFcHexagonOutline(w, h));
+    case "fc-off-page-connector":
+      return flattenCompositeShapePath(getFcOffPageConnectorOutline(w, h));
+    case "fc-circle":
+      return flattenCompositeShapePath(getFcCircleOutline(w, h));
     default:
       return assertNever(element.shape, "Unsupported composite shape");
   }
@@ -776,6 +835,12 @@ export const getCompositeShapeTextBounds = (
     case "pentagon":
     case "hexagon":
     case "parallelogram":
+    case "fc-diamond":
+    case "fc-parallelogram":
+    case "fc-manual-input":
+    case "fc-trapezoid":
+    case "fc-hexagon":
+    case "fc-off-page-connector":
       return getConvexTextBounds(getCompositeShapePoints(element), w, h);
     case "trapezoid": {
       const halfInset = (w * (1 - shape.trapezoid.narrowWidthRatio)) / 2;
@@ -982,6 +1047,66 @@ export const getCompositeShapeTextBounds = (
       const inset = Math.max(TEXT_GAP, Math.min(w, ry) * 0.08);
       return insetRect(inset, 2 * ry + TEXT_GAP, w - inset, h - ry - TEXT_GAP);
     }
+    case "fc-round-rect":
+    case "fc-terminator": {
+      const radius =
+        shape.id === "fc-terminator"
+          ? Math.min(w, h) / 2
+          : Math.min(w, h) * 0.0875;
+      const corner = Math.max(0, radius - TEXT_GAP) / Math.SQRT2;
+      return insetRect(
+        radius - corner,
+        radius - corner,
+        w - radius + corner,
+        h - radius + corner,
+      );
+    }
+    case "fc-circle": {
+      const halfWidth = Math.max(0.005, (w / 2 - TEXT_GAP) / Math.SQRT2);
+      const halfHeight = Math.max(0.005, (h / 2 - TEXT_GAP) / Math.SQRT2);
+      return insetRect(
+        w / 2 - halfWidth,
+        h / 2 - halfHeight,
+        w / 2 + halfWidth,
+        h / 2 + halfHeight,
+      );
+    }
+    case "fc-document":
+      // keep the text area above the wavy bottom
+      return insetRect(TEXT_GAP, TEXT_GAP, w - TEXT_GAP, h * 0.85 - TEXT_GAP);
+    case "fc-predefined-process":
+      // keep the text area between the two detail verticals
+      return insetRect(
+        w * 0.1083 + TEXT_GAP,
+        TEXT_GAP,
+        w * 0.8917 - TEXT_GAP,
+        h - TEXT_GAP,
+      );
+    case "fc-cylinder": {
+      const ry = Math.min(w * 0.2, h / 4);
+      const inset = Math.max(TEXT_GAP, Math.min(w, ry) * 0.08);
+      return insetRect(inset, 2 * ry + TEXT_GAP, w - inset, h - ry - TEXT_GAP);
+    }
+    case "fc-horiz-cylinder": {
+      const rx = Math.min(h * 0.2, w / 4);
+      // right inset also clears the seam arc (reaches w - 1.875 * rx)
+      return insetRect(
+        rx + TEXT_GAP,
+        TEXT_GAP,
+        w - 1.875 * rx - TEXT_GAP,
+        h - TEXT_GAP,
+      );
+    }
+    case "fc-delay": {
+      const radius = h / 2;
+      const corner = Math.max(0, radius - TEXT_GAP) / Math.SQRT2;
+      return insetRect(
+        TEXT_GAP,
+        h / 2 - corner,
+        w - radius + corner,
+        h / 2 + corner,
+      );
+    }
     default:
       return assertNever(shape, "Unsupported composite shape text bounds");
   }
@@ -1122,6 +1247,20 @@ export const isCompositeShapeOpen = (id: BaseShapeId) => {
     case "cylinder":
     case "pie":
     case "circular-ring":
+    case "fc-round-rect":
+    case "fc-terminator":
+    case "fc-diamond":
+    case "fc-document":
+    case "fc-parallelogram":
+    case "fc-cylinder":
+    case "fc-horiz-cylinder":
+    case "fc-predefined-process":
+    case "fc-manual-input":
+    case "fc-trapezoid":
+    case "fc-delay":
+    case "fc-hexagon":
+    case "fc-off-page-connector":
+    case "fc-circle":
       return false;
     default:
       return assertNever(id, "Unsupported composite shape");
@@ -2328,6 +2467,474 @@ const getCylinderSideFace = (w: number, h: number): CompositeShapePath => {
   };
 };
 
+// ---------------------------------------------------------------------------
+// Lark flowchart shapes (docs/flow-chart/design.md). Geometry is normalized
+// from the whiteboard PDF vector export; each fc shape has its own outline
+// function and never reuses a non-fc shape's implementation. Polygons are
+// sharp-cornered (the ~2px corner rounding in the PDF is render cosmetic).
+
+/** Quarter-circle approximation shared by the fc rounded corners and arcs. */
+const FC_ARC_K = 0.5522848;
+
+const getFcRoundRectOutline = (w: number, h: number): CompositeShapePath => {
+  const r = Math.min(Math.min(w, h) * 0.0875, w / 2, h / 2);
+  const k = FC_ARC_K;
+  return {
+    start: [r, 0],
+    commands: [
+      { type: "line", to: [w - r, 0] },
+      {
+        type: "cubic",
+        control1: [w - r + k * r, 0],
+        control2: [w, r - k * r],
+        to: [w, r],
+      },
+      { type: "line", to: [w, h - r] },
+      {
+        type: "cubic",
+        control1: [w, h - r + k * r],
+        control2: [w - r + k * r, h],
+        to: [w - r, h],
+      },
+      { type: "line", to: [r, h] },
+      {
+        type: "cubic",
+        control1: [r - k * r, h],
+        control2: [0, h - r + k * r],
+        to: [0, h - r],
+      },
+      { type: "line", to: [0, r] },
+      {
+        type: "cubic",
+        control1: [0, r - k * r],
+        control2: [r - k * r, 0],
+        to: [r, 0],
+      },
+    ],
+    closed: true,
+  };
+};
+
+/** Capsule with r = min(w, h) / 2; the semicircles sit on the short axis. */
+const getFcTerminatorOutline = (w: number, h: number): CompositeShapePath => {
+  const k = FC_ARC_K;
+  const r = Math.min(w, h) / 2;
+  if (w >= h) {
+    return {
+      start: [r, 0],
+      commands: [
+        { type: "line", to: [w - r, 0] },
+        {
+          type: "cubic",
+          control1: [w - r + k * r, 0],
+          control2: [w, r - k * r],
+          to: [w, r],
+        },
+        {
+          type: "cubic",
+          control1: [w, r + k * r],
+          control2: [w - r + k * r, h],
+          to: [w - r, h],
+        },
+        { type: "line", to: [r, h] },
+        {
+          type: "cubic",
+          control1: [r - k * r, h],
+          control2: [0, h - r + k * r],
+          to: [0, h - r],
+        },
+        {
+          type: "cubic",
+          control1: [0, h - r - k * r],
+          control2: [r - k * r, 0],
+          to: [r, 0],
+        },
+      ],
+      closed: true,
+    };
+  }
+  return {
+    start: [r, 0],
+    commands: [
+      {
+        type: "cubic",
+        control1: [r + k * r, 0],
+        control2: [w, r - k * r],
+        to: [w, r],
+      },
+      { type: "line", to: [w, h - r] },
+      {
+        type: "cubic",
+        control1: [w, h - r + k * r],
+        control2: [r + k * r, h],
+        to: [r, h],
+      },
+      {
+        type: "cubic",
+        control1: [r - k * r, h],
+        control2: [0, h - r + k * r],
+        to: [0, h - r],
+      },
+      { type: "line", to: [0, r] },
+      {
+        type: "cubic",
+        control1: [0, r - k * r],
+        control2: [r - k * r, 0],
+        to: [r, 0],
+      },
+    ],
+    closed: true,
+  };
+};
+
+const getFcDiamondOutline = (w: number, h: number): CompositeShapePath =>
+  pathFromPoints(
+    [
+      [w / 2, 0],
+      [w, h / 2],
+      [w / 2, h],
+      [0, h / 2],
+    ],
+    true,
+  );
+
+/**
+ * The PDF's wave bottom spills ~4.6% of the height out of the element box, so
+ * the baked wave coordinates are y-compressed to keep the outline inside.
+ */
+const FC_DOCUMENT_Y_SCALE = 1 / 1.0458;
+
+const getFcDocumentOutline = (w: number, h: number): CompositeShapePath => {
+  const r = Math.min(w, h) * 0.0875;
+  const k = FC_ARC_K;
+  // wave bottom baked from the 120 x 80 Lark PDF path
+  const px = (x: number) => (x / 120) * w;
+  const py = (y: number) => (y / 80) * h * FC_DOCUMENT_Y_SCALE;
+  return {
+    start: [0, py(72.8354)],
+    commands: [
+      { type: "line", to: [0, r] },
+      {
+        type: "cubic",
+        control1: [0, r - k * r],
+        control2: [r - k * r, 0],
+        to: [r, 0],
+      },
+      { type: "line", to: [w - r, 0] },
+      {
+        type: "cubic",
+        control1: [w - r + k * r, 0],
+        control2: [w, r - k * r],
+        to: [w, r],
+      },
+      { type: "line", to: [w, py(71.5622)] },
+      {
+        type: "cubic",
+        control1: [px(120), py(72.355)],
+        control2: [px(119.141), py(72.8448)],
+        to: [px(118.462), py(72.4503)],
+      },
+      {
+        type: "cubic",
+        control1: [px(107.061), py(65.8311)],
+        control2: [px(88.9977), py(61.0855)],
+        to: [px(58.8538), py(73.3783)],
+      },
+      {
+        type: "cubic",
+        control1: [px(33.6389), py(83.6611)],
+        control2: [px(11.1627), py(80.5411)],
+        to: [px(0.4453), py(73.6705)],
+      },
+      {
+        type: "cubic",
+        control1: [px(0.1622), py(73.489)],
+        control2: [px(0), py(73.1745)],
+        to: [0, py(72.8354)],
+      },
+    ],
+    closed: true,
+  };
+};
+
+const getFcParallelogramOutline = (w: number, h: number): CompositeShapePath =>
+  pathFromPoints(
+    [
+      [0.2333 * w, 0],
+      [w, 0],
+      [0.7667 * w, h],
+      [0, h],
+    ],
+    true,
+  );
+
+const getFcCylinderOutline = (w: number, h: number): CompositeShapePath => {
+  const ry = Math.min(w * 0.2, h / 4);
+  const k = FC_ARC_K;
+  const cx = w / 2;
+  return {
+    start: [0, ry],
+    commands: [
+      {
+        type: "cubic",
+        control1: [0, ry - k * ry],
+        control2: [cx - k * cx, 0],
+        to: [cx, 0],
+      },
+      {
+        type: "cubic",
+        control1: [cx + k * cx, 0],
+        control2: [w, ry - k * ry],
+        to: [w, ry],
+      },
+      { type: "line", to: [w, h - ry] },
+      {
+        type: "cubic",
+        control1: [w, h - ry + k * ry],
+        control2: [cx + k * cx, h],
+        to: [cx, h],
+      },
+      {
+        type: "cubic",
+        control1: [cx - k * cx, h],
+        control2: [0, h - ry + k * ry],
+        to: [0, h - ry],
+      },
+    ],
+    closed: true,
+  };
+};
+
+/** Front rim of the top opening: half ellipse of depth ry, inset 0.0125w. */
+const getFcCylinderFrontEdge = (w: number, h: number): CompositeShapePath => {
+  const ry = Math.min(w * 0.2, h / 4);
+  const k = FC_ARC_K;
+  const cx = w / 2;
+  const inset = w * 0.0125;
+  const rx = cx - inset;
+  return {
+    start: [w - inset, ry],
+    commands: [
+      {
+        type: "cubic",
+        control1: [w - inset, ry + k * ry],
+        control2: [cx + k * rx, 2 * ry],
+        to: [cx, 2 * ry],
+      },
+      {
+        type: "cubic",
+        control1: [cx - k * rx, 2 * ry],
+        control2: [inset, ry + k * ry],
+        to: [inset, ry],
+      },
+    ],
+    closed: false,
+  };
+};
+
+const getFcHorizCylinderOutline = (
+  w: number,
+  h: number,
+): CompositeShapePath => {
+  const rx = Math.min(h * 0.2, w / 4);
+  const k = FC_ARC_K;
+  const cy = h / 2;
+  return {
+    start: [w - rx, 0],
+    commands: [
+      {
+        type: "cubic",
+        control1: [w - rx + k * rx, 0],
+        control2: [w, cy - k * cy],
+        to: [w, cy],
+      },
+      {
+        type: "cubic",
+        control1: [w, cy + k * cy],
+        control2: [w - rx + k * rx, h],
+        to: [w - rx, h],
+      },
+      { type: "line", to: [rx, h] },
+      {
+        type: "cubic",
+        control1: [rx - k * rx, h],
+        control2: [0, cy + k * cy],
+        to: [0, cy],
+      },
+      {
+        type: "cubic",
+        control1: [0, cy - k * cy],
+        control2: [rx - k * rx, 0],
+        to: [rx, 0],
+      },
+    ],
+    closed: true,
+  };
+};
+
+/**
+ * Seam between the body and the right end face: left-bulging half ellipse
+ * centered at x = w - 0.9375 * rx, spanning the full height.
+ */
+const getFcHorizCylinderSeam = (w: number, h: number): CompositeShapePath => {
+  const rx = Math.min(h * 0.2, w / 4) * 0.9375;
+  const k = FC_ARC_K;
+  const cx = w - rx;
+  const cy = h / 2;
+  return {
+    start: [cx, 0],
+    commands: [
+      {
+        type: "cubic",
+        control1: [cx - k * rx, 0],
+        control2: [cx - rx, cy - k * cy],
+        to: [cx - rx, cy],
+      },
+      {
+        type: "cubic",
+        control1: [cx - rx, cy + k * cy],
+        control2: [cx - k * rx, h],
+        to: [cx, h],
+      },
+    ],
+    closed: false,
+  };
+};
+
+/** Same rounded-rectangle proportions as fc-round-rect. */
+const getFcPredefinedProcessOutline = (
+  w: number,
+  h: number,
+): CompositeShapePath => getFcRoundRectOutline(w, h);
+
+const getFcManualInputOutline = (w: number, h: number): CompositeShapePath =>
+  pathFromPoints(
+    [
+      [0, 0.2 * h],
+      [w, 0],
+      [w, h],
+      [0, h],
+    ],
+    true,
+  );
+
+const getFcTrapezoidOutline = (w: number, h: number): CompositeShapePath =>
+  pathFromPoints(
+    [
+      [0, 0],
+      [w, 0],
+      [0.825 * w, h],
+      [0.175 * w, h],
+    ],
+    true,
+  );
+
+/** D shape: rounded left corners, straight top/bottom, right semicircle. */
+const getFcDelayOutline = (w: number, h: number): CompositeShapePath => {
+  const k = FC_ARC_K;
+  const rs = Math.min(h / 2, w);
+  const cx = w - rs;
+  const cy = h / 2;
+  const r = Math.min(Math.min(w, h) * 0.0375, cx, h / 2);
+  return {
+    start: [r, 0],
+    commands: [
+      { type: "line", to: [cx, 0] },
+      {
+        type: "cubic",
+        control1: [cx + k * rs, 0],
+        control2: [w, cy - k * rs],
+        to: [w, cy],
+      },
+      {
+        type: "cubic",
+        control1: [w, cy + k * rs],
+        control2: [cx + k * rs, h],
+        to: [cx, h],
+      },
+      { type: "line", to: [r, h] },
+      {
+        type: "cubic",
+        control1: [r - k * r, h],
+        control2: [0, h - r + k * r],
+        to: [0, h - r],
+      },
+      { type: "line", to: [0, r] },
+      {
+        type: "cubic",
+        control1: [0, r - k * r],
+        control2: [r - k * r, 0],
+        to: [r, 0],
+      },
+    ],
+    closed: true,
+  };
+};
+
+const getFcHexagonOutline = (w: number, h: number): CompositeShapePath =>
+  pathFromPoints(
+    [
+      [0, h / 2],
+      [0.255 * w, 0],
+      [0.745 * w, 0],
+      [w, h / 2],
+      [0.745 * w, h],
+      [0.255 * w, h],
+    ],
+    true,
+  );
+
+const getFcOffPageConnectorOutline = (
+  w: number,
+  h: number,
+): CompositeShapePath =>
+  pathFromPoints(
+    [
+      [0, 0],
+      [w, 0],
+      [w, 0.69 * h],
+      [0.5 * w, h],
+      [0, 0.69 * h],
+    ],
+    true,
+  );
+
+const getFcCircleOutline = (w: number, h: number): CompositeShapePath => {
+  const k = 0.5522847498307936;
+  const rx = w / 2;
+  const ry = h / 2;
+  return {
+    start: [rx, 0],
+    commands: [
+      {
+        type: "cubic",
+        control1: [rx + k * rx, 0],
+        control2: [w, ry - k * ry],
+        to: [w, ry],
+      },
+      {
+        type: "cubic",
+        control1: [w, ry + k * ry],
+        control2: [rx + k * rx, h],
+        to: [rx, h],
+      },
+      {
+        type: "cubic",
+        control1: [rx - k * rx, h],
+        control2: [0, ry + k * ry],
+        to: [0, ry],
+      },
+      {
+        type: "cubic",
+        control1: [0, ry - k * ry],
+        control2: [rx - k * rx, 0],
+        to: [rx, 0],
+      },
+    ],
+    closed: true,
+  };
+};
+
 /** Local paths are the source for both visible strokes and binding geometry. */
 export const getCompositeShapeGeometry = (
   element: CompositeShapeGeometryInput,
@@ -2414,6 +3021,22 @@ export const getCompositeShapeGeometry = (
           element.shape.circularRing,
           true,
         )
+      : element.shape.id === "fc-round-rect"
+      ? getFcRoundRectOutline(w, h)
+      : element.shape.id === "fc-terminator"
+      ? getFcTerminatorOutline(w, h)
+      : element.shape.id === "fc-document"
+      ? getFcDocumentOutline(w, h)
+      : element.shape.id === "fc-cylinder"
+      ? getFcCylinderOutline(w, h)
+      : element.shape.id === "fc-horiz-cylinder"
+      ? getFcHorizCylinderOutline(w, h)
+      : element.shape.id === "fc-predefined-process"
+      ? getFcPredefinedProcessOutline(w, h)
+      : element.shape.id === "fc-delay"
+      ? getFcDelayOutline(w, h)
+      : element.shape.id === "fc-circle"
+      ? getFcCircleOutline(w, h)
       : pathFromPoints(
           getCompositeShapePoints(element),
           !isCompositeShapeOpen(element.shape.id),
@@ -2434,6 +3057,36 @@ export const getCompositeShapeGeometry = (
         },
       ],
     };
+  }
+
+  if (element.shape.id === "fc-predefined-process") {
+    return {
+      outline,
+      details: [
+        pathFromPoints(
+          [
+            [w * 0.1083, h * 0.025],
+            [w * 0.1083, h * 0.975],
+          ],
+          false,
+        ),
+        pathFromPoints(
+          [
+            [w * 0.8917, h * 0.025],
+            [w * 0.8917, h * 0.975],
+          ],
+          false,
+        ),
+      ],
+    };
+  }
+
+  if (element.shape.id === "fc-cylinder") {
+    return { outline, details: [getFcCylinderFrontEdge(w, h)] };
+  }
+
+  if (element.shape.id === "fc-horiz-cylinder") {
+    return { outline, details: [getFcHorizCylinderSeam(w, h)] };
   }
 
   if (element.shape.id === "parallelogram") {

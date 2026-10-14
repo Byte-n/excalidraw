@@ -14,6 +14,7 @@ import {
   FrameToolButton,
   FreedrawToolPopover,
   GenericShapeToolPopover,
+  FlowchartShapeToolPopover,
   getToolShortcut,
   HandToolButton,
   ImageToolButton,
@@ -83,8 +84,8 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
   const WIDTH = 36;
   const GAP = 4;
 
-  // hand, selection, freedraw, eraser, rectangle, arrow, others
-  const MIN_TOOLS = 7;
+  // hand, selection, freedraw, eraser, rectangle, flowchart, arrow, others
+  const MIN_TOOLS = 8;
   const MIN_WIDTH = MIN_TOOLS * WIDTH + (MIN_TOOLS - 1) * GAP;
   const ADDITIONAL_WIDTH = WIDTH + GAP;
 
@@ -160,6 +161,9 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
 
       {/* Rectangle/Diamond/Ellipse */}
       <GenericShapeToolPopover {...toolProps} hideShortcut />
+
+      {/* Flowchart shapes */}
+      <FlowchartShapeToolPopover {...toolProps} />
 
       {/* Arrow/Line */}
       <ToolPopover

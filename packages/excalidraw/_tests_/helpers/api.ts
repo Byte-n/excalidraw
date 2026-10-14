@@ -385,6 +385,20 @@ export class API {
       case "cylinder":
       case "pie":
       case "circular-ring":
+      case "fc-round-rect":
+      case "fc-terminator":
+      case "fc-diamond":
+      case "fc-document":
+      case "fc-parallelogram":
+      case "fc-cylinder":
+      case "fc-horiz-cylinder":
+      case "fc-predefined-process":
+      case "fc-manual-input":
+      case "fc-trapezoid":
+      case "fc-delay":
+      case "fc-hexagon":
+      case "fc-off-page-connector":
+      case "fc-circle":
         element = rest.shape
           ? newElement({
               type: "composite_shape",

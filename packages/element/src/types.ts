@@ -255,7 +255,21 @@ export type BaseShapeData =
         sectorRatio: number;
         startRadialLineAngle: number;
       }>;
-    }>;
+    }>
+  | Readonly<{ id: "fc-round-rect"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-terminator"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-diamond"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-document"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-parallelogram"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-cylinder"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-horiz-cylinder"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-predefined-process"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-manual-input"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-trapezoid"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-delay"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-hexagon"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-off-page-connector"; schemaVersion: 1 }>
+  | Readonly<{ id: "fc-circle"; schemaVersion: 1 }>;
 
 export type BaseShapeId = BaseShapeData["id"];
 

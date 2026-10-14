@@ -30,6 +30,7 @@ import {
   FreedrawToolPopover,
   FrameToolButton,
   GenericShapeToolPopover,
+  FlowchartShapeToolPopover,
   FreedrawToolButton,
   getToolShortcut,
   HandToolButton,
@@ -255,6 +256,7 @@ export const Toolbar = ({
           showShortcut={!isCompactStylesPanel}
         />
         <GenericShapeToolPopover {...toolProps} />
+        <FlowchartShapeToolPopover {...toolProps} />
         <ArrowToolButton {...toolProps} />
         <LineToolButton {...toolProps} />
         {isCompactStylesPanel ? (

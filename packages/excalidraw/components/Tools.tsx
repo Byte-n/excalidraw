@@ -487,6 +487,20 @@ const isGenericShapeType = (type: string): type is GenericShapeType =>
     "cylinder",
     "pie",
     "circular-ring",
+    "fc-round-rect",
+    "fc-terminator",
+    "fc-diamond",
+    "fc-document",
+    "fc-parallelogram",
+    "fc-cylinder",
+    "fc-horiz-cylinder",
+    "fc-predefined-process",
+    "fc-manual-input",
+    "fc-trapezoid",
+    "fc-delay",
+    "fc-hexagon",
+    "fc-off-page-connector",
+    "fc-circle",
   ].includes(type);
 
 const SHAPE_TOOLS = (
@@ -534,6 +548,40 @@ const SHAPE_TOOLS = (
   fillable:
     type === "right-triangle" || type === "left-triangle" || supportsFill(type),
   title: capitalizeString(type.replaceAll("-", " ")),
+}));
+
+/**
+ * Lark flowchart shapes. Unlike SHAPE_TOOLS their titles are localized
+ * (`toolBar.fc-*`), so titles resolve at render time inside
+ * FlowchartShapeToolPopover; only the locale-independent parts are derived
+ * here once.
+ */
+const FLOWCHART_SHAPE_IDS = [
+  "fc-round-rect",
+  "fc-terminator",
+  "fc-diamond",
+  "fc-document",
+  "fc-parallelogram",
+  "fc-cylinder",
+  "fc-horiz-cylinder",
+  "fc-predefined-process",
+  "fc-manual-input",
+  "fc-trapezoid",
+  "fc-delay",
+  "fc-hexagon",
+  "fc-off-page-connector",
+  "fc-circle",
+] as const;
+
+type FlowchartShapeId = typeof FLOWCHART_SHAPE_IDS[number];
+
+const isFlowchartShapeType = (type: string): type is FlowchartShapeId =>
+  (FLOWCHART_SHAPE_IDS as readonly string[]).includes(type);
+
+const FLOWCHART_SHAPE_TOOLS = FLOWCHART_SHAPE_IDS.map((type) => ({
+  type,
+  icon: getCompositeShapeIcon(type),
+  fillable: supportsFill(type),
 }));
 
 /**
@@ -747,6 +795,61 @@ export const TableToolPopover = ({
       keyBindingLabel={hideShortcut ? undefined : getToolLetter("table")}
       ariaKeyshortcuts={hideShortcut ? undefined : getToolShortcut("table")}
       shortcut={hideShortcut ? null : getToolShortcut("table")}
+    />
+  );
+};
+
+/**
+ * The flowchart-shape popover mounted next to GenericShapeToolPopover in the
+ * desktop and mobile toolbars. It shares `preferredGenericShape` with the
+ * generic popover (both activate the rectangle tool; the creation chain maps
+ * it to the preferred composite shape), so the trigger shows the shared
+ * "current shape" when it's a flowchart shape and falls back to the default
+ * fc-diamond icon otherwise.
+ *
+ * Options are shape ids rather than tool types, so the group declares the
+ * rectangle tool as its shared tool: without it `ToolPopover` reads the
+ * active rectangle tool as "left the group" and closes the popup the moment
+ * it opens.
+ */
+export const FlowchartShapeToolPopover = ({
+  app,
+  activeTool,
+}: {
+  app: AppClassProperties;
+  activeTool: UIAppState["activeTool"];
+}) => {
+  const options = FLOWCHART_SHAPE_TOOLS.map((tool) => ({
+    ...tool,
+    title: t(`toolBar.${tool.type}`),
+  }));
+
+  const preferredGenericShape = app.state.preferredGenericShape;
+
+  const displayedOption =
+    options.find((tool) => tool.type === preferredGenericShape) ||
+    options.find((tool) => tool.type === "fc-diamond")!;
+
+  return (
+    <ToolPopover
+      app={app}
+      options={options}
+      activeTool={activeTool}
+      sharedToolType="rectangle"
+      activeOptionType={
+        activeTool.type === "rectangle"
+          ? preferredGenericShape
+          : activeTool.type
+      }
+      defaultOption={displayedOption.type}
+      data-testid="toolbar-flowchart"
+      onToolChange={(type: string) => {
+        if (isFlowchartShapeType(type)) {
+          app.setAppState({ preferredGenericShape: type });
+          app.setActiveTool({ type: "rectangle" });
+        }
+      }}
+      displayedOption={displayedOption}
     />
   );
 };

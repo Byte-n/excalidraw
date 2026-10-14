@@ -26,38 +26,31 @@ export const getCompositeShapeIcon = (id: ShapeIconId) => {
   const height = id === "pill" || id === "round-rect" ? 12 : 16;
   const x = (24 - width) / 2;
   const y = (24 - height) / 2;
-  const outline =
-    shapeId === "cloud" || isCompositeShapeOpen(shapeId)
-      ? compositeShapePathToSvg(
-          getCompositeShapeGeometry({ width, height, shape }).outline,
+  const isOpenPath = shapeId === "cloud" || isCompositeShapeOpen(shapeId);
+  const geometry = getCompositeShapeGeometry({ width, height, shape });
+  const outline = isOpenPath
+    ? compositeShapePathToSvg(geometry.outline)
+    : getCompositeShapePoints({ width, height, shape })
+        .map(
+          ([px, py], index) => `${index === 0 ? "M" : "L"}${x + px} ${y + py}`,
         )
-      : getCompositeShapePoints({ width, height, shape })
-          .map(
-            ([px, py], index) =>
-              `${index === 0 ? "M" : "L"}${x + px} ${y + py}`,
-          )
-          .join(" ");
-  const cubeDetails =
-    shapeId === "cube"
-      ? getCompositeShapeGeometry({ width, height, shape })
-          .details.map(compositeShapePathToSvg)
-          .join(" ")
-      : null;
+        .join(" ");
+  // detail strokes (cube edges, fc-predefined-process verticals, fc cylinder
+  // rims) render generically from the geometry; the classic cylinder keeps
+  // its hand-drawn rim arc below
+  const details =
+    shapeId === "cylinder" || geometry.details.length === 0
+      ? null
+      : geometry.details.map(compositeShapePathToSvg).join(" ");
 
   return createIcon(
     <>
       <path
-        d={`${outline}${
-          shapeId === "cloud" || isCompositeShapeOpen(shapeId) ? "" : " Z"
-        }`}
-        transform={
-          shapeId === "cloud" || isCompositeShapeOpen(shapeId)
-            ? `translate(${x} ${y})`
-            : undefined
-        }
+        d={`${outline}${isOpenPath ? "" : " Z"}`}
+        transform={isOpenPath ? `translate(${x} ${y})` : undefined}
       />
-      {cubeDetails && (
-        <path fill="none" d={cubeDetails} transform={`translate(${x} ${y})`} />
+      {details && (
+        <path fill="none" d={details} transform={`translate(${x} ${y})`} />
       )}
       {shapeId === "cylinder" && <path fill="none" d="M4 6.24 Q12 3 20 6.24" />}
     </>,

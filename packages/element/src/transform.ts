@@ -711,7 +711,21 @@ export const convertToExcalidrawElements = (
       case "cube":
       case "pie":
       case "cylinder":
-      case "circular-ring": {
+      case "circular-ring":
+      case "fc-round-rect":
+      case "fc-terminator":
+      case "fc-diamond":
+      case "fc-document":
+      case "fc-parallelogram":
+      case "fc-cylinder":
+      case "fc-horiz-cylinder":
+      case "fc-predefined-process":
+      case "fc-manual-input":
+      case "fc-trapezoid":
+      case "fc-delay":
+      case "fc-hexagon":
+      case "fc-off-page-connector":
+      case "fc-circle": {
         const width =
           element?.label?.text && element.width === undefined
             ? 0
@@ -1063,6 +1077,20 @@ export const convertToExcalidrawElements = (
       case "step":
       case "cube":
       case "cylinder":
+      case "fc-round-rect":
+      case "fc-terminator":
+      case "fc-diamond":
+      case "fc-document":
+      case "fc-parallelogram":
+      case "fc-cylinder":
+      case "fc-horiz-cylinder":
+      case "fc-predefined-process":
+      case "fc-manual-input":
+      case "fc-trapezoid":
+      case "fc-delay":
+      case "fc-hexagon":
+      case "fc-off-page-connector":
+      case "fc-circle":
       case "stickynote":
       case "arrow": {
         if (element.label?.text) {

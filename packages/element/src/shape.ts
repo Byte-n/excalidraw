@@ -986,7 +986,21 @@ const _generateElementShape = (
           case "cube":
           case "cylinder":
           case "pie":
-          case "circular-ring": {
+          case "circular-ring":
+          case "fc-round-rect":
+          case "fc-terminator":
+          case "fc-diamond":
+          case "fc-document":
+          case "fc-parallelogram":
+          case "fc-cylinder":
+          case "fc-horiz-cylinder":
+          case "fc-predefined-process":
+          case "fc-manual-input":
+          case "fc-trapezoid":
+          case "fc-delay":
+          case "fc-hexagon":
+          case "fc-off-page-connector":
+          case "fc-circle": {
             const options = generateRoughOptions(
               element,
               isCompositeShapeOpen(shapeId),
@@ -1039,12 +1053,33 @@ const _generateElementShape = (
               shapeId === "pill" ||
               shapeId === "rectangle-bubble" ||
               shapeId === "pie" ||
-              shapeId === "circular-ring"
+              shapeId === "circular-ring" ||
+              shapeId === "fc-round-rect" ||
+              shapeId === "fc-terminator" ||
+              shapeId === "fc-document" ||
+              shapeId === "fc-cylinder" ||
+              shapeId === "fc-horiz-cylinder" ||
+              shapeId === "fc-predefined-process" ||
+              shapeId === "fc-delay" ||
+              shapeId === "fc-circle"
             ) {
-              return generator.path(compositeShapePathToSvg(geometry.outline), {
-                ...options,
-                preserveVertices: true,
-              });
+              const pathOptions = { ...options, preserveVertices: true };
+              const outline = generator.path(
+                compositeShapePathToSvg(geometry.outline),
+                pathOptions,
+              );
+              if (!geometry.details.length) {
+                return outline;
+              }
+              return [
+                outline,
+                ...geometry.details.map((path) =>
+                  generator.path(compositeShapePathToSvg(path), {
+                    ...pathOptions,
+                    fill: undefined,
+                  }),
+                ),
+              ];
             }
             return generator.polygon(getCompositeShapePoints(element), options);
           }

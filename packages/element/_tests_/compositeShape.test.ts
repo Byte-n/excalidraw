@@ -101,6 +101,20 @@ describe("composite shape data", () => {
     "step",
     "cube",
     "cylinder",
+    "fc-round-rect",
+    "fc-terminator",
+    "fc-diamond",
+    "fc-document",
+    "fc-parallelogram",
+    "fc-cylinder",
+    "fc-horiz-cylinder",
+    "fc-predefined-process",
+    "fc-manual-input",
+    "fc-trapezoid",
+    "fc-delay",
+    "fc-hexagon",
+    "fc-off-page-connector",
+    "fc-circle",
   ] as const)("reverses the padded text area for %s", (type) => {
     const element = newElement({
       type,
@@ -352,6 +366,50 @@ describe("composite shape data", () => {
     }
   });
 
+  it.each([
+    [120, 80],
+    [200, 50],
+    [24, 18],
+  ])(
+    "keeps fc-document text above its wavy bottom at %sx%s",
+    (width, height) => {
+      const element = newElement({
+        type: "fc-document",
+        x: 0,
+        y: 0,
+        width,
+        height,
+        backgroundColor: "#eeeeee",
+      });
+      if (element.type !== "composite_shape") {
+        throw new Error("Expected composite shape");
+      }
+      const bounds = getCompositeShapeTextBounds(element);
+      const elementsMap = arrayToMap([element]);
+
+      // the text area is a rectangle that cuts off above the wave replacing
+      // the bottom edge (at very tall ratios the wave crest still crosses its
+      // middle, so only the padded corners are probed at document-like ratios)
+      expect(bounds.y + bounds.height).toBeCloseTo(height * 0.85 - 2);
+      const paddingX = Math.min(5, bounds.width / 4);
+      const paddingY = Math.min(5, bounds.height / 4);
+      const left = bounds.x + paddingX;
+      const top = bounds.y + paddingY;
+      const right = bounds.x + bounds.width - paddingX;
+      const bottom = bounds.y + bounds.height - paddingY;
+      for (const [x, y] of [
+        [left, top],
+        [right, top],
+        [right, bottom],
+        [left, bottom],
+      ]) {
+        expect(
+          isPointInElement(pointFrom<GlobalPoint>(x, y), element, elementsMap),
+        ).toBe(true);
+      }
+    },
+  );
+
   it.each(["triangle", "trapezoid", "cube"] as const)(
     "redraws %s after a control point changes",
     (type) => {
@@ -475,6 +533,19 @@ describe("composite shape data", () => {
     "step",
     "cube",
     "cylinder",
+    "fc-round-rect",
+    "fc-terminator",
+    "fc-diamond",
+    "fc-parallelogram",
+    "fc-cylinder",
+    "fc-horiz-cylinder",
+    "fc-predefined-process",
+    "fc-manual-input",
+    "fc-trapezoid",
+    "fc-delay",
+    "fc-hexagon",
+    "fc-off-page-connector",
+    "fc-circle",
   ] as const)("keeps %s text inside its body at varied sizes", (type) => {
     for (const [width, height] of [
       [120, 80],
@@ -723,6 +794,20 @@ describe("composite shape data", () => {
     "step",
     "cube",
     "cylinder",
+    "fc-round-rect",
+    "fc-terminator",
+    "fc-diamond",
+    "fc-document",
+    "fc-parallelogram",
+    "fc-cylinder",
+    "fc-horiz-cylinder",
+    "fc-predefined-process",
+    "fc-manual-input",
+    "fc-trapezoid",
+    "fc-delay",
+    "fc-hexagon",
+    "fc-off-page-connector",
+    "fc-circle",
   ] as const)("accepts canonical persisted data for %s", (id) => {
     expect(assertBaseShapeData(baseShapeData(id))).toEqual(baseShapeData(id));
   });
@@ -753,6 +838,20 @@ describe("composite shape data", () => {
     "step",
     "cube",
     "cylinder",
+    "fc-round-rect",
+    "fc-terminator",
+    "fc-diamond",
+    "fc-document",
+    "fc-parallelogram",
+    "fc-cylinder",
+    "fc-horiz-cylinder",
+    "fc-predefined-process",
+    "fc-manual-input",
+    "fc-trapezoid",
+    "fc-delay",
+    "fc-hexagon",
+    "fc-off-page-connector",
+    "fc-circle",
   ] as const)("rejects invalid schema data for %s", (id) => {
     expect(() => assertBaseShapeData({ id, schemaVersion: 2 })).toThrow(
       "Unsupported composite shape data",
@@ -926,6 +1025,20 @@ describe("composite shape data", () => {
     "step",
     "cube",
     "cylinder",
+    "fc-round-rect",
+    "fc-terminator",
+    "fc-diamond",
+    "fc-document",
+    "fc-parallelogram",
+    "fc-cylinder",
+    "fc-horiz-cylinder",
+    "fc-predefined-process",
+    "fc-manual-input",
+    "fc-trapezoid",
+    "fc-delay",
+    "fc-hexagon",
+    "fc-off-page-connector",
+    "fc-circle",
   ] as const)("binds labels for the %s shape shorthand", (type) => {
     const elements = convertToExcalidrawElements([
       {
@@ -981,6 +1094,20 @@ describe("composite shape data", () => {
     "step",
     "cube",
     "cylinder",
+    "fc-round-rect",
+    "fc-terminator",
+    "fc-diamond",
+    "fc-document",
+    "fc-parallelogram",
+    "fc-cylinder",
+    "fc-horiz-cylinder",
+    "fc-predefined-process",
+    "fc-manual-input",
+    "fc-trapezoid",
+    "fc-delay",
+    "fc-hexagon",
+    "fc-off-page-connector",
+    "fc-circle",
   ] as const)("binds arrow endpoints for the %s shape shorthand", (type) => {
     const elements = convertToExcalidrawElements([
       {

@@ -42,7 +42,7 @@ const captureBaseline = () =>
     h.app.store.scheduleCapture();
     h.app.scene.triggerUpdate();
   });
-const presets = [
+const genericPresets = [
   "rectangle",
   "diamond",
   "ellipse",
@@ -73,6 +73,25 @@ const presets = [
   "pie",
   "circular-ring",
 ] as const;
+
+const flowchartPresets = [
+  "fc-round-rect",
+  "fc-terminator",
+  "fc-diamond",
+  "fc-document",
+  "fc-parallelogram",
+  "fc-cylinder",
+  "fc-horiz-cylinder",
+  "fc-predefined-process",
+  "fc-manual-input",
+  "fc-trapezoid",
+  "fc-delay",
+  "fc-hexagon",
+  "fc-off-page-connector",
+  "fc-circle",
+] as const;
+
+const presets = [...genericPresets, ...flowchartPresets] as const;
 
 const shapeForPreset = (preset: typeof presets[number]) => {
   if (preset === "right-triangle" || preset === "left-triangle") {
@@ -105,7 +124,27 @@ describe.each([
       const options = h.app.ownerDocument.querySelectorAll<HTMLButtonElement>(
         '.tool-popover-content [data-testid^="toolbar-"]',
       );
-      expect(options).toHaveLength(presets.length);
+      expect(options).toHaveLength(genericPresets.length);
+      return options;
+    });
+    const icons = Array.from(
+      buttons,
+      (button) => button.querySelector("svg")?.outerHTML,
+    );
+
+    expect(icons.every(Boolean)).toBe(true);
+    expect(new Set(icons).size).toBe(buttons.length);
+  });
+
+  it("shows a distinct icon for each flowchart shape option", async () => {
+    act(() => h.app.setActiveTool({ type: "rectangle" }));
+    fireEvent.click(screen.getByTestId("toolbar-flowchart"));
+
+    const buttons = await waitFor(() => {
+      const options = h.app.ownerDocument.querySelectorAll<HTMLButtonElement>(
+        '.tool-popover-content [data-testid^="toolbar-"]',
+      );
+      expect(options).toHaveLength(flowchartPresets.length);
       return options;
     });
     const icons = Array.from(
@@ -175,7 +214,13 @@ describe.each([
       if (formFactor === "phone" && preset === "rectangle") {
         UI.clickTool("rectangle");
       } else {
-        fireEvent.click(screen.getByTestId("toolbar-rectangle"));
+        fireEvent.click(
+          screen.getByTestId(
+            preset.startsWith("fc-")
+              ? "toolbar-flowchart"
+              : "toolbar-rectangle",
+          ),
+        );
         const option = h.app.ownerDocument.querySelector<HTMLButtonElement>(
           `.tool-popover-content [data-testid="toolbar-${preset}"]`,
         );

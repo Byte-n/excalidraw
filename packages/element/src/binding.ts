@@ -3085,6 +3085,20 @@ const getShapeSideAdaptive = (
     case "cylinder":
     case "pie":
     case "circular-ring":
+    case "fc-round-rect":
+    case "fc-terminator":
+    case "fc-diamond":
+    case "fc-document":
+    case "fc-parallelogram":
+    case "fc-cylinder":
+    case "fc-horiz-cylinder":
+    case "fc-predefined-process":
+    case "fc-manual-input":
+    case "fc-trapezoid":
+    case "fc-delay":
+    case "fc-hexagon":
+    case "fc-off-page-connector":
+    case "fc-circle":
       config = SHAPE_CONFIGS.rectangle!;
       break;
     default:
