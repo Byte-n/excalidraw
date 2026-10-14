@@ -1,13 +1,5 @@
 import React from "react";
 
-import {
-  COLOR_PALETTE,
-  DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX,
-  DEFAULT_ELEMENT_BACKGROUND_PICKS,
-  DEFAULT_ELEMENT_STROKE_COLOR_INDEX,
-  TABLE_LINE_PICKS,
-} from "@excalidraw/common";
-
 import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
@@ -21,8 +13,42 @@ import {
 
 unmountComponent();
 
+// radix popover 需要 ResizeObserver（jsdom 没有，同 test-utils 的 togglePopover）
+const stubResizeObserver = () => {
+  (global as any).ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+};
+
+// 表格整体浮动栏：边框颜色 / 网格线颜色 / 背景颜色三个独立色板外露，
+// 其余分组（边框宽度/样式、透明度、表头、标题对齐）进「样式」弹层
+const queryFillPanel = () => document.querySelector(".table-style-actions")!;
+
+const openStylesPopup = () => {
+  stubResizeObserver();
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>(
+      ".selected-shape-actions [aria-label='Styles']",
+    )!,
+  );
+};
+
+const applyHexViaOpenPicker = (label: string, hex: string) => {
+  stubResizeObserver();
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>(
+      `.table-style-actions [aria-label='${label}']`,
+    )!,
+  );
+  fireEvent.change(document.querySelector(".color-picker-input")!, {
+    target: { value: hex },
+  });
+};
+
 describe("table style controls", () => {
-  it("shows styles directly and applies a fill without a clear-fill command", async () => {
+  it("shows border/grid/background swatches and applies a fill without a clear-fill command", async () => {
     await render(<Excalidraw />);
     const table = API.createElement({ type: "table" });
     API.setElements([table]);
@@ -30,39 +56,28 @@ describe("table style controls", () => {
       API.setAppState({ selectedElementIds: { [table.id]: true } });
     });
 
-    const panel = document.querySelector(".table-style-actions");
+    const panel = queryFillPanel();
     expect(panel).not.toBeNull();
+    // 边框颜色与网格线颜色为两个独立色板，背景色板其后
     expect(
-      Array.from(panel!.querySelectorAll(":scope > div > h3")).map(
-        (heading) => heading.textContent,
+      Array.from(panel.querySelectorAll(":scope > .compact-action-item")).map(
+        (item) =>
+          item.querySelector(".properties-trigger")?.getAttribute("aria-label"),
       ),
-    ).toEqual(["Stroke", "Grid lines", "Background"]);
-    expect(
-      Array.from(panel!.querySelectorAll(":scope > div > h3")).every(
-        (heading) =>
-          heading.nextElementSibling?.matches(".color-picker-container"),
-      ),
-    ).toBe(true);
-    expect(panel!.querySelector("[title='Clear fill override']")).toBeNull();
-    expect(panel!.textContent).toContain("Border width");
+    ).toEqual(["Border color", "Grid line color", "Background"]);
+    expect(panel.querySelector("[title='Clear fill override']")).toBeNull();
 
-    const fill = DEFAULT_ELEMENT_BACKGROUND_PICKS[1];
-    const swatch = panel!.querySelector<HTMLButtonElement>(
-      `[data-testid='color-top-pick-${fill}']`,
-    );
-    expect(swatch).not.toBeNull();
-    fireEvent.click(swatch!);
-    expect(swatch).toHaveClass("active");
+    applyHexViaOpenPicker("Background", "ffec99");
     expect(
       (
         window.h.elements.find((element) => element.id === table.id) as
           | typeof table
           | undefined
       )?.table.style?.backgroundColor,
-    ).toBe(fill);
+    ).toBe("#ffec99");
   });
 
-  it("uses separate stroke and background controls in the compact toolbar", async () => {
+  it("uses separate stroke and background controls on tablets", async () => {
     (global as any).ResizeObserver = class ResizeObserver {
       observe() {}
       unobserve() {}
@@ -79,47 +94,38 @@ describe("table style controls", () => {
       API.setAppState({ selectedElementIds: { [table.id]: true } });
     });
 
+    // 平板与桌面共用同一场景矩阵渲染（浮动栏 + touch 放大）
     const panel = document.querySelector(
-      ".compact-shape-actions .table-style-actions--fill-only",
+      ".tb-floatbar .table-style-actions--fill-only",
     )!;
     expect(
       Array.from(panel.querySelectorAll(":scope > .compact-action-item")).map(
         (item) =>
           item.querySelector(".properties-trigger")?.getAttribute("aria-label"),
       ),
-    ).toEqual(["Stroke", "Grid lines", "Background"]);
+    ).toEqual(["Border color", "Grid line color", "Background"]);
     expect(panel).toHaveClass("table-style-actions--fill-only");
 
-    fireEvent.click(
-      panel.querySelector<HTMLButtonElement>(`[aria-label='Stroke']`)!,
-    );
-    fireEvent.click(
-      document.querySelector<HTMLButtonElement>("[data-testid='color-red']")!,
-    );
+    applyHexViaOpenPicker("Border color", "e03131");
     expect(
       (
         window.h.elements.find(
           (element) => element.id === table.id,
         ) as typeof table
       ).table.style?.borderColor,
-    ).toBe(COLOR_PALETTE.red[DEFAULT_ELEMENT_STROKE_COLOR_INDEX]);
+    ).toBe("#e03131");
 
-    fireEvent.click(
-      panel.querySelector<HTMLButtonElement>(`[aria-label='Background']`)!,
-    );
-    fireEvent.click(
-      document.querySelector<HTMLButtonElement>("[data-testid='color-red']")!,
-    );
+    applyHexViaOpenPicker("Background", "a5d8ff");
     expect(
       (
         window.h.elements.find(
           (element) => element.id === table.id,
         ) as typeof table
       ).table.style?.backgroundColor,
-    ).toBe(COLOR_PALETTE.red[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX]);
+    ).toBe("#a5d8ff");
   });
 
-  it("shows the full shape background picker for selected cells on desktop", async () => {
+  it("shows the shape background picker for selected cells on desktop", async () => {
     await render(<Excalidraw />);
     const table = API.createElement({ type: "table" });
     API.setElements([table]);
@@ -138,11 +144,8 @@ describe("table style controls", () => {
       ".selected-shape-actions .table-style-actions",
     )!;
     expect(
-      Array.from(panel.querySelectorAll(":scope > div > h3")).map(
-        (heading) => heading.textContent,
-      ),
-    ).toEqual(["Background"]);
-    expect(panel.querySelector(".color-picker__top-picks")).not.toBeNull();
+      panel.querySelector(".properties-trigger")?.getAttribute("aria-label"),
+    ).toBe("Background");
     expect(
       document.querySelector("[data-testid='table-cell-multi-select']"),
     ).not.toBeNull();
@@ -155,18 +158,21 @@ describe("table style controls", () => {
       )!,
     );
     expect(window.h.state.tableCellSelection?.mobileMode).toBe(true);
+
+    // 打开单元格背景色弹层并取色
     fireEvent.click(
-      panel.querySelector<HTMLButtonElement>(
-        `[data-testid='color-top-pick-${DEFAULT_ELEMENT_BACKGROUND_PICKS[1]}']`,
-      )!,
+      panel.querySelector<HTMLButtonElement>(`[aria-label='Background']`)!,
     );
+    fireEvent.change(document.querySelector(".color-picker-input")!, {
+      target: { value: "d3f9d8" },
+    });
     expect(
       (
         window.h.elements.find(
           (element) => element.id === table.id,
         ) as typeof table
       ).table.cells[0].style.backgroundColor,
-    ).toBe(DEFAULT_ELEMENT_BACKGROUND_PICKS[1]);
+    ).toBe("#d3f9d8");
   });
 
   it("keeps the selected-cell color picker compact on tablets", async () => {
@@ -194,9 +200,8 @@ describe("table style controls", () => {
     });
 
     const panel = document.querySelector(
-      ".compact-shape-actions .table-style-actions--fill-only",
+      ".tb-floatbar .table-style-actions--fill-only",
     )!;
-    expect(panel.querySelector(".color-picker__top-picks")).toBeNull();
     expect(
       panel.querySelectorAll(":scope > .compact-action-item"),
     ).toHaveLength(1);
@@ -213,11 +218,6 @@ describe("table style controls", () => {
       API.setAppState({ selectedElementIds: { [table.id]: true } });
     });
 
-    const panel = document.querySelector(".table-style-actions")!;
-    const sections = panel.querySelectorAll(":scope > div");
-    const borderSection = sections[0];
-    const gridSection = sections[1];
-
     const getStyle = () =>
       (
         window.h.elements.find((element) => element.id === table.id) as
@@ -225,36 +225,32 @@ describe("table style controls", () => {
           | undefined
       )?.table.style;
 
-    // transparent heads both line strips
-    expect(TABLE_LINE_PICKS[0]).toBe("transparent");
-    const border = TABLE_LINE_PICKS[2];
-    fireEvent.click(
-      borderSection.querySelector<HTMLButtonElement>(
-        `[data-testid='color-top-pick-${border}']`,
-      )!,
-    );
-    expect(getStyle()?.borderColor).toBe(border);
+    applyHexViaOpenPicker("Border color", "e03131");
+    expect(getStyle()?.borderColor).toBe("#e03131");
     expect(getStyle()?.gridColor).toBeUndefined();
-    expect(
-      borderSection.querySelector(`[data-testid='color-top-pick-${border}']`),
-    ).toHaveClass("active");
 
     // a transparent grid leaves the border alone
     fireEvent.click(
-      gridSection.querySelector<HTMLButtonElement>(
-        "[data-testid='color-top-pick-transparent']",
+      document.querySelector<HTMLButtonElement>(
+        ".table-style-actions [aria-label='Grid line color']",
+      )!,
+    );
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>(
+        "[data-testid='color-transparent']",
       )!,
     );
     expect(getStyle()?.gridColor).toBe("transparent");
-    expect(getStyle()?.borderColor).toBe(border);
+    expect(getStyle()?.borderColor).toBe("#e03131");
     expect(
-      gridSection.querySelector("[data-testid='color-top-pick-transparent']"),
-    ).toHaveClass("active");
-    expect(panel.textContent).not.toContain("Grid width");
-    expect(panel.textContent).not.toContain("Grid style");
+      document.querySelector(".selected-shape-actions")!.textContent,
+    ).not.toContain("Grid width");
+    expect(
+      document.querySelector(".selected-shape-actions")!.textContent,
+    ).not.toContain("Grid style");
   });
 
-  it("applies a transparent background from the top picks", async () => {
+  it("applies a transparent background from the picker", async () => {
     await render(<Excalidraw />);
     const table = API.createElement({ type: "table" });
     API.setElements([table]);
@@ -262,11 +258,14 @@ describe("table style controls", () => {
       API.setAppState({ selectedElementIds: { [table.id]: true } });
     });
 
-    const panel = document.querySelector(".table-style-actions")!;
-    const backgroundSection = panel.querySelectorAll(":scope > div")[2];
     fireEvent.click(
-      backgroundSection.querySelector<HTMLButtonElement>(
-        "[data-testid='color-top-pick-transparent']",
+      document.querySelector<HTMLButtonElement>(
+        ".table-style-actions [aria-label='Background']",
+      )!,
+    );
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>(
+        "[data-testid='color-transparent']",
       )!,
     );
     expect(
@@ -286,19 +285,23 @@ describe("table style controls", () => {
       API.setAppState({ selectedElementIds: { [table.id]: true } });
     });
 
-    const panel = document.querySelector(".table-style-actions")!;
-    const borderWidth = panel.querySelector<HTMLInputElement>(
+    // 边框宽度/样式在「样式」弹层
+    openStylesPopup();
+    const stylesPopup = document.querySelector(
+      ".properties-content .selected-shape-actions",
+    )!;
+    const borderWidth = stylesPopup.querySelector<HTMLInputElement>(
       'input[type="range"]',
     )!;
     fireEvent.change(borderWidth, { target: { value: "4" } });
     expect(borderWidth.value).toBe("4");
 
-    const dashed = panel.querySelector<HTMLInputElement>(
+    const dashed = stylesPopup.querySelector<HTMLInputElement>(
       'input[name="table-border-style"]:checked',
     )!;
     fireEvent.click(dashed.parentElement!.nextElementSibling!);
     expect(
-      panel.querySelector<HTMLInputElement>(
+      document.querySelector<HTMLInputElement>(
         'input[name="table-border-style"]:checked',
       )?.parentElement,
     ).toHaveAttribute("title", "Dashed");
@@ -314,25 +317,24 @@ describe("table style controls", () => {
         },
       });
     });
-    const fill = COLOR_PALETTE.green[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX];
     fireEvent.click(
       document.querySelector<HTMLButtonElement>(
         ".table-style-actions [aria-label='Background']",
       )!,
     );
-    fireEvent.click(
-      document.querySelector<HTMLButtonElement>("[data-testid='color-green']")!,
-    );
+    fireEvent.change(document.querySelector(".color-picker-input")!, {
+      target: { value: "d3f9d8" },
+    });
     expect(
       (
         window.h.elements.find(
           (element) => element.id === table.id,
         ) as typeof table
       ).table.cells[0].style.backgroundColor,
-    ).toBe(fill);
+    ).toBe("#d3f9d8");
   });
 
-  it("toggles the first-row header from the table style panel", async () => {
+  it("toggles the first-row header from the table style popup", async () => {
     await render(<Excalidraw />);
     const table = API.createElement({ type: "table" });
     API.setElements([table]);
@@ -340,10 +342,11 @@ describe("table style controls", () => {
       API.setAppState({ selectedElementIds: { [table.id]: true } });
     });
 
-    const panel = document.querySelector(".table-style-actions")!;
-    const toggle = panel.querySelector<HTMLButtonElement>('[role="checkbox"]');
+    openStylesPopup();
+    const popup = document.querySelector(".properties-content")!;
+    const toggle = popup.querySelector<HTMLButtonElement>('[role="checkbox"]');
     expect(toggle).not.toBeNull();
-    expect(panel.textContent).toContain("Header row");
+    expect(popup.textContent).toContain("Header row");
     // header defaults to on
     expect(toggle).toHaveAttribute("aria-checked", "true");
 
@@ -358,12 +361,12 @@ describe("table style controls", () => {
     expect(getStyle()?.header).toBe(false);
 
     fireEvent.click(
-      panel.querySelector<HTMLButtonElement>('[role="checkbox"]')!,
+      document.querySelector<HTMLButtonElement>('[role="checkbox"]')!,
     );
     expect(getStyle()?.header).toBe(true);
   });
 
-  it("sets the table title alignment from the table style panel", async () => {
+  it("sets the table title alignment from the table style popup", async () => {
     await render(<Excalidraw />);
     const table = API.createElement({ type: "table" });
     API.setElements([table]);
@@ -371,11 +374,12 @@ describe("table style controls", () => {
       API.setAppState({ selectedElementIds: { [table.id]: true } });
     });
 
-    const panel = document.querySelector(".table-style-actions")!;
-    expect(panel.textContent).toContain("Title align");
+    openStylesPopup();
+    const popup = document.querySelector(".properties-content")!;
+    expect(popup.textContent).toContain("Title align");
     // start (left) is the default alignment
     expect(
-      panel.querySelector<HTMLInputElement>(
+      popup.querySelector<HTMLInputElement>(
         'input[name="table-title-align"]:checked',
       )?.parentElement,
     ).toHaveAttribute("title", "Left");
@@ -389,12 +393,12 @@ describe("table style controls", () => {
 
     // the align patch must merge into the existing style, not replace it
     fireEvent.click(
-      panel.querySelector<HTMLButtonElement>('[role="checkbox"]')!,
+      popup.querySelector<HTMLButtonElement>('[role="checkbox"]')!,
     );
     expect(getStyle()?.header).toBe(false);
 
     fireEvent.click(
-      panel.querySelector<HTMLInputElement>(
+      document.querySelector<HTMLInputElement>(
         '[data-testid="table-title-align-center"]',
       )!.parentElement!,
     );
@@ -402,14 +406,14 @@ describe("table style controls", () => {
     expect(getStyle()?.header).toBe(false);
 
     fireEvent.click(
-      panel.querySelector<HTMLInputElement>(
+      document.querySelector<HTMLInputElement>(
         '[data-testid="table-title-align-end"]',
       )!.parentElement!,
     );
     expect(getStyle()?.title?.align).toBe("end");
 
     fireEvent.click(
-      panel.querySelector<HTMLInputElement>(
+      document.querySelector<HTMLInputElement>(
         '[data-testid="table-title-align-start"]',
       )!.parentElement!,
     );

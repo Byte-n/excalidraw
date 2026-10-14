@@ -81,6 +81,23 @@
   --text-primary-color: var(--color-on-surface);
 
   --color-selection: #1677ff;
+  --color-selection-soft: rgba(22, 119, 255, 0.08);
+  --color-selection-hover: rgba(22, 119, 255, 0.55);
+
+  // 选中工具栏设计令牌（docs/design-ui/excalidraw-canvas-toolbar.html §9）
+  --menu-bg: #ffffff;
+  --menu-border: rgba(31, 35, 41, 0.08);
+  --menu-shadow: 0 10px 28px rgba(31, 35, 41, 0.12),
+    0 2px 6px rgba(31, 35, 41, 0.06);
+  --menu-hover: #f2f3f5;
+  --menu-divider: #eef0f2;
+  --menu-danger-hover: #fdecee;
+
+  --page-ink: #1f2329;
+  --page-ink-2: #4e5969;
+  --page-muted: #8f959e;
+  --page-line: #e5e6eb;
+  --neutral-fill: #f2f3f5;
 
   --color-icon-white: #fff;
 
@@ -227,6 +244,22 @@
 
     // will be inverted to a lighter color.
     --color-selection: #4096ff;
+    --color-selection-soft: rgba(64, 150, 255, 0.12);
+    --color-selection-hover: rgba(64, 150, 255, 0.6);
+
+    // 选中工具栏设计令牌（暗色）
+    --menu-bg: #26272b;
+    --menu-border: rgba(255, 255, 255, 0.08);
+    --menu-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+    --menu-hover: #313237;
+    --menu-divider: #34363b;
+    --menu-danger-hover: #3a1d23;
+
+    --page-ink: #e6e8eb;
+    --page-ink-2: #b4b9c1;
+    --page-muted: #7d838c;
+    --page-line: #2b2d32;
+    --neutral-fill: #313237;
 
     --color-icon-white: var(--color-gray-90);
 

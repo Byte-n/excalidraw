@@ -1,92 +1,113 @@
-import { Popover } from "radix-ui";
 import clsx from "clsx";
-import React, { useEffect, useMemo } from "react";
+import React, { useState } from "react";
 
 import { isArrowKey, KEYS } from "@excalidraw/common";
 
-import { atom, useAtom } from "../editor-jotai";
-import { getLanguage, t } from "../i18n";
+import { getLanguage } from "../i18n";
 
 import Collapsible from "./Stats/Collapsible";
-import { useExcalidrawContainer } from "./App";
+import { markPropertiesPopoverEscClose } from "./PropertiesPopover";
 
 import "./IconPicker.scss";
 
 import type { JSX } from "react";
 
-const moreOptionsAtom = atom(false);
 const PICKER_COLUMNS = 4;
-const DEFAULT_SECTION_NAME = "default";
 
-type Option<T> = {
+export type IconGridOption<T> = {
   value: T;
   text: string;
   icon: JSX.Element;
   keyBinding: string | null;
 };
 
-type PickerSection<T> = {
-  name: string;
-  options: readonly Option<T>[];
-};
+export const findIconOption = <T,>(
+  options: readonly IconGridOption<T>[],
+  predicate: (option: IconGridOption<T>) => boolean,
+) => options.find(predicate) ?? null;
 
-const flattenOptions = <T,>(sections: readonly PickerSection<T>[]) =>
-  sections.flatMap((section) => section.options);
-
-const findOption = <T,>(
-  sections: readonly PickerSection<T>[],
-  predicate: (option: Option<T>) => boolean,
-) => {
-  for (const section of sections) {
-    const option = section.options.find(predicate);
-    if (option) {
-      return option;
-    }
-  }
-
-  return null;
-};
-
-const hasOption = <T,>(
-  sections: readonly PickerSection<T>[],
-  predicate: (option: Option<T>) => boolean,
-) => sections.some((section) => section.options.some(predicate));
-
-const getNavigationRows = <T,>(sections: readonly PickerSection<T>[]) =>
-  sections.flatMap((section) =>
+const getNavigationRows = <T,>(
+  sections: readonly (readonly IconGridOption<T>[])[],
+) =>
+  sections.flatMap((options) =>
     Array.from(
-      { length: Math.ceil(section.options.length / PICKER_COLUMNS) },
+      { length: Math.ceil(options.length / PICKER_COLUMNS) },
       (_, index) =>
-        section.options.slice(
+        options.slice(
           index * PICKER_COLUMNS,
           index * PICKER_COLUMNS + PICKER_COLUMNS,
         ),
     ),
   );
 
-function Picker<T>({
-  visibleSections,
-  hiddenSections = [],
-  value,
+// 折叠态记忆（设计稿：关系型端点默认折叠、展开后刷新仍记忆）——localStorage 持久化
+const readCollapseMemory = (key: string): boolean | null => {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw == null ? null : (JSON.parse(raw) as boolean);
+  } catch {
+    return null;
+  }
+};
+
+const writeCollapseMemory = (key: string, open: boolean) => {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(open));
+  } catch {
+    // localStorage 不可用（隐私模式等）时降级为会话内状态
+  }
+};
+
+/**
+ * 端点库网格（设计稿「箭头端点库」）：常用选项 4 列网格 + 折叠区
+ * （默认折叠，记忆态经 localStorage 持久化；当前值落在折叠区时强制展开，
+ * 保持当前值可见）。内联在属性弹层内（弹层内不再开弹层）。
+ *
+ * 快捷键与旧版一致：字母键直接选中、Tab 循环、方向键按行导航、
+ * Esc/Enter 关闭所在弹层。
+ */
+export function IconOptionGrid<T>({
   label,
+  value,
+  commonOptions,
+  commonLabel,
+  collapsibleOptions = [],
+  collapsibleLabel,
+  collapsePersistKey,
   onChange,
   onClose,
 }: {
   label: string;
   value: T;
-  visibleSections: readonly PickerSection<T>[];
-  hiddenSections?: readonly PickerSection<T>[];
+  commonOptions: readonly IconGridOption<T>[];
+  commonLabel?: string;
+  collapsibleOptions?: readonly IconGridOption<T>[];
+  collapsibleLabel?: string;
+  collapsePersistKey?: string;
   onChange: (value: T) => void;
   onClose: () => void;
 }) {
-  const { container } = useExcalidrawContainer();
-  const [showMoreOptions, setShowMoreOptions] = useAtom(moreOptionsAtom);
-  const allSections = [...visibleSections, ...hiddenSections];
-  const allOptions = flattenOptions(allSections);
+  const allOptions = [...commonOptions, ...collapsibleOptions];
+  const valueInCollapsible = collapsibleOptions.some(
+    (option) => option.value === value,
+  );
+  const [storedOpen, setStoredOpen] = useState<boolean | null>(() =>
+    collapsePersistKey ? readCollapseMemory(collapsePersistKey) : null,
+  );
+  const showCollapsible = valueInCollapsible || storedOpen === true;
+
   const navigationRows = getNavigationRows([
-    ...visibleSections,
-    ...(showMoreOptions ? hiddenSections : []),
+    commonOptions,
+    ...(showCollapsible ? [collapsibleOptions] : []),
   ]);
+
+  const toggleCollapsible = () => {
+    const next = !showCollapsible;
+    setStoredOpen(next);
+    if (collapsePersistKey) {
+      writeCollapseMemory(collapsePersistKey, next);
+    }
+  };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     const pressedOption = allOptions.find(
@@ -180,154 +201,71 @@ function Picker<T>({
       }
       event.preventDefault();
     } else if (event.key === KEYS.ESCAPE || event.key === KEYS.ENTER) {
-      // Close on escape or enter
+      // Close on escape or enter（Esc 关闭焦点回弹层触发器）
       event.preventDefault();
+      if (event.key === KEYS.ESCAPE) {
+        markPropertiesPopoverEscClose();
+      }
       onClose();
     }
+    // 弹层内键盘捕获：按键不外泄到画布全局快捷键
     event.nativeEvent.stopImmediatePropagation();
     event.stopPropagation();
   };
 
-  useEffect(() => {
-    if (hasOption(hiddenSections, (option) => option.value === value)) {
-      setShowMoreOptions(true);
-    }
-  }, [value, hiddenSections, setShowMoreOptions]);
-
-  const renderOptions = (options: readonly Option<T>[]) => {
-    return (
-      <div className="picker-content">
-        {options.map((option) => (
-          <button
-            type="button"
-            className={clsx("picker-option", {
-              active: value === option.value,
-            })}
-            onClick={() => {
-              onChange(option.value);
-            }}
-            title={
-              option.keyBinding
-                ? `${option.text} — ${option.keyBinding.toUpperCase()}`
-                : option.text
-            }
-            aria-label={option.text || "none"}
-            aria-keyshortcuts={option.keyBinding || undefined}
-            key={option.text}
-            ref={(ref) => {
-              if (value === option.value) {
-                // Use a timeout here to render focus properly
-                setTimeout(() => {
-                  ref?.focus();
-                }, 0);
-              }
-            }}
-          >
-            {option.icon}
-            {option.keyBinding && (
-              <span className="picker-keybinding">{option.keyBinding}</span>
-            )}
-          </button>
-        ))}
-      </div>
-    );
-  };
-
-  const renderSections = (sections: readonly PickerSection<T>[]) =>
-    sections.map((section, index) =>
-      section.name === DEFAULT_SECTION_NAME ? (
-        <React.Fragment key={`${section.name}-${index}`}>
-          {renderOptions(section.options)}
-        </React.Fragment>
-      ) : (
-        <div className="picker-section" key={`${section.name}-${index}`}>
-          <div className="picker-section-label">{section.name}</div>
-          {renderOptions(section.options)}
-        </div>
-      ),
-    );
-
-  return (
-    <Popover.Content
-      className="picker"
-      role="dialog"
-      aria-modal="true"
-      aria-label={label}
-      side={"bottom"}
-      align="start"
-      sideOffset={12}
-      alignOffset={12}
-      style={{ zIndex: "var(--zIndex-ui-styles-popup)" }}
-      onKeyDown={handleKeyDown}
-      collisionBoundary={container ?? undefined}
+  const renderOption = (option: IconGridOption<T>) => (
+    <button
+      type="button"
+      className={clsx("headgrid__option", {
+        "is-on": value === option.value,
+      })}
+      onClick={() => {
+        onChange(option.value);
+      }}
+      title={
+        option.keyBinding
+          ? `${option.text} — ${option.keyBinding.toUpperCase()}`
+          : option.text
+      }
+      aria-label={option.text || "none"}
+      aria-keyshortcuts={option.keyBinding || undefined}
+      key={option.text}
+      ref={(ref) => {
+        if (value === option.value) {
+          // Use a timeout here to render focus properly
+          setTimeout(() => {
+            ref?.focus();
+          }, 0);
+        }
+      }}
     >
-      <div className="picker-sections">
-        {renderSections(visibleSections)}
-
-        {hiddenSections.length > 0 && (
-          <Collapsible
-            label={t("labels.more_options")}
-            open={showMoreOptions}
-            openTrigger={() => {
-              setShowMoreOptions((value) => !value);
-            }}
-            className="picker-collapsible"
-          >
-            <div className="picker-sections">
-              {renderSections(hiddenSections)}
-            </div>
-          </Collapsible>
-        )}
-      </div>
-    </Popover.Content>
-  );
-}
-
-export function IconPicker<T>({
-  value,
-  label,
-  visibleSections,
-  hiddenSections,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  visibleSections: readonly PickerSection<T>[];
-  hiddenSections?: readonly PickerSection<T>[];
-  onChange: (value: T) => void;
-}) {
-  const [isActive, setActive] = React.useState(false);
-  const selectedOption = useMemo(
-    () =>
-      findOption(visibleSections, (option) => option.value === value) ??
-      findOption(hiddenSections ?? [], (option) => option.value === value),
-    [visibleSections, hiddenSections, value],
+      {option.icon}
+      {option.keyBinding && (
+        <span className="picker-keybinding">{option.keyBinding}</span>
+      )}
+    </button>
   );
 
   return (
-    <div>
-      <Popover.Root open={isActive} onOpenChange={(open) => setActive(open)}>
-        <Popover.Trigger
-          type="button"
-          aria-label={label}
-          onClick={() => setActive(!isActive)}
-          className={isActive ? "active" : ""}
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      className="icon-option-grid"
+      role="group"
+      aria-label={label}
+      onKeyDown={handleKeyDown}
+    >
+      {commonLabel && <div className="tb-sub">{commonLabel}</div>}
+      <div className="headgrid">{commonOptions.map(renderOption)}</div>
+      {collapsibleOptions.length > 0 && collapsibleLabel && (
+        <Collapsible
+          label={collapsibleLabel}
+          open={showCollapsible}
+          openTrigger={toggleCollapsible}
+          className="picker-collapsible icon-option-grid__collapsible"
         >
-          {selectedOption?.icon}
-        </Popover.Trigger>
-        {isActive && (
-          <Picker
-            visibleSections={visibleSections}
-            hiddenSections={hiddenSections}
-            value={value}
-            label={label}
-            onChange={onChange}
-            onClose={() => {
-              setActive(false);
-            }}
-          />
-        )}
-      </Popover.Root>
+          <div className="headgrid">{collapsibleOptions.map(renderOption)}</div>
+        </Collapsible>
+      )}
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import { pointFrom } from "@excalidraw/math";
 
+import clsx from "clsx";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -66,6 +68,7 @@ import {
   getColorUpdate,
   hasBackground,
   hasFillStyle,
+  hasFrameBackground,
   hasStrokeColor,
 } from "@excalidraw/element";
 
@@ -104,7 +107,11 @@ import { RadioSelection } from "../components/RadioSelection";
 import { IconButton } from "../components/IconButton";
 import { ColorPicker } from "../components/ColorPicker/ColorPicker";
 import { FontPicker } from "../components/FontPicker/FontPicker";
-import { IconPicker } from "../components/IconPicker";
+import {
+  IconOptionGrid,
+  findIconOption,
+  type IconGridOption,
+} from "../components/IconPicker";
 import { Range } from "../components/Range";
 import {
   ArrowheadArrowIcon,
@@ -177,6 +184,12 @@ import { register } from "./register";
 import type { AppClassProperties, AppState, Primitive } from "../types";
 
 const FONT_SIZE_RELATIVE_INCREASE_STEP = 0.1;
+
+// 油漆桶弹层在全色板网格中隐藏透明（不可见填充是无操作）——隐藏而非移除，
+// 让其余颜色保住既有网格位与热键；模块常量保证 memo 的 === 比较成立
+const BUCKET_FILL_EXCLUDED_COLORS: readonly string[] = [
+  COLOR_PALETTE.transparent,
+];
 
 const getStylesPanelInfo = (app: AppClassProperties) => {
   const stylesPanelMode = deriveStylesPanelMode(app.editorInterface);
@@ -398,38 +411,66 @@ export const actionChangeStrokeColor = register<
     };
   },
   PanelComponent: ({ elements, appState, updateData, app }) => {
-    const { stylesPanelMode } = getStylesPanelInfo(app);
     const target = resolveColorTarget(appState, elements, "strokeColor");
-    // a note has no stroke: its "stroke" is the ink of its text and footer
+    // 场景化标签（设计稿场景矩阵）：便签的「描边」是文字墨色 →「文字颜色」；
+    // 纯文本场景（选中文本 / 文本工具 / 编辑容器文本）→「颜色」
+    const elementsMap = app.scene.getNonDeletedElementsMap();
+    const strokeTargets = getSelectedElements(elements, appState, {
+      includeBoundTextElement: true,
+    }).filter((element) => hasStrokeColor(element.type));
+    const editingText =
+      appState.editingTextElement &&
+      elementsMap.get(appState.editingTextElement.id);
+    if (
+      editingText &&
+      isTextElement(editingText) &&
+      !strokeTargets.some((element) => element.id === editingText.id)
+    ) {
+      strokeTargets.push(editingText);
+    }
+    const isTextScene =
+      appState.activeTool.type === "text" ||
+      (strokeTargets.length > 0 && strokeTargets.every(isTextElement));
     const label =
-      target.kind === "sticky" ? t("labels.textColor") : t("labels.stroke");
+      target.kind === "sticky"
+        ? t("labels.textColor")
+        : isTextScene
+        ? t("labels.color")
+        : t("labels.stroke");
 
     return (
-      <>
-        {stylesPanelMode === "full" && <h3 aria-hidden="true">{label}</h3>}
-        <ColorPicker
-          topPicks={target.topPicks}
-          palette={target.palette}
-          customizableTopPicks={target.customizableTopPicks}
-          excludedColors={target.excludedColors}
-          type="elementStroke"
-          label={label}
-          color={getFormValue(
-            elements,
-            app,
-            (element) => element.strokeColor,
-            true,
-            (hasSelection) => (!hasSelection ? target.currentValue : null),
-          )}
-          onChange={(color) => updateData({ color })}
-          elements={elements}
-          appState={appState}
-          updateData={updateData}
-        />
-      </>
+      <ColorPicker
+        topPicks={target.topPicks}
+        palette={target.palette}
+        presetColors={target.presetColors}
+        excludedColors={target.excludedColors}
+        customizableTopPicks={target.customizableTopPicks}
+        type="elementStroke"
+        label={label}
+        compact
+        color={getFormValue(
+          elements,
+          app,
+          (element) => element.strokeColor,
+          true,
+          (hasSelection) => (!hasSelection ? target.currentValue : null),
+        )}
+        onChange={(color) => updateData({ color })}
+        elements={elements}
+        appState={appState}
+        updateData={updateData}
+      />
     );
   },
 });
+
+/**
+ * Whether a background pick lands on this element. Frames take a fill of their
+ * own (`hasFrameBackground`) without joining `supportsFill`, which the
+ * hit-test and bucket tool share.
+ */
+const takesBackgroundPick = (element: ExcalidrawElement) =>
+  hasBackground(element) || hasFrameBackground(element.type);
 
 export const actionChangeBackgroundColor = register<
   Partial<AppState> & { color?: string }
@@ -474,7 +515,7 @@ export const actionChangeBackgroundColor = register<
       nextElements = changeProperty(elements, appState, (el) =>
         // a note's label passes the pick on to the note (below)
         getColorTargetElement(el, "backgroundColor", elementsMap) === el &&
-        hasBackground(el)
+        takesBackgroundPick(el)
           ? newElementWith(
               el,
               getColorUpdate(el, "backgroundColor", color, elementsMap),
@@ -522,41 +563,44 @@ export const actionChangeBackgroundColor = register<
     };
   },
   PanelComponent: ({ elements, appState, updateData, app }) => {
-    const { stylesPanelMode } = getStylesPanelInfo(app);
     const target = resolveColorTarget(appState, elements, "backgroundColor");
+    // 便签背景为六色纸专用色板，标签「纸色」（设计稿场景矩阵 bg:paper）；
     // while editing a note's label the picker shows and sets the note's fill
     const elementsMap = app.scene.getNonDeletedElementsMap();
+    const label =
+      target.kind === "sticky"
+        ? t("labels.paperColor")
+        : t("labels.background");
 
     return (
-      <>
-        {stylesPanelMode === "full" && (
-          <h3 aria-hidden="true">{t("labels.background")}</h3>
+      <ColorPicker
+        topPicks={target.topPicks}
+        palette={target.palette}
+        presetColors={target.presetColors}
+        excludedColors={target.excludedColors}
+        customizableTopPicks={target.customizableTopPicks}
+        type="elementBackground"
+        label={label}
+        compact
+        // 便签纸色变体（设计稿）：弹层只有六色纸 + 明度，无自定义与取色
+        picksOnly={target.kind === "sticky"}
+        color={getFormValue(
+          elements,
+          app,
+          (element) =>
+            getColorTargetElement(element, "backgroundColor", elementsMap)
+              .backgroundColor,
+          (element) =>
+            takesBackgroundPick(
+              getColorTargetElement(element, "backgroundColor", elementsMap),
+            ),
+          (hasSelection) => (!hasSelection ? target.currentValue : null),
         )}
-        <ColorPicker
-          topPicks={target.topPicks}
-          palette={target.palette}
-          customizableTopPicks={target.customizableTopPicks}
-          excludedColors={target.excludedColors}
-          type="elementBackground"
-          label={t("labels.background")}
-          color={getFormValue(
-            elements,
-            app,
-            (element) =>
-              getColorTargetElement(element, "backgroundColor", elementsMap)
-                .backgroundColor,
-            (element) =>
-              hasBackground(
-                getColorTargetElement(element, "backgroundColor", elementsMap),
-              ),
-            (hasSelection) => (!hasSelection ? target.currentValue : null),
-          )}
-          onChange={(color) => updateData({ color })}
-          elements={elements}
-          appState={appState}
-          updateData={updateData}
-        />
-      </>
+        onChange={(color) => updateData({ color })}
+        elements={elements}
+        appState={appState}
+        updateData={updateData}
+      />
     );
   },
 });
@@ -580,36 +624,28 @@ export const actionChangeBucketFillBackgroundColor = register<
     };
   },
   PanelComponent: ({ elements, appState, updateData, app }) => {
-    const { stylesPanelMode } = getStylesPanelInfo(app);
-
     return (
-      <>
-        {stylesPanelMode === "full" && (
-          <h3 aria-hidden="true">{t("labels.background")}</h3>
+      <ColorPicker
+        topPicks={BUCKET_FILL_BACKGROUND_PICKS}
+        palette={DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE}
+        // 弹层预设行 = 油漆桶快捷色（无透明——不可见填充是无操作）
+        presetColors={BUCKET_FILL_BACKGROUND_PICKS}
+        excludedColors={BUCKET_FILL_EXCLUDED_COLORS}
+        // customized independently of the background picker's picks even
+        // though both drive `currentItemBackgroundColor` — the bucket
+        // strip's defaults and use case differ (no transparent)
+        customizableTopPicks="bucketFill"
+        type="elementBackground"
+        label={t("labels.background")}
+        compact
+        color={app.bucketFill.getBucketFillBackgroundColor(
+          appState.currentItemBackgroundColor,
         )}
-        <ColorPicker
-          topPicks={BUCKET_FILL_BACKGROUND_PICKS}
-          palette={DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE}
-          // hidden rather than removed from the palette so the remaining
-          // colors keep their usual hotkeys (w for white etc.)
-          excludedColors={[COLOR_PALETTE.transparent]}
-          // customized independently of the background picker's picks even
-          // though both drive `currentItemBackgroundColor` — the bucket
-          // strip's defaults and use case differ (no transparent)
-          customizableTopPicks="bucketFill"
-          type="elementBackground"
-          label={t("labels.background")}
-          color={app.bucketFill.getBucketFillBackgroundColor(
-            appState.currentItemBackgroundColor,
-          )}
-          onChange={(color) =>
-            updateData({ currentItemBackgroundColor: color })
-          }
-          elements={elements}
-          appState={appState}
-          updateData={updateData}
-        />
-      </>
+        onChange={(color) => updateData({ currentItemBackgroundColor: color })}
+        elements={elements}
+        appState={appState}
+        updateData={updateData}
+      />
     );
   },
 });
@@ -644,8 +680,8 @@ export const actionChangeFillStyle = register<ExcalidrawElement["fillStyle"]>({
       selectedFillStyleElements.every((el) => el.fillStyle === "zigzag");
 
     return (
-      <fieldset>
-        <legend>{t("labels.fill")}</legend>
+      <fieldset className="tb-group">
+        <legend className="tb-legend">{t("labels.fill")}</legend>
         <div className="buttonList">
           <RadioSelection
             type="button"
@@ -734,8 +770,8 @@ export const actionChangeStrokeWidth = register<StrokeWidthKey>({
     };
   },
   PanelComponent: ({ elements, appState, updateData, app, data }) => (
-    <fieldset>
-      <legend>{t("labels.strokeWidth")}</legend>
+    <fieldset className="tb-group">
+      <legend className="tb-legend">{t("labels.strokeWidth")}</legend>
       <div className="buttonList">
         <RadioSelection<StrokeWidthKey>
           group="stroke-width"
@@ -829,8 +865,8 @@ export const actionChangeFreedrawMode = register<StrokeVariability>({
     }
 
     return (
-      <fieldset>
-        <legend>{t("labels.pressure")}</legend>
+      <fieldset className="tb-group">
+        <legend className="tb-legend">{t("labels.pressure")}</legend>
         <div className="buttonList">
           <RadioSelection<StrokeVariability>
             group="strokeOptions.variability"
@@ -873,8 +909,8 @@ export const actionChangeStrokeStyle = register<
     };
   },
   PanelComponent: ({ elements, appState, updateData, app, data }) => (
-    <fieldset>
-      <legend>{t("labels.strokeStyle")}</legend>
+    <fieldset className="tb-group">
+      <legend className="tb-legend">{t("labels.strokeStyle")}</legend>
       <div className="buttonList">
         <RadioSelection
           group="strokeStyle"
@@ -939,16 +975,20 @@ export const actionChangeOpacity = register<ExcalidrawElement["opacity"]>({
     );
 
     return (
-      <Range
-        label={t("labels.opacity")}
-        value={opacity ?? appState.currentItemOpacity}
-        hasCommonValue={opacity !== null}
-        onChange={updateData}
-        min={0}
-        max={100}
-        step={10}
-        testId="opacity"
-      />
+      <fieldset className="tb-group">
+        <legend className="tb-legend">{t("labels.opacity")}</legend>
+        <Range
+          label={t("labels.opacity")}
+          hideLabel
+          value={opacity ?? appState.currentItemOpacity}
+          hasCommonValue={opacity !== null}
+          onChange={updateData}
+          min={0}
+          max={100}
+          step={10}
+          testId="opacity"
+        />
+      </fieldset>
     );
   },
 });
@@ -974,8 +1014,8 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
       const { isCompact } = getStylesPanelInfo(app);
 
       return (
-        <fieldset>
-          <legend>{t("labels.fontSize")}</legend>
+        <fieldset className="tb-group">
+          <legend className="tb-legend">{t("labels.fontSize")}</legend>
           <div className="buttonList">
             <RadioSelection
               group="font-size"
@@ -1318,7 +1358,7 @@ export const actionChangeFontFamily = register<{
     // relying on state batching as multiple `FontPicker` handlers could be called in rapid succession and we want to combine them
     const [batchedData, setBatchedData] = useState<ChangeFontFamilyData>({});
     const isUnmounted = useRef(true);
-    const { stylesPanelMode, isCompact } = getStylesPanelInfo(app);
+    const { isCompact } = getStylesPanelInfo(app);
 
     const selectedFontFamily = useMemo(() => {
       const getFontFamily = (
@@ -1390,108 +1430,99 @@ export const actionChangeFontFamily = register<{
     }, []);
 
     return (
-      <>
-        {stylesPanelMode === "full" && (
-          <legend>{t("labels.fontFamily")}</legend>
-        )}
-        <FontPicker
-          isOpened={appState.openPopup === "fontFamily"}
-          selectedFontFamily={selectedFontFamily}
-          hoveredFontFamily={appState.currentHoveredFontFamily}
-          compactMode={stylesPanelMode !== "full"}
-          onSelect={(fontFamily) => {
-            withCaretPositionPreservation(
-              () => {
-                setBatchedData({
-                  openPopup: null,
-                  currentHoveredFontFamily: null,
-                  currentItemFontFamily: fontFamily,
-                });
-                // defensive clear so immediate close won't abuse the cached elements
-                cachedElementsRef.current.clear();
-              },
-              isCompact,
-              !!appState.editingTextElement,
-            );
-          }}
-          onHover={(fontFamily) => {
+      <FontPicker
+        isOpened={appState.openPopup === "fontFamily"}
+        selectedFontFamily={selectedFontFamily}
+        hoveredFontFamily={appState.currentHoveredFontFamily}
+        compactMode
+        onSelect={(fontFamily) => {
+          withCaretPositionPreservation(
+            () => {
+              setBatchedData({
+                openPopup: null,
+                currentHoveredFontFamily: null,
+                currentItemFontFamily: fontFamily,
+              });
+              // defensive clear so immediate close won't abuse the cached elements
+              cachedElementsRef.current.clear();
+            },
+            isCompact,
+            !!appState.editingTextElement,
+          );
+        }}
+        onHover={(fontFamily) => {
+          setBatchedData({
+            currentHoveredFontFamily: fontFamily,
+            cachedElements: new Map(cachedElementsRef.current),
+            resetContainers: true,
+          });
+        }}
+        onLeave={() => {
+          setBatchedData({
+            currentHoveredFontFamily: null,
+            cachedElements: new Map(cachedElementsRef.current),
+            resetAll: true,
+          });
+        }}
+        onPopupChange={(open) => {
+          if (open) {
+            // open, populate the cache from scratch
+            cachedElementsRef.current.clear();
+
+            const { editingTextElement } = appState;
+
+            // still check type to be safe
+            if (editingTextElement?.type === "text") {
+              // retrieve the latest version from the scene, as `editingTextElement` isn't mutated
+              const latesteditingTextElement = app.scene.getElement(
+                editingTextElement.id,
+              );
+
+              // inside the wysiwyg editor
+              cachedElementsRef.current.set(
+                editingTextElement.id,
+                newElementWith(
+                  latesteditingTextElement || editingTextElement,
+                  {},
+                  true,
+                ),
+              );
+            } else {
+              const selectedElements = getSelectedElements(elements, appState, {
+                includeBoundTextElement: true,
+              });
+
+              for (const element of selectedElements) {
+                cachedElementsRef.current.set(
+                  element.id,
+                  newElementWith(element, {}, true),
+                );
+              }
+            }
+
             setBatchedData({
-              currentHoveredFontFamily: fontFamily,
-              cachedElements: new Map(cachedElementsRef.current),
-              resetContainers: true,
+              ...batchedData,
+              openPopup: "fontFamily",
             });
-          }}
-          onLeave={() => {
-            setBatchedData({
+          } else {
+            const fontFamilyData = {
               currentHoveredFontFamily: null,
               cachedElements: new Map(cachedElementsRef.current),
               resetAll: true,
+            } as ChangeFontFamilyData;
+
+            setBatchedData({
+              ...fontFamilyData,
             });
-          }}
-          onPopupChange={(open) => {
-            if (open) {
-              // open, populate the cache from scratch
-              cachedElementsRef.current.clear();
+            cachedElementsRef.current.clear();
 
-              const { editingTextElement } = appState;
-
-              // still check type to be safe
-              if (editingTextElement?.type === "text") {
-                // retrieve the latest version from the scene, as `editingTextElement` isn't mutated
-                const latesteditingTextElement = app.scene.getElement(
-                  editingTextElement.id,
-                );
-
-                // inside the wysiwyg editor
-                cachedElementsRef.current.set(
-                  editingTextElement.id,
-                  newElementWith(
-                    latesteditingTextElement || editingTextElement,
-                    {},
-                    true,
-                  ),
-                );
-              } else {
-                const selectedElements = getSelectedElements(
-                  elements,
-                  appState,
-                  {
-                    includeBoundTextElement: true,
-                  },
-                );
-
-                for (const element of selectedElements) {
-                  cachedElementsRef.current.set(
-                    element.id,
-                    newElementWith(element, {}, true),
-                  );
-                }
-              }
-
-              setBatchedData({
-                ...batchedData,
-                openPopup: "fontFamily",
-              });
-            } else {
-              const fontFamilyData = {
-                currentHoveredFontFamily: null,
-                cachedElements: new Map(cachedElementsRef.current),
-                resetAll: true,
-              } as ChangeFontFamilyData;
-
-              setBatchedData({
-                ...fontFamilyData,
-              });
-              cachedElementsRef.current.clear();
-
-              // Refocus text editor when font picker closes if we were editing text
-              if (isCompact && appState.editingTextElement) {
-                restoreCaretPosition(null, app.ownerDocument); // Just refocus without saved position
-              }
+            // Refocus text editor when font picker closes if we were editing text
+            if (isCompact && appState.editingTextElement) {
+              restoreCaretPosition(null, app.ownerDocument); // Just refocus without saved position
             }
-          }}
-        />
-      </>
+          }
+        }}
+      />
     );
   },
 });
@@ -1535,8 +1566,8 @@ export const actionChangeTextAlign = register<TextAlign>({
     const { isCompact } = getStylesPanelInfo(app);
 
     return (
-      <fieldset>
-        <legend>{t("labels.textAlign")}</legend>
+      <fieldset className="tb-group">
+        <legend className="tb-legend">{t("labels.textAlign")}</legend>
         <div className="buttonList">
           <RadioSelection<TextAlign | false>
             group="text-align"
@@ -1634,7 +1665,8 @@ export const actionChangeVerticalAlign = register<VerticalAlign>({
   PanelComponent: ({ elements, appState, updateData, app, data }) => {
     const { isCompact } = getStylesPanelInfo(app);
     return (
-      <fieldset>
+      <fieldset className="tb-group">
+        <legend className="tb-legend">{t("labels.verticalAlign")}</legend>
         <div className="buttonList">
           <RadioSelection<VerticalAlign | false>
             group="text-align"
@@ -1739,8 +1771,8 @@ export const actionChangeRoundness = register<"sharp" | "round">({
     );
 
     return (
-      <fieldset>
-        <legend>{t("labels.edges")}</legend>
+      <fieldset className="tb-group">
+        <legend className="tb-legend">{t("labels.edges")}</legend>
         <div className="buttonList">
           <RadioSelection
             group="edges"
@@ -1949,45 +1981,106 @@ export const actionChangeArrowhead = register<{
       [isRTL],
     );
 
+    // 端点库（设计稿「箭头端点库」）：顶部「起点/终点」双触发器切换当前编辑
+    // 的端点，下方共享同一网格（弹层内不再开弹层）；默认编辑起点
+    const [activePosition, setActivePosition] = useState<"start" | "end">(
+      "start",
+    );
+
+    const startValue = getFormValue<Arrowhead | null>(
+      elements,
+      app,
+      (element) =>
+        isLinearElement(element) && canHaveArrowheads(element.type)
+          ? element.startArrowhead
+          : appState.currentItemStartArrowhead,
+      true,
+      (hasSelection) =>
+        hasSelection ? null : appState.currentItemStartArrowhead,
+    );
+    const endValue = getFormValue<Arrowhead | null>(
+      elements,
+      app,
+      (element) =>
+        isLinearElement(element) && canHaveArrowheads(element.type)
+          ? element.endArrowhead
+          : appState.currentItemEndArrowhead,
+      true,
+      (hasSelection) =>
+        hasSelection ? null : appState.currentItemEndArrowhead,
+    );
+
+    const flattenSections = (
+      sections: readonly {
+        readonly options: ReadonlyArray<IconGridOption<Arrowhead | null>>;
+      }[],
+    ) => sections.flatMap((section) => section.options);
+
+    // 常用 10 枚 = 原可见区（无/箭头/三角/空心三角）+ 原隐藏前区
+    // （圆点/空心圆/菱形/空心菱形/竖线/X 形）；关系型 6 枚进折叠区
+    const activeOptions =
+      activePosition === "start" ? startArrowheadOptions : endArrowheadOptions;
+    const commonOptions = flattenSections([
+      activeOptions.visibleSections[0],
+      activeOptions.hiddenSections[0],
+    ]);
+    const relationalOptions = flattenSections([
+      activeOptions.hiddenSections[1],
+    ]);
+
     return (
-      <fieldset>
-        <legend>{t("labels.arrowheads")}</legend>
-        <div className="iconSelectList buttonList">
-          <IconPicker
-            visibleSections={startArrowheadOptions.visibleSections}
-            hiddenSections={startArrowheadOptions.hiddenSections}
-            label="arrowhead_start"
-            value={getFormValue<Arrowhead | null>(
-              elements,
-              app,
-              (element) =>
-                isLinearElement(element) && canHaveArrowheads(element.type)
-                  ? element.startArrowhead
-                  : appState.currentItemStartArrowhead,
-              true,
-              (hasSelection) =>
-                hasSelection ? null : appState.currentItemStartArrowhead,
-            )}
-            onChange={(value) => updateData({ position: "start", type: value })}
-          />
-          <IconPicker
-            visibleSections={endArrowheadOptions.visibleSections}
-            hiddenSections={endArrowheadOptions.hiddenSections}
-            label="arrowhead_end"
-            value={getFormValue<Arrowhead | null>(
-              elements,
-              app,
-              (element) =>
-                isLinearElement(element) && canHaveArrowheads(element.type)
-                  ? element.endArrowhead
-                  : appState.currentItemEndArrowhead,
-              true,
-              (hasSelection) =>
-                hasSelection ? null : appState.currentItemEndArrowhead,
-            )}
-            onChange={(value) => updateData({ position: "end", type: value })}
-          />
+      <fieldset className="tb-group">
+        <legend className="tb-legend">{t("labels.arrowheads")}</legend>
+        <div className="tb-heads">
+          {(["start", "end"] as const).map((position) => {
+            const options =
+              position === "start"
+                ? startArrowheadOptions
+                : endArrowheadOptions;
+            const current = findIconOption(
+              flattenSections([
+                ...options.visibleSections,
+                ...options.hiddenSections,
+              ]),
+              (option) =>
+                option.value === (position === "start" ? startValue : endValue),
+            );
+            const positionLabel = t(
+              position === "start"
+                ? "labels.arrowheadStart"
+                : "labels.arrowheadEnd",
+            );
+            return (
+              <button
+                key={position}
+                type="button"
+                className={clsx("tb-headtrig", {
+                  "is-on": activePosition === position,
+                })}
+                aria-pressed={activePosition === position}
+                title={`${positionLabel} · ${current?.text ?? ""}`}
+                aria-label={`${positionLabel} · ${current?.text ?? ""}`}
+                onClick={() => setActivePosition(position)}
+              >
+                {current?.icon}
+                <span>
+                  {positionLabel} · {current?.text}
+                </span>
+              </button>
+            );
+          })}
         </div>
+        <IconOptionGrid
+          label={t("labels.arrowheads")}
+          value={activePosition === "start" ? startValue : endValue}
+          commonOptions={commonOptions}
+          commonLabel={t("labels.arrowheadsCommon")}
+          collapsibleOptions={relationalOptions}
+          collapsibleLabel={t("labels.arrowheadsRelational")}
+          collapsePersistKey="excalidraw-arrowheads-relational-open"
+          onChange={(type) => updateData({ position: activePosition, type })}
+          onClose={() => app.setState({ openPopup: null })}
+        />
       </fieldset>
     );
   },
@@ -2003,10 +2096,11 @@ export const actionChangeArrowProperties = register({
     return false;
   },
   PanelComponent: ({ elements, appState, updateData, app, renderAction }) => {
+    // 场景矩阵箭头分组顺序：箭头类型在前、端点在后（atype|heads）
     return (
       <div className="selected-shape-actions">
-        {renderAction("changeArrowhead")}
         {renderAction("changeArrowType")}
+        {renderAction("changeArrowhead")}
       </div>
     );
   },
@@ -2204,8 +2298,8 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
   },
   PanelComponent: ({ elements, appState, updateData, app }) => {
     return (
-      <fieldset>
-        <legend>{t("labels.arrowtypes")}</legend>
+      <fieldset className="tb-group">
+        <legend className="tb-legend">{t("labels.arrowtypes")}</legend>
         <div className="buttonList">
           <RadioSelection
             group="arrowtypes"

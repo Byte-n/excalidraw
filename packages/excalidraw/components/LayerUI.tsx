@@ -2,7 +2,6 @@ import clsx from "clsx";
 import React from "react";
 
 import {
-  CLASSES,
   DEFAULT_SIDEBAR,
   TOOL_TYPE,
   arrayToMap,
@@ -36,7 +35,6 @@ import {
 import { MindmapRootDeleteDialog } from "./MindmapRootDeleteDialog";
 import { MindmapTextDialog } from "./MindmapTextDialog";
 
-import { SelectedShapeActions, CompactShapeActions } from "./Actions";
 import { LoadingMessage } from "./LoadingMessage";
 import { MobileMenu } from "./MobileMenu";
 import { PasteChartDialog } from "./PasteChartDialog";
@@ -56,6 +54,7 @@ import { TTDDialog } from "./TTDDialog/TTDDialog";
 import { Stats } from "./Stats";
 import { TableAccessibility } from "./TableAccessibility";
 import ElementLinkDialog from "./ElementLinkDialog";
+import { FloatingShapeActions } from "./toolbar/FloatingShapeActions";
 import { ErrorDialog } from "./ErrorDialog";
 import { EyeDropper, activeEyeDropperAtom } from "./EyeDropper";
 import { FixedSideContainer } from "./FixedSideContainer";
@@ -272,58 +271,6 @@ const LayerUI = ({
       : renderNativeTopCenterToolbar(toolbarProps);
   };
 
-  const renderSelectedShapeActions = () => {
-    return (
-      <Section
-        heading="selectedShapeActions"
-        className={clsx("selected-shape-actions zen-mode-transition", {
-          "transition-left": appState.zenModeEnabled,
-        })}
-      >
-        {isCompactStylesPanel ? (
-          <Island
-            className={clsx("compact-shape-actions-island")}
-            padding={0}
-            data-viewport-ui="side"
-            data-viewport-ui-name="stylesPanel"
-            style={{
-              // we want to make sure this doesn't overflow so subtracting the
-              // approximate height of hamburgerMenu + footer
-              maxHeight: `${appState.height - 166}px`,
-            }}
-          >
-            <CompactShapeActions
-              appState={appState}
-              elementsMap={app.scene.getNonDeletedElementsMap()}
-              renderAction={actionManager.renderAction}
-              app={app}
-              setAppState={setAppState}
-            />
-          </Island>
-        ) : (
-          <Island
-            className={CLASSES.SHAPE_ACTIONS_MENU}
-            padding={2}
-            style={{
-              // we want to make sure this doesn't overflow so subtracting the
-              // approximate height of hamburgerMenu + footer
-              maxHeight: `${appState.height - 166}px`,
-            }}
-            data-viewport-ui="side"
-            data-viewport-ui-name="stylesPanel"
-          >
-            <SelectedShapeActions
-              appState={appState}
-              elementsMap={app.scene.getNonDeletedElementsMap()}
-              renderAction={actionManager.renderAction}
-              app={app}
-            />
-          </Island>
-        )}
-      </Section>
-    );
-  };
-
   const renderFixedSideContainer = () => {
     const shouldRenderSelectedShapeActions =
       defaultUIEnabled && showSelectedShapeActions(appState, elements);
@@ -348,22 +295,12 @@ const LayerUI = ({
             className={clsx("App-menu_top__left")}
           >
             {renderCanvasActions()}
-            {defaultUIEnabled && (
-              <div
-                className={clsx("selected-shape-actions-container", {
-                  "selected-shape-actions-container--compact":
-                    isCompactStylesPanel,
-                })}
-              >
-                {shouldRenderSelectedShapeActions &&
-                  renderSelectedShapeActions()}
-              </div>
-            )}
+            {/* 桌面/平板的属性面板已改为跟随选区的浮动栏
+                （FloatingShapeActions，渲染在 .layer-ui__wrapper 内），
+                不再占用左列布局空间，也不再注册 data-viewport-ui="side" */}
             {/* in compact UI the pen mode button lives outside the toolbar, as
-                a separate floating button below the compact actions menu
-                (same as we render it on mobile); shown alongside the compact
-                actions island, i.e. when a drawing tool or elements are
-                selected */}
+                a separate floating button (same as we render it on mobile);
+                shown when a drawing tool or elements are selected */}
             {defaultUIEnabled &&
               isCompactStylesPanel &&
               !appState.viewModeEnabled &&
@@ -689,6 +626,9 @@ const LayerUI = ({
           >
             {renderWelcomeScreen && <tunnels.WelcomeScreenCenterTunnel.Out />}
             {renderFixedSideContainer()}
+            {/* 跟随选区的浮动工具栏（桌面/平板）；显隐与定位由组件内部
+                依据 appState（context）实时计算 */}
+            {defaultUIEnabled && <FloatingShapeActions />}
             <Footer
               appState={appState}
               actionManager={actionManager}

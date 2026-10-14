@@ -38,8 +38,19 @@ describe("Test LanguageList", () => {
       </Provider>,
     );
 
-    // select rectangle tool to show properties menu
-    UI.clickTool("rectangle");
+    // 选择一个会展示浮动工具配置栏的工具（rectangle 在无选区时不展示，
+    // 见 FloatingShapeActions 的 TOOL_CONFIG_BAR_TOOLS），line 支持描边宽度，
+    // 「样式」弹层内含 `thin` 分段选择器可用于校验多语言重渲染
+    UI.clickTool("line");
+    // 描边宽度分段选择器在浮动栏「样式」弹层内（T3 场景矩阵）
+    (global as any).ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>("[aria-label='Styles']")!,
+    );
     // english lang should display `thin` label
     expect(screen.queryByTitle(/thin/i)).not.toBeNull();
     fireEvent.click(document.querySelector(".dropdown-menu-button")!);
@@ -53,6 +64,10 @@ describe("Test LanguageList", () => {
     fireEvent.change(document.querySelector(".dropdown-select__language")!, {
       target: { value: defaultLang.code },
     });
+    // 主菜单交互关闭了「样式」弹层，重新打开
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>("[aria-label='Styles']")!,
+    );
     // switching back to English
     await waitFor(() => expect(screen.queryByTitle(/thin/i)).not.toBeNull());
   });

@@ -17,6 +17,7 @@ import { t } from "../../i18n";
 
 import { CustomColorList } from "./CustomColorList";
 import PickerColorList from "./PickerColorList";
+import PresetColorList from "./PresetColorList";
 import PickerHeading from "./PickerHeading";
 import { ShadeList } from "./ShadeList";
 import {
@@ -37,13 +38,18 @@ interface PickerProps {
   type: ColorPickerType;
   elements: readonly ExcalidrawElement[];
   palette: ColorPaletteCustom;
+  /** 弹层预设行（便签纸色 picksOnly 变体的单行色板） */
+  presetColors: readonly string[];
+  /** palette colors to hide from the popup, keeping hotkey positions */
+  excludedColors?: readonly string[];
   updateData: (formData?: any) => void;
   children?: React.ReactNode;
   showTitle?: boolean;
   onEyeDropperToggle: (force?: boolean) => void;
   onEscape: (event: React.KeyboardEvent | KeyboardEvent) => void;
   showHotKey?: boolean;
-  excludedColors?: readonly string[];
+  /** 便签纸色变体：只渲染预设 + 明度（无自定义、无色值输入/取色） */
+  picksOnly?: boolean;
 }
 
 export const Picker = React.forwardRef(
@@ -55,13 +61,15 @@ export const Picker = React.forwardRef(
       type,
       elements,
       palette,
+      presetColors,
+      excludedColors,
       updateData,
       children,
       showTitle,
       onEyeDropperToggle,
       onEscape,
       showHotKey = true,
-      excludedColors,
+      picksOnly = false,
     }: PickerProps,
     ref,
   ) => {
@@ -74,14 +82,17 @@ export const Picker = React.forwardRef(
       : null;
 
     const [customColors] = React.useState(() => {
-      if (type === "canvasBackground") {
+      if (type === "canvasBackground" || picksOnly) {
         return [];
       }
-      // the table grid picker samples the same stroke-color domain
+      // the table grid and mindmap edge pickers sample the stroke-color domain
       return getMostUsedCustomColors(
         elements,
-        type === "tableGrid" ? "elementStroke" : type,
+        type === "tableGrid" || type === "mindmapEdgeColor"
+          ? "elementStroke"
+          : type,
         palette,
+        presetColors,
       );
     });
 
@@ -97,7 +108,9 @@ export const Picker = React.forwardRef(
 
     useEffect(() => {
       if (!activeColorPickerSection) {
-        const isCustom = !!color && isCustomColor({ color, palette });
+        // 预设色按「基础色」对待（不是自定义色）
+        const isCustom =
+          !!color && isCustomColor({ color, palette, presetColors });
         const isCustomButNotInList = isCustom && !customColors.includes(color);
 
         setActiveColorPickerSection(
@@ -114,6 +127,7 @@ export const Picker = React.forwardRef(
       activeColorPickerSection,
       color,
       palette,
+      presetColors,
       setActiveColorPickerSection,
       colorObj,
       customColors,
@@ -162,10 +176,12 @@ export const Picker = React.forwardRef(
               onChange,
               onEyeDropperToggle,
               customColors,
+              presetColors,
               setActiveColorPickerSection,
               updateData,
               activeShade,
               onEscape,
+              picksOnly,
               excludedColors,
             });
 
@@ -179,6 +195,43 @@ export const Picker = React.forwardRef(
           tabIndex={-1}
         >
           {title && <div className="color-picker__title">{title}</div>}
+
+          {/* 弹层结构（设计稿）：色板（全色板网格 5×3）→ 明度（5，随当前色）→
+              自定义 → 色值；便签纸色 picksOnly 变体为六色纸预设行（无小标题）+
+              明度 */}
+          {picksOnly ? (
+            <PresetColorList
+              theme={theme}
+              colors={presetColors}
+              color={color}
+              onChange={onChange}
+              showHotKey={showHotKey}
+            />
+          ) : (
+            <div>
+              <PickerHeading>{t("colorPicker.colors")}</PickerHeading>
+              <PickerColorList
+                theme={theme}
+                color={color}
+                palette={palette}
+                onChange={onChange}
+                activeShade={activeShade}
+                showHotKey={showHotKey}
+                excludedColors={excludedColors}
+              />
+            </div>
+          )}
+
+          <div>
+            <PickerHeading>{t("colorPicker.shades")}</PickerHeading>
+            <ShadeList
+              theme={theme}
+              color={color}
+              onChange={onChange}
+              palette={palette}
+              showHotKey={showHotKey}
+            />
+          </div>
 
           {!!customColors.length && (
             <div>
@@ -195,29 +248,6 @@ export const Picker = React.forwardRef(
             </div>
           )}
 
-          <div>
-            <PickerHeading>{t("colorPicker.colors")}</PickerHeading>
-            <PickerColorList
-              theme={theme}
-              color={color}
-              palette={palette}
-              onChange={onChange}
-              activeShade={activeShade}
-              showHotKey={showHotKey}
-              excludedColors={excludedColors}
-            />
-          </div>
-
-          <div>
-            <PickerHeading>{t("colorPicker.shades")}</PickerHeading>
-            <ShadeList
-              theme={theme}
-              color={color}
-              onChange={onChange}
-              palette={palette}
-              showHotKey={showHotKey}
-            />
-          </div>
           {children}
           {/* dnd context is only provided when top picks are customizable */}
           {dnd && (

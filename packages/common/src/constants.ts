@@ -201,12 +201,17 @@ export const THEME = {
 export const DARK_THEME_FILTER = "invert(93%) hue-rotate(180deg)";
 
 /**
- * Frame chrome (design: `docs/design-ui/excalidraw-canvas-frame.html`). A frame
- * is a board, not a decorative rectangle: an opaque background hides the
- * canvas dot grid, with a 1px low-contrast border. Values are light-theme —
- * canvas renderers pass them through `applyDarkModeFilter` for the dark
- * theme; only the DOM title color keeps an explicit dark value because it is
- * not a filter derivation of the light one.
+ * Frame defaults (design: `docs/design-ui/excalidraw-canvas-frame.html`). A
+ * frame is a board, not a decorative rectangle: a 1px low-contrast border, and
+ * a background fill the user can set — transparent until they do, so the dot
+ * grid shows through the empty board by default. Values are light-theme —
+ * canvas renderers pass them through `applyDarkModeFilter` for the dark theme;
+ * only the DOM title color keeps an explicit dark value because it is not a
+ * filter derivation of the light one.
+ *
+ * `backgroundColor` here is a *constructor* default only (mirroring
+ * `DEFAULT_ELEMENT_PROPS`): the renderers read `element.backgroundColor`, so a
+ * frame painted by the user keeps its fill.
  */
 export const FRAME_STYLE = {
   strokeColor: "#D0D3D9" as ExcalidrawElement["strokeColor"],
@@ -214,7 +219,7 @@ export const FRAME_STYLE = {
   strokeStyle: "solid" as ExcalidrawElement["strokeStyle"],
   fillStyle: "solid" as ExcalidrawElement["fillStyle"],
   roundness: null as ExcalidrawElement["roundness"],
-  backgroundColor: "#FFFFFF" as ExcalidrawElement["backgroundColor"],
+  backgroundColor: "transparent" as ExcalidrawElement["backgroundColor"],
   radius: 8,
   nameOffsetY: 8,
   nameColorLightTheme: "#646A73",

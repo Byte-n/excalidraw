@@ -14,7 +14,11 @@ import {
 } from "@excalidraw/excalidraw/actions";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
-import { Keyboard, Pointer, UI } from "@excalidraw/excalidraw/_tests_/helpers/ui";
+import {
+  Keyboard,
+  Pointer,
+  UI,
+} from "@excalidraw/excalidraw/_tests_/helpers/ui";
 import {
   act,
   GlobalTestState,
@@ -303,7 +307,8 @@ describe("Cropping and other features", async () => {
       initialWidth / 2,
       initialHeight / 2,
     ]);
-    Keyboard.keyDown(KEYS.ESCAPE);
+    // Esc 现在是「取消并还原」（设计稿裁剪模式条），应用裁剪用 Enter
+    Keyboard.keyDown(KEYS.ENTER);
     const cropBeforeResizing = image.crop;
     const cropBeforeResizingCloned = cloneJSON(image.crop) as ImageCrop;
 
@@ -330,7 +335,8 @@ describe("Cropping and other features", async () => {
       initialWidth / 2,
       initialHeight / 4,
     ]);
-    Keyboard.keyDown(KEYS.ESCAPE);
+    // Esc 现在是「取消并还原」（设计稿裁剪模式条），应用裁剪用 Enter
+    Keyboard.keyDown(KEYS.ENTER);
     const widthToHeightRatio = image.width / image.height;
 
     const canvas = await exportToCanvas({

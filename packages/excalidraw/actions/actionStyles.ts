@@ -11,6 +11,7 @@ import {
 import {
   hasBackground,
   hasFillStyle,
+  hasFrameBackground,
   newElementWith,
   syncStickyNoteInk,
 } from "@excalidraw/element";
@@ -121,9 +122,11 @@ export const actionPasteStyles = register({
               return element;
             }
             let newElement = newElementWith(element, {
-              backgroundColor: hasBackground(element)
-                ? elementStylesToCopyFrom.backgroundColor
-                : element.backgroundColor,
+              // a frame's background is the user's, like any filled shape's
+              backgroundColor:
+                hasBackground(element) || hasFrameBackground(element.type)
+                  ? elementStylesToCopyFrom.backgroundColor
+                  : element.backgroundColor,
               strokeWidth: elementStylesToCopyFrom?.strokeWidth,
               strokeColor: elementStylesToCopyFrom?.strokeColor,
               strokeStyle: elementStylesToCopyFrom?.strokeStyle,
@@ -195,8 +198,9 @@ export const actionPasteStyles = register({
 
             if (isFrameLikeElement(element)) {
               newElement = newElementWith(newElement, {
+                // the board's corners are fixed chrome; its background comes
+                // from the copied styles above, like any other filled shape
                 roundness: null,
-                backgroundColor: "transparent",
               });
             }
 

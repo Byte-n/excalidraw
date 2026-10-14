@@ -15,6 +15,7 @@ import type {
 
 import type { Scene } from "@excalidraw/element";
 
+import { t } from "../../i18n";
 import { useApp, useExcalidrawSetAppState } from "../App";
 import { InlineIcon } from "../InlineIcon";
 
@@ -94,7 +95,11 @@ const StatsDragInput = <
   const inputRef = useRef<HTMLInputElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
 
-  const [inputValue, setInputValue] = useState(value.toString());
+  // 多选属性不一致时显示本地化「多值」占位（与色板 @mix 同语义），
+  // 输入后统一；value 语义值仍为 "Mixed"，仅展示文案走 locale
+  const displayValue = value === "Mixed" ? t("stats.mixed") : value.toString();
+
+  const [inputValue, setInputValue] = useState(displayValue);
 
   const stateRef = useRef<{
     originalAppState: AppState;
@@ -112,10 +117,9 @@ const StatsDragInput = <
   }
 
   useEffect(() => {
-    const inputValue = value.toString();
-    setInputValue(inputValue);
-    stateRef.current.lastUpdatedValue = inputValue;
-  }, [value]);
+    setInputValue(displayValue);
+    stateRef.current.lastUpdatedValue = displayValue;
+  }, [displayValue]);
 
   const handleInputValue = (
     updatedValue: string,
@@ -132,7 +136,7 @@ const StatsDragInput = <
     // through — non-finite values corrupt element geometry (NaN/Infinity
     // don't survive the JSON round-trip on save)
     if (!Number.isFinite(parsed)) {
-      setInputValue(value.toString());
+      setInputValue(displayValue);
       return;
     }
 
@@ -365,7 +369,7 @@ const StatsDragInput = <
         {icon ? <InlineIcon icon={icon} /> : label}
       </div>
       <input
-        className="drag-input"
+        className={clsx("drag-input", value === "Mixed" && "is-mixed")}
         autoComplete="off"
         spellCheck="false"
         onKeyDown={(event) => {
@@ -393,7 +397,7 @@ const StatsDragInput = <
         }}
         onBlur={(event) => {
           if (!inputValue) {
-            setInputValue(value.toString());
+            setInputValue(displayValue);
           } else if (editable) {
             handleInputValue(
               event.target.value,

@@ -49,7 +49,7 @@ export const CustomColorList = ({
             tabIndex={-1}
             type="button"
             className={clsx(
-              "color-picker__button color-picker__button--large has-outline",
+              "color-picker__button color-picker__button--large",
               {
                 active: color === c,
                 "is-transparent": c === "transparent" || !c,

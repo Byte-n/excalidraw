@@ -18,6 +18,7 @@ import * as StaticScene from "../renderer/staticScene";
 import { API } from "./helpers/api";
 import { Keyboard, Pointer, UI } from "./helpers/ui";
 import {
+  act,
   assertSelectedElements,
   checkpointHistory,
   fireEvent,
@@ -184,13 +185,14 @@ describe("regression tests", () => {
     mouse.down(10, 10);
     mouse.up(10, 10);
     togglePopover("Background");
+    // 弹层全色板网格：色块按调色板色名 testid color-<name>（背景明度档 0）
     UI.clickOnTestId("color-yellow");
-    UI.clickOnTestId("color-red");
+    UI.clickOnTestId("color-violet");
 
     togglePopover("Stroke");
     UI.clickOnTestId("color-blue");
-    expect(API.getSelectedElement().backgroundColor).toBe("#ffc9c9");
-    expect(API.getSelectedElement().strokeColor).toBe("#1971c2");
+    expect(API.getSelectedElement().backgroundColor).toBe("#f0ebfc");
+    expect(API.getSelectedElement().strokeColor).toBe("#2f6fb0");
   });
 
   it("click on an element and drag it", () => {
@@ -674,7 +676,18 @@ describe("regression tests", () => {
   it("updates fontSize & fontFamily appState", () => {
     UI.clickTool("text");
     expect(h.state.currentItemFontFamily).toEqual(FONT_FAMILY.Nunito);
-    fireEvent.click(screen.getByTitle(/code/i));
+    // 字体在浮动栏字体弹层内（T3 场景矩阵）；弹层列表项以真实字体名命名
+    (global as any).ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>(
+        "[data-testid='font-family-show-fonts']",
+      )!,
+    );
+    fireEvent.click(screen.getByTitle("Comic Shanns"));
     expect(h.state.currentItemFontFamily).toEqual(FONT_FAMILY["Comic Shanns"]);
   });
 
@@ -1004,9 +1017,11 @@ describe("regression tests", () => {
     () => {
       UI.clickTool("rectangle");
       // change background color since default is transparent
-      // and transparent elements can't be selected by clicking inside of them
-      togglePopover("Background");
-      UI.clickOnTestId("color-red");
+      // and transparent elements can't be selected by clicking inside of them.
+      // 直接设定默认背景色，不经过颜色弹层
+      act(() => {
+        API.setAppState({ currentItemBackgroundColor: "#e6f4f1" });
+      });
       mouse.down();
       mouse.up(1000, 1000);
 

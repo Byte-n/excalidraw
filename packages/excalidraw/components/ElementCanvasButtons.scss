@@ -1,20 +1,16 @@
 .excalidraw {
+  // 画布悬浮按钮容器：胶囊纵向排列、贴元素边缘外侧；胶囊自身规格
+  // （高 28、圆角 999、白底描边 / primary 主色底）见 toolbar.scss 的
+  // .tb-canvasbtn
   .excalidraw-canvas-buttons {
     position: absolute;
 
-    box-shadow: 0px 2px 4px 0 rgb(0 0 0 / 30%);
     z-index: var(--zIndex-canvasButtons);
-    background: var(--island-bg-color);
-    border-radius: var(--border-radius-lg);
 
     display: flex;
     flex-direction: column;
-    gap: 0.375rem;
-
-    .ToolIcon__MagicButton.is-mobile .ToolIcon__icon {
-      width: 44px;
-      height: 44px;
-    }
+    align-items: flex-start;
+    gap: 6px;
   }
 
   // 思维导图编辑态快捷键提示（节点下方，不响应指针）

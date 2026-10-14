@@ -77,6 +77,15 @@ describe("appState", () => {
     UI.clickTool("text");
 
     expect(h.state.currentItemFontSize).toBe(30);
+    // 字号分段选择器在浮动栏「文字属性」弹层内（T3 场景矩阵）
+    (global as any).ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>("[aria-label='Text align']")!,
+    );
     fireEvent.click(queryByTestId(container, "fontSize-small")!);
     expect(h.state.currentItemFontSize).toBe(16);
 

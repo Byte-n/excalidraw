@@ -44,10 +44,16 @@ export const colorPickerHotkeyBindings = [
 export const isCustomColor = ({
   color,
   palette,
+  presetColors,
 }: {
   color: string;
   palette: ColorPaletteCustom;
+  /** 弹层预设行：预设色不算自定义色（不进「自定义」区） */
+  presetColors?: readonly string[];
 }) => {
+  if (presetColors?.includes(color)) {
+    return false;
+  }
   const paletteValues = Object.values(palette).flat();
   return !paletteValues.includes(color);
 };
@@ -56,6 +62,7 @@ export const getMostUsedCustomColors = (
   elements: readonly ExcalidrawElement[],
   type: "elementBackground" | "elementStroke",
   palette: ColorPaletteCustom,
+  presetColors?: readonly string[],
 ) => {
   const elementColorTypeMap = {
     elementBackground: "backgroundColor",
@@ -72,7 +79,9 @@ export const getMostUsedCustomColors = (
 
     // fully-transparent colors are "no color", not a reusable custom color
     // (matters for palettes that exclude `transparent`, e.g. bucket fill)
-    return !isTransparent(color) && isCustomColor({ color, palette });
+    return (
+      !isTransparent(color) && isCustomColor({ color, palette, presetColors })
+    );
   });
 
   const colorCountMap = new Map<string, number>();
@@ -108,4 +117,7 @@ export type ColorPickerType =
   // the table grid picker needs its own popup identity: `openPopup` is keyed
   // by picker type, and sharing "elementStroke" with the table border picker
   // would open both popovers at once
-  | "tableGrid";
+  | "tableGrid"
+  // the mindmap edge picker samples the stroke-color domain but, like the
+  // table grid picker, needs its own popup identity
+  | "mindmapEdgeColor";

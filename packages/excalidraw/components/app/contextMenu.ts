@@ -194,20 +194,82 @@ export const openContextMenu = (
   );
 };
 
-export const getContextMenuItems = (
-  app: App,
-  type: "canvas" | "element",
-): ContextMenuItems => {
-  const submenu = (
-    label: ContextMenuSubmenu["label"],
-    items: ContextMenuItems,
-  ): ContextMenuSubmenu => ({ type: "submenu", label, items });
+export const buildContextMenuSubmenu = (
+  label: ContextMenuSubmenu["label"],
+  items: ContextMenuItems,
+): ContextMenuSubmenu => ({ type: "submenu", label, items });
 
-  const copyAsSubmenu = submenu("labels.contextMenuCopyAs", [
+/**
+ * 子菜单构建器：右键菜单（getContextMenuItems）与浮动栏「更多」菜单
+ * （toolbar/ToolbarMoreMenu.tsx）同源共用，改动一处两端一致。
+ */
+export const getCopyAsSubmenu = (): ContextMenuSubmenu =>
+  buildContextMenuSubmenu("labels.contextMenuCopyAs", [
     actionCopyAsPng,
     actionCopyAsSvg,
     copyText,
   ]);
+
+export const getStyleSubmenu = (): ContextMenuSubmenu =>
+  buildContextMenuSubmenu("labels.contextMenuStyle", [
+    actionCopyStyles,
+    actionPasteStyles,
+  ]);
+
+export const getLinkSubmenu = (): ContextMenuSubmenu =>
+  buildContextMenuSubmenu("labels.contextMenuLink", [
+    actionLink,
+    actionCopyElementLink,
+  ]);
+
+export const getEditSubmenu = (): ContextMenuSubmenu =>
+  buildContextMenuSubmenu("labels.contextMenuEdit", [
+    actionToggleCropEditor,
+    actionToggleLinearEditor,
+    actionToggleShapeSwitch,
+    actionAddToLibrary,
+  ]);
+
+export const getTextSubmenu = (): ContextMenuSubmenu =>
+  buildContextMenuSubmenu("labels.contextMenuText", [
+    actionTextAutoResize,
+    actionSetCompositeShapeTextFitAuto,
+    actionSetCompositeShapeTextFitFixed,
+    actionUnbindText,
+    actionBindText,
+    actionWrapTextInContainer,
+  ]);
+
+export const getTableSubmenu = (): ContextMenuSubmenu =>
+  buildContextMenuSubmenu("labels.contextMenuTable", [
+    actionTableClearContent,
+    actionTableClearBackgroundText,
+    actionTableClearStyle,
+    actionTableCopyFormat,
+    actionTablePasteFormat,
+    actionTableCenterContent,
+  ]);
+
+/** 画框相关动作：右键菜单平铺、「更多」菜单收进「画框›」子菜单（同序） */
+export const getFrameSubmenuItems = (): ContextMenuItems => [
+  actionSelectAllElementsInFrame,
+  actionRemoveAllElementsFromFrame,
+  actionWrapSelectionInFrame,
+];
+
+/** 翻转动作：右键菜单平铺、「更多」菜单收进「翻转›」子菜单 */
+export const getFlipSubmenuItems = (): ContextMenuItems => [
+  actionFlipHorizontal,
+  actionFlipVertical,
+];
+
+export const getContextMenuItems = (
+  app: App,
+  type: "canvas" | "element",
+): ContextMenuItems => {
+  const submenu = buildContextMenuSubmenu;
+
+  const copyAsSubmenu = getCopyAsSubmenu();
   const viewSubmenu = submenu("labels.contextMenuView", [
     actionToggleGridMode,
     actionToggleZenMode,
@@ -276,17 +338,7 @@ export const getContextMenuItems = (
 
   return [
     ...(app.state.tableCellSelection
-      ? ([
-          submenu("labels.contextMenuTable", [
-            actionTableClearContent,
-            actionTableClearBackgroundText,
-            actionTableClearStyle,
-            actionTableCopyFormat,
-            actionTablePasteFormat,
-            actionTableCenterContent,
-          ]),
-          CONTEXT_MENU_SEPARATOR,
-        ] as ContextMenuItems)
+      ? ([getTableSubmenu(), CONTEXT_MENU_SEPARATOR] as ContextMenuItems)
       : []),
     actionCut,
     actionCopy,
@@ -302,29 +354,15 @@ export const getContextMenuItems = (
     actionFlipHorizontal,
     actionFlipVertical,
     CONTEXT_MENU_SEPARATOR,
-    submenu("labels.contextMenuEdit", [
-      actionToggleCropEditor,
-      actionToggleLinearEditor,
-      actionToggleShapeSwitch,
-      actionAddToLibrary,
-    ]),
+    getEditSubmenu(),
     CONTEXT_MENU_SEPARATOR,
-    submenu("labels.contextMenuText", [
-      actionTextAutoResize,
-      actionSetCompositeShapeTextFitAuto,
-      actionSetCompositeShapeTextFitFixed,
-      actionUnbindText,
-      actionBindText,
-      actionWrapTextInContainer,
-    ]),
+    getTextSubmenu(),
     CONTEXT_MENU_SEPARATOR,
-    actionSelectAllElementsInFrame,
-    actionRemoveAllElementsFromFrame,
-    actionWrapSelectionInFrame,
+    ...getFrameSubmenuItems(),
     CONTEXT_MENU_SEPARATOR,
-    submenu("labels.contextMenuStyle", [actionCopyStyles, actionPasteStyles]),
+    getStyleSubmenu(),
     CONTEXT_MENU_SEPARATOR,
-    submenu("labels.contextMenuLink", [actionLink, actionCopyElementLink]),
+    getLinkSubmenu(),
     CONTEXT_MENU_SEPARATOR,
     actionDeleteSelected,
   ];

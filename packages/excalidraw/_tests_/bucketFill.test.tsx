@@ -452,19 +452,37 @@ describe("bucket fill tool", () => {
     expect(h.state.activeTool.type).toBe("bucketfill");
   });
 
-  it("shows fill color, fill style and opacity in the panel when the tool is active", () => {
-    seedRectangle();
+  it("工具配置态不展示桶填充配置栏；选中元素后面板照常（取色 + 填充样式/透明度）", () => {
+    const rect = seedRectangle();
     selectBucketFill();
+
+    // 工具配置态（无选区）：桶填充不在顶部配置栏工具白名单内，不展示浮动栏
+    expect(document.querySelector(".tb-floatbar")).toBeNull();
+
+    // 有选区后：桶填充面板照常展示
+    act(() => {
+      API.setAppState({ selectedElementIds: { [rect.id]: true } });
+    });
 
     const panel = document.querySelector(".selected-shape-actions");
     expect(panel).not.toBeNull();
     // the fill (background) color picker is shown...
     expect(panel!.querySelector('[aria-label="Background"]')).not.toBeNull();
-    // ...along with the fill style + opacity controls for the created fills...
-    expect(panel!.querySelector('[data-testid="fill-hachure"]')).not.toBeNull();
-    expect(panel!.querySelector('[data-testid="opacity"]')).not.toBeNull();
+    // ...the fill style + opacity controls live in the styles popup...
+    fireEvent.click(
+      panel!.querySelector<HTMLButtonElement>('[aria-label="Styles"]')!,
+    );
+    const stylesPopup = document.querySelector(".properties-content");
+    expect(stylesPopup).not.toBeNull();
+    expect(
+      stylesPopup!.querySelector('[data-testid="fill-hachure"]'),
+    ).not.toBeNull();
+    expect(
+      stylesPopup!.querySelector('[data-testid="opacity"]'),
+    ).not.toBeNull();
     // ...and nothing else from the generic shape panel (e.g. stroke)
     expect(panel!.querySelector('[aria-label="Stroke"]')).toBeNull();
+    expect(stylesPopup!.querySelector('[aria-label="Stroke"]')).toBeNull();
   });
 
   it("uses the current fill style and opacity for created fills", () => {
@@ -500,12 +518,17 @@ describe("bucket fill tool", () => {
     expect(h.state.openPopup).toBe("elementBackground");
   });
 
-  it("swallows the hidden transparent entry's hotkey (q) inside the picker", () => {
-    // regression: the hidden transparent entry's `q` returned "unhandled",
-    // so the picker didn't stop propagation and App.onKeyDown toggled the
-    // global tool lock while the color dialog was open
-    seedRectangle();
+  it("keeps picker hotkeys scoped to the palette grid inside the popup", () => {
+    // regression: a hotkey reported "unhandled" let the key escape the modal
+    // and hit global shortcuts (`q` toggles the tool lock) while the color
+    // dialog was open. The bucket fill popup hides `transparent`
+    // (excludedColors) — its `q` key is dead but handled
+    const rect = seedRectangle();
     selectBucketFill();
+    // 桶填充配置栏需有作用对象（选区）才展示
+    act(() => {
+      API.setAppState({ selectedElementIds: { [rect.id]: true } });
+    });
     togglePopover("Background");
 
     const picker = document.querySelector(".color-picker-content")!;
@@ -513,14 +536,13 @@ describe("bucket fill tool", () => {
     expect(h.state.activeTool.locked).toBe(false);
     const before = h.state.currentItemBackgroundColor;
 
-    // `q` maps to the hidden transparent swatch AND to the global tool-lock
-    // shortcut — inside the modal it must be dead, not leaked
+    // `q` = 透明位（网格中已隐藏）→ 空键：不选中、不泄漏
     fireEvent.keyDown(picker, { key: "q" });
     expect(h.state.activeTool.locked).toBe(false);
     expect(h.state.currentItemBackgroundColor).toBe(before);
 
-    // the other hotkeys keep working on their usual keys (w = white)
-    fireEvent.keyDown(picker, { key: "w" });
+    // 调色板键按位生效：s = blue 族（取当前明度档）→ 非透明色
+    fireEvent.keyDown(picker, { key: "s" });
     expect(h.state.currentItemBackgroundColor).not.toBe(before);
     expect(h.state.currentItemBackgroundColor).not.toBe("transparent");
   });

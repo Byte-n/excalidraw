@@ -15,7 +15,11 @@ import {
 } from "@excalidraw/common";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
-import { UI, Keyboard, Pointer } from "@excalidraw/excalidraw/_tests_/helpers/ui";
+import {
+  UI,
+  Keyboard,
+  Pointer,
+} from "@excalidraw/excalidraw/_tests_/helpers/ui";
 import {
   act,
   render,
@@ -701,6 +705,7 @@ describe("arrow element", () => {
       height: 100,
     });
     UI.clickTool("arrow");
+    UI.openToolbarPopup("Arrow type");
     UI.clickOnTestId("elbow-arrow");
     mouse.reset();
     mouse.moveTo(-5, 0);
@@ -729,6 +734,7 @@ describe("arrow element", () => {
       height: 100,
     });
     UI.clickTool("arrow");
+    UI.openToolbarPopup("Arrow type");
     UI.clickOnTestId("elbow-arrow");
     mouse.reset();
     mouse.moveTo(-5, 0);
@@ -1122,6 +1128,7 @@ describe("multiple selection", () => {
 
   it("resizes with linear elements > 2 points", async () => {
     UI.clickTool("line");
+    UI.openToolbarPopup("Styles");
     UI.clickByTitle("Sharp");
 
     const line = UI.createElement("line", {
@@ -1307,6 +1314,7 @@ describe("multiple selection", () => {
     const topArrowLabel = await UI.editText(topArrow.get(), "lorem ipsum");
 
     UI.clickTool("text");
+    UI.openToolbarPopup("Text align");
     UI.clickByTitle("Large");
     const bottomArrow = UI.createElement("arrow", {
       x: 0,
@@ -1378,6 +1386,7 @@ describe("multiple selection", () => {
     await UI.editText(topText, "lorem ipsum");
 
     UI.clickTool("text");
+    UI.openToolbarPopup("Text align");
     UI.clickByTitle("Large");
     const bottomText = UI.createElement("text", { position: 40 });
     await UI.editText(bottomText, "dolor\nsit amet");

@@ -39,6 +39,16 @@ describe("freedraw mode action", () => {
     const element = UI.createElement("freedraw", { x: 0, y: 0 });
     API.setSelectedElements([element.get()] as NonDeletedExcalidrawElement[]);
 
+    // 压感分段选择器在浮动栏「样式」弹层内（T3 场景矩阵）
+    (global as any).ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>("[aria-label='Styles']")!,
+    );
+
     fireEvent.click(screen.getByTitle("Variable"));
     expect(
       (h.elements[0] as ExcalidrawFreeDrawElement).strokeOptions?.variability,

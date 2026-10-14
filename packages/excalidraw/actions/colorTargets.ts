@@ -4,6 +4,7 @@ import {
   DEFAULT_ELEMENT_BACKGROUND_PICKS,
   DEFAULT_ELEMENT_STROKE_COLOR_PALETTE,
   DEFAULT_ELEMENT_STROKE_PICKS,
+  DEFAULT_ELEMENT_STROKE_PRESETS,
   STICKY_NOTE_BACKGROUND_PICKS,
   STICKY_NOTE_STROKE_PICKS,
   arrayToMap,
@@ -12,6 +13,7 @@ import {
 import {
   getColorTargetElement,
   hasBackground,
+  hasFrameBackground,
   hasStrokeColor,
   isStickyNoteBoundText,
   isStickyNoteElement,
@@ -58,6 +60,10 @@ export type ColorTarget = {
   /** the strip's picks — five in every domain but the sticky paper's six */
   topPicks: readonly string[];
   customizableTopPicks: keyof AppState["colorTopPicks"];
+  /** 弹层预设行（便签纸色 picksOnly 变体的单行色板）：描边域六色，
+   * 其余域同既有 picks；固定不随用户自定义快捷色板变化 */
+  presetColors: readonly string[];
+  /** palette colors to hide from the popup, keeping hotkey positions */
   excludedColors: readonly string[] | undefined;
 };
 
@@ -75,13 +81,11 @@ const DEFAULT_KEYS: Record<
   },
 };
 
-// transparent is hidden rather than removed from the palette so the remaining
-// colors keep their usual hotkeys (same mechanism as the bucket fill picker);
-// a module constant so the memoized picker's identity comparison holds
+// 便签无透明色域：透明在全色板网格中隐藏而非移除，让其余颜色保住既有
+// 网格位与热键（与油漆桶选择器同一机制）；模块常量保证 memo 的 === 比较成立
 const STICKY_NOTE_EXCLUDED_COLORS: readonly string[] = [
   COLOR_PALETTE.transparent,
 ];
-
 const isStickyNoteColorTarget = (
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
@@ -110,7 +114,7 @@ export const resolveColorTarget = (
   const supports = (element: ExcalidrawElement) =>
     property === "strokeColor"
       ? hasStrokeColor(element.type)
-      : hasBackground(element);
+      : hasBackground(element) || hasFrameBackground(element.type);
 
   const targets: ExcalidrawElement[] = getSelectedElements(elements, appState, {
     includeBoundTextElement: property === "strokeColor",
@@ -171,6 +175,14 @@ export const resolveColorTarget = (
         : isStroke
         ? "elementStroke"
         : "elementBackground",
+    presetColors:
+      kind === "sticky"
+        ? isStroke
+          ? STICKY_NOTE_STROKE_PICKS
+          : STICKY_NOTE_BACKGROUND_PICKS
+        : isStroke
+        ? DEFAULT_ELEMENT_STROKE_PRESETS
+        : DEFAULT_ELEMENT_BACKGROUND_PICKS,
     excludedColors: kind === "sticky" ? STICKY_NOTE_EXCLUDED_COLORS : undefined,
   };
 };

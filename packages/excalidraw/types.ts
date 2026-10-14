@@ -683,11 +683,21 @@ export interface AppState {
     | "elementBackground"
     | "elementStroke"
     | "tableGrid"
+    // the mindmap edge color picker needs its own popup identity (same
+    // reason as "tableGrid": `openPopup` is keyed by picker type)
+    | "mindmapEdgeColor"
     | "fontFamily"
     | "compactTextProperties"
     | "compactStrokeStyles"
     | "compactOtherProperties"
     | "compactArrowProperties"
+    | "compactAlign"
+    | "compactLayers"
+    | "mindmapNodeShape"
+    | "mindmapIncomingEdge"
+    | "mindmapGraphDirection"
+    | "mindmapGraphEdge"
+    | "mindmapEdgeStyle"
     | null;
   openSidebar: { name: SidebarName; tab?: SidebarTabName } | null;
   openDialog:
@@ -1447,6 +1457,8 @@ export type AppClassProperties = {
   onMagicframeToolSelect: App["onMagicframeToolSelect"];
   getName: App["getName"];
   dismissLinearEditor: App["dismissLinearEditor"];
+  finishImageCropping: App["finishImageCropping"];
+  cancelImageCropping: App["cancelImageCropping"];
   flowchart: App["flowchart"];
   mindmap: App["mindmap"];
   setMindmapDragOpacity: App["setMindmapDragOpacity"];
@@ -1492,6 +1504,9 @@ export type AppClassProperties = {
 
   isInteractionEnabled: App["isInteractionEnabled"];
   isNavigationEnabled: App["isNavigationEnabled"];
+  // 链接弹层（浮动栏 FloatbarLinkAction → HyperlinkContent）需要
+  setToast: App["setToast"];
+  updateEmbedValidationStatus: App["updateEmbedValidationStatus"];
 };
 
 export type TopCenterToolbarProps = {

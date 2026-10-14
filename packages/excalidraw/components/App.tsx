@@ -31,6 +31,7 @@ import {
   getInitializedImageElements,
   isElementCompletelyInViewport,
   isFrameLikeElement,
+  isImageElement,
   isTableElement,
   isUsingAdaptiveRadius,
   makeNextSelectedElementIds,
@@ -38,6 +39,8 @@ import {
   resolveElementRenderState,
   Scene,
   Store,
+  StoreChange,
+  StoreSnapshot,
   syncInvalidIndices,
   tableCellContainerRef,
   getTableCellInsertionIndex,
@@ -303,7 +306,6 @@ class App extends React.Component<AppProps, AppState> {
   });
   public viewport: AppViewport = new AppViewport(this, {
     getContainer: () => this.excalidrawContainerRef.current,
-    getStylesPanelMode: () => this.stylesPanelMode,
     isGestureActive: () =>
       this.gesture.pointers.size >= 2 || this.pan.isActive(),
   });
@@ -1016,6 +1018,22 @@ class App extends React.Component<AppProps, AppState> {
     return lifecycle.componentWillUnmount(this);
   }
   public componentDidUpdate(prevProps: AppProps, prevState: AppState) {
+    // 进入裁剪模式时快照原 crop 值（覆盖全部入口：快捷键、双击、操作按钮、
+    // API），供 cancelImageCropping 取消时还原。
+    // 必须浅拷贝：cropElement.ts 的手柄拖动会原地修改 crop 对象
+    // （`let crop = element.crop ?? {...}` 后直接写 crop.x/y/width/height），
+    // 存引用会被同步污染，导致二次裁剪时取消无法还原
+    if (!prevState.croppingElementId && this.state.croppingElementId) {
+      const croppingElement = this.scene.getNonDeletedElement(
+        this.state.croppingElementId,
+      );
+      this.imageCroppingOriginalCrop =
+        croppingElement && isImageElement(croppingElement)
+          ? croppingElement.crop
+            ? { ...croppingElement.crop }
+            : croppingElement.crop
+          : undefined;
+    }
     return lifecycle.componentDidUpdate(this, prevProps, prevState);
   }
   public addEventListeners = () => eventListeners.addEventListeners(this);
@@ -1589,6 +1607,9 @@ class App extends React.Component<AppProps, AppState> {
     options: Parameters<typeof textController.startTextEditing>[1],
   ) => textController.startTextEditing(this, options);
 
+  /** 进入裁剪模式时原 crop 的快照（componentDidUpdate 维护），供取消还原 */
+  public imageCroppingOriginalCrop: ExcalidrawImageElement["crop"] | undefined;
+
   public startImageCropping = (image: ExcalidrawImageElement) => {
     this.store.scheduleCapture();
     this.setState({
@@ -1599,10 +1620,61 @@ class App extends React.Component<AppProps, AppState> {
   public finishImageCropping = () => {
     if (this.state.croppingElementId) {
       this.store.scheduleCapture();
+      this.imageCroppingOriginalCrop = undefined;
       this.setState({
         croppingElementId: null,
       });
     }
+  };
+
+  /**
+   * 取消裁剪（设计稿「图片 · 裁剪模式」：✕/Esc 还原到进入时状态）：
+   * 恢复快照的 crop 后退出。还原不产生历史记录——以 NEVER 微动作对齐
+   * store 快照并发出 ephemeral 增量（协作可同步、不进撤销栈）；裁剪期间
+   * 的中间增量在撤销时会因与当前状态等价被历史自动跳过。
+   */
+  public cancelImageCropping = () => {
+    const { croppingElementId } = this.state;
+    if (!croppingElementId) {
+      return;
+    }
+
+    const originalCrop = this.imageCroppingOriginalCrop;
+    this.imageCroppingOriginalCrop = undefined;
+
+    const element = this.scene.getNonDeletedElement(croppingElementId);
+    const cropUnchanged =
+      element &&
+      isImageElement(element) &&
+      (element.crop === originalCrop ||
+        (element.crop !== null &&
+          originalCrop != null &&
+          element.crop.x === originalCrop.x &&
+          element.crop.y === originalCrop.y &&
+          element.crop.width === originalCrop.width &&
+          element.crop.height === originalCrop.height));
+    if (
+      originalCrop !== undefined &&
+      element &&
+      isImageElement(element) &&
+      !cropUnchanged
+    ) {
+      this.scene.mutateElement(element, { crop: originalCrop });
+      this.store.scheduleMicroAction({
+        action: CaptureUpdateAction.NEVER,
+        change: StoreChange.create(
+          this.store.snapshot,
+          StoreSnapshot.create(this.scene.getElementsMapIncludingDeleted(), {
+            ...this.state,
+            croppingElementId: null,
+          }),
+        ),
+      });
+    }
+
+    this.setState({
+      croppingElementId: null,
+    });
   };
 
   private shouldHandleBrowserCanvasDoubleClick = (type: string) => {

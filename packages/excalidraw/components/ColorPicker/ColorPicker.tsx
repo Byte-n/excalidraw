@@ -8,6 +8,7 @@ import {
   COLOR_PALETTE,
   DEFAULT_ELEMENT_BACKGROUND_PICKS,
   DEFAULT_ELEMENT_STROKE_PICKS,
+  DEFAULT_ELEMENT_STROKE_PRESETS,
   isColorDark,
   isWritableElement,
   THEME,
@@ -22,8 +23,11 @@ import { t } from "../../i18n";
 import { useApp, useExcalidrawContainer, useStylesPanelMode } from "../App";
 import { ButtonSeparator } from "../ButtonSeparator";
 import { activeEyeDropperAtom } from "../EyeDropper";
-import { PropertiesPopover } from "../PropertiesPopover";
-import { slashIcon, strokeIcon } from "../icons";
+import {
+  PropertiesPopover,
+  markPropertiesPopoverEscClose,
+} from "../PropertiesPopover";
+import { strokeIcon } from "../icons";
 import {
   saveCaretPosition,
   restoreCaretPosition,
@@ -60,15 +64,20 @@ interface ColorPickerProps {
   appState: UIAppState;
   palette?: ColorPaletteCustom | null;
   topPicks?: readonly string[];
-  updateData: (formData?: any) => void;
+  /** 弹层预设行（仅便签纸色 picksOnly 变体渲染；其余变体为全色板网格）。
+   * 缺省回退到 topPicks 基线（不含用户自定义）；预设色不计入自定义色 */
+  presetColors?: readonly string[];
   /** palette colors to hide from the popup, keeping hotkey positions */
   excludedColors?: readonly string[];
+  updateData: (formData?: any) => void;
   /** allow users to customize the top picks strip by drag & dropping colors
    * from the picker popup onto it. The value names the
    * `appState.colorTopPicks` slot the customization is stored in */
   customizableTopPicks?: keyof AppState["colorTopPicks"];
   enableEyeDropper?: boolean;
   compact?: boolean;
+  /** 便签纸色变体：弹层只有预设 + 明度（无自定义、无色值输入/取色） */
+  picksOnly?: boolean;
 }
 
 const ColorPickerPopupContent = ({
@@ -78,12 +87,14 @@ const ColorPickerPopupContent = ({
   label,
   elements,
   palette = COLOR_PALETTE,
+  presetColors,
+  excludedColors,
   updateData,
   getOpenPopup,
   appState,
-  excludedColors,
   enableEyeDropper,
   compact,
+  picksOnly,
 }: Pick<
   ColorPickerProps,
   | "type"
@@ -94,10 +105,13 @@ const ColorPickerPopupContent = ({
   | "palette"
   | "updateData"
   | "appState"
-  | "excludedColors"
   | "enableEyeDropper"
   | "compact"
+  | "picksOnly"
+  | "excludedColors"
 > & {
+  /** 弹层预设行（调用方已解析为固定基线，见 effectivePresetColors） */
+  presetColors: readonly string[];
   getOpenPopup: () => AppState["openPopup"];
 }) => {
   const { container } = useExcalidrawContainer();
@@ -134,9 +148,11 @@ const ColorPickerPopupContent = ({
   return (
     <PropertiesPopover
       container={container}
-      style={{ maxWidth: "13rem" }}
+      label={label}
+      // 弹层宽度对齐设计稿（颜色弹层 236px）
+      style={{ width: "14.75rem" }}
       // Improve focus handling for text editing scenarios
-      preventAutoFocusOnTouch={!!appState.editingTextElement}
+      preventAutoFocusOnTextEdit={!!appState.editingTextElement}
       onFocusOutside={(event) => {
         const target = event.target;
         // focus moving into the top-picks context menu — let the menu keep
@@ -200,6 +216,7 @@ const ColorPickerPopupContent = ({
         <Picker
           ref={colorPickerContentRef}
           palette={palette}
+          presetColors={presetColors}
           excludedColors={excludedColors}
           color={color}
           theme={appState.theme}
@@ -244,7 +261,8 @@ const ColorPickerPopupContent = ({
             if (eyeDropperState) {
               setEyeDropperState(null);
             } else {
-              // close explicitly on Escape
+              // close explicitly on Escape（标记 Esc 关闭，焦点回触发器）
+              markPropertiesPopoverEscClose();
               updateData({ openPopup: null });
             }
           }}
@@ -253,8 +271,9 @@ const ColorPickerPopupContent = ({
           updateData={updateData}
           showTitle={isCompactMode}
           showHotKey={!isMobileMode}
+          picksOnly={picksOnly}
         >
-          {colorInputJSX}
+          {picksOnly ? null : colorInputJSX}
         </Picker>
       ) : (
         colorInputJSX
@@ -269,6 +288,7 @@ const isColorPickerPopup = (
   popup === "elementStroke" ||
   popup === "elementBackground" ||
   popup === "canvasBackground" ||
+  popup === "mindmapEdgeColor" ||
   popup === "tableGrid";
 
 const ColorPickerTrigger = ({
@@ -314,29 +334,31 @@ const ColorPickerTrigger = ({
   return (
     <Popover.Trigger
       type="button"
-      className={clsx("color-picker__button active-color properties-trigger", {
-        "is-transparent": !color || color === "transparent",
-        "has-outline":
-          !color || !isColorDark(color, COLOR_OUTLINE_CONTRAST_THRESHOLD),
+      className={clsx("color-picker__button properties-trigger", {
+        // null = 多值（多选属性不一致）→ 虚线斜分；transparent → 红斜线
+        "is-transparent": color === "transparent",
+        "is-mix": color === null,
         "compact-sizing": isCompactMode,
         "mobile-border": isMobileMode,
       })}
       aria-label={label}
       style={displayColor ? { "--swatch-color": displayColor } : undefined}
       title={
-        type === "elementStroke" || type === "tableGrid"
+        type === "elementStroke" ||
+        type === "tableGrid" ||
+        type === "mindmapEdgeColor"
           ? t("labels.showStroke")
           : t("labels.showBackground")
       }
       data-openpopup={type}
       onClick={handleClick}
-      // the active-color swatch can be dragged onto the top-picks strip to
+      // the trigger swatch can be dragged onto the top-picks strip to
       // pin the current (possibly custom) color
       onPointerDown={
         dnd ? (event) => dnd.startSwatchDrag(event, color) : undefined
       }
     >
-      <div className="color-picker__button-outline">{!color && slashIcon}</div>
+      <div className="color-picker__button-outline" />
       {isCompactMode && color && mode === "stroke" && (
         <div className="color-picker__button-background">
           <span
@@ -364,12 +386,14 @@ const ColorPickerComponent = ({
   elements,
   palette = COLOR_PALETTE,
   topPicks,
+  presetColors,
+  excludedColors,
   updateData,
   appState,
-  excludedColors,
   customizableTopPicks,
   enableEyeDropper = true,
   compact = false,
+  picksOnly = false,
 }: ColorPickerProps) => {
   const openRef = useRef(appState.openPopup);
   useEffect(() => {
@@ -394,6 +418,16 @@ const ColorPickerComponent = ({
       (type === "elementStroke"
         ? DEFAULT_ELEMENT_STROKE_PICKS
         : DEFAULT_ELEMENT_BACKGROUND_PICKS);
+
+  // 弹层预设行：固定基线（描边域六色 / 其余域同既有 picks），
+  // 不随用户自定义快捷色板变化；仅 picksOnly 变体渲染它，其余变体据此
+  // 排除「最常用自定义色」中的预设色
+  const effectivePresetColors =
+    presetColors ??
+    topPicks ??
+    (type === "elementBackground" || type === "canvasBackground"
+      ? DEFAULT_ELEMENT_BACKGROUND_PICKS
+      : DEFAULT_ELEMENT_STROKE_PRESETS);
 
   const dnd = useTopPicksDnD({
     enabled: isTopPicksCustomizable,
@@ -473,7 +507,9 @@ const ColorPickerComponent = ({
             type={type}
             theme={appState.theme}
             mode={
-              type === "elementStroke" || type === "tableGrid"
+              type === "elementStroke" ||
+              type === "tableGrid" ||
+              type === "mindmapEdgeColor"
                 ? "stroke"
                 : "background"
             }
@@ -501,9 +537,11 @@ const ColorPickerComponent = ({
               label={label}
               elements={elements}
               palette={palette}
+              presetColors={effectivePresetColors}
               excludedColors={excludedColors}
               enableEyeDropper={enableEyeDropper}
               compact={compact}
+              picksOnly={picksOnly}
               updateData={updateData}
               getOpenPopup={() => openRef.current}
               appState={appState}
@@ -520,7 +558,8 @@ const ColorPickerComponent = ({
  * box-select and the like), while its actual inputs are a handful of resolved
  * primitives and reference-stable objects — cheap `===` checks, no deep
  * comparisons:
- * - `palette` / `topPicks` / `excludedColors` are module constants,
+ * - `palette` / `topPicks` / `presetColors` / `excludedColors` are module
+ *   constants,
  * - `appState.colorTopPicks` identity changes exactly when its content does.
  *
  * Function props (`onChange`, `updateData`) are deliberately ignored — they
@@ -549,10 +588,12 @@ const areColorPickerPropsEqual = (
     prev.appState.openPopup === next.appState.openPopup &&
     prev.palette === next.palette &&
     prev.topPicks === next.topPicks &&
+    prev.presetColors === next.presetColors &&
     prev.excludedColors === next.excludedColors &&
     prev.customizableTopPicks === next.customizableTopPicks &&
     prev.enableEyeDropper === next.enableEyeDropper &&
     prev.compact === next.compact &&
+    prev.picksOnly === next.picksOnly &&
     prev.appState.theme === next.appState.theme &&
     prev.appState.colorTopPicks === next.appState.colorTopPicks &&
     // the trigger tweaks its click behavior while a text element is edited

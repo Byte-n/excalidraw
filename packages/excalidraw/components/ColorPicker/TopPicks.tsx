@@ -3,11 +3,9 @@ import { ContextMenu } from "radix-ui";
 
 import {
   applyDarkModeFilter,
-  COLOR_OUTLINE_CONTRAST_THRESHOLD,
   DEFAULT_CANVAS_BACKGROUND_PICKS,
   DEFAULT_ELEMENT_BACKGROUND_PICKS,
   DEFAULT_ELEMENT_STROKE_PICKS,
-  isColorDark,
   THEME,
 } from "@excalidraw/common";
 
@@ -121,10 +119,6 @@ export const TopPicks = ({
             className={clsx("color-picker__button", {
               active: color === activeColor,
               "is-transparent": color === "transparent" || !color,
-              "has-outline": !isColorDark(
-                color,
-                COLOR_OUTLINE_CONTRAST_THRESHOLD,
-              ),
               "is-dnd-source":
                 dragState?.origin.kind === "pick" &&
                 dragState.origin.index === index,

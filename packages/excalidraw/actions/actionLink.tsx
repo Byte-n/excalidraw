@@ -32,6 +32,8 @@ export const actionLink = register({
         ...appState,
         showHyperlinkPopup: "editor",
         openMenu: null,
+        // 链接弹层与其他弹层互斥（openPopup 单值模型）
+        openPopup: null,
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };

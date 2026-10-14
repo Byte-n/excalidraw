@@ -46,10 +46,13 @@ describe("actionStyles", () => {
     mouse.up(20, 20);
 
     // Change some styles of second rectangle
+    // 弹层全色板网格：色块按调色板色名 testid color-<name>，族色块取当前明度档
     togglePopover("Stroke");
     UI.clickOnTestId("color-red");
     togglePopover("Background");
-    UI.clickOnTestId("color-blue");
+    UI.clickOnTestId("color-red");
+    // Fill style / stroke width / stroke style / opacity live in the styles popup
+    togglePopover("Styles");
     // Fill style
     fireEvent.click(screen.getByTitle("Cross-hatch"));
     // Stroke width
@@ -80,12 +83,40 @@ describe("actionStyles", () => {
 
     const firstRect = API.getSelectedElement();
     expect(firstRect.id).toBe(h.elements[0].id);
-    expect(firstRect.strokeColor).toBe("#e03131");
-    expect(firstRect.backgroundColor).toBe("#a5d8ff");
+    expect(firstRect.strokeColor).toBe("#d83a52");
+    expect(firstRect.backgroundColor).toBe("#fdecee");
     expect(firstRect.fillStyle).toBe("cross-hatch");
     expect(firstRect.strokeWidth).toBe(STROKE_WIDTH.bold);
     expect(firstRect.strokeStyle).toBe("dotted");
     expect(firstRect.opacity).toBe(60);
+  });
+
+  it("applies the copied background to a frame, keeping its corners", async () => {
+    // 画板底色是元素属性，复制样式照常带过去；圆角仍是固定 chrome
+    const rect = API.createElement({
+      type: "rectangle",
+      backgroundColor: "#fdecee",
+    });
+    const frame = API.createElement({
+      type: "frame",
+      backgroundColor: COLOR_PALETTE.transparent,
+    });
+    API.setElements([rect, frame]);
+
+    API.setSelectedElements([rect]);
+    Keyboard.withModifierKeys({ ctrl: true, alt: true }, () => {
+      Keyboard.codeDown(CODES.C);
+    });
+    mouse.reset();
+
+    API.setSelectedElements([frame]);
+    Keyboard.withModifierKeys({ ctrl: true, alt: true }, () => {
+      Keyboard.codeDown(CODES.V);
+    });
+
+    const pasted = API.getSelectedElement();
+    expect(pasted.backgroundColor).toBe("#fdecee");
+    expect(pasted.roundness).toBe(null);
   });
 
   it("should show and apply roundness for sticky notes", async () => {
@@ -97,6 +128,8 @@ describe("actionStyles", () => {
     API.setElements([stickyNote]);
     API.setSelectedElements([stickyNote]);
 
+    // 边角在浮动栏「样式」弹层内（T3 场景矩阵）
+    togglePopover("Styles");
     fireEvent.click(screen.getByTitle("Round"));
 
     expect(API.getSelectedElement().roundness).toEqual({
@@ -104,24 +137,24 @@ describe("actionStyles", () => {
     });
   });
 
-  it("should hide transparent stroke color for sticky notes", async () => {
+  it("sticky note stroke popup hides transparent in the palette grid", async () => {
     UI.clickTool("stickynote");
 
     togglePopover("Text color");
 
-    // hidden via `excludedColors` (same mechanism as bucket fill): the swatch
-    // is gone, but an invisible placeholder keeps the grid so the remaining
-    // colors stay on their usual positions and hotkeys
-    expect(screen.queryByTestId("color-transparent")).toBeNull();
+    // 全色板网格 15 位：便签文字无透明色域，透明位渲染为隐藏占位
+    // （保住其余颜色的网格位与热键序），可见色块 14 枚
+    const popup = document.querySelector(".color-picker-content")!;
+    const grid = popup.querySelector(".color-picker-content--default")!;
     expect(
-      document.querySelector(
-        '.color-picker-content--default [aria-hidden="true"]',
-      ),
-    ).not.toBeNull();
-    expect(screen.queryByTestId("color-black")).not.toBeNull();
+      grid.querySelectorAll("button.color-picker__button").length,
+    ).toBe(14);
+    expect(screen.queryByTestId("color-transparent")).toBeNull();
+    expect(grid.querySelector(".is-transparent")).toBeNull();
+    expect(grid.querySelectorAll("[aria-hidden='true']").length).toBe(1);
   });
 
-  it("keeps the transparent hotkey dead and the others intact for sticky notes", async () => {
+  it("keeps the excluded transparent hotkey dead and the palette keys intact", async () => {
     UI.clickTool("stickynote");
 
     togglePopover("Text color");
@@ -129,13 +162,13 @@ describe("actionStyles", () => {
     const picker = document.querySelector(".color-picker-content")!;
     const before = h.state.currentItemStickynoteStrokeColor;
 
-    // `q` maps to the hidden transparent swatch (and to the global tool-lock
-    // shortcut) — inside the popup it must be inert, not leaked
+    // 透明被排除（隐藏占位）：其绑定键 q 为空键，不泄漏到全局
+    // 工具锁定快捷键
     fireEvent.keyDown(picker, { key: "q" });
     expect(h.state.currentItemStickynoteStrokeColor).toBe(before);
     expect(h.state.activeTool.locked).toBe(false);
 
-    // the remaining colors keep their usual keys (w = white)
+    // 调色板键按位生效（w = 白）
     fireEvent.keyDown(picker, { key: "w" });
     expect(h.state.currentItemStickynoteStrokeColor).toBe(COLOR_PALETTE.white);
   });
@@ -154,6 +187,7 @@ describe("actionStyles", () => {
     API.setSelectedElements([stickyNote]);
 
     togglePopover("Text color");
+    // 全色板网格：蓝色族色块（取当前明度档 4）
     UI.clickOnTestId("color-blue");
 
     expect(API.getSelectedElement().strokeColor).toBe(COLOR_PALETTE.blue[4]);

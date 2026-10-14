@@ -17,6 +17,7 @@ import {
   elementOverlapsWithFrame,
   getTargetFrame,
   shouldApplyFrameClip,
+  sortFramesBelowChildren,
 } from "@excalidraw/element";
 
 import {
@@ -285,6 +286,9 @@ const _renderStaticScene = ({
     return;
   }
 
+  // 画板实底必须画在 frame 的子元素之下，而存储顺序不保证这一点
+  const elementsToRender = sortFramesBelowChildren(visibleElements);
+
   const { renderGrid = true, isExporting } = renderConfig;
   // export draws vectors, not cached bitmaps — nothing to keep on the grid
   const appState = isExporting
@@ -327,7 +331,7 @@ const _renderStaticScene = ({
 
   const groupsToBeAddedToFrame = new Set<string>();
 
-  visibleElements.forEach((element) => {
+  elementsToRender.forEach((element) => {
     if (
       element.groupIds.length > 0 &&
       appState.frameToHighlight &&
@@ -393,7 +397,7 @@ const _renderStaticScene = ({
   };
 
   // Paint visible elements
-  visibleElements
+  elementsToRender
     .filter((el) => !isIframeLikeElement(el))
     .forEach((element) => {
       try {
@@ -452,7 +456,7 @@ const _renderStaticScene = ({
     });
 
   // render embeddables on top
-  visibleElements
+  elementsToRender
     .filter((el) => isIframeLikeElement(el))
     .forEach((element) => {
       try {

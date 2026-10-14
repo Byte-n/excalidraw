@@ -16,9 +16,12 @@ import * as InteractiveCanvas from "@excalidraw/excalidraw/renderer/interactiveS
 import * as StaticScene from "@excalidraw/excalidraw/renderer/staticScene";
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
 
-import { Keyboard, Pointer, UI } from "@excalidraw/excalidraw/_tests_/helpers/ui";
 import {
-  screen,
+  Keyboard,
+  Pointer,
+  UI,
+} from "@excalidraw/excalidraw/_tests_/helpers/ui";
+import {
   render,
   fireEvent,
   GlobalTestState,
@@ -542,7 +545,13 @@ describe("Test Linear Elements", () => {
       );
 
       // update roundness
-      fireEvent.click(screen.getByTitle("Round"));
+      // 设计稿（工具栏改造 T2）：编辑节点模式下属性浮动栏整体替换为模式条，
+      // 面板上的「Round」按钮不再可用，改为直接变更元素圆角
+      act(() => {
+        h.app.scene.mutateElement(h.elements[0], {
+          roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
+        });
+      });
 
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
         `11`,
@@ -791,7 +800,8 @@ describe("Test Linear Elements", () => {
 
       it("should remove the midpoint when one of the points in the segment is deleted", async () => {
         const line = h.elements[0] as ExcalidrawLinearElement;
-        enterLineEditingMode(line);
+        // beforeEach 已进入编辑态；编辑节点模式下 Enter 现在会退出编辑
+        // （设计稿模式条「完成」，Enter/Esc 同效），不再重复进入
         const points = LinearElementEditor.getPointsGlobalCoordinates(
           line,
           arrayToMap(h.elements),
@@ -814,9 +824,9 @@ describe("Test Linear Elements", () => {
         deletePoint(points[2]);
         expect(line.points.length).toEqual(3);
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-          `22`,
+          `18`,
         );
-        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`12`);
+        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`11`);
 
         const newMidPoints = LinearElementEditor.getEditorMidPoints(
           line,

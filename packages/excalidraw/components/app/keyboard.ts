@@ -66,7 +66,11 @@ import type { GlobalPoint } from "@excalidraw/math";
 
 import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 
-import { getSelectedElements, hasBackground } from "../../scene";
+import {
+  getSelectedElements,
+  hasBackground,
+  hasFrameBackground,
+} from "../../scene";
 import {
   getConversionTypeFromElements,
   convertElementTypePopupAtom,
@@ -363,11 +367,14 @@ export const onKeyDown = (
   }
 
   if (!isInputLike(event.target)) {
-    if (
-      (event.key === KEYS.ESCAPE || event.key === KEYS.ENTER) &&
-      app.state.croppingElementId
-    ) {
-      app.finishImageCropping();
+    if (app.state.croppingElementId) {
+      // 裁剪模式（设计稿「图片 · 裁剪模式」）：
+      // Esc = 取消并还原到进入时状态；Enter = 应用
+      if (event.key === KEYS.ESCAPE) {
+        app.cancelImageCropping();
+      } else if (event.key === KEYS.ENTER) {
+        app.finishImageCropping();
+      }
       return;
     }
 
@@ -687,6 +694,15 @@ export const onKeyDown = (
     const selectedElements = app.scene.getSelectedElements(app.state);
     if (selectedElements.length === 1) {
       const selectedElement = selectedElements[0];
+      // 编辑节点模式下 Enter 与 Esc 同效——退出编辑
+      // （设计稿「线条 · 编辑节点」模式条「完成」）
+      if (
+        app.state.selectedLinearElement?.isEditing &&
+        app.state.selectedLinearElement.elementId === selectedElement.id
+      ) {
+        app.actionManager.executeAction(actionToggleLinearEditor);
+        return;
+      }
       if (event[KEYS.CTRL_OR_CMD] || isLineElement(selectedElement)) {
         if (isLinearElement(selectedElement)) {
           if (
@@ -752,7 +768,10 @@ export const onKeyDown = (
           ? app.state.preferredGenericShape
           : app.state.activeTool.type,
       ) ||
-        selectedElements.some((element) => hasBackground(element)))
+        selectedElements.some(
+          (element) =>
+            hasBackground(element) || hasFrameBackground(element.type),
+        ))
     ) {
       app.setState({ openPopup: "elementBackground" });
       event.stopPropagation();

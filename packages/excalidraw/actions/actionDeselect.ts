@@ -152,6 +152,9 @@ export const actionDeselect = register({
       !appState.newElement &&
       appState.multiElement === null &&
       !appState.selectedLinearElement?.isEditing &&
+      // 属性/链接弹层打开时 Esc 只关闭弹层（焦点回触发器），不取消选中
+      !appState.openPopup &&
+      !appState.showHyperlinkPopup &&
       (appState.activeEmbeddable !== null ||
         appState.activeTool.type !== app.state.preferredSelectionTool.type ||
         !!appState.editingGroupId ||

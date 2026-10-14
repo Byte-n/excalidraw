@@ -6,7 +6,11 @@ import { arrayToMap } from "@excalidraw/common";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
 import { actionGroup } from "@excalidraw/excalidraw/actions";
-import { Keyboard, Pointer, UI } from "@excalidraw/excalidraw/_tests_/helpers/ui";
+import {
+  Keyboard,
+  Pointer,
+  UI,
+} from "@excalidraw/excalidraw/_tests_/helpers/ui";
 import { getTextEditor } from "@excalidraw/excalidraw/_tests_/queries/dom";
 import {
   getCloneByOrigId,
@@ -19,6 +23,7 @@ import {
   elementOverlapsWithFrame,
   getElementsOverlappingFrame,
   getFrameChildren,
+  sortFramesBelowChildren,
 } from "../src/frame";
 
 import type {
@@ -1335,5 +1340,54 @@ describe("adding elements to frames", () => {
       dragElementIntoFrame(frame2, rectangle1);
       expect(h.elements.length).toBe(4);
     });
+  });
+});
+
+describe("sortFramesBelowChildren", () => {
+  it("lifts a frame above the elements it contains", () => {
+    const frame = API.createElement({ id: "frame", type: "frame" });
+    const child = API.createElement({
+      id: "child",
+      containerRef: { kind: "frameLike", elementId: frame.id },
+    });
+
+    expect(sortFramesBelowChildren([child, frame]).map((el) => el.id)).toEqual([
+      "frame",
+      "child",
+    ]);
+    expect(sortFramesBelowChildren([frame, child]).map((el) => el.id)).toEqual([
+      "frame",
+      "child",
+    ]);
+  });
+
+  it("keeps an outer frame below a nested one", () => {
+    const outer = API.createElement({ id: "outer", type: "frame" });
+    const inner = API.createElement({
+      id: "inner",
+      type: "frame",
+      containerRef: { kind: "frameLike", elementId: outer.id },
+    });
+    const child = API.createElement({
+      id: "child",
+      containerRef: { kind: "frameLike", elementId: inner.id },
+    });
+
+    expect(
+      sortFramesBelowChildren([child, inner, outer]).map((el) => el.id),
+    ).toEqual(["outer", "inner", "child"]);
+  });
+
+  it("leaves elements outside every frame in place", () => {
+    const frame = API.createElement({ id: "frame", type: "frame" });
+    const child = API.createElement({
+      id: "child",
+      containerRef: { kind: "frameLike", elementId: frame.id },
+    });
+    const free = API.createElement({ id: "free" });
+
+    expect(
+      sortFramesBelowChildren([free, child, frame]).map((el) => el.id),
+    ).toEqual(["free", "frame", "child"]);
   });
 });

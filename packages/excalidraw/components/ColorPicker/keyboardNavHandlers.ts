@@ -1,12 +1,8 @@
 import { COLORS_PER_ROW, COLOR_PALETTE, KEYS } from "@excalidraw/common";
 
-import type {
-  ColorPickerColor,
-  ColorPalette,
-  ColorPaletteCustom,
-} from "@excalidraw/common";
+import type { ColorPickerColor } from "@excalidraw/common";
 
-import type { ValueOf } from "@excalidraw/common/utility-types";
+import type { ColorPaletteCustom } from "@excalidraw/common";
 
 import {
   colorPickerHotkeyBindings,
@@ -15,12 +11,17 @@ import {
 
 import type { ActiveColorPickerSectionAtomType } from "./colorPickerUtils";
 
+/** 便签纸色 picksOnly 变体的预设行为单行平铺（最多 6 枚），行内左右循环、
+ * 上下键不动 */
+const PRESET_COLORS_PER_ROW = 6;
+
 const arrowHandler = (
   eventKey: string,
   currentIndex: number | null,
   length: number,
+  colorsPerRow = COLORS_PER_ROW,
 ) => {
-  const rows = Math.ceil(length / COLORS_PER_ROW);
+  const rows = Math.ceil(length / colorsPerRow);
 
   currentIndex = currentIndex ?? -1;
 
@@ -33,13 +34,13 @@ const arrowHandler = (
       return (currentIndex + 1) % length;
     }
     case "ArrowDown": {
-      const nextIndex = currentIndex + COLORS_PER_ROW;
-      return nextIndex >= length ? currentIndex % COLORS_PER_ROW : nextIndex;
+      const nextIndex = currentIndex + colorsPerRow;
+      return nextIndex >= length ? currentIndex % colorsPerRow : nextIndex;
     }
     case "ArrowUp": {
-      const prevIndex = currentIndex - COLORS_PER_ROW;
+      const prevIndex = currentIndex - colorsPerRow;
       const newIndex =
-        prevIndex < 0 ? COLORS_PER_ROW * rows + prevIndex : prevIndex;
+        prevIndex < 0 ? colorsPerRow * rows + prevIndex : prevIndex;
       return newIndex >= length ? undefined : newIndex;
     }
   }
@@ -51,10 +52,13 @@ interface HotkeyHandlerProps {
   onChange: (color: string) => void;
   palette: ColorPaletteCustom;
   customColors: string[];
+  presetColors: readonly string[];
   setActiveColorPickerSection: (
     update: React.SetStateAction<ActiveColorPickerSectionAtomType>,
   ) => void;
   activeShade: number;
+  /** 便签纸色变体：字母键按预设行映射（纸色不在调色板内） */
+  picksOnly?: boolean;
   excludedColors?: readonly string[];
 }
 
@@ -67,8 +71,10 @@ const hotkeyHandler = ({
   onChange,
   palette,
   customColors,
+  presetColors,
   setActiveColorPickerSection,
   activeShade,
+  picksOnly = false,
   excludedColors,
 }: HotkeyHandlerProps): boolean => {
   if (colorObj?.shade != null) {
@@ -95,9 +101,22 @@ const hotkeyHandler = ({
 
   if (colorPickerHotkeyBindings.includes(e.key)) {
     const index = colorPickerHotkeyBindings.indexOf(e.key);
-    const paletteKey = Object.keys(palette)[index] as keyof ColorPalette;
+
+    if (picksOnly) {
+      const preset = presetColors[index];
+      // 超出预设数量的绑定键是空键：在弹层键盘作用域内保持惰性（不上报
+      // unhandled，否则会泄漏到全局快捷键——`q` 会切换工具锁定）
+      if (preset == null) {
+        return true;
+      }
+      onChange(preset);
+      setActiveColorPickerSection("baseColors");
+      return true;
+    }
+
+    const paletteKey = Object.keys(palette)[index];
     const paletteValue = palette[paletteKey];
-    const r = Array.isArray(paletteValue)
+    const resolved = Array.isArray(paletteValue)
       ? paletteValue[activeShade]
       : paletteValue;
     // hotkeys of excluded (hidden) or absent palette entries are dead, not
@@ -105,10 +124,10 @@ const hotkeyHandler = ({
     // HANDLED: within the modal's keyboard scope the key is deliberately
     // inert, and reporting it unhandled would let it escape to global
     // shortcuts (`q` toggles the tool lock)
-    if (r == null || excludedColors?.includes(r)) {
+    if (resolved == null || excludedColors?.includes(resolved)) {
       return true;
     }
-    onChange(r);
+    onChange(resolved);
     setActiveColorPickerSection("baseColors");
     return true;
   }
@@ -122,6 +141,7 @@ interface ColorPickerKeyNavHandlerProps {
   color: string | null;
   onChange: (color: string) => void;
   customColors: string[];
+  presetColors: readonly string[];
   setActiveColorPickerSection: (
     update: React.SetStateAction<ActiveColorPickerSectionAtomType>,
   ) => void;
@@ -129,6 +149,8 @@ interface ColorPickerKeyNavHandlerProps {
   activeShade: number;
   onEyeDropperToggle: (force?: boolean) => void;
   onEscape: (event: React.KeyboardEvent | KeyboardEvent) => void;
+  /** 便签纸色变体只有预设 + 明度、无取色入口：取色热键不响应 */
+  picksOnly?: boolean;
   excludedColors?: readonly string[];
 }
 
@@ -142,11 +164,13 @@ export const colorPickerKeyNavHandler = ({
   color,
   onChange,
   customColors,
+  presetColors,
   setActiveColorPickerSection,
   updateData,
   activeShade,
   onEyeDropperToggle,
   onEscape,
+  picksOnly = false,
   excludedColors,
 }: ColorPickerKeyNavHandlerProps): boolean => {
   if (event[KEYS.CTRL_OR_CMD]) {
@@ -160,12 +184,18 @@ export const colorPickerKeyNavHandler = ({
 
   // checkt using `key` to ignore combos with Alt modifier
   if (event.key === KEYS.ALT) {
-    onEyeDropperToggle(true);
+    if (!picksOnly) {
+      onEyeDropperToggle(true);
+    }
     return true;
   }
 
   if (event.key === KEYS.I) {
-    onEyeDropperToggle();
+    // picksOnly 变体无取色入口：吞掉按键（外泄会命中画布级 `i` 取色快捷键）
+    // 但不唤起取色器
+    if (!picksOnly) {
+      onEyeDropperToggle();
+    }
     return true;
   }
 
@@ -207,18 +237,13 @@ export const colorPickerKeyNavHandler = ({
     if (nextSection === "custom") {
       onChange(customColors[0]);
     } else if (nextSection === "baseColors") {
-      const baseColorName = (
-        Object.entries(palette) as [string, ValueOf<ColorPalette>][]
-      ).find(([name, shades]) => {
-        if (Array.isArray(shades)) {
-          return shades.includes(color);
-        } else if (shades === color) {
-          return name;
+      if (picksOnly) {
+        // 当前色不在预设行时，Tab 进入预设区落到首个预设
+        if (color == null || !presetColors.includes(color)) {
+          onChange(presetColors[0]);
         }
-        return null;
-      });
-
-      if (!baseColorName) {
+      } else if (!colorObj) {
+        // 当前色不在调色板时，Tab 进入色板区落到黑色（与上游一致）
         onChange(COLOR_PALETTE.black);
       }
     }
@@ -236,8 +261,10 @@ export const colorPickerKeyNavHandler = ({
       onChange,
       palette,
       customColors,
+      presetColors,
       setActiveColorPickerSection,
       activeShade,
+      picksOnly,
       excludedColors,
     })
   ) {
@@ -257,9 +284,26 @@ export const colorPickerKeyNavHandler = ({
   }
 
   if (activeColorPickerSection === "baseColors") {
-    if (colorObj) {
+    if (picksOnly) {
+      // 预设行按值导航（当前色不在预设内时方向键不动）
+      const currentIndex = color != null ? presetColors.indexOf(color) : -1;
+
+      if (currentIndex !== -1) {
+        const newIndex = arrowHandler(
+          event.key,
+          currentIndex,
+          presetColors.length,
+          PRESET_COLORS_PER_ROW,
+        );
+
+        if (newIndex !== undefined) {
+          onChange(presetColors[newIndex]);
+          return true;
+        }
+      }
+    } else if (colorObj) {
       const { colorName } = colorObj;
-      const colorNames = Object.keys(palette) as (keyof ColorPalette)[];
+      const colorNames = Object.keys(palette);
       const indexOfColorName = colorNames.indexOf(colorName);
 
       let newColorIndex = arrowHandler(
@@ -285,8 +329,7 @@ export const colorPickerKeyNavHandler = ({
       }
 
       if (newColorIndex !== undefined) {
-        const newColorName = colorNames[newColorIndex];
-        const newColorNameValue = palette[newColorName];
+        const newColorNameValue = palette[colorNames[newColorIndex]];
 
         onChange(
           Array.isArray(newColorNameValue)

@@ -946,7 +946,11 @@ export const handleSelectionOnPointerDown = (
                   app,
                 ),
                 showHyperlinkPopup:
-                  hitElement.link || isEmbeddableElement(hitElement)
+                  // 仅手机端选中即弹元素锚定卡片（手机无浮动栏链接
+                  // 入口）；桌面/平板改为点击浮动栏「链接」按钮弹出
+                  // （Actions.tsx FloatbarLinkAction）
+                  app.editorInterface.formFactor === "phone" &&
+                  (hitElement.link || isEmbeddableElement(hitElement))
                     ? "info"
                     : false,
               };

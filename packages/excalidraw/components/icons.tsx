@@ -826,6 +826,17 @@ export const SendToBackIcon = createIcon(arrowBarToTopJSX, {
   },
 });
 
+// 图层（z-order）弹层触发器图标：层叠菱形（tabler layers）
+export const LayersIcon = createIcon(
+  <g strokeWidth={1.5}>
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M12 2l-8 4l8 4l8 -4l-8 -4" />
+    <path d="M4 10l8 4l8 -4" />
+    <path d="M4 14l8 4l8 -4" />
+  </g>,
+  tablerIconProps,
+);
+
 //
 // Align action icons created from scratch to match those of z-index actions
 // Note: vertical align icons are flipped so the larger item is always the

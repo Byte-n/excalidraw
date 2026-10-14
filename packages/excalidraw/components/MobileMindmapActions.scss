@@ -1,32 +1,10 @@
 .excalidraw .mobile-mindmap-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-height: 44px;
-  margin: 0 auto 4px;
-  padding: 2px 4px;
-  background: var(--island-bg-color);
-  border: 1px solid var(--default-border-color);
-  border-radius: 4px;
-  pointer-events: auto;
+  // 容器规格沿用 toolbar.scss 的 .tb-bar（通栏横排、38px 图标按钮）；
+  // 此处仅留节点动作条特有规则
 
-  > button,
-  .dropdown-menu-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: 8px;
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--text-primary-color);
-  }
-
-  svg {
-    width: 20px;
-    height: 20px;
+  // 折叠/展开为字符字形（▸/▾），与 16px 图标视觉对齐
+  .tb-iconbtn > span {
+    font-size: 14px;
+    line-height: 1;
   }
 }

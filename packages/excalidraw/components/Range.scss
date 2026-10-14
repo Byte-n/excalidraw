@@ -1,19 +1,22 @@
 @use "../css/variables.module" as *;
 
 .excalidraw {
-  --slider-thumb-size: 16px;
+  // 设计稿 tb-range：滑块 14px 白底 1.5px 主色边
+  --slider-thumb-size: 14px;
 
   .range-wrapper {
-    position: relative;
-    padding-top: 10px;
-    padding-bottom: 25px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .range-input {
-    width: 100%;
+    flex: 1;
+    margin: 0;
     height: 4px;
     -webkit-appearance: none;
-    background: var(--color-slider-track);
+    appearance: none;
+    background: var(--neutral-fill);
     border-radius: 2px;
     outline: none;
   }
@@ -23,34 +26,65 @@
     appearance: none;
     width: var(--slider-thumb-size);
     height: var(--slider-thumb-size);
-    background: var(--color-slider-thumb);
+    background: var(--menu-bg);
+    border: 1.5px solid var(--color-selection);
     border-radius: 50%;
     cursor: pointer;
-    border: none;
+    box-shadow: 0 1px 2px rgba(31, 35, 41, 0.18);
   }
 
   .range-input::-moz-range-thumb {
     width: var(--slider-thumb-size);
     height: var(--slider-thumb-size);
-    background: var(--color-slider-thumb);
+    background: var(--menu-bg);
+    border: 1.5px solid var(--color-selection);
     border-radius: 50%;
     cursor: pointer;
-    border: none;
+    box-shadow: 0 1px 2px rgba(31, 35, 41, 0.18);
   }
 
-  .value-bubble {
-    position: absolute;
-    bottom: 0;
-    transform: translateX(-50%);
-    font-size: 12px;
-    color: var(--text-primary-color);
+  .range-input:focus-visible {
+    outline: 2px solid var(--color-selection);
+    outline-offset: 2px;
   }
 
-  .zero-label {
-    position: absolute;
-    bottom: 0;
-    left: 4px;
+  &.theme--dark .range-input {
+    &::-webkit-slider-thumb {
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    }
+
+    &::-moz-range-thumb {
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    }
+  }
+
+  // 数值框（Enter 提交 / Esc 还原 / 越界收敛），规格同设计稿 tb-num；
+  // 高 specificity 以压过 .selected-shape-actions .control-label input 的
+  // width: 100% 旧规则
+  .control-label .range-wrapper input.range-number {
+    box-sizing: border-box;
+    flex: none;
+    width: 40px;
+    min-width: 40px;
+    height: 26px;
+    padding: 0 6px;
+    border: 1px solid var(--page-line);
+    border-radius: 6px;
+    background: var(--menu-bg);
+    color: var(--page-ink);
+    font-family: inherit;
     font-size: 12px;
-    color: var(--text-primary-color);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    outline: none;
+
+    &:hover {
+      border-color: var(--color-selection-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-selection);
+      outline-offset: 1px;
+    }
   }
 }

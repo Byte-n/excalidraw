@@ -536,15 +536,15 @@ describe("composite shape editing matrix", () => {
       UI.clickOnTestId("color-red");
       if (supportsFill(shapeForPreset(preset).id)) {
         togglePopover("Background");
-        UI.clickOnTestId("color-blue");
+        UI.clickOnTestId("color-red");
       }
 
       let edited = h.app.scene.getNonDeletedElement(element.id);
       expect(edited).toMatchObject({
         shape: shapeForPreset(preset),
-        strokeColor: "#e03131",
+        strokeColor: "#d83a52",
         backgroundColor: supportsFill(shapeForPreset(preset).id)
-          ? "#a5d8ff"
+          ? "#fdecee"
           : "transparent",
       });
       if (!edited) {

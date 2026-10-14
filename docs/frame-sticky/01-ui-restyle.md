@@ -4,6 +4,14 @@
 - 设计依据：`docs/design-ui/excalidraw-canvas-frame.html`、`docs/design-ui/excalidraw-canvas-sticky.html`（含亮/暗双主题令牌与交互状态图）。
 - 参考先例：[表格 P06 UI 重设计](../table-container/phase-6.md)、[思维导图 P12 UI 重设计](../mindmap-plan/12-mindmap-ui-restyle.md)。
 
+> **后续修订（2026-10-14）：Frame 底色改为元素属性，默认透明。**
+> 本期把画板写成硬编码 `#FFFFFF` 实底（下文 A.2 / 决策 3 / 实施清单第 2 条），
+> 代价是底色不是元素属性、用户无法修改。现改为：渲染器读
+> `element.backgroundColor`，`FRAME_STYLE.backgroundColor` 退回**新建默认值**
+> `transparent`，画板背景色进入属性面板（快捷色透明打头、弹层网格可及白色）。
+> 填充样式仍固定实底、边框仍固定 1px 浅灰 chrome；存量画板不迁移，本文件
+> 其余描述作为 f6db397d 当期实现的记录保留。
+
 ## Context
 
 设计稿把 Frame 从「装饰性矩形」重定义为画板：实色背景遮住点阵、1px 浅灰边框、标题缩小加 # 图标，交互反馈统一走主色（`#1677ff` / 暗色 `#4096ff`）。便签保留「纸片」感，用柔和双层投影替代抖动轮廓与硬偏移阴影，六色低饱和纸色替换当前快捷色。本期不改交互模型（创建、编辑、归属、裁剪逻辑全部保留），只做**视觉语言替换 + 反馈补强**。

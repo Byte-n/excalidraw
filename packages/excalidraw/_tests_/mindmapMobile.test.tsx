@@ -207,4 +207,77 @@ describe("Mindmap mobile actions", () => {
       vi.useRealTimers();
     }
   });
+
+  it("opens the node actions bottom sheet from the action bar", () => {
+    API.setSelectedElements([node("child")]);
+    const toolbar = screen.getByRole("toolbar", { name: "Mindmap" });
+    // 选中节点后底部属性条让位为节点动作条
+    expect(document.querySelector(".mobile-shape-actions")).toBeNull();
+
+    fireEvent.click(
+      within(toolbar).getByRole("button", { name: "More tools" }),
+    );
+
+    // 底部 sheet：抓手 + 遮罩 + role=dialog；四个菜单项，危险项置底区
+    const sheet = document.querySelector(".tb-sheet")!;
+    expect(sheet).not.toBeNull();
+    expect(sheet.getAttribute("role")).toBe("dialog");
+    expect(sheet.querySelector(".tb-sheet__grab")).not.toBeNull();
+    const overlay = document.querySelector(".tb-sheet__overlay")!;
+    expect(overlay).not.toBeNull();
+    // 锚定结构防回归：sheet 必须处于锚定容器内（贴底通栏 + 层级压过遮罩，
+    // 见 toolbar.scss .tb-sheet-anchor）且 DOM 居遮罩之后——jsdom 不测布局，
+    // 真机走查需确认 sheet 贴底且菜单项可点（遮罩不得盖住 sheet）
+    const anchor = sheet.closest(".tb-sheet-anchor");
+    expect(anchor).not.toBeNull();
+    expect(
+      overlay.compareDocumentPosition(anchor!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    const items = Array.from(
+      sheet.querySelectorAll<HTMLButtonElement>("[role='menuitem']"),
+    );
+    expect(items.map((item) => item.textContent)).toEqual([
+      expect.stringContaining("Add sibling node"),
+      expect.stringContaining("Promote node"),
+      expect.stringContaining("Delete subtree"),
+      expect.stringContaining("Delete node, keep children"),
+    ]);
+    // 危险项（删除完整子树）在置底危险区且带危险样式
+    const dangerItem = items.find((item) =>
+      item.textContent?.includes("Delete subtree"),
+    )!;
+    expect(dangerItem.classList.contains("dangerous")).toBe(true);
+    expect(
+      dangerItem.compareDocumentPosition(
+        items.find((item) => item.textContent?.includes("keep children"))!,
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    // 点菜单项执行并关闭 sheet
+    fireEvent.click(
+      items.find((item) => item.textContent?.includes("Add sibling"))!,
+    );
+    expect(document.querySelector(".tb-sheet")).toBeNull();
+  });
+
+  it("closes the node actions sheet on overlay tap and Escape", () => {
+    API.setSelectedElements([node("child")]);
+    const toolbar = screen.getByRole("toolbar", { name: "Mindmap" });
+    fireEvent.click(
+      within(toolbar).getByRole("button", { name: "More tools" }),
+    );
+    expect(document.querySelector(".tb-sheet")).not.toBeNull();
+
+    fireEvent.pointerDown(document.querySelector(".tb-sheet__overlay")!);
+    expect(document.querySelector(".tb-sheet")).toBeNull();
+
+    fireEvent.click(
+      within(toolbar).getByRole("button", { name: "More tools" }),
+    );
+    expect(document.querySelector(".tb-sheet")).not.toBeNull();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(document.querySelector(".tb-sheet")).toBeNull();
+  });
 });

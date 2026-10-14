@@ -335,10 +335,13 @@ describe("contextMenu element", () => {
     mouse.up(20, 20);
 
     // Change some styles of second rectangle
+    // 弹层全色板网格：色块按调色板色名 testid color-<name>，族色块取当前明度档
     togglePopover("Stroke");
     UI.clickOnTestId("color-red");
     togglePopover("Background");
-    UI.clickOnTestId("color-blue");
+    UI.clickOnTestId("color-red");
+    // Fill style / stroke width / stroke style / opacity live in the styles popup
+    togglePopover("Styles");
     // Fill style
     fireEvent.click(screen.getByTitle("Cross-hatch"));
     // Stroke width
@@ -351,10 +354,10 @@ describe("contextMenu element", () => {
       target: { value: "60" },
     });
 
-    // closing the background popover as this blocks
+    // closing the styles popover as this blocks
     // context menu from rendering after we started focussing
     // the popover once rendered :/
-    togglePopover("Background");
+    togglePopover("Styles");
 
     mouse.reset();
 
@@ -380,8 +383,8 @@ describe("contextMenu element", () => {
 
     const firstRect = API.getSelectedElement();
     expect(firstRect.id).toBe(h.elements[0].id);
-    expect(firstRect.strokeColor).toBe("#e03131");
-    expect(firstRect.backgroundColor).toBe("#a5d8ff");
+    expect(firstRect.strokeColor).toBe("#d83a52");
+    expect(firstRect.backgroundColor).toBe("#fdecee");
     expect(firstRect.fillStyle).toBe("cross-hatch");
     expect(firstRect.strokeWidth).toBe(STROKE_WIDTH.bold);
     expect(firstRect.strokeStyle).toBe("dotted");

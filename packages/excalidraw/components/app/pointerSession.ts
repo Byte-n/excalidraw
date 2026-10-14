@@ -853,7 +853,12 @@ export const handleCanvasPointerDown = (
             app,
           ),
           showHyperlinkPopup:
-            hitElement.link || isEmbeddableElement(hitElement) ? "info" : false,
+            // 仅手机端选中即弹元素锚定卡片；桌面/平板改为点击浮动栏
+            // 「链接」按钮弹出（Actions.tsx FloatbarLinkAction）
+            app.editorInterface.formFactor === "phone" &&
+            (hitElement.link || isEmbeddableElement(hitElement))
+              ? "info"
+              : false,
         };
       });
       pointerDownState.hit.wasAddedToSelection = true;
@@ -1960,6 +1965,9 @@ export const onPointerMoveFromPointerDownHandler = (
                   )
                 : null,
             showHyperlinkPopup:
+              // 仅手机端选中即弹元素锚定卡片；桌面/平板改为点击浮动栏
+              // 「链接」按钮弹出（Actions.tsx FloatbarLinkAction）
+              app.editorInterface.formFactor === "phone" &&
               elementsWithinSelection.length === 1 &&
               (elementsWithinSelection[0].link ||
                 isEmbeddableElement(elementsWithinSelection[0]))
@@ -3004,7 +3012,10 @@ export const onPointerUpFromPointerDownHandler = (
                 app,
               ),
               showHyperlinkPopup:
-                hitElement.link || isEmbeddableElement(hitElement)
+                // 仅手机端选中即弹元素锚定卡片；桌面/平板改为点击浮动栏
+                // 「链接」按钮弹出（Actions.tsx FloatbarLinkAction）
+                app.editorInterface.formFactor === "phone" &&
+                (hitElement.link || isEmbeddableElement(hitElement))
                   ? "info"
                   : false,
             };

@@ -1,0 +1,925 @@
+@use "../../css/variables.module" as *;
+
+// 选中工具栏通用控件样式
+// 设计稿：docs/design-ui/excalidraw-canvas-toolbar.html §3「通用控件」；
+// 令牌见 css/theme.scss（--color-selection* / --menu-* / --page-* / --neutral-fill）。
+.excalidraw {
+  // —— 工具栏尺寸令牌 ——
+  // 一律由全局令牌派生：theme.scss 的 @media (min-device-width: 1921px) 会把
+  // --default-button-size 放大到 2.25rem、--default-icon-size 到 1.25rem，工具栏
+  // 随之整体放大，与主工具条等 UI 同步（此前尺寸写死 px，大屏下只有走令牌的
+  // 控件会变大，出现「颜色弹层里的控件变了、栏内图标没变」的错位）。
+  //
+  // 浮动栏本体（--tb-btn-*）与平板同档，桌面/平板一致：按钮 32 / 色板 24。
+  // 弹层与通用控件（--tb-ctl-*）单独一档（按钮 28 / 色板 22），不受
+  // formFactor 影响——它们本就没有触控变体。
+  --tb-icon-size: var(--default-icon-size); // 图标 16 → 20
+  --tb-ctl-size: calc(
+    var(--default-button-size) - 0.25rem
+  ); // 弹层/通用 28 → 32
+  --tb-ctl-swatch-size: calc(var(--tb-ctl-size) - 0.375rem); // 弹层色板 22 → 26
+  --tb-btn-size: var(--default-button-size); // 浮动栏按钮 32 → 36
+  --tb-swatch-size: calc(var(--tb-btn-size) - 0.5rem); // 浮动栏色板 24 → 28
+
+  // 浮动工具栏容器（桌面/平板）：跟随选区的横排胶囊。
+  // 定位/翻转/收敛逻辑见 floatingPosition.ts；显隐（拖动/缩放/旋转时）见
+  // FloatingShapeActions.tsx。渲染在 .layer-ui__wrapper 内（pointer-events
+  // 默认为 none），需自行恢复指针响应。
+  .tb-floatbar {
+    position: absolute;
+    z-index: var(--zIndex-floatingToolbar);
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 6px;
+    border: 1px solid var(--menu-border);
+    border-radius: 999px;
+    background: var(--menu-bg);
+    box-shadow: var(--menu-shadow);
+    font-size: 13px;
+    white-space: nowrap;
+    box-sizing: border-box;
+    pointer-events: var(--ui-pointerEvents);
+
+    // 出现/消失 120ms 透明 + 位移；选区变化时内容就地更新，不做重排动效
+    animation: tb-floatbar-in 120ms ease-out;
+    transition: opacity 120ms ease-out, translate 120ms ease-out;
+
+    &.is-hidden {
+      opacity: 0;
+      translate: 0 4px;
+      pointer-events: none;
+    }
+
+    .tb-swatch {
+      width: var(--tb-swatch-size);
+      height: var(--tb-swatch-size);
+      margin: 3px;
+      flex: none;
+    }
+
+    .tb-iconbtn {
+      width: var(--tb-btn-size);
+      height: var(--tb-btn-size);
+      flex: none;
+    }
+
+    // —— T3 场景矩阵内容（桌面/平板同一渲染源）——
+    // 栏内为横排：外露色板 + 每组一个图标按钮 + sep 分隔
+    > .selected-shape-actions {
+      flex-direction: row;
+      align-items: center;
+      row-gap: 0;
+      column-gap: 2px;
+      white-space: nowrap;
+
+      fieldset {
+        margin: 0;
+      }
+    }
+
+    .compact-action-item {
+      min-height: var(--tb-btn-size);
+      display: inline-flex;
+    }
+
+    // 栏内图标按钮（tb-iconbtn 规格：28×28 圆角 6；悬停槽色；
+    // 开启 = 主色 8% 底 + 主色图标）。Actions.scss 的同名规则作用于
+    // 手机底栏（.compact-shape-actions），此处作用域为浮动栏
+    .compact-action-button,
+    .ToolIcon {
+      width: var(--tb-btn-size);
+      height: var(--tb-btn-size);
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--page-ink-2);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 0;
+
+      svg {
+        width: var(--tb-icon-size);
+        height: var(--tb-icon-size);
+        flex: 0 0 auto;
+      }
+
+      .ToolIcon__icon {
+        width: var(--tb-icon-size);
+        height: var(--tb-icon-size);
+        background: transparent;
+      }
+
+      &:hover:not(:disabled) {
+        background: var(--menu-hover);
+        color: var(--page-ink);
+      }
+
+      &.active,
+      &.ToolIcon--checked {
+        background: var(--color-selection-soft);
+        color: var(--color-selection);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--color-selection);
+        outline-offset: 1px;
+      }
+
+      &:disabled {
+        color: var(--page-muted);
+        opacity: 0.55;
+        cursor: default;
+        background: transparent;
+      }
+    }
+
+    // 栏内色板 24px。ColorPicker 的触发器恒带 .compact-sizing
+    // （= --mobile-action-button-size 32px，见 ColorPicker.tsx），其规则与
+    // 「.tb-floatbar .color-picker__button」同为三级类选择器且声明在后，会
+    // 把它压掉——故这里补上 .compact-action-item 升到四级，与手机底栏同法。
+    // 栏内 ColorPicker 一律包在 .compact-action-item 内（Actions.tsx 的色板槽位）
+    .color-picker__button,
+    .compact-action-item .color-picker__button {
+      width: var(--tb-swatch-size);
+      height: var(--tb-swatch-size);
+      margin: 3px;
+    }
+
+    .sep {
+      width: 1px;
+      height: calc(var(--tb-icon-size) + 4px);
+      flex: none;
+      margin: 0 4px;
+      background: var(--menu-divider);
+    }
+
+    .tb-btn-primary {
+      height: calc(var(--tb-btn-size) - 8px);
+      border-radius: 999px;
+    }
+
+    // 模式条/锁定条的模式名文本
+    .tb-floatbar__label {
+      display: inline-flex;
+      align-items: center;
+      padding: 0 6px;
+      font-size: 12px;
+      color: var(--page-ink-2);
+
+      svg {
+        width: var(--tb-icon-size);
+        height: var(--tb-icon-size);
+      }
+    }
+  }
+
+  // 「更多」菜单弹层（视觉复用 ContextMenu.scss 的 .context-menu* 类）
+  .tb-more-menu-popover {
+    z-index: var(--zIndex-ui-styles-popup);
+  }
+
+  @keyframes tb-floatbar-in {
+    from {
+      opacity: 0;
+      translate: 0 -4px;
+    }
+
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
+  // 分组容器：fieldset.tb-group > legend.tb-legend + 控件行
+  .tb-group {
+    border: 0;
+    margin: 12px 0 0;
+    padding: 0;
+    min-width: 0;
+
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+
+  // 弹层内容容器（.selected-shape-actions）以 row-gap 12 承担组距，
+  // 顶层分组 margin 归零避免叠加（嵌套子组如导图连线四子组不受影响）
+  .selected-shape-actions > .tb-group {
+    margin-top: 0;
+  }
+
+  .tb-legend {
+    padding: 0;
+    margin-bottom: 6px;
+    font-size: 11px;
+    color: var(--page-muted);
+  }
+
+  .tb-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .tb-note {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--page-muted);
+  }
+
+  .tb-sub {
+    margin: 8px 0 4px;
+    font-size: 11px;
+    color: var(--page-muted);
+
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+
+  // 色板：22px 圆形；is-on 双环；is-none 红斜线（透明）；is-mix 虚线斜分（多值）
+  .tb-swatch {
+    width: var(--tb-ctl-swatch-size);
+    height: var(--tb-ctl-swatch-size);
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    background: var(--swatch-color, transparent);
+    cursor: pointer;
+    position: relative;
+    box-sizing: border-box;
+
+    &:hover {
+      box-shadow: 0 0 0 2px var(--color-selection-hover);
+    }
+
+    &.is-on {
+      box-shadow: 0 0 0 2px var(--menu-bg), 0 0 0 4px var(--color-selection);
+    }
+
+    &.is-none {
+      background: var(--menu-bg);
+      overflow: hidden;
+
+      &::after {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        background: linear-gradient(
+          to top right,
+          transparent 45%,
+          #d83a52 46%,
+          #d83a52 54%,
+          transparent 55%
+        );
+      }
+    }
+
+    &.is-mix {
+      border: 1px dashed var(--page-muted);
+      background: linear-gradient(
+        135deg,
+        var(--page-muted) 50%,
+        var(--page-line) 50%
+      );
+    }
+  }
+
+  // 分段选择器：槽底 #F2F3F5 圆角 7 内边距 2；选项高 24 最小宽 32；
+  // 选中 = 白底 + 主色 + 轻投影（role=radiogroup）
+  .tb-seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 7px;
+    background: var(--neutral-fill);
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  // RadioSelection 的选项（label/button）共用此类；带类名以压过
+  // styles.scss 中 .buttonList label/button 的旧图标按钮规格
+  .tb-seg .tb-seg__option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: calc(var(--tb-ctl-size) + 4px);
+    width: auto;
+    height: calc(var(--tb-ctl-size) - 4px);
+    padding: 0 8px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--page-ink-2);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    box-sizing: border-box;
+
+    svg {
+      width: var(--tb-icon-size);
+      height: var(--tb-icon-size);
+    }
+
+    &:hover {
+      background: transparent;
+      border-color: transparent;
+      color: var(--page-ink);
+    }
+
+    &:focus-visible,
+    &:focus-within {
+      outline: 2px solid var(--color-selection);
+      outline-offset: 1px;
+      // 顶掉 styles.scss 旧焦点环（1px brand-hover box-shadow）；
+      // .active 的投影与此同优先级但声明在后，选中态不受影响
+      box-shadow: none;
+    }
+
+    &.active,
+    &.is-on {
+      background: var(--menu-bg);
+      color: var(--color-selection);
+      box-shadow: 0 1px 3px rgba(31, 35, 41, 0.18);
+
+      &:hover {
+        background: var(--menu-bg);
+        color: var(--color-selection);
+      }
+    }
+  }
+
+  // 图标按钮：28×28 圆角 6，图标 16px；悬停槽色，开启 = 主色 8% 底 + 主色图标
+  .tb-iconbtn {
+    width: var(--tb-ctl-size);
+    height: var(--tb-ctl-size);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--page-ink-2);
+    cursor: pointer;
+    box-sizing: border-box;
+
+    &:hover {
+      background: var(--menu-hover);
+      color: var(--page-ink);
+    }
+
+    &.is-on {
+      background: var(--color-selection-soft);
+      color: var(--color-selection);
+    }
+
+    &.is-disabled,
+    &:disabled {
+      color: var(--page-muted);
+      opacity: 0.55;
+      cursor: default;
+      background: transparent;
+    }
+
+    svg {
+      width: var(--tb-icon-size);
+      height: var(--tb-icon-size);
+    }
+  }
+
+  // 滑杆 + 数值：轨道 4 主色填充；滑块 14 白底 1.5px 主色边；
+  // 数值框高 26、12px 等宽数字，Enter 提交 / Esc 还原
+  .tb-range {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+  }
+
+  .tb-track {
+    position: relative;
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--neutral-fill);
+  }
+
+  .tb-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: 2px;
+    background: var(--color-selection);
+  }
+
+  .tb-thumb {
+    position: absolute;
+    top: 50%;
+    width: calc(var(--tb-icon-size) - 2px);
+    height: calc(var(--tb-icon-size) - 2px);
+    border-radius: 50%;
+    background: var(--menu-bg);
+    border: 1.5px solid var(--color-selection);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 1px 2px rgba(31, 35, 41, 0.18);
+    box-sizing: border-box;
+  }
+
+  .tb-num {
+    min-width: calc(var(--tb-ctl-size) + 12px);
+    height: calc(var(--tb-ctl-size) - 2px);
+    padding: 0 6px;
+    border: 1px solid var(--page-line);
+    border-radius: 6px;
+    background: var(--menu-bg);
+    color: var(--page-ink);
+    font-family: inherit;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  // 下拉触发器与输入框：高 28、圆角 6、1px 描边；悬停描边转主色 55%
+  .tb-select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    height: var(--tb-ctl-size);
+    padding: 0 6px 0 10px;
+    border: 1px solid var(--page-line);
+    border-radius: 6px;
+    background: var(--menu-bg);
+    color: var(--page-ink);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    box-sizing: border-box;
+
+    &:hover {
+      border-color: var(--color-selection-hover);
+    }
+
+    svg {
+      width: calc(var(--tb-icon-size) - 2px);
+      height: calc(var(--tb-icon-size) - 2px);
+      color: var(--page-muted);
+    }
+  }
+
+  .tb-input {
+    width: 100%;
+    height: var(--tb-ctl-size);
+    padding: 0 10px;
+    border: 1px solid var(--page-line);
+    border-radius: 6px;
+    background: var(--menu-bg);
+    color: var(--page-ink);
+    font-family: inherit;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+
+    &:hover {
+      border-color: var(--color-selection-hover);
+    }
+  }
+
+  // 复选项：15px 圆角 4；选中主色底 + 白色对勾；标签 12px
+  .tb-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--page-ink);
+    cursor: pointer;
+
+    .tb-box {
+      width: calc(var(--tb-icon-size) - 1px);
+      height: calc(var(--tb-icon-size) - 1px);
+      flex: none;
+      border-radius: 4px;
+      border: 1px solid var(--page-line);
+      background: var(--menu-bg);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+
+      svg {
+        width: calc(var(--tb-icon-size) - 5px);
+        height: calc(var(--tb-icon-size) - 5px);
+        stroke: #fff;
+        stroke-width: 2;
+        fill: none;
+      }
+    }
+
+    &.is-on .tb-box {
+      background: var(--color-selection);
+      border-color: var(--color-selection);
+    }
+  }
+
+  // 弹层容器（PropertiesPopover 的 Island）：圆角 10、内边距 8、统一阴影、
+  // 带箭头。与 .Island 基础样式同属性冲突，双类选择器提升优先级。
+  // 宽度由调用方经 Island style（maxWidth/width）控制，不在此固定。
+  .Island.tb-pop {
+    position: relative;
+    padding: 8px;
+    background: var(--menu-bg);
+    border: 1px solid var(--menu-border);
+    border-radius: 10px;
+    box-shadow: var(--menu-shadow);
+    font-size: 12px;
+    color: var(--page-ink);
+    text-align: left;
+
+    .tb-group {
+      margin-top: 10px;
+
+      &:first-child {
+        margin-top: 0;
+      }
+    }
+  }
+
+  // 弹层箭头（radix Popover.Arrow 的 svg 盒）：10px 旋转方块。
+  // 外层 span 由 radix 定位并随 side 旋转（bottom 时 rotate 180°），
+  // 故边框取「右 + 下」两侧——旋转/翻转后视觉边始终朝外（上弹时为左+上）。
+  svg.tb-pop-arrow {
+    background: var(--menu-bg);
+    border-right: 1px solid var(--menu-border);
+    border-bottom: 1px solid var(--menu-border);
+    box-sizing: border-box;
+    transform: translateY(-50%) rotate(45deg);
+
+    // 隐藏 radix 默认三角，仅借用 svg 盒做旋转方块
+    polygon {
+      display: none;
+    }
+  }
+
+  .tb-pop-title {
+    padding: 2px 4px 8px;
+    color: var(--page-muted);
+    font-size: 11px;
+  }
+
+  // 画布悬浮按钮：高 28、圆角 999、图标 + 文字胶囊，贴元素边缘外侧；
+  // 主行动作用 primary 主色底
+  .tb-canvasbtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: var(--tb-ctl-size);
+    padding: 0 12px;
+    border: 1px solid var(--menu-border);
+    border-radius: 999px;
+    background: var(--menu-bg);
+    box-shadow: var(--menu-shadow);
+    color: var(--page-ink);
+    font-family: inherit;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    box-sizing: border-box;
+
+    &:hover {
+      border-color: var(--color-selection-hover);
+      color: var(--color-selection);
+    }
+
+    svg {
+      width: calc(var(--tb-icon-size) - 2px);
+      height: calc(var(--tb-icon-size) - 2px);
+    }
+
+    &.primary {
+      background: var(--color-selection);
+      border-color: var(--color-selection);
+      color: #fff;
+
+      &:hover {
+        filter: brightness(1.08);
+        color: #fff;
+      }
+    }
+  }
+
+  // 主按钮：高 28、圆角 6、主色底白字（模式条「完成/应用」、锁定条「解锁」）
+  .tb-btn-primary {
+    height: var(--tb-ctl-size);
+    padding: 0 16px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--color-selection);
+    color: #fff;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    box-sizing: border-box;
+
+    &:hover {
+      filter: brightness(1.08);
+    }
+  }
+
+  // —— 手机端（T5）：底部条 tb-bar + 底部 sheet ————————————————
+
+  // 底部条：通栏横排可横滑；色板 24px 外露、图标按钮 38×38、分隔线 1×22。
+  // 挂载在 .App-bottom-bar 内（容器 pointer-events: none，此处恢复）。
+  // 条内 compact-action-button / ToolIcon（撤销·重做·删除等既有动作按钮）
+  // 的 38px 规格在 Actions.scss 的 .mobile-shape-actions 块（同源同尺寸）。
+  .tb-bar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    width: 100%;
+    padding: 6px 8px;
+    padding-bottom: calc(6px + var(--sab, 0px));
+    background: var(--menu-bg);
+    border-top: 1px solid var(--menu-border);
+    border-radius: 0;
+    box-shadow: none;
+    box-sizing: border-box;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    pointer-events: var(--ui-pointerEvents);
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    > * {
+      flex: none;
+    }
+
+    .sep {
+      width: 1px;
+      height: 22px;
+      flex: none;
+      margin: 0 6px;
+      background: var(--menu-divider);
+    }
+
+    // 条上色板 24px（+7px margin 与 38px 按钮同槽位）；四级类选择器压过
+    // ColorPicker.scss 的 .color-picker__button.compact-sizing（32px）
+    .compact-action-item .color-picker__button {
+      width: 24px;
+      height: 24px;
+      margin: 7px;
+      flex: none;
+    }
+
+    // tb-iconbtn 在条上放大至 38×38（思维导图节点动作条等直接用例）
+    .tb-iconbtn {
+      width: 38px;
+      height: 38px;
+    }
+  }
+
+  // sheet 遮罩：压暗画布 + 拦截手势（点击经 radix 外部点击/调用方关闭）
+  .tb-sheet__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: var(--zIndex-ui-styles-popup);
+    background: var(--overlay-bg-color);
+    pointer-events: var(--ui-pointerEvents);
+    animation: tb-sheet-overlay-in 160ms ease-out;
+  }
+
+  // 底部 sheet 容器：圆角 14 14 0 0、抓手 36×4、160ms 上滑
+  .tb-sheet {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 4px 14px 16px;
+    padding-bottom: calc(16px + var(--sab, 0px));
+    background: var(--menu-bg);
+    border-top: 1px solid var(--menu-border);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -8px 28px rgba(31, 35, 41, 0.14);
+    color: var(--page-ink);
+    font-size: 12px;
+    text-align: left;
+    overflow-y: auto;
+    min-height: 0;
+    animation: tb-sheet-in 160ms ease-out;
+  }
+
+  .tb-sheet__grab {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--page-line);
+    margin: 6px auto 10px;
+  }
+
+  // sheet 内触控放大（设计稿「通用控件」手机列）：
+  // 色板 34、分段选项高 30/最小宽 38、图标按钮 36、滑杆轨道 6/滑块 20/
+  // 数值框高 32、触发器与输入框高 36 圆角 8、菜单行高 44
+  .tb-sheet {
+    // 四级类选择器压过 ColorPicker.scss 的 .color-picker__button.compact-sizing
+    // （32px，同为三级且声明在后）——与浮动栏、手机底栏同法
+    .color-picker__button,
+    .compact-action-item .color-picker__button {
+      width: 34px;
+      height: 34px;
+    }
+
+    .tb-row {
+      gap: 10px;
+    }
+
+    // 压过 styles.scss 旧 isMobile 规则（.excalidraw--mobile 前缀的
+    // .buttonList label/button 32px 方形）：四级类选择器
+    .tb-seg .tb-seg__option {
+      height: 30px;
+      min-width: 38px;
+    }
+
+    .tb-iconbtn {
+      width: 36px;
+      height: 36px;
+    }
+
+    // 滑杆轨道 6 / 滑块 20（--slider-thumb-size 见 Range.scss）/ 数值框高 32
+    --slider-thumb-size: 20px;
+
+    .range-input {
+      height: 6px;
+      border-radius: 3px;
+    }
+
+    .control-label .range-wrapper input.range-number {
+      height: 32px;
+    }
+
+    .tb-select,
+    .tb-input {
+      height: 36px;
+      border-radius: 8px;
+    }
+
+    // 「更多」sheet 等 buttonList 图标按钮 36×36（压过 styles.scss 的
+    // isMobile 32px 规则，故带 .excalidraw--mobile 前缀——sheet 仅手机渲染）
+    @include isMobile {
+      .buttonList button,
+      .buttonList label {
+        width: 36px;
+        height: 36px;
+      }
+
+      .buttonList .ToolIcon__icon {
+        width: 36px;
+        height: 36px;
+      }
+    }
+
+    // 菜单列表（复用 ContextMenu.scss 的 .context-menu* 结构）：
+    // sheet 内去边框/阴影、通宽，行高 44
+    .context-menu {
+      width: 100%;
+      padding: 0;
+      border: 0;
+      box-shadow: none;
+      background: transparent;
+    }
+
+    .context-menu .context-menu-item {
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 44px;
+    }
+
+    // sheet 菜单保留快捷键标注（ContextMenu.scss 的 isMobile 规则默认隐藏）
+    .context-menu .context-menu-item .context-menu-item__shortcut {
+      display: block;
+    }
+  }
+
+  // PropertiesPopover 的手机竖屏分支：radix 弹层骨架保留（Esc/外部点击/
+  // 焦点回归不变），popper 定位覆盖为贴容器底边通栏（脱离触发器）
+  .tb-sheet-portal {
+    [data-radix-popper-content-wrapper] {
+      position: absolute !important;
+      inset: auto 0 0 0 !important;
+      transform: none !important;
+      min-width: 0 !important;
+      // 高度上限 70%（相对 .excalidraw 容器）；内容经 flex 链收缩、
+      // .tb-sheet overflow-y 滚动
+      max-height: 70% !important;
+      display: flex;
+      flex-direction: column;
+
+      > div {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+    }
+  }
+
+  // 非 radix 分支（MobileMindmapActions 经 createPortal 直挂 .excalidraw）
+  // 的 sheet 锚定容器：与上方 popper 覆盖等效——贴容器底边通栏、
+  // 层级与遮罩同级但 DOM 居后（压在遮罩上）、高度上限 70%
+  // （.tb-sheet 基块只有盒模型/视觉属性，定位一律由锚定容器承担）
+  .tb-sheet-anchor {
+    position: absolute;
+    inset: auto 0 0 0;
+    z-index: var(--zIndex-ui-styles-popup);
+    display: flex;
+    flex-direction: column;
+    max-height: 70%;
+  }
+
+  @keyframes tb-sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes tb-sheet-overlay-in {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  // 统一焦点态：2px 主色 outline、offset 1–2
+  .tb-swatch:focus-visible,
+  .tb-iconbtn:focus-visible,
+  .tb-select:focus-visible,
+  .tb-input:focus-visible,
+  .tb-check:focus-visible,
+  .tb-btn-primary:focus-visible,
+  .tb-canvasbtn:focus-visible {
+    outline: 2px solid var(--color-selection);
+    outline-offset: 2px;
+  }
+
+  // 顶掉 styles.scss 旧焦点环（1px brand-hover box-shadow），焦点只留统一
+  // outline。is-on 色板的双环为选中态样式，须排除保留。
+  .tb-swatch:focus-visible:not(.is-on),
+  .tb-iconbtn:focus-visible,
+  .tb-select:focus-visible,
+  .tb-input:focus-visible,
+  .tb-check:focus-visible,
+  .tb-btn-primary:focus-visible {
+    box-shadow: none;
+  }
+
+  // 画布悬浮按钮常态带 --menu-shadow 投影，旧规则会在焦点时把它换成
+  // brand-hover 环——此处改回自身投影，与统一 outline 叠加
+  .tb-canvasbtn:focus-visible {
+    box-shadow: var(--menu-shadow);
+  }
+
+  &.theme--dark {
+    .tb-swatch.is-none::after {
+      background: linear-gradient(
+        to top right,
+        transparent 45%,
+        #ff7a8c 46%,
+        #ff7a8c 54%,
+        transparent 55%
+      );
+    }
+
+    .tb-seg .tb-seg__option.active,
+    .tb-seg .tb-seg__option.is-on {
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    }
+
+    .tb-thumb {
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    }
+
+    .tb-sheet {
+      box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.45);
+    }
+  }
+}

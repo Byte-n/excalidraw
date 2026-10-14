@@ -1,10 +1,4 @@
-import {
-  debounce,
-  easeOut,
-  isBounds,
-  type Bounds,
-  type StylesPanelMode,
-} from "@excalidraw/common";
+import { debounce, easeOut, isBounds, type Bounds } from "@excalidraw/common";
 import { clamp } from "@excalidraw/math";
 
 import {
@@ -60,15 +54,6 @@ const SCROLL_CONSTRAINTS_SNAP_BACK_DELAY = 200;
 
 /** single source of truth for the `--right-sidebar-width` CSS variable */
 export const RIGHT_SIDEBAR_WIDTH = 302;
-
-/**
- * Approximate styles panel footprints (panel width + editor edge inset),
- * used by `getOffsets` to reserve space for the panel before it was ever
- * rendered (= measured). Keep roughly in sync with the CSS
- * (`.App-menu__left` width / `.compact-shape-actions-island` min-width +
- * `--editor-container-padding`).
- */
-const STYLES_PANEL_APPROX_WIDTH = { full: 216, compact: 64 };
 
 type Viewport = Pick<AppState, "scrollX" | "scrollY" | "zoom">;
 
@@ -302,7 +287,6 @@ const interpolateViewport = ({
 
 type AppViewportDependencies = {
   getContainer: () => HTMLDivElement | null;
-  getStylesPanelMode: () => StylesPanelMode;
   isGestureActive: () => boolean;
 };
 
@@ -566,15 +550,9 @@ export class AppViewport {
         measuredOffsets[side] = Math.max(measuredOffsets[side], offset);
       };
 
-      if (opts.reserve.stylesPanel) {
-        reserveSurface("stylesPanel", {
-          side: isRTL ? "right" : "left",
-          offset:
-            this.dependencies.getStylesPanelMode() === "compact"
-              ? STYLES_PANEL_APPROX_WIDTH.compact
-              : STYLES_PANEL_APPROX_WIDTH.full,
-        });
-      }
+      // "stylesPanel" 不再预留：T2 起属性面板为跟随选区的浮动栏，
+      // 悬浮于画布之上、不占用布局空间（该预留值随之失去意义；
+      // 类型字段保留以兼容宿主 API）
       if (opts.reserve.sidebar) {
         reserveSurface("sidebar", {
           side: isRTL ? "left" : "right",

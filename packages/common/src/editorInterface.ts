@@ -156,6 +156,9 @@ export const getFormFactor = (
 export const deriveStylesPanelMode = (
   editorInterface: EditorInterface,
 ): StylesPanelMode => {
+  // T2（浮动工具栏改造）后语义调整：桌面/平板的属性面板统一为跟随选区的
+  // 浮动栏，full/compact 不再驱动面板形态；返回值保留以兼容公开 hook
+  // `useStylesPanelMode` 与宿主的 desktopUIMode 偏好读取。
   if (editorInterface.formFactor === "phone") {
     return "mobile";
   }

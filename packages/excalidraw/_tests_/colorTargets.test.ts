@@ -1,9 +1,11 @@
 import {
   COLOR_PALETTE,
   DEFAULT_ELEMENT_STROKE_PICKS,
+  DEFAULT_ELEMENT_STROKE_PRESETS,
   DEFAULT_STICKY_NOTE_BG,
   STICKY_NOTE_BACKGROUND_PICKS,
   STICKY_NOTE_INK,
+  STICKY_NOTE_STROKE_PICKS,
 } from "@excalidraw/common";
 
 import {
@@ -39,6 +41,7 @@ describe("resolveColorTarget", () => {
     expect(regular.kind).toBe("regular");
     expect(regular.appStateKeys).toEqual(["currentItemStrokeColor"]);
     expect(regular.topPicks).toBe(DEFAULT_ELEMENT_STROKE_PICKS);
+    expect(regular.presetColors).toBe(DEFAULT_ELEMENT_STROKE_PRESETS);
     expect(regular.excludedColors).toBeUndefined();
 
     const sticky = resolveColorTarget(
@@ -58,7 +61,11 @@ describe("resolveColorTarget", () => {
     ]);
     expect(sticky.topPicks).toBe(STICKY_NOTE_BACKGROUND_PICKS);
     expect(sticky.customizableTopPicks).toBe("stickyNoteBackground");
-    expect(sticky.excludedColors).toContain(COLOR_PALETTE.transparent);
+    // 便签纸色弹层预设 = 六色纸（不含透明）
+    expect(sticky.presetColors).toBe(STICKY_NOTE_BACKGROUND_PICKS);
+    expect(sticky.presetColors).not.toContain(COLOR_PALETTE.transparent);
+    // 便签色域无透明：透明在全色板网格中隐藏（保留网格位与热键序）
+    expect(sticky.excludedColors).toEqual([COLOR_PALETTE.transparent]);
   });
 
   it("classifies a note (and its label) as the sticky domain", () => {
@@ -69,6 +76,8 @@ describe("resolveColorTarget", () => {
     );
     expect(target.kind).toBe("sticky");
     expect(target.appStateKeys).toEqual(["currentItemStickynoteStrokeColor"]);
+    expect(target.presetColors).toBe(STICKY_NOTE_STROKE_PICKS);
+    expect(target.excludedColors).toEqual([COLOR_PALETTE.transparent]);
   });
 
   it("writes both domains for a mixed selection but shows the regular picker", () => {
@@ -83,6 +92,8 @@ describe("resolveColorTarget", () => {
       "currentItemStickynoteStrokeColor",
     ]);
     expect(target.topPicks).toBe(DEFAULT_ELEMENT_STROKE_PICKS);
+    expect(target.presetColors).toBe(DEFAULT_ELEMENT_STROKE_PRESETS);
+    // mixed 走常规选择器（含透明，供普通元素使用）
     expect(target.excludedColors).toBeUndefined();
   });
 

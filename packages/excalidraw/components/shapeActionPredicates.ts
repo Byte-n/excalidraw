@@ -6,6 +6,7 @@ import {
   getColorTargetElement,
   hasBoundTextElement,
   isElbowArrow,
+  isFrameLikeElement,
   isImageElement,
   isLinearElement,
   isTextElement,
@@ -29,6 +30,7 @@ import {
   getSelectedElements,
   hasBackground,
   hasFillStyle,
+  hasFrameBackground,
   hasFreedrawMode,
   hasStrokeStyle,
   hasStrokeWidth,
@@ -74,11 +76,15 @@ export const canChangeBackgroundColor = (
   return (
     hasBackground(activeFillTarget) ||
     // a note's label (the target while editing it) has no fill, but a
-    // background pick on it colors the note — so the picker stays available
-    targetElements.some((element) =>
-      hasBackground(
-        getColorTargetElement(element, "backgroundColor", elementsMap),
-      ),
+    // background pick on it colors the note — so the picker stays available.
+    // Frames are filled too, but only once selected: a frame always starts
+    // transparent, and the frame tool has no "current background" to
+    // preconfigure (see `createFrameElementOnPointerDown`).
+    targetElements.some(
+      (element) =>
+        hasBackground(
+          getColorTargetElement(element, "backgroundColor", elementsMap),
+        ) || hasFrameBackground(element.type),
     )
   );
 };
@@ -166,15 +172,17 @@ export const getShapeActionPredicates = (
     opacity: activeToolType !== "autoshape" || hasSelection,
 
     // arrangement
-    // z-order controls are hidden while the freedraw or drawShape tool is
-    // active without an actual selection
+    // z-order controls act on the selection, so they require one: hidden in
+    // the tool-config state (no selection), and still hidden while the
+    // freedraw or drawShape tool is active without a selected freedraw
     layers:
-      (activeToolType !== "freedraw" &&
+      hasSelection &&
+      ((activeToolType !== "freedraw" &&
         activeToolType !== "autoshape" &&
         !targetElements.some((element) => element.type === "freedraw")) ||
-      getSelectedElements(elementsMap, appState).some(
-        (element) => element.type === "freedraw",
-      ),
+        getSelectedElements(elementsMap, appState).some(
+          (element) => element.type === "freedraw",
+        )),
     align:
       !isSingleElementBoundContainer && alignActionsPredicate(appState, app),
     distribute: targetElements.length > 2,
@@ -194,6 +202,8 @@ export const getShapeActionPredicates = (
       singleSelected &&
       isLinearElement(targetElements[0]) &&
       !isElbowArrow(targetElements[0]),
+    /** Frame/MagicFrame 场景：浮动栏「重命名」入口（聚焦画布标题输入框） */
+    frameRename: singleSelected && isFrameLikeElement(targetElements[0]),
   };
 };
 

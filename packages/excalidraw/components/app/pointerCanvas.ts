@@ -394,6 +394,12 @@ export const handleCanvasDoubleClick = (
   if (app.state.multiElement) {
     return;
   }
+
+  // 裁剪模式下双击画布 = 应用裁剪并退出（设计稿「图片 · 裁剪模式」）
+  if (app.state.croppingElementId) {
+    app.finishImageCropping();
+    return;
+  }
   // double click only creates/edits text in selection mode, or with the
   // autoshape tool (double-click-to-type without leaving the tool; all the
   // selection-dependent branches below are inert there since autoshape
@@ -1266,7 +1272,15 @@ export const handleCanvasPointerMove = (
     if (
       hitElement &&
       (hitElement.link || isEmbeddableElement(hitElement)) &&
-      app.state.selectedElementIds[hitElement.id] &&
+      // 编辑态悬停已选中元素：仅手机端自动弹出（桌面/平板改为点击
+      // 浮动栏「链接」按钮弹出，避免弹层随选中/悬停一直展示）
+      ((app.editorInterface.formFactor === "phone" &&
+        app.state.selectedElementIds[hitElement.id]) ||
+        // 只读/查看模式：悬停带链接元素弹出访问态（设计稿「链接弹层与
+        // 联动态」）；可嵌入元素在查看模式下可直接交互，不弹
+        (app.state.viewModeEnabled &&
+          !!hitElement.link &&
+          !isEmbeddableElement(hitElement))) &&
       !app.state.contextMenu &&
       !app.state.showHyperlinkPopup
     ) {

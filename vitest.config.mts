@@ -98,6 +98,7 @@ export default defineConfig({
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
+      "**/worktrees/**",
       "packages/agent-tool/_tests_/**",
       "packages/yjs-hocuspocus-client/_tests_/**",
       "packages/yjs-hocuspocus-server/_tests_/**",
@@ -132,7 +133,11 @@ export default defineConfig({
           hookTimeout: 10_000,
           server: {
             deps: {
-              inline: ["@hocuspocus/provider", "@hocuspocus/server", "y-protocols"],
+              inline: [
+                "@hocuspocus/provider",
+                "@hocuspocus/server",
+                "y-protocols",
+              ],
             },
           },
         },
@@ -149,7 +154,11 @@ export default defineConfig({
           hookTimeout: 10_000,
           server: {
             deps: {
-              inline: ["@hocuspocus/provider", "@hocuspocus/server", "y-protocols"],
+              inline: [
+                "@hocuspocus/provider",
+                "@hocuspocus/server",
+                "y-protocols",
+              ],
             },
           },
         },

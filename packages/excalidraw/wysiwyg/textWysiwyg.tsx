@@ -1082,8 +1082,8 @@ export const textWysiwyg = ({
     const inShapeActionsMenu =
       (target instanceof ownerWindow.HTMLElement ||
         target instanceof ownerWindow.SVGElement) &&
-      (!!(target as Element).closest(`.${CLASSES.SHAPE_ACTIONS_MENU}`) ||
-        !!(target as Element).closest(".compact-shape-actions-island"));
+      // 浮动工具栏（T2 起桌面/平板的属性面板容器）
+      !!(target as Element).closest(".tb-floatbar");
 
     ownerWindow.setTimeout(() => {
       // If we interacted within shape actions menu or its popovers/triggers,
@@ -1140,10 +1140,9 @@ export const textWysiwyg = ({
     if (
       ((event.target instanceof ownerWindow.HTMLElement ||
         event.target instanceof ownerWindow.SVGElement) &&
-        (event.target.closest(
-          `.${CLASSES.SHAPE_ACTIONS_MENU}, .${CLASSES.ZOOM_ACTIONS}`,
-        ) ||
-          event.target.closest(".compact-shape-actions-island")) &&
+        (event.target.closest(`.${CLASSES.ZOOM_ACTIONS}`) ||
+          // 浮动工具栏（T2 起桌面/平板的属性面板容器）
+          event.target.closest(".tb-floatbar")) &&
         !isWritableElement(event.target)) ||
       isPropertiesTrigger ||
       isPropertiesContent

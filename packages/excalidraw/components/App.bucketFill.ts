@@ -2,7 +2,6 @@ import {
   applyDarkModeFilter,
   BUCKET_FILL_BACKGROUND_PICKS,
   COLOR_PALETTE,
-  DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX,
   getSizeFromPoints,
   isTransparent,
   THEME,
@@ -310,6 +309,8 @@ export class AppBucketFill {
     theme?: Theme,
   ) =>
     isTransparent(backgroundColor)
-      ? COLOR_PALETTE.green[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX]
+      ? // 固定取 green[1]：背景默认档已随设计色调移到 index 0（近白浅档），
+        // 兜底色需要在白画布上可见
+        COLOR_PALETTE.green[1]
       : applyDarkModeFilter(backgroundColor, theme === THEME.DARK);
 }

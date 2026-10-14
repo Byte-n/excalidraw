@@ -44,6 +44,16 @@ vi.mock("@excalidraw/common", async (importOriginal) => {
 // mock for pep.js not working with setPointerCapture()
 HTMLElement.prototype.setPointerCapture = vi.fn();
 
+// jsdom 没有 ResizeObserver（radix 弹层 use-size 需要）；各测试内的临时
+// stub 会覆盖此全局 stub，互不冲突
+if (typeof globalThis.ResizeObserver === "undefined") {
+  (globalThis as any).ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 require("fake-indexeddb/auto");
 
 polyfill();

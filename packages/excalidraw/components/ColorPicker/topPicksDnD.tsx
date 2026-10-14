@@ -37,7 +37,7 @@ const isSameColor = (a: string, b: string) => {
 
 type DragOrigin =
   // a color dragged from the picker popup (palette/shades/custom) or the
-  // active-color trigger — dropping replaces the hovered pick
+  // active color trigger — dropping replaces the hovered pick
   | { kind: "swatch" }
   // a pick dragged from the top-picks strip itself — dropping reorders
   | { kind: "pick"; index: number };
@@ -191,6 +191,13 @@ export const useTopPicksDnD = ({
 
       const ghost = document.createElement("div");
       ghost.className = GHOST_CLASS;
+      // the ghost is appended to document.body, outside the .excalidraw
+      // scope — mirror the theme class so its theme-scoped overrides
+      // (e.g. the transparent swatch's dark-mode slash) still apply
+      ghost.classList.toggle(
+        "theme--dark",
+        !!sourceEl.closest(".excalidraw")?.classList.contains("theme--dark"),
+      );
       const swatch = document.createElement("div");
       swatch.className = `${GHOST_CLASS}__swatch`;
       if (isTransparent(color)) {

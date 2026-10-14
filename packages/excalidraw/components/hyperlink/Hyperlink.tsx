@@ -42,9 +42,9 @@ import { getTooltipDiv, updateTooltipPosition } from "../../components/Tooltip";
 import { t } from "../../i18n";
 
 import { useAppProps, useEditorInterface, useExcalidrawAppState } from "../App";
-import { IconButton } from "../IconButton";
-import { FreedrawIcon, TrashIcon, elementLinkIcon } from "../icons";
+import { LinkIcon, TrashIcon, chevronDownIcon, pencilIcon } from "../icons";
 import { getSelectedElements } from "../../scene";
+import { markPropertiesPopoverEscClose } from "../PropertiesPopover";
 
 import { getLinkHandleFromCoords } from "./helpers";
 
@@ -52,10 +52,11 @@ import "./Hyperlink.scss";
 
 import type { AppState, ExcalidrawProps, UIAppState } from "../../types";
 
-const POPUP_WIDTH = 380;
-const POPUP_HEIGHT = 42;
-const POPUP_PADDING = 5;
-const SPACE_BOTTOM = 85;
+// 元素锚定卡片（手机 / 只读·查看模式悬停）的定位与悬停隐藏量测常量；
+// 桌面/平板的链接弹层锚定浮动栏「链接」按钮（Actions.tsx FloatbarLinkAction）
+const POPUP_WIDTH = 252;
+const POPUP_HEIGHT = 132;
+const SPACE_BOTTOM = 140;
 const AUTO_HIDE_TIMEOUT = 500;
 
 let IS_HYPERLINK_TOOLTIP_VISIBLE = false;
@@ -65,14 +66,22 @@ const embeddableLinkCache = new Map<
   string
 >();
 
-export const Hyperlink = ({
-  element,
-  scene,
-  setAppState,
-  onLinkOpen,
-  setToast,
-  updateEmbedValidationStatus,
-}: {
+/** 访问态的链接显示文本：域名 + 路径（元素内链接显示「前往目标元素」） */
+export const getDisplayLink = (link: string): string => {
+  if (isElementLink(link)) {
+    return t("labels.link.goToElement");
+  }
+  try {
+    const url = new URL(normalizeLink(link));
+    return `${url.host}${url.pathname === "/" ? "" : url.pathname}${
+      url.search
+    }${url.hash}`;
+  } catch {
+    return link;
+  }
+};
+
+type HyperlinkContentProps = {
   element: NonDeletedExcalidrawElement;
   scene: Scene;
   setAppState: React.Component<any, AppState>["setState"];
@@ -84,8 +93,25 @@ export const Hyperlink = ({
     element: ExcalidrawEmbeddableElement,
     status: boolean,
   ) => void;
-}) => {
-  const elementsMap = scene.getNonDeletedElementsMap();
+  /** 只读/查看模式：访问态不显示「编辑」入口 */
+  readOnly?: boolean;
+};
+
+/**
+ * 链接弹层内容（设计稿「链接弹层与联动态」）：编辑态 = URL 输入 +
+ * 「链接到元素…」+ 移除/保存；访问态 = 链接图标 + 域名文本 + 编辑/访问。
+ * 桌面/平板由浮动栏「链接」按钮向下弹出（tb-pop），手机与只读/查看模式
+ * 由元素锚定卡片（Hyperlink）承载，内容同源。
+ */
+export const HyperlinkContent = ({
+  element,
+  scene,
+  setAppState,
+  onLinkOpen,
+  setToast,
+  updateEmbedValidationStatus,
+  readOnly = false,
+}: HyperlinkContentProps) => {
   const appState = useExcalidrawAppState();
   const appProps = useAppProps();
   const editorInterface = useEditorInterface();
@@ -179,6 +205,7 @@ export const Hyperlink = ({
     updateEmbedValidationStatus,
   ]);
 
+  // 关闭/切换弹层时提交当前输入（保持既有「点击外部即保存」行为）
   useLayoutEffect(() => {
     return () => {
       handleSubmit();
@@ -195,6 +222,185 @@ export const Hyperlink = ({
     }
   }, [isEditing, editorInterface.formFactor, editorInterface.isTouchScreen]);
 
+  const handleRemove = useCallback(() => {
+    trackEvent("hyperlink", "delete");
+    scene.mutateElement(element, { link: null });
+    setAppState({ showHyperlinkPopup: false });
+  }, [setAppState, element, scene]);
+
+  const onEdit = () => {
+    trackEvent("hyperlink", "edit", "popup-ui");
+    setAppState({ showHyperlinkPopup: "editor" });
+  };
+
+  const handleSave = () => {
+    handleSubmit();
+    const link = normalizeLink(inputRef.current?.value ?? inputVal) || null;
+    // 保存后：有链接回访问态，无链接直接关闭
+    setAppState({ showHyperlinkPopup: link ? "info" : false });
+  };
+
+  if (isEditing) {
+    return (
+      <>
+        <div className="tb-pop-title">
+          {isEmbeddableElement(element)
+            ? t("labels.link.editEmbed")
+            : t("labels.link.edit")}
+        </div>
+        <div className="excalidraw-hyperlink__row">
+          <input
+            className={clsx("tb-input", "excalidraw-hyperlink__input")}
+            placeholder={t("labels.link.hint")}
+            ref={inputRef}
+            value={inputVal}
+            onChange={(event) => setInputVal(event.target.value)}
+            autoFocus
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              // prevent cmd/ctrl+k shortcut when editing link
+              if (event[KEYS.CTRL_OR_CMD] && event.key === KEYS.K) {
+                event.preventDefault();
+              }
+              if (event.key === KEYS.ENTER) {
+                handleSave();
+              }
+              if (event.key === KEYS.ESCAPE) {
+                // Esc 关闭弹层、焦点回「链接」按钮；输入经卸载提交保留
+                markPropertiesPopoverEscClose();
+                setAppState({ showHyperlinkPopup: false });
+              }
+            }}
+          />
+        </div>
+        <div className="excalidraw-hyperlink__row">
+          <button
+            type="button"
+            className="tb-select excalidraw-hyperlink__linkto"
+            title={t("labels.linkToElement")}
+            aria-label={t("labels.linkToElement")}
+            onClick={() => {
+              setAppState({
+                openDialog: {
+                  name: "elementLinkSelector",
+                  sourceElementId: element.id,
+                },
+              });
+            }}
+          >
+            <span>{t("labels.linkToElement")}</span>
+            {chevronDownIcon}
+          </button>
+        </div>
+        <div className="excalidraw-hyperlink__actions">
+          {linkVal && !isEmbeddableElement(element) && (
+            <button
+              type="button"
+              className="tb-iconbtn"
+              title={t("buttons.remove")}
+              aria-label={t("buttons.remove")}
+              onClick={handleRemove}
+            >
+              {TrashIcon}
+            </button>
+          )}
+          <button type="button" className="tb-btn-primary" onClick={handleSave}>
+            {t("labels.link.save")}
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="tb-pop-title">{t("labels.link.label")}</div>
+      <div className="excalidraw-hyperlink__row">
+        <span
+          className="tb-iconbtn is-on excalidraw-hyperlink__linkicon"
+          aria-hidden="true"
+        >
+          {LinkIcon}
+        </span>
+        <span className="excalidraw-hyperlink__domain" title={linkVal}>
+          {linkVal ? getDisplayLink(linkVal) : t("labels.link.empty")}
+        </span>
+      </div>
+      <div className="excalidraw-hyperlink__actions">
+        {!readOnly && (
+          <button
+            type="button"
+            className="tb-iconbtn"
+            title={t("buttons.edit")}
+            aria-label={t("buttons.edit")}
+            onClick={onEdit}
+          >
+            {pencilIcon}
+          </button>
+        )}
+        {linkVal && (
+          <a
+            href={normalizeLink(linkVal)}
+            className="tb-btn-primary excalidraw-hyperlink__visit"
+            target={isLocalLink(linkVal) ? "_self" : "_blank"}
+            onClick={(event) => {
+              if (linkVal && onLinkOpen) {
+                const customEvent = wrapEvent(
+                  EVENT.EXCALIDRAW_LINK,
+                  event.nativeEvent,
+                );
+                onLinkOpen(
+                  {
+                    ...element,
+                    link: normalizeLink(linkVal),
+                  },
+                  customEvent,
+                );
+                if (customEvent.defaultPrevented) {
+                  event.preventDefault();
+                }
+              }
+            }}
+            rel="noopener noreferrer"
+          >
+            {t("labels.link.visit")}
+          </a>
+        )}
+      </div>
+    </>
+  );
+};
+
+/**
+ * 元素锚定的链接卡片：手机（T5 前的过渡形态）与只读/查看模式悬停。
+ * 桌面/平板编辑态不渲染——链接弹层锚定浮动栏「链接」按钮
+ * （components/Actions.tsx 的 FloatbarLinkAction）。
+ */
+export const Hyperlink = ({
+  element,
+  scene,
+  setAppState,
+  onLinkOpen,
+  setToast,
+  updateEmbedValidationStatus,
+}: {
+  element: NonDeletedExcalidrawElement;
+  scene: Scene;
+  setAppState: React.Component<any, AppState>["setState"];
+  onLinkOpen: ExcalidrawProps["onLinkOpen"];
+  setToast: (
+    toast: { message: string; closable?: boolean; duration?: number } | null,
+  ) => void;
+  updateEmbedValidationStatus: (
+    element: ExcalidrawEmbeddableElement,
+    status: boolean,
+  ) => void;
+}) => {
+  const elementsMap = scene.getNonDeletedElementsMap();
+  const appState = useExcalidrawAppState();
+  const isEditing = appState.showHyperlinkPopup === "editor";
+
+  // 悬停离场自动隐藏（查看模式悬停 / 手机元素锚定卡片）
   useEffect(() => {
     let timeoutId: number | null = null;
 
@@ -226,24 +432,13 @@ export const Hyperlink = ({
     };
   }, [appState, element, isEditing, setAppState, elementsMap]);
 
-  const handleRemove = useCallback(() => {
-    trackEvent("hyperlink", "delete");
-    scene.mutateElement(element, { link: null });
-    setAppState({ showHyperlinkPopup: false });
-  }, [setAppState, element, scene]);
-
-  const onEdit = () => {
-    trackEvent("hyperlink", "edit", "popup-ui");
-    setAppState({ showHyperlinkPopup: "editor" });
-  };
   const { x, y } = getCoordsForPopover(element, appState, elementsMap);
   if (
     appState.contextMenu ||
     appState.selectedElementsAreBeingDragged ||
     appState.resizingElement ||
     appState.isRotating ||
-    appState.openMenu ||
-    appState.viewModeEnabled
+    appState.openMenu
   ) {
     return null;
   }
@@ -255,100 +450,17 @@ export const Hyperlink = ({
         top: `${y}px`,
         left: `${x}px`,
         width: POPUP_WIDTH,
-        padding: POPUP_PADDING,
       }}
     >
-      {isEditing ? (
-        <input
-          className={clsx("excalidraw-hyperlinkContainer-input")}
-          placeholder={t("labels.link.hint")}
-          ref={inputRef}
-          value={inputVal}
-          onChange={(event) => setInputVal(event.target.value)}
-          autoFocus
-          onKeyDown={(event) => {
-            event.stopPropagation();
-            // prevent cmd/ctrl+k shortcut when editing link
-            if (event[KEYS.CTRL_OR_CMD] && event.key === KEYS.K) {
-              event.preventDefault();
-            }
-            if (event.key === KEYS.ENTER || event.key === KEYS.ESCAPE) {
-              handleSubmit();
-              setAppState({ showHyperlinkPopup: "info" });
-            }
-          }}
-        />
-      ) : element.link ? (
-        <a
-          href={normalizeLink(element.link || "")}
-          className="excalidraw-hyperlinkContainer-link"
-          target={isLocalLink(element.link) ? "_self" : "_blank"}
-          onClick={(event) => {
-            if (element.link && onLinkOpen) {
-              const customEvent = wrapEvent(
-                EVENT.EXCALIDRAW_LINK,
-                event.nativeEvent,
-              );
-              onLinkOpen(
-                {
-                  ...element,
-                  link: normalizeLink(element.link),
-                },
-                customEvent,
-              );
-              if (customEvent.defaultPrevented) {
-                event.preventDefault();
-              }
-            }
-          }}
-          rel="noopener noreferrer"
-        >
-          {element.link}
-        </a>
-      ) : (
-        <div className="excalidraw-hyperlinkContainer-link">
-          {t("labels.link.empty")}
-        </div>
-      )}
-      <div className="excalidraw-hyperlinkContainer__buttons">
-        {!isEditing && (
-          <IconButton
-            type="button"
-            title={t("buttons.edit")}
-            aria-label={t("buttons.edit")}
-            label={t("buttons.edit")}
-            onClick={onEdit}
-            className="excalidraw-hyperlinkContainer--edit"
-            icon={FreedrawIcon}
-          />
-        )}
-        <IconButton
-          type="button"
-          title={t("labels.linkToElement")}
-          aria-label={t("labels.linkToElement")}
-          label={t("labels.linkToElement")}
-          onClick={() => {
-            setAppState({
-              openDialog: {
-                name: "elementLinkSelector",
-                sourceElementId: element.id,
-              },
-            });
-          }}
-          icon={elementLinkIcon}
-        />
-        {linkVal && !isEmbeddableElement(element) && (
-          <IconButton
-            type="button"
-            title={t("buttons.remove")}
-            aria-label={t("buttons.remove")}
-            label={t("buttons.remove")}
-            onClick={handleRemove}
-            className="excalidraw-hyperlinkContainer--remove"
-            icon={TrashIcon}
-          />
-        )}
-      </div>
+      <HyperlinkContent
+        element={element}
+        scene={scene}
+        setAppState={setAppState}
+        onLinkOpen={onLinkOpen}
+        setToast={setToast}
+        updateEmbedValidationStatus={updateEmbedValidationStatus}
+        readOnly={appState.viewModeEnabled}
+      />
     </div>
   );
 };
@@ -485,9 +597,9 @@ const shouldHideLinkPopup = (
 
   if (
     clientX >= popoverX - threshold &&
-    clientX <= popoverX + POPUP_WIDTH + POPUP_PADDING * 2 + threshold &&
+    clientX <= popoverX + POPUP_WIDTH + threshold &&
     clientY >= popoverY - threshold &&
-    clientY <= popoverY + threshold + POPUP_PADDING * 2 + POPUP_HEIGHT
+    clientY <= popoverY + threshold + POPUP_HEIGHT
   ) {
     return false;
   }

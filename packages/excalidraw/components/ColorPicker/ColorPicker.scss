@@ -2,9 +2,16 @@
 @use "../../css/variables.module" as *;
 
 .excalidraw {
-  --color-outline: var(--color-gray-20);
   &.theme--dark {
-    --color-outline: var(--color-gray-80);
+    .color-picker__button.is-transparent::after {
+      background: linear-gradient(
+        to top right,
+        transparent 45%,
+        #ff7a8c 46%,
+        #ff7a8c 54%,
+        transparent 55%
+      );
+    }
   }
 
   .focus-visible-none {
@@ -65,7 +72,7 @@
 
   .color-picker-container {
     display: grid;
-    grid-template-columns: 1fr 20px 1.625rem;
+    grid-template-columns: 1fr 20px 1.375rem;
     padding: 0.25rem 0px;
     align-items: center;
 
@@ -87,36 +94,32 @@
   }
 
   .color-picker__button {
-    --radius: 4px;
+    // 设计稿 tb-swatch：22px 圆形 + 1px 描边
     --size: 1.375rem;
-
-    &.has-outline {
-      box-shadow: 0 0 0 1px var(--color-outline);
-    }
 
     padding: 0;
     margin: 0;
     width: var(--size);
     height: var(--size);
-    border: 0;
-    border-radius: var(--radius);
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    border-radius: 50%;
     background-color: var(--swatch-color);
     background-position: left center;
     position: relative;
     font-family: inherit;
     box-sizing: border-box;
 
-    &:hover:not(.active).color-picker__button--large {
-      box-shadow: inset 0 0 0 1px var(--color-primary);
+    &:hover:not(.active) {
+      box-shadow: 0 0 0 2px var(--color-selection-hover);
     }
+
     &:active {
-      box-shadow: 0 0 0 1px var(--color-primary) !important;
+      box-shadow: 0 0 0 2px var(--color-selection) !important;
     }
-    &:active.color-picker__button--large {
-      box-shadow: none !important;
-      &.has-outline {
-        box-shadow: 0 0 0 1px var(--color-outline) !important;
-      }
+
+    // 当前值 = 2px 底色 + 2px 主色双环
+    &.active:not(:active) {
+      box-shadow: 0 0 0 2px var(--menu-bg), 0 0 0 4px var(--color-selection);
     }
 
     .color-picker__button-outline {
@@ -140,49 +143,42 @@
       }
     }
 
-    &.active:not(:active) {
-      .color-picker__button-outline {
-        position: absolute;
-        --offset: -1px;
-        top: var(--offset);
-        left: var(--offset);
-        right: var(--offset);
-        bottom: var(--offset);
-        box-shadow: 0 0 0 1px var(--color-primary-darkest);
-        z-index: 1; // due hover state so this has preference
-        border-radius: var(--radius);
+    &:focus-visible {
+      outline: 2px solid var(--color-selection);
+      outline-offset: 2px;
+
+      &:not(.active) {
+        box-shadow: none;
       }
     }
 
-    &:focus-visible {
-      outline: none;
+    // 透明 = 红斜线
+    &.is-transparent {
+      background-color: var(--menu-bg);
+      overflow: hidden;
 
       &::after {
         content: "";
         position: absolute;
-        top: -4px;
-        right: -4px;
-        bottom: -4px;
-        left: -4px;
-        border: 3px solid var(--focus-highlight-color);
-        border-radius: calc(var(--radius) + 1px);
-      }
-
-      &.active {
-        .color-picker__button-outline {
-          display: none;
-        }
+        inset: -1px;
+        background: linear-gradient(
+          to top right,
+          transparent 45%,
+          #d83a52 46%,
+          #d83a52 54%,
+          transparent 55%
+        );
       }
     }
 
-    &--large {
-      --radius: 6px;
-      width: 1.875rem;
-      height: 1.875rem;
-    }
-
-    &.is-transparent {
-      background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3uCTZhw1gGGYhAGBZIA/nYDCgBDAm9BGDWAAJyRCgLaBCAAgXwixzAS0pgAAAABJRU5ErkJggg==");
+    // 多值（多选属性不一致）= 虚线斜分
+    &.is-mix {
+      border: 1px dashed var(--page-muted);
+      background: linear-gradient(
+        135deg,
+        var(--page-muted) 50%,
+        var(--page-line) 50%
+      );
     }
 
     &--no-focus-visible {
@@ -193,12 +189,6 @@
       &:focus-visible {
         outline: none !important;
       }
-    }
-
-    &.active-color {
-      border-radius: calc(var(--radius) + 1px);
-      width: 1.625rem;
-      height: 1.625rem;
     }
 
     &.compact-sizing {
@@ -301,14 +291,20 @@
   .color-picker-content--default {
     padding: 0.5rem;
     display: grid;
-    grid-template-columns: repeat(5, 1.875rem);
-    grid-gap: 0.25rem;
+    grid-template-columns: repeat(5, 1.375rem);
+    grid-gap: 6px;
     border-radius: 4px;
 
     &:focus {
       outline: none;
-      box-shadow: 0 0 0 2px var(--focus-highlight-color);
+      box-shadow: 0 0 0 2px var(--color-selection);
     }
+  }
+
+  // 预设行（设计稿「颜色弹层」）：单行平铺，最多 6 枚
+  .color-picker-content--presets {
+    grid-template-columns: repeat(6, 1.375rem);
+    padding: 0;
   }
 
   .color-picker-content--canvas {
@@ -546,15 +542,42 @@
   &__swatch {
     width: 100%;
     height: 100%;
-    border-radius: 4px;
+    border-radius: 50%;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
     transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
 
     &.is-transparent {
       background-color: #fff;
-      background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3uCTZhw1gGGYhAGBZIA/nYDCgBDAm9BGDWAAJyRCgLaBCAAgXwixzAS0pgAAAABJRU5ErkJggg==");
-      background-position: left center;
+      background-image: none;
+      position: relative;
+      overflow: hidden;
+
+      &::after {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        background: linear-gradient(
+          to top right,
+          transparent 45%,
+          #d83a52 46%,
+          #d83a52 54%,
+          transparent 55%
+        );
+      }
     }
+  }
+
+  // 暗色红斜线变体（同 .color-picker__button.is-transparent 的 theme--dark
+  // 覆盖）；ghost 挂在 body 上、不在 .excalidraw 作用域内，主题类由
+  // topPicksDnD 创建时同步
+  &.theme--dark &__swatch.is-transparent::after {
+    background: linear-gradient(
+      to top right,
+      transparent 45%,
+      #ff7a8c 46%,
+      #ff7a8c 54%,
+      transparent 55%
+    );
   }
 
   &--lifted &__swatch {

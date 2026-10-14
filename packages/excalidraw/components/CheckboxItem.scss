@@ -2,10 +2,12 @@
 @use "../css/variables.module" as *;
 
 .excalidraw {
+  // 复选项（设计稿 tb-check）：15px 圆角 4；选中主色底 + 白色对勾；标签 12px
   .Checkbox {
     margin: 4px 0.3em;
     display: flex;
     align-items: center;
+    gap: 8px;
 
     cursor: pointer;
     user-select: none;
@@ -13,75 +15,55 @@
     -webkit-tap-highlight-color: transparent;
 
     &:hover:not(.is-checked) .Checkbox-box:not(:focus) {
-      box-shadow: 0 0 0 2px #{$color-blue-4};
-    }
-
-    &:hover:not(.is-checked) .Checkbox-box:not(:focus) {
-      svg {
-        display: block;
-        opacity: 0.3;
-      }
-    }
-
-    &:active {
-      .Checkbox-box {
-        box-shadow: 0 0 2px 1px inset #{$color-blue-7} !important;
-      }
-    }
-
-    &:hover {
-      .Checkbox-box {
-        background-color: color.adjust($color-blue-1, $alpha: -0.8);
-      }
+      border-color: var(--color-selection-hover);
     }
 
     &.is-checked {
       .Checkbox-box {
-        background-color: #{$color-blue-1};
+        background-color: var(--color-selection);
+        border-color: var(--color-selection);
+
         svg {
           display: block;
         }
       }
-      &:hover .Checkbox-box {
-        background-color: #{$color-blue-2};
-      }
     }
 
     .Checkbox-box {
-      width: 22px;
-      height: 22px;
+      width: 15px;
+      height: 15px;
       padding: 0;
       flex: 0 0 auto;
 
-      margin: 0 1em;
-
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
 
-      box-shadow: 0 0 0 2px #{$color-blue-7};
-      background-color: transparent;
+      border: 1px solid var(--page-line);
       border-radius: 4px;
+      background-color: var(--menu-bg);
+      color: #fff;
 
-      color: #{$color-blue-7};
+      cursor: pointer;
 
-      border: 0;
-
-      &:focus {
-        box-shadow: 0 0 0 3px #{$color-blue-7};
+      &:focus-visible {
+        outline: 2px solid var(--color-selection);
+        outline-offset: 1px;
       }
 
       svg {
         display: none;
-        width: 16px;
-        height: 16px;
-        stroke-width: 3px;
+        width: 11px;
+        height: 11px;
+        stroke-width: 2;
       }
     }
 
     .Checkbox-label {
       display: flex;
       align-items: center;
+      font-size: 12px;
+      color: var(--page-ink);
     }
 
     .excalidraw-tooltip-icon {

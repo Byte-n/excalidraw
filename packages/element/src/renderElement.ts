@@ -21,6 +21,7 @@ import {
   distance,
   getFontString,
   isRTL,
+  isTransparent,
   getVerticalOffset,
   invariant,
   applyDarkModeFilter,
@@ -1244,13 +1245,17 @@ const drawElement = (
           element.x + appState.scrollX,
           element.y + appState.scrollY,
         );
-        // A frame is a board: the opaque fill hides the canvas grid and any
-        // elements passing underneath; it paints below the frame's children
-        // because the frame precedes them in z-order.
-        context.fillStyle = applyDarkModeFilter(
-          FRAME_STYLE.backgroundColor,
-          appState.theme === THEME.DARK,
-        );
+        // 画板底色：默认透明（点阵穿透），由用户在属性面板设置。设了底色就
+        // 遮住点阵并盖住排在其下的元素，所以它必须画在 frame 的子元素之下，
+        // 而存储顺序并不保证这一点 —— 渲染器统一先用
+        // `sortFramesBelowChildren` 把 frame 归位。
+        const hasBoardFill = !isTransparent(element.backgroundColor);
+        if (hasBoardFill) {
+          context.fillStyle = applyDarkModeFilter(
+            element.backgroundColor,
+            appState.theme === THEME.DARK,
+          );
+        }
 
         context.lineWidth = FRAME_STYLE.strokeWidth / appState.zoom.value;
         context.strokeStyle = applyDarkModeFilter(
@@ -1275,11 +1280,15 @@ const drawElement = (
             element.height,
             FRAME_STYLE.radius / appState.zoom.value,
           );
-          context.fill();
+          if (hasBoardFill) {
+            context.fill();
+          }
           context.stroke();
           context.closePath();
         } else {
-          context.fillRect(0, 0, element.width, element.height);
+          if (hasBoardFill) {
+            context.fillRect(0, 0, element.width, element.height);
+          }
           context.strokeRect(0, 0, element.width, element.height);
         }
 

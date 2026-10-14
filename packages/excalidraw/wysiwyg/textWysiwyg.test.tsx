@@ -50,6 +50,33 @@ unmountComponent();
 const tab = "    ";
 const mouse = new Pointer("mouse");
 
+// radix 弹层需要 ResizeObserver（jsdom 没有，同 test-utils 的 togglePopover）
+const stubResizeObserver = () => {
+  (global as any).ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+};
+
+// T3 起桌面/平板为浮动栏：字号/文字对齐/垂直对齐在「文字属性」弹层，
+// 字体在字体弹层
+const openTextPropsPopup = () => {
+  stubResizeObserver();
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>("[aria-label='Text align']")!,
+  );
+};
+
+const openFontPopup = () => {
+  stubResizeObserver();
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>(
+      "[data-testid='font-family-show-fonts']",
+    )!,
+  );
+};
+
 const exitTextEditorAndAssertSelection = async ({
   editor,
   selectedIds,
@@ -1137,7 +1164,8 @@ describe("textWysiwyg", () => {
 
       expect(text.fontFamily).toEqual(FONT_FAMILY.Nunito);
 
-      fireEvent.click(screen.getByTitle(/code/i));
+      openFontPopup();
+      fireEvent.click(screen.getByTitle("Comic Shanns"));
 
       expect(
         (h.elements[1] as ExcalidrawTextElementWithContainer).fontFamily,
@@ -1288,6 +1316,7 @@ describe("textWysiwyg", () => {
 
       editor.select();
 
+      openTextPropsPopup();
       fireEvent.click(screen.getByTitle("Left"));
       fireEvent.click(screen.getByTitle("Align bottom"));
       Keyboard.exitTextEditor(editor);
@@ -1307,6 +1336,7 @@ describe("textWysiwyg", () => {
 
       editor.select();
 
+      openTextPropsPopup();
       fireEvent.click(screen.getByTitle("Right"));
       fireEvent.click(screen.getByTitle("Align top"));
 
@@ -1567,13 +1597,15 @@ describe("textWysiwyg", () => {
       mouse.select(rectangle);
       Keyboard.keyPress(KEYS.ENTER);
 
-      fireEvent.click(screen.getByTitle(/code/i));
+      openFontPopup();
+      fireEvent.click(screen.getByTitle("Comic Shanns"));
 
       expect(
         (h.elements[1] as ExcalidrawTextElementWithContainer).fontFamily,
       ).toEqual(FONT_FAMILY["Comic Shanns"]);
       expect(getOriginalContainerHeightFromCache(rectangle.id)).toBe(75);
 
+      openTextPropsPopup();
       fireEvent.click(screen.getByTitle(/Very large/i));
       expect(
         (h.elements[1] as ExcalidrawTextElementWithContainer).fontSize,
@@ -1595,7 +1627,8 @@ describe("textWysiwyg", () => {
       mouse.select(rectangle);
       Keyboard.keyPress(KEYS.ENTER);
 
-      fireEvent.click(screen.getByTitle(/code/i));
+      openFontPopup();
+      fireEvent.click(screen.getByTitle("Comic Shanns"));
       expect(
         (h.elements[1] as ExcalidrawTextElementWithContainer).fontFamily,
       ).toEqual(FONT_FAMILY["Comic Shanns"]);
@@ -1603,7 +1636,8 @@ describe("textWysiwyg", () => {
         (h.elements[1] as ExcalidrawTextElementWithContainer).lineHeight,
       ).toEqual(1.25);
 
-      fireEvent.click(screen.getByTitle(/normal/i));
+      openFontPopup();
+      fireEvent.click(screen.getByTitle("Nunito"));
       expect(
         (h.elements[1] as ExcalidrawTextElementWithContainer).fontFamily,
       ).toEqual(FONT_FAMILY.Nunito);
@@ -1624,6 +1658,7 @@ describe("textWysiwyg", () => {
         Keyboard.keyPress(KEYS.ENTER);
         editor = await getTextEditor();
         editor.select();
+        openTextPropsPopup();
       });
 
       it("when top left", async () => {
@@ -1741,6 +1776,7 @@ describe("textWysiwyg", () => {
       );
 
       editor.select();
+      openTextPropsPopup();
       fireEvent.click(screen.getByTitle("Left"));
 
       Keyboard.exitTextEditor(editor);
@@ -1824,6 +1860,7 @@ describe("textWysiwyg", () => {
         (h.elements[1] as ExcalidrawTextElementWithContainer).verticalAlign,
       ).toBe(VERTICAL_ALIGN.MIDDLE);
 
+      openTextPropsPopup();
       fireEvent.click(screen.getByTitle("Align bottom"));
 
       Keyboard.exitTextEditor(editor);

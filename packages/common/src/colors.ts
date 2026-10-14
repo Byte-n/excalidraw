@@ -188,24 +188,28 @@ export const COLORS_PER_ROW = 5;
 export const DEFAULT_CHART_COLOR_INDEX = 4;
 
 export const DEFAULT_ELEMENT_STROKE_COLOR_INDEX = 4;
-export const DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX = 1;
+// 背景快捷浅档位于各族 index 0（见 COLOR_PALETTE 注释），默认档对齐为 0
+export const DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX = 0;
 
 export const COLOR_PALETTE = {
   transparent: "transparent",
   black: "#1e1e1e",
   white: "#ffffff",
-  // open-color from https://github.com/yeun/open-color/blob/master/open-color.js
-  // corresponds to indexes [0,2,4,6,8] (weights: 50, 200, 400, 600, 800)
-  gray: ["#f8f9fa", "#e9ecef", "#ced4da", "#868e96", "#343a40"],
-  red: ["#fff5f5", "#ffc9c9", "#ff8787", "#fa5252", "#e03131"],
+  // gray/red/yellow/teal/blue/violet 六族已按设计稿色调重调：
+  // index 0 = 背景快捷浅档，index 4 = 描边预设（见 DEFAULT_ELEMENT_STROKE_PRESETS），
+  // index 1–3 为预设色的白混合插值。其余族保持 open-color 原值
+  // （https://github.com/yeun/open-color/blob/master/open-color.js，
+  // 对应 indexes [0,2,4,6,8]，weights: 50, 200, 400, 600, 800）
+  gray: ["#f4f4f4", "#c0c1c3", "#848689", "#505358", "#1f2329"],
+  red: ["#fdecee", "#f4c8cf", "#ea93a0", "#e16578", "#d83a52"],
   pink: ["#fff0f6", "#fcc2d7", "#f783ac", "#e64980", "#c2255c"],
   grape: ["#f8f0fc", "#eebefa", "#da77f2", "#be4bdb", "#9c36b5"],
-  violet: ["#f3f0ff", "#d0bfff", "#9775fa", "#7950f2", "#6741d9"],
-  blue: ["#e7f5ff", "#a5d8ff", "#4dabf7", "#228be6", "#1971c2"],
+  violet: ["#f0ebfc", "#d7cbf4", "#b199e8", "#906fdf", "#7146d6"],
+  blue: ["#e8f0f8", "#c5d7e9", "#8db0d4", "#5d8fc1", "#2f6fb0"],
   cyan: ["#e3fafc", "#99e9f2", "#3bc9db", "#15aabf", "#0c8599"],
-  teal: ["#e6fcf5", "#96f2d7", "#38d9a9", "#12b886", "#099268"],
+  teal: ["#e6f4f1", "#bcdfdb", "#7ac0b8", "#43a59a", "#0e8c7e"],
   green: ["#ebfbee", "#b2f2bb", "#69db7c", "#40c057", "#2f9e44"],
-  yellow: ["#fff9db", "#ffec99", "#ffd43b", "#fab005", "#f08c00"],
+  yellow: ["#fff3dc", "#ebd6b8", "#d8af73", "#c88e38", "#b86e00"],
   orange: ["#fff4e6", "#ffd8a8", "#ffa94d", "#fd7e14", "#e8590c"],
   // radix bronze shades [3,5,7,9,11]
   bronze: ["#f8f1ee", "#eaddd7", "#d2bab0", "#a18072", "#846358"],
@@ -246,6 +250,21 @@ export const DEFAULT_ELEMENT_STROKE_PICKS = [
   "#7146d6",
   "#d83a52",
 ] as ColorTuple;
+
+/**
+ * 描边域六色基线：墨色 / 朱红 / 琥珀 / 青绿 / 牛仔蓝 / 紫。
+ * 不再渲染为弹层预设行（弹层已恢复全色板网格），仅作色域语义基线：
+ * isCustomColor / getMostUsedCustomColors 据此把预设色排除出「自定义色」，
+ * 与浮动栏外露的快捷色板（DEFAULT_ELEMENT_STROKE_PICKS，5 枚）相互独立。
+ */
+export const DEFAULT_ELEMENT_STROKE_PRESETS = [
+  DEFAULT_NEW_ELEMENT_STROKE_COLOR,
+  "#d83a52",
+  "#b86e00",
+  "#0e8c7e",
+  "#2f6fb0",
+  "#7146d6",
+] as const;
 
 // ORDER matters for positioning in quick picker
 export const DEFAULT_ELEMENT_BACKGROUND_PICKS = [

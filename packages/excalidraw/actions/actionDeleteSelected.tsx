@@ -1,8 +1,4 @@
-import {
-  KEYS,
-  MOBILE_ACTION_BUTTON_BG,
-  updateActiveTool,
-} from "@excalidraw/common";
+import { KEYS, updateActiveTool } from "@excalidraw/common";
 
 import { getNonDeletedElements } from "@excalidraw/element";
 import { fixBindingsAfterDeletion } from "@excalidraw/element";
@@ -29,8 +25,6 @@ import { t } from "../i18n";
 import { getSelectedElements, isSomeElementSelected } from "../scene";
 import { TrashIcon } from "../components/icons";
 import { IconButton } from "../components/IconButton";
-
-import { useStylesPanelMode } from "../components/App";
 
 import { register } from "./register";
 
@@ -349,8 +343,6 @@ export const actionDeleteSelected = register({
     (event.key === KEYS.BACKSPACE || event.key === KEYS.DELETE) &&
     !event[KEYS.CTRL_OR_CMD],
   PanelComponent: ({ elements, appState, updateData, app }) => {
-    const isMobile = useStylesPanelMode() === "mobile";
-
     return (
       <IconButton
         type="button"
@@ -361,11 +353,6 @@ export const actionDeleteSelected = register({
         disabled={
           !isSomeElementSelected(getNonDeletedElements(elements), appState)
         }
-        style={{
-          ...(isMobile && appState.openPopup !== "compactOtherProperties"
-            ? MOBILE_ACTION_BUTTON_BG
-            : {}),
-        }}
       />
     );
   },

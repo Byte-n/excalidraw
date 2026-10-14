@@ -5,7 +5,6 @@ import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 import { useTunnels } from "../context/tunnels";
 import { t } from "../i18n";
 import { getScrollToContentState } from "../scene";
-import { SCROLLBAR_WIDTH, SCROLLBAR_MARGIN } from "../scene/scrollbars";
 
 import { ExitViewModeButton, MobileShapeActions } from "./Actions";
 import { MobileToolbar } from "./MobileToolbar";
@@ -186,9 +185,8 @@ export const MobileMenu = ({
       {shouldRenderBottomBar && (
         <div
           className="App-bottom-bar"
-          style={{
-            marginBottom: SCROLLBAR_WIDTH + SCROLLBAR_MARGIN,
-          }}
+          // tb-bar（选中属性底部条）通栏贴底、工具岛保持原有几何——
+          // 宽限/居中/下边距均在 styles.scss 的 .App-bottom-bar 块
           data-viewport-ui="bottom"
         >
           {scrollBackToContentButton && (

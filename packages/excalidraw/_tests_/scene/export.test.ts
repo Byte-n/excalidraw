@@ -688,6 +688,39 @@ describe("exporting frames", () => {
       );
     });
 
+    it("should export the board's fill, spelling out an unset one", async () => {
+      const painted = API.createElement({
+        type: "frame",
+        width: 100,
+        height: 100,
+        x: 0,
+        y: 0,
+        backgroundColor: "#ffec99",
+      });
+      const bare = API.createElement({
+        type: "frame",
+        width: 100,
+        height: 100,
+        x: 200,
+        y: 0,
+        backgroundColor: "transparent",
+      });
+
+      const svg = await exportToSvg({
+        elements: [painted, bare],
+        files: null,
+        exportPadding: 0,
+      });
+
+      expect(
+        svg.querySelector(`[data-id="${painted.id}"]`)!.getAttribute("fill"),
+      ).toBe("#ffec99");
+      // an unset board must be written out: an SVG rect defaults to black
+      expect(
+        svg.querySelector(`[data-id="${bare.id}"]`)!.getAttribute("fill"),
+      ).toBe("transparent");
+    });
+
     it("should not export frame-overlapping elements belonging to different frame", async () => {
       const frame1 = API.createElement({
         type: "frame",

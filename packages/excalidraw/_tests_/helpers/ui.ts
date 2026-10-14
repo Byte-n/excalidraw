@@ -494,6 +494,19 @@ export class UI {
     fireEvent.click(element);
   };
 
+  /**
+   * 打开浮动栏分组弹层（T3 场景矩阵：样式 / 箭头属性 / 文字属性等图标按钮，
+   * radix 弹层需要 ResizeObserver 桩）
+   */
+  static openToolbarPopup = (label: string) => {
+    (global as any).ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    UI.clickLabeledElement(label);
+  };
+
   static clickOnTestId = (testId: string) => {
     const element = document.querySelector(`[data-testid='${testId}']`);
     // const element = GlobalTestState.renderResult.queryByTestId(testId);

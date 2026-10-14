@@ -3,7 +3,6 @@ import { useEffect, useRef } from "react";
 
 import {
   applyDarkModeFilter,
-  isColorDark,
   THEME,
   type ColorPaletteCustom,
 } from "@excalidraw/common";
@@ -98,7 +97,6 @@ const PickerColorList = ({
             className={clsx(
               "color-picker__button color-picker__button--large",
               {
-                "has-outline": !isColorDark(color, 255),
                 active: colorObj?.colorName === key,
                 "is-transparent": color === "transparent" || !color,
               },

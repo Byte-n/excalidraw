@@ -1,4 +1,9 @@
 import {
+  COLOR_PALETTE,
+  DEFAULT_ELEMENT_STROKE_COLOR_INDEX,
+} from "@excalidraw/common";
+
+import {
   buildMindmapGraphIndex,
   isMindmapEdgeElement,
   isMindmapNodeElement,
@@ -84,6 +89,36 @@ const node = (id: string) =>
     isDeleted: false;
   };
 
+// radix popover 需要 ResizeObserver（jsdom 没有，同 test-utils 的 togglePopover）
+const stubResizeObserver = () => {
+  (global as any).ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+};
+
+// 浮动栏分组弹层触发器（T3 场景矩阵：导图分组收进弹层）
+const openFloatbarGroup = (popup: string) => {
+  stubResizeObserver();
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>(
+      `[data-testid='floatbar-group-${popup}']`,
+    )!,
+  );
+};
+
+// 弹层内连线颜色：色板触发器（aria-label「Edge color」）→ 色值输入框
+const setEdgeColorViaPicker = (hex: string) => {
+  stubResizeObserver();
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>("[aria-label='Edge color']")!,
+  );
+  fireEvent.change(document.querySelector(".color-picker-input")!, {
+    target: { value: hex },
+  });
+};
+
 const addSecondGraph = () => {
   const root = {
     ...newMindmapNodeElement({
@@ -147,35 +182,46 @@ describe("Mindmap P03 drag preview", () => {
     mouse.clickAt(node("root").x + 20, node("root").y + 20);
 
     expect(h.app.mindmap.getSelectedGraphRoot()?.id).toBe("root");
+
+    // 布局方向弹层
+    openFloatbarGroup("mindmapGraphDirection");
     expect(
       screen.getByRole("button", { name: "Right to left" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("mindmap-shape-rectangle"),
-    ).not.toBeInTheDocument();
-
+    expect(screen.queryByTestId("mindmap-shape-rectangle")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Right to left" }));
     expect(node("root").layoutDirection).toBe("right-to-left");
 
-    fireEvent.change(screen.getByLabelText("Mindmap edge color"), {
-      target: { value: "#ff0000" },
-    });
-    fireEvent.change(screen.getByLabelText("Mindmap edge width"), {
-      target: { value: "5" },
-    });
+    // 默认连线弹层：颜色 / 宽度 / 线型 / 路径四子组
+    openFloatbarGroup("mindmapGraphEdge");
+    const edgePopup = document.querySelector(
+      ".properties-content .selected-shape-actions",
+    )!;
     fireEvent.click(
-      screen
-        .getByRole("region", { name: "Mindmap edge" })
-        .querySelector('button[aria-label="Dashed"]')!,
+      edgePopup.querySelector<HTMLButtonElement>(
+        "[data-testid='mindmap-edge-color-red']",
+      )!,
+    );
+    fireEvent.change(
+      edgePopup.querySelector<HTMLInputElement>(
+        "[data-testid='mindmap-edge-width']",
+      )!,
+      { target: { value: "5" } },
     );
     fireEvent.click(
-      screen
-        .getByRole("region", { name: "Mindmap edge" })
-        .querySelector('button[aria-label="Curved"]')!,
+      edgePopup.querySelector<HTMLInputElement>(
+        "[data-testid='mindmap-edge-line-dashed']",
+      )!,
+    );
+    fireEvent.click(
+      edgePopup.querySelector<HTMLInputElement>(
+        "[data-testid='mindmap-edge-routing-curved']",
+      )!,
     );
 
+    const red = COLOR_PALETTE.red[DEFAULT_ELEMENT_STROKE_COLOR_INDEX];
     expect(node("root")).toMatchObject({
-      defaultEdgeStrokeColor: "#ff0000",
+      defaultEdgeStrokeColor: red,
       defaultEdgeStrokeWidth: 5,
       defaultEdgeStrokeStyle: "dashed",
       defaultEdgeRouting: "curved",
@@ -186,7 +232,7 @@ describe("Mindmap P03 drag preview", () => {
     expect(edges.length).toBeGreaterThan(0);
     edges.forEach((edge) => {
       expect(edge).toMatchObject({
-        strokeColor: "#ff0000",
+        strokeColor: red,
         strokeWidth: 5,
         strokeStyle: "dashed",
         routing: "curved",
@@ -197,12 +243,11 @@ describe("Mindmap P03 drag preview", () => {
     mouse.clickAt(node("root").x + 20, node("root").y + 20);
     expect(h.state.selectedElementIds).toEqual({ root: true });
     expect(h.app.mindmap.getSelectedGraphRoot()).toBeNull();
+    // 退回单节点场景：整树的布局方向/默认连线触发器不再出现
     expect(
-      screen.queryByLabelText("Mindmap edge color"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Right to left" }),
-    ).not.toBeInTheDocument();
+      screen.queryByTestId("floatbar-group-mindmapGraphDirection"),
+    ).toBeNull();
+    expect(screen.queryByTestId("floatbar-group-mindmapGraphEdge")).toBeNull();
   });
 
   it("edits only the selected node's incoming edge", () => {
@@ -218,35 +263,49 @@ describe("Mindmap P03 drag preview", () => {
       defaultEdgeRouting: node("root").defaultEdgeRouting,
     };
 
+    // 整树的布局方向触发器不出现；入边样式弹层含四个子组
     expect(
-      screen.getByRole("region", { name: "Incoming edge" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Right to left" }),
-    ).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Incoming edge color"), {
-      target: { value: "#00aa00" },
-    });
-    fireEvent.change(screen.getByLabelText("Incoming edge width"), {
-      target: { value: "4" },
-    });
+      screen.queryByTestId("floatbar-group-mindmapGraphDirection"),
+    ).toBeNull();
+    openFloatbarGroup("mindmapIncomingEdge");
+    const edgePopup = document.querySelector(
+      ".properties-content .selected-shape-actions",
+    )!;
+    expect(edgePopup.textContent).toContain("Incoming edge");
+    expect(edgePopup.textContent).toContain("Color");
+    expect(edgePopup.textContent).toContain("Width");
+    expect(edgePopup.textContent).toContain("Line style");
+    expect(edgePopup.textContent).toContain("Routing");
+
     fireEvent.click(
-      screen
-        .getByRole("region", { name: "Incoming edge" })
-        .querySelector('button[aria-label="Dotted"]')!,
+      edgePopup.querySelector<HTMLButtonElement>(
+        "[data-testid='mindmap-edge-color-green']",
+      )!,
+    );
+    fireEvent.change(
+      edgePopup.querySelector<HTMLInputElement>(
+        "[data-testid='mindmap-edge-width']",
+      )!,
+      { target: { value: "4" } },
     );
     fireEvent.click(
-      screen
-        .getByRole("region", { name: "Incoming edge" })
-        .querySelector('button[aria-label="Curved"]')!,
+      edgePopup.querySelector<HTMLInputElement>(
+        "[data-testid='mindmap-edge-line-dotted']",
+      )!,
+    );
+    fireEvent.click(
+      edgePopup.querySelector<HTMLInputElement>(
+        "[data-testid='mindmap-edge-routing-curved']",
+      )!,
     );
 
+    const green = COLOR_PALETTE.green[DEFAULT_ELEMENT_STROKE_COLOR_INDEX];
     const incomingEdge = h.app.scene
       .getNonDeletedElements()
       .filter(isMindmapEdgeElement)
       .find((edge) => edge.childId === "a");
     expect(incomingEdge).toMatchObject({
-      strokeColor: "#00aa00",
+      strokeColor: green,
       strokeWidth: 4,
       strokeStyle: "dotted",
       routing: "curved",
@@ -276,12 +335,17 @@ describe("Mindmap P03 drag preview", () => {
     mouse.clickAt(node("root").x + 20, node("root").y + 20);
     expect(h.state.selectedElementIds).toEqual({ root: true });
     expect(h.app.mindmap.getSelectedGraphRoot()).toBeNull();
+    // 节点形状在浮动栏「节点形状」弹层内
+    openFloatbarGroup("mindmapNodeShape");
     expect(screen.getByTestId("mindmap-shape-rectangle")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Right to left" })).toBeNull();
+    expect(
+      screen.queryByTestId("floatbar-group-mindmapGraphDirection"),
+    ).toBeNull();
 
     mouse.clickAt(node("root").x + 20, node("root").y + 20);
     expect(h.state.selectedElementIds).toEqual({ root: true });
     expect(h.app.mindmap.getSelectedGraphRoot()).toBeNull();
+    openFloatbarGroup("mindmapNodeShape");
     expect(screen.getByTestId("mindmap-shape-rectangle")).toBeInTheDocument();
 
     API.setSelectedElements([
@@ -289,6 +353,7 @@ describe("Mindmap P03 drag preview", () => {
       h.app.scene.getNonDeletedElement("root-text")!,
     ]);
     expect(h.app.mindmap.getSelectedGraphRoot()?.id).toBe("root");
+    openFloatbarGroup("mindmapGraphDirection");
     expect(
       screen.getByRole("button", { name: "Right to left" }),
     ).toBeInTheDocument();
@@ -341,7 +406,11 @@ describe("Mindmap P03 drag preview", () => {
     mouse.moveTo(destination.x, destination.y);
 
     const preview = h.app.mindmap.getDragPreview();
-    expect(preview?.target).toEqual({ parentId: "b", beforeId: null, kind: "child" });
+    expect(preview?.target).toEqual({
+      parentId: "b",
+      beforeId: null,
+      kind: "child",
+    });
     expect(preview?.previewElements.map((element) => element.id)).toEqual([
       expect.any(String),
       "a",
@@ -1163,15 +1232,31 @@ describe("Mindmap P03 drag preview", () => {
     mouse.clickAt(x, y);
 
     expect(h.state.selectedElementIds[edge.id]).toBe(true);
-    expect(
-      screen.getByRole("region", { name: "Mindmap edge" }),
-    ).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Mindmap edge color"), {
-      target: { value: "#ff0000" },
-    });
+    // 连线场景：颜色色板外露于浮动栏，宽度/线型/路径在「连线样式」弹层
+    setEdgeColorViaPicker("ff0000");
     expect(h.app.scene.getNonDeletedElement(edge.id)?.strokeColor).toBe(
       "#ff0000",
     );
+
+    openFloatbarGroup("mindmapEdgeStyle");
+    const edgePopup = document.querySelector(
+      ".properties-content .selected-shape-actions",
+    )!;
+    fireEvent.change(
+      edgePopup.querySelector<HTMLInputElement>(
+        "[data-testid='mindmap-edge-width']",
+      )!,
+      { target: { value: "6" } },
+    );
+    fireEvent.click(
+      edgePopup.querySelector<HTMLInputElement>(
+        "[data-testid='mindmap-edge-routing-curved']",
+      )!,
+    );
+    expect(h.app.scene.getNonDeletedElement(edge.id)).toMatchObject({
+      strokeWidth: 6,
+      routing: "curved",
+    });
 
     const elementCount = h.app.scene.getNonDeletedElements().length;
     API.executeAction(actionDuplicateSelection);

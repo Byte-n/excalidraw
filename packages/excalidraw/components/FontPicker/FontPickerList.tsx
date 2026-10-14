@@ -14,6 +14,7 @@ import {
   debounce,
   FONT_FAMILY,
   getFontFamilyString,
+  KEYS,
 } from "@excalidraw/common";
 
 import type { ValueOf } from "@excalidraw/common/utility-types";
@@ -26,7 +27,10 @@ import {
   useExcalidrawContainer,
   useStylesPanelMode,
 } from "../App";
-import { PropertiesPopover } from "../PropertiesPopover";
+import {
+  PropertiesPopover,
+  markPropertiesPopoverEscClose,
+} from "../PropertiesPopover";
 import { QuickSearch } from "../QuickSearch";
 import { ScrollableList } from "../ScrollableList";
 import DropdownMenuGroup from "../dropdownMenu/DropdownMenuGroup";
@@ -41,6 +45,7 @@ import {
   FontFamilyHeadingIcon,
   FontFamilyNormalIcon,
   FreedrawIcon,
+  checkIcon,
 } from "../icons";
 
 import { fontPickerKeyHandler } from "./keyboardNavHandlers";
@@ -244,6 +249,11 @@ export const FontPickerList = React.memo(
 
     const onKeyDown = useCallback<KeyboardEventHandler<HTMLDivElement>>(
       (event) => {
+        if (event.key === KEYS.ESCAPE) {
+          // 字体弹层自行拦截 Esc（stopPropagation，radix 收不到），
+          // 关闭前补标记，焦点回触发器
+          markPropertiesPopoverEscClose();
+        }
         const handled = fontPickerKeyHandler({
           event,
           inputRef,
@@ -337,6 +347,12 @@ export const FontPickerList = React.memo(
           >
             {font.text}
           </MenuItemContent>
+          {/* 当前字体行尾对勾（设计稿字体弹层） */}
+          {isSelected && (
+            <span className="font-picker__check" aria-hidden="true">
+              {checkIcon}
+            </span>
+          )}
         </button>
       );
     };
@@ -371,6 +387,7 @@ export const FontPickerList = React.memo(
       <PropertiesPopover
         className="properties-content"
         container={container}
+        label={t("labels.fontFamily")}
         style={{ width: "15rem" }}
         onClose={() => {
           onClose();
@@ -389,7 +406,7 @@ export const FontPickerList = React.memo(
         }}
         onPointerLeave={onLeave}
         onKeyDown={onKeyDown}
-        preventAutoFocusOnTouch={!!app.state.editingTextElement}
+        preventAutoFocusOnTextEdit={!!app.state.editingTextElement}
       >
         {stylesPanelMode === "full" && (
           <QuickSearch

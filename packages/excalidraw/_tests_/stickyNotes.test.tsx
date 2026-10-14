@@ -57,6 +57,20 @@ import {
 const { h } = window;
 const mouse = new Pointer("mouse");
 
+// T3 起便签/文本色板为浮动栏外露色板 + 弹层取色：打开色板弹层后用过
+// 色值输入框应用精确颜色（radix 弹层需要 ResizeObserver 桩）
+const pickColorViaPopup = (label: string, hex: string) => {
+  (global as any).ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+  UI.clickLabeledElement(label);
+  fireEvent.change(document.querySelector(".color-picker-input")!, {
+    target: { value: hex.replace(/^#/, "") },
+  });
+};
+
 const LONG_TEXT = Array(40).fill("abcdefghijklmnopqrstuvwx").join("\n");
 const RED = COLOR_PALETTE.red[4];
 
@@ -320,15 +334,15 @@ describe("sticky notes", () => {
   });
 
   describe("colors", () => {
-    it("routes a closed-popup top pick to the sticky default after switching tools", () => {
+    it("routes a popup pick to the sticky default after switching tools", () => {
       // regression: the memoized picker kept a stale `onChange` that had
-      // captured the rectangle tool's target, so the top pick wrote the
+      // captured the rectangle tool's target, so the pick wrote the
       // shape default while the sticky tool was active
       UI.clickTool("rectangle");
       UI.clickTool("stickynote");
       const shapeDefault = h.state.currentItemStrokeColor;
 
-      UI.clickOnTestId(`color-top-pick-${RED}`);
+      pickColorViaPopup("Text color", RED);
 
       expect(h.state.currentItemStickynoteStrokeColor).toBe(RED);
       expect(h.state.currentItemStrokeColor).toBe(shapeDefault);
@@ -352,9 +366,9 @@ describe("sticky notes", () => {
       layoutNotes(note.id);
       API.setSelectedElements([getElement(note.id), getElement(rectangle.id)]);
 
-      // 混合选区使用元素描边快捷色
+      // 混合选区使用元素描边色板（标签「描边」）
       const pick = DEFAULT_ELEMENT_STROKE_PICKS[4];
-      UI.clickOnTestId(`color-top-pick-${pick}`);
+      pickColorViaPopup("Stroke", pick);
 
       expect(getElement(rectangle.id).strokeColor).toBe(pick);
       expect(getElement(note.id).strokeColor).toBe(pick);
@@ -603,7 +617,7 @@ describe("sticky notes", () => {
 
       mouse.doubleClickAt(note.x + note.width / 2, note.y + note.height / 2);
       await getTextEditor();
-      UI.clickOnTestId(`color-top-pick-${RED}`);
+      pickColorViaPopup("Text color", RED);
 
       expect(getElement(label.id).strokeColor).toBe(RED);
       // one ink: the note (and so its footer) follows the label
@@ -638,14 +652,14 @@ describe("sticky notes", () => {
           h.app,
         ).backgroundColor,
       ).toBe(true);
-      const backgroundPicker = document.querySelector(
-        ".color-picker__top-picks .color-picker__button.active[title]",
+      // 便签背景色板标签为「纸色」，外露色板显示当前纸色
+      const backgroundTrigger = document.querySelector<HTMLElement>(
+        "[aria-label='Paper color']",
       );
-      const activeSwatches = Array.from(
-        document.querySelectorAll(".color-picker__top-picks .active"),
-      ).map((button) => button.getAttribute("title"));
-      expect(backgroundPicker).not.toBeNull();
-      expect(activeSwatches).toContain(noteBackground);
+      expect(backgroundTrigger).not.toBeNull();
+      expect(backgroundTrigger!.style.getPropertyValue("--swatch-color")).toBe(
+        noteBackground,
+      );
 
       act(() => {
         h.app.actionManager.executeAction(actionChangeBackgroundColor, "ui", {

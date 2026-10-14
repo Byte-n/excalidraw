@@ -2996,7 +2996,7 @@ exports[`regression tests > change the properties of a shape > [end of test] app
   "croppingElementId": null,
   "currentHoveredFontFamily": null,
   "currentItemArrowType": "round",
-  "currentItemBackgroundColor": "#ffc9c9",
+  "currentItemBackgroundColor": "#f0ebfc",
   "currentItemEndArrowhead": "triangle",
   "currentItemFillStyle": "solid",
   "currentItemFontFamily": 6,
@@ -3006,7 +3006,7 @@ exports[`regression tests > change the properties of a shape > [end of test] app
   "currentItemStartArrowhead": null,
   "currentItemStickynoteBackgroundColor": "#ffe58f",
   "currentItemStickynoteStrokeColor": "#1f2329",
-  "currentItemStrokeColor": "#1971c2",
+  "currentItemStrokeColor": "#2f6fb0",
   "currentItemStrokeStyle": "solid",
   "currentItemStrokeVariability": "constant",
   "currentItemStrokeWidthKey": "medium",
@@ -3181,7 +3181,7 @@ exports[`regression tests > change the properties of a shape > [end of test] und
       "updated": {
         "id0": {
           "deleted": {
-            "backgroundColor": "#ffec99",
+            "backgroundColor": "#fff3dc",
             "version": 4,
           },
           "inserted": {
@@ -3206,11 +3206,11 @@ exports[`regression tests > change the properties of a shape > [end of test] und
       "updated": {
         "id0": {
           "deleted": {
-            "backgroundColor": "#ffc9c9",
+            "backgroundColor": "#f0ebfc",
             "version": 5,
           },
           "inserted": {
-            "backgroundColor": "#ffec99",
+            "backgroundColor": "#fff3dc",
             "version": 4,
           },
         },
@@ -3231,7 +3231,7 @@ exports[`regression tests > change the properties of a shape > [end of test] und
       "updated": {
         "id0": {
           "deleted": {
-            "strokeColor": "#1971c2",
+            "strokeColor": "#2f6fb0",
             "version": 6,
           },
           "inserted": {
@@ -7883,7 +7883,7 @@ exports[`regression tests > given a selected element A and a not selected elemen
   "croppingElementId": null,
   "currentHoveredFontFamily": null,
   "currentItemArrowType": "round",
-  "currentItemBackgroundColor": "#ffc9c9",
+  "currentItemBackgroundColor": "#e6f4f1",
   "currentItemEndArrowhead": "triangle",
   "currentItemFillStyle": "solid",
   "currentItemFontFamily": 6,
@@ -7996,7 +7996,7 @@ exports[`regression tests > given a selected element A and a not selected elemen
 
 exports[`regression tests > given a selected element A and a not selected element B with higher z-index than A and given B partially overlaps A when there's a shift-click on the overlapped section B is added to the selection > [end of test] number of elements 1`] = `0`;
 
-exports[`regression tests > given a selected element A and a not selected element B with higher z-index than A and given B partially overlaps A when there's a shift-click on the overlapped section B is added to the selection > [end of test] number of renders 1`] = `17`;
+exports[`regression tests > given a selected element A and a not selected element B with higher z-index than A and given B partially overlaps A when there's a shift-click on the overlapped section B is added to the selection > [end of test] number of renders 1`] = `16`;
 
 exports[`regression tests > given a selected element A and a not selected element B with higher z-index than A and given B partially overlaps A when there's a shift-click on the overlapped section B is added to the selection > [end of test] redo stack 1`] = `[]`;
 
@@ -8021,7 +8021,7 @@ exports[`regression tests > given a selected element A and a not selected elemen
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "#ffc9c9",
+            "backgroundColor": "#e6f4f1",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -8079,7 +8079,7 @@ exports[`regression tests > given a selected element A and a not selected elemen
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "#ffc9c9",
+            "backgroundColor": "#e6f4f1",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -15370,7 +15370,7 @@ exports[`regression tests > updates fontSize & fontFamily appState > [end of tes
 
 exports[`regression tests > updates fontSize & fontFamily appState > [end of test] number of elements 1`] = `0`;
 
-exports[`regression tests > updates fontSize & fontFamily appState > [end of test] number of renders 1`] = `5`;
+exports[`regression tests > updates fontSize & fontFamily appState > [end of test] number of renders 1`] = `6`;
 
 exports[`regression tests > updates fontSize & fontFamily appState > [end of test] redo stack 1`] = `[]`;
 

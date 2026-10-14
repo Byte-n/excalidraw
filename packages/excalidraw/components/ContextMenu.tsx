@@ -42,7 +42,11 @@ export const CONTEXT_MENU_SEPARATOR = "separator";
 const isSubmenu = (item: ContextMenuItem): item is ContextMenuSubmenu =>
   typeof item === "object" && "type" in item && item.type === "submenu";
 
-const filterItems = (
+/**
+ * 按 action predicate 过滤菜单项（子菜单递归；空子菜单整体移除）。
+ * 右键菜单与浮动栏「更多」菜单（toolbar/ToolbarMoreMenu）共用。
+ */
+export const filterContextMenuItems = (
   items: ContextMenuItems,
   actionManager: ActionManager,
   elements: ReturnType<typeof useExcalidrawElements>,
@@ -57,7 +61,7 @@ const filterItems = (
       return acc;
     }
     if (isSubmenu(item)) {
-      const submenuItems = filterItems(
+      const submenuItems = filterContextMenuItems(
         item.items,
         actionManager,
         elements,
@@ -93,74 +97,98 @@ const filterItems = (
   );
 };
 
+/**
+ * 菜单项列表渲染（含子菜单），右键菜单与「更多」菜单共用同一渲染，
+ * 视觉由 ContextMenu.scss 的 .context-menu* 类承担。
+ */
+export const ContextMenuItemsView = ({
+  items,
+  actionManager,
+  onClose,
+}: {
+  items: ContextMenuItem[];
+  actionManager: ActionManager;
+  onClose: (callback?: () => void) => void;
+}) => {
+  const appState = useExcalidrawAppState();
+  const elements = useExcalidrawElements();
+
+  const renderItems = (menuItems: ContextMenuItem[]): React.ReactNode =>
+    menuItems.map((item, idx) => {
+      if (item === CONTEXT_MENU_SEPARATOR) {
+        return <hr key={idx} className="context-menu-item-separator" />;
+      }
+
+      if (isSubmenu(item)) {
+        return <Submenu key={idx} item={item} renderItems={renderItems} />;
+      }
+
+      const actionName = item.name;
+      let label = "";
+      if (item.label) {
+        if (typeof item.label === "function") {
+          label = t(
+            item.label(
+              elements,
+              appState,
+              actionManager.app,
+            ) as unknown as TranslationKeys,
+          );
+        } else {
+          label = t(item.label as unknown as TranslationKeys);
+        }
+      }
+
+      return (
+        <li
+          key={idx}
+          data-testid={actionName}
+          role="menuitem"
+          onClick={() => {
+            // Clear the menu before executing an action that may read appState.
+            onClose(() => {
+              actionManager.executeAction(item, "contextMenu");
+            });
+          }}
+        >
+          <button
+            type="button"
+            className={clsx("context-menu-item", {
+              dangerous: actionName === "deleteSelectedElements",
+              checkmark: item.checked?.(appState, elements),
+            })}
+            aria-label={label}
+          >
+            <span className="context-menu-item__icon" aria-hidden="true">
+              {typeof item.icon === "function"
+                ? item.icon(appState, elements)
+                : item.icon}
+            </span>
+            <div className="context-menu-item__label">{label}</div>
+            <kbd className="context-menu-item__shortcut">
+              {actionName
+                ? getShortcutFromShortcutName(actionName as ShortcutName)
+                : ""}
+            </kbd>
+          </button>
+        </li>
+      );
+    });
+
+  return <>{renderItems(items)}</>;
+};
+
 export const ContextMenu = React.memo(
   ({ actionManager, items, top, left, onClose }: ContextMenuProps) => {
     const appState = useExcalidrawAppState();
     const elements = useExcalidrawElements();
 
-    const filteredItems = filterItems(items, actionManager, elements, appState);
-
-    const renderItems = (menuItems: ContextMenuItem[]) =>
-      menuItems.map((item, idx) => {
-        if (item === CONTEXT_MENU_SEPARATOR) {
-          return <hr key={idx} className="context-menu-item-separator" />;
-        }
-
-        if (isSubmenu(item)) {
-          return <Submenu key={idx} item={item} renderItems={renderItems} />;
-        }
-
-        const actionName = item.name;
-        let label = "";
-        if (item.label) {
-          if (typeof item.label === "function") {
-            label = t(
-              item.label(
-                elements,
-                appState,
-                actionManager.app,
-              ) as unknown as TranslationKeys,
-            );
-          } else {
-            label = t(item.label as unknown as TranslationKeys);
-          }
-        }
-
-        return (
-          <li
-            key={idx}
-            data-testid={actionName}
-            role="menuitem"
-            onClick={() => {
-              // Clear the menu before executing an action that may read appState.
-              onClose(() => {
-                actionManager.executeAction(item, "contextMenu");
-              });
-            }}
-          >
-            <button
-              type="button"
-              className={clsx("context-menu-item", {
-                dangerous: actionName === "deleteSelectedElements",
-                checkmark: item.checked?.(appState, elements),
-              })}
-              aria-label={label}
-            >
-              <span className="context-menu-item__icon" aria-hidden="true">
-                {typeof item.icon === "function"
-                  ? item.icon(appState, elements)
-                  : item.icon}
-              </span>
-              <div className="context-menu-item__label">{label}</div>
-              <kbd className="context-menu-item__shortcut">
-                {actionName
-                  ? getShortcutFromShortcutName(actionName as ShortcutName)
-                  : ""}
-              </kbd>
-            </button>
-          </li>
-        );
-      });
+    const filteredItems = filterContextMenuItems(
+      items,
+      actionManager,
+      elements,
+      appState,
+    );
 
     return (
       <Popover
@@ -178,7 +206,11 @@ export const ContextMenu = React.memo(
           className="context-menu"
           onContextMenu={(event) => event.preventDefault()}
         >
-          {renderItems(filteredItems)}
+          <ContextMenuItemsView
+            items={filteredItems}
+            actionManager={actionManager}
+            onClose={onClose}
+          />
         </ul>
       </Popover>
     );

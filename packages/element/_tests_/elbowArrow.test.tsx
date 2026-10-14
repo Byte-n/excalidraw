@@ -51,6 +51,7 @@ describe("elbow arrow segment move", () => {
     });
 
     UI.clickTool("arrow");
+    UI.openToolbarPopup("Arrow type");
     UI.clickOnTestId("elbow-arrow");
 
     mouse.reset();
@@ -93,6 +94,7 @@ describe("elbow arrow segment move", () => {
 
   it("can move the second segment of an unconnected elbow arrow", () => {
     UI.clickTool("arrow");
+    UI.openToolbarPopup("Arrow type");
     UI.clickOnTestId("elbow-arrow");
 
     mouse.reset();
@@ -241,6 +243,7 @@ describe("elbow arrow ui", () => {
     });
 
     UI.clickTool("arrow");
+    UI.openToolbarPopup("Arrow type");
     UI.clickOnTestId("elbow-arrow");
 
     expect(h.state.currentItemArrowType).toBe(ARROW_TYPE.elbow);
@@ -280,6 +283,7 @@ describe("elbow arrow ui", () => {
     });
 
     UI.clickTool("arrow");
+    UI.openToolbarPopup("Arrow type");
     UI.clickOnTestId("elbow-arrow");
 
     mouse.reset();
@@ -324,6 +328,7 @@ describe("elbow arrow ui", () => {
     });
 
     UI.clickTool("arrow");
+    UI.openToolbarPopup("Arrow type");
     UI.clickOnTestId("elbow-arrow");
 
     mouse.reset();
@@ -382,6 +387,7 @@ describe("elbow arrow ui", () => {
     });
 
     UI.clickTool("arrow");
+    UI.openToolbarPopup("Arrow type");
     UI.clickOnTestId("elbow-arrow");
 
     mouse.reset();

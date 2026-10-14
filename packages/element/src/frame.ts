@@ -689,6 +689,88 @@ export const addElementsToFrame = <T extends ElementsMapOrArray>(
   ) as T;
 };
 
+/**
+ * 渲染顺序：frame 是实底画板，背景必须落在它包含的元素之下，否则子元素会被
+ * 整块盖住。场景里的存储顺序不保证这一点 —— `addElementsToFrame` 与上游
+ * Excalidraw 一样把子元素排在 frame 之下，导入的旧文件同样如此。这里把排在
+ * 子元素之上的 frame 提到其子树的最低位置。
+ *
+ * 只重排交给渲染器的列表，不写回场景：元素索引仍是 z-index 操作与协作的
+ * 事实源，顺序已经正确的列表原样返回。
+ */
+export const sortFramesBelowChildren = <T extends ExcalidrawElement>(
+  elements: readonly T[],
+): readonly T[] => {
+  const elementsMap = arrayToMap(elements);
+  /** frame 在列表中的位置、嵌套深度，以及它必须待在其下的最低位置 */
+  const frames = new Map<
+    string,
+    { element: T; index: number; depth: number; boundIndex: number }
+  >();
+
+  // 先登记每个 frame：后续上行查找只做位置收敛，不覆盖这里算出的深度
+  elements.forEach((element, index) => {
+    if (!isFrameLikeElement(element)) {
+      return;
+    }
+    let depth = 0;
+    let ancestor = getContainingFrame(element, elementsMap);
+    while (ancestor) {
+      depth += 1;
+      ancestor = getContainingFrame(ancestor, elementsMap);
+    }
+    frames.set(element.id, { element, index, depth, boundIndex: index });
+  });
+
+  elements.forEach((element, index) => {
+    // 逐级上行到最外层 frame，tableCell 之类的中转容器由
+    // `getContainingFrame` 自行穿透
+    let ancestor = getContainingFrame(element, elementsMap);
+    while (ancestor) {
+      const frame = frames.get(ancestor.id);
+      if (frame) {
+        frame.boundIndex = Math.min(frame.boundIndex, index);
+      }
+      ancestor = getContainingFrame(ancestor, elementsMap);
+    }
+  });
+
+  const lifted = [...frames.values()]
+    .filter((frame) => frame.boundIndex < frame.index)
+    .sort((a, b) => a.boundIndex - b.boundIndex || a.depth - b.depth);
+
+  if (!lifted.length) {
+    return elements;
+  }
+
+  // 落到同一位置的 frame 按嵌套深度升序排在前面，外层画板先画，内层才不会被
+  // 外层的实底盖住
+  const framesAt = new Map<number, T[]>();
+  const liftedIds = new Set<string>();
+  for (const frame of lifted) {
+    const bucket = framesAt.get(frame.boundIndex);
+    if (bucket) {
+      bucket.push(frame.element);
+    } else {
+      framesAt.set(frame.boundIndex, [frame.element]);
+    }
+    liftedIds.add(frame.element.id);
+  }
+
+  const ordered: T[] = [];
+  elements.forEach((element, index) => {
+    const bucket = framesAt.get(index);
+    if (bucket) {
+      ordered.push(...bucket);
+    }
+    if (!liftedIds.has(element.id)) {
+      ordered.push(element);
+    }
+  });
+
+  return ordered;
+};
+
 export const removeElementsFromFrame = (
   elementsToRemove: ReadonlySetLike<ExcalidrawElement>,
   elementsMap: ElementsMap,

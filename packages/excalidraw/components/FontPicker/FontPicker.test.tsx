@@ -1,6 +1,6 @@
 import { KEYS } from "@excalidraw/common";
 
-import { Excalidraw } from "../..";
+import { Excalidraw } from "../../index";
 import { Keyboard } from "../../_tests_/helpers/ui";
 import { act, render } from "../../_tests_/test-utils";
 

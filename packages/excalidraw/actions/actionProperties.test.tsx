@@ -14,52 +14,49 @@ import { API } from "../_tests_/helpers/api";
 import { UI } from "../_tests_/helpers/ui";
 import { render } from "../_tests_/test-utils";
 
+// T3 起桌面/平板为浮动栏：填充/描边宽度/样式等在「样式」弹层，
+// 字号/对齐在「文字属性」弹层（radix 弹层需要 ResizeObserver 桩）
+const stubResizeObserver = () => {
+  (global as any).ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+};
+
+const openStylesPopup = () => {
+  stubResizeObserver();
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>("[aria-label='Styles']")!,
+  );
+};
+
+const openTextPropsPopup = () => {
+  stubResizeObserver();
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>("[aria-label='Text align']")!,
+  );
+};
+
+const openFontPopup = () => {
+  stubResizeObserver();
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>(
+      "[data-testid='font-family-show-fonts']",
+    )!,
+  );
+};
+
 describe("element locking", () => {
   beforeEach(async () => {
     await render(<Excalidraw />);
   });
 
   describe("properties when tool selected", () => {
-    it("should show active background top picks", () => {
-      UI.clickTool("rectangle");
-
-      const color = DEFAULT_ELEMENT_BACKGROUND_PICKS[1];
-
-      // just in case we change it in the future
-      expect(color).not.toBe(COLOR_PALETTE.transparent);
-
-      API.setAppState({
-        currentItemBackgroundColor: color,
-      });
-      const activeColor = queryByTestId(
-        document.body,
-        `color-top-pick-${color}`,
-      );
-      expect(activeColor).toHaveClass("active");
-    });
-
-    it("should show fill style when background non-transparent", () => {
-      UI.clickTool("rectangle");
-
-      const color = DEFAULT_ELEMENT_BACKGROUND_PICKS[1];
-
-      // just in case we change it in the future
-      expect(color).not.toBe(COLOR_PALETTE.transparent);
-
-      API.setAppState({
-        currentItemBackgroundColor: color,
-        currentItemFillStyle: "hachure",
-      });
-      const hachureFillButton = queryByTestId(document.body, `fill-hachure`);
-
-      expect(hachureFillButton).toHaveClass("active");
-      API.setAppState({
-        currentItemFillStyle: "solid",
-      });
-      const solidFillStyle = queryByTestId(document.body, `fill-solid`);
-      expect(solidFillStyle).toHaveClass("active");
-    });
-
+    // 注：形状工具（rectangle）在无选区时不再展示浮动栏（见 FloatingShapeActions
+    // 的 TOOL_CONFIG_BAR_TOOLS），因此原有「rectangle 工具默认态下的外露色板
+    // / 样式弹层填充」两条用例已随之失效并移除；下述 trivial 用例保留作为
+    // 该路径不渲染的哨兵。
     it("should not show fill style when background transparent", () => {
       UI.clickTool("rectangle");
 
@@ -91,6 +88,7 @@ describe("element locking", () => {
         currentItemTextAlign: "right",
       });
 
+      openTextPropsPopup();
       const centerTextAlign = queryByTestId(document.body, `align-right`);
       expect(centerTextAlign).toBeChecked();
     });
@@ -106,6 +104,7 @@ describe("element locking", () => {
       API.setElements([rect]);
       API.setSelectedElements([rect]);
 
+      openStylesPopup();
       const crossHatchButton = queryByTestId(document.body, `fill-cross-hatch`);
       expect(crossHatchButton).toHaveClass("active");
     });
@@ -136,6 +135,39 @@ describe("element locking", () => {
       expect(hachureFillButton).toBe(null);
     });
 
+    it("should paint a frame's board from the background picker", () => {
+      // 画板底色默认透明，是元素属性（渲染器读 element.backgroundColor）
+      const frame = API.createElement({
+        type: "frame",
+        backgroundColor: COLOR_PALETTE.transparent,
+      });
+      API.setElements([frame]);
+      API.setSelectedElements([frame]);
+
+      stubResizeObserver();
+      fireEvent.click(
+        document.querySelector<HTMLButtonElement>("[aria-label='Background']")!,
+      );
+      fireEvent.change(document.querySelector(".color-picker-input")!, {
+        target: { value: "d3f9d8" },
+      });
+      expect(API.getSelectedElement().backgroundColor).toBe("#d3f9d8");
+    });
+
+    it("should not show fill style for a selected frame", () => {
+      // 画板只开背景色：填充样式恒为实底，不出现在画板域内
+      const frame = API.createElement({
+        type: "frame",
+        backgroundColor: "#d3f9d8",
+        fillStyle: "hachure",
+      });
+      API.setElements([frame]);
+      API.setSelectedElements([frame]);
+
+      openStylesPopup();
+      expect(queryByTestId(document.body, `fill-hachure`)).toBe(null);
+    });
+
     it("should highlight common stroke width of selected elements", () => {
       const rect1 = API.createElement({
         type: "rectangle",
@@ -148,6 +180,7 @@ describe("element locking", () => {
       API.setElements([rect1, rect2]);
       API.setSelectedElements([rect1, rect2]);
 
+      openStylesPopup();
       const thinStrokeWidthButton = queryByTestId(
         document.body,
         `strokeWidth-thin`,
@@ -167,6 +200,7 @@ describe("element locking", () => {
       API.setElements([rect, freedraw]);
       API.setSelectedElements([rect, freedraw]);
 
+      openStylesPopup();
       expect(queryByTestId(document.body, `strokeWidth-medium`)).toBeChecked();
     });
 
@@ -182,6 +216,7 @@ describe("element locking", () => {
       API.setElements([rect, freedraw]);
       API.setSelectedElements([rect, freedraw]);
 
+      openStylesPopup();
       const boldStrokeWidthButton = queryByTestId(
         document.body,
         `strokeWidth-bold`,
@@ -223,6 +258,7 @@ describe("element locking", () => {
       API.setElements([rect1, rect2]);
       API.setSelectedElements([rect1, rect2]);
 
+      openStylesPopup();
       expect(queryByTestId(document.body, `strokeWidth-thin`)).not.toBe(null);
       expect(
         queryByTestId(document.body, `strokeWidth-thin`),
@@ -247,10 +283,15 @@ describe("element locking", () => {
       API.setElements([rect, text]);
       API.setSelectedElements([rect, text]);
 
+      openStylesPopup();
       expect(queryByTestId(document.body, `strokeWidth-medium`)).toBeChecked();
-      expect(queryByTestId(document.body, `font-family-code`)).toHaveClass(
-        "active",
-      );
+
+      // 字体在字体弹层列表内（当前字体行尾选中态）
+      openFontPopup();
+      expect(
+        document.querySelector(`button[value="${FONT_FAMILY["Comic Shanns"]}"]`)
+          ?.className,
+      ).toContain("dropdown-menu-item--selected");
     });
   });
 });

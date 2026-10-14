@@ -30,6 +30,16 @@ export const supportsFill = (target: FillTarget) => {
 
 export const hasBackground = supportsFill;
 
+/**
+ * A frame takes a background fill like any other filled shape, but stays
+ * outside `supportsFill` on purpose: `supportsFill` is shared with the
+ * interior hit-test, the bucket tool and roughjs' fill options, where a frame
+ * must keep behaving as a container (hit on its border/title, filled as a
+ * board). Only the background picker reads this.
+ */
+export const hasFrameBackground = (type: ElementOrToolType) =>
+  type === "frame" || type === "magicframe";
+
 export const hasFillStyle = (target: FillTarget) =>
   hasBackground(target) &&
   (typeof target === "string" ? target : target.type) !== "stickynote";

@@ -1,9 +1,4 @@
-import {
-  KEYS,
-  matchKey,
-  arrayToMap,
-  MOBILE_ACTION_BUTTON_BG,
-} from "@excalidraw/common";
+import { KEYS, matchKey, arrayToMap } from "@excalidraw/common";
 
 import { CaptureUpdateAction } from "@excalidraw/element";
 
@@ -16,8 +11,6 @@ import { UndoIcon, RedoIcon } from "../components/icons";
 import { HistoryChangedEvent } from "../history";
 import { useEmitter } from "../hooks/useEmitter";
 import { t } from "../i18n";
-
-import { useStylesPanelMode } from "../components/App";
 
 import type { History } from "../history";
 import type { AppClassProperties, AppState } from "../types";
@@ -86,8 +79,6 @@ export const createUndoAction: ActionCreator = (history) => ({
         history.isRedoStackEmpty,
       ),
     );
-    const isMobile = useStylesPanelMode() === "mobile";
-
     return (
       <IconButton
         type="button"
@@ -97,9 +88,6 @@ export const createUndoAction: ActionCreator = (history) => ({
         size={data?.size || "medium"}
         disabled={isUndoStackEmpty}
         data-testid="button-undo"
-        style={{
-          ...(isMobile ? MOBILE_ACTION_BUTTON_BG : {}),
-        }}
       />
     );
   },
@@ -126,8 +114,6 @@ export const createRedoAction: ActionCreator = (history) => ({
         history.isRedoStackEmpty,
       ),
     );
-    const isMobile = useStylesPanelMode() === "mobile";
-
     return (
       <IconButton
         type="button"
@@ -137,9 +123,6 @@ export const createRedoAction: ActionCreator = (history) => ({
         size={data?.size || "medium"}
         disabled={isRedoStackEmpty}
         data-testid="button-redo"
-        style={{
-          ...(isMobile ? MOBILE_ACTION_BUTTON_BG : {}),
-        }}
       />
     );
   },

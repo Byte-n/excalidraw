@@ -7,6 +7,7 @@ import {
   isIframeElement,
   isMagicFrameElement,
   isMindmapNodeElement,
+  isEmbeddableElement,
 } from "@excalidraw/element";
 
 import { getLanguage, t } from "../../i18n";
@@ -251,22 +252,43 @@ export const AppView = ({ app }: { app: App }) => {
                         />
                         {app.isDefaultUIEnabled() && <CursorHint />}
                         {app.isDefaultUIEnabled() &&
-                          selectedElements.length === 1 &&
                           app.state.openDialog?.name !==
                             "elementLinkSelector" &&
-                          app.state.showHyperlinkPopup && (
-                            <Hyperlink
-                              key={firstSelectedElement.id}
-                              element={firstSelectedElement}
-                              scene={app.scene}
-                              setAppState={app.setAppState}
-                              onLinkOpen={app.props.onLinkOpen}
-                              setToast={app.setToast}
-                              updateEmbedValidationStatus={
-                                app.updateEmbedValidationStatus
-                              }
-                            />
-                          )}
+                          app.state.showHyperlinkPopup &&
+                          // 桌面/平板编辑态：链接弹层锚定浮动栏「链接」按钮
+                          // （Actions.tsx FloatbarLinkAction）；此处只保留
+                          // 手机与只读/查看模式（悬停带链接元素）的元素锚定卡片
+                          (app.editorInterface.formFactor === "phone" ||
+                            app.state.viewModeEnabled) &&
+                          (() => {
+                            const viewModeHovered =
+                              app.state.viewModeEnabled &&
+                              app.state.hoveredElementId
+                                ? allElementsMap.get(app.state.hoveredElementId)
+                                : null;
+                            const linkElement = app.state.viewModeEnabled
+                              ? viewModeHovered &&
+                                viewModeHovered.link &&
+                                !isEmbeddableElement(viewModeHovered)
+                                ? viewModeHovered
+                                : null
+                              : selectedElements.length === 1
+                              ? firstSelectedElement
+                              : null;
+                            return linkElement ? (
+                              <Hyperlink
+                                key={linkElement.id}
+                                element={linkElement}
+                                scene={app.scene}
+                                setAppState={app.setAppState}
+                                onLinkOpen={app.props.onLinkOpen}
+                                setToast={app.setToast}
+                                updateEmbedValidationStatus={
+                                  app.updateEmbedValidationStatus
+                                }
+                              />
+                            ) : null;
+                          })()}
                         {app.isDefaultUIEnabled() &&
                           mindmapEditHintPoint &&
                           mindmapEditingNode && (
@@ -295,7 +317,7 @@ export const AppView = ({ app }: { app: App }) => {
                               <ElementCanvasButton
                                 title={t("labels.convertToCode")}
                                 icon={MagicIcon}
-                                checked={false}
+                                variant="primary"
                                 onChange={() =>
                                   app.onMagicFrameGenerate(
                                     firstSelectedElement,
@@ -317,15 +339,13 @@ export const AppView = ({ app }: { app: App }) => {
                               <ElementCanvasButton
                                 title={t("labels.copySource")}
                                 icon={copyIcon}
-                                checked={false}
                                 onChange={() =>
                                   app.onIframeSrcCopy(firstSelectedElement)
                                 }
                               />
                               <ElementCanvasButton
-                                title="Enter fullscreen"
+                                title={t("labels.enterFullscreen")}
                                 icon={fullscreenIcon}
-                                checked={false}
                                 onChange={() => {
                                   const iframe =
                                     app.getHTMLIFrameElement(

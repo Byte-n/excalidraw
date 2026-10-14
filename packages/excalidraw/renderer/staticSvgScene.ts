@@ -9,6 +9,7 @@ import {
   getFontFamilyString,
   isRTL,
   isTestEnv,
+  isTransparent,
   getVerticalOffset,
   applyDarkModeFilter,
   MIME_TYPES,
@@ -34,6 +35,7 @@ import {
 } from "@excalidraw/element";
 
 import { getContainingFrame } from "@excalidraw/element";
+import { sortFramesBelowChildren } from "@excalidraw/element";
 
 import {
   getTableCellBounds,
@@ -804,14 +806,17 @@ const renderElementToSvg = (
         rect.setAttribute("rx", FRAME_STYLE.radius.toString());
         rect.setAttribute("ry", FRAME_STYLE.radius.toString());
 
-        // the board's opaque background exports with the frame, same as the
-        // canvas renderer paints it
+        // the board's fill exports with the frame, same as the canvas renderer
+        // paints it; an unset (transparent) board must still be spelled out —
+        // an SVG rect defaults to black
         rect.setAttribute(
           "fill",
-          applyDarkModeFilter(
-            FRAME_STYLE.backgroundColor,
-            renderConfig.theme === THEME.DARK,
-          ),
+          isTransparent(element.backgroundColor)
+            ? element.backgroundColor
+            : applyDarkModeFilter(
+                element.backgroundColor,
+                renderConfig.theme === THEME.DARK,
+              ),
         );
         rect.setAttribute(
           "stroke",
@@ -1104,8 +1109,11 @@ export const renderSceneToSvg = (
     return;
   }
 
+  // 画板实底必须画在 frame 的子元素之下，而存储顺序不保证这一点
+  const elementsToRender = sortFramesBelowChildren(elements);
+
   // render elements
-  elements
+  elementsToRender
     .filter((el) => !isIframeLikeElement(el))
     .forEach((element) => {
       if (!element.isDeleted) {

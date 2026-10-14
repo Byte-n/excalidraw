@@ -1,28 +1,30 @@
 import clsx from "clsx";
 
-import { IconButton } from "./IconButton";
-
 import type { JSX } from "react";
 
+/**
+ * 画布悬浮按钮：贴元素边缘外侧的图标 + 文字胶囊（tb-canvasbtn，
+ * 规格见 toolbar.scss——高 28、圆角 999）。主行动作传 variant="primary"
+ * （主色底白字）。
+ */
 export const ElementCanvasButton = (props: {
-  title?: string;
+  title: string;
   icon: JSX.Element;
-  checked: boolean;
   onChange?(): void;
-  isMobile?: boolean;
+  variant?: "primary";
 }) => {
   return (
-    <IconButton
-      className={clsx("ToolIcon__MagicButton", {
-        "is-mobile": props.isMobile,
+    <button
+      type="button"
+      className={clsx("tb-canvasbtn", {
+        primary: props.variant === "primary",
       })}
-      type="toggle"
-      size="small"
-      icon={props.icon}
-      checked={props.checked}
-      title={`${props.title}`}
-      aria-label={`${props.title}`}
-      onSelect={() => props.onChange?.()}
-    />
+      title={props.title}
+      aria-label={props.title}
+      onClick={() => props.onChange?.()}
+    >
+      {props.icon}
+      {props.title}
+    </button>
   );
 };
