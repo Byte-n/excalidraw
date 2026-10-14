@@ -9,7 +9,8 @@ import type { AppState } from "../../types";
 /**
  * 浮动工具栏（tb-floatbar）定位规则，设计稿
  * docs/design-ui/excalidraw-canvas-toolbar.html §2「交互通则」：
- * 选区包围盒上方居中、间距 12px；上方空间不足翻到下方；左右出界时
+ * 选区包围盒上方居中（设计稿为 12px，实测偏近，此处取 16px，见
+ * FLOATBAR_GAP）；上方空间不足翻到下方；左右出界时
  * 水平收敛（边距 8）；尺寸固定不随画布缩放变化（始终按 100% 渲染），
  * 仅位置随缩放/滚动换算。
  *
@@ -18,8 +19,10 @@ import type { AppState } from "../../types";
  * 换算到容器（.layer-ui__wrapper）坐标系。
  */
 
-/** 浮动栏与选区包围盒的垂直间距 */
-export const FLOATBAR_GAP = 12;
+/** 浮动栏与选区包围盒的垂直间距（上/下方翻置同值） */
+export const FLOATBAR_GAP = 16;
+/** 工具配置态（无作用对象）浮动栏与顶部主工具条的间距 */
+export const FLOATBAR_TOP_UI_GAP = 12;
 /** 浮动栏距视口边缘的最小边距 */
 export const FLOATBAR_MARGIN = 8;
 
@@ -95,8 +98,8 @@ export const getSelectionFloatbarLayout = ({
   const centerX = (containerX1 + containerX2) / 2;
   const left = clampLeft(centerX - width / 2, width, containerSize.width);
 
-  // 垂直：优先放在包围盒上方（间距 12）；上方不足（出视口或撞上顶部
-  // 工具区）时翻到下方
+  // 垂直：优先放在包围盒上方（间距 FLOATBAR_GAP）；上方不足（出视口或
+  // 撞上顶部工具区）时翻到下方
   let placement: FloatbarPlacement = "above";
   let top = containerY1 - FLOATBAR_GAP - height;
   const collidesTopUI =
@@ -134,5 +137,5 @@ export const getToolConfigFloatbarLayout = ({
     containerSize.width,
   );
 
-  return { left, top: topUIBottom + FLOATBAR_GAP, placement: "below" };
+  return { left, top: topUIBottom + FLOATBAR_TOP_UI_GAP, placement: "below" };
 };
