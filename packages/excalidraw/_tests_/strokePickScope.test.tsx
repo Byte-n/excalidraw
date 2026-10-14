@@ -66,8 +66,10 @@ describe("描边取色域（容器与绑定标签）", () => {
     act(() => {
       h.app.setState({ selectedElementIds: { [child.id]: true } });
     });
-    h.app.actionManager.executeAction(actionChangeStrokeColor, "ui", {
-      color: RED,
+    act(() => {
+      h.app.actionManager.executeAction(actionChangeStrokeColor, "ui", {
+        color: RED,
+      });
     });
 
     expect(getElement(child.id).strokeColor).toBe(RED);
@@ -85,8 +87,10 @@ describe("描边取色域（容器与绑定标签）", () => {
     const editor = await getTextEditor();
     expect(h.state.editingTextElement?.id).toBe(childText!.id);
 
-    h.app.actionManager.executeAction(actionChangeStrokeColor, "ui", {
-      color: RED,
+    act(() => {
+      h.app.actionManager.executeAction(actionChangeStrokeColor, "ui", {
+        color: RED,
+      });
     });
 
     expect(getElement(childText!.id).strokeColor).toBe(RED);
@@ -164,8 +168,10 @@ describe("描边取色域（容器与绑定标签）", () => {
       });
     });
 
-    h.app.actionManager.executeAction(actionChangeStrokeColor, "ui", {
-      color: RED,
+    act(() => {
+      h.app.actionManager.executeAction(actionChangeStrokeColor, "ui", {
+        color: RED,
+      });
     });
 
     expect(getElement("rect").strokeColor).toBe(RED);

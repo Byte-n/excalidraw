@@ -162,7 +162,9 @@ describe("creation preset placement", () => {
   );
 
   it("snaps the placement to the grid", async () => {
-    h.app.setAppState({ gridModeEnabled: true, gridSize: 20 });
+    act(() => {
+      h.app.setAppState({ gridModeEnabled: true, gridSize: 20 });
+    });
     UI.clickTool("rectangle");
     pointer().clickAt(303, 247);
 
