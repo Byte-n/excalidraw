@@ -1471,6 +1471,7 @@ export type AppClassProperties = {
   bucketFill: App["bucketFill"];
   duplicate: App["duplicate"];
   toolDrag: App["toolDrag"];
+  createPreview: App["createPreview"];
   activeResizeHandle: App["activeResizeHandle"];
   isToolLocked: App["isToolLocked"];
   getEffectiveGridSize: App["getEffectiveGridSize"];

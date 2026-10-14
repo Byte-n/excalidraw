@@ -2,6 +2,7 @@ import {
   DRAGGING_THRESHOLD,
   CURSOR_TYPE,
   getFontString,
+  getGridPoint,
   KEYS,
 } from "@excalidraw/common";
 import { generateNKeysBetween } from "@excalidraw/fractional-indexing";
@@ -12,6 +13,7 @@ import {
   applyMindmapBranchTheme,
   applyMindmapTreeCommand,
   applyMindmapOperation,
+  buildMindmapGraphFromTree,
   layoutMindmapScene,
   bumpVersion,
   buildMindmapGraphIndex,
@@ -35,8 +37,6 @@ import {
   newElement,
   newElementWith,
   newLinearElement,
-  newMindmapNodeElement,
-  newTextElement,
   reparentMindmapNodes,
   repairMindmapElements,
   traceMindmapEdgePath,
@@ -63,6 +63,8 @@ import { t } from "../i18n";
 import { validateMindmapTextTree } from "../data/mindmapText";
 
 import { getSelectionColor } from "../renderer/helpers";
+
+import { getMindmapPresetTree } from "./app/createPresets";
 
 import type { MindmapTextNode } from "../data/mindmapText";
 
@@ -2619,49 +2621,18 @@ export class AppMindmap {
       this.app.state.scrollY;
     const x = Math.max(viewportX - 80, sceneRight + 80);
     const y = viewportY - 28;
-    const root = newMindmapNodeElement({
-      x,
-      y,
-      graphId: "",
-      role: "root",
-      parentId: null,
-      order: null,
-    });
-    const graphId = `mindmap:${root.id}`;
-    const created: ExcalidrawElement[] = [];
-    const add = (
-      item: MindmapTextNode,
-      parentId: string | null,
-      order: FractionalIndex | null,
-      node = parentId
-        ? newMindmapNodeElement({
-            x,
-            y,
-            graphId,
-            role: "node",
-            parentId,
-            order,
-          })
-        : { ...root, graphId },
-    ) => {
-      const text = newTextElement({
-        x: node.x + node.width / 2,
-        y: node.y + node.height / 2,
-        text: item.text,
-        containerId: node.id,
-        textAlign: "center",
-        verticalAlign: "middle",
+    const {
+      elements: created,
+      rootId,
+      graphId,
+    } = buildMindmapGraphFromTree(
+      tree,
+      { x, y },
+      {
         fontFamily: this.app.state.currentItemFontFamily,
         fontSize: this.app.state.currentItemFontSize,
-      });
-      created.push({ ...node, boundElements: [{ id: text.id, type: "text" }] });
-      created.push(text);
-      const orders = generateNKeysBetween(null, null, item.children.length);
-      item.children.forEach((child, index) =>
-        add(child, node.id, orders[index] as FractionalIndex),
-      );
-    };
-    add(tree, null, null);
+      },
+    );
     // 导入即创建：整树无基线，直接派生分支主题；布局期补建的入边再派生一次（幂等）
     const createdNodeIds = created
       .filter(isMindmapNodeElement)
@@ -2675,7 +2646,7 @@ export class AppMindmap {
     this.app.syncActionResult({
       elements: applyMindmapBranchTheme(laidOut, graphId, createdNodeIds),
       appState: {
-        selectedElementIds: { [root.id]: true },
+        selectedElementIds: { [rootId]: true },
         selectedGroupIds: {},
         previousSelectedElementIds: {},
         selectedLinearElement: null,
@@ -2684,7 +2655,7 @@ export class AppMindmap {
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
-    const importedRoot = this.app.scene.getNonDeletedElement(root.id);
+    const importedRoot = this.app.scene.getNonDeletedElement(rootId);
     if (importedRoot) {
       this.app.viewport.setViewport({
         target: getCommonBounds([importedRoot]),
@@ -2696,27 +2667,35 @@ export class AppMindmap {
     return true;
   };
 
+  /**
+   * 点一下建出**整张预设导图**（中心主题 → 3 分支 → 每支 2 子主题），根节点
+   * 左上角落在指针上——与悬停预览看到的那张图完全一致（预览与这里共用
+   * `buildMindmapGraphFromTree`）。落地后直接进入根节点编辑，占位文字即刻可改。
+   */
   private createRoot(x: number, y: number) {
     if (this.app.state.viewModeEnabled) {
       this.notifyUnsupportedOperation();
       return;
     }
-    const result = applyMindmapOperation(
-      this.app.scene.getElementsIncludingDeleted(),
-      {
-        action: "createRoot",
-        position: { x: x - 80, y: y - 28 },
-        text: "",
-      },
+    const [originX, originY] = getGridPoint(
+      x,
+      y,
+      this.app.lastPointerDownEvent?.[KEYS.CTRL_OR_CMD]
+        ? null
+        : this.app.getEffectiveGridSize(),
     );
-    const graphRoot = result.elements.find(
+    const { elements: created, rootId } = buildMindmapGraphFromTree(
+      getMindmapPresetTree(),
+      { x: originX, y: originY },
+    );
+    const graphRoot = created.find(
       (element): element is ExcalidrawMindmapNodeElement =>
-        isMindmapNodeElement(element) &&
-        result.createdElementIds.includes(element.id),
+        element.id === rootId && isMindmapNodeElement(element),
     )!;
     this.app.syncActionResult({
-      elements: result.elements,
-      captureUpdate: CaptureUpdateAction.EVENTUALLY,
+      elements: [...this.app.scene.getElementsIncludingDeleted(), ...created],
+      // 一次点击建出一整张图，和「导入文本树」同类：整张图是一次可撤销操作
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
     this.pendingTextNodeIds.add(graphRoot.id);
     this.startNodeEditing(graphRoot);

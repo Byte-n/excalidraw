@@ -18,7 +18,6 @@ import {
   POINTER_BUTTON,
   TOUCH_CTX_MENU_TIMEOUT,
   TOOL_TYPE,
-  DEFAULT_STICKY_NOTE_SIZE,
   getGridPoint,
   getFontString,
   tupleToCoors,
@@ -121,6 +120,7 @@ import {
 import * as gestureController from "./gesture";
 
 import { getCompositeControlPointLocal } from "./compositeShapeControls";
+import { getPresetPlacement, isPresetCreationTool } from "./createPresets";
 import * as tableController from "./table";
 import { resolveInteractionTarget } from "./interactionTarget";
 
@@ -2446,29 +2446,24 @@ export const onPointerUpFromPointerDownHandler = (
     }
 
     if (newElement && isStickyNoteElement(newElement)) {
-      // a gesture under the drag threshold is a click: the default square,
-      // centered on the pointer. A drag keeps its size — previewed
-      // unclamped while the pointer is down — and snaps to the minimum
-      // only now, growing away from the origin corner like the drag did
+      // a gesture under the drag threshold is a click: the note lands at its
+      // preset size with its top-left on the pointer — the very placement the
+      // hover preview showed. A drag keeps its size — previewed unclamped
+      // while the pointer is down — and snaps to the minimum only now,
+      // growing away from the origin corner like the drag did
       const zoom = app.state.zoom.value;
       const isClick =
         newElement.width * zoom < DRAGGING_THRESHOLD &&
         newElement.height * zoom < DRAGGING_THRESHOLD;
       let nextGeometry;
       if (isClick) {
-        const size = DEFAULT_STICKY_NOTE_SIZE;
-        // Snap after centering: half the default size need not be on the grid.
-        const [x, y] = getGridPoint(
-          pointerDownState.origin.x - size / 2,
-          pointerDownState.origin.y - size / 2,
-          childEvent[KEYS.CTRL_OR_CMD] ? null : app.getEffectiveGridSize(),
+        nextGeometry = getPresetPlacement(
+          app,
+          "stickynote",
+          newElement,
+          pointerDownState.origin,
+          childEvent,
         );
-        nextGeometry = {
-          x,
-          y,
-          width: size,
-          height: size,
-        };
       } else {
         // one line at the current font ceiling must fit, or the note would
         // grow on the first keystroke
@@ -2535,6 +2530,33 @@ export const onPointerUpFromPointerDownHandler = (
 
     if (newElement && isTableElement(newElement)) {
       app.finalizeNewTableElementOnPointerUp(newElement);
+    }
+
+    // 创建工具的「单击落地」：预设尺寸、左上角落在按下点——落地的就是悬停时
+    // 预览的那个形状。判定用尺寸而不是 `drag.hasOccurred`：创建中的元素不走
+    // 选中元素那条拖拽路径，没有那个标志（便签分支用的是同一套尺寸判定）。表格
+    // 天然不在此列——它建出来就是 3×3 的最小预设，永远不为 0。画框不能在这里
+    // return，它还要走下面的 frame-like 成员归属。
+    const zoom = app.state.zoom.value;
+    const isPresetClick =
+      newElement &&
+      isPresetCreationTool(activeTool.type) &&
+      newElement.width * zoom < DRAGGING_THRESHOLD &&
+      newElement.height * zoom < DRAGGING_THRESHOLD;
+    if (isPresetClick) {
+      app.scene.mutateElement(
+        newElement,
+        getPresetPlacement(
+          app,
+          activeTool.type,
+          newElement,
+          pointerDownState.origin,
+          childEvent,
+        ),
+        { informMutation: false, isDragging: false },
+      );
+      app.store.scheduleCapture();
+      app.scene.triggerUpdate();
     }
 
     if (

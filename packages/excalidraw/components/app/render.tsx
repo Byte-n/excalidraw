@@ -82,9 +82,16 @@ export const AppView = ({ app }: { app: App }) => {
 
   const allElementsMap = app.scene.getNonDeletedElementsMap();
 
-  // a tool dragged out of the toolbar previews on the new-element canvas
-  // (it is not in the scene until dropped)
-  const previewElement = newElementCanvasElement ?? app.toolDrag.preview;
+  // off-scene previews live on the new-element canvas (they are not in the
+  // scene until the gesture commits): a tool dragged out of the toolbar is a
+  // single element, a creation tool's hover preset may be a whole mindmap.
+  // The real element being created takes the canvas over from both.
+  const previewElements = newElementCanvasElement
+    ? [newElementCanvasElement]
+    : app.toolDrag.preview
+    ? [app.toolDrag.preview]
+    : app.createPreview.elements;
+  const isTranslucentPreview = !newElementCanvasElement;
 
   const shouldBlockPointerEvents =
     // default back to `--ui-pointerEvents` flow if setPointerCapture
@@ -427,10 +434,11 @@ export const AppView = ({ app }: { app: App }) => {
                             ...app.getRenderOverrideConfig(),
                           }}
                         />
-                        {previewElement && (
+                        {previewElements?.length ? (
                           <NewElementCanvas
                             appState={app.state}
-                            newElement={previewElement}
+                            newElement={newElementCanvasElement}
+                            previewElements={previewElements}
                             scale={app.ownerWindow.devicePixelRatio}
                             rc={app.rc}
                             elementsMap={renderableElementsMap}
@@ -449,16 +457,15 @@ export const AppView = ({ app }: { app: App }) => {
                               theme: app.state.theme,
                               ...app.getRenderOverrideConfig(),
                             }}
-                            // a tool dragged out of the toolbar previews
-                            // translucently; the element itself is drawn
-                            // exactly as it will land
+                            // an off-scene preview is translucent; the
+                            // element itself is drawn exactly as it will land
                             opacity={
-                              app.toolDrag.preview
+                              isTranslucentPreview
                                 ? TOOL_DRAG_PREVIEW_OPACITY
                                 : undefined
                             }
                           />
-                        )}
+                        ) : null}
                         <InteractiveCanvas
                           app={app}
                           containerRef={app.excalidrawContainerRef}
@@ -493,6 +500,11 @@ export const AppView = ({ app }: { app: App }) => {
                           }}
                           onTouchMove={app.handleTouchMove}
                           onPointerDown={app.handleCanvasPointerDown}
+                          onPointerLeave={() => {
+                            // the creation preset only makes sense while the
+                            // pointer is on the canvas
+                            app.createPreview.clear();
+                          }}
                           onDoubleClick={app.handleCanvasDoubleClick}
                         />
                         {app.props.viewportStatusFrame?.border &&

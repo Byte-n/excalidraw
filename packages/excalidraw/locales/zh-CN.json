@@ -468,6 +468,11 @@
     "noRegion": "",
     "tooComplex": ""
   },
+  "mindmapPreset": {
+    "root": "中心主题",
+    "branch": "分支主题",
+    "leaf": "子主题"
+  },
   "element": {
     "mindmap-node": "思维导图节点",
     "mindmap-edge": "思维导图连接线",

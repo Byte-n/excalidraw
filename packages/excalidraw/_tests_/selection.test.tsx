@@ -1340,14 +1340,10 @@ describe("tool locking & selection", () => {
         value !== "arrow" &&
         value !== "hand" &&
         value !== "laser" &&
-        // no top-level toolbar button (rendered in the extra-tools dropdown)
-        value !== "frame" &&
+        // no toolbar button at all (rendered in the extra-tools dropdown)
         value !== "embeddable" &&
         value !== "autoshape" &&
-        value !== "bucketfill" &&
-        // mindmap and table are also rendered in the extra-tools dropdown
-        value !== "mindmap" &&
-        value !== "table"
+        value !== "bucketfill"
       ) {
         const element = UI.createElement(value);
         expect(h.state.selectedElementIds[element.id]).not.toBe(true);

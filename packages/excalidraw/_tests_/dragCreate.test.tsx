@@ -247,7 +247,7 @@ describe("Test dragCreate", () => {
       fireEvent.pointerUp(canvas, { clientX: 300, clientY: 300 });
     };
 
-    it("places a clicked note on the grid", async () => {
+    it("places a clicked note with its top-left on the pointer, snapped to the grid", async () => {
       const { getByToolName, container } = await render(<Excalidraw />);
       API.setAppState({ gridModeEnabled: true, gridSize: 20 });
       fireEvent.click(getByToolName("stickynote"));
@@ -255,9 +255,10 @@ describe("Test dragCreate", () => {
       createDefaultStickyNote(container.querySelector("canvas.interactive")!);
       await getTextEditor();
 
+      // 与悬停预览、拖拽起点同一锚点：鼠标点即元素左上角
       expect(
         h.elements.find((element) => element.type === "stickynote"),
-      ).toMatchObject({ x: 180, y: 180 });
+      ).toMatchObject({ x: 300, y: 300 });
     });
 
     it("switches back to selection and starts editing when tool is unlocked", async () => {
@@ -463,9 +464,10 @@ describe("Test dragCreate", () => {
     });
   });
 
-  describe("do not add element to the scene if size is too small", () => {
+  describe("a click without dragging places the preset, dragging still sizes freely", () => {
     beforeAll(() => {
-      mockBoundingClientRect();
+      // 画布矩形零偏移：下面的断言里 client 坐标就是场景坐标
+      mockBoundingClientRect({ top: 0, left: 0, x: 0, y: 0 });
     });
     afterAll(() => {
       restoreOriginalGetBoundingClientRect();
@@ -485,12 +487,16 @@ describe("Test dragCreate", () => {
       // finish (position does not matter)
       fireEvent.pointerUp(canvas);
 
-      expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `5`,
-      );
-      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
       expect(h.state.selectionElement).toBeNull();
-      expect(h.elements.length).toEqual(0);
+
+      // 左上角落在按下点，尺寸是预设的 200×120
+      expect(h.elements.length).toEqual(1);
+      expect(h.elements[0]).toMatchObject({
+        x: 30,
+        y: 20,
+        width: 200,
+        height: 120,
+      });
     });
 
     it("ellipse", async () => {
@@ -506,12 +512,16 @@ describe("Test dragCreate", () => {
       // finish (position does not matter)
       fireEvent.pointerUp(canvas);
 
-      expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `6`,
-      );
-      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
       expect(h.state.selectionElement).toBeNull();
-      expect(h.elements.length).toEqual(0);
+      expect(h.elements.length).toEqual(1);
+      expect(h.elements[0]).toMatchObject({
+        type: "composite_shape",
+        shape: { id: "ellipse", schemaVersion: 1 },
+        x: 30,
+        y: 20,
+        width: 200,
+        height: 120,
+      });
     });
 
     it("diamond", async () => {
@@ -527,12 +537,16 @@ describe("Test dragCreate", () => {
       // finish (position does not matter)
       fireEvent.pointerUp(canvas);
 
-      expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `6`,
-      );
-      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
       expect(h.state.selectionElement).toBeNull();
-      expect(h.elements.length).toEqual(0);
+      expect(h.elements.length).toEqual(1);
+      expect(h.elements[0]).toMatchObject({
+        type: "composite_shape",
+        shape: { id: "diamond", schemaVersion: 1 },
+        x: 30,
+        y: 20,
+        width: 200,
+        height: 120,
+      });
     });
 
     it("arrow", async () => {

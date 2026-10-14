@@ -69,6 +69,10 @@ type InteractiveCanvasProps = {
     DOMAttributes<HTMLCanvasElement>["onPointerCancel"],
     undefined
   >;
+  onPointerLeave: Exclude<
+    DOMAttributes<HTMLCanvasElement>["onPointerLeave"],
+    undefined
+  >;
   onTouchMove: Exclude<
     DOMAttributes<HTMLCanvasElement>["onTouchMove"],
     undefined
@@ -228,6 +232,7 @@ const InteractiveCanvas = (props: InteractiveCanvasProps) => {
       onPointerMove={props.onPointerMove}
       onPointerUp={props.onPointerUp}
       onPointerCancel={props.onPointerCancel}
+      onPointerLeave={props.onPointerLeave}
       onTouchMove={props.onTouchMove}
       onPointerDown={props.onPointerDown}
       onDoubleClick={

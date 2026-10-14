@@ -776,6 +776,24 @@ export const handleCanvasPointerMove = (
   // 在工具光标落定之后运行：思维导图折叠 affordance 的悬停指针不被覆盖
   app.mindmap.handlePointerMove(scenePointerX, scenePointerY);
 
+  // 创建工具的预设预览：悬停时跟随光标的那半个透明图形。指针未按下、也不在
+  // 任何会话里时才有意义——按下之后由真正的 newElement 接管。
+  if (
+    !app.state.newElement &&
+    !app.state.selectionElement &&
+    !app.state.multiElement &&
+    !app.state.selectedElementsAreBeingDragged &&
+    !isOverScrollBar
+  ) {
+    app.createPreview.handlePointerMove(
+      app.state.activeTool.type,
+      { x: scenePointerX, y: scenePointerY },
+      event,
+    );
+  } else {
+    app.createPreview.clear();
+  }
+
   app.maybeUpdateFrameToHighlightOnPointerMove(
     {
       x: scenePointerX,

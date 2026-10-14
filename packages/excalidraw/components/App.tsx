@@ -124,6 +124,7 @@ import { AppDuplicate } from "./App.duplicate";
 import { AppFlowchart } from "./App.flowchart";
 import { AppMindmap } from "./App.mindmap";
 import { AppPan } from "./App.pan";
+import { AppCreatePreview } from "./App.createPreview";
 import { AppToolDrag } from "./App.toolDrag";
 import { AppViewport } from "./App.viewport";
 import { AppWheel } from "./App.wheel";
@@ -298,6 +299,7 @@ class App extends React.Component<AppProps, AppState> {
   public bucketFill: AppBucketFill = new AppBucketFill(this);
   public duplicate: AppDuplicate = new AppDuplicate(this);
   public toolDrag: AppToolDrag = new AppToolDrag(this);
+  public createPreview: AppCreatePreview = new AppCreatePreview(this);
   public flowchart: AppFlowchart = new AppFlowchart(this);
   public mindmap: AppMindmap = new AppMindmap(this);
   public cursor: AppCursor = new AppCursor(this);

@@ -1,5 +1,8 @@
 import { getFontString } from "@excalidraw/common";
-import { generateKeyBetween } from "@excalidraw/fractional-indexing";
+import {
+  generateKeyBetween,
+  generateNKeysBetween,
+} from "@excalidraw/fractional-indexing";
 
 import {
   applyMindmapBranchTheme,
@@ -45,10 +48,22 @@ import type { MindmapGraphIndex } from "./mindmap";
 import type {
   ExcalidrawElement,
   ExcalidrawMindmapNodeElement,
+  FontFamilyValues,
   FractionalIndex,
 } from "./types";
 
 export type MindmapNodeTarget = Readonly<{ graphId: string; nodeId: string }>;
+
+/**
+ * 一棵纯文字的树：「从文本树建整图」的输入（`buildMindmapGraphFromTree`）。
+ * 与 excalidraw 包的 `MindmapTextNode`（Markdown/Outline/OPML 导入）结构一致，
+ * 但这里不依赖那个包，任何层级的调用方都能用。
+ */
+export type MindmapTreeSpec = {
+  text: string;
+  children: readonly MindmapTreeSpec[];
+};
+
 export type MindmapOperation =
   | Readonly<{ action: "createRoot"; position: ScenePoint; text: string }>
   | Readonly<{
@@ -154,21 +169,21 @@ export const layoutMindmapScene = (
         const nextNode =
           isMindmapLayoutFrozen(node) || pinnedNodeIds?.has(node.id)
             ? node
-          : {
-              ...node,
-              ...(metrics.width > maxWidth && {
-                width: computeContainerDimensionForBoundText(
-                  metrics.width,
-                  shape,
-                ),
-              }),
-              ...(metrics.height > maxHeight && {
-                height: computeContainerDimensionForBoundText(
-                  metrics.height,
-                  shape,
-                ),
-              }),
-            };
+            : {
+                ...node,
+                ...(metrics.width > maxWidth && {
+                  width: computeContainerDimensionForBoundText(
+                    metrics.width,
+                    shape,
+                  ),
+                }),
+                ...(metrics.height > maxHeight && {
+                  height: computeContainerDimensionForBoundText(
+                    metrics.height,
+                    shape,
+                  ),
+                }),
+              };
         resized ||=
           nextNode.width !== node.width || nextNode.height !== node.height;
         updated.set(node.id, nextNode);
@@ -191,6 +206,78 @@ export const layoutMindmapScene = (
   return repaired.map((element) => updated.get(element.id) ?? element);
 };
 
+/**
+ * 从一棵文本树直接建出整张、已布局的脑图（节点 + 绑定文本 + 连线），
+ * 不接触 App/scene/store —— 调用方拿到元素后自行落地。文字树的导入
+ * （excalidraw 包的 `importTextTree`）与创建工具的预设预览共用它，导入结果
+ * 与预设所见因此同源。
+ *
+ * `position` 是**根节点的左上角**（与 `createRoot` 的语义一致），其余节点
+ * 先与根同点、再由 `layoutMindmapScene` 排出层级位置。
+ */
+export const buildMindmapGraphFromTree = (
+  tree: MindmapTreeSpec,
+  position: ScenePoint,
+  font: { fontFamily?: FontFamilyValues; fontSize?: number } = {},
+  /**
+   * 每个节点/绑定文本的显式身份。缺省（导入路径）由构造函数生成 id/seed；
+   * **离屏预览必须传**——预览元素不入场景，却会消耗共享的 id 计数器与随机
+   * 序列，把同一会话里后续元素的 id/seed 全部推后一位。
+   */
+  identity: (index: number) => { id?: string; seed?: number } = () => ({}),
+): {
+  elements: readonly ExcalidrawElement[];
+  rootId: string;
+  graphId: string;
+} => {
+  validatePoint(position);
+  const root = newMindmapNodeElement({
+    ...position,
+    graphId: "",
+    role: "root",
+    parentId: null,
+    order: null,
+    ...identity(0),
+  });
+  const graphId = `mindmap:${root.id}`;
+
+  let elements: readonly ExcalidrawElement[] = [];
+  let created = 1;
+  const add = (item: MindmapTreeSpec, node: ExcalidrawMindmapNodeElement) => {
+    elements = appendNode(elements, node, item.text, font, identity(created++));
+    const orders = generateNKeysBetween(null, null, item.children.length);
+    item.children.forEach((child, index) => {
+      add(
+        child,
+        newMindmapNodeElement({
+          x: node.x,
+          y: node.y,
+          graphId,
+          role: "node",
+          parentId: node.id,
+          order: orders[index] as FractionalIndex,
+          ...identity(created++),
+        }),
+      );
+    });
+  };
+  add(tree, { ...root, graphId });
+
+  const nodeIds = elements
+    .filter(isMindmapNodeElement)
+    .map((element) => element.id);
+  // 布局会补建缺失的入边，主题因此在布局后再派发一次（幂等）
+  const laidOut = layoutMindmapScene(
+    applyMindmapBranchTheme(elements, graphId, nodeIds),
+    [graphId],
+  );
+  return {
+    elements: applyMindmapBranchTheme(laidOut, graphId, nodeIds),
+    rootId: root.id,
+    graphId,
+  };
+};
+
 const validatePoint = (point: ScenePoint) => {
   if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
     throw new CanvasSceneError("invalid_input", "脑图位置必须是有限坐标");
@@ -201,6 +288,9 @@ const appendNode = (
   elements: readonly ExcalidrawElement[],
   node: ExcalidrawMindmapNodeElement,
   value: string,
+  font: { fontFamily?: FontFamilyValues; fontSize?: number } = {},
+  /** 见 `buildMindmapGraphFromTree` 的 `identity`；绑定文本随容器取身份 */
+  nodeIdentity?: { id?: string; seed?: number },
 ) => {
   const text = newTextElement({
     x: node.x + node.width / 2,
@@ -209,6 +299,11 @@ const appendNode = (
     containerId: node.id,
     textAlign: "center",
     verticalAlign: "middle",
+    ...font,
+    ...(nodeIdentity?.id === undefined
+      ? {}
+      : { id: `${nodeIdentity.id}-text` }),
+    ...(nodeIdentity?.seed === undefined ? {} : { seed: nodeIdentity.seed }),
   });
   return [
     ...elements,

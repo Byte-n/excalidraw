@@ -36,7 +36,7 @@ beforeEach(() => {
 
 const { h } = window;
 
-describe("remove shape in non linear elements", () => {
+describe("a click places the preset instead of nothing", () => {
   beforeAll(() => {
     mockBoundingClientRect({ width: 1000, height: 1000 });
   });
@@ -56,9 +56,14 @@ describe("remove shape in non linear elements", () => {
     fireEvent.pointerDown(canvas, { clientX: 30, clientY: 20 });
     fireEvent.pointerUp(canvas, { clientX: 30, clientY: 30 });
 
-    expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`5`);
-    expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
-    expect(h.elements.length).toEqual(0);
+    // 单击不再「尺寸太小被丢弃」，而是落下 200×120 的预设
+    expect(h.elements.length).toEqual(1);
+    expect(h.elements[0]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "rectangle", schemaVersion: 1 },
+      width: 200,
+      height: 120,
+    });
   });
 
   it("ellipse", async () => {
@@ -70,9 +75,13 @@ describe("remove shape in non linear elements", () => {
     fireEvent.pointerDown(canvas, { clientX: 30, clientY: 20 });
     fireEvent.pointerUp(canvas, { clientX: 30, clientY: 30 });
 
-    expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`6`);
-    expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
-    expect(h.elements.length).toEqual(0);
+    expect(h.elements.length).toEqual(1);
+    expect(h.elements[0]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "ellipse", schemaVersion: 1 },
+      width: 200,
+      height: 120,
+    });
   });
 
   it("diamond", async () => {
@@ -84,9 +93,13 @@ describe("remove shape in non linear elements", () => {
     fireEvent.pointerDown(canvas, { clientX: 30, clientY: 20 });
     fireEvent.pointerUp(canvas, { clientX: 30, clientY: 30 });
 
-    expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`6`);
-    expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
-    expect(h.elements.length).toEqual(0);
+    expect(h.elements.length).toEqual(1);
+    expect(h.elements[0]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "diamond", schemaVersion: 1 },
+      width: 200,
+      height: 120,
+    });
   });
 });
 

@@ -1216,6 +1216,9 @@ export const setActiveTool = (
   if (nextActiveTool.type !== "mindmap") {
     app.mindmap.clearHover();
   }
+  // 创建工具的悬停预览只属于「当前选中的工具」：换工具就收起，指针不动时
+  // 也不会留下上一个工具的图形
+  app.createPreview.clear();
   if (nextActiveTool.type === "hand") {
     app.cursor.set(CURSOR_TYPE.GRAB);
   } else if (!app.pan.isSpaceHeld()) {

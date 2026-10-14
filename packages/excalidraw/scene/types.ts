@@ -117,6 +117,13 @@ export type NewElementSceneRenderConfig = {
   canvas: HTMLCanvasElement | null;
   rc: RoughCanvas;
   newElement: NonDeletedExcalidrawElement | null;
+  /**
+   * Extra elements painted on the same canvas, alongside `newElement` — the
+   * off-scene creation previews (a tool dragged out of the toolbar is one
+   * element, the mindmap preset is a whole graph). They are not in the scene,
+   * so the renderer merges them into the maps it hands to `renderElement`.
+   */
+  previewElements?: readonly NonDeletedExcalidrawElement[];
   elementsMap: RenderableElementsMap;
   allElementsMap: NonDeletedSceneElementsMap;
   scale: number;

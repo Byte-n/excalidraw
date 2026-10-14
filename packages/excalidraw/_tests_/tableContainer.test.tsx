@@ -687,7 +687,7 @@ describe("table delete", () => {
     await render(<Excalidraw handleKeyboardGlobally={true} />);
 
     // the table through the real tool so the store tracks the subtree
-    UI.clickExtraTool("table");
+    UI.clickTool("table");
     mouseDown(100, 100);
     mouseUp(100, 100);
     const table = getTables()[0];
@@ -708,7 +708,7 @@ describe("table delete", () => {
 
     // a nested table drawn inside another cell
     const nestedCell = cellCenter(table, 1, 1);
-    UI.clickExtraTool("table");
+    UI.clickTool("table");
     mouseDown(nestedCell.x, nestedCell.y);
     mouseUp(nestedCell.x, nestedCell.y);
     const nested = getTables().find((element) => element.id !== table.id)!;

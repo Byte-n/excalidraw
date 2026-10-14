@@ -5,7 +5,6 @@ import {
   DEFAULT_STROKE_STREAMLINE,
   DEFAULT_STROKE_STREAMLINE_PRECISE,
   DEFAULT_TRANSFORM_HANDLE_SPACING,
-  FRAME_STYLE,
   LINE_CONFIRM_THRESHOLD,
   ROUNDNESS,
   DEFAULT_COLLISION_THRESHOLD,
@@ -17,14 +16,8 @@ import {
 import {
   getHoveredElementForBinding,
   isBindingEnabled,
-  newFrameElement,
   newFreeDrawElement,
-  newEmbeddableElement,
-  newMagicFrameElement,
-  newStickyNoteElement,
-  getStickyNoteCreationInk,
   newArrowElement,
-  newElement,
   newLinearElement,
   hasBoundTextElement,
   isPathALoop,
@@ -90,7 +83,6 @@ import type {
   ExcalidrawTableElement,
   NonDeleted,
   ExcalidrawTextContainer,
-  BaseShapeId,
 } from "@excalidraw/element/types";
 import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
 
@@ -106,6 +98,8 @@ import { snapNewElement } from "../../snapping";
 
 import { getSelectedElements } from "../../scene";
 import { snapResizingElements } from "../../snapping";
+
+import { isSelectionDraft, newCreationDraft } from "./createPresets";
 
 import * as tableController from "./table";
 
@@ -1597,78 +1591,15 @@ export const createGenericElementOnPointerDown = (
 
   const containerRef = app.getContainerRefForDropAt({ x: gridX, y: gridY });
 
-  const baseElementAttributes = {
-    x: gridX,
-    y: gridY,
-    strokeColor:
-      elementType === "stickynote"
-        ? // the default yellow paper pairs with its own ink
-          getStickyNoteCreationInk(
-            app.state.currentItemStickynoteBackgroundColor,
-            app.state.currentItemStickynoteStrokeColor,
-          )
-        : app.state.currentItemStrokeColor,
-    backgroundColor:
-      elementType === "stickynote"
-        ? app.state.currentItemStickynoteBackgroundColor
-        : app.state.currentItemBackgroundColor,
-    fillStyle: app.state.currentItemFillStyle,
-    strokeWidth: app.getCurrentItemStrokeWidth(elementType),
-    strokeStyle: app.state.currentItemStrokeStyle,
-    opacity: app.state.currentItemOpacity,
-    roundness: app.getCurrentItemRoundness(elementType),
-    locked: false,
+  // 装配与「跟随光标的预设预览」共用一份（见 `app/createPresets`）
+  const element = newCreationDraft(
+    app,
+    elementType,
+    { x: gridX, y: gridY },
     containerRef,
-  } as const;
+  );
 
-  let element;
-  if (elementType === "embeddable") {
-    element = newEmbeddableElement({
-      type: "embeddable",
-      ...baseElementAttributes,
-    });
-  } else if (elementType === "stickynote") {
-    element = newStickyNoteElement({
-      type: "stickynote",
-      ...baseElementAttributes,
-    });
-  } else if (elementType === "selection") {
-    element = newElement({
-      type: "selection",
-      ...baseElementAttributes,
-    });
-  } else {
-    const preferredShape = app.state.preferredGenericShape;
-    const genericShapeId: BaseShapeId =
-      preferredShape === "right-triangle" || preferredShape === "left-triangle"
-        ? "triangle"
-        : elementType === "rectangle"
-        ? preferredShape
-        : elementType;
-    if (
-      preferredShape === "right-triangle" ||
-      preferredShape === "left-triangle"
-    ) {
-      element = newElement({
-        type: "composite_shape",
-        shape: {
-          id: "triangle",
-          schemaVersion: 1,
-          triangle: {
-            apexX: preferredShape === "right-triangle" ? 0 : 1,
-          },
-        },
-        ...baseElementAttributes,
-      });
-    } else {
-      element = newElement({
-        type: genericShapeId,
-        ...baseElementAttributes,
-      });
-    }
-  }
-
-  if (element.type === "selection") {
+  if (isSelectionDraft(element)) {
     app.setState({
       selectionElement: element,
     });
@@ -1694,18 +1625,7 @@ export const createFrameElementOnPointerDown = (
       : app.getEffectiveGridSize(),
   );
 
-  const constructorOpts = {
-    x: gridX,
-    y: gridY,
-    opacity: app.state.currentItemOpacity,
-    locked: false,
-    ...FRAME_STYLE,
-  } as const;
-
-  const frame =
-    type === TOOL_TYPE.magicframe
-      ? newMagicFrameElement(constructorOpts)
-      : newFrameElement(constructorOpts);
+  const frame = newCreationDraft(app, type, { x: gridX, y: gridY });
 
   app.insertNewElement(frame);
 

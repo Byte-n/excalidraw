@@ -132,6 +132,10 @@ export class AppCursor {
       this.applyEraser();
     } else if (activeTool.type === "autoshape") {
       this.set(CURSOR_TYPE.CROSSHAIR);
+    } else if (activeTool.type === "text") {
+      // the text tool inserts text where you click, so it shows the text
+      // caret rather than the crosshair every other creating tool uses
+      this.set(CURSOR_TYPE.TEXT);
     } else if (activeTool.type === "bucketfill") {
       // The hotspot is the center of the paint droplet in the icon.
       this.set(

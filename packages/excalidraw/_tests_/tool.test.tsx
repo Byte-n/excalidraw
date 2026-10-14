@@ -294,17 +294,17 @@ describe("props.activeTool (forced tool)", () => {
     expect(queryToolButton("eraser")!.disabled).toBe(true);
     expect(queryToolButton("lock")).toBe(null);
 
+    // frame lives in the always-visible row now, and is disabled like the rest
+    const frameButton = queryToolButton("frame");
+    expect(frameButton).not.toBe(null);
+    expect(frameButton!.disabled).toBe(true);
+
     // the extra-tools dropdown items are disabled as well
     fireEvent.click(
       GlobalTestState.renderResult.container.querySelector(
         ".App-toolbar__extra-tools-trigger",
       )!,
     );
-    const frameItem = document.querySelector<HTMLButtonElement>(
-      '[data-testid="toolbar-frame"]',
-    );
-    expect(frameItem).not.toBe(null);
-    expect(frameItem!.disabled).toBe(true);
     const laserItem = document.querySelector<HTMLButtonElement>(
       '[data-testid="toolbar-laser"]',
     );
@@ -392,14 +392,36 @@ describe("toolbar", () => {
 
     openExtraTools();
     expect(queryTool("image")).not.toBe(null);
-    expect(queryTool("frame")).not.toBe(null);
+  });
+
+  it("keeps frame, table and mindmap in the always-visible row", async () => {
+    await render(<Excalidraw />);
+    for (const type of ["frame", "table", "mindmap"]) {
+      expect(queryTool(type)).not.toBe(null);
+    }
+
+    // ...and out of the extra-tools menu, so no testid renders twice
+    openExtraTools();
+    for (const type of ["frame", "table", "mindmap"]) {
+      expect(
+        queryTool(type)!.closest(".App-toolbar__extra-tools-dropdown"),
+      ).toBe(null);
+    }
+    expect(
+      document.querySelectorAll('[data-testid="toolbar-frame"]'),
+    ).toHaveLength(1);
+    expect(
+      document.querySelectorAll('[data-testid="toolbar-table"]'),
+    ).toHaveLength(1);
+    expect(
+      document.querySelectorAll('[data-testid="toolbar-mindmap"]'),
+    ).toHaveLength(1);
   });
 
   it("hides the image tool through UIOptions.tools.image", async () => {
     await render(<Excalidraw UIOptions={{ tools: { image: false } }} />);
     openExtraTools();
     expect(queryTool("image")).toBe(null);
-    expect(queryTool("frame")).not.toBe(null);
   });
 
   it("badges tools with their letter shortcut", async () => {

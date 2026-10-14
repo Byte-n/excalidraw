@@ -46,7 +46,6 @@ import {
   getCellsInTableRange,
   newElementWith,
   newTextElement,
-  newTableElement,
   tableDefaultSizes,
 } from "@excalidraw/element";
 
@@ -81,6 +80,8 @@ import type {
 import type { CanvasElementOperationResult } from "@excalidraw/element/sceneOperations";
 
 import { snapNewElement } from "../../snapping";
+
+import { newCreationDraft } from "./createPresets";
 
 import { commitCanvasElementOperation } from "./sceneOperations";
 
@@ -133,14 +134,14 @@ export const createTableElementOnPointerDown = (
     y: gridY,
   });
 
-  const table = newTableElement({
-    type: "table",
-    x: gridX,
-    y: gridY,
-    opacity: app.state.currentItemOpacity,
-    locked: false,
+  // 装配与「跟随光标的预设预览」共用一份（见 `app/createPresets`）；表格的
+  // 默认 3×3 就是它的预设尺寸，由 `newTableElement` 自带，不另设常量
+  const table = newCreationDraft(
+    app,
+    "table",
+    { x: gridX, y: gridY },
     containerRef,
-  });
+  );
 
   app.insertNewElement(table);
 
@@ -234,11 +235,12 @@ export const maybeDragNewTableElement = (
 };
 
 /**
- * Release of a new-table drag. A click already holds the default preset; a
- * drag that cannot give every cell the interactive minimum falls back to the
- * default preset sizes (it was previewed at the true drag size, like the
- * sticky note). Selection and the tool revert stay in the shared pointer-up
- * tail.
+ * Release of a new-table drag. A click already holds the default preset — with
+ * its top-left on the pointer, which is also where the hover preview puts it —
+ * and a drag that cannot give every cell the interactive minimum falls back to
+ * the default preset sizes, keeping the top-left it was dragged out from (it
+ * was previewed at the true drag size, like the sticky note). Selection and
+ * the tool revert stay in the shared pointer-up tail.
  */
 export const finalizeNewTableElementOnPointerUp = (
   app: TableApp,

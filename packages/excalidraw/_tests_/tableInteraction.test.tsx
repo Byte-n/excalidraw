@@ -114,7 +114,7 @@ describe("table tool", () => {
 
   describe("creation", () => {
     it("splits a drag evenly across the default 3x3 grid and selects the table", async () => {
-      UI.clickExtraTool("table");
+      UI.clickTool("table");
 
       mouseDown(30, 20);
       mouseMove(330, 170);
@@ -142,7 +142,7 @@ describe("table tool", () => {
     });
 
     it("creates the default preset on a click without dragging", async () => {
-      UI.clickExtraTool("table");
+      UI.clickTool("table");
 
       mouseDown(100, 100);
       mouseUp(100, 100);
@@ -157,7 +157,7 @@ describe("table tool", () => {
     });
 
     it("falls back to the default preset when the drag is below the minimum", async () => {
-      UI.clickExtraTool("table");
+      UI.clickTool("table");
 
       mouseDown(300, 300);
       mouseMove(310, 308);
@@ -182,7 +182,7 @@ describe("table tool", () => {
       });
       API.setElements([frame]);
 
-      UI.clickExtraTool("table");
+      UI.clickTool("table");
       mouseDown(50, 50);
       mouseUp(50, 50);
 

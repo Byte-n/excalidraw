@@ -156,7 +156,7 @@ describe("Mindmap P02 树操作界面", () => {
   });
 
   it("Space 折叠和展开，松键保留选中；叶子及重复按键无历史", () => {
-    UI.clickExtraTool("mindmap");
+    UI.clickTool("mindmap");
     select("a");
     const before = snapshot();
     const count = API.getUndoStack().length;
@@ -209,7 +209,7 @@ describe("Mindmap P02 树操作界面", () => {
 
   it("折叠 affordance 在 selection 与 mindmap 两种工具下都能切换折叠", () => {
     const pointer = new Pointer("mouse");
-    UI.clickExtraTool("mindmap");
+    UI.clickTool("mindmap");
     select("a");
     Keyboard.keyPress(" ");
     expect(node("a").collapsed).toBe(true);
@@ -224,7 +224,7 @@ describe("Mindmap P02 树操作界面", () => {
     pointer.clickAt(affordance.minus.center[0], affordance.minus.center[1]);
     expect(node("a").collapsed).toBe(true);
     // 切回 selection 工具：徽标点击展开
-    UI.clickExtraTool("selection");
+    UI.clickTool("selection");
     affordance = getMindmapCollapseAffordance(node("a"), "left-to-right");
     pointer.clickAt(affordance.badge.center[0], affordance.badge.center[1]);
     expect(node("a").collapsed).toBe(false);
@@ -685,7 +685,7 @@ describe("Mindmap P02 树操作界面", () => {
       isComposing: true,
     });
     expect(snapshot()).toEqual(before);
-    UI.clickExtraTool("mindmap");
+    UI.clickTool("mindmap");
     const target = node("a");
     new Pointer("mouse").doubleClickAt(target.x + 30, target.y + 20);
     const editor = await getTextEditor();

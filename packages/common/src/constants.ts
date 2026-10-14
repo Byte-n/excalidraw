@@ -301,6 +301,23 @@ export const STICKY_NOTE_FOOTER = {
 export const STICKY_NOTE_BODY_INSET_Y =
   STICKY_NOTE_PADDING * 2 + STICKY_NOTE_FOOTER.height;
 export const DEFAULT_STICKY_NOTE_SIZE = 250;
+
+/**
+ * 创建工具的**预设尺寸**：选中工具后跟随光标的半透明预览就是它，单击
+ * （位移不到 `DRAGGING_THRESHOLD`、没有拖拽）落地时也按它成型、以光标为
+ * 中心。按住拖拽仍按拖出的范围自定大小，与预设无关。
+ *
+ * 表格没有自己的条目——`newTableElement` 建出来的默认 3×3 就是预设，元素
+ * 自带尺寸，不在这里重复推导，避免两处漂移。
+ */
+export const DEFAULT_SHAPE_PRESET_SIZE = {
+  width: 200,
+  height: 120,
+} as const;
+export const DEFAULT_FRAME_PRESET_SIZE = {
+  width: 640,
+  height: 480,
+} as const;
 // floor for a finalized note's width and base height; the UI floor is font-aware
 // on top of it (see `getStickyNoteMinSize`)
 export const STICKY_NOTE_MIN_SIZE = 75;

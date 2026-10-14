@@ -1,12 +1,17 @@
-import { getBoundTextElement, isMindmapNodeElement } from "@excalidraw/element";
+import {
+  buildMindmapGraphFromTree,
+  getBoundTextElement,
+  isMindmapNodeElement,
+} from "@excalidraw/element";
 
 import { actionChangeStrokeColor } from "../actions";
+import { restoreElements } from "../data/restore";
 
 import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
-import { Keyboard, Pointer, UI } from "./helpers/ui";
-import { getTextEditor, updateTextEditor } from "./queries/dom";
+import { Pointer, UI } from "./helpers/ui";
+import { getTextEditor } from "./queries/dom";
 import { act, render } from "./test-utils";
 
 const { h } = window;
@@ -29,20 +34,17 @@ describe("描边取色域（容器与绑定标签）", () => {
     await render(<Excalidraw langCode="zh-CN" handleKeyboardGlobally={true} />);
   });
 
-  /** 建一张「根 + 一级子节点」的脑图，返回两个节点与各自的绑定标签。 */
+  /**
+   * 建一张「根 + 一级子节点」的脑图（确定夹具，不再走点击建图——点击现在
+   * 会建出整张预设导图），返回子节点与它的绑定标签。
+   */
   const createGraph = async () => {
-    UI.clickExtraTool("mindmap");
-    const pointer = new Pointer("mouse");
-    pointer.clickAt(300, 240);
-    let editor = await getTextEditor();
-    updateTextEditor(editor, "root");
-    Keyboard.exitTextEditor(editor);
-    act(() => {
-      Keyboard.keyPress("Tab");
-    });
-    editor = await getTextEditor();
-    updateTextEditor(editor, "child");
-    Keyboard.exitTextEditor(editor);
+    const { elements } = buildMindmapGraphFromTree(
+      { text: "root", children: [{ text: "child", children: [] }] },
+      { x: 300, y: 240 },
+    );
+    API.setElements(restoreElements(elements, null, { repairBindings: true }));
+    UI.clickTool("mindmap");
 
     const elementsMap = h.app.scene.getNonDeletedElementsMap();
     const nodes = h.app.scene
@@ -75,7 +77,7 @@ describe("描边取色域（容器与绑定标签）", () => {
   it("编辑节点文本取色：只改文字色，节点描边不动", async () => {
     const { child, childText } = await createGraph();
 
-    UI.clickExtraTool("mindmap");
+    UI.clickTool("mindmap");
     new Pointer("mouse").doubleClickAt(
       child.x + child.width / 2,
       child.y + child.height / 2,
@@ -95,7 +97,7 @@ describe("描边取色域（容器与绑定标签）", () => {
   it("编辑节点文本：色板与弹层小标题都是「字体颜色」", async () => {
     const { child } = await createGraph();
 
-    UI.clickExtraTool("mindmap");
+    UI.clickTool("mindmap");
     new Pointer("mouse").doubleClickAt(
       child.x + child.width / 2,
       child.y + child.height / 2,
