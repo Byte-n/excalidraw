@@ -380,6 +380,45 @@ export const getTableCellRange = (
   return { startRow, endRow, startColumn, endColumn };
 };
 
+/**
+ * 单元格范围选区在表格局部坐标系下的矩形（起止单元格包围盒的并集）。
+ * 合并单元格会把范围撑大（见 `getTableCellRange`），故按范围两端取并集。
+ * 选区引用了未知单元格（如已失效的瞬态选区）时返回 `null`。
+ */
+export const getTableCellRangeBounds = (
+  table: TableDataV1,
+  firstId: string,
+  lastId: string,
+): { x: number; y: number; width: number; height: number } | null => {
+  let range: TableCellRange;
+  try {
+    range = getTableCellRange(table, firstId, lastId);
+  } catch {
+    return null;
+  }
+  // 范围两端的行列坐标 → 落在该位置的单元格（可能是合并单元格的成员，
+  // getTableCellBounds 会解析回合并后的可见单元格）
+  const cellAt = (rowIndex: number, columnIndex: number) =>
+    table.cells.find(
+      (cell) =>
+        cell.rowId === table.rows[rowIndex].id &&
+        cell.columnId === table.columns[columnIndex].id,
+    );
+  const firstCell = cellAt(range.startRow, range.startColumn);
+  const lastCell = cellAt(range.endRow, range.endColumn);
+  const start = firstCell && getTableCellBounds(table, firstCell.id);
+  const end = lastCell && getTableCellBounds(table, lastCell.id);
+  if (!start || !end) {
+    return null;
+  }
+  return {
+    x: start.x,
+    y: start.y,
+    width: end.x + end.width - start.x,
+    height: end.y + end.height - start.y,
+  };
+};
+
 const assertUniqueIds = (
   entries: readonly { id: string }[],
   label: string,

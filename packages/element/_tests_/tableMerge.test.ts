@@ -17,6 +17,7 @@ import {
   createTableData,
   getTableCellBounds,
   getTableCellRange,
+  getTableCellRangeBounds,
   getVisibleTableCell,
 } from "../src/tableStruct";
 import { newElementWith } from "../src/mutateElement";
@@ -83,6 +84,14 @@ describe("merged table cells", () => {
       startColumn: 0,
       endColumn: 1,
     });
+    // 选区矩形按撑大后的范围取并集（渲染高亮与浮动栏定位共用）
+    expect(
+      getTableCellRangeBounds(
+        second,
+        at(original, 0, 0).id,
+        at(original, 2, 0).id,
+      ),
+    ).toEqual({ x: 0, y: 0, width: 320, height: 168 });
   });
 
   it("extends spans only when inserting inside a merge", () => {

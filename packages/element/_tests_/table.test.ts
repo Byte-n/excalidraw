@@ -11,6 +11,7 @@ import {
   evenlySplitTableSize,
   getTableCellAtPoint,
   getTableCellBounds,
+  getTableCellRangeBounds,
   getTableColumnOffset,
   getTableHeight,
   getTableRowOffset,
@@ -218,6 +219,26 @@ describe("table geometry", () => {
       height: 50,
     });
     expect(getTableCellBounds(table, "missing")).toBe(null);
+  });
+
+  it("unions a cell range into table-local bounds", () => {
+    const element = createNonUniformTable();
+    const table = element.table;
+    const first = cellAt(element, 0, 0).id;
+    const last = cellAt(element, 1, 1).id;
+
+    expect(getTableCellRangeBounds(table, first, last)).toEqual({
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 150,
+    });
+    // 单格范围即该单元格自身
+    expect(getTableCellRangeBounds(table, last, last)).toEqual(
+      getTableCellBounds(table, last),
+    );
+    // 未知单元格（如失效的瞬态选区）不抛错，返回 null
+    expect(getTableCellRangeBounds(table, first, "missing")).toBe(null);
   });
 });
 

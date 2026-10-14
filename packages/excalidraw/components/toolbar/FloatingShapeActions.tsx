@@ -6,8 +6,10 @@ import { showSelectedShapeActions } from "@excalidraw/element";
 // （如测试先导入 @excalidraw/element/tableScene）因自身循环引用
 // （bounds → linearElementEditor → index）产生的部分快照问题
 import { getCommonBounds } from "@excalidraw/element/bounds";
+import { getTableCellRangeBounds } from "@excalidraw/element/tableStruct";
+import { isTableElement } from "@excalidraw/element/typeChecks";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { Bounds } from "@excalidraw/common";
 
 import {
   actionToggleElementLock,
@@ -53,6 +55,9 @@ const TOOL_CONFIG_BAR_TOOLS: ReadonlySet<string> = new Set([
  * 设计稿：docs/design-ui/excalidraw-canvas-toolbar.html §2「容器结构」。
  *
  * - 选中态：锚定选区包围盒（上方居中，不足翻到下方，左右出界收敛）
+ * - 单元格选区：锚定所选单元格（范围并集），而非整张表格
+ * - 文本编辑态：选区此时为空，改为锚定被编辑文本（单元格背景文本锚定所属
+ *   单元格，容器文本锚定其容器）
  * - 无选中·工具配置态：固定视口顶部居中（主工具条下方 12px）
  * - 裁剪/编辑节点模式：整体替换为模式条（裁剪拖动时不隐藏）
  * - 全锁定选区：内联「已锁定 + 解锁」
@@ -177,28 +182,81 @@ export const FloatingShapeActions = () => {
     selectedElements.length > 0 &&
     selectedElements.every((element) => element.locked);
 
-  // 锚定元素：裁剪/编辑节点模式锚定目标元素；单元格/行列选区锚定表格；
-  // 否则为整个选区；无选区（工具配置态）则不锚定、固定顶部居中
-  let anchorElements: readonly NonDeletedExcalidrawElement[] = [];
+  // 锚定包围盒（场景坐标）：裁剪/编辑节点模式锚定目标元素；文本编辑锚定被
+  // 编辑文本（单元格背景文本锚定所属单元格，容器文本锚定容器）；否则为整个
+  // 选区；单元格选区锚定所选单元格（范围并集）——贴着用户实际操作的单元格，
+  // 而不是整张表格；无锚点（工具配置态）则固定顶部居中
+  const cellSceneBounds = (
+    tableId: string,
+    firstCellId: string,
+    lastCellId: string,
+  ): Bounds | null => {
+    const table = elementsMap.get(tableId);
+    if (!table || !isTableElement(table)) {
+      return null;
+    }
+    const local = getTableCellRangeBounds(table.table, firstCellId, lastCellId);
+    if (!local) {
+      return null;
+    }
+    return [
+      table.x + local.x,
+      table.y + local.y,
+      table.x + local.x + local.width,
+      table.y + local.y + local.height,
+    ];
+  };
+
+  let anchorBounds: Bounds | null = null;
   if (croppingElementId) {
     const element = elementsMap.get(croppingElementId);
     if (element) {
-      anchorElements = [element];
+      anchorBounds = getCommonBounds([element], elementsMap);
     }
   } else if (isLinearEditing) {
     const element = elementsMap.get(appState.selectedLinearElement!.elementId);
     if (element) {
-      anchorElements = [element];
+      anchorBounds = getCommonBounds([element], elementsMap);
     }
   } else if (selectedElements.length) {
-    anchorElements = selectedElements;
+    anchorBounds = getCommonBounds(selectedElements, elementsMap);
+  } else if (appState.editingTextElement) {
+    // 文本编辑态：进入编辑时选区被清空（退出才还原），故这里按被编辑的
+    // 文本自身锚定；单元格背景文本锚定所属单元格（文字随输入重排，单元格
+    // 才是稳定锚点），带容器的文本（图形/便签/箭头标签等）锚定容器——那才是
+    // 用户眼中的「选中元素」，且输入时容器的尺寸会随文本变化
+    const editingText = elementsMap.get(appState.editingTextElement.id);
+    if (editingText) {
+      const containerRef = editingText.containerRef;
+      const cell =
+        containerRef?.kind === "tableCell"
+          ? cellSceneBounds(
+              containerRef.elementId,
+              containerRef.cellId,
+              containerRef.cellId,
+            )
+          : null;
+      const containerId =
+        editingText.type === "text" ? editingText.containerId : null;
+      const container = containerId ? elementsMap.get(containerId) : null;
+      anchorBounds =
+        cell ??
+        getCommonBounds(container ? [container] : [editingText], elementsMap);
+    }
   } else {
-    const tableId =
-      appState.tableCellSelection?.tableId ??
-      appState.tableRowColSelection?.tableId;
-    const table = tableId ? elementsMap.get(tableId) : null;
-    if (table) {
-      anchorElements = [table];
+    const tableSelection = appState.tableCellSelection;
+    if (tableSelection) {
+      anchorBounds = cellSceneBounds(
+        tableSelection.tableId,
+        tableSelection.anchorId,
+        tableSelection.focusId,
+      );
+    } else if (appState.tableRowColSelection) {
+      // 行列选区当前不展示浮动栏（见 showSelectedShapeActions），锚定整表即可
+      const table = elementsMap.get(appState.tableRowColSelection.tableId);
+      if (table) {
+        anchorBounds = getCommonBounds([table], elementsMap);
+      }
     }
   }
 
@@ -217,9 +275,9 @@ export const FloatingShapeActions = () => {
     height: parent?.clientHeight || container?.clientHeight || appState.height,
   };
 
-  const layout = anchorElements.length
+  const layout = anchorBounds
     ? getSelectionFloatbarLayout({
-        selectionBounds: getCommonBounds(anchorElements, elementsMap),
+        selectionBounds: anchorBounds,
         barSize,
         containerSize,
         appState,
@@ -298,7 +356,7 @@ export const FloatingShapeActions = () => {
       </>
     );
   } else {
-    ariaLabel = anchorElements.length
+    ariaLabel = anchorBounds
       ? t("labels.floatbar.selection")
       : t("labels.floatbar.toolDefaults");
     content = (

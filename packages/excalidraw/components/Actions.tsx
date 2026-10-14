@@ -782,10 +782,15 @@ export const FloatbarShapeActions = ({
     app,
   );
   const { container } = useExcalidrawContainer();
+  // 文本编辑态（含表格单元格背景文本、表格标题）：浮动栏按被编辑文本呈现，
+  // 作为文本属性的作用对象——单元格命令（选区模式/合并/拆分）与表格色板是
+  // 单元格选区的操作，此时让位（否则输入单元格文字时看到的仍是单元格工具栏）
+  const editingText = appState.editingTextElement;
   const tableSelected =
-    !!appState.tableCellSelection ||
-    !!appState.tableRowColSelection ||
-    targetElements.some(isTableElement);
+    !editingText &&
+    (!!appState.tableCellSelection ||
+      !!appState.tableRowColSelection ||
+      targetElements.some(isTableElement));
 
   // —— 思维导图 · 连线：连线颜色色板外露 + 宽度/线型/路径弹层 ——
   const selectedMindmapEdge = app.mindmap.getSelectedEdge();
@@ -887,7 +892,8 @@ export const FloatbarShapeActions = ({
   }
 
   // —— 表格 · 单元格选区：选区模式 / 合并 / 单元格背景色板 + 更多 ——
-  if (appState.tableCellSelection) {
+  // （文本编辑时由下方的文本属性栏接手，见 editingText）
+  if (appState.tableCellSelection && !editingText) {
     return (
       <div className="selected-shape-actions">
         <TableCellCompactActions
@@ -938,8 +944,11 @@ export const FloatbarShapeActions = ({
 
   return (
     <div className="selected-shape-actions">
-      {/* 表格：边框颜色 / 网格线颜色 / 背景颜色三色板外露 */}
-      <TableStyleActions app={app} appState={appState} variant="fill" />
+      {/* 表格：边框颜色 / 网格线颜色 / 背景颜色三色板外露
+          （文本编辑时让位：此刻作用对象是被编辑的文本，颜色走文本描边色板） */}
+      {!editingText && (
+        <TableStyleActions app={app} appState={appState} variant="fill" />
+      )}
 
       {/* 外露色板：描边 / 背景 */}
       {!tableSelected && predicates.strokeColor && (
@@ -1916,10 +1925,14 @@ export const MobileShapeActions = ({
     app,
   );
   const { container } = useExcalidrawContainer();
+  // 与浮动栏同一规则：文本编辑时（含单元格背景文本）底条按被编辑文本呈现，
+  // 单元格命令与表格色板让位给文本属性
+  const editingText = appState.editingTextElement;
   const tableSelected =
-    !!appState.tableCellSelection ||
-    !!appState.tableRowColSelection ||
-    targetElements.some(isTableElement);
+    !editingText &&
+    (!!appState.tableCellSelection ||
+      !!appState.tableRowColSelection ||
+      targetElements.some(isTableElement));
   const mobileActionsRef = useRef<HTMLDivElement>(null);
 
   const ACTIONS_WIDTH =
@@ -1949,7 +1962,7 @@ export const MobileShapeActions = ({
     return null;
   }
 
-  if (appState.tableCellSelection) {
+  if (appState.tableCellSelection && !editingText) {
     return (
       <div
         className="compact-shape-actions mobile-shape-actions tb-bar"
@@ -1985,8 +1998,11 @@ export const MobileShapeActions = ({
       className="compact-shape-actions mobile-shape-actions tb-bar"
       ref={mobileActionsRef}
     >
-      {/* 表格：边框颜色 / 网格线颜色 / 背景颜色色板外露 */}
-      <TableStyleActions app={app} appState={appState} variant="fill" />
+      {/* 表格：边框颜色 / 网格线颜色 / 背景颜色色板外露
+          （文本编辑时让位，见 editingText） */}
+      {!editingText && (
+        <TableStyleActions app={app} appState={appState} variant="fill" />
+      )}
 
       {/* 外露色板：描边 / 背景（24px） */}
       {!tableSelected && predicates.strokeColor && (

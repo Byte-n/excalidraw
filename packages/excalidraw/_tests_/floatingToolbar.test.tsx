@@ -13,6 +13,7 @@ import type {
 } from "@excalidraw/element/types";
 
 import { actionToggleLinearEditor } from "../actions";
+import { FLOATBAR_GAP } from "../components/toolbar/floatingPosition";
 import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
@@ -23,7 +24,7 @@ const { h } = window;
 
 const mouse = new Pointer("mouse");
 
-const queryFloatbar = () => document.querySelector(".tb-floatbar");
+const queryFloatbar = () => document.querySelector<HTMLElement>(".tb-floatbar");
 
 describe("浮动工具栏（T2 容器与定位）", () => {
   it("桌面选中元素：出现 role=toolbar 的浮动栏，内容为既有属性面板", async () => {
@@ -173,6 +174,77 @@ describe("浮动工具栏（T2 容器与定位）", () => {
       h.app.finishImageCropping();
       API.setAppState({ selectedElementsAreBeingDragged: false });
     });
+  });
+
+  it("文本编辑态：选区被清空后仍锚定被编辑文本（不落到顶部工具条下方）", async () => {
+    await render(<Excalidraw handleKeyboardGlobally />);
+    // 固定容器尺寸，避免 jsdom 下量测为 0 影响左右收敛的期望值
+    act(() => {
+      API.setAppState({ width: 800, height: 600 });
+    });
+    const text = API.createElement({
+      type: "text",
+      text: "ola",
+      x: 300,
+      y: 200,
+      width: 20,
+      height: 20,
+    });
+    API.setElements([text]);
+    API.setSelectedElements([text]);
+
+    act(() => {
+      Keyboard.keyPress(KEYS.ENTER);
+    });
+    expect(h.state.editingTextElement?.id).toBe(text.id);
+    // 根因：进入文本编辑时选区被清空，浮动栏因此失去锚点而退回顶部
+    expect(h.state.selectedElementIds).toEqual({});
+
+    const bar = queryFloatbar()!;
+    expect(bar.getAttribute("aria-label")).toBe("Selected element properties");
+
+    // jsdom 下浮动栏量测为 0×0，故 left/top 即锚点包围盒边缘（上方居中 + 间距）
+    const edited = h.app.scene.getNonDeletedElement(text.id)!;
+    expect(bar.style.left).toBe(`${edited.x + edited.width / 2}px`);
+    expect(bar.style.top).toBe(`${edited.y - FLOATBAR_GAP}px`);
+  });
+
+  it("图形文本编辑态：锚定容器图形本身，而非其中的文本", async () => {
+    await render(<Excalidraw handleKeyboardGlobally />);
+    act(() => {
+      API.setAppState({ width: 800, height: 600 });
+    });
+    const shape = API.createElement({
+      type: "rectangle",
+      x: 300,
+      y: 200,
+      width: 100,
+      height: 60,
+      boundElements: [],
+    });
+    const boundText = API.createElement({
+      type: "text",
+      text: "ola",
+      x: 310,
+      y: 220,
+      width: 40,
+      height: 20,
+      containerId: shape.id,
+    });
+    API.setElements([shape, boundText]);
+    API.updateElement(shape, {
+      boundElements: [{ type: "text", id: boundText.id }],
+    });
+
+    mouse.doubleClickOn(boundText);
+    expect(h.state.editingTextElement?.id).toBe(boundText.id);
+    expect(h.state.selectedElementIds).toEqual({});
+
+    const bar = queryFloatbar()!;
+    expect(bar.getAttribute("aria-label")).toBe("Selected element properties");
+    // 锚定图形的包围盒（300,200,100×60）——输入时图形尺寸会随文本变化
+    expect(bar.style.left).toBe("350px");
+    expect(bar.style.top).toBe(`${200 - FLOATBAR_GAP}px`);
   });
 
   it("全锁定选区：浮动栏内联「已锁定 + 解锁」，解锁后恢复属性面板", async () => {
@@ -496,6 +568,108 @@ describe("浮动工具栏（T2 容器与定位）", () => {
       height: 60,
       naturalWidth: 200,
       naturalHeight: 100,
+    });
+  });
+
+  describe("表格单元格", () => {
+    // 默认表格：3×3，列宽 160 / 行高 56，置于 (200,200)
+    const TABLE_X = 200;
+    const TABLE_Y = 200;
+    const COLUMN_WIDTH = 160;
+
+    const createTable = () => {
+      const table = API.createElement({
+        type: "table",
+        x: TABLE_X,
+        y: TABLE_Y,
+      });
+      API.setElements([table]);
+      return table;
+    };
+
+    const selectCell = (
+      table: ReturnType<typeof createTable>,
+      anchorIndex: number,
+      focusIndex = anchorIndex,
+    ) => {
+      act(() => {
+        API.setAppState({
+          tableCellSelection: {
+            tableId: table.id,
+            anchorId: table.table.cells[anchorIndex].id,
+            focusId: table.table.cells[focusIndex].id,
+            mobileMode: false,
+          },
+        });
+      });
+    };
+
+    it("单元格选区：浮动栏锚定该单元格（而非整张表格）", async () => {
+      await render(<Excalidraw handleKeyboardGlobally />);
+      act(() => {
+        API.setAppState({ width: 800, height: 600 });
+      });
+      const table = createTable();
+      selectCell(table, 0);
+
+      const bar = queryFloatbar()!;
+      expect(bar.getAttribute("aria-label")).toBe(
+        "Selected element properties",
+      );
+      // 单元格命令仍在该栏（这是单元格选区的工具栏）
+      expect(
+        bar.querySelector("[data-testid='table-cell-multi-select']"),
+      ).not.toBeNull();
+      // 首个单元格（200,200,160×56）上方居中；整表中心是 440
+      expect(bar.style.left).toBe(`${TABLE_X + COLUMN_WIDTH / 2}px`);
+      expect(bar.style.top).toBe(`${TABLE_Y - FLOATBAR_GAP}px`);
+    });
+
+    it("单元格范围选区：锚定所选范围的并集", async () => {
+      await render(<Excalidraw handleKeyboardGlobally />);
+      act(() => {
+        API.setAppState({ width: 800, height: 600 });
+      });
+      const table = createTable();
+      // cells[0]/cells[1] = 第一行的前两个单元格（行主序）
+      selectCell(table, 0, 1);
+
+      const bar = queryFloatbar()!;
+      // 并集 x 200..520、y 200..256 → 上方居中于 360
+      expect(bar.style.left).toBe(`${TABLE_X + COLUMN_WIDTH}px`);
+      expect(bar.style.top).toBe(`${TABLE_Y - FLOATBAR_GAP}px`);
+    });
+
+    it("单元格背景文本编辑：浮动栏展示文本属性，单元格命令与表格色板让位", async () => {
+      await render(<Excalidraw handleKeyboardGlobally />);
+      act(() => {
+        API.setAppState({ width: 800, height: 600 });
+      });
+      const table = createTable();
+      selectCell(table, 0);
+
+      // Enter = 编辑所选单元格的背景文本
+      act(() => {
+        Keyboard.keyPress(KEYS.ENTER);
+      });
+      expect(h.state.editingTextElement).not.toBeNull();
+
+      const bar = queryFloatbar()!;
+      // 文本属性接管：字体/对齐 + 文本色板（描边色域）
+      expect(
+        bar.querySelector("[aria-label='Show font picker']"),
+      ).not.toBeNull();
+      expect(bar.querySelector("[aria-label='Text align']")).not.toBeNull();
+      expect(bar.querySelector("[aria-label='Color']")).not.toBeNull();
+      // 单元格命令（选区模式/合并拆分）与单元格背景色板让位
+      expect(
+        bar.querySelector("[data-testid='table-cell-multi-select']"),
+      ).toBeNull();
+      expect(bar.querySelector("[data-testid='table-merge-cells']")).toBeNull();
+      expect(bar.querySelector(".table-style-actions")).toBeNull();
+      // 位置仍贴着被编辑的单元格
+      expect(bar.style.left).toBe(`${TABLE_X + COLUMN_WIDTH / 2}px`);
+      expect(bar.style.top).toBe(`${TABLE_Y - FLOATBAR_GAP}px`);
     });
   });
 

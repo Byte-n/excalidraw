@@ -60,7 +60,7 @@ import {
   getTableAxisBlockRange,
   getTableCellBounds,
   getTableCellFillColor,
-  getTableCellRange,
+  getTableCellRangeBounds,
   getCellBackgroundTextLayout,
   getLineHeightInPx,
   getTextVerticalOffset,
@@ -1548,27 +1548,18 @@ const renderTableCellSelection = (
   if (!table || !isTableElement(table) || table.isDeleted) {
     return;
   }
-  const range = getTableCellRange(
+  const range = getTableCellRangeBounds(
     table.table,
     selection.anchorId,
     selection.focusId,
   );
-  const first = table.table.cells.find(
-    (cell) =>
-      cell.rowId === table.table.rows[range.startRow].id &&
-      cell.columnId === table.table.columns[range.startColumn].id,
-  )!;
-  const last = table.table.cells.find(
-    (cell) =>
-      cell.rowId === table.table.rows[range.endRow].id &&
-      cell.columnId === table.table.columns[range.endColumn].id,
-  )!;
-  const start = getTableCellBounds(table.table, first.id)!;
-  const end = getTableCellBounds(table.table, last.id)!;
-  const unionX = table.x + start.x;
-  const unionY = table.y + start.y;
-  const unionWidth = end.x + end.width - start.x;
-  const unionHeight = end.y + end.height - start.y;
+  if (!range) {
+    return;
+  }
+  const unionX = table.x + range.x;
+  const unionY = table.y + range.y;
+  const unionWidth = range.width;
+  const unionHeight = range.height;
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
   // 8% accent fill + 1px accent frame (设计稿 cell-range)
