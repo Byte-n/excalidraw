@@ -343,7 +343,7 @@ export const STICKY_NOTE_SHADOW = {
     { offsetY: 8, blur: 20, opacity: 0.14 },
   ],
 } as const;
-export const DEFAULT_FONT_FAMILY: FontFamilyValues = FONT_FAMILY.Excalifont;
+export const DEFAULT_FONT_FAMILY: FontFamilyValues = FONT_FAMILY.Nunito;
 export const DEFAULT_TEXT_ALIGN = "left";
 export const DEFAULT_VERTICAL_ALIGN = "top";
 export const DEFAULT_VERSION = "{version}";

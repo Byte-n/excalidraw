@@ -1,4 +1,4 @@
-import { FONT_FAMILY } from "@excalidraw/common";
+import { DEFAULT_FONT_FAMILY, FONT_FAMILY } from "@excalidraw/common";
 import { isCompositeShapeId } from "@excalidraw/element";
 import {
   DEFAULT_CHART_COLOR_INDEX,
@@ -1064,11 +1064,10 @@ describe("charts", () => {
       const title = textElements.find(
         (element) => element.fontFamily === FONT_FAMILY["Lilita One"],
       );
+      // the axis labels are the texts in the chart's common font; the title and
+      // the legend labels are drawn in the display font
       const axisLabels = textElements.filter(
-        (element) =>
-          element.fontFamily === FONT_FAMILY.Excalifont &&
-          element.text !== "Dunk" &&
-          element.text !== "Egg",
+        (element) => element.fontFamily === DEFAULT_FONT_FAMILY,
       );
       const topAxisLabelY = Math.min(...axisLabels.map((element) => element.y));
 
