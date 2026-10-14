@@ -1,6 +1,7 @@
 import {
   SHIFT_LOCKING_ANGLE,
   viewportCoordsToSceneCoords,
+  type Bounds,
 } from "@excalidraw/common";
 import {
   normalizeRadians,
@@ -118,8 +119,12 @@ export const isElementInViewport = (
   );
 };
 
-export const isElementCompletelyInViewport = (
-  elements: ExcalidrawElement[],
+/** Scene-coordinate viewport check for a `[x1, y1, x2, y2]` box — the same
+ * space `getCommonBounds` returns, so callers with a box that isn't an
+ * element (a table cell, a pasted rect) don't have to fake one.
+ * `padding` insets the usable viewport. */
+export const isSceneBoundsCompletelyInViewport = (
+  bounds: Bounds,
   width: number,
   height: number,
   viewTransformations: {
@@ -129,10 +134,9 @@ export const isElementCompletelyInViewport = (
     scrollX: number;
     scrollY: number;
   },
-  elementsMap: ElementsMap,
   padding?: Offsets,
 ) => {
-  const [x1, y1, x2, y2] = getCommonBounds(elements, elementsMap); // scene coordinates
+  const [x1, y1, x2, y2] = bounds; // scene coordinates
   const topLeftSceneCoords = viewportCoordsToSceneCoords(
     {
       clientX: viewTransformations.offsetLeft + (padding?.left || 0),
@@ -153,6 +157,29 @@ export const isElementCompletelyInViewport = (
     y1 >= topLeftSceneCoords.y &&
     x2 <= bottomRightSceneCoords.x &&
     y2 <= bottomRightSceneCoords.y
+  );
+};
+
+export const isElementCompletelyInViewport = (
+  elements: ExcalidrawElement[],
+  width: number,
+  height: number,
+  viewTransformations: {
+    zoom: Zoom;
+    offsetLeft: number;
+    offsetTop: number;
+    scrollX: number;
+    scrollY: number;
+  },
+  elementsMap: ElementsMap,
+  padding?: Offsets,
+) => {
+  return isSceneBoundsCompletelyInViewport(
+    getCommonBounds(elements, elementsMap),
+    width,
+    height,
+    viewTransformations,
+    padding,
   );
 };
 

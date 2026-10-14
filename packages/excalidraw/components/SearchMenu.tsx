@@ -8,11 +8,15 @@ import {
   FONT_FAMILY,
   FRAME_STYLE,
   getLineHeight,
+  type Bounds,
 } from "@excalidraw/common";
 
 import {
   getCommonBounds,
+  getTableCellBounds,
   isElementCompletelyInViewport,
+  isSceneBoundsCompletelyInViewport,
+  isTableElement,
 } from "@excalidraw/element";
 
 import { measureText } from "@excalidraw/element";
@@ -34,6 +38,7 @@ import {
 import { getDefaultFrameName } from "@excalidraw/element/frame";
 
 import type {
+  ElementsMap,
   ExcalidrawFrameLikeElement,
   ExcalidrawTextElement,
 } from "@excalidraw/element/types";
@@ -64,6 +69,10 @@ const searchQueryAtom = atom<string>("");
 export const searchItemInFocusAtom = atom<number | null>(null);
 
 const SEARCH_DEBOUNCE = 350;
+
+/** Below this on-screen size a match is too small to read, so focusing it is
+ * allowed to zoom in (never past 100%). */
+const FONT_SIZE_LEGIBILITY_THRESHOLD = 14;
 
 type SearchMatchItem = {
   element: ExcalidrawTextElement | ExcalidrawFrameLikeElement;
@@ -225,10 +234,55 @@ export const SearchMenu = () => {
 
       if (match) {
         const currentElement = app.scene.getNonDeletedElement(match.element.id);
+        if (!currentElement) {
+          return;
+        }
+
+        if (isTextElement(currentElement)) {
+          // A match inside a table cell navigates to the cell, not to the
+          // matched word. Cell text is 13px by default, so the word box below
+          // would always read as "tiny" and be fit with `contain` — filling the
+          // viewport with a single word, up to `MAX_ZOOM`. The cell rect fits
+          // with `scale-down` instead, which never zooms past 100%.
+          const cellBounds = getTableCellSceneBounds(
+            currentElement,
+            app.scene.getNonDeletedElementsMap(),
+          );
+          if (cellBounds) {
+            const isCellTextTiny =
+              currentElement.fontSize * app.state.zoom.value <
+              FONT_SIZE_LEGIBILITY_THRESHOLD;
+
+            if (
+              isCellTextTiny ||
+              !isSceneBoundsCompletelyInViewport(
+                cellBounds,
+                app.canvas.width / app.ownerWindow.devicePixelRatio,
+                app.canvas.height / app.ownerWindow.devicePixelRatio,
+                {
+                  offsetLeft: app.state.offsetLeft,
+                  offsetTop: app.state.offsetTop,
+                  scrollX: app.state.scrollX,
+                  scrollY: app.state.scrollY,
+                  zoom: app.state.zoom,
+                },
+                app.viewport.getOffsets(),
+              )
+            ) {
+              app.viewport.setViewport({
+                target: cellBounds,
+                fit: "scale-down",
+                animation: { duration: 300 },
+                offsets: { ui: true },
+              });
+            }
+            return;
+          }
+        }
+
         if (
-          !currentElement ||
-          (!isTextElement(currentElement) &&
-            !isFrameLikeElement(currentElement))
+          !isTextElement(currentElement) &&
+          !isFrameLikeElement(currentElement)
         ) {
           return;
         }
@@ -257,8 +311,6 @@ export const SearchMenu = () => {
             ? FONT_FAMILY.Assistant
             : currentElement.fontFamily,
         });
-
-        const FONT_SIZE_LEGIBILITY_THRESHOLD = 14;
 
         const fontSize = matchAsElement.fontSize;
         const isTextTiny =
@@ -704,6 +756,36 @@ const normalizeWrappedText = (
   }
 
   return normalizedLines.join("\n");
+};
+
+/** Scene bounds of the table cell a cell member sits in, or `null` when the
+ * element isn't a direct member of a cell. The box is the visible (merged)
+ * cell, so a match in a merged cell navigates to the whole cell. */
+const getTableCellSceneBounds = (
+  element: ExcalidrawTextElement,
+  elementsMap: ElementsMap,
+): Bounds | null => {
+  const containerRef = element.containerRef;
+  if (containerRef?.kind !== "tableCell") {
+    return null;
+  }
+
+  const table = elementsMap.get(containerRef.elementId);
+  if (!isTableElement(table)) {
+    return null;
+  }
+
+  const bounds = getTableCellBounds(table.table, containerRef.cellId);
+  if (!bounds) {
+    return null;
+  }
+
+  return [
+    table.x + bounds.x,
+    table.y + bounds.y,
+    table.x + bounds.x + bounds.width,
+    table.y + bounds.y + bounds.height,
+  ];
 };
 
 const getMatchedLines = (

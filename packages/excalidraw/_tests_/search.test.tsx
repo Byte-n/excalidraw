@@ -1,5 +1,7 @@
 import React from "react";
 
+import { vi } from "vitest";
+
 import {
   CANVAS_SEARCH_TAB,
   CLASSES,
@@ -159,6 +161,55 @@ describe("search", () => {
         6,
       );
     });
+  });
+
+  it("should focus the table cell a cell text match lives in", async () => {
+    const scrollIntoViewMock = jest.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    const table = API.createElement({ type: "table", x: 100, y: 100 });
+    const cell = table.table.cells[0];
+    API.setElements([
+      table,
+      API.createElement({
+        type: "text",
+        text: "单元格文本内容",
+        fontSize: 13,
+        containerRef: {
+          kind: "tableCell",
+          elementId: table.id,
+          cellId: cell.id,
+          role: "backgroundText",
+        },
+      }),
+    ]);
+
+    Keyboard.withModifierKeys({ ctrl: true }, () => {
+      Keyboard.keyPress(KEYS.F);
+    });
+    const searchInput = await querySearchInput();
+
+    const setViewport = vi.spyOn(h.app.viewport, "setViewport");
+
+    updateTextEditor(searchInput, "文本");
+
+    await waitFor(() => {
+      expect(h.app.state.searchMatches?.matches.length).toBe(1);
+      expect(setViewport).toHaveBeenCalled();
+    });
+
+    const { target, fit } = setViewport.mock.calls.at(-1)![0]!;
+
+    // the focus target is the cell, not the matched word's box
+    expect(target).toEqual([
+      table.x,
+      table.y,
+      table.x + table.table.columns[0].width,
+      table.y + table.table.rows[0].height,
+    ]);
+    // `scale-down` never zooms past 100%; the word-box path picks `contain`
+    // for 13px cell text, which has no cap and lands on `MAX_ZOOM`
+    expect(fit).toBe("scale-down");
   });
 
   it("should match frame names", async () => {
