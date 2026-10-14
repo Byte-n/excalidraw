@@ -244,6 +244,24 @@ export const syncStickyNoteInk = <T extends ExcalidrawElement>(
 };
 
 /**
+ * The other half of a note's ink: its label for a note, the note for its
+ * label, `null` when the element is neither. For writers that have no before/
+ * after pair to compare, which `syncStickyNoteInk` needs.
+ */
+export const getStickyNoteInkCounterpart = (
+  element: ExcalidrawElement,
+  elementsMap: ElementsMap,
+): ExcalidrawElement | null => {
+  if (isStickyNoteElement(element)) {
+    return getBoundTextElement(element, elementsMap);
+  }
+  if (isTextElement(element) && isStickyNoteBoundText(element, elementsMap)) {
+    return elementsMap.get(element.containerId!) ?? null;
+  }
+  return null;
+};
+
+/**
  * The paper is a plain rect with a fixed small radius (a rounded index card,
  * not a rough sketch): `STICKY_NOTE_CORNER_RADIUS` when the element is round,
  * 0 when it is sharp. Also used for collision geometry

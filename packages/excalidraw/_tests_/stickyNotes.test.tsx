@@ -342,7 +342,7 @@ describe("sticky notes", () => {
       UI.clickTool("stickynote");
       const shapeDefault = h.state.currentItemStrokeColor;
 
-      pickColorViaPopup("Text color", RED);
+      pickColorViaPopup("Font color", RED);
 
       expect(h.state.currentItemStickynoteStrokeColor).toBe(RED);
       expect(h.state.currentItemStrokeColor).toBe(shapeDefault);
@@ -617,7 +617,7 @@ describe("sticky notes", () => {
 
       mouse.doubleClickAt(note.x + note.width / 2, note.y + note.height / 2);
       await getTextEditor();
-      pickColorViaPopup("Text color", RED);
+      pickColorViaPopup("Font color", RED);
 
       expect(getElement(label.id).strokeColor).toBe(RED);
       // one ink: the note (and so its footer) follows the label

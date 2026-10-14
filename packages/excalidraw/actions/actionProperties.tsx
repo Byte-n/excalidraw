@@ -385,20 +385,14 @@ export const actionChangeStrokeColor = register<
     const elementsMap = arrayToMap(elements);
 
     return {
-      // a note and its label share one ink: coloring the label while editing
-      // it (no selection) colors the note too — the footer paints with it
       elements: syncStickyNoteInk(
-        changeProperty(
-          elements,
-          appState,
-          (el) =>
-            hasStrokeColor(el.type)
-              ? newElementWith(
-                  el,
-                  getColorUpdate(el, "strokeColor", color, elementsMap),
-                )
-              : el,
-          true,
+        changeProperty(elements, appState, (el) =>
+          hasStrokeColor(el.type)
+            ? newElementWith(
+                el,
+                getColorUpdate(el, "strokeColor", color, elementsMap),
+              )
+            : el,
         ),
         elementsMap,
       ),
@@ -412,12 +406,10 @@ export const actionChangeStrokeColor = register<
   },
   PanelComponent: ({ elements, appState, updateData, app }) => {
     const target = resolveColorTarget(appState, elements, "strokeColor");
-    // 场景化标签（设计稿场景矩阵）：便签的「描边」是文字墨色 →「文字颜色」；
-    // 纯文本场景（选中文本 / 文本工具 / 编辑容器文本）→「颜色」
     const elementsMap = app.scene.getNonDeletedElementsMap();
-    const strokeTargets = getSelectedElements(elements, appState, {
-      includeBoundTextElement: true,
-    }).filter((element) => hasStrokeColor(element.type));
+    const strokeTargets = getSelectedElements(elements, appState).filter(
+      (element) => hasStrokeColor(element.type),
+    );
     const editingText =
       appState.editingTextElement &&
       elementsMap.get(appState.editingTextElement.id);
@@ -431,12 +423,8 @@ export const actionChangeStrokeColor = register<
     const isTextScene =
       appState.activeTool.type === "text" ||
       (strokeTargets.length > 0 && strokeTargets.every(isTextElement));
-    const label =
-      target.kind === "sticky"
-        ? t("labels.textColor")
-        : isTextScene
-        ? t("labels.color")
-        : t("labels.stroke");
+    const isInk = target.kind === "sticky" || isTextScene;
+    const label = isInk ? t("labels.fontColor") : t("labels.stroke");
 
     return (
       <ColorPicker
@@ -447,6 +435,7 @@ export const actionChangeStrokeColor = register<
         customizableTopPicks={target.customizableTopPicks}
         type="elementStroke"
         label={label}
+        popupTitle={label}
         compact
         color={getFormValue(
           elements,

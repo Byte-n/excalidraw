@@ -50,8 +50,7 @@ describe("T5 手机端：底部条 + 底部 sheet", () => {
 
       const bar = queryBar()!;
       expect(bar).not.toBeNull();
-      // 外露色板（便签：文字颜色 + 纸色）
-      expect(bar.querySelector("[aria-label='Text color']")).not.toBeNull();
+      expect(bar.querySelector("[aria-label='Font color']")).not.toBeNull();
       expect(bar.querySelector("[aria-label='Paper color']")).not.toBeNull();
       // 图层 / 更多
       expect(bar.querySelector("[aria-label='Layers']")).not.toBeNull();

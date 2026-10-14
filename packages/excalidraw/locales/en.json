@@ -69,7 +69,7 @@
     "pasteStyles": "Paste styles",
     "stroke": "Stroke",
     "color": "Color",
-    "textColor": "Text color",
+    "fontColor": "Font color",
     "paperColor": "Paper color",
     "changeStroke": "Change stroke color",
     "background": "Background",

@@ -137,7 +137,7 @@ describe("浮动栏场景矩阵（T3）", () => {
     expect(legends).toEqual(["Edges", "Opacity"]);
   });
 
-  it("便签（zh-CN）：外露色板为「文字颜色」+「纸色」", async () => {
+  it("便签（zh-CN）：外露色板为「字体颜色」+「纸色」", async () => {
     await render(<Excalidraw langCode="zh-CN" />);
     const note = API.createElement({ type: "stickynote" });
     API.setElements([note]);
@@ -146,9 +146,17 @@ describe("浮动栏场景矩阵（T3）", () => {
     });
 
     const bar = queryFloatbar()!;
-    expect(bar.querySelector("[aria-label='文字颜色']")).not.toBeNull();
+    expect(bar.querySelector("[aria-label='字体颜色']")).not.toBeNull();
     expect(bar.querySelector("[aria-label='纸色']")).not.toBeNull();
     expect(bar.querySelector("[aria-label='描边']")).toBeNull();
+
+    stubResizeObserver();
+    fireEvent.click(
+      bar.querySelector<HTMLButtonElement>("[aria-label='字体颜色']")!,
+    );
+    expect(document.querySelector(".color-picker__title")?.textContent).toBe(
+      "字体颜色",
+    );
   });
 
   it("思维导图整树（选中根）：布局方向 + 默认连线触发器，无原生颜色/数字输入", async () => {

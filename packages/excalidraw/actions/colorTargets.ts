@@ -99,11 +99,10 @@ const isStickyNoteColorTarget = (
  * the memoized picker keeps a stale `onChange`, and the always-visible top
  * picks fire it without a re-render.
  *
- * Targets are the selected color-capable elements (for stroke incl. bound
- * labels, since a note's visible text is its label) plus the text being
- * edited (`handleTextWysiwyg` deselects while editing) — or, for a
- * background pick on a note's label, the note (see `getColorTargetElement`).
- * With no target, the active tool decides the domain.
+ * Targets are the selected color-capable elements plus the text being edited
+ * (`handleTextWysiwyg` deselects while editing) — or, for a background pick on
+ * a note's label, the note (see `getColorTargetElement`). With no target, the
+ * active tool decides the domain.
  */
 export const resolveColorTarget = (
   appState: ColorTargetAppState,
@@ -116,9 +115,10 @@ export const resolveColorTarget = (
       ? hasStrokeColor(element.type)
       : hasBackground(element) || hasFrameBackground(element.type);
 
-  const targets: ExcalidrawElement[] = getSelectedElements(elements, appState, {
-    includeBoundTextElement: property === "strokeColor",
-  }).filter(supports);
+  const targets: ExcalidrawElement[] = getSelectedElements(
+    elements,
+    appState,
+  ).filter(supports);
   const editingText =
     appState.editingTextElement &&
     elementsMap.get(appState.editingTextElement.id);

@@ -140,15 +140,15 @@ describe("actionStyles", () => {
   it("sticky note stroke popup hides transparent in the palette grid", async () => {
     UI.clickTool("stickynote");
 
-    togglePopover("Text color");
+    togglePopover("Font color");
 
     // 全色板网格 15 位：便签文字无透明色域，透明位渲染为隐藏占位
     // （保住其余颜色的网格位与热键序），可见色块 14 枚
     const popup = document.querySelector(".color-picker-content")!;
     const grid = popup.querySelector(".color-picker-content--default")!;
-    expect(
-      grid.querySelectorAll("button.color-picker__button").length,
-    ).toBe(14);
+    expect(grid.querySelectorAll("button.color-picker__button").length).toBe(
+      14,
+    );
     expect(screen.queryByTestId("color-transparent")).toBeNull();
     expect(grid.querySelector(".is-transparent")).toBeNull();
     expect(grid.querySelectorAll("[aria-hidden='true']").length).toBe(1);
@@ -157,7 +157,7 @@ describe("actionStyles", () => {
   it("keeps the excluded transparent hotkey dead and the palette keys intact", async () => {
     UI.clickTool("stickynote");
 
-    togglePopover("Text color");
+    togglePopover("Font color");
 
     const picker = document.querySelector(".color-picker-content")!;
     const before = h.state.currentItemStickynoteStrokeColor;
@@ -186,7 +186,7 @@ describe("actionStyles", () => {
     API.setElements([stickyNote]);
     API.setSelectedElements([stickyNote]);
 
-    togglePopover("Text color");
+    togglePopover("Font color");
     // 全色板网格：蓝色族色块（取当前明度档 4）
     UI.clickOnTestId("color-blue");
 

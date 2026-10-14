@@ -42,6 +42,7 @@ import {
   StoreChange,
   StoreSnapshot,
   syncInvalidIndices,
+  syncStickyNoteInk,
   tableCellContainerRef,
   getTableCellInsertionIndex,
   frameLikeContainerRef,
@@ -961,26 +962,27 @@ class App extends React.Component<AppProps, AppState> {
           });
         } else {
           const elementsMap = this.scene.getNonDeletedElementsMap();
-          // a note's visible text is its label, so stroke picks include it
           const targetIds = new Set(
             this.scene
               .getSelectedElements({
                 selectedElementIds: this.state.selectedElementIds,
-                includeBoundTextElement: property === "strokeColor",
               })
               .map((element) => element.id),
           );
           this.updateScene({
-            elements: this.scene
-              .getElementsIncludingDeleted()
-              .map((el) =>
-                targetIds.has(el.id)
-                  ? newElementWith(
-                      el,
-                      getColorUpdate(el, property, color, elementsMap),
-                    )
-                  : el,
-              ),
+            elements: syncStickyNoteInk(
+              this.scene
+                .getElementsIncludingDeleted()
+                .map((el) =>
+                  targetIds.has(el.id)
+                    ? newElementWith(
+                        el,
+                        getColorUpdate(el, property, color, elementsMap),
+                      )
+                    : el,
+                ),
+              elementsMap,
+            ),
             captureUpdate: CaptureUpdateAction.IMMEDIATELY,
           });
         }
