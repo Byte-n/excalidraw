@@ -193,6 +193,65 @@ describe("table row/column structure", () => {
     }
   });
 
+  describe("structure hit range", () => {
+    it("leaves the halo around the frame to the canvas", () => {
+      const { table } = createFixture();
+      // every zone now hugs its affordance: the rail band starts at the frame
+      // edge (16px), a separator is felt within 4px. The old 24px halo around
+      // the frame answered with a reorder grip / insertion point instead
+      for (const point of [
+        { x: table.x + COLUMN_WIDTH / 2, y: table.y - 20 },
+        { x: table.x - 20, y: table.y + ROW_HEIGHT / 2 },
+        { x: table.x + table.width + 20, y: table.y + ROW_HEIGHT / 2 },
+        { x: table.x + COLUMN_WIDTH / 2, y: table.y + table.height + 20 },
+      ]) {
+        expect(getTableStructureHoverAtSceneCoords(h.app, point)).toBeNull();
+      }
+    });
+
+    it("lets an element in the frame halo take the click", () => {
+      const { table } = createFixture();
+      const above = API.createElement({
+        type: "rectangle",
+        x: table.x + 40,
+        y: table.y - 40,
+        width: 80,
+        height: 30,
+      });
+      API.setElements([...h.elements, above] as any);
+
+      // 18px above the table: inside the old column grip band, outside the
+      // rail band
+      const point = { x: table.x + 80, y: table.y - 18 };
+      mouseMove(point.x, point.y);
+      mouseDown(point.x, point.y);
+      mouseUp(point.x, point.y);
+
+      expect(h.state.selectedElementIds).toEqual({ [above.id]: true });
+    });
+
+    it("keeps the cell interior out of the separator and frame zones", () => {
+      const { table } = createFixture();
+      const hoverAt = (x: number, y: number) =>
+        getTableStructureHoverAtSceneCoords(h.app, { x, y });
+
+      // a separator answers within ±4px of the line …
+      expect(hoverAt(table.x + 100, table.y + ROW_HEIGHT + 3)).toMatchObject({
+        kind: "rowResize",
+        rowId: table.table.rows[0].id,
+      });
+      // … and the first row/column border within 4px inside the frame
+      expect(hoverAt(table.x + 3, table.y + ROW_HEIGHT / 2)).toMatchObject({
+        kind: "columnResize",
+        columnId: table.table.columns[0].id,
+        edge: "start",
+      });
+      // 10px in, the cell keeps the pointer — no resize zone any more
+      expect(hoverAt(table.x + 100, table.y + ROW_HEIGHT + 10)).toBeNull();
+      expect(hoverAt(table.x + 10, table.y + ROW_HEIGHT / 2)).toBeNull();
+    });
+  });
+
   it("suspends hover scans during a table gesture and restores them afterwards", () => {
     const { table } = createFixture();
     selectRow(0, table);
@@ -542,8 +601,10 @@ describe("table row/column structure", () => {
 
   describe("row height / column width", () => {
     it.each([
-      { axis: "row", index: 0, edge: "start", x: 280, y: 210 },
-      { axis: "column", index: 0, edge: "start", x: 210, y: 228 },
+      // the start-edge strip is 4px wide (TABLE_STRUCTURE_EDGE_HIT_SIZE), so
+      // the frame-border cases probe 3px inside it
+      { axis: "row", index: 0, edge: "start", x: 280, y: 203 },
+      { axis: "column", index: 0, edge: "start", x: 203, y: 228 },
       { axis: "row", index: 1, edge: "end", x: 300, y: 312 },
       { axis: "column", index: 1, edge: "end", x: 520, y: 228 },
     ] as const)(
@@ -996,7 +1057,7 @@ describe("table row/column structure", () => {
 
       // the strip just inside the left frame edge drags the first column's
       // outer border
-      const border = { x: table.x + 10, y: table.y + ROW_HEIGHT / 2 };
+      const border = { x: table.x + 3, y: table.y + ROW_HEIGHT / 2 };
       mouseMove(border.x, border.y);
       expect(h.state.tableStructureHover).toMatchObject({
         kind: "columnResize",
@@ -1024,7 +1085,7 @@ describe("table row/column structure", () => {
     it("drags the top frame border to resize the first row", async () => {
       const { table, content0, snapshot } = createFixture();
 
-      const border = { x: table.x + COLUMN_WIDTH / 2, y: table.y + 10 };
+      const border = { x: table.x + COLUMN_WIDTH / 2, y: table.y + 3 };
       mouseMove(border.x, border.y);
       expect(h.state.tableStructureHover).toMatchObject({
         kind: "rowResize",
@@ -1228,12 +1289,14 @@ describe("table row/column structure", () => {
 
     it("uses the former right and bottom insertion zones for edge resizing", () => {
       const { table } = createFixture();
-      mouseMove(table.x + table.width + 12, table.y + ROW_HEIGHT / 2);
+      // a separator's zone is ±4px (TABLE_STRUCTURE_LINE_HIT_HALF), inside and
+      // outside alike
+      mouseMove(table.x + table.width + 2, table.y + ROW_HEIGHT / 2);
       expect(h.state.tableStructureHover).toMatchObject({
         kind: "columnResize",
         columnId: table.table.columns[2].id,
       });
-      mouseMove(table.x + COLUMN_WIDTH / 2, table.y + table.height + 12);
+      mouseMove(table.x + COLUMN_WIDTH / 2, table.y + table.height + 2);
       expect(h.state.tableStructureHover).toMatchObject({
         kind: "rowResize",
         rowId: table.table.rows[2].id,

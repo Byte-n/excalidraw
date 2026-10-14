@@ -1,6 +1,6 @@
 import { CURSOR_TYPE } from "@excalidraw/common";
 
-import { TABLE_STRUCTURE_ZONE_SIZE } from "../components/app/table";
+import { TABLE_STRUCTURE_RAIL_HIT_SIZE } from "../components/app/table";
 import {
   clearContainerInteractionHover,
   dispatchContainerInteraction,
@@ -82,7 +82,7 @@ const createMockApp = ({
 
 /** The scene point on the table's left reorder rail. */
 const railPoint = (table: any) => ({
-  x: table.x - TABLE_STRUCTURE_ZONE_SIZE / 2,
+  x: table.x - TABLE_STRUCTURE_RAIL_HIT_SIZE / 2,
   y: table.y + table.height / 2,
 });
 

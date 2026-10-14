@@ -1057,14 +1057,58 @@ const getTableCellBackgroundInsertionIndex = (
 //   verbatim without a history entry.
 // ---------------------------------------------------------------------------
 
-/** Minimum hit area of every structure zone, in CSS px (phase-1.md:89). */
-export const TABLE_STRUCTURE_ZONE_SIZE = 24;
-const TABLE_TOUCH_STRUCTURE_ZONE_SIZE = 44;
+/**
+ * Structure hit metrics, in CSS px, one per affordance instead of a single
+ * band (phase-1.md:89 sized every zone at 24). Each zone now covers what the
+ * user sees and no more — the rail hugs the frame from the outside, the
+ * insertion window sits on the dot, a separator is felt only within a few px
+ * (`SIDE_RESIZING_THRESHOLD`'s reach, the same as a regular side handle) —
+ * so the cells and their content keep the pointer everywhere else. The old
+ * 24px band swallowed the first 24px inside the frame and a 24px halo
+ * outside it, where the grip beat every element and hover target.
+ */
+export const TABLE_STRUCTURE_RAIL_HIT_SIZE = 16;
+/** Half-width of a separator zone (interior grid lines, right/bottom frame). */
+export const TABLE_STRUCTURE_LINE_HIT_HALF = 4;
+/** Half-width of an insertion window, centred on the dot's offset. */
+export const TABLE_STRUCTURE_INSERT_HIT_HALF = 8;
+/** Strip inside the left/top frame that drags the first row/column border. */
+export const TABLE_STRUCTURE_EDGE_HIT_SIZE = 4;
 
-const getTableStructureZoneSize = (app: TableApp) =>
+/** The metrics above per input kind. */
+type TableStructureHitMetrics = {
+  /** Outer band, starting at the frame edge, that arms the reorder grip. */
+  rail: number;
+  /** Half-width of a separator line zone. */
+  line: number;
+  /** Half-width of an insertion point window. */
+  insert: number;
+  /** Width of the strip inside the left/top frame. */
+  edge: number;
+};
+
+/**
+ * Touch keeps the legacy generous targets: there is no hover channel to aim
+ * with, and the drags start from a long press rather than a precise rail.
+ */
+const TABLE_STRUCTURE_TOUCH_HIT_METRICS: TableStructureHitMetrics = {
+  rail: 44,
+  line: 22,
+  insert: 22,
+  edge: 44,
+};
+
+const TABLE_STRUCTURE_HIT_METRICS: TableStructureHitMetrics = {
+  rail: TABLE_STRUCTURE_RAIL_HIT_SIZE,
+  line: TABLE_STRUCTURE_LINE_HIT_HALF,
+  insert: TABLE_STRUCTURE_INSERT_HIT_HALF,
+  edge: TABLE_STRUCTURE_EDGE_HIT_SIZE,
+};
+
+const getTableStructureHitMetrics = (app: TableApp): TableStructureHitMetrics =>
   app.editorInterface.isTouchScreen
-    ? TABLE_TOUCH_STRUCTURE_ZONE_SIZE
-    : TABLE_STRUCTURE_ZONE_SIZE;
+    ? TABLE_STRUCTURE_TOUCH_HIT_METRICS
+    : TABLE_STRUCTURE_HIT_METRICS;
 
 type TableLocalPoint = { x: number; y: number };
 
@@ -1141,7 +1185,7 @@ export const refitTableCellBackgroundText = (
  * The structure zones of one table, judged in table-local coordinates
  * (phase-1.md:80-83). Priority: insertion point > reorder grip > resize
  * line > first row/column border strip (outer frame affordances beat
- * cells). Every zone is at least `TABLE_STRUCTURE_ZONE_SIZE` CSS px wide.
+ * cells). Every zone is sized by `TableStructureHitMetrics`.
  * Resize lines carry the dragged `edge`: an `end` border changes the entry
  * before the separator and shifts later entries, while a `start` border (the
  * outer left/top frame) grows the first entry and moves the frame edge.
@@ -1151,29 +1195,37 @@ const resolveStructureHover = (
   table: NonDeleted<ExcalidrawTableElement>,
   local: TableLocalPoint,
 ): TableRowColStructureHover | null => {
-  const band = getTableStructureZoneSize(app) / app.state.zoom.value;
+  const zoom = app.state.zoom.value;
+  const metrics = getTableStructureHitMetrics(app);
+  const rail = metrics.rail / zoom;
+  const line = metrics.line / zoom;
+  const edge = metrics.edge / zoom;
+  const insertHalf = metrics.insert / zoom;
+  // The insertion dots sit `TABLE_STRUCTURE_INSERTION_OFFSET` outside the
+  // frame: their window is centred on that offset, so it stays clear of the
+  // rail — a point on the rail is a reorder drag, not an insertion.
+  const insertionOffset = TABLE_STRUCTURE_INSERTION_OFFSET / zoom;
+  const insertOuter = insertionOffset + insertHalf;
+  const insertInner = Math.max(0, insertionOffset - insertHalf);
   const { x: lx, y: ly } = local;
-  const inLeftBand = lx >= -band && lx < 0;
-  const inTopBand = ly >= -band && ly < 0;
-  const insertionExtent =
-    TABLE_STRUCTURE_INSERTION_OFFSET / app.state.zoom.value + band / 2;
-  const inLeftInsertionBand = lx >= -insertionExtent && lx < 0;
-  const inTopInsertionBand = ly >= -insertionExtent && ly < 0;
-  const inRightBand = lx >= table.width - band / 2 && lx <= table.width + band;
-  const inBottomBand =
-    ly >= table.height - band / 2 && ly <= table.height + band;
   const insideRows = ly >= 0 && ly <= table.height;
   const insideColumns = lx >= 0 && lx <= table.width;
+  const inLeftBand = lx >= -rail && lx < 0;
+  const inTopBand = ly >= -rail && ly < 0;
+  const inLeftInsertionBand = lx >= -insertOuter && lx < -insertInner;
+  const inTopInsertionBand = ly >= -insertOuter && ly < -insertInner;
+  const inRightBand = lx >= table.width - line && lx <= table.width + line;
+  const inBottomBand = ly >= table.height - line && ly <= table.height + line;
 
   // The top and left rails expose reorder handles and insertion points.
   // Resolve the boundaries first so their plus buttons remain clickable.
-  if (inTopInsertionBand && lx >= -band / 2 && lx <= table.width + band / 2) {
+  if (inTopInsertionBand) {
     let offset = 0;
     for (let index = 0; index <= table.table.columns.length; index++) {
       if (index > 0) {
         offset += table.table.columns[index - 1].width;
       }
-      if (Math.abs(lx - offset) <= band / 2) {
+      if (Math.abs(lx - offset) <= insertHalf) {
         return {
           tableId: table.id,
           kind: "columnInsert",
@@ -1188,13 +1240,13 @@ const resolveStructureHover = (
       return { tableId: table.id, kind: "columnGrip", columnId };
     }
   }
-  if (inLeftInsertionBand && ly >= -band / 2 && ly <= table.height + band / 2) {
+  if (inLeftInsertionBand) {
     let offset = 0;
     for (let index = 0; index <= table.table.rows.length; index++) {
       if (index > 0) {
         offset += table.table.rows[index - 1].height;
       }
-      if (Math.abs(ly - offset) <= band / 2) {
+      if (Math.abs(ly - offset) <= insertHalf) {
         return { tableId: table.id, kind: "rowInsert", boundaryIndex: index };
       }
     }
@@ -1233,7 +1285,7 @@ const resolveStructureHover = (
     let offset = 0;
     for (const row of table.table.rows.slice(0, -1)) {
       offset += row.height;
-      if (Math.abs(ly - offset) <= band / 2) {
+      if (Math.abs(ly - offset) <= line) {
         if (
           getTableCellAtPoint(table, table.x + lx, table.y + offset - 0.001) ===
           getTableCellAtPoint(table, table.x + lx, table.y + offset + 0.001)
@@ -1251,7 +1303,7 @@ const resolveStructureHover = (
     offset = 0;
     for (const column of table.table.columns.slice(0, -1)) {
       offset += column.width;
-      if (Math.abs(lx - offset) <= band / 2) {
+      if (Math.abs(lx - offset) <= line) {
         if (
           getTableCellAtPoint(table, table.x + offset - 0.001, table.y + ly) ===
           getTableCellAtPoint(table, table.x + offset + 0.001, table.y + ly)
@@ -1271,7 +1323,7 @@ const resolveStructureHover = (
   // The strips just inside the left/top frame drag the first column's/row's
   // outer border: the entry grows or shrinks and the frame edge follows it.
   if (insideRows && insideColumns) {
-    if (lx < band) {
+    if (lx < edge) {
       const columnId = table.table.columns[0].id;
       return {
         tableId: table.id,
@@ -1280,7 +1332,7 @@ const resolveStructureHover = (
         edge: "start",
       };
     }
-    if (ly < band) {
+    if (ly < edge) {
       const rowId = table.table.rows[0].id;
       return { tableId: table.id, kind: "rowResize", rowId, edge: "start" };
     }
@@ -1311,17 +1363,22 @@ const rowOrColumnIdAt = (
 
 /**
  * The table whose structure zones the pointer rests on: the topmost visible,
- * unlocked table whose zone envelope (bounds grown by one zone band) contains
- * the point — the same topmost-wins rule the cell highlight uses.
+ * unlocked table whose zone envelope contains the point — the same
+ * topmost-wins rule the cell highlight uses. The envelope is the union of the
+ * zones themselves: the insertion dots reach furthest out on the top/left, a
+ * separator's half-width on the right/bottom. A table therefore never claims
+ * a point none of its own zones would answer.
  */
 const getStructureZoneTableAtSceneCoords = (
   app: TableApp,
   sceneX: number,
   sceneY: number,
 ): NonDeleted<ExcalidrawTableElement> | null => {
-  const band = getTableStructureZoneSize(app) / app.state.zoom.value;
+  const zoom = app.state.zoom.value;
+  const metrics = getTableStructureHitMetrics(app);
   const outerExtent =
-    TABLE_STRUCTURE_INSERTION_OFFSET / app.state.zoom.value + band / 2;
+    TABLE_STRUCTURE_INSERTION_OFFSET / zoom + metrics.insert / zoom;
+  const innerExtent = metrics.line / zoom;
   let candidate: NonDeleted<ExcalidrawTableElement> | null = null;
   for (const element of app.scene.getNonDeletedElements()) {
     if (!isTableElement(element) || element.locked) {
@@ -1330,9 +1387,9 @@ const getStructureZoneTableAtSceneCoords = (
     const local = getTableLocalPoint(element, sceneX, sceneY);
     if (
       local.x >= -outerExtent &&
-      local.x <= element.width + band &&
+      local.x <= element.width + innerExtent &&
       local.y >= -outerExtent &&
-      local.y <= element.height + band
+      local.y <= element.height + innerExtent
     ) {
       candidate = element;
     }

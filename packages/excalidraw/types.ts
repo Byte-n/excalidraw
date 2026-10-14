@@ -307,7 +307,10 @@ export type TableRowColSelection = {
 /**
  * The structure affordance the pointer rests on: the outer reorder grip of a
  * row/column, one of its resize lines, or an insertion boundary
- * (phase-1.md:78-83). Zones are at least 24 CSS px wide (phase-1.md:89);
+ * (phase-1.md:78-83). Each zone hugs the affordance it drives — the rail
+ * band above/left of the frame, an insertion window centred on the dot, a few
+ * px around a separator (`TableStructureHitMetrics` in
+ * `components/app/table.ts`);
  * `id` names the resized row/column (the one above/left of the separator)
  * and `edge` says which of its borders the pointer drags: the `start` border
  * of the first row/column (the table's outer left/top frame) or the `end`

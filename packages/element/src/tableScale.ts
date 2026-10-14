@@ -47,8 +47,9 @@ import type {
  * Minimum cell sizes a scaled table may reach. Creation presets
  * (`DEFAULT_TABLE_ROW_HEIGHT`/`DEFAULT_TABLE_COLUMN_WIDTH`) are starting
  * points, not constraints; this floor is the interaction magnitude instead —
- * the row/column handles' hit area is at least 24 CSS px (phase-1 interaction
- * spec), so a smaller cell could not be grabbed or hit reliably.
+ * a cell must keep more interior than the structure zones overlapping it (a
+ * few px around each separator plus the frame-edge strip), so a smaller cell
+ * could not be grabbed or hit reliably.
  */
 export const MIN_TABLE_ROW_HEIGHT = 24;
 export const MIN_TABLE_COLUMN_WIDTH = 24;
