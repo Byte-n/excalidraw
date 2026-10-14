@@ -60,6 +60,8 @@
     "tableGridLines": "Grid lines",
     "tableBorderColor": "Border color",
     "tableGridColor": "Grid line color",
+    "tableOuterBorder": "Outer frame line",
+    "tableInnerBorder": "Inner frame line",
     "tableBorderWidth": "Border width",
     "tableBorderStyle": "Border style",
     "tableTitleAlign": "Title align",

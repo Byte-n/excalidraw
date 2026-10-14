@@ -78,6 +78,9 @@ interface ColorPickerProps {
   compact?: boolean;
   /** 便签纸色变体：弹层只有预设 + 明度（无自定义、无色值输入/取色） */
   picksOnly?: boolean;
+  /** 弹层小标题的场景名（紧凑态下按 type 的通用名不适用时显式指定，
+   * 如表格的外框线 / 内框线两个色板都复用描边类 type） */
+  popupTitle?: string;
 }
 
 const ColorPickerPopupContent = ({
@@ -95,6 +98,7 @@ const ColorPickerPopupContent = ({
   enableEyeDropper,
   compact,
   picksOnly,
+  popupTitle,
 }: Pick<
   ColorPickerProps,
   | "type"
@@ -108,6 +112,7 @@ const ColorPickerPopupContent = ({
   | "enableEyeDropper"
   | "compact"
   | "picksOnly"
+  | "popupTitle"
   | "excludedColors"
 > & {
   /** 弹层预设行（调用方已解析为固定基线，见 effectivePresetColors） */
@@ -270,6 +275,7 @@ const ColorPickerPopupContent = ({
           elements={elements}
           updateData={updateData}
           showTitle={isCompactMode}
+          popupTitle={popupTitle}
           showHotKey={!isMobileMode}
           picksOnly={picksOnly}
         >
@@ -394,6 +400,7 @@ const ColorPickerComponent = ({
   enableEyeDropper = true,
   compact = false,
   picksOnly = false,
+  popupTitle,
 }: ColorPickerProps) => {
   const openRef = useRef(appState.openPopup);
   useEffect(() => {
@@ -542,6 +549,7 @@ const ColorPickerComponent = ({
               enableEyeDropper={enableEyeDropper}
               compact={compact}
               picksOnly={picksOnly}
+              popupTitle={popupTitle}
               updateData={updateData}
               getOpenPopup={() => openRef.current}
               appState={appState}
@@ -594,6 +602,7 @@ const areColorPickerPropsEqual = (
     prev.enableEyeDropper === next.enableEyeDropper &&
     prev.compact === next.compact &&
     prev.picksOnly === next.picksOnly &&
+    prev.popupTitle === next.popupTitle &&
     prev.appState.theme === next.appState.theme &&
     prev.appState.colorTopPicks === next.appState.colorTopPicks &&
     // the trigger tweaks its click behavior while a text element is edited

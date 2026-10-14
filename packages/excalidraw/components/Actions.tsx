@@ -1772,12 +1772,15 @@ const TableStyleActions = ({
   // the border and grid pickers are deliberately decoupled (a transparent
   // border must not kill the grid, and vice versa). Their top-picks strips
   // are fixed — `transparent` heads them, and they don't share the element
-  // stroke picker's drag customization
+  // stroke picker's drag customization.
+  // 表格的两条线在场景语义上是外框 / 内框，而 type 只表示取色域（都取描边
+  // 色域），故显式给出弹层小标题，避免沿用形状场景的「描边」
   const borderColorPicker = (
     <ColorPicker
       key="border"
       type="elementStroke"
       label={t("labels.tableBorderColor")}
+      popupTitle={t("labels.tableOuterBorder")}
       color={table.table.style?.borderColor ?? TABLE_STYLE.strokeColor}
       onChange={(nextColor) => update({ borderColor: nextColor })}
       palette={DEFAULT_ELEMENT_STROKE_COLOR_PALETTE}
@@ -1793,6 +1796,7 @@ const TableStyleActions = ({
       key="grid"
       type="tableGrid"
       label={t("labels.tableGridColor")}
+      popupTitle={t("labels.tableInnerBorder")}
       color={table.table.style?.gridColor ?? TABLE_STYLE.gridColor}
       onChange={(nextColor) => update({ gridColor: nextColor })}
       palette={DEFAULT_ELEMENT_STROKE_COLOR_PALETTE}

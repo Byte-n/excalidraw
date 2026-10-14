@@ -45,6 +45,9 @@ interface PickerProps {
   updateData: (formData?: any) => void;
   children?: React.ReactNode;
   showTitle?: boolean;
+  /** 弹层小标题的场景名（紧凑态触发器只有色块，标题是唯一的控件说明）。
+   * 缺省按 type 取通用名（描边 / 背景），无通用名的 type 不显示标题 */
+  popupTitle?: string;
   onEyeDropperToggle: (force?: boolean) => void;
   onEscape: (event: React.KeyboardEvent | KeyboardEvent) => void;
   showHotKey?: boolean;
@@ -66,6 +69,7 @@ export const Picker = React.forwardRef(
       updateData,
       children,
       showTitle,
+      popupTitle,
       onEyeDropperToggle,
       onEscape,
       showHotKey = true,
@@ -74,11 +78,12 @@ export const Picker = React.forwardRef(
     ref,
   ) => {
     const title = showTitle
-      ? type === "elementStroke"
-        ? t("labels.stroke")
-        : type === "elementBackground"
-        ? t("labels.background")
-        : null
+      ? popupTitle ??
+        (type === "elementStroke"
+          ? t("labels.stroke")
+          : type === "elementBackground"
+          ? t("labels.background")
+          : null)
       : null;
 
     const [customColors] = React.useState(() => {

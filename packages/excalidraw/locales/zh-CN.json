@@ -50,6 +50,8 @@
     "tableGridLines": "网格线",
     "tableBorderColor": "边框颜色",
     "tableGridColor": "网格线颜色",
+    "tableOuterBorder": "外框线",
+    "tableInnerBorder": "内框线",
     "tableBorderWidth": "边框宽度",
     "tableBorderStyle": "边框样式",
     "tableTitleAlign": "标题对齐",

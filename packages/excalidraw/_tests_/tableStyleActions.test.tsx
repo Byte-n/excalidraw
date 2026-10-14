@@ -47,6 +47,17 @@ const applyHexViaOpenPicker = (label: string, hex: string) => {
   });
 };
 
+/** 打开色板弹层读小标题后原路关闭（触发器再点一次即 toggle 关） */
+const pickerPopupTitle = (label: string) => {
+  const trigger = document.querySelector<HTMLButtonElement>(
+    `.table-style-actions [aria-label='${label}']`,
+  )!;
+  fireEvent.click(trigger);
+  const title = document.querySelector(".color-picker__title")?.textContent;
+  fireEvent.click(trigger);
+  return title;
+};
+
 describe("table style controls", () => {
   it("shows border/grid/background swatches and applies a fill without a clear-fill command", async () => {
     await render(<Excalidraw />);
@@ -75,6 +86,22 @@ describe("table style controls", () => {
           | undefined
       )?.table.style?.backgroundColor,
     ).toBe("#ffec99");
+  });
+
+  it("titles the two line pickers as the table's outer / inner frame", async () => {
+    await render(<Excalidraw />);
+    const table = API.createElement({ type: "table" });
+    API.setElements([table]);
+    act(() => {
+      API.setAppState({ selectedElementIds: { [table.id]: true } });
+    });
+
+    // 两条线都取描边色域（type 只表示取色域），小标题按表格场景给出，
+    // 不沿用形状场景的「描边」；网格线弹层此前没有小标题
+    expect(pickerPopupTitle("Border color")).toBe("Outer frame line");
+    expect(pickerPopupTitle("Grid line color")).toBe("Inner frame line");
+    // 背景色板的小标题仍随 type 走
+    expect(pickerPopupTitle("Background")).toBe("Background");
   });
 
   it("uses separate stroke and background controls on tablets", async () => {
