@@ -83,13 +83,14 @@ export const AppView = ({ app }: { app: App }) => {
   const allElementsMap = app.scene.getNonDeletedElementsMap();
 
   // off-scene previews live on the new-element canvas (they are not in the
-  // scene until the gesture commits): a tool dragged out of the toolbar is a
-  // single element, a creation tool's hover preset may be a whole mindmap.
-  // The real element being created takes the canvas over from both.
+  // scene until the gesture commits): a tool/preset dragged out of the toolbar
+  // or 图形抽屉 may be several elements (泳道表格带标签文字、脑图整图), a
+  // creation tool's hover preset too. The real element being created takes the
+  // canvas over from both.
   const previewElements = newElementCanvasElement
     ? [newElementCanvasElement]
-    : app.toolDrag.preview
-    ? [app.toolDrag.preview]
+    : app.toolDrag.previewElements
+    ? app.toolDrag.previewElements
     : app.createPreview.elements;
   const isTranslucentPreview = !newElementCanvasElement;
 

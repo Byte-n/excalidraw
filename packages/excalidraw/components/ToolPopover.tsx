@@ -47,6 +47,12 @@ type ToolPopoverProps = {
    * （见 `AppToolDrag`），按下即武装、原地松开仍算一次点击。
    */
   onTriggerPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  /**
+   * 弹层底部的整行插槽：靠 `flex-wrap` 换到选项之后独占一行（见
+   * `ToolPopover.scss` 的 `.tool-popover-footer`）。点它收起本弹层——
+   * 目前只有普通图形 popover 用它挂「更多功能」（图形抽屉入口）。
+   */
+  footer?: React.ReactNode;
 };
 
 /**
@@ -71,6 +77,7 @@ export const ToolPopover = ({
   sharedToolType,
   isTriggerChecked,
   onTriggerPointerDown,
+  footer,
 }: ToolPopoverProps) => {
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const currentType = activeOptionType ?? activeTool.type;
@@ -215,6 +222,17 @@ export const ToolPopover = ({
               }}
             />
           ))}
+          {footer && (
+            // 整行插槽：.tool-popover-content 是换行 flex，`flex-basis:100%`
+            // 让它独占最后一行。点这里即收起弹层（footer 里的按钮自行处理
+            // 打开抽屉等副作用），因此无需向外暴露额外的回调。
+            <div
+              className="tool-popover-footer"
+              onClick={() => setIsPopupOpen(false)}
+            >
+              {footer}
+            </div>
+          )}
         </Popover.Content>
       </Popover.Root>
     </div>

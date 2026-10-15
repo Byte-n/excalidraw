@@ -709,6 +709,15 @@ export interface AppState {
     | "mindmapEdgeStyle"
     | null;
   openSidebar: { name: SidebarName; tab?: SidebarTabName } | null;
+  /**
+   * 图形抽屉（「更多功能」）是否展开。
+   *
+   * 纯浮层状态：只由「更多功能」入口、抽屉的收起按钮、`Esc`、画布
+   * `pointerdown` 四路改变，**不联动** `openSidebar`（抽屉与素材库各自独立、
+   * 可并存）。抽屉常挂载、仅以 `data-open` 控制显隐，因此分区折叠状态在会话
+   * 内保留（见 `components/ShapeDrawer`）。
+   */
+  openShapeDrawer: boolean;
   openDialog:
     | null
     | { name: "imageExport" | "help" | "jsonExport" }

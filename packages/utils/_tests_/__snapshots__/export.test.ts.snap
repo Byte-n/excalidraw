@@ -86,6 +86,7 @@ exports[`exportToSvg > with default arguments 1`] = `
   "openDialog": null,
   "openMenu": null,
   "openPopup": null,
+  "openShapeDrawer": false,
   "openSidebar": null,
   "originSnapOffset": {
     "x": 0,

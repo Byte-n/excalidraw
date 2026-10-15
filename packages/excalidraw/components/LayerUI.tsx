@@ -45,6 +45,7 @@ import { MobileMenu } from "./MobileMenu";
 import { PasteChartDialog } from "./PasteChartDialog";
 import { Section } from "./Section";
 import Stack from "./Stack";
+import { ShapeDrawer } from "./ShapeDrawer";
 import { UserList } from "./UserList";
 import { PenModeButton } from "./PenModeButton";
 import Footer from "./footer/Footer";
@@ -694,6 +695,10 @@ const LayerUI = ({
           {renderSidebars()}
         </>
       )}
+      {/* 图形抽屉（「更多功能」入口）：纯浮层，桌面/平板/横屏挂在容器左侧，
+          手机竖屏改走底部 sheet（组件内部分支）。常挂载、仅以 data-open
+          控制显隐，因此分区折叠状态在会话内保留 */}
+      {defaultUIEnabled && <ShapeDrawer app={app} />}
     </>
   );
 

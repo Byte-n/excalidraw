@@ -50,6 +50,7 @@ import type {
   ExcalidrawMindmapNodeElement,
   FontFamilyValues,
   FractionalIndex,
+  MindmapLayoutDirection,
 } from "./types";
 
 export type MindmapNodeTarget = Readonly<{ graphId: string; nodeId: string }>;
@@ -225,6 +226,13 @@ export const buildMindmapGraphFromTree = (
    * 序列，把同一会话里后续元素的 id/seed 全部推后一位。
    */
   identity: (index: number) => { id?: string; seed?: number } = () => ({}),
+  /**
+   * 根节点的生长方向。必须**在建根时就写死**（`newMindmapNodeElement` 只在
+   * role === "root" 时落该字段），因为随后的 `layoutMindmapScene` 直接按它
+   * 排布整张图——布局之后再改方向不会重排。缺省 `undefined` 走元素默认
+   * （`left-to-right`），导入路径行为不变。
+   */
+  layoutDirection?: MindmapLayoutDirection,
 ): {
   elements: readonly ExcalidrawElement[];
   rootId: string;
@@ -237,6 +245,7 @@ export const buildMindmapGraphFromTree = (
     role: "root",
     parentId: null,
     order: null,
+    ...(layoutDirection === undefined ? {} : { layoutDirection }),
     ...identity(0),
   });
   const graphId = `mindmap:${root.id}`;

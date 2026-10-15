@@ -14,7 +14,6 @@ import {
   FrameToolButton,
   FreedrawToolPopover,
   GenericShapeToolPopover,
-  FlowchartShapeToolPopover,
   getToolShortcut,
   HandToolButton,
   ImageToolButton,
@@ -84,8 +83,9 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
   const WIDTH = 36;
   const GAP = 4;
 
-  // hand, selection, freedraw, eraser, rectangle, flowchart, arrow, others
-  const MIN_TOOLS = 8;
+  // hand, selection, freedraw, eraser, rectangle, arrow, others
+  // （流程图入口已从工具栏移除，改为普通图形 popover 底部的「更多功能」抽屉）
+  const MIN_TOOLS = 7;
   const MIN_WIDTH = MIN_TOOLS * WIDTH + (MIN_TOOLS - 1) * GAP;
   const ADDITIONAL_WIDTH = WIDTH + GAP;
 
@@ -161,9 +161,6 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
 
       {/* Rectangle/Diamond/Ellipse */}
       <GenericShapeToolPopover {...toolProps} hideShortcut />
-
-      {/* Flowchart shapes */}
-      <FlowchartShapeToolPopover {...toolProps} />
 
       {/* Arrow/Line */}
       <ToolPopover

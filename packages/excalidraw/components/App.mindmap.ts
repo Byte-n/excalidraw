@@ -2668,11 +2668,50 @@ export class AppMindmap {
   };
 
   /**
+   * 把一张**已装配好**的整图落地并进入根节点编辑：写入场景（整图是一次可
+   * 撤销操作）→ 根节点标记为待命名 → 进入根节点编辑。
+   *
+   * 画布上「点一下建图」的 `createRoot` 与图形抽屉的 `placePreset` 共用它
+   * ——两者都先各自按自己的锚点把元素建好，只在这里把 createRoot 的落地/
+   * 选中/编辑语义复用一遍，抽屉因此不必复制这一套。
+   */
+  placePresetGraph = (
+    created: readonly ExcalidrawElement[],
+    rootId: string,
+  ): void => {
+    this.app.syncActionResult({
+      elements: [...this.app.scene.getElementsIncludingDeleted(), ...created],
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    this.startRootEditing(rootId);
+  };
+
+  /**
+   * 进入整图根节点编辑的尾段：把根节点标记为待命名，再进入它的文字编辑。
+   *
+   * `placePresetGraph`（同步整图 + 进编辑）直接用它；图形抽屉的**拖入**路径则
+   * 先用通用插入把整图放进场景，再单独调用它——两条路径都不得重复插入，也都
+   * 落到「根节点待命名 + 进入文字编辑」这一个语义上。
+   */
+  startRootEditing = (rootId: string): void => {
+    const root = this.app.scene.getNonDeletedElement(rootId);
+    if (root && isMindmapNodeElement(root)) {
+      this.pendingTextNodeIds.add(root.id);
+      this.startNodeEditing(root);
+    }
+  };
+
+  /**
    * 点一下建出**整张预设导图**（中心主题 → 3 分支 → 每支 2 子主题），根节点
    * 左上角落在指针上——与悬停预览看到的那张图完全一致（预览与这里共用
-   * `buildMindmapGraphFromTree`）。落地后直接进入根节点编辑，占位文字即刻可改。
+   * `buildMindmapGraphFromTree`）。`layoutDirection` 决定整图生长方向，缺省走
+   * 元素默认。落地后直接进入根节点编辑，占位文字即刻可改。
    */
-  private createRoot(x: number, y: number) {
+  private createRoot(
+    x: number,
+    y: number,
+    layoutDirection?: MindmapLayoutDirection,
+  ) {
     if (this.app.state.viewModeEnabled) {
       this.notifyUnsupportedOperation();
       return;
@@ -2687,18 +2726,11 @@ export class AppMindmap {
     const { elements: created, rootId } = buildMindmapGraphFromTree(
       getMindmapPresetTree(),
       { x: originX, y: originY },
+      {},
+      undefined,
+      layoutDirection,
     );
-    const graphRoot = created.find(
-      (element): element is ExcalidrawMindmapNodeElement =>
-        element.id === rootId && isMindmapNodeElement(element),
-    )!;
-    this.app.syncActionResult({
-      elements: [...this.app.scene.getElementsIncludingDeleted(), ...created],
-      // 一次点击建出一整张图，和「导入文本树」同类：整张图是一次可撤销操作
-      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-    });
-    this.pendingTextNodeIds.add(graphRoot.id);
-    this.startNodeEditing(graphRoot);
+    this.placePresetGraph(created, rootId);
   }
 
   private createNode(parent: ExcalidrawMindmapNodeElement, kind: NewNodeKind) {

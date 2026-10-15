@@ -138,11 +138,14 @@ describe.each([
 
   it("shows a distinct icon for each flowchart shape option", async () => {
     act(() => h.app.setActiveTool({ type: "rectangle" }));
-    fireEvent.click(screen.getByTestId("toolbar-flowchart"));
+    // 流程图入口已从工具栏移除：改走「基础 popover → 更多功能 → 抽屉流程图分区」
+    fireEvent.click(screen.getByTestId("toolbar-rectangle"));
+    fireEvent.click(screen.getByTestId("tool-popover-more"));
+    fireEvent.click(screen.getByTestId("shape-drawer-group-flowchart"));
 
     const buttons = await waitFor(() => {
       const options = h.app.ownerDocument.querySelectorAll<HTMLButtonElement>(
-        '.tool-popover-content [data-testid^="toolbar-"]',
+        '[data-testid^="shape-drawer-item-fc-"]',
       );
       expect(options).toHaveLength(flowchartPresets.length);
       return options;
@@ -211,30 +214,36 @@ describe.each([
 
   it("creates every preset from the shared shape picker", () => {
     for (const [index, preset] of presets.entries()) {
-      if (formFactor === "phone" && preset === "rectangle") {
-        UI.clickTool("rectangle");
-      } else {
-        fireEvent.click(
-          screen.getByTestId(
-            preset.startsWith("fc-")
-              ? "toolbar-flowchart"
-              : "toolbar-rectangle",
-          ),
-        );
-        const option = h.app.ownerDocument.querySelector<HTMLButtonElement>(
-          `.tool-popover-content [data-testid="toolbar-${preset}"]`,
-        );
-        if (!option) {
-          throw new Error(`Missing ${preset} option`);
+      if (preset.startsWith("fc-")) {
+        // 流程图入口已从工具栏移除：改走「基础 popover → 更多功能 → 抽屉流程图分区」。
+        // 抽屉是单击落地（不武装工具、不在画布上拖画），元素直接落在可见区域中心
+        fireEvent.click(screen.getByTestId("toolbar-rectangle"));
+        fireEvent.click(screen.getByTestId("tool-popover-more"));
+        const groupToggle = screen.getByTestId("shape-drawer-group-flowchart");
+        if (groupToggle.getAttribute("aria-expanded") === "false") {
+          fireEvent.click(groupToggle);
         }
-        fireEvent.click(option);
-      }
+        fireEvent.click(screen.getByTestId(`shape-drawer-item-${preset}`));
+      } else {
+        if (formFactor === "phone" && preset === "rectangle") {
+          UI.clickTool("rectangle");
+        } else {
+          fireEvent.click(screen.getByTestId("toolbar-rectangle"));
+          const option = h.app.ownerDocument.querySelector<HTMLButtonElement>(
+            `.tool-popover-content [data-testid="toolbar-${preset}"]`,
+          );
+          if (!option) {
+            throw new Error(`Missing ${preset} option`);
+          }
+          fireEvent.click(option);
+        }
 
-      const x = 32 + (index % 3) * 105;
-      const y = 50 + Math.floor(index / 3) * 80;
-      mouse.reset();
-      mouse.down(x, y);
-      mouse.up(x + 65, y + 50);
+        const x = 32 + (index % 3) * 105;
+        const y = 50 + Math.floor(index / 3) * 80;
+        mouse.reset();
+        mouse.down(x, y);
+        mouse.up(x + 65, y + 50);
+      }
 
       const created = h.elements[h.elements.length - 1];
       expect(created).toMatchObject({

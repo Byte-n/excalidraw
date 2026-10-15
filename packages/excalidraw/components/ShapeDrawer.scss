@@ -1,0 +1,199 @@
+@use "../css/variables.module" as *;
+
+.excalidraw {
+  // —— 图形抽屉（「更多功能」入口，docs/shape-drawer/design.md）——
+  //
+  // 桌面/平板/手机横屏：画板左侧滑出的抽屉。宽度来自 TS 常量
+  // （SHAPE_DRAWER_WIDTH_PX，经 CSS 变量注入，杜绝两处漂移）。z-index 取
+  // --zIndex-ui-styles-popup（100），高于画布、低于素材库（120）——纯浮层，
+  // 不挤压 .layer-ui__wrapper，与素材库可并存。
+  .shape-drawer {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    z-index: var(--zIndex-ui-styles-popup);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: var(--shape-drawer-width, 240px);
+    color: var(--page-ink);
+    background: var(--menu-bg);
+    border-inline-end: 1px solid var(--menu-border);
+    box-shadow: var(--menu-shadow);
+    // 关闭态：滑出屏幕 + 退出 tab 顺序与无障碍树（visibility: hidden）
+    transform: translateX(-100%);
+    // visibility 延后到滑出动画结束后再隐藏，避免中途消失
+    transition: transform 160ms ease, visibility 0s linear 160ms;
+
+    &[data-open="true"] {
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(0);
+      transition: transform 160ms ease;
+    }
+
+    &[data-open="false"] {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    // RTL：从右侧滑入
+    :root[dir="rtl"] & {
+      transform: translateX(100%);
+
+      &[data-open="true"] {
+        transform: translateX(0);
+      }
+    }
+  }
+
+  .shape-drawer__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex: none;
+    padding: 0.75rem 0.75rem 0.5rem;
+    border-bottom: 1px solid var(--menu-border);
+  }
+
+  .shape-drawer__title {
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .shape-drawer__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.375rem;
+    background: transparent;
+    color: var(--page-ink-2);
+    cursor: pointer;
+
+    svg {
+      width: 1rem;
+      height: 1rem;
+    }
+
+    &:hover {
+      background: var(--button-hover-bg);
+    }
+  }
+
+  .shape-drawer__content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.5rem 0.75rem 0.75rem;
+  }
+
+  .shape-drawer__group + .shape-drawer__group {
+    margin-top: 0.25rem;
+  }
+
+  .shape-drawer__group-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.375rem 0.25rem;
+    border: 0;
+    border-radius: 0.375rem;
+    background: transparent;
+    color: var(--page-ink);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-align: start;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--button-hover-bg);
+    }
+  }
+
+  .shape-drawer__chevron {
+    display: inline-flex;
+    color: var(--page-ink-2);
+    transform: rotate(-90deg);
+    transition: transform 120ms ease;
+
+    svg {
+      width: 1rem;
+      height: 1rem;
+    }
+
+    &.is-open {
+      transform: rotate(0deg);
+    }
+  }
+
+  .shape-drawer__grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.375rem;
+    padding: 0.25rem 0.25rem 0.5rem;
+
+    // 折叠时退出 tab 顺序与无障碍树（覆盖 UA 的 [hidden] { display: none }，
+    // 否则本块的 display: grid 会压过 UA 规则、把内容又显示出来）
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  .shape-drawer__item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    padding: 0.25rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--page-ink);
+    cursor: pointer;
+
+    svg {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+
+    &:hover {
+      background: var(--button-hover-bg);
+      border-color: var(--menu-border);
+    }
+  }
+
+  .shape-drawer__item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  // —— 手机竖屏：底部 BottomSheet 形态 ——
+  //
+  // 外层只是「注入面板高度」的壳（static，不拦截定位）：遮罩与 sheet 各自
+  // 相对 .excalidraw 绝对定位（同 MobileMindmapActions 的 .tb-sheet-anchor）。
+  // 关闭时不渲染（避免隐藏的 .tb-sheet 被全局查询误命中），进入动效由
+  // BottomSheet 自身的 tb-sheet-in 承担。
+  .shape-drawer-sheet-root {
+    // 面板最大高度取自 TS 常量（SHAPE_SHEET_HEIGHT_RATIO，经 CSS 变量注入）；
+    // 双类选择器压过 toolbar.scss 的 .tb-sheet-anchor { max-height: 70% }
+    .tb-sheet-anchor.shape-drawer-sheet-anchor {
+      max-height: var(--shape-sheet-max-height, 45%);
+    }
+  }
+
+  // sheet 内容通宽：抽屉的头部/分组/网格在 sheet 里同样铺满
+  .shape-drawer-sheet {
+    .shape-drawer__content {
+      padding-inline: 0;
+    }
+  }
+}

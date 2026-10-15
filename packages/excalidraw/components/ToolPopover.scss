@@ -29,6 +29,41 @@
     z-index: var(--zIndex-layerUI);
   }
 
+  // 弹层底部的整行插槽：「更多功能」（图形抽屉入口）。`flex: 0 0 100%`
+  // 借 .tool-popover-content 的换行独占一整行；顶部分隔线把它与选项分开。
+  .tool-popover-footer {
+    flex: 0 0 100%;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--menu-divider);
+
+    > * {
+      width: 100%;
+    }
+
+    // 整行按钮：左对齐图标/文字，悬停底色沿用菜单项观感
+    button {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      height: 2rem;
+      padding: 0 0.5rem;
+      border: 0;
+      border-radius: 0.375rem;
+      background: transparent;
+      color: var(--page-ink);
+      font-size: 0.8125rem;
+      text-align: start;
+      cursor: pointer;
+
+      &:hover {
+        background: var(--button-hover-bg);
+      }
+    }
+  }
+
   @include isMobile() {
     .tool-popover-content {
       max-width: min(

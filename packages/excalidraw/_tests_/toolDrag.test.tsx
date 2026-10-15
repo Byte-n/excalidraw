@@ -119,6 +119,35 @@ describe("dragging a tool out of the toolbar", () => {
     expect(liveNotes()[0]).toMatchObject({ x: 180, y: 180 });
   });
 
+  it("binds the dropped note to the frame under the pointer at release", () => {
+    // 旧引擎每次 pointermove 重解析投放容器，元素归属由**松手点**决定；新引擎
+    // 跨阈值时只装配一次（容器取自按钮旁），所以这里松手点落在 Frame 内，便签
+    // 应绑定该 Frame —— 若 pointerup 不重解析，containerRef 会停在装配时的值。
+    const dropClient = { clientX: 400, clientY: 350 };
+    const dropScene = viewportCoordsToSceneCoords(dropClient, h.state);
+    const frame = API.createElement({
+      type: "frame",
+      x: dropScene.x - 100,
+      y: dropScene.y - 100,
+      width: 200,
+      height: 200,
+    });
+    API.setElements([frame]);
+
+    dragOut(dropClient.clientX, dropClient.clientY);
+    fireEvent.pointerUp(GlobalTestState.interactiveCanvas, {
+      ...POINTER,
+      button: 0,
+      ...dropClient,
+    });
+
+    const [note] = liveNotes();
+    expect(note.containerRef).toEqual({
+      kind: "frameLike",
+      elementId: frame.id,
+    });
+  });
+
   it("leaves nothing behind when Escape cancels the drag", () => {
     dragOut(300, 260);
     expect(h.app.toolDrag.preview).not.toBeNull();

@@ -472,6 +472,8 @@
     "hexagon": "Hexagon",
     "star": "Star",
     "triangle": "Triangle",
+    "right-triangle": "Right triangle",
+    "left-triangle": "Left triangle",
     "round-rect": "Round rectangle",
     "rectangle-bubble": "Rectangle bubble",
     "pill": "Pill",
@@ -482,6 +484,8 @@
     "step": "Step",
     "cube": "Cube",
     "cylinder": "Cylinder",
+    "pie": "Pie",
+    "circular-ring": "Circular ring",
     "fc-round-rect": "Process",
     "fc-terminator": "Terminator",
     "fc-diamond": "Decision",
@@ -529,7 +533,21 @@
   "mindmapPreset": {
     "root": "Central topic",
     "branch": "Branch topic",
-    "leaf": "Subtopic"
+    "leaf": "Subtopic",
+    "directionRight": "Grow right",
+    "directionLeft": "Grow left",
+    "directionDown": "Grow down",
+    "directionUp": "Grow up"
+  },
+  "shapeDrawer": {
+    "title": "Shapes",
+    "more": "More",
+    "basic": "Basic shapes",
+    "flowchart": "Flowchart",
+    "sticky": "Sticky notes",
+    "frame": "Frame",
+    "table": "Table",
+    "mindmap": "Mindmap"
   },
   "element": {
     "mindmap-node": "Mindmap node",
@@ -559,7 +577,7 @@
     "step": "Step",
     "cube": "Cube",
     "cylinder": "Cylinder",
-"pie": "Pie",
+    "pie": "Pie",
     "circular-ring": "Circular ring",
     "fc-round-rect": "Process",
     "fc-terminator": "Terminator",

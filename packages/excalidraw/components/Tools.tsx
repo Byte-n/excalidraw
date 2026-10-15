@@ -4,25 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import { KEYS, capitalizeString } from "@excalidraw/common";
 import {
   STICKY_NOTE_PRESETS,
-  TABLE_PRESET_IDS,
   findStickyNotePreset,
   getStickyNoteCreationInk,
   isTablePresetId,
-  supportsFill,
 } from "@excalidraw/element";
 
-import type { BaseShapeId, PointerType } from "@excalidraw/element/types";
-import type { TablePresetId } from "@excalidraw/element";
+import type { PointerType } from "@excalidraw/element/types";
 
 import { trackEvent } from "../analytics";
 import { t } from "../i18n";
 import { getShortcutKey } from "../shortcut";
 
-import { getCompositeShapeIcon } from "./CompositeShapeIcon";
 import { IconButton } from "./IconButton";
+import {
+  getCatalogGroup,
+  isFlowchartShapeId,
+  isGenericShapeId,
+} from "./presetCatalog";
 import { getStickyNotePresetIcon } from "./StickyNotePresetIcon";
-import { getTablePresetIcon } from "./TablePresetIcon";
 import { ToolPopover } from "./ToolPopover";
+
 import {
   SelectionIcon,
   RectangleIcon,
@@ -45,6 +46,8 @@ import {
   mindmapIcon,
   tableToolIcon,
 } from "./icons";
+
+import type { FlowchartShapeId, GenericShapeId } from "./presetCatalog";
 
 import type {
   AppClassProperties,
@@ -454,135 +457,11 @@ export const SelectionToolPopover = ({
   );
 };
 
-type GenericShapeType = BaseShapeId | "right-triangle" | "left-triangle";
+// 普通图形 popover 认可的形状 id 一律从目录派生（basic ∪ flowchart），
+// 清单只在 `presetCatalog` 维护，避免两处漂移
+type GenericShapeType = GenericShapeId;
 
-const isGenericShapeType = (type: string): type is GenericShapeType =>
-  [
-    "rectangle",
-    "diamond",
-    "ellipse",
-    "cross",
-    "brace-reverse",
-    "brace",
-    "cloud",
-    "double-arrow",
-    "forward-arrow",
-    "backward-arrow",
-    "octagon",
-    "pentagon",
-    "hexagon",
-    "star",
-    "triangle",
-    "right-triangle",
-    "left-triangle",
-    "round-rect",
-    "rectangle-bubble",
-    "pill",
-    "bubble",
-    "trapezoid",
-    "parallelogram",
-    "right-pentagon",
-    "step",
-    "cube",
-    "cylinder",
-    "pie",
-    "circular-ring",
-    "fc-round-rect",
-    "fc-terminator",
-    "fc-diamond",
-    "fc-document",
-    "fc-parallelogram",
-    "fc-cylinder",
-    "fc-horiz-cylinder",
-    "fc-predefined-process",
-    "fc-manual-input",
-    "fc-trapezoid",
-    "fc-delay",
-    "fc-hexagon",
-    "fc-off-page-connector",
-    "fc-circle",
-  ].includes(type);
-
-const SHAPE_TOOLS = (
-  Object.freeze([
-    "rectangle",
-    "diamond",
-    "ellipse",
-    "cross",
-    "brace-reverse",
-    "brace",
-    "cloud",
-    "double-arrow",
-    "forward-arrow",
-    "backward-arrow",
-    "octagon",
-    "pentagon",
-    "hexagon",
-    "star",
-    "triangle",
-    "right-triangle",
-    "left-triangle",
-    "round-rect",
-    "rectangle-bubble",
-    "pill",
-    "bubble",
-    "trapezoid",
-    "parallelogram",
-    "right-pentagon",
-    "step",
-    "cube",
-    "cylinder",
-    "pie",
-    "circular-ring",
-  ]) as readonly GenericShapeType[]
-).map((type) => ({
-  type,
-  icon:
-    type === "diamond"
-      ? DiamondIcon
-      : type === "ellipse"
-      ? EllipseIcon
-      : type === "rectangle"
-      ? RectangleIcon
-      : getCompositeShapeIcon(type),
-  fillable:
-    type === "right-triangle" || type === "left-triangle" || supportsFill(type),
-  title: capitalizeString(type.replaceAll("-", " ")),
-}));
-
-/**
- * Lark flowchart shapes. Unlike SHAPE_TOOLS their titles are localized
- * (`toolBar.fc-*`), so titles resolve at render time inside
- * FlowchartShapeToolPopover; only the locale-independent parts are derived
- * here once.
- */
-const FLOWCHART_SHAPE_IDS = [
-  "fc-round-rect",
-  "fc-terminator",
-  "fc-diamond",
-  "fc-document",
-  "fc-parallelogram",
-  "fc-cylinder",
-  "fc-horiz-cylinder",
-  "fc-predefined-process",
-  "fc-manual-input",
-  "fc-trapezoid",
-  "fc-delay",
-  "fc-hexagon",
-  "fc-off-page-connector",
-  "fc-circle",
-] as const;
-
-type FlowchartShapeId = typeof FLOWCHART_SHAPE_IDS[number];
-
-const isFlowchartShapeType = (type: string): type is FlowchartShapeId =>
-  (FLOWCHART_SHAPE_IDS as readonly string[]).includes(type);
-
-const FLOWCHART_SHAPE_TOOLS = FLOWCHART_SHAPE_IDS.map((type) => ({
-  type,
-  icon: getCompositeShapeIcon(type),
-  fillable: supportsFill(type),
-}));
+const isGenericShapeType = isGenericShapeId;
 
 /**
  * The rectangle/diamond/ellipse popover used by the desktop and mobile
@@ -633,13 +512,21 @@ export const GenericShapeToolPopover = ({
     ? app.state.preferredGenericShape
     : lastShapeRef.current;
 
+  // 选项一律从目录取数：新增形状只需在目录里加一条，这里自然跟上
+  const shapeOptions = getCatalogGroup("basic").items.map((item) => ({
+    type: item.id,
+    icon: item.getIcon(app.state.theme),
+    fillable: item.fillable,
+    title: t(item.titleKey),
+  }));
+
   const displayedOption =
-    SHAPE_TOOLS.find((tool) => tool.type === groupShape) || SHAPE_TOOLS[0];
+    shapeOptions.find((tool) => tool.type === groupShape) || shapeOptions[0];
 
   return (
     <ToolPopover
       app={app}
-      options={SHAPE_TOOLS}
+      options={shapeOptions}
       activeTool={activeTool}
       // 当前形状取自共享的 preferredGenericShape（而非本组形状）：本组不是
       // 当前分组时不匹配任何选项，按钮与选项都不会显示为选中
@@ -666,6 +553,16 @@ export const GenericShapeToolPopover = ({
       }
       ariaKeyshortcuts={hideShortcut ? undefined : getToolShortcut("rectangle")}
       shortcut={hideShortcut ? null : getToolShortcut("rectangle")}
+      // 底部整行「更多功能」：打开图形抽屉（不武装工具、不改当前图形）
+      footer={
+        <button
+          type="button"
+          data-testid="tool-popover-more"
+          onClick={() => app.setAppState({ openShapeDrawer: true })}
+        >
+          {t("shapeDrawer.more")}
+        </button>
+      }
     />
   );
 };
@@ -753,16 +650,6 @@ export const StickyNoteToolPopover = ({
 };
 
 /**
- * 表格预设的选项文案：`plain` 就是工具名本身，两条泳道用各自的预设名（也正是
- * 新建出来的表里标题带上那行字）。
- */
-const TABLE_PRESET_TITLES: Record<TablePresetId, Parameters<typeof t>[0]> = {
-  plain: "toolBar.table",
-  "swimlane-horizontal": "toolBar.swimlaneHorizontal",
-  "swimlane-vertical": "toolBar.swimlaneVertical",
-};
-
-/**
  * 表格工具的内置预设 popover，与便签样式弹层同一套交互：触发按钮显示当前预设
  * 的缩略图，点选项即换预设并激活表格工具。预设只决定**新建**的表长什么样
  * （见 `app/createPresets`），画布上已有的表一律不动。
@@ -777,10 +664,11 @@ export const TableToolPopover = ({
   hideShortcut?: boolean;
 }) => {
   const current = app.state.currentTablePreset;
-  const PRESET_TOOLS = TABLE_PRESET_IDS.map((id) => ({
-    type: id,
-    icon: getTablePresetIcon(id, app.state.theme),
-    title: t(TABLE_PRESET_TITLES[id]),
+  // 预设选项同样来自目录：标题与缩略图都由目录条目给出
+  const PRESET_TOOLS = getCatalogGroup("table").items.map((item) => ({
+    type: item.id,
+    icon: item.getIcon(app.state.theme),
+    title: t(item.titleKey),
   }));
   const displayedOption =
     PRESET_TOOLS.find((option) => option.type === current) || PRESET_TOOLS[0];
@@ -831,21 +719,23 @@ export const FlowchartShapeToolPopover = ({
   app: AppClassProperties;
   activeTool: UIAppState["activeTool"];
 }) => {
-  const options = FLOWCHART_SHAPE_TOOLS.map((tool) => ({
-    ...tool,
-    title: t(`toolBar.${tool.type}`),
+  const options = getCatalogGroup("flowchart").items.map((item) => ({
+    type: item.id,
+    icon: item.getIcon(app.state.theme),
+    fillable: item.fillable,
+    title: t(item.titleKey),
   }));
 
   // 本组最近选用的形状：当前形状属于普通图形组时，本组按钮仍显示并点开
   // 自己的那个形状——点按钮即可切回本组
   const lastShapeRef = useRef<FlowchartShapeId>("fc-diamond");
   useEffect(() => {
-    if (isFlowchartShapeType(app.state.preferredGenericShape)) {
+    if (isFlowchartShapeId(app.state.preferredGenericShape)) {
       lastShapeRef.current = app.state.preferredGenericShape;
     }
   }, [app.state.preferredGenericShape]);
 
-  const groupShape: FlowchartShapeId = isFlowchartShapeType(
+  const groupShape: FlowchartShapeId = isFlowchartShapeId(
     app.state.preferredGenericShape,
   )
     ? app.state.preferredGenericShape
@@ -871,7 +761,7 @@ export const FlowchartShapeToolPopover = ({
       defaultOption={displayedOption.type}
       data-testid="toolbar-flowchart"
       onToolChange={(type: string) => {
-        if (isFlowchartShapeType(type)) {
+        if (isFlowchartShapeId(type)) {
           app.setAppState({ preferredGenericShape: type });
           app.setActiveTool({ type: "rectangle" });
         }

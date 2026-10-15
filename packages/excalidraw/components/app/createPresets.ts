@@ -38,7 +38,7 @@ import { t } from "../../i18n";
 import { buildTableCellBackgroundText } from "./tableCellText";
 
 import type App from "../App";
-import type { KeyboardModifiersObject, ToolType } from "../../types";
+import type { AppState, KeyboardModifiersObject, ToolType } from "../../types";
 
 /**
  * 创建工具的**预设**：选中工具后跟随光标的半透明预览，以及「单击落地」用的
@@ -135,6 +135,17 @@ export const PREVIEW_ELEMENT_ID = "preview:preset";
 export const PREVIEW_ELEMENT_SEED = 1;
 
 /**
+ * 建草稿时**一次性**覆盖 `appState` 里的当前样式。缺省的每一项都回落到
+ * `app.state` 的现值（现有调用点行为不变）。图形抽屉靠它放 `fc-diamond`、
+ * 指定纸色的便签，而**不写 appState**（不动工具栏的「当前图形」/ 当前纸色）。
+ */
+export type CreationDraftOverrides = {
+  preferredGenericShape?: AppState["preferredGenericShape"];
+  stickyBackgroundColor?: string;
+  stickyStrokeColor?: string;
+};
+
+/**
  * 装配一个「还没定位好」的创建草稿：样式、形状分支、容器归属都在这里，
  * `at` 只决定 x/y。按下即建传指针（等价于元素左上角），预览传预设的左上角。
  */
@@ -145,6 +156,7 @@ export function newCreationDraft(
   at: { x: number; y: number },
   containerRef?: DirectContainerRef,
   identity?: CreationIdentity,
+  overrides?: CreationDraftOverrides,
 ): NonDeleted<ExcalidrawFrameLikeElement>;
 export function newCreationDraft(
   app: PresetApp,
@@ -152,6 +164,7 @@ export function newCreationDraft(
   at: { x: number; y: number },
   containerRef?: DirectContainerRef,
   identity?: CreationIdentity,
+  overrides?: CreationDraftOverrides,
 ): NonDeleted<ExcalidrawTableElement>;
 export function newCreationDraft(
   app: PresetApp,
@@ -159,6 +172,7 @@ export function newCreationDraft(
   at: { x: number; y: number },
   containerRef?: DirectContainerRef,
   identity?: CreationIdentity,
+  overrides?: CreationDraftOverrides,
 ): CreationDraft;
 export function newCreationDraft(
   app: PresetApp,
@@ -166,6 +180,7 @@ export function newCreationDraft(
   at: { x: number; y: number },
   containerRef?: DirectContainerRef,
   identity?: CreationIdentity,
+  overrides?: CreationDraftOverrides,
 ): CreationDraft {
   const { state } = app;
 
@@ -195,20 +210,24 @@ export function newCreationDraft(
     )[0] as NonDeleted<ExcalidrawTableElement>;
   }
 
+  // 便签纸色/墨色：抽屉会按预设覆盖，其余调用点用 appState 现值
+  const stickyBackgroundColor =
+    overrides?.stickyBackgroundColor ??
+    state.currentItemStickynoteBackgroundColor;
+  const stickyStrokeColor =
+    overrides?.stickyStrokeColor ?? state.currentItemStickynoteStrokeColor;
+
   const baseElementAttributes = {
     x: at.x,
     y: at.y,
     strokeColor:
       elementType === "stickynote"
         ? // the default yellow paper pairs with its own ink
-          getStickyNoteCreationInk(
-            state.currentItemStickynoteBackgroundColor,
-            state.currentItemStickynoteStrokeColor,
-          )
+          getStickyNoteCreationInk(stickyBackgroundColor, stickyStrokeColor)
         : state.currentItemStrokeColor,
     backgroundColor:
       elementType === "stickynote"
-        ? state.currentItemStickynoteBackgroundColor
+        ? stickyBackgroundColor
         : state.currentItemBackgroundColor,
     fillStyle: state.currentItemFillStyle,
     strokeWidth: app.getCurrentItemStrokeWidth(elementType),
@@ -239,7 +258,9 @@ export function newCreationDraft(
     });
   }
 
-  const preferredShape = state.preferredGenericShape;
+  // 抽屉放置会带上预设的图形 id，其余调用点用 appState 现值
+  const preferredShape =
+    overrides?.preferredGenericShape ?? state.preferredGenericShape;
   const genericShapeId: BaseShapeId =
     preferredShape === "right-triangle" || preferredShape === "left-triangle"
       ? "triangle"
