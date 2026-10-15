@@ -4164,7 +4164,9 @@ const _renderInteractiveScene = ({
       }
     } else if (
       visibleSelectedElements.length > 1 &&
-      !appState.isRotating &&
+      // 多选旋转中框要照画：框取自实时 AABB，会随角度呼吸，与松手后的静止
+      // 形态一致（旋转柄 glyph 另有「光标接管指示」的约定，见
+      // renderTransformHandles）。
       !visibleSelectedElements.some((el) => el.locked)
     ) {
       const dashedLinePadding =
@@ -4218,10 +4220,9 @@ const _renderInteractiveScene = ({
     }
     context.restore();
 
-    // 变换读数：单选与多选共用一条出口。注意不能放进上面的分支——多选旋转
-    // 时 `!appState.isRotating` 会让变换手柄不画，但读数必须照画。
-    // 反向则要严格：手柄不画的地方（只读模式、编辑文字、裁剪中）不能只剩个
-    // 悬停读数——那样没有手柄可指。
+    // 变换读数：单选与多选共用一条出口，放在上面两个长度分支之外——它的显
+    // 隐条件与手柄并不重合，抄进分支里会立刻漂移。口径是「有手柄可指才有读
+    // 数」：只读模式、编辑文字、裁剪中这些手柄不画的地方，不能只剩个悬停读数。
     if (
       showBoundingBox &&
       visibleSelectedElements.length &&
@@ -4239,7 +4240,6 @@ const _renderInteractiveScene = ({
         selectedElements: visibleSelectedElements,
         elementsMap,
         rotationDelta: app.transformStatus.getRotationDelta(),
-        gestureBounds: app.transformStatus.getGestureBounds(),
       });
       if (readout) {
         // 单选用未旋转的本地框中心——元素就是绕它转的，旋转中它不动

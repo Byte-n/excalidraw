@@ -8,6 +8,7 @@ import type {
 import { Excalidraw } from "../index";
 
 import { Pointer } from "./helpers/ui";
+import { spyInteractiveStrokeRects } from "./helpers/canvas";
 import { render } from "./test-utils";
 
 const { h } = window;
@@ -55,53 +56,6 @@ const fixture = () => {
     elements.push(node, text);
   });
   return elements;
-};
-
-/**
- * 记录交互画布 2d 上下文的 strokeRect 调用。返回 [还原函数, 取调用]。
- */
-const spyInteractiveStrokeRects = () => {
-  const callsByCanvas = new WeakMap<
-    object,
-    [number, number, number, number][]
-  >();
-  const origGetContext = HTMLCanvasElement.prototype.getContext;
-  HTMLCanvasElement.prototype.getContext = function (
-    this: HTMLCanvasElement,
-    ...args: any[]
-  ) {
-    const ctx = (origGetContext as any).apply(this, args);
-    if (args[0] !== "2d" || !ctx) {
-      return ctx;
-    }
-    const rects: [number, number, number, number][] = [];
-    callsByCanvas.set(this, rects);
-    return new Proxy(ctx, {
-      get(target, prop: string) {
-        const value = (target as any)[prop];
-        if (typeof value === "function") {
-          return (...fnArgs: unknown[]) => {
-            if (prop === "strokeRect") {
-              rects.push(fnArgs as [number, number, number, number]);
-            }
-            return value.apply(target, fnArgs);
-          };
-        }
-        return value;
-      },
-    }) as typeof ctx;
-  } as any;
-
-  const getRects = () => {
-    const interactive = document.querySelector(
-      "canvas.excalidraw__canvas.interactive",
-    ) as HTMLCanvasElement;
-    return callsByCanvas.get(interactive) ?? [];
-  };
-  const restore = () => {
-    HTMLCanvasElement.prototype.getContext = origGetContext;
-  };
-  return { getRects, restore };
 };
 
 describe("mindmap: 按住根节点的选中描边", () => {

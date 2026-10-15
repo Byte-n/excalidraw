@@ -1,7 +1,10 @@
 import { act } from "react-dom/test-utils";
 import { vi } from "vitest";
 
-import { sceneCoordsToViewportCoords } from "@excalidraw/common";
+import {
+  DEFAULT_TRANSFORM_HANDLE_SPACING,
+  sceneCoordsToViewportCoords,
+} from "@excalidraw/common";
 import {
   getCommonBounds,
   getTransformHandles,
@@ -14,6 +17,7 @@ import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
+import { spyInteractiveStrokeRects } from "./helpers/canvas";
 import { Pointer } from "./helpers/ui";
 import {
   assertSelectedElements,
@@ -289,15 +293,23 @@ describe("transform status readout", () => {
     it("rotating reports the sweep delta together with the selection size", async () => {
       select(createMulti());
       const { fillText } = spyOnFillText();
-      const size = expectedBounds();
+      const sizeAtRest = expectedBounds();
 
       const handle = multiHandleCenter("rotation");
       await dragHandle(handle, { x: -60, y: 90 });
 
+      // 大小与画布上的选区框同源：旋转中取实时 AABB，不是按下瞬间的框
+      const liveSize = expectedBounds();
+      expect(liveSize).not.toBe(sizeAtRest);
+
       const texts = drawnTexts(fillText).map(String);
       expect(
-        texts.some((text) => text.includes("°") && text.includes(size)),
+        texts.some((text) => text.includes("°") && text.includes(liveSize)),
       ).toBe(true);
+      // 冻结值不应再出现——出现过就说明读数还没跟上实时 AABB
+      expect(
+        texts.some((text) => text.includes("°") && text.includes(sizeAtRest)),
+      ).toBe(false);
 
       mouseUp(0, 0);
     });
@@ -326,6 +338,74 @@ describe("transform status readout", () => {
       mouseMove(200, 300);
 
       expect(drawnTexts(fillText)).not.toContain(expectedBounds());
+    });
+
+    /**
+     * 多选旋转中选区框不能消失。此前闸在渲染层多选分支的 `!appState.isRotating`
+     * 上，整个手势里框与手柄都不画；放开后框取自实时 AABB，与读数同一几何。
+     */
+    describe("旋转中的选区框", () => {
+      const pad = () =>
+        (DEFAULT_TRANSFORM_HANDLE_SPACING * 2) / h.state.zoom.value;
+      /** 渲染层画框时四周各留了 dashedLinePadding */
+      const boxSize = () => {
+        const [x1, y1, x2, y2] = getCommonBounds(live());
+        return { w: x2 - x1 + pad() * 2, h: y2 - y1 + pad() * 2 };
+      };
+      const findBox = (size: { w: number; h: number }) =>
+        spy
+          .getRects()
+          .find(
+            ([, , w, height]) =>
+              Math.abs(w - size.w) < 0.5 && Math.abs(height - size.h) < 0.5,
+          );
+
+      let spy: ReturnType<typeof spyInteractiveStrokeRects>;
+
+      beforeEach(() => {
+        spy = spyInteractiveStrokeRects();
+      });
+
+      afterEach(() => {
+        spy.restore();
+      });
+
+      it("keeps the dashed box on the live AABB while rotating", async () => {
+        select(createMulti());
+
+        // 先证明探针有效：静止时就该有这个框，别让下面的断言靠空数组蒙过去
+        mouseMove(999, 999);
+        await nextFrame();
+        expect(findBox(boxSize())).toBeDefined();
+
+        const atRest = boxSize();
+        const handle = multiHandleCenter("rotation");
+        mouseDown(handle.x, handle.y);
+        mouseMove(handle.x - 60, handle.y + 90);
+        await nextFrame();
+
+        expect(h.state.isRotating).toBe(true);
+
+        // 框是「活」的：旋转后的 AABB 与按下时不同，否则这条断言等于没测
+        const rotating = boxSize();
+        expect(rotating.w !== atRest.w || rotating.h !== atRest.h).toBe(true);
+        expect(findBox(rotating)).toBeDefined();
+
+        mouseUp(0, 0);
+      });
+
+      it("still hides the box when the selection contains a locked element", async () => {
+        const elements = createMulti().map((element, index) => ({
+          ...element,
+          locked: index === 0,
+        }));
+        select(elements as NonDeletedExcalidrawElement[]);
+
+        mouseMove(999, 999);
+        await nextFrame();
+
+        expect(findBox(boxSize())).toBeUndefined();
+      });
     });
   });
 

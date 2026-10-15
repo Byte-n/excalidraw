@@ -1,4 +1,3 @@
-import type { Bounds } from "@excalidraw/common";
 import type { Radians } from "@excalidraw/math";
 
 import type { TransformHandleType } from "@excalidraw/element";
@@ -23,12 +22,6 @@ export class AppTransformStatus {
 
   /** 多选旋转时本次手势累计转过的角度（单选直接用元素自身的 angle）。 */
   private rotationDelta: Radians | null = null;
-
-  /**
-   * 多选旋转时按下瞬间的选区框。渲染层读它拿「选区大小」——旋转中的实时
-   * AABB 会随角度呼吸，和旁边稳定跳动的增量并排会显得读数在乱抖。
-   */
-  private gestureBounds: Bounds | null = null;
 
   constructor(private readonly app: App) {}
 
@@ -75,8 +68,6 @@ export class AppTransformStatus {
 
   getRotationDelta = () => this.rotationDelta;
 
-  getGestureBounds = () => this.gestureBounds;
-
   setRotationDelta = (delta: Radians | null): void => {
     this.rotationDelta = delta;
   };
@@ -86,13 +77,11 @@ export class AppTransformStatus {
    * 尚未成立（`isResizing`/`isRotating` 要等第一次移动才置位），清掉会让
    * 「按住不放」时读数凭空消失。
    */
-  beginGesture = (bounds: Bounds | null): void => {
-    this.gestureBounds = bounds;
+  beginGesture = (): void => {
     this.rotationDelta = null;
   };
 
   endGesture = (): void => {
-    this.gestureBounds = null;
     this.rotationDelta = null;
   };
 }

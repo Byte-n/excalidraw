@@ -570,11 +570,9 @@ export const handleSelectionOnPointerDown = (
         pointerDownState.resize.handleType = false;
       } else {
         pointerDownState.resize.isResizing = true;
-        // 通用变换手势（含旋转）：记下按下瞬间的选区框，多选旋转的
-        // 「选区大小」读它——旋转中的实时 AABB 会随角度呼吸。
-        app.transformStatus.beginGesture(
-          getCommonBounds(selectedElements, elementsMap),
-        );
+        // 通用变换手势（含旋转）：清掉上一次手势残留的旋转增量。读数里的
+        // 「选区大小」不在这里冻结——它跟选区框一样取实时 AABB。
+        app.transformStatus.beginGesture();
         pointerDownState.resize.offset = tupleToCoors(
           getResizeOffsetXY(
             pointerDownState.resize.handleType,
