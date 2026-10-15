@@ -124,6 +124,7 @@ import { AppDuplicate } from "./App.duplicate";
 import { AppFlowchart } from "./App.flowchart";
 import { AppMindmap } from "./App.mindmap";
 import { AppQuickCreate } from "./App.quickCreate";
+import { AppTransformStatus } from "./App.transformStatus";
 import { AppRepaint } from "./App.repaint";
 import { AppPan } from "./App.pan";
 import { AppCreatePreview } from "./App.createPreview";
@@ -305,6 +306,7 @@ class App extends React.Component<AppProps, AppState> {
   public flowchart: AppFlowchart = new AppFlowchart(this);
   public mindmap: AppMindmap = new AppMindmap(this);
   public quickCreate: AppQuickCreate = new AppQuickCreate(this);
+  public transformStatus: AppTransformStatus = new AppTransformStatus(this);
   /** 交互层画布的显式重绘入口（setState({}) 画不出来，见 App.repaint.ts） */
   public repaint: AppRepaint = new AppRepaint();
   public cursor: AppCursor = new AppCursor(this);

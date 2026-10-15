@@ -1490,6 +1490,7 @@ export type AppClassProperties = {
   flowchart: App["flowchart"];
   mindmap: App["mindmap"];
   quickCreate: App["quickCreate"];
+  transformStatus: App["transformStatus"];
   repaint: App["repaint"];
   setMindmapDragOpacity: App["setMindmapDragOpacity"];
   drawShape: App["drawShape"];

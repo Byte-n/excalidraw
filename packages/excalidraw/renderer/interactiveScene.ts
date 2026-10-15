@@ -28,6 +28,7 @@ import {
   shouldRotateWithDiscreteAngle,
   THEME,
   applyDarkModeFilter,
+  viewportCoordsToSceneCoords,
 } from "@excalidraw/common";
 
 import {
@@ -98,7 +99,11 @@ import {
 
 import { renderSelectionElement } from "@excalidraw/element";
 
-import { getCommonBounds, getElementAbsoluteCoords } from "@excalidraw/element";
+import {
+  getCommonBounds,
+  getElementAbsoluteCoords,
+  getTransformStatusReadout,
+} from "@excalidraw/element";
 import {
   getGlobalFixedPointForBindableElement,
   isFocusPointVisible,
@@ -110,6 +115,7 @@ import type {
   TransformHandles,
   TransformHandleType,
   QuickCreateHandle,
+  TransformStatusReadout,
 } from "@excalidraw/element";
 
 import type {
@@ -1198,41 +1204,113 @@ const renderSelectionBorder = (
   context.restore();
 };
 
+/** 变换读数气泡的规格，全部是屏幕 px（绘制时一律除以 zoom）。 */
+const TRANSFORM_STATUS_FONT = 11;
+const TRANSFORM_STATUS_HEIGHT = 20;
+const TRANSFORM_STATUS_RADIUS = 5;
+/** 气泡「离指针最近的那条边」到指针的距离。 */
+const TRANSFORM_STATUS_GAP = 16;
+
+/**
+ * 解出气泡中心相对锚点的偏移量 d，使 `nearest(d)` 正好等于 gap。
+ *
+ * 只把气泡的上边中点摆到 `锚点 + 方向 × gap` 是不够的：短文本（`15°`）和
+ * 长文本（`120 × 80`）在同一个 gap 下肉眼看到的空隙并不一样，旋转时恰好
+ * 总是短文本，看上去就比缩放远。所以按「最近的一条边」对齐。
+ *
+ * `nearest(d)` 随 d 单调增，二分即可；顺带兜住 gap 比半个气泡还小的退化。
+ */
+const solveTransformStatusOffset = (
+  ux: number,
+  uy: number,
+  width: number,
+  height: number,
+  gap: number,
+) => {
+  const nearest = (d: number) =>
+    Math.hypot(
+      Math.max(0, ux * d - width / 2),
+      Math.max(0, uy * d - height / 2),
+    );
+  let lo = 0;
+  let hi = gap + width + height + 4;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (nearest(mid) < gap) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return hi;
+};
+
+/**
+ * 变换读数气泡：11px 字、高 20、圆角 5 的胶囊，跟随指针，沿「选区中心 →
+ * 指针」方向外推，最近边恒距指针 {@link TRANSFORM_STATUS_GAP} 屏幕 px。
+ * 旋转报角度（墨底），缩放报尺寸（选区色底）。
+ */
 const renderTransformStatusLabel = (
   context: CanvasRenderingContext2D,
+  app: AppClassProperties,
   appState: InteractiveCanvasAppState,
-  isResizing: boolean,
+  readout: TransformStatusReadout,
   selectionColor: string,
-  bounds: [number, number, number, number],
-  angle: number,
+  center: { x: number; y: number },
 ) => {
-  if (!isResizing && !appState.isRotating) {
-    return;
-  }
-  const [x1, y1, x2, y2] = bounds;
   const zoom = appState.zoom.value;
-  const text = appState.isRotating
-    ? `${Math.round((angle * 180) / Math.PI)}°`
-    : `${Math.round(Math.abs(x2 - x1))} × ${Math.round(Math.abs(y2 - y1))}`;
+  // 指针用 viewport.lastPosition：它挂在 ownerDocument 的 pointermove 上，
+  // 手势进行中也逐帧更新（lastPointerMoveCoords 只在画布上的移动里更新）
+  const pointer = viewportCoordsToSceneCoords(
+    {
+      clientX: app.viewport.lastPosition.x,
+      clientY: app.viewport.lastPosition.y,
+    },
+    appState,
+  );
+
   context.save();
-  context.font = "11px sans-serif";
-  const width = context.measureText(text).width + 12 / zoom;
-  const height = 20 / zoom;
-  const centerX = (x1 + x2) / 2 + appState.scrollX;
-  const top = y2 + appState.scrollY + 10 / zoom;
-  const left = centerX - width / 2;
-  context.fillStyle = appState.isRotating ? "#1f2329" : selectionColor;
+  context.translate(appState.scrollX, appState.scrollY);
+  context.font = `${TRANSFORM_STATUS_FONT / zoom}px sans-serif`;
+  const width = context.measureText(readout.text).width + 12 / zoom;
+  const height = TRANSFORM_STATUS_HEIGHT / zoom;
+
+  const gap = TRANSFORM_STATUS_GAP / zoom;
+  const dx = pointer.x - center.x;
+  const dy = pointer.y - center.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const ux = Math.abs(dx) / length;
+  const uy = Math.abs(dy) / length;
+  const offset = solveTransformStatusOffset(ux, uy, width, height, gap);
+  // Math.sign(0) 为 0：指针正对中心时不会往某个方向甩出去
+  const cx = pointer.x + Math.sign(dx) * ux * offset;
+  const cy = pointer.y + Math.sign(dy) * uy * offset;
+
+  const isAngle = readout.kind === "angle";
+  context.fillStyle = isAngle
+    ? getThemedColor("#1f2329", appState.theme)
+    : selectionColor;
   context.beginPath();
   if (context.roundRect) {
-    context.roundRect(left, top, width, height, 5 / zoom);
+    context.roundRect(
+      cx - width / 2,
+      cy - height / 2,
+      width,
+      height,
+      TRANSFORM_STATUS_RADIUS / zoom,
+    );
   } else {
-    context.rect(left, top, width, height);
+    context.rect(cx - width / 2, cy - height / 2, width, height);
   }
   context.fill();
-  context.fillStyle = "#fff";
+  // 角度底是墨色，文字随主题反转（同 renderTableResizeSizeLabel）；尺寸底是
+  // 选区色（本身已随主题），白字两头都压得住
+  context.fillStyle = isAngle
+    ? getThemedColor("#ffffff", appState.theme)
+    : "#ffffff";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.fillText(text, centerX, top + height / 2);
+  context.fillText(readout.text, cx, cy);
   context.restore();
 };
 
@@ -4139,20 +4217,49 @@ const _renderInteractiveScene = ({
       }
     }
     context.restore();
-    if (visibleSelectedElements.length === 1 && showBoundingBox) {
-      const [x1, y1, x2, y2] = getElementAbsoluteCoords(
-        visibleSelectedElements[0],
+
+    // 变换读数：单选与多选共用一条出口。注意不能放进上面的分支——多选旋转
+    // 时 `!appState.isRotating` 会让变换手柄不画，但读数必须照画。
+    // 反向则要严格：手柄不画的地方（只读模式、编辑文字、裁剪中）不能只剩个
+    // 悬停读数——那样没有手柄可指。
+    if (
+      showBoundingBox &&
+      visibleSelectedElements.length &&
+      !appState.viewModeEnabled &&
+      !isTextElement(appState.editingTextElement) &&
+      !appState.croppingElementId
+    ) {
+      const readout = getTransformStatusReadout({
+        gesture: appState.isRotating
+          ? "rotation"
+          : app.state.isResizing
+          ? "scale"
+          : null,
+        hoveredHandle: app.transformStatus.getHoveredHandle(),
+        selectedElements: visibleSelectedElements,
         elementsMap,
-        true,
-      );
-      renderTransformStatusLabel(
-        context,
-        appState,
-        app.state.isResizing,
-        selectionColor,
-        [x1, y1, x2, y2],
-        visibleSelectedElements[0].angle,
-      );
+        rotationDelta: app.transformStatus.getRotationDelta(),
+        gestureBounds: app.transformStatus.getGestureBounds(),
+      });
+      if (readout) {
+        // 单选用未旋转的本地框中心——元素就是绕它转的，旋转中它不动
+        const [x1, y1, x2, y2] =
+          visibleSelectedElements.length === 1
+            ? getElementAbsoluteCoords(
+                visibleSelectedElements[0],
+                elementsMap,
+                true,
+              )
+            : getCommonBounds(visibleSelectedElements, elementsMap);
+        renderTransformStatusLabel(
+          context,
+          app,
+          appState,
+          readout,
+          selectionColor,
+          { x: (x1 + x2) / 2, y: (y1 + y2) / 2 },
+        );
+      }
     }
   }
 

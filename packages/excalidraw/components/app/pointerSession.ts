@@ -2068,6 +2068,7 @@ export const onPointerUpFromPointerDownHandler = (
     } = app.state;
 
     app.activeResizeHandle = null;
+    app.transformStatus.endGesture();
     app.setState((prevState) => ({
       isResizing: false,
       isRotating: false,

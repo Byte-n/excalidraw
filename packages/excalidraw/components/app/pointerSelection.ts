@@ -83,7 +83,7 @@ import type {
   NonDeleted,
   ExcalidrawTextContainer,
 } from "@excalidraw/element/types";
-import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
 
 import type { ExcalidrawFrameLikeElement } from "@excalidraw/element/types";
 
@@ -286,6 +286,15 @@ export const maybeHandleResize = (
     isResizing: transformHandleType && transformHandleType !== "rotation",
     isRotating: transformHandleType === "rotation",
     activeEmbeddable: null,
+    // 抓住变换手柄时，按下建的那枚零尺寸框选草稿要丢掉——与拖拽分支同一口径
+    // （见 pointerSession 里 `selectedElementsAreBeingDragged` 那段注释）。
+    // 渲染层的「画选中元素」一整块以 `!selectionElement` 为门槛，留着它会让
+    // 整个缩放/旋转手势里选择框、变换手柄、变换读数全都不画。
+    //
+    // 只在真有手柄（`transformHandleType` 为真）时清：键盘路径
+    // （`onKeyDown/KeyUpFromPointerDownHandler`）会带着 `false` 也走到这里，
+    // 框选拖拽还指着那枚草稿，无条件清掉会让「框选中按一下修饰键」丢了选框。
+    selectionElement: transformHandleType ? null : app.state.selectionElement,
   });
   const pointerCoords = pointerDownState.lastCoords;
   let [resizeX, resizeY] = getGridPoint(
@@ -385,14 +394,16 @@ export const maybeHandleResize = (
       // selection's handle sits at 0 so follow the pointer's sweep
       const { center } = pointerDownState.resize;
       const { origin } = pointerDownState;
+      const sweep =
+        Math.atan2(pointerCoords.y - center.y, pointerCoords.x - center.x) -
+        Math.atan2(origin.y - center.y, origin.x - center.x);
+      // 读数与光标同源：单选报元素自身的绝对角，多选报这次扫过的增量
+      app.transformStatus.setRotationDelta(
+        selectedElements.length === 1 ? null : (sweep as Radians),
+      );
       app.cursor.set(
         getRotationCursor(
-          selectedElements.length === 1
-            ? selectedElements[0].angle
-            : Math.atan2(
-                pointerCoords.y - center.y,
-                pointerCoords.x - center.x,
-              ) - Math.atan2(origin.y - center.y, origin.x - center.x),
+          selectedElements.length === 1 ? selectedElements[0].angle : sweep,
         ),
       );
     }
@@ -559,6 +570,11 @@ export const handleSelectionOnPointerDown = (
         pointerDownState.resize.handleType = false;
       } else {
         pointerDownState.resize.isResizing = true;
+        // 通用变换手势（含旋转）：记下按下瞬间的选区框，多选旋转的
+        // 「选区大小」读它——旋转中的实时 AABB 会随角度呼吸。
+        app.transformStatus.beginGesture(
+          getCommonBounds(selectedElements, elementsMap),
+        );
         pointerDownState.resize.offset = tupleToCoors(
           getResizeOffsetXY(
             pointerDownState.resize.handleType,

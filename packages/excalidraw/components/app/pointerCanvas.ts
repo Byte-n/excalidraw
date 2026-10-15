@@ -738,6 +738,10 @@ export const handleCanvasPointerMove = (
     y: scenePointerY,
   };
 
+  // 变换读数的悬停态每帧先清空，由下面把手柄判定的那两处按同一次判定写回。
+  // 放在所有提前 return 之前，平移/空格/手型工具/滚动条这些路径才能一起清掉。
+  app.transformStatus.clearHovered();
+
   app.updateMultiTouchGesture(event);
 
   if (app.interactionState.isTableGestureActive) {
@@ -1203,6 +1207,10 @@ export const handleCanvasPointerMove = (
         app.cursor.set(
           getCursorForResizingElement(elementWithTransformHandleType),
         );
+        // 与光标同一个判定：光标切成变换操作态，读数就出现
+        app.transformStatus.setHoveredHandle(
+          elementWithTransformHandleType.transformHandleType,
+        );
         return;
       }
     }
@@ -1240,6 +1248,7 @@ export const handleCanvasPointerMove = (
           transformHandleType,
         }),
       );
+      app.transformStatus.setHoveredHandle(transformHandleType);
       return;
     }
   }

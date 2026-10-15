@@ -114,6 +114,7 @@ export * from "./textMeasurements";
 export * from "./textWrapping";
 export * from "./transform";
 export * from "./transformHandles";
+export * from "./transformStatus";
 export * from "./typeChecks";
 export * from "./utils";
 export * from "./zindex";
