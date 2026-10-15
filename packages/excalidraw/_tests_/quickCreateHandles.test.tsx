@@ -1,4 +1,5 @@
 import { ROUNDNESS, reseed } from "@excalidraw/common";
+import { pointFrom } from "@excalidraw/math";
 
 import {
   getContainingFrame,
@@ -11,7 +12,12 @@ import {
   QUICK_CREATE_HANDLE_REST_ALPHA,
 } from "@excalidraw/element";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { LocalPoint } from "@excalidraw/math";
+
+import type {
+  ExcalidrawElement,
+  NonDeletedExcalidrawElement,
+} from "@excalidraw/element/types";
 
 import {
   QUICK_CREATE_GHOST_ARROW_ID,
@@ -32,8 +38,11 @@ const mouse = new Pointer("mouse");
 /** 视图坐标为 0 偏移、zoom=1 时，场景坐标与视图坐标重合 */
 const live = () => h.elements.filter((element) => !element.isDeleted);
 
-const selectShape = (shape: NonDeletedExcalidrawElement) => {
-  API.setElements([shape]);
+const selectShape = (
+  shape: NonDeletedExcalidrawElement,
+  others: readonly NonDeletedExcalidrawElement[] = [],
+) => {
+  API.setElements([shape, ...others]);
   API.setSelectedElements([shape]);
   mouse.reset();
   // 基准历史：让随后的一次点击单独成为一步可撤销
@@ -79,6 +88,56 @@ const newArrow = (sourceId: string) => {
     throw new Error("Expected an arrow");
   }
   return element;
+};
+
+const liveIds = () => live().map((element) => element.id);
+
+/**
+ * 本次新建的副本 / 连线：按 id 差集取。场景里本来就摆着别的图形（让位用例的
+ * 占位图形）时，`newShape` 那种「第一个非源图形」的取法会取错。
+ */
+const createdShape = (before: readonly string[]): ExcalidrawElement => {
+  const element = live().find(
+    (candidate) =>
+      isCompositeShapeElement(candidate) && !before.includes(candidate.id),
+  );
+  if (!element) {
+    throw new Error("Expected a composite shape");
+  }
+  return element;
+};
+
+const createdArrow = (before: readonly string[]) => {
+  const element = live().find(
+    (candidate) => isArrowElement(candidate) && !before.includes(candidate.id),
+  );
+  if (!isArrowElement(element)) {
+    throw new Error("Expected an arrow");
+  }
+  return element;
+};
+
+/** 连线点的**场景**坐标（元素里的 points 是相对 x/y 的局部坐标） */
+const worldPoints = (element: ExcalidrawElement) =>
+  isArrowElement(element)
+    ? element.points.map(([x, y]) => ({ x: element.x + x, y: element.y + y }))
+    : [];
+
+/** 点到（可能旋转的）图形中心的「本体坐标」分量，用来判断是否落在轮廓上 */
+const outlineRatio = (
+  element: ExcalidrawElement,
+  point: { x: number; y: number },
+) => {
+  const cos = Math.cos(-element.angle);
+  const sin = Math.sin(-element.angle);
+  const dx = point.x - (element.x + element.width / 2);
+  const dy = point.y - (element.y + element.height / 2);
+  const localX = dx * cos - dy * sin;
+  const localY = dx * sin + dy * cos;
+  return Math.max(
+    Math.abs(localX) / (element.width / 2),
+    Math.abs(localY) / (element.height / 2),
+  );
 };
 
 describe("quick create handles", () => {
@@ -759,6 +818,452 @@ describe("quick create handles", () => {
       mouse.downAt(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
       mouse.upAt();
       expect(live()).toHaveLength(1);
+    });
+  });
+
+  describe("spilling the copy along the absolute axis", () => {
+    /** 源 120×80 在 (100,100)：中心 (160,140)，右手柄基准位中心 (410,140) */
+    const RIGHT_BASE = { x: 410, y: 140 };
+    /** 下手柄基准位中心：源下边 140+90+40 = 280 偏移 */
+    const BOTTOM_BASE = { x: 160, y: 310 };
+    /** 左右手柄沿绝对 Y 让位、档距 = 1.75 × 副本高(80) = 140；上下手柄沿绝对 X、1.75 × 宽(120) = 210 */
+    const RIGHT_STEP = 140;
+    const BOTTOM_STEP = 210;
+
+    /** 与副本同尺寸的占位图形：摆在哪一档就占掉哪一档 */
+    const blocker = (
+      center: { x: number; y: number },
+      extra: Record<string, unknown> = {},
+    ) =>
+      API.createElement({
+        type: "rectangle",
+        x: center.x - 60,
+        y: center.y - 40,
+        width: 120,
+        height: 80,
+        ...extra,
+      });
+
+    const clickHandle = (direction: "top" | "right" | "bottom" | "left") => {
+      const { center } = handleFor(direction);
+      mouse.downAt(center.x, center.y);
+      mouse.upAt();
+    };
+
+    const placeAndClick = (
+      others: readonly NonDeletedExcalidrawElement[],
+      direction: "top" | "right" | "bottom" | "left",
+      arrowType: "sharp" | "round" | "elbow" = "sharp",
+    ) => {
+      const source = createRectangle();
+      selectShape(source, others);
+      act(() => {
+        h.app.setState({ currentItemArrowType: arrowType });
+      });
+      const before = liveIds();
+      clickHandle(direction);
+      return {
+        source,
+        copy: createdShape(before),
+        arrow: createdArrow(before),
+      };
+    };
+
+    const copyCenter = (copy: ExcalidrawElement) => ({
+      x: copy.x + copy.width / 2,
+      y: copy.y + copy.height / 2,
+    });
+
+    it.each(["sharp", "round", "elbow"] as const)(
+      "keeps the base spot and a two-point straight connector when it is free (%s)",
+      (arrowType) => {
+        const source = createRectangle();
+        selectShape(source);
+        act(() => {
+          h.app.setState({ currentItemArrowType: arrowType });
+        });
+        const before = liveIds();
+        clickHandle("right");
+
+        const copy = createdShape(before);
+        expect(copy).toMatchObject({ x: 350, y: 100 });
+        const points = worldPoints(createdArrow(before));
+        // 轴向对齐：两点直线，从左往右、同一高度。端点正好贴在两图形的朝对侧
+        // 边缘上（几像素的出入来自 orbit 绑定把端点落到轮廓上，不属于落位几何）
+        expect(points).toHaveLength(2);
+        expect(points[0].y).toBeCloseTo(140, 0);
+        expect(points[1].y).toBeCloseTo(140, 0);
+        expect(Math.abs(points[0].x - 220)).toBeLessThan(10);
+        expect(Math.abs(points[1].x - 350)).toBeLessThan(10);
+        expect(points[0].x).toBeLessThan(points[1].x);
+      },
+    );
+
+    it("spills 上 1 when the base spot is taken, and bends the connector there", () => {
+      const { copy, arrow } = placeAndClick([blocker(RIGHT_BASE)], "right");
+
+      // ① 上 1 = 基准位沿**绝对 Y** 上移一档（不随旋转改变）
+      expect(copyCenter(copy)).toEqual({
+        x: RIGHT_BASE.x,
+        y: RIGHT_BASE.y - RIGHT_STEP,
+      });
+      expect(copy).toMatchObject({ x: 350, y: -40, width: 120, height: 80 });
+
+      // 折线四点：出口 A(220,140) → 转折线 x = 285 上的两个拐角 → 入口 D(350,0)
+      expect(arrow.points).toHaveLength(4);
+      expect(worldPoints(arrow)).toEqual([
+        { x: 220, y: 140 },
+        { x: 285, y: 140 },
+        { x: 285, y: 0 },
+        { x: 350, y: 0 },
+      ]);
+      // 入口落在副本朝源一侧的**轮廓**上（左边中段，不是包围盒角）
+      const entry = worldPoints(arrow)[3];
+      expect(outlineRatio(copy, entry)).toBeCloseTo(1);
+      expect(entry.x).toBeCloseTo(copy.x);
+      expect(entry.y).toBeCloseTo(copy.y + copy.height / 2);
+    });
+
+    it("tries 下 1 next, then 上 2, each measured from the base", () => {
+      const first = placeAndClick(
+        [
+          blocker(RIGHT_BASE),
+          blocker({ x: RIGHT_BASE.x, y: RIGHT_BASE.y - RIGHT_STEP }),
+        ],
+        "right",
+      );
+      // ② 下 1 = 基准位 + 1 档
+      expect(copyCenter(first.copy)).toEqual({
+        x: RIGHT_BASE.x,
+        y: RIGHT_BASE.y + RIGHT_STEP,
+      });
+
+      const second = placeAndClick(
+        [
+          blocker(RIGHT_BASE),
+          blocker({ x: RIGHT_BASE.x, y: RIGHT_BASE.y - RIGHT_STEP }),
+          blocker({ x: RIGHT_BASE.x, y: RIGHT_BASE.y + RIGHT_STEP }),
+        ],
+        "right",
+      );
+      // ③ 上 2 = 基准位 − 2 档（从基准位直接算，不逐档累加）
+      expect(copyCenter(second.copy)).toEqual({
+        x: RIGHT_BASE.x,
+        y: RIGHT_BASE.y - 2 * RIGHT_STEP,
+      });
+      expect(second.copy).toMatchObject({ x: 350, y: -180 });
+    });
+
+    it("spills 右 1 from the bottom handle when the base and 左 1 are taken", () => {
+      const { copy, arrow } = placeAndClick(
+        [
+          blocker(BOTTOM_BASE),
+          blocker({ x: BOTTOM_BASE.x - BOTTOM_STEP, y: BOTTOM_BASE.y }),
+        ],
+        "bottom",
+      );
+
+      // 下手柄沿**绝对 X** 扩散、步长 = 1.75 × 副本宽 = 210：② 右 1 = (370,310)
+      expect(copyCenter(copy)).toEqual({
+        x: BOTTOM_BASE.x + BOTTOM_STEP,
+        y: BOTTOM_BASE.y,
+      });
+      expect(copy).toMatchObject({ x: 310, y: 270 });
+      // 竖向手柄的转折线是 y = (180 + 270) / 2 = 225
+      expect(worldPoints(arrow)).toEqual([
+        { x: 160, y: 180 },
+        { x: 160, y: 225 },
+        { x: 370, y: 225 },
+        { x: 370, y: 270 },
+      ]);
+      expect(outlineRatio(copy, worldPoints(arrow)[3])).toBeCloseTo(1);
+    });
+
+    it("spills along the absolute axis and lands on the rotated copy's outline", () => {
+      const angle = Math.PI / 6;
+      const source = createRectangle({ angle });
+      // 基准位仍是老规则：源中心沿旋转后的方向向量外移 250
+      const base = {
+        x: 160 + 250 * Math.cos(angle),
+        y: 140 + 250 * Math.sin(angle),
+      };
+      selectShape(source, [blocker(base)]);
+      act(() => {
+        h.app.setState({ currentItemArrowType: "sharp" });
+      });
+      const before = liveIds();
+      clickHandle("right");
+
+      const copy = createdShape(before);
+      const arrow = createdArrow(before);
+      const center = copyCenter(copy);
+      // 让位方向**不跟着转**：沿绝对 Y 上移一档，x 与基准位一致
+      expect(center.x).toBeCloseTo(base.x);
+      expect(center.y).toBeCloseTo(base.y - RIGHT_STEP);
+      expect(copy.angle).toBeCloseTo(angle);
+
+      const entry = worldPoints(arrow)[3];
+      // 入口落在**旋转后**的轮廓上、与副本中心同高（绝对水平线）
+      expect(entry.y).toBeCloseTo(center.y);
+      expect(outlineRatio(copy, entry)).toBeCloseTo(1);
+      // 取包围盒当轮廓的话会落在 中心 − (120·cos30 + 80·sin30)/2 ≈ 中心 − 71.96，
+      // 而真轮廓（本体坐标 |x| = 半宽 60）在 中心 − 60/cos30 ≈ 中心 − 69.28
+      expect(entry.x).toBeCloseTo(base.x - 60 / Math.cos(angle), 6);
+      expect(entry.x).not.toBeCloseTo(base.x - 71.9615, 1);
+    });
+
+    it("falls back to the base spot when all ten candidates are taken", () => {
+      const candidates = [1, 2, 3, 4, 5].flatMap((k) => [
+        { x: RIGHT_BASE.x, y: RIGHT_BASE.y - k * RIGHT_STEP },
+        { x: RIGHT_BASE.x, y: RIGHT_BASE.y + k * RIGHT_STEP },
+      ]);
+      const { copy, arrow } = placeAndClick(
+        [blocker(RIGHT_BASE), ...candidates.map((center) => blocker(center))],
+        "right",
+      );
+
+      // 10 档全被占：回落基准位——副本与连线照建，宁可叠上也不能「点了没反应」
+      expect(copyCenter(copy)).toEqual(RIGHT_BASE);
+      expect(copy).toMatchObject({ x: 350, y: 100 });
+      expect(arrow.endBinding?.elementId).toBe(copy.id);
+      expect(arrow.points.length).toBeGreaterThan(0);
+    });
+
+    it("still counts a locked shape as an obstacle", () => {
+      const { copy } = placeAndClick(
+        [blocker(RIGHT_BASE, { locked: true })],
+        "right",
+      );
+      // 让位规则里锁定元素不算「指针压着」，但落点上它占着地方，副本得让开
+      expect(copyCenter(copy)).toEqual({
+        x: RIGHT_BASE.x,
+        y: RIGHT_BASE.y - RIGHT_STEP,
+      });
+    });
+
+    it("counts a mindmap node as an obstacle", () => {
+      const node = API.createElement({
+        type: "mindmap-node",
+        x: RIGHT_BASE.x - 60,
+        y: RIGHT_BASE.y - 40,
+        width: 120,
+        height: 80,
+        mindmap: {
+          graphId: "mm",
+          parentId: null,
+          order: null,
+          shape: { id: "rectangle", schemaVersion: 1 },
+          collapsed: false,
+        },
+      });
+      const source = createRectangle();
+      selectShape(source, [node]);
+      const before = liveIds();
+      clickHandle("right");
+
+      expect(copyCenter(createdShape(before))).toEqual({
+        x: RIGHT_BASE.x,
+        y: RIGHT_BASE.y - RIGHT_STEP,
+      });
+    });
+
+    it("ignores arrows, text and the source's own bound outgoing arrow", () => {
+      // 横穿基准位的箭头 + 压在基准位上的文本：都不算占用。箭头还记在源的
+      // boundElements 里（源自己的出边箭头就是这种），同样不算。
+      const source = createRectangle({
+        boundElements: [{ id: "crossing-arrow", type: "arrow" }],
+      });
+      const crossing = API.createElement({
+        type: "arrow",
+        id: "crossing-arrow",
+        x: 300,
+        y: 140,
+        width: 200,
+        height: 0,
+        points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 0)],
+      });
+      const text = API.createElement({
+        type: "text",
+        x: 350,
+        y: 100,
+        width: 120,
+        height: 80,
+        text: "hi",
+      });
+      selectShape(source, [crossing, text]);
+      const before = liveIds();
+      clickHandle("right");
+
+      // 佐证用例不是空的：箭头与文本的包围盒都压着基准位
+      expect(crossing.x).toBeLessThan(RIGHT_BASE.x - 60);
+      expect(crossing.x + crossing.width).toBeGreaterThan(RIGHT_BASE.x + 60);
+      expect(text.x).toBe(350);
+
+      expect(copyCenter(createdShape(before))).toEqual(RIGHT_BASE);
+    });
+
+    it("ignores a freedraw scribble over the candidate", () => {
+      const source = createRectangle();
+      const scribble = API.createElement({
+        type: "freedraw",
+        x: 350,
+        y: 100,
+        width: 120,
+        height: 80,
+        points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(120, 80)],
+      });
+      selectShape(source, [scribble]);
+      const before = liveIds();
+      clickHandle("right");
+
+      expect(copyCenter(createdShape(before))).toEqual(RIGHT_BASE);
+    });
+
+    describe("connector style handling", () => {
+      it("turns the sharp arrow into a four-point polyline", () => {
+        const { arrow } = placeAndClick(
+          [blocker(RIGHT_BASE)],
+          "right",
+          "sharp",
+        );
+
+        expect(arrow.points).toHaveLength(4);
+        expect(arrow.elbowed).toBe(false);
+        // 折线要的就是直角折线，不能留圆角（留着会被画成圆角拐弯）
+        expect(arrow.roundness).toBeNull();
+        expect(worldPoints(arrow)[1]).toEqual({ x: 285, y: 140 });
+      });
+
+      it("leaves the elbow arrow to the built-in orthogonal router", () => {
+        const { arrow } = placeAndClick(
+          [blocker(RIGHT_BASE)],
+          "right",
+          "elbow",
+        );
+
+        // 老行为：仍旧 elbowed，路径由内置正交路由算——不把我们算出来的那四个
+        // 拐点塞给它（塞进去会绕开它自己那一套布线）
+        expect(arrow.elbowed).toBe(true);
+        expect(arrow.roundness).toBeNull();
+        const points = worldPoints(arrow);
+        for (let index = 1; index < points.length; index++) {
+          expect(
+            points[index - 1].x === points[index].x ||
+              points[index - 1].y === points[index].y,
+          ).toBe(true);
+        }
+      });
+
+      it("samples the cubic into five points for the round arrow", () => {
+        const { arrow } = placeAndClick(
+          [blocker(RIGHT_BASE)],
+          "right",
+          "round",
+        );
+
+        const points = worldPoints(arrow);
+        // 保留圆角样式，但点集是三次贝塞尔的采样：roughjs 的样条穿过每个点，
+        // 真曲线只能这么逼近。节点是 t = 0、0.2、0.5、0.8、1，所以中间只多出
+        // 3 个手柄，偏差 ~1.4 个场景单位（≈图形宽的 0.8%）
+        expect(arrow.roundness).toEqual({
+          type: ROUNDNESS.PROPORTIONAL_RADIUS,
+        });
+        expect(arrow.elbowed).toBe(false);
+        expect(points).toHaveLength(5);
+        expect(points[0]).toMatchObject({ x: 220, y: 140 });
+        expect(points[4]).toMatchObject({ x: 350, y: 0 });
+        // t = 0.5 是其中一个节点，正好落在转折段 B–C 的中点 (285,70)——恒等式
+        expect(points[2].x).toBeCloseTo((285 + 285) / 2, 6);
+        expect(points[2].y).toBeCloseTo((140 + 0) / 2, 6);
+        // 采样点都在真曲线上（t = 0.2 处手算的 x / y，控制点 A、B、C、D）
+        expect(points[1].x).toBeCloseTo(
+          0.512 * 220 + 0.384 * 285 + 0.096 * 285 + 0.008 * 350,
+          6,
+        );
+        expect(points[1].y).toBeCloseTo(
+          0.512 * 140 + 0.384 * 140 + 0.096 * 0 + 0.008 * 0,
+          6,
+        );
+      });
+    });
+
+    it("previews the spilled copy and the very same connector while hovering", () => {
+      const source = createRectangle();
+      selectShape(source, [blocker(RIGHT_BASE)]);
+      act(() => {
+        h.app.setState({ currentItemArrowType: "sharp" });
+      });
+
+      mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
+      const ghost = h.app.quickCreate.getGhostElements(handleFor("right"));
+      const before = liveIds();
+      clickHandle("right");
+      const copy = createdShape(before);
+      const arrow = createdArrow(before);
+
+      // 预演落在让位后的位置上，连线点与落地**逐个一致**（所见即所得）
+      expect(ghost[0]).toMatchObject({ x: copy.x, y: copy.y });
+      expect(worldPoints(ghost[1])).toEqual(worldPoints(arrow));
+      expect(worldPoints(ghost[1])).toHaveLength(4);
+      // 预演与落地都是那四个拐点，预演没有消耗共享的 id
+      expect(arrow.id).not.toBe(QUICK_CREATE_GHOST_ARROW_ID);
+    });
+
+    it("previews the round arrow as the sampled curve", () => {
+      const source = createRectangle();
+      selectShape(source, [blocker(RIGHT_BASE)]);
+      act(() => {
+        h.app.setState({ currentItemArrowType: "round" });
+      });
+
+      mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
+      const ghost = h.app.quickCreate.getGhostElements(handleFor("right"));
+
+      // 曲线样式下预演画的就是采样后的曲线（与落地同一套点）
+      expect(worldPoints(ghost[1])).toHaveLength(5);
+      expect(worldPoints(ghost[1])[2]).toMatchObject({ x: 285, y: 70 });
+    });
+
+    it("previews the elbow arrow with the same fold points", () => {
+      const source = createRectangle();
+      selectShape(source, [blocker(RIGHT_BASE)]);
+      act(() => {
+        h.app.setState({ currentItemArrowType: "elbow" });
+      });
+
+      mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
+      const ghost = h.app.quickCreate.getGhostElements(handleFor("right"));
+
+      // 预演没有绑定可依、内置正交路由跑不起来，所以直接画同一套拐点
+      // （画成「源中心 → 副本中心」的斜直线就是老版的不贴合之处）
+      expect(worldPoints(ghost[1])).toEqual([
+        { x: 220, y: 140 },
+        { x: 285, y: 140 },
+        { x: 285, y: 0 },
+        { x: 350, y: 0 },
+      ]);
+      expect(ghost[1]).toMatchObject({ elbowed: true, roundness: null });
+    });
+
+    it("rebuilds the preview when the scene changes the landing spot", () => {
+      const source = createRectangle();
+      selectShape(source);
+      mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
+      const before = h.app.quickCreate.getGhostElements(handleFor("right"));
+      expect(before[0]).toMatchObject({ x: 350, y: 100 });
+
+      // 基准位被占：落点变了，预演必须跟着重建——缓存键里带着解出来的落点，
+      // 否则场景一变还会画着上一帧的旧位置
+      const versionBefore = source.version;
+      API.setElements([source, blocker(RIGHT_BASE)]);
+      API.setSelectedElements([source]);
+      // 源自己的 version 没变：这次重建只能靠落点进缓存键，否则用例是空的
+      expect(h.app.scene.getNonDeletedElement(source.id)?.version).toBe(
+        versionBefore,
+      );
+      const after = h.app.quickCreate.getGhostElements(handleFor("right"));
+      expect(after).not.toBe(before);
+      expect(after[0]).toMatchObject({ x: 350, y: -40 });
     });
   });
 

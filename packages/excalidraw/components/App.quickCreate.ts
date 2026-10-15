@@ -8,9 +8,10 @@ import {
   getContainingFrame,
   getElementAbsoluteCoords,
   getElementWithTransformHandleType,
-  getQuickCreateDirectionVector,
+  getQuickCreateConnector,
+  getQuickCreateCurvePoints,
   getQuickCreateHandles,
-  getQuickCreateTargetCenter,
+  getQuickCreateResolvedTargetCenter,
   getQuickCreateTargetElement,
   getTransformHandles,
   hitTestQuickCreateHandle,
@@ -36,8 +37,11 @@ import type {
 } from "@excalidraw/element/types";
 
 import type {
+  QuickCreateConnector,
   QuickCreateDirection,
   QuickCreateHandle,
+  QuickCreatePoint,
+  QuickCreateSourceGeometry,
 } from "@excalidraw/element";
 
 import { getCurrentItemArrowProps } from "./app/arrowCreation";
@@ -68,6 +72,16 @@ export const QUICK_CREATE_GHOST_ARROW_ID = "preview:quick-create:arrow";
 const GHOST_ARROW_IDENTITY: CreationIdentity = {
   id: QUICK_CREATE_GHOST_ARROW_ID,
   seed: 1,
+};
+
+/**
+ * 一次落位解出来的全部几何：源几何（出口、方向由它算）、目标中心，以及从出口
+ * 到入口的连线路径。预演与真实创建共用同一个值——「所见即所得」靠的就是这个。
+ */
+type QuickCreatePlacement = {
+  source: QuickCreateSourceGeometry;
+  target: QuickCreatePoint;
+  connector: QuickCreateConnector;
 };
 
 /**
@@ -409,16 +423,22 @@ export class AppQuickCreate {
     if (!source || !isCompositeShapeElement(source)) {
       return [];
     }
+    const placement = this.resolvePlacement(source, handle.direction);
     const key = [
       source.id,
       source.version,
       handle.direction,
       this.getArrowStyleFingerprint(),
+      // 落点还取决于场上别的图形：基准位被占时副本会沿绝对轴让位，所以解出来的
+      // 目标位置也进缓存键——不然场景一变（别的图形挪过来/挪走）还会画着上一帧
+      // 的旧落点与旧折线。
+      placement.target.x,
+      placement.target.y,
     ].join("|");
     if (this.ghost?.key !== key) {
       this.ghost = {
         key,
-        elements: this.buildGhostElements(source, handle.direction),
+        elements: this.buildGhostElements(source, handle.direction, placement),
       };
     }
     return this.ghost.elements;
@@ -438,31 +458,54 @@ export class AppQuickCreate {
     ].join("|");
   };
 
+  /**
+   * 落点与连线的**唯一**来源：悬停预演与真实创建都从这里取几何，所见即所得。
+   *
+   * 落点先用老规则算基准位（源中心沿旋转后的方向向量外移「源半尺寸 + 间隙 +
+   * 副本半尺寸」），基准位压着已有图形时再沿**绝对轴**让位（见
+   * `getQuickCreateResolvedTargetCenter`）。连线按落点算出口、入口与转折点。
+   */
+  private resolvePlacement = (
+    source: NonDeletedExcalidrawElement,
+    direction: QuickCreateDirection,
+  ): QuickCreatePlacement => {
+    const elementsMap = this.app.scene.getNonDeletedElementsMap();
+    const sourceBounds = getElementAbsoluteCoords(source, elementsMap);
+    const geometry: QuickCreateSourceGeometry = {
+      center: {
+        x: (sourceBounds[0] + sourceBounds[2]) / 2,
+        y: (sourceBounds[1] + sourceBounds[3]) / 2,
+      },
+      angle: source.angle,
+      width: source.width,
+      height: source.height,
+    };
+    const size = { width: source.width, height: source.height };
+    const target = getQuickCreateResolvedTargetCenter(
+      { ...geometry, id: source.id, boundElements: source.boundElements },
+      direction,
+      size,
+      elementsMap,
+    );
+    return {
+      source: geometry,
+      target,
+      connector: getQuickCreateConnector(geometry, direction, target, size),
+    };
+  };
+
   private buildGhostElements = (
     source: NonDeleted<ExcalidrawCompositeShapeElement>,
     direction: QuickCreateDirection,
-  ): readonly NonDeletedExcalidrawElement[] => {
-    const elementsMap = this.app.scene.getNonDeletedElementsMap();
-    const sourceBounds = getElementAbsoluteCoords(source, elementsMap);
-    const sourceCenter = {
-      x: (sourceBounds[0] + sourceBounds[2]) / 2,
-      y: (sourceBounds[1] + sourceBounds[3]) / 2,
-    };
-    const target = getQuickCreateTargetCenter(
-      {
-        center: sourceCenter,
-        angle: source.angle,
-        width: source.width,
-        height: source.height,
-      },
-      direction,
-      { width: source.width, height: source.height },
-    );
-    return [
-      this.buildGhostShape(source, target),
-      this.buildGhostArrow(source, direction, sourceCenter, target),
-    ];
-  };
+    placement: QuickCreatePlacement,
+  ): readonly NonDeletedExcalidrawElement[] => [
+    this.buildGhostShape(source, placement.target),
+    this.buildConnectorArrow(placement, {
+      opacityScale: QUICK_CREATE_GHOST_ALPHA,
+      identity: GHOST_ARROW_IDENTITY,
+      foldElbowRoute: true,
+    }),
+  ];
 
   /** 幽灵副本：与 `cloneShape` 同款（清掉分组/绑定/容器归属），只压暗一半 */
   private buildGhostShape = (
@@ -482,41 +525,58 @@ export class AppQuickCreate {
     } as NonDeleted<ExcalidrawCompositeShapeElement>);
 
   /**
-   * 幽灵连线：从源朝向该方向的边缘中点，到副本的近端边缘中点，沿方向取直。
-   * 这是刻意的近似——真实创建后端点由 orbit 绑定重算，旋转或斜向时会有几像素
-   * 出入（与 `createConnectedShape` 的起点同一套几何）。
+   * 连线：把几何解出来的路径按**当前线样式**落成箭头的 x/y 与 points
+   * （points 是相对 x/y 的局部坐标，与画布上拖拽建的箭头同一套约定）。
+   *
+   * - 出口与副本在出线轴上对齐（没让位、源也没转）：两点直线，三种样式都是
+   *   老行为。
+   * - 错开 + 折线（sharp）：直接用四个拐点 [A, B, C, D]，`roundness` 为 null、
+   *   不 elbowed → 画出来就是直角折线（roundness 非 null 会被画成圆角拐弯，
+   *   偏 13 个场景单位）。
+   * - 错开 + 圆角曲线（round）：同样四个点，但中间两点当**控制点**采样三次
+   *   贝塞尔采样成 5 个点——带 roundness 的箭头渲染是 roughjs「穿过每个点」的
+   *   样条，真曲线只能靠采样（节点见 `QUICK_CREATE_CURVE_KNOTS`：再多点收益
+   *   很小，用户要拖的中间手柄却会翻倍）。
+   * - 错开 + 折线箭头（elbow）：**不塞我们的拐点**，仍旧给两点 + `elbowed`，
+   *   交给内置正交路由自己布线（老行为）。预演没有绑定可依、路由跑不起来，
+   *   所以预演改为直接拿同一套拐点画折线（`foldElbowRoute`）——渲染层对 elbowed
+   *   箭头做的就是「把折角磨圆」，与落地后路由算出的那条直角线形状一致。
    */
-  private buildGhostArrow = (
-    source: NonDeleted<ExcalidrawCompositeShapeElement>,
-    direction: QuickCreateDirection,
-    sourceCenter: { x: number; y: number },
-    target: { x: number; y: number },
-  ): NonDeletedExcalidrawElement => {
-    const vector = getQuickCreateDirectionVector(direction, source.angle);
-    const halfAlong =
-      direction === "left" || direction === "right"
-        ? source.width / 2
-        : source.height / 2;
-    const start = {
-      x: sourceCenter.x + vector.x * halfAlong,
-      y: sourceCenter.y + vector.y * halfAlong,
-    };
-    const end = {
-      x: target.x - vector.x * halfAlong,
-      y: target.y - vector.y * halfAlong,
-    };
+  private buildConnectorArrow = (
+    placement: QuickCreatePlacement,
+    options: {
+      opacityScale?: number;
+      identity?: CreationIdentity;
+      /** 预演专用：折线箭头也按拐点画，避免画成一条斜直线 */
+      foldElbowRoute?: boolean;
+    } = {},
+  ): NonDeleted<ExcalidrawLinearElement> => {
+    const { connector } = placement;
     const arrowProps = getCurrentItemArrowProps(this.app);
+    const { exit, bend, entry } = connector;
+    const fold =
+      bend && (options.foldElbowRoute || !arrowProps.elbowed) ? bend : null;
+    // 出口就是箭头的起点（x/y），所以这里只列**起点之后**的点
+    const tail: QuickCreatePoint[] = fold
+      ? arrowProps.roundness
+        ? getQuickCreateCurvePoints(exit, fold, entry).slice(1)
+        : [...fold, entry]
+      : [entry];
     return newArrowElement({
       type: "arrow",
-      x: start.x,
-      y: start.y,
+      x: exit.x,
+      y: exit.y,
       ...arrowProps,
       points: [
         pointFrom<LocalPoint>(0, 0),
-        pointFrom<LocalPoint>(end.x - start.x, end.y - start.y),
+        ...tail.map((point) =>
+          pointFrom<LocalPoint>(point.x - exit.x, point.y - exit.y),
+        ),
       ],
-      opacity: arrowProps.opacity * QUICK_CREATE_GHOST_ALPHA,
-      ...GHOST_ARROW_IDENTITY,
+      ...(options.opacityScale === undefined
+        ? {}
+        : { opacity: arrowProps.opacity * options.opacityScale }),
+      ...options.identity,
     });
   };
 
@@ -529,36 +589,13 @@ export class AppQuickCreate {
     source: NonDeletedExcalidrawElement,
     direction: QuickCreateDirection,
   ) => {
-    const elementsMap = this.app.scene.getNonDeletedElementsMap();
-    const sourceBounds = getElementAbsoluteCoords(source, elementsMap);
-    const sourceCenter = {
-      x: (sourceBounds[0] + sourceBounds[2]) / 2,
-      y: (sourceBounds[1] + sourceBounds[3]) / 2,
-    };
-    const center = getQuickCreateTargetCenter(
-      {
-        center: sourceCenter,
-        angle: source.angle,
-        width: source.width,
-        height: source.height,
-      },
-      direction,
-      { width: source.width, height: source.height },
+    const placement = this.resolvePlacement(source, direction);
+    const clone = this.cloneShape(
+      source,
+      placement.target.x,
+      placement.target.y,
     );
-    const clone = this.cloneShape(source, center.x, center.y);
-    const arrow = newArrowElement({
-      type: "arrow",
-      x: sourceCenter.x,
-      y: sourceCenter.y,
-      ...getCurrentItemArrowProps(this.app),
-      points: [
-        pointFrom<LocalPoint>(0, 0),
-        pointFrom<LocalPoint>(
-          center.x - sourceCenter.x,
-          center.y - sourceCenter.y,
-        ),
-      ],
-    });
+    const arrow = this.buildConnectorArrow(placement);
 
     this.app.insertNewElements([arrow, clone]);
     bindBindingElement(
@@ -575,7 +612,14 @@ export class AppQuickCreate {
       "end",
       this.app.scene,
     );
-    this.reflowArrowEndpoints(arrow);
+    // 两点连线（直线，以及交给内置正交路由的折线箭头）照旧按 orbit 绑定把两端
+    // 落到图形轮廓上；折线/采样曲线的端点**已经**按几何落在两个轮廓上（入口就是
+    // 副本轮廓的轴向交点），不能再来一次：reflow 只会沿「副本中心 → 倒数第二个
+    // 点」这条射线求交点——对折线来说是错的那条射线，会把入口从轮廓上拽走，
+    // 旋转副本尤其明显，预演也就跟落地对不上了。
+    if (arrow.points.length === 2) {
+      this.reflowArrowEndpoints(arrow);
+    }
 
     this.app.setState({
       selectedElementIds: { [clone.id]: true },
