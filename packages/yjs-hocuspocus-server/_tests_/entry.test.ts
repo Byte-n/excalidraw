@@ -2,6 +2,26 @@ import { spawnSync } from "node:child_process";
 
 import { expect, test } from "vitest";
 
+// Node v26 prints this ExperimentalWarning to stderr the first time
+// `globalThis.localStorage` is touched and `--localstorage-file` was not passed.
+// The child process below exists precisely to assert that no browser storage is
+// available, so the warning is expected here; any other stderr line still fails
+// the test.
+const stripNodeStorageWarning = (stderr: string) =>
+  stderr
+    .split("\n")
+    .filter(
+      (line) =>
+        !/^\(node:\d+\) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided\.$/.test(
+          line,
+        ) &&
+        !/^\(Use `node --trace-warnings \.\.\.` to show where the warning was created\)$/.test(
+          line,
+        ),
+    )
+    .join("\n")
+    .trim();
+
 test.each(["development", "production", "default"])(
   "%s server entry imports without browser globals and leaves Server ownership to the host",
   (condition) => {
@@ -25,7 +45,7 @@ test.each(["development", "production", "default"])(
       ],
       { encoding: "utf8", env: { ...process.env, NODE_OPTIONS: "" } },
     );
-    expect(result.stderr).toBe("");
+    expect(stripNodeStorageWarning(result.stderr)).toBe("");
     expect(result.status).toBe(0);
   },
 );
