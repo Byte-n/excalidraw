@@ -28,7 +28,11 @@ import type { AppState } from "@excalidraw/excalidraw/types";
 import type { Mutable } from "@excalidraw/common/utility-types";
 
 import { generateRoughOptions } from "./shape";
-import { getCurveConnectorPath } from "./curveConnector";
+import {
+  getCurvedConnectorEndNormal,
+  getCurvedConnectorPath,
+  isCurvedConnector,
+} from "./curveConnector";
 import {
   getCompositeShapeGeometry,
   getCompositeShapeGlobalPoints,
@@ -775,60 +779,81 @@ export const getArrowheadPoints = (
     return null;
   }
 
-  if (shape.length < 1) {
-    return null;
+  // 方向向量与箭头 tip 点的来源。曲线连接线取解析端切线（该端所依附边的外法
+  // 线反向），不读形状 ops——方向只由两端法线决定，与曲线是否退化无关，不必把
+  // 曲线切成短段近似；tip 点直接用元素端点（ops 与 points 同为元素局部坐标）。
+  // 其余箭头保持上游按最后一个贝塞尔段的 B(0.3) 弦近似。
+  let nx: number;
+  let ny: number;
+  let x2: number;
+  let y2: number;
+
+  if (isCurvedConnector(element)) {
+    const normal = getCurvedConnectorEndNormal(element, position);
+    nx = -normal.x;
+    ny = -normal.y;
+    [x2, y2] =
+      position === "start"
+        ? element.points[0]
+        : element.points[element.points.length - 1];
+  } else {
+    if (shape.length < 1) {
+      return null;
+    }
+
+    const ops = getCurvePathOps(shape[0]);
+    if (ops.length < 1) {
+      return null;
+    }
+
+    // The index of the bCurve operation to examine.
+    const index = position === "start" ? 1 : ops.length - 1;
+
+    const data = ops[index].data;
+
+    invariant(data.length === 6, "Op data length is not 6");
+
+    const p3 = pointFrom(data[4], data[5]);
+    const p2 = pointFrom(data[2], data[3]);
+    const p1 = pointFrom(data[0], data[1]);
+
+    // We need to find p0 of the bezier curve.
+    // It is typically the last point of the previous
+    // curve; it can also be the position of moveTo operation.
+    const prevOp = ops[index - 1];
+    let p0 = pointFrom(0, 0);
+    if (prevOp.op === "move") {
+      const p = pointFromArray(prevOp.data);
+      invariant(p != null, "Op data is not a point");
+      p0 = p;
+    } else if (prevOp.op === "bcurveTo") {
+      p0 = pointFrom(prevOp.data[4], prevOp.data[5]);
+    }
+
+    // B(t) = p0 * (1-t)^3 + 3p1 * t * (1-t)^2 + 3p2 * t^2 * (1-t) + p3 * t^3
+    const equation = (t: number, idx: number) =>
+      Math.pow(1 - t, 3) * p3[idx] +
+      3 * t * Math.pow(1 - t, 2) * p2[idx] +
+      3 * Math.pow(t, 2) * (1 - t) * p1[idx] +
+      p0[idx] * Math.pow(t, 3);
+
+    // Ee know the last point of the arrow (or the first, if start arrowhead).
+    const [tipX, tipY] = position === "start" ? p0 : p3;
+    x2 = tipX;
+    y2 = tipY;
+
+    // By using cubic bezier equation (B(t)) and the given parameters,
+    // we calculate a point that is closer to the last point.
+    // The value 0.3 is chosen arbitrarily and it works best for all
+    // the tested cases.
+    const [x1, y1] = [equation(0.3, 0), equation(0.3, 1)];
+
+    // Find the normalized direction vector based on the
+    // previously calculated points.
+    const distance = Math.hypot(x2 - x1, y2 - y1);
+    nx = (x2 - x1) / distance;
+    ny = (y2 - y1) / distance;
   }
-
-  const ops = getCurvePathOps(shape[0]);
-  if (ops.length < 1) {
-    return null;
-  }
-
-  // The index of the bCurve operation to examine.
-  const index = position === "start" ? 1 : ops.length - 1;
-
-  const data = ops[index].data;
-
-  invariant(data.length === 6, "Op data length is not 6");
-
-  const p3 = pointFrom(data[4], data[5]);
-  const p2 = pointFrom(data[2], data[3]);
-  const p1 = pointFrom(data[0], data[1]);
-
-  // We need to find p0 of the bezier curve.
-  // It is typically the last point of the previous
-  // curve; it can also be the position of moveTo operation.
-  const prevOp = ops[index - 1];
-  let p0 = pointFrom(0, 0);
-  if (prevOp.op === "move") {
-    const p = pointFromArray(prevOp.data);
-    invariant(p != null, "Op data is not a point");
-    p0 = p;
-  } else if (prevOp.op === "bcurveTo") {
-    p0 = pointFrom(prevOp.data[4], prevOp.data[5]);
-  }
-
-  // B(t) = p0 * (1-t)^3 + 3p1 * t * (1-t)^2 + 3p2 * t^2 * (1-t) + p3 * t^3
-  const equation = (t: number, idx: number) =>
-    Math.pow(1 - t, 3) * p3[idx] +
-    3 * t * Math.pow(1 - t, 2) * p2[idx] +
-    3 * Math.pow(t, 2) * (1 - t) * p1[idx] +
-    p0[idx] * Math.pow(t, 3);
-
-  // Ee know the last point of the arrow (or the first, if start arrowhead).
-  const [x2, y2] = position === "start" ? p0 : p3;
-
-  // By using cubic bezier equation (B(t)) and the given parameters,
-  // we calculate a point that is closer to the last point.
-  // The value 0.3 is chosen arbitrarily and it works best for all
-  // the tested cases.
-  const [x1, y1] = [equation(0.3, 0), equation(0.3, 1)];
-
-  // Find the normalized direction vector based on the
-  // previously calculated points.
-  const distance = Math.hypot(x2 - x1, y2 - y1);
-  const nx = (x2 - x1) / distance;
-  const ny = (y2 - y1) / distance;
 
   const size = getArrowheadSize(arrowhead);
 
@@ -978,11 +1003,11 @@ const generateLinearElementShape = (
   const generator = rough.generator();
   const options = generateRoughOptions(element);
 
-  // 曲线连接线（3 点模型）：形状缓存没命中时也必须算同一条曲线——下面那套
-  // roughjs `curve` 是「穿过每个点」的样条，对 3 点模型是另一条曲线，包围盒
-  // 会跟渲染出来的对不上。缓存通常已被 `getElementAbsoluteCoords` 先热好，
-  // 所以这条分支平时不走；一旦走到就不能给出另一个盒子。
-  const curveConnectorPath = getCurveConnectorPath(element);
+  // 曲线连接线：形状缓存没命中时也必须算同一条曲线——下面那套 roughjs
+  // `curve` 是「穿过每个点」的样条，与渲染出来的曲线不是同一条，包围盒会对不
+  // 上。缓存通常已被 `getElementAbsoluteCoords` 先热好，这条分支平时不走；一旦
+  // 走到就不能给出另一个盒子。非曲线连接线返回 null，落入下面的原分支。
+  const curveConnectorPath = getCurvedConnectorPath(element);
   if (curveConnectorPath) {
     return generator.path(curveConnectorPath, options);
   }
@@ -1169,13 +1194,22 @@ export const getElementPointsCoords = (
 ): Bounds => {
   // This might be computationally heavey
   const gen = rough.generator();
-  const curve =
-    element.roundness == null
-      ? gen.linearPath(
-          points as [number, number][],
-          generateRoughOptions(element),
-        )
-      : gen.curve(points as [number, number][], generateRoughOptions(element));
+
+  // 曲线连接线：与渲染 / 命中同源，形状取 getCurvedConnectorPath（用传入的
+  // points 临时替换元素点位，端点切线仍读该端 binding）。否则会落到下面 roughjs
+  // 的过点样条，与画出来的曲线不是同一条，拖手势算出的原点偏移会让元素相对指针
+  // 漂移。非曲线连接线返回 null，保持原有 roundness 分支不变。
+  const curvedPath = isCurvedConnector(element)
+    ? getCurvedConnectorPath({ ...element, points: points as LocalPoint[] })
+    : null;
+  const curve = curvedPath
+    ? gen.path(curvedPath, generateRoughOptions(element))
+    : element.roundness == null
+    ? gen.linearPath(
+        points as [number, number][],
+        generateRoughOptions(element),
+      )
+    : gen.curve(points as [number, number][], generateRoughOptions(element));
   const ops = getCurvePathOps(curve);
   const [minX, minY, maxX, maxY] = getMinMaxXYFromCurvePathOps(ops);
   return [

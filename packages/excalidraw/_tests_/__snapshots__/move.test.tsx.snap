@@ -197,6 +197,7 @@ exports[`move element > rectangles with binding arrow 7`] = `
   "boundElements": null,
   "containerRef": undefined,
   "created": 1,
+  "curvedConnector": false,
   "customData": undefined,
   "elbowed": false,
   "endArrowhead": "triangle",

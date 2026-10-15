@@ -7,6 +7,7 @@ exports[`multi point mode in linear elements > arrow 3`] = `
   "boundElements": null,
   "containerRef": undefined,
   "created": 1,
+  "curvedConnector": false,
   "customData": undefined,
   "elbowed": false,
   "endArrowhead": "triangle",

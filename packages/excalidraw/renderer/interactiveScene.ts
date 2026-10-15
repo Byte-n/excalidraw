@@ -47,6 +47,7 @@ import {
   isArrowElement,
   isBindableElement,
   isCurvedArrow,
+  isCurvedConnector,
   isElbowArrow,
   isFrameLikeElement,
   isImageElement,
@@ -77,6 +78,7 @@ import {
   isSelectedViaGroup,
   selectGroupsFromGivenElements,
   traceMindmapEdgePath,
+  traceCurvedConnectorPath,
   getCompletelySelectedMindmapGraphElementIds,
   getMindmapCollapseAffordance,
   getMindmapAddButtonAffordances,
@@ -467,10 +469,14 @@ const drawElbowSegmentMidpointHandle = (
 
 /**
  * Hover trace for a hovered-but-unselected linear element: an 8px/zoom
- * translucent primary stroke painted along the element's point polyline. The
- * points returned by `getPointsGlobalCoordinates` already carry the element's
- * rotation, so the trace follows the path. This replaces the rectangular box
- * highlight that non-linear hovered elements receive.
+ * translucent primary stroke painted along the element's geometry. A curved
+ * connector is traced along the cubic curve it actually renders
+ * (`traceCurvedConnectorPath`, shared with render/bounds/hit) so the trace
+ * follows the curve rather than the chord between its endpoints. Every other
+ * linear element keeps the polyline through its `points`; those points come
+ * from `getPointsGlobalCoordinates` and already carry the element's rotation,
+ * so the trace follows the path. This replaces the rectangular box highlight
+ * that non-linear hovered elements receive.
  */
 const renderHoveredLinearTrace = (
   context: CanvasRenderingContext2D,
@@ -485,6 +491,7 @@ const renderHoveredLinearTrace = (
   if (points.length < 2) {
     return;
   }
+  const isCurve = isCurvedConnector(element);
   const zoom = appState.zoom.value;
   const alpha = appState.theme === THEME.DARK ? 0.24 : 0.18;
 
@@ -498,10 +505,14 @@ const renderHoveredLinearTrace = (
   context.lineCap = "round";
   context.setLineDash([]);
 
-  context.beginPath();
-  context.moveTo(points[0][0], points[0][1]);
-  for (let i = 1; i < points.length; i++) {
-    context.lineTo(points[i][0], points[i][1]);
+  if (isCurve) {
+    traceCurvedConnectorPath(context, element, elementsMap);
+  } else {
+    context.beginPath();
+    context.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) {
+      context.lineTo(points[i][0], points[i][1]);
+    }
   }
   context.stroke();
   context.restore();

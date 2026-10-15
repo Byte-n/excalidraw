@@ -9,6 +9,7 @@ exports[`Test dragCreate > add element to the scene when pointer dragging long e
   "boundElements": null,
   "containerRef": undefined,
   "created": 1,
+  "curvedConnector": false,
   "customData": undefined,
   "elbowed": false,
   "endArrowhead": "triangle",

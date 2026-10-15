@@ -652,6 +652,11 @@ export type ExcalidrawArrowElement = ExcalidrawLinearElement &
   Readonly<{
     type: "arrow";
     elbowed: boolean;
+    /**
+     * 曲线连接线：两端附着点 + 用户控制点推导出的平滑曲线（见
+     * `element/curveConnector.ts`）。判据看这个字段，不看点数。
+     */
+    curvedConnector: boolean;
   }>;
 
 export type ExcalidrawElbowArrowElement = Merge<

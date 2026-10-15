@@ -2,10 +2,9 @@ import { CURSOR_TYPE } from "@excalidraw/common";
 import { pointFrom } from "@excalidraw/math";
 
 import {
-  getCurveConnectorAttachmentFixedPoint,
-  getCurveConnectorDefaultK,
   LinearElementEditor,
   bindBindingElement,
+  calculateFixedPointForNonElbowArrowBinding,
   duplicateElement,
   getContainingFrame,
   getElementAbsoluteCoords,
@@ -16,13 +15,11 @@ import {
   getQuickCreateTargetElement,
   getTransformHandles,
   hitTestQuickCreateHandle,
-  isArrowElement,
   isBindableElement,
   isCompositeShapeElement,
   isFrameLikeElement,
   isLinearElement,
   newArrowElement,
-  recomputeCurveConnector,
   updateBoundPoint,
   QUICK_CREATE_GHOST_ALPHA,
 } from "@excalidraw/element";
@@ -31,10 +28,10 @@ import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
 
 import type {
   ElementsMap,
-  ExcalidrawArrowElement,
   ExcalidrawBindableElement,
   ExcalidrawCompositeShapeElement,
   ExcalidrawLinearElement,
+  FixedPointBinding,
   NonDeleted,
   NonDeletedExcalidrawElement,
   PointerType,
@@ -84,8 +81,7 @@ const GHOST_ARROW_IDENTITY: CreationIdentity = {
  * 到入口的连线路径。预演与真实创建共用同一个值——「所见即所得」靠的就是这个。
  */
 type QuickCreatePlacement = {
-  source: QuickCreateSourceGeometry;
-  /** 源元素 id：预演连线补等效绑定身份用（几何不查它） */
+  /** 源元素 id：预演时用它从场景取源元素、算端绑定的锚点 */
   sourceId: string;
   target: QuickCreatePoint;
   connector: QuickCreateConnector;
@@ -471,8 +467,8 @@ export class AppQuickCreate {
    * 落点先用老规则算基准位（源中心沿旋转后的方向向量外移「源半尺寸 + 间隙 +
    * 副本半尺寸」），基准位压着已有图形时再沿**绝对轴**让位（见
    * `getQuickCreateResolvedTargetCenter`）。连线按落点算出口、入口与转折点；
-   * 曲线样式的**弯曲**几何不在这里落地：那档只用出口/入口当绑定的锚点（轴向与
-   * 附着点），三个点由模型在绑定后自己解（见 `reflowCurveConnector`）。
+   * 曲线样式的**弯曲**几何不在这里落地：那档只用出口/入口当两个端点，弯曲形状
+   * 在渲染期由两端 + 各自所依附边的外法线推导（见 `element/curveConnector.ts`）。
    */
   private resolvePlacement = (
     source: NonDeletedExcalidrawElement,
@@ -497,7 +493,6 @@ export class AppQuickCreate {
       elementsMap,
     );
     return {
-      source: geometry,
       sourceId: source.id,
       target,
       connector: getQuickCreateConnector(geometry, direction, target, size),
@@ -547,10 +542,9 @@ export class AppQuickCreate {
    * - 错开 + 折线（sharp）：直接用四个拐点 [A, B, C, D]，`roundness` 为 null、
    *   不 elbowed → 画出来就是直角折线（roundness 非 null 会被画成圆角拐弯，
    *   偏 13 个场景单位）。
-   * - 错开 + 圆角曲线（round）：**占位三点** [源中心, 两者中点, 副本中心]，创建
-   *   路径完全不碰弯曲几何——不算出口、入口，也不算转折线。落地由「插连线 → 绑
-   *   两端 → 模型重算」归位（见 `createConnectedShape` 与 `reflowCurveConnector`），
-   *   曲线几何因此只有一个来源：`element/curveConnector.ts` 的 3 点模型。
+   * - 错开 + 圆角曲线（round）：**恒为两点** [出口, 入口]（错开时的拐点不塞进
+   *   points），并置 `curvedConnector`。弯曲几何在渲染期由两端 + 各自所依附边的
+   *   外法线推导，创建路径一个弯曲几何都不算；两端对齐时几何自然退化成直线。
    * - 错开 + 折线箭头（elbow）：**不塞我们的拐点**，仍旧给两点 + `elbowed`，
    *   交给内置正交路由自己布线（老行为）。预演没有绑定可依、路由跑不起来，
    *   所以预演改为直接拿同一套拐点画折线（`foldElbowRoute`）——渲染层对 elbowed
@@ -563,7 +557,7 @@ export class AppQuickCreate {
       identity?: CreationIdentity;
       /** 预演专用：折线箭头也按拐点画，避免画成一条斜直线 */
       foldElbowRoute?: boolean;
-      /** 预演专用：预演副本元素（补等效绑定、跑模型重算时要能在 map 里查到它） */
+      /** 预演副本元素：端绑定的锚点按它的轮廓算，与落地写进副本的固定点同源 */
       ghostShape?: NonDeletedExcalidrawElement;
     } = {},
   ): NonDeleted<ExcalidrawLinearElement> => {
@@ -573,32 +567,20 @@ export class AppQuickCreate {
     const fold =
       bend && (options.foldElbowRoute || !arrowProps.elbowed) ? bend : null;
     const rounded = !!arrowProps.roundness;
-    // 曲线样式要转折时用**占位三点**：只用到两个中心（创建时已知），一个弯曲
-    // 几何都不算。K 取两者中点，重算反推出来的比例正好是默认的 0.5（
-    // turn = (8·中点 − 源中心 − 副本中心) / 6 = 中点），所以归位结果与模型对
-    // 同一对两端的解完全一致。
-    const placeholder = rounded && fold;
-    const origin: QuickCreatePoint = placeholder
-      ? { ...placement.source.center }
-      : exit;
-    // 出口就是箭头的起点（x/y），所以这里只列**起点之后**的点
-    const tail: QuickCreatePoint[] = fold
-      ? rounded
-        ? [
-            getCurveConnectorDefaultK(origin, placement.target),
-            placement.target,
-          ]
-        : [...fold, entry]
-      : [entry];
-    const arrow = newArrowElement({
+    // 出口就是箭头的起点（x/y），所以这里只列**起点之后**的点。圆角样式恒为两点：
+    // 弯曲几何留给渲染期推导，创建路径不碰它。
+    const tail: QuickCreatePoint[] =
+      fold && !rounded ? [...fold, entry] : [entry];
+    const created = newArrowElement({
       type: "arrow",
-      x: origin.x,
-      y: origin.y,
+      x: exit.x,
+      y: exit.y,
       ...arrowProps,
+      curvedConnector: rounded,
       points: [
         pointFrom<LocalPoint>(0, 0),
         ...tail.map((point) =>
-          pointFrom<LocalPoint>(point.x - origin.x, point.y - origin.y),
+          pointFrom<LocalPoint>(point.x - exit.x, point.y - exit.y),
         ),
       ],
       ...(options.opacityScale === undefined
@@ -606,79 +588,109 @@ export class AppQuickCreate {
         : { opacity: arrowProps.opacity * options.opacityScale }),
       ...options.identity,
     });
-    if (!placeholder || !options.ghostShape) {
-      // 落地路径到此为止：占位三点会在绑好两端之后由 createConnectedShape
-      // 调模型重算归位（那时才有真正的绑定可依）。
+    const arrow: NonDeleted<ExcalidrawLinearElement> = created;
+    if (!rounded || !options.ghostShape) {
       return arrow;
     }
     // 预演元素不在场景里、没有绑定：补上与落地 `bindBindingElement` 写进去的
-    // 同源固定点（口径同 binding.fixedPoint，决定轴向与附着点），再跑一次与落地
-    // **同一个**模型重算，预演才与落地逐点一致。id 只是占位，几何不查它。
-    return this.settleCurveConnector(
-      {
-        ...arrow,
-        ...this.getPreviewBindings(placement),
-      } as NonDeleted<ExcalidrawArrowElement>,
-      options.ghostShape,
-    );
+    // 同源固定点（口径同 `binding.fixedPoint`）。渲染期正是读它解端切线、决定该端
+    // 贴在哪条边、曲线朝哪弯，缺了会退回弦主轴、画出错的轴向。补完再按与落地
+    // `reflowArrowEndpoints` 同一个函数把两端落到轮廓上，预演才与落地逐点一致。
+    const bound: NonDeleted<ExcalidrawLinearElement> = {
+      ...arrow,
+      ...this.getPreviewBindings(placement, arrow, options.ghostShape),
+    };
+    return this.projectPreviewEndpoints(bound, options.ghostShape);
   };
 
   /**
-   * 预演专用：把模型解出来的三点写回一个**不在场景里**的元素。落地那条走的是
-   * `LinearElementEditor.movePoints`（会正确处理元素角度），这里只是它的等价
-   * 动作——起点归零、其余点整体平移，元素 x/y 跟着挪（预演箭头角度恒为 0）。
-   * 两端解析不出来时保持占位点、不抛。
+   * 预演专用：把两端按**与落地 `reflowArrowEndpoints` 同一个** `updateBoundPoint`
+   * 落到轮廓上（`updateBoundPoint` 是纯函数，返回元素局部坐标点）。预演元素不在
+   * 场景里，没法走落地那条 `movePoints`，所以这里只把返回的点写回元素本身。
+   * 副本要临时塞进 map：`updateBoundPoint` 解析另一端的绑定时会查它。
    */
-  private settleCurveConnector = (
-    arrow: NonDeleted<ExcalidrawArrowElement>,
+  private projectPreviewEndpoints = (
+    arrow: NonDeleted<ExcalidrawLinearElement>,
     ghostShape: NonDeletedExcalidrawElement,
   ): NonDeleted<ExcalidrawLinearElement> => {
-    const elementsMap = new Map(
+    const elementsMap: ElementsMap = new Map(
       this.app.scene.getNonDeletedElementsMap(),
-    ) as Map<string, NonDeletedExcalidrawElement>;
-    elementsMap.set(ghostShape.id, ghostShape);
-    const points = recomputeCurveConnector(
-      arrow,
-      elementsMap as unknown as ElementsMap,
     );
-    if (!points) {
-      return arrow;
+    elementsMap.set(ghostShape.id, ghostShape);
+    const points = arrow.points.map((p) => pointFrom<LocalPoint>(p[0], p[1]));
+    for (const field of ["startBinding", "endBinding"] as const) {
+      const binding = arrow[field];
+      const target = binding && elementsMap.get(binding.elementId);
+      if (binding && target && isBindableElement(target)) {
+        const point = updateBoundPoint(
+          arrow,
+          field,
+          binding,
+          target,
+          elementsMap,
+        );
+        if (point) {
+          points[field === "startBinding" ? 0 : points.length - 1] = point;
+        }
+      }
     }
+    // 与落地 `movePoints` 同款归位：端点的元素局部不变量是 points[0] 恒为 [0,0]，
+    // 所以把投影后的起点搬回原点、元素 x/y 反向平移（场景位置不变）
     const [offsetX, offsetY] = points[0];
     return {
       ...arrow,
       x: arrow.x + offsetX,
       y: arrow.y + offsetY,
-      points: points.map(([x, y]) =>
-        pointFrom<LocalPoint>(x - offsetX, y - offsetY),
+      points: points.map((p) =>
+        pointFrom<LocalPoint>(p[0] - offsetX, p[1] - offsetY),
       ),
     };
   };
 
-  /** 预演连线的等效绑定：附着点的归一化盒坐标，口径同 binding.fixedPoint */
-  private getPreviewBindings = (placement: QuickCreatePlacement) => {
-    const { source, sourceId, target, connector } = placement;
+  /**
+   * 预演连线的等效绑定：附着点的归一化盒坐标。用与落地 `bindBindingElement` 内部
+   * **同一个**函数算（传出口 / 入口当 `focusPoint`），两边因此逐位一致；该函数在
+   * 给定 `focusPoint` 时不读 `elementsMap`，这里按签名照传。
+   */
+  private getPreviewBindings = (
+    placement: QuickCreatePlacement,
+    arrow: NonDeleted<ExcalidrawLinearElement>,
+    ghostShape: NonDeletedExcalidrawElement,
+  ): {
+    startBinding: FixedPointBinding | null;
+    endBinding: FixedPointBinding | null;
+  } => {
+    const { sourceId, connector } = placement;
+    const elementsMap = this.app.scene.getNonDeletedElementsMap();
+    const source = this.app.scene.getNonDeletedElement(sourceId);
     return {
-      startBinding: {
-        elementId: sourceId,
-        mode: "orbit" as const,
-        fixedPoint: getCurveConnectorAttachmentFixedPoint(connector.exit, {
-          center: source.center,
-          angle: source.angle,
-          width: source.width,
-          height: source.height,
-        }),
-      },
-      endBinding: {
-        elementId: QUICK_CREATE_GHOST_SHAPE_ID,
-        mode: "orbit" as const,
-        fixedPoint: getCurveConnectorAttachmentFixedPoint(connector.entry, {
-          center: target,
-          angle: source.angle,
-          width: source.width,
-          height: source.height,
-        }),
-      },
+      startBinding:
+        source && isBindableElement(source)
+          ? {
+              elementId: sourceId,
+              mode: "orbit" as const,
+              ...calculateFixedPointForNonElbowArrowBinding(
+                arrow,
+                source,
+                "start",
+                elementsMap,
+                pointFrom<GlobalPoint>(connector.exit.x, connector.exit.y),
+              ),
+            }
+          : null,
+      endBinding: isBindableElement(ghostShape)
+        ? {
+            elementId: QUICK_CREATE_GHOST_SHAPE_ID,
+            mode: "orbit" as const,
+            ...calculateFixedPointForNonElbowArrowBinding(
+              arrow,
+              ghostShape,
+              "end",
+              elementsMap,
+              pointFrom<GlobalPoint>(connector.entry.x, connector.entry.y),
+            ),
+          }
+        : null,
     };
   };
 
@@ -700,11 +712,10 @@ export class AppQuickCreate {
     const arrow = this.buildConnectorArrow(placement);
 
     this.app.insertNewElements([arrow, clone]);
-    // 绑定的**锚点**（也就是轴向与附着点，不是弯曲几何）用几何解出来的出口/入口：
-    // `fixedPoint` 决定连线贴在哪条边上、渲染时从哪解轴向。曲线样式的箭头此时是
-    // 占位三点，它的端点不在这两个位置上，所以必须显式传——否则 fixedPoint 会落成
-    // 图形中心，轴向也跟着错。折线/直线样式传的是同一个点（箭头端点本来就等于
-    // 出口/入口），属于无操作。
+    // 两端绑定的**锚点**（决定该端贴在哪条边、曲线朝哪弯）用几何解出来的出口 /
+    // 入口：这里显式传 `focusPoint`，落地写进 `fixedPoint` 的值因此与预演逐位一致
+    // （预演走的是同一个函数）。创建路径的端点本来就落在出口 / 入口上，显式传是
+    // 把「锚点取这里」写成明确意图，不改变结果。
     bindBindingElement(
       arrow,
       source as NonDeleted<ExcalidrawBindableElement>,
@@ -727,17 +738,13 @@ export class AppQuickCreate {
         placement.connector.entry.y,
       ),
     );
-    // 两点连线（直线，以及交给内置正交路由的折线箭头）照旧按 orbit 绑定把两端
-    // 落到图形轮廓上；折线样式的端点**已经**按几何落在两个轮廓上（入口就是副本
-    // 轮廓的轴向交点），不能再来一次：reflow 只会沿「副本中心 → 倒数第二个点」
+    // 两点连线（直线、圆角连接线，以及交给内置正交路由的折线箭头）按 orbit 绑定
+    // 把两端落到图形轮廓上；折线样式的端点**已经**按几何落在两个轮廓上（入口就是
+    // 副本轮廓的轴向交点），不能再来一次：reflow 只会沿「副本中心 → 倒数第二个点」
     // 这条射线求交点——对折线来说是错的那条射线，会把入口从轮廓上拽走，旋转副本
-    // 尤其明显，预演也就跟落地对不上了。
+    // 尤其明显。圆角连接线现在恒为两点，走的就是这条 reflow。
     if (arrow.points.length === 2) {
       this.reflowArrowEndpoints(arrow);
-    } else {
-      // 曲线样式：占位三点在两端绑定建好之后交给**模型**归位，创建路径到此
-      // 一步也没解过弯曲几何。与插入同一次 capture，撤销仍是一步。
-      this.reflowCurveConnector(arrow);
     }
 
     this.app.setState({
@@ -768,33 +775,6 @@ export class AppQuickCreate {
       // （与 frameChildrenIndex 同口径），清掉才不会被画框当成员
       containerRef: undefined,
     } as NonDeleted<ExcalidrawCompositeShapeElement>;
-  };
-
-  /**
-   * 曲线连线（3 点模型）落地归位：两端绑定建好之后调一次模型重算，把占位三点
-   * 落到各自轮廓上。曲线几何因此只有一个来源（`element/curveConnector.ts` 的
-   * 模型），创建路径不再自己解出入口、中间点。走 `movePoints` 这条现成通路，
-   * 历史 / 协作 / 原点归一都与拖动图形时的重算完全一致。
-   *
-   * 重算拿不到结果时保持占位点、不抛（两端刚绑上，理论上不该发生）。
-   */
-  private reflowCurveConnector = (
-    arrow: NonDeleted<ExcalidrawLinearElement>,
-  ) => {
-    const live = this.app.scene.getNonDeletedElement(arrow.id);
-    if (!live || !isArrowElement(live)) {
-      return;
-    }
-    const points = recomputeCurveConnector(
-      live,
-      this.app.scene.getNonDeletedElementsMap(),
-    );
-    if (!points) {
-      return;
-    }
-    const updates: PointsPositionUpdates = new Map();
-    points.forEach((point, index) => updates.set(index, { point }));
-    LinearElementEditor.movePoints(live, this.app.scene, updates);
   };
 
   /** 按已建立的绑定把两端落到图形轮廓上，弹头才不会藏在图形下面。 */

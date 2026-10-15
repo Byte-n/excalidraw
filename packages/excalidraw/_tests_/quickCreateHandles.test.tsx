@@ -5,7 +5,6 @@ import { getCurvePathOps } from "@excalidraw/utils/shape";
 import {
   ShapeCache,
   getContainingFrame,
-  getCurveConnectorRatio,
   getElementBounds,
   getQuickCreateHandles,
   hitTestQuickCreateHandle,
@@ -14,14 +13,12 @@ import {
   isMindmapNodeElement,
   QUICK_CREATE_GHOST_ALPHA,
   QUICK_CREATE_HANDLE_REST_ALPHA,
-  recomputeCurveConnector,
   updateBoundElements,
 } from "@excalidraw/element";
 
 import type { LocalPoint } from "@excalidraw/math";
 import type { ElementUpdate } from "@excalidraw/element/mutateElement";
 import type {
-  ExcalidrawArrowElement,
   ExcalidrawElement,
   ExcalidrawLinearElement,
   ExcalidrawSelectionElement,
@@ -1228,7 +1225,7 @@ describe("quick create handles", () => {
         }
       });
 
-      it("takes the landed three points from the model, not from the creation path", () => {
+      it("creates a two-point curved connector flagged as such", () => {
         const source = createRectangle();
         selectShape(source, [blocker(RIGHT_BASE)]);
         act(() => {
@@ -1238,62 +1235,34 @@ describe("quick create handles", () => {
         clickHandle("right");
         const arrow = createdArrow(before);
 
-        // 只存 A、K、D 三个点，而且创建路径根本没解过弯曲几何（占位三点是源中心 /
-        // 副本中心 / 两者中点）：落地三点必须等于模型对同一对两端的输出
+        // 圆角样式 ⇒ curvedConnector 置位、恒为两点。错开时的拐点不塞进 points：
+        // 弯曲几何在渲染期由两端 + 各自所依附边的外法线推导，创建路径不算它。
         expect(arrow.roundness).toEqual({
           type: ROUNDNESS.PROPORTIONAL_RADIUS,
         });
         expect(arrow.elbowed).toBe(false);
-        expect(arrow.points).toHaveLength(3);
-        const fromModel = recomputeCurveConnector(
-          arrow as NonDeleted<ExcalidrawArrowElement>,
-          h.app.scene.getNonDeletedElementsMap(),
-        )!;
-        // 再算一遍结果不变（模型对同一状态的解是可重复的；允许浮点级出入）
-        expect(fromModel).toHaveLength(3);
-        for (let index = 0; index < 3; index++) {
-          expect(fromModel[index][0]).toBeCloseTo(arrow.points[index][0], 2);
-          expect(fromModel[index][1]).toBeCloseTo(arrow.points[index][1], 2);
-        }
-        // 两端点是绑定解出来的（在轮廓外一个 binding gap 上），不是创建时算的
-        // 出口 (220,140) / 入口 (350,0)
-        expect(worldPoints(arrow)[0]).not.toEqual({ x: 220, y: 140 });
+        expect(arrow.curvedConnector).toBe(true);
+        expect(arrow.points).toHaveLength(2);
+
+        // 两端锚点落在朝对侧的边上：出口贴源右边缘（fx ≈ 1）、入口贴副本左边缘
+        // （fx ≈ 0），另一轴都是中线（normalizeFixedPoint 会避开正 0.5，故给容差）
+        expect(arrow.startBinding?.fixedPoint[0]).toBeCloseTo(1, 6);
+        expect(arrow.startBinding?.fixedPoint[1]).toBeCloseTo(0.5, 3);
+        expect(arrow.endBinding?.fixedPoint[0]).toBeCloseTo(0, 6);
+        expect(arrow.endBinding?.fixedPoint[1]).toBeCloseTo(0.5, 3);
+
+        // 端点在轮廓外一个 binding gap 上（orbit 绑定把端点落到轮廓外侧）
         expect(outlineRatio(source, worldPoints(arrow)[0])).toBeGreaterThan(1);
 
-        const points = worldPoints(arrow);
-        // 控制点由两端推导（转折线在两端中点的轴上位置）：c1 与 A 同高、c2 与 D
-        // 同高 → 两端切线水平，箭头方向永远水平；K 是曲线 t = 0.5 处的点
-        const [A, K, D] = points;
-        const turn = (A.x + D.x) / 2;
-        const c1 = { x: turn, y: A.y };
-        const c2 = { x: turn, y: D.y };
-        expect(cubicAt(A, c1, c2, D, 0.5).x).toBeCloseTo(K.x, 6);
-        expect(cubicAt(A, c1, c2, D, 0.5).y).toBeCloseTo(K.y, 6);
-
-        // 渲染走的就是这条三次贝塞尔（形状 ops）：首段第一个控制点与 A 同高、
-        // 末段最后一个控制点与 D 同高（局部坐标里 A 归零，D 是相对 A 的偏移）
+        // 渲染出来是一条三次贝塞尔（一个 C）：两端切线水平 → 首段控制点与 A 同高、
+        // 末段控制点与 D 同高（ops 输出收敛到两位小数）
         const ops = curveOps(arrow);
-        const localD = { x: D.x - arrow.x, y: D.y - arrow.y };
+        const [A, D] = worldPoints(arrow);
         expect(ops[0].op).toBe("move");
         expect(ops[1].op).toBe("bcurveTo");
-        expect(ops[1].data[1]).toBeCloseTo(0, 6);
+        expect(ops[1].data[1]).toBeCloseTo(A.y - arrow.y, 2);
         expect(ops[ops.length - 1].op).toBe("bcurveTo");
-        expect(ops[ops.length - 1].data[3]).toBeCloseTo(localD.y, 6);
-        // 画出来的**箭头方向**取首末段的弦（bounds.ts 的 getArrowheadPoints），
-        // 所以段要短才贴得住切线：两端弦都近水平
-        const lastOp = ops.length - 1;
-        expect(
-          Math.abs(
-            (ops[1].data[5] - ops[0].data[1]) /
-              (ops[1].data[4] - ops[0].data[0]),
-          ),
-        ).toBeLessThan(0.05);
-        expect(
-          Math.abs(
-            (ops[lastOp].data[5] - ops[lastOp - 1].data[1]) /
-              (ops[lastOp].data[4] - ops[lastOp - 1].data[0]),
-          ),
-        ).toBeLessThan(0.05);
+        expect(ops[ops.length - 1].data[3]).toBeCloseTo(D.y - arrow.y, 2);
       });
     });
 
@@ -1319,7 +1288,7 @@ describe("quick create handles", () => {
       expect(arrow.id).not.toBe(QUICK_CREATE_GHOST_ARROW_ID);
     });
 
-    it("previews the round arrow as the very same three-point curve", () => {
+    it("previews the round arrow as the very same two-point curve", () => {
       const source = createRectangle();
       selectShape(source, [blocker(RIGHT_BASE)]);
       act(() => {
@@ -1328,18 +1297,31 @@ describe("quick create handles", () => {
 
       mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
       const ghost = h.app.quickCreate.getGhostElements(handleFor("right"));
-      const ghostOps = curveOps(ghost[1]);
 
       const before = liveIds();
       clickHandle("right");
       const arrow = createdArrow(before);
 
-      // 预演与落地**逐点**一致：A、K、D 三点
-      expect(worldPoints(ghost[1])).toHaveLength(3);
-      expect(worldPoints(ghost[1])).toEqual(worldPoints(arrow));
-      // 连渲染出来的曲线也一样：轴向是渲染时从绑定解的，预演元素替上等效绑定
-      // （fixedPoint 与落地同源）才画得出同一条曲线
-      expect(curveOps(arrow)).toEqual(ghostOps);
+      // 圆角连接线恒为两点，且预演与落地同 `curvedConnector`、同绑定锚点
+      // （fixedPoint 决定该端贴在哪条边、曲线朝哪弯，渲染期读它解端切线）
+      const ghostArrow = ghost[1];
+      if (!isArrowElement(ghostArrow)) {
+        throw new Error("Expected an arrow");
+      }
+      expect(worldPoints(ghostArrow)).toHaveLength(2);
+      expect(ghostArrow.curvedConnector).toBe(true);
+      expect(arrow.curvedConnector).toBe(true);
+      expect(ghostArrow.startBinding?.fixedPoint).toEqual(
+        arrow.startBinding?.fixedPoint,
+      );
+      expect(ghostArrow.endBinding?.fixedPoint).toEqual(
+        arrow.endBinding?.fixedPoint,
+      );
+      // 几何逐点一致：预演按与落地 `reflowArrowEndpoints` 同一个 `updateBoundPoint`
+      // 把两端落到轮廓上，所以两边的点（含 binding gap 那几像素外推）完全相同
+      expect(worldPoints(ghostArrow)).toEqual(worldPoints(arrow));
+      // 渲染出的曲线也一样（点与 fixedPoint 都同源）
+      expect(curveOps(ghostArrow)).toEqual(curveOps(arrow));
     });
 
     it("previews the elbow arrow with the same fold points", () => {
@@ -1384,7 +1366,7 @@ describe("quick create handles", () => {
       expect(after[0]).toMatchObject({ x: 350, y: -40 });
     });
 
-    describe("the three-point curve model", () => {
+    describe("the curved connector model", () => {
       const placeRound = (
         others: readonly NonDeletedExcalidrawElement[],
         direction: "top" | "right" | "bottom" | "left" = "right",
@@ -1404,95 +1386,77 @@ describe("quick create handles", () => {
         const copy = createdShape(before);
         const arrow = createdArrow(before);
 
-        // 下边出口 → A 贴源的下边；副本让位到右 1，入口贴它上边（几像素的出入
-        // 来自 binding gap）
+        // 恒为两点：出口贴源下边、入口贴副本上边（几像素的出入来自 binding gap）
         const points = worldPoints(arrow);
-        expect(points).toHaveLength(3);
-        // 出口贴源的下边（沿斜射线落在"轮廓外扩一个 binding gap"上，所以会顺着
-        // 边滑一点），入口贴副本的上边
-        expect(Math.abs(points[0].x - 160)).toBeLessThan(20);
-        expect(Math.abs(points[0].y - 180)).toBeLessThan(10);
+        expect(points).toHaveLength(2);
         expect(Math.abs(outlineRatio(source, points[0]) - 1)).toBeLessThan(
           0.15,
         );
-        expect(Math.abs(outlineRatio(copy, points[2]) - 1)).toBeLessThan(0.15);
-        expect(Math.abs(points[2].x - 370)).toBeLessThan(20);
-        expect(Math.abs(points[2].y - 270)).toBeLessThan(10);
+        expect(Math.abs(outlineRatio(copy, points[1]) - 1)).toBeLessThan(0.15);
 
-        // 竖直轴、比例 0.5：控制点在两端中点的轴上位置 → c1/c2 与两端同 x，
-        // K 是曲线 t = 0.5 的点（另一轴是两端中点）
-        const [A, K, D] = points;
-        const turn = (A.y + D.y) / 2;
-        const c1 = { x: A.x, y: turn };
-        const c2 = { x: D.x, y: turn };
-        expect(cubicAt(A, c1, c2, D, 0.5).x).toBeCloseTo(K.x, 6);
-        expect(cubicAt(A, c1, c2, D, 0.5).y).toBeCloseTo(K.y, 6);
-        expect(K.x).toBeCloseTo((A.x + D.x) / 2, 3);
+        // 锚点落在各自的上下边（fy ≈ 1 / 0），另一轴是中线
+        expect(arrow.startBinding?.fixedPoint[1]).toBeCloseTo(1, 3);
+        expect(arrow.endBinding?.fixedPoint[1]).toBeCloseTo(0, 3);
 
-        // 切线**竖直**：首段第一个控制点的 x 与 A 相同、末段第二个控制点与 D 相同
+        // 端切线**竖直**：首段第一个控制点的 x 与 A 相同、末段最后一个控制点与 D 相同
         const ops = curveOps(arrow);
-        expect(ops[1].data[0]).toBeCloseTo(A.x - arrow.x, 6);
-        expect(ops[ops.length - 1].data[2]).toBeCloseTo(D.x - arrow.x, 6);
+        expect(ops[1].data[0]).toBeCloseTo(points[0].x - arrow.x, 2);
+        expect(ops[ops.length - 1].data[2]).toBeCloseTo(
+          points[1].x - arrow.x,
+          2,
+        );
       });
 
-      it("recomputes the whole curve when the bound shape moves", () => {
+      it("follows the bound shape when it moves", () => {
         const { copy, arrow } = placeRound([blocker(RIGHT_BASE)]);
 
         moveShape(copy, 0, -140);
 
         const points = worldPoints(arrow);
-        expect(points).toHaveLength(3);
+        expect(points).toHaveLength(2);
         // 入口跟着副本落到新位置（副本左边中段，几像素的出入来自 binding gap）
-        expect(Math.abs(points[2].x - 350)).toBeLessThan(10);
-        expect(points[2].y).toBeLessThan(-100);
-        // K 落在新让位段中点：比例仍是默认的 0.5
-        expect(
-          (points[1].x - points[0].x) / (points[2].x - points[0].x),
-        ).toBeCloseTo(0.5, 3);
-        expect(points[1].y).toBeCloseTo((points[0].y + points[2].y) / 2, 3);
+        expect(Math.abs(points[1].x - 350)).toBeLessThan(10);
+        expect(points[1].y).toBeLessThan(-100);
+        // 锚点（贴哪条边）不变：弯曲几何在渲染期由新两端重解
+        expect(arrow.endBinding?.fixedPoint[0]).toBeCloseTo(0, 3);
+        expect(arrow.curvedConnector).toBe(true);
       });
 
-      it("keeps the ratio the user dragged on K when the shape moves again", () => {
+      it("keeps a user-added control point in place when the shape moves", () => {
         const { copy, arrow } = placeRound([blocker(RIGHT_BASE)]);
-        const beforeDrag = curveOps(arrow);
 
-        // 把 K 拖到比例的 0.3 处（等价于拖中间手柄）：转折线从 x = 285 挪到
-        // 220 + 0.3 × 130 = 259，而 K 是曲线 t = 0.5 的点，所以落在
-        // x = 220 + (0 + 130 + 6 × 39) / 8 = 265.5（局部 45.5）
+        // 拖段中点手柄 ⇒ 控制点入列，points.length ≥ 3 即手动态（曲线过该点）
         setArrowPoints(arrow, [
           [0, 0],
           [45.5, -70],
           [130, -140],
         ]);
-        expect(curveOps(arrow)).not.toEqual(beforeDrag);
+        expect(arrow.points).toHaveLength(3);
+        const control = worldPoints(arrow)[1];
 
         moveShape(copy, 0, -140);
 
-        // 新比例被保留：重算后转折线仍在这条曲线的 0.3 处（**旧**三点反推比例）
-        const points = worldPoints(arrow);
-        expect(
-          getCurveConnectorRatio({
-            A: points[0],
-            D: points[2],
-            axis: "h",
-            K: points[1],
-          }),
-        ).toBeCloseTo(0.3, 3);
-        // 而 K 自己仍在曲线上（t = 0.5）：另一轴是两端中点
-        expect(points[1].y).toBeCloseTo((points[0].y + points[2].y) / 2, 3);
+        // 手动态：控制点在场景里不动，只有端点沿岸滑动
+        const after = worldPoints(arrow);
+        expect(after).toHaveLength(3);
+        expect(after[1].x).toBeCloseTo(control.x, 6);
+        expect(after[1].y).toBeCloseTo(control.y, 6);
       });
 
       it("hits the bulge and covers it with the bounding box", () => {
         const { arrow } = placeRound([blocker(RIGHT_BASE)]);
-        // 几何取落地后的**模型**三点（不是创建路径算的出口/入口）
-        const [A, K, D] = worldPoints(arrow);
-        expect(K.x).toBeCloseTo((A.x + D.x) / 2, 3);
-        expect(K.y).toBeCloseTo((A.y + D.y) / 2, 3);
-        // 水平轴、比例 0.5 → 控制点在两端中点的轴上位置
-        const c1 = { x: (A.x + D.x) / 2, y: A.y };
-        const c2 = { x: (A.x + D.x) / 2, y: D.y };
+        // 自动态就是一段三次贝塞尔：控制点直接读渲染出的形状 ops（渲染 / 命中 /
+        // 包围盒同源，所以断言落在它上面而不是落在点上）
+        const ops = curveOps(arrow);
+        const A = { x: ops[0].data[0] + arrow.x, y: ops[0].data[1] + arrow.y };
+        const c1 = { x: ops[1].data[0] + arrow.x, y: ops[1].data[1] + arrow.y };
+        const c2 = { x: ops[1].data[2] + arrow.x, y: ops[1].data[3] + arrow.y };
+        const D = { x: ops[1].data[4] + arrow.x, y: ops[1].data[5] + arrow.y };
+        // 端切线水平：首末控制点分别与 A / D 同高
+        expect(c1.y).toBeCloseTo(A.y, 6);
+        expect(c2.y).toBeCloseTo(D.y, 6);
 
-        // 曲线在 t = 0.25 处离 A–D 弦最远（≈20 场景单位）：那一点要能选中
+        // 曲线在 t = 0.25 处离 A–D 弦最远（十几场景单位）：那一点要能选中
         const onCurve = cubicAt(A, c1, c2, D, 0.25);
         const onChord = {
           x: onCurve.x,
@@ -1500,7 +1464,7 @@ describe("quick create handles", () => {
         };
         expect(
           Math.hypot(onCurve.x - onChord.x, onCurve.y - onChord.y),
-        ).toBeGreaterThan(15);
+        ).toBeGreaterThan(10);
         expect(h.app.getElementAtPosition(onCurve.x, onCurve.y)?.id).toBe(
           arrow.id,
         );
@@ -1520,10 +1484,9 @@ describe("quick create handles", () => {
           expect(point.y).toBeGreaterThanOrEqual(minY - 1);
           expect(point.x).toBeLessThanOrEqual(maxX + 1);
           expect(point.y).toBeLessThanOrEqual(maxY + 1);
-          // 边界贴着曲线：盒子的四条边都踩到曲线的极值上
-          expect(minX).toBeLessThanOrEqual(A.x);
-          expect(maxX).toBeGreaterThanOrEqual(D.x);
         }
+        expect(minX).toBeLessThanOrEqual(A.x + 1);
+        expect(maxX).toBeGreaterThanOrEqual(D.x - 1);
         expect(maxX - minX).toBeLessThan(Math.abs(D.x - A.x) + 20);
         expect(maxY - minY).toBeLessThan(Math.abs(D.y - A.y) + 20);
       });
@@ -1547,21 +1510,20 @@ describe("quick create handles", () => {
 
         // 出口在旋转后源的本地 +x 边上 → 轴向仍是**绝对**水平；两端都贴各自的
         // 真实轮廓（几像素的出入来自 binding gap）
-        const [A, , D] = worldPoints(arrow);
+        const points = worldPoints(arrow);
+        expect(points).toHaveLength(2);
+        const [A, D] = points;
         expect(Math.abs(outlineRatio(source, A) - 1)).toBeLessThan(0.15);
         expect(Math.abs(outlineRatio(copy, D) - 1)).toBeLessThan(0.15);
         const ops = curveOps(arrow);
-        const localA = { x: A.x - arrow.x, y: A.y - arrow.y };
-        const localD = { x: D.x - arrow.x, y: D.y - arrow.y };
-        expect(ops[1].data[1]).toBeCloseTo(localA.y, 6);
-        expect(ops[ops.length - 1].data[3]).toBeCloseTo(localD.y, 6);
+        expect(ops[1].data[1]).toBeCloseTo(A.y - arrow.y, 2);
+        expect(ops[ops.length - 1].data[3]).toBeCloseTo(D.y - arrow.y, 2);
       });
 
-      it("keeps the model's shape after the copy is moved away and back", () => {
-        // 「创建时算」与「模型算」没有分歧：把副本挪开再挪回原位，比例、轴向、
-        // 以及 K 贴在曲线上这些性质都保持不变（两端由绑定重解，与创建时的解算
-        // 同一套；orbit 求解的射线方向依赖当前另一端，所以位置允许 binding gap
-        // 量级的出入）
+      it("keeps the connector's shape after the copy is moved away and back", () => {
+        // 端点在创建时与模型重解时走的是同一套：把副本挪开再挪回原位，两端回到
+        // 原处、切线方向不变（orbit 求解的射线方向依赖当前另一端，所以位置允许
+        // binding gap 量级的出入）
         const { copy, arrow } = placeRound([blocker(RIGHT_BASE)]);
         const landed = worldPoints(arrow);
 
@@ -1570,49 +1532,33 @@ describe("quick create handles", () => {
 
         moveShape(copy, 0, 2 * RIGHT_STEP);
         const back = worldPoints(arrow);
-        expect(back).toHaveLength(3);
-        for (let index = 0; index < 3; index++) {
+        expect(back).toHaveLength(2);
+        for (let index = 0; index < 2; index++) {
           expect(Math.abs(back[index].x - landed[index].x)).toBeLessThan(15);
           expect(Math.abs(back[index].y - landed[index].y)).toBeLessThan(15);
         }
-        // 比例仍是默认的 0.5，K 仍落在曲线上（t = 0.5）
-        expect(
-          getCurveConnectorRatio({
-            A: back[0],
-            D: back[2],
-            axis: "h",
-            K: back[1],
-          }),
-        ).toBeCloseTo(0.5, 3);
-        expect(back[1].y).toBeCloseTo((back[0].y + back[2].y) / 2, 3);
         // 轴向没变：切线仍水平
         const ops = curveOps(arrow);
         const lastOp = ops.length - 1;
-        expect(ops[1].data[1]).toBeCloseTo(back[0].y - arrow.y, 6);
-        expect(ops[lastOp].data[3]).toBeCloseTo(back[2].y - arrow.y, 6);
+        expect(ops[1].data[1]).toBeCloseTo(back[0].y - arrow.y, 2);
+        expect(ops[lastOp].data[3]).toBeCloseTo(back[1].y - arrow.y, 2);
       });
 
-      it("only refreshes the endpoints for arrows outside the model", () => {
-        // ≥4 点的曲线：保持现状（只刷首尾两点，中间点原样不动）
-        const fourPoint = placeAndClick(
-          [blocker(RIGHT_BASE)],
-          "right",
-          "round",
-        );
-        setArrowPoints(fourPoint.arrow, [
+      it("refreshes only the endpoints of a connector with control points", () => {
+        // 手动态（points.length ≥ 3）：只刷首尾两点，控制点原样不动
+        const manual = placeAndClick([blocker(RIGHT_BASE)], "right", "round");
+        setArrowPoints(manual.arrow, [
           [0, 0],
           [40, -40],
           [90, -100],
           [130, -140],
         ]);
-        const fourPointMiddle = worldPoints(fourPoint.arrow).slice(1, 3);
-        moveShape(fourPoint.copy, 0, -140);
-        expect(worldPoints(fourPoint.arrow)).toHaveLength(4);
-        expect(worldPoints(fourPoint.arrow).slice(1, 3)).toEqual(
-          fourPointMiddle,
-        );
+        const middle = worldPoints(manual.arrow).slice(1, 3);
+        moveShape(manual.copy, 0, -140);
+        expect(worldPoints(manual.arrow)).toHaveLength(4);
+        expect(worldPoints(manual.arrow).slice(1, 3)).toEqual(middle);
 
-        // 2 点的曲线样式：仍旧两点直线，只有端点跟着走
+        // 自动态（两点）：只有端点跟着走
         const line = placeAndClick([blocker(RIGHT_BASE)], "right", "round");
         setArrowPoints(line.arrow, [
           [0, 0],
@@ -1634,7 +1580,8 @@ describe("quick create handles", () => {
           ).toBe(true);
         }
 
-        // 直箭头（无圆角）带 3 个点时也不是新模型：中间点不跟着重算
+        // 直箭头（无圆角）带 3 个点时也不是新模型（判据看 curvedConnector、不看
+        // 点数）：中间点不跟着重算
         const sharp = placeAndClick([blocker(RIGHT_BASE)], "right", "round");
         setArrowPoints(
           sharp.arrow,
@@ -1861,17 +1808,19 @@ describe("quick create handles", () => {
       // 连线：源右边缘中点到副本近端边缘中点，样式取当前连接线，同样压到一半
       expect(ghostArrow).toMatchObject({
         type: "arrow",
-        x: 220,
-        y: 140,
         opacity: 100 * QUICK_CREATE_GHOST_ALPHA,
       });
       if (!isArrowElement(ghostArrow)) {
         throw new Error("Expected an arrow");
       }
-      expect(ghostArrow.points).toEqual([
-        [0, 0],
-        [130, 0],
-      ]);
+      // 端点由 orbit 绑定解出（沿外法线外推一个 binding gap），所以世界坐标略在
+      // 两边轮廓之外；默认是圆角样式 ⇒ 恒为两点
+      const ghostConnector = worldPoints(ghostArrow);
+      expect(ghostConnector).toHaveLength(2);
+      expect(ghostConnector[0].y).toBeCloseTo(140, 1);
+      expect(ghostConnector[1].y).toBeCloseTo(140, 1);
+      expect(ghostConnector[0].x).toBeGreaterThan(220);
+      expect(ghostConnector[1].x).toBeLessThan(350);
 
       // 预演画在两个真实图元上（副本 + 连线各一次 blit），且**先于**四个创建
       // 入口：预演不得盖住要点的那几个圆点

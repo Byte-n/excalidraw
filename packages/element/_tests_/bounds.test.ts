@@ -1,3 +1,5 @@
+import { RoughGenerator } from "roughjs/bin/generator";
+
 import { pointFrom } from "@excalidraw/math";
 import { arrayToMap, type Bounds, ROUNDNESS } from "@excalidraw/common";
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
@@ -11,11 +13,20 @@ import {
 } from "../src/compositeShape";
 import {
   elementsOverlappingBBox,
+  getArrowheadPoints,
   getElementAbsoluteCoords,
   getElementBounds,
 } from "../src/bounds";
+import { getCurvedConnectorPath } from "../src/curveConnector";
 
-import type { ExcalidrawElement, ExcalidrawLinearElement } from "../src/types";
+import type { Drawable } from "roughjs/bin/core";
+
+import type {
+  ExcalidrawArrowElement,
+  ExcalidrawElement,
+  ExcalidrawLinearElement,
+  NonDeleted,
+} from "../src/types";
 
 const _ce = ({
   x,
@@ -215,5 +226,115 @@ describe("elementsOverlappingBBox()", () => {
         ],
       }),
     ).toEqual([rectInside]);
+  });
+});
+
+const binding = (elementId: string, fixedPoint: [number, number]) => ({
+  elementId,
+  mode: "orbit" as const,
+  fixedPoint,
+});
+
+type Binding = ReturnType<typeof binding>;
+
+/**
+ * 2 点曲线连接线：两端各自挂在一条边上（默认起点右边缘、终点左边缘）。
+ * `curvedConnector` 是显式字段——`API.createElement` 的 arrow 分支不接收它，
+ * 所以构造后再置位（判据只看这个字段，不看点数）。
+ */
+const createCurvedConnector = ({
+  points = [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 40)],
+  startBinding = binding("source", [1, 0.5]),
+  endBinding = binding("target", [0, 0.5]),
+}: {
+  points?: readonly LocalPoint[];
+  startBinding?: Binding;
+  endBinding?: Binding;
+} = {}): NonDeleted<ExcalidrawArrowElement> => {
+  const element = API.createElement({
+    type: "arrow",
+    x: 0,
+    y: 0,
+    width: 200,
+    height: 40,
+    points,
+    roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
+    startBinding,
+    endBinding,
+  });
+  return {
+    ...element,
+    type: "arrow",
+    elbowed: false,
+    curvedConnector: true,
+    roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
+  };
+};
+
+/** `getArrowheadPoints` 对曲线连接线不读 shape，只为满足签名造一个同源形状 */
+const roughPathShape = (element: ExcalidrawElement): Drawable[] => [
+  new RoughGenerator().path(getCurvedConnectorPath(element)!, {
+    roughness: 0,
+    disableMultiStroke: true,
+  }),
+];
+
+const normalize = (x: number, y: number) => {
+  const length = Math.hypot(x, y);
+  return { x: x / length, y: y / length };
+};
+
+/**
+ * 从箭头返回的两点（倒刺）反推方向：两个倒刺的中点落在 tip→尾部 的轴上，
+ * tip 指向它的单位向量就是箭头的前进方向；两个倒刺的连线（对角线）垂直于它。
+ */
+const arrowheadVectors = (
+  element: ExcalidrawLinearElement,
+  position: "start" | "end",
+) => {
+  const [tipX, tipY, armAX, armAY, armBX, armBY] = getArrowheadPoints(
+    element,
+    roughPathShape(element),
+    position,
+    "arrow",
+  )!;
+
+  return {
+    axis: normalize(tipX - (armAX + armBX) / 2, tipY - (armAY + armBY) / 2),
+    diagonal: normalize(armBX - armAX, armBY - armAY),
+  };
+};
+
+describe("getArrowheadPoints for curved connectors", () => {
+  it("points the end arrowhead horizontally along the attached edge normal", () => {
+    // 终点挂左边缘：到达方向取该端切线，垂直于竖边 ⇒ 水平（+x）
+    const element = createCurvedConnector();
+    const { axis, diagonal } = arrowheadVectors(element, "end");
+
+    expect(axis.x).toBeCloseTo(1, 6);
+    expect(axis.y).toBeCloseTo(0, 6);
+    // 对角线（两倒刺连线）与箭头方向垂直
+    expect(diagonal.x * axis.x + diagonal.y * axis.y).toBeCloseTo(0, 6);
+  });
+
+  it("points the reversed start arrowhead along the attached edge normal", () => {
+    // 起点挂右边缘：反向箭头方向垂直于竖边 ⇒ 水平（−x）
+    const element = createCurvedConnector();
+    const { axis } = arrowheadVectors(element, "start");
+
+    expect(axis.x).toBeCloseTo(-1, 6);
+    expect(axis.y).toBeCloseTo(0, 6);
+  });
+
+  it("turns the end arrowhead vertical when the end binds to the top edge", () => {
+    // 终点改挂上边缘：该端切线垂直于上边 ⇒ 箭头方向竖直
+    const element = createCurvedConnector({
+      endBinding: binding("target", [0.5, 0]),
+    });
+    const { axis, diagonal } = arrowheadVectors(element, "end");
+
+    expect(axis.x).toBeCloseTo(0, 6);
+    expect(axis.y).toBeCloseTo(1, 6);
+    expect(diagonal.x * axis.x + diagonal.y * axis.y).toBeCloseTo(0, 6);
   });
 });

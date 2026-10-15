@@ -726,6 +726,8 @@ export const restoreElement = (
         x: x ?? 0,
         y: y ?? 0,
         elbowed: (element as ExcalidrawArrowElement).elbowed,
+        curvedConnector:
+          (element as ExcalidrawArrowElement).curvedConnector ?? false,
         ...getSizeFromPoints(points),
       };
 

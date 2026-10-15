@@ -47,10 +47,6 @@ import {
 } from "./collision";
 import { distanceToElement } from "./distance";
 import {
-  isDerivedCurveConnector,
-  recomputeCurveConnector,
-} from "./curveConnector";
-import {
   headingForPointFromElement,
   headingIsHorizontal,
   vectorToHeading,
@@ -1401,53 +1397,41 @@ export const updateBoundElements = (
       return;
     }
 
-    // 曲线连接线（3 点模型）的几何由两端推导，所以整条重算——不是只刷首尾
-    // 两点。严格由判据守卫：其余箭头（含 ≥4 点的曲线）一律走原来的首尾刷新。
-    let updates: MapEntry<PointsPositionUpdates>[] = [];
-    if (isDerivedCurveConnector(element)) {
-      const recomputed = recomputeCurveConnector(element, elementsMap);
-      if (recomputed) {
-        updates = recomputed.map((point, index) => [index, { point }]);
-      }
-    }
+    const updates = bindableElementsVisitor(
+      elementsMap,
+      element,
+      (bindableElement, bindingProp) => {
+        if (
+          bindableElement &&
+          isBindableElement(bindableElement) &&
+          (bindingProp === "startBinding" || bindingProp === "endBinding") &&
+          (changedElement.id === element[bindingProp]?.elementId ||
+            changedElement.id ===
+              element[
+                bindingProp === "startBinding" ? "endBinding" : "startBinding"
+              ]?.elementId)
+        ) {
+          const point = updateBoundPoint(
+            element,
+            bindingProp,
+            element[bindingProp],
+            bindableElement,
+            elementsMap,
+          );
 
-    if (!updates.length) {
-      updates = bindableElementsVisitor(
-        elementsMap,
-        element,
-        (bindableElement, bindingProp) => {
-          if (
-            bindableElement &&
-            isBindableElement(bindableElement) &&
-            (bindingProp === "startBinding" || bindingProp === "endBinding") &&
-            (changedElement.id === element[bindingProp]?.elementId ||
-              changedElement.id ===
-                element[
-                  bindingProp === "startBinding" ? "endBinding" : "startBinding"
-                ]?.elementId)
-          ) {
-            const point = updateBoundPoint(
-              element,
-              bindingProp,
-              element[bindingProp],
-              bindableElement,
-              elementsMap,
-            );
-
-            if (point) {
-              return [
-                bindingProp === "startBinding" ? 0 : element.points.length - 1,
-                { point },
-              ] as MapEntry<PointsPositionUpdates>;
-            }
+          if (point) {
+            return [
+              bindingProp === "startBinding" ? 0 : element.points.length - 1,
+              { point },
+            ] as MapEntry<PointsPositionUpdates>;
           }
+        }
 
-          return null;
-        },
-      ).filter(
-        (update): update is MapEntry<PointsPositionUpdates> => update !== null,
-      );
-    }
+        return null;
+      },
+    ).filter(
+      (update): update is MapEntry<PointsPositionUpdates> => update !== null,
+    );
 
     LinearElementEditor.movePoints(element, scene, new Map(updates), {
       moveMidPointsWithElement:

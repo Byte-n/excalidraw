@@ -1,5 +1,6 @@
 import { pointCenter, pointFrom } from "@excalidraw/math";
 import { act, queryByTestId, queryByText } from "@testing-library/react";
+import rough from "roughjs/bin/rough";
 import { vi } from "vitest";
 
 import {
@@ -11,6 +12,7 @@ import {
   arrayToMap,
 } from "@excalidraw/common";
 
+import { getCurvePathOps } from "@excalidraw/utils/shape";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import * as InteractiveCanvas from "@excalidraw/excalidraw/renderer/interactiveScene";
 import * as StaticScene from "@excalidraw/excalidraw/renderer/staticScene";
@@ -36,6 +38,13 @@ import { getBoundTextElementPosition, getBoundTextMaxWidth } from "../src";
 import { LinearElementEditor } from "../src";
 import { newArrowElement } from "../src";
 import { getLinearElementPathSegments } from "../src/utils";
+import {
+  distanceToElement,
+  generateRoughOptions,
+  getCurvedConnectorPath,
+  getElementBounds,
+  getMinMaxXYFromCurvePathOps,
+} from "../src";
 
 import {
   getTextEditor,
@@ -48,6 +57,7 @@ import type {
   ExcalidrawLinearElement,
   ExcalidrawTextElementWithContainer,
   FontString,
+  NonDeleted,
   NonDeletedExcalidrawElement,
 } from "../src/types";
 
@@ -125,6 +135,43 @@ describe("Test Linear Elements", () => {
     API.setElements([line]);
     mouse.clickAt(p1[0], p1[1]);
     return line;
+  };
+
+  /**
+   * 2 点曲线连接线：对角线两端、无绑定（端切线回落弦主轴）⇒ 一条非退化的 S
+   * 曲线。`curvedConnector` 是显式字段（判据只看该字段、不看点数），直接作为
+   * `newArrowElement` 的构造参数传入。
+   */
+  const createCurvedConnector = (): NonDeleted<ExcalidrawArrowElement> => {
+    const arrow = newArrowElement({
+      type: "arrow",
+      x: p1[0],
+      y: p1[1],
+      width: 40,
+      height: 40,
+      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(40, 40)],
+      roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
+      curvedConnector: true,
+    });
+    API.setElements([arrow]);
+    mouse.clickAt(p1[0], p1[1]);
+    return arrow;
+  };
+
+  const dragSegmentMidpointOfCurvedConnector = (
+    arrow: NonDeleted<ExcalidrawArrowElement>,
+  ) => {
+    const [midPoint] = LinearElementEditor.getEditorMidPoints(
+      arrow,
+      h.app.scene.getNonDeletedElementsMap(),
+      h.state,
+    );
+    expect(midPoint).not.toBeNull();
+    drag(
+      midPoint!,
+      pointFrom<GlobalPoint>(midPoint![0] + delta, midPoint![1] + delta),
+    );
+    return midPoint!;
   };
 
   const enterLineEditingMode = (
@@ -1207,8 +1254,8 @@ describe("Test Linear Elements", () => {
         );
         expect(position).toMatchInlineSnapshot(`
           {
-            "x": 75,
-            "y": 60,
+            "x": "86.17305",
+            "y": "76.11251",
           }
         `);
       });
@@ -1414,8 +1461,8 @@ describe("Test Linear Elements", () => {
           20,
           105,
           80,
-          40,
-          20,
+          "55.45894",
+          45,
         ]
       `);
 
@@ -1425,7 +1472,7 @@ describe("Test Linear Elements", () => {
         .toMatchInlineSnapshot(`
           {
             "height": 150,
-            "width": "335.59945",
+            "width": "366.11716",
           }
         `);
 
@@ -1437,7 +1484,7 @@ describe("Test Linear Elements", () => {
         ),
       ).toMatchInlineSnapshot(`
         {
-          "x": "240.59945",
+          "x": "271.11716",
           "y": 45,
         }
       `);
@@ -1454,10 +1501,10 @@ describe("Test Linear Elements", () => {
         [
           20,
           45,
-          "470.59945",
+          "501.11716",
           220,
-          "115.88556",
-          220,
+          "205.45894",
+          145,
         ]
       `);
     });
@@ -2035,41 +2082,16 @@ describe("Test Linear Elements", () => {
   });
 
   it("should keep adding control points to a curved arrow outside the editor", () => {
-    // 这个 fixture 要比本文件别处长：3 点曲线连线按逻辑段切成两段，每段都要
-    // 超过 isSegmentTooShort 的门槛（POINT_HANDLE_SIZE * 4 = 40），才留得下段
-    // 中点手柄——新模型的曲线由两端推导，拖出来的鼓包只被折算成转折线位置，
-    // 不再额外增加弧长，所以同样的图形每段会更短。
-    const start = pointFrom<GlobalPoint>(20, 20);
-    const end = pointFrom<GlobalPoint>(260, 20);
-    const spanMidpoint = pointCenter<GlobalPoint>(start, end);
-    const arrow = API.createElement({
-      type: "arrow",
-      x: start[0],
-      y: start[1],
-      width: end[0] - start[0],
-      height: 0,
-      points: [
-        pointFrom(0, 0),
-        pointFrom(end[0] - start[0], end[1] - start[1]),
-      ],
-      roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
+    const arrow = createTwoPointerLinearElement("arrow", {
+      type: ROUNDNESS.PROPORTIONAL_RADIUS,
     });
-    API.setElements([arrow]);
-    mouse.clickAt(start[0], start[1]);
+    const elementsMap = h.app.scene.getNonDeletedElementsMap();
 
-    drag(
-      spanMidpoint,
-      pointFrom<GlobalPoint>(spanMidpoint[0], spanMidpoint[1] + delta),
-    );
+    drag(midpoint, pointFrom<GlobalPoint>(midpoint[0], midpoint[1] + delta));
     expect(arrow.points).toHaveLength(3);
     expect(h.state.selectedLinearElement?.isEditing).toBe(false);
 
     for (let pointCount = 3; pointCount < 5; pointCount++) {
-      // 每次拖段中点加点、指针抬起之后选中会被清掉（既有行为，与本模型无关：
-      // 那段「指针抬起落在元素外就取消选中」的分支对 4 点圆角箭头同样成立），
-      // 所以在编辑器外连续加点要先重新选中。
-      mouse.clickAt(start[0], start[1]);
-      const elementsMap = h.app.scene.getNonDeletedElementsMap();
       const midPoints = LinearElementEditor.getEditorMidPoints(
         arrow,
         elementsMap,
@@ -2082,8 +2104,88 @@ describe("Test Linear Elements", () => {
         segmentMidpoint,
         pointFrom<GlobalPoint>(segmentMidpoint[0], segmentMidpoint[1] + delta),
       );
-      expect(h.state.selectedLinearElement?.isEditing).toBe(false);
       expect(arrow.points).toHaveLength(pointCount + 1);
     }
+  });
+
+  it("should place a curved connector's segment midpoint handle on the drawn curve", () => {
+    const arrow = createCurvedConnector();
+    const elementsMap = h.app.scene.getNonDeletedElementsMap();
+
+    const midPoints = LinearElementEditor.getEditorMidPoints(
+      arrow,
+      elementsMap,
+      h.state,
+    );
+    expect(midPoints).toHaveLength(1);
+    const midPoint = midPoints[0];
+    expect(midPoint).not.toBeNull();
+
+    // 中点手柄必须落在画出来的同一条曲线上（碰撞形状与渲染同源）
+    expect(
+      distanceToElement(arrow, elementsMap, midPoint!),
+    ).toBeLessThanOrEqual(1);
+  });
+
+  it("should add a control point when dragging a curved connector's segment midpoint", () => {
+    const arrow = createCurvedConnector();
+
+    dragSegmentMidpointOfCurvedConnector(arrow);
+
+    expect(arrow.points).toHaveLength(3);
+    // 判据不看点数：加了控制点依然是曲线连接线
+    expect(arrow.curvedConnector).toBe(true);
+
+    // 曲线经过新加的控制点
+    const controlPoint = pointFrom<GlobalPoint>(
+      arrow.x + arrow.points[1][0],
+      arrow.y + arrow.points[1][1],
+    );
+    expect(
+      distanceToElement(
+        arrow,
+        h.app.scene.getNonDeletedElementsMap(),
+        controlPoint,
+      ),
+    ).toBeLessThanOrEqual(1);
+  });
+
+  it("should return a curved connector to the automatic curve when its only control point is deleted", () => {
+    const arrow = createCurvedConnector();
+
+    dragSegmentMidpointOfCurvedConnector(arrow);
+    expect(arrow.points).toHaveLength(3);
+
+    act(() => {
+      LinearElementEditor.deletePoints(arrow, h.app, [1]);
+    });
+
+    expect(arrow.points).toHaveLength(2);
+    // 判据不看点数：删光控制点后仍是曲线连接线（回到自动态）
+    expect(arrow.curvedConnector).toBe(true);
+  });
+
+  it("should derive a curved connector's bounds from the same curve it renders", () => {
+    const arrow = createCurvedConnector();
+    const elementsMap = h.app.scene.getNonDeletedElementsMap();
+
+    // 新对象身份 ⇒ ShapeCache / ElementBounds 缓存均未命中，强制走 bounds.ts
+    // 的形状生成兜底分支（generateLinearElementShape）
+    const coldArrow = { ...arrow };
+    const bounds = getElementBounds(coldArrow, elementsMap);
+
+    // 兜底分支与渲染同源：就是 getCurvedConnectorPath 这条曲线的 bbox
+    const path = getCurvedConnectorPath(coldArrow)!;
+    const ops = getCurvePathOps(
+      rough.generator().path(path, generateRoughOptions(coldArrow)),
+    );
+    const [minX, minY, maxX, maxY] = getMinMaxXYFromCurvePathOps(ops);
+
+    expect(bounds).toEqual([
+      minX + coldArrow.x,
+      minY + coldArrow.y,
+      maxX + coldArrow.x,
+      maxY + coldArrow.y,
+    ]);
   });
 });
