@@ -1,10 +1,5 @@
 import { DEFAULT_SHAPE_PRESET_SIZE } from "@excalidraw/common";
-import {
-  bezierEquation,
-  curve,
-  pointFrom,
-  pointRotateRads,
-} from "@excalidraw/math";
+import { pointFrom, pointRotateRads } from "@excalidraw/math";
 
 import type { GlobalPoint, Radians } from "@excalidraw/math";
 
@@ -92,27 +87,6 @@ export const getQuickCreateGap = (direction: QuickCreateDirection) =>
 export const QUICK_CREATE_SPILL_STEP_RATIO = 1.75;
 /** 每侧试 5 档（k = 1..5，正负交替），即 10 个候选位，试完就回落基准位 */
 export const QUICK_CREATE_SPILL_MAX_STEPS = 5;
-/**
- * 圆角曲线连线的采样节点（t 值，非均匀）。
- *
- * 非折线箭头带 roundness 时，渲染走的是 roughjs 的 `generator.curve(points)`
- * ——一条**穿过每个给定点**的 Catmull-Rom 样条（见 shape.ts 的 renderArrow），
- * 所以真三次贝塞尔只能靠采样逼近，点数就是用户要拖的中间手柄数。
- *
- * 为什么是这 5 个节点（都在真实渲染路径上量过，默认几何的最大偏差）：
- * - 3 点做不到扇形：B、C 都在转折线上，扇形曲线在 t = 0.5 处**恒等**于 A–D
- *   弦的中点，而单个中间点若落在弦上，Catmull-Rom 画出来就是直线（自由单点
- *   二维搜索的最优解就是那条直线，差 13.75）。「1 个手柄」换不来扇形。
- * - 5 点（t = 0、0.2、0.5、0.8、1）几乎免费：偏差 1.44（≈图形宽的 0.8%）。
- * - 更多点收益很小：7 点 1.60、9 点 0.89 —— 手柄却要多一倍。
- * - 均匀 5 点（0.25/0.5/0.75）反而差：3.65；均匀 4 点 6.45 —— Catmull-Rom
- *   喜欢接近均匀的参数间距，但首尾要略密，所以取 0.2 / 0.5 / 0.8。
- * - 也别按弧长取节点：弧长四分位更差（默认几何 4.67、让位 3 档 10.87）。
- * - t = 0.5 是其中一个节点，所以曲线经过转折段中点是恒等式、不是近似。
- * 跨几何抽查（1 档 / 3 档 / 400×80 / 80×300 / 下手柄横移 2 档）：这组 5 点
- * 最大偏差 1.44–3.59，相对跨度都在 2% 以内。
- */
-export const QUICK_CREATE_CURVE_KNOTS = [0, 0.2, 0.5, 0.8, 1] as const;
 
 /** 出线轴上的对齐容差：只是兜住浮点噪声（如 angle = π 时 sin 不是 0） */
 const AXIAL_ALIGNMENT_EPSILON = 1e-9;
@@ -578,27 +552,4 @@ export const getQuickCreateConnector = (
           { x: entry.x, y: turn },
         ],
   };
-};
-
-/**
- * 把转折点当控制点采样三次贝塞尔，给圆角曲线样式用：非折线箭头带 roundness
- * 时 roughjs 只画「穿过给定点」的样条，真曲线只能这么逼近（节点见
- * QUICK_CREATE_CURVE_KNOTS）。首尾两个采样点就是出口与入口，中间的 t = 0.5
- * 仍落在转折段中点。
- */
-export const getQuickCreateCurvePoints = (
-  exit: QuickCreatePoint,
-  bend: [QuickCreatePoint, QuickCreatePoint],
-  entry: QuickCreatePoint,
-): QuickCreatePoint[] => {
-  const cubic = curve(
-    pointFrom<GlobalPoint>(exit.x, exit.y),
-    pointFrom<GlobalPoint>(bend[0].x, bend[0].y),
-    pointFrom<GlobalPoint>(bend[1].x, bend[1].y),
-    pointFrom<GlobalPoint>(entry.x, entry.y),
-  );
-  return QUICK_CREATE_CURVE_KNOTS.map((t) => {
-    const [x, y] = bezierEquation(cubic, t);
-    return { x, y };
-  });
 };

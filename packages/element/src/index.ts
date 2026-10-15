@@ -71,6 +71,7 @@ export * from "./comparisons";
 export * from "./compositeShape";
 export * from "./containerCache";
 export * from "./cropElement";
+export * from "./curveConnector";
 export * from "./delta";
 export * from "./distance";
 export * from "./distribute";

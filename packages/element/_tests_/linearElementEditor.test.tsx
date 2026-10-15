@@ -1207,8 +1207,8 @@ describe("Test Linear Elements", () => {
         );
         expect(position).toMatchInlineSnapshot(`
           {
-            "x": "86.17305",
-            "y": "76.11251",
+            "x": 75,
+            "y": 60,
           }
         `);
       });
@@ -1414,8 +1414,8 @@ describe("Test Linear Elements", () => {
           20,
           105,
           80,
-          "55.45894",
-          45,
+          40,
+          20,
         ]
       `);
 
@@ -1425,7 +1425,7 @@ describe("Test Linear Elements", () => {
         .toMatchInlineSnapshot(`
           {
             "height": 150,
-            "width": "366.11716",
+            "width": "335.59945",
           }
         `);
 
@@ -1437,7 +1437,7 @@ describe("Test Linear Elements", () => {
         ),
       ).toMatchInlineSnapshot(`
         {
-          "x": "271.11716",
+          "x": "240.59945",
           "y": 45,
         }
       `);
@@ -1454,10 +1454,10 @@ describe("Test Linear Elements", () => {
         [
           20,
           45,
-          "501.11716",
+          "470.59945",
           220,
-          "205.45894",
-          145,
+          "115.88556",
+          220,
         ]
       `);
     });
@@ -2035,16 +2035,41 @@ describe("Test Linear Elements", () => {
   });
 
   it("should keep adding control points to a curved arrow outside the editor", () => {
-    const arrow = createTwoPointerLinearElement("arrow", {
-      type: ROUNDNESS.PROPORTIONAL_RADIUS,
+    // 这个 fixture 要比本文件别处长：3 点曲线连线按逻辑段切成两段，每段都要
+    // 超过 isSegmentTooShort 的门槛（POINT_HANDLE_SIZE * 4 = 40），才留得下段
+    // 中点手柄——新模型的曲线由两端推导，拖出来的鼓包只被折算成转折线位置，
+    // 不再额外增加弧长，所以同样的图形每段会更短。
+    const start = pointFrom<GlobalPoint>(20, 20);
+    const end = pointFrom<GlobalPoint>(260, 20);
+    const spanMidpoint = pointCenter<GlobalPoint>(start, end);
+    const arrow = API.createElement({
+      type: "arrow",
+      x: start[0],
+      y: start[1],
+      width: end[0] - start[0],
+      height: 0,
+      points: [
+        pointFrom(0, 0),
+        pointFrom(end[0] - start[0], end[1] - start[1]),
+      ],
+      roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
     });
-    const elementsMap = h.app.scene.getNonDeletedElementsMap();
+    API.setElements([arrow]);
+    mouse.clickAt(start[0], start[1]);
 
-    drag(midpoint, pointFrom<GlobalPoint>(midpoint[0], midpoint[1] + delta));
+    drag(
+      spanMidpoint,
+      pointFrom<GlobalPoint>(spanMidpoint[0], spanMidpoint[1] + delta),
+    );
     expect(arrow.points).toHaveLength(3);
     expect(h.state.selectedLinearElement?.isEditing).toBe(false);
 
     for (let pointCount = 3; pointCount < 5; pointCount++) {
+      // 每次拖段中点加点、指针抬起之后选中会被清掉（既有行为，与本模型无关：
+      // 那段「指针抬起落在元素外就取消选中」的分支对 4 点圆角箭头同样成立），
+      // 所以在编辑器外连续加点要先重新选中。
+      mouse.clickAt(start[0], start[1]);
+      const elementsMap = h.app.scene.getNonDeletedElementsMap();
       const midPoints = LinearElementEditor.getEditorMidPoints(
         arrow,
         elementsMap,
@@ -2057,6 +2082,7 @@ describe("Test Linear Elements", () => {
         segmentMidpoint,
         pointFrom<GlobalPoint>(segmentMidpoint[0], segmentMidpoint[1] + delta),
       );
+      expect(h.state.selectedLinearElement?.isEditing).toBe(false);
       expect(arrow.points).toHaveLength(pointCount + 1);
     }
   });

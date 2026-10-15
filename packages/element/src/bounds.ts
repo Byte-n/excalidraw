@@ -28,6 +28,7 @@ import type { AppState } from "@excalidraw/excalidraw/types";
 import type { Mutable } from "@excalidraw/common/utility-types";
 
 import { generateRoughOptions } from "./shape";
+import { getCurveConnectorPath } from "./curveConnector";
 import {
   getCompositeShapeGeometry,
   getCompositeShapeGlobalPoints,
@@ -976,6 +977,15 @@ const generateLinearElementShape = (
 ): Drawable => {
   const generator = rough.generator();
   const options = generateRoughOptions(element);
+
+  // 曲线连接线（3 点模型）：形状缓存没命中时也必须算同一条曲线——下面那套
+  // roughjs `curve` 是「穿过每个点」的样条，对 3 点模型是另一条曲线，包围盒
+  // 会跟渲染出来的对不上。缓存通常已被 `getElementAbsoluteCoords` 先热好，
+  // 所以这条分支平时不走；一旦走到就不能给出另一个盒子。
+  const curveConnectorPath = getCurveConnectorPath(element);
+  if (curveConnectorPath) {
+    return generator.path(curveConnectorPath, options);
+  }
 
   const method = (() => {
     if (element.roundness) {

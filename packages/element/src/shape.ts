@@ -62,6 +62,10 @@ import {
   getMindmapNodeGeometry,
   getMindmapShapeId,
 } from "./mindmap";
+import {
+  getCurveConnectorCollisionPath,
+  getCurveConnectorPath,
+} from "./curveConnector";
 
 import {
   canBecomePolygon,
@@ -690,6 +694,46 @@ export const getFreedrawFillPolygon = (element: ExcalidrawFreeDrawElement) => {
   return polygon;
 };
 
+/**
+ * 曲线连接线（3 点模型）的碰撞 / 命中 ops：把局部路径绕元素中心旋转
+ * `element.angle` 之后仍表达为局部坐标（与下面圆角分支同一套旋转口径）。
+ * `utils.ts` 的 `deconstructLinearOrFreeDrawElement` 会把它们拆成线段与曲线，
+ * 命中距离与碰撞因此跟着同一条路径走。
+ */
+const generateCurveConnectorOps = (
+  path: string,
+  element: ExcalidrawLinearElement,
+  center: GlobalPoint,
+  generator: RoughGenerator,
+  options: Options,
+): { op: string; data: number[] }[] => {
+  const rawOps = generator.path(path, options).sets[0].ops;
+  const toLocal = (x: number, y: number) => {
+    const [px, py] = pointRotateRads<GlobalPoint>(
+      pointFrom<GlobalPoint>(element.x + x, element.y + y),
+      center,
+      element.angle,
+    );
+    return pointFrom<LocalPoint>(px - element.x, py - element.y);
+  };
+  return rawOps.map((op) => {
+    if (op.op === "move") {
+      return { op: "move", data: toLocal(op.data[0], op.data[1]) };
+    }
+    if (op.op === "bcurveTo") {
+      return {
+        op: "bcurveTo",
+        data: [
+          ...toLocal(op.data[0], op.data[1]),
+          ...toLocal(op.data[2], op.data[3]),
+          ...toLocal(op.data[4], op.data[5]),
+        ],
+      };
+    }
+    return op;
+  });
+};
+
 export const generateLinearCollisionShape = (
   element: ExcalidrawLinearElement | ExcalidrawFreeDrawElement,
   elementsMap: ElementsMap,
@@ -716,11 +760,24 @@ export const generateLinearCollisionShape = (
         ? element.points
         : [pointFrom<LocalPoint>(0, 0)];
 
+      // 曲线连接线（3 点模型）走推导出来的三次贝塞尔：形状 ops 是渲染、
+      // 命中距离、碰撞、包围盒的共同来源，所以两处形状函数必须输出同一条
+      // 曲线（见 curveConnector.ts；命中那处按逻辑段切，见该模块的两个常量）。
+      const curveConnectorPath = getCurveConnectorCollisionPath(element);
+
       if (isElbowArrow(element)) {
         return generator.path(
           generateElbowArrowShape(points, ELBOW_ARROW_CORNER_RADIUS),
           options,
         ).sets[0].ops;
+      } else if (curveConnectorPath) {
+        return generateCurveConnectorOps(
+          curveConnectorPath,
+          element,
+          center,
+          generator,
+          options,
+        );
       } else if (!element.roundness) {
         return points.map((point, idx) => {
           const p = pointRotateRads(
@@ -1144,6 +1201,11 @@ const _generateElementShape = (
         ? element.points
         : [pointFrom<LocalPoint>(0, 0)];
 
+      // 曲线连接线（3 点模型）：路径由两端 + 轴向 + 比例推导，与命中/碰撞那处
+      // 共用 getCurveConnectorPath，所以渲染、包围盒（bounds.ts 读这里的形状
+      // ops）与命中永远同一条曲线。
+      const curveConnectorPath = getCurveConnectorPath(element);
+
       if (isElbowArrow(element)) {
         // NOTE (mtolmacs): Temporary fix for extremely big arrow shapes
         if (
@@ -1165,6 +1227,13 @@ const _generateElementShape = (
             ),
           ];
         }
+      } else if (curveConnectorPath) {
+        shape = [
+          generator.path(
+            curveConnectorPath,
+            generateRoughOptions(element, true, isDarkMode),
+          ),
+        ];
       } else if (!element.roundness) {
         // curve is always the first element
         // this simplifies finding the curve for an element
