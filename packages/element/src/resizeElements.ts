@@ -330,6 +330,39 @@ export const rescalePointsInElement = (
       }
     : {};
 
+/**
+ * Convert the selection's world-axis scale factors into the scale factors along
+ * an element's *own* two axes, so a rotated element can be scaled inside its own
+ * frame and stay a rectangle.
+ *
+ * For an element at angle `φ`, the world-axis scaling `diag(sx, sy)` maps its
+ * two unit axes `u = (cosφ, sinφ)` and `v = (−sinφ, cosφ)` onto non-orthogonal
+ * images, i.e. the true result is a parallelogram. `a = |S·u|` and `b = |S·v|`
+ * are exactly the lengths of that parallelogram's sides, so keeping them and
+ * straightening the included angle back to 90° preserves the side lengths and
+ * is the closest a rectangle can get. Equivalently: keep the diagonal of
+ * `R(−φ)·S·R(φ)` and drop its shear term `(sy − sx)·sinφ·cosφ`.
+ *
+ * Consequences worth knowing:
+ * - at angles that are a multiple of 90°, `u`/`v` are eigenvectors of `S`, the
+ *   shear term is 0, and the result is *exact* — `(a, b)` degenerates to the
+ *   swap of `(sx, sy)`, matching the unrotated behaviour bit for bit;
+ * - elsewhere the only error is the straightened angle, which inflates area by
+ *   `|S·u|·|S·v| ≥ |det S| = sx·sy` (equality only in the exact cases).
+ */
+export const getElementLocalScaleFactors = (
+  angle: Radians,
+  scaleX: number,
+  scaleY: number,
+): { a: number; b: number } => {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    a: Math.hypot(scaleX * cos, scaleY * sin),
+    b: Math.hypot(scaleX * sin, scaleY * cos),
+  };
+};
+
 export const measureFontSizeFromWidth = (
   element: NonDeleted<ExcalidrawTextElement>,
   elementsMap: ElementsMap,
@@ -1417,11 +1450,16 @@ export const resizeMultipleElements = (
       ? [midX, midY]
       : anchorsMap[handleDirection];
 
+    // Rotated elements no longer force a uniform scale: the world-axis factors
+    // are converted into each element's own axes per element (see
+    // `getElementLocalScaleFactors`), which is exact at multiples of 90° and the
+    // side-length-preserving approximation elsewhere. Only the locks that were
+    // never about rotation remain — explicit Shift/Alt, text (font size is
+    // re-derived from width), groups, and the table corner case.
     const keepAspectRatio =
       shouldMaintainAspectRatio ||
       targetElements.some(
         (item) =>
-          item.latest.angle !== 0 ||
           isTextElement(item.latest) ||
           isInGroup(item.latest) ||
           // a table has no two-axis different-factor mode (P1 invariant 4):
@@ -1578,8 +1616,13 @@ export const resizeMultipleElements = (
         continue;
       }
 
-      const width = orig.width * scaleX;
-      const height = orig.height * scaleY;
+      // 选区在世界轴上的缩放量先换算到元素自己两条轴上，再缩放元素自己的
+      // `width`/`height`：旋转元素因此保持矩形，而不是被剪切成平行四边形。
+      // 角度是 90° 的整数倍时换算无损失（退化成本身的旧行为），可放心统一走
+      // 这条路径。
+      const { a, b } = getElementLocalScaleFactors(orig.angle, scaleX, scaleY);
+      const width = orig.width * a;
+      const height = orig.height * b;
       const angle = normalizeRadians(
         (orig.angle * flipFactorX * flipFactorY) as Radians,
       );
@@ -1590,8 +1633,23 @@ export const resizeMultipleElements = (
       const offsetY = orig.y - anchorY;
       const shiftX = flipByX && !isLinearOrFreeDraw ? width : 0;
       const shiftY = flipByY && !isLinearOrFreeDraw ? height : 0;
-      const x = anchorX + flipFactorX * (offsetX * scaleX + shiftX);
-      const y = anchorY + flipFactorY * (offsetY * scaleY + shiftY);
+
+      let x: number;
+      let y: number;
+      if (orig.angle === 0) {
+        // 未旋转元素沿用"左上角映射 + flip 补偿"：线性/自由绘制的点镜像
+        // 语义依赖它，逐位不变。
+        x = anchorX + flipFactorX * (offsetX * scaleX + shiftX);
+        y = anchorY + flipFactorY * (offsetY * scaleY + shiftY);
+      } else {
+        // 旋转后元素的左上角与尺寸不再互相独立，改按中心映射：中心走仿射、
+        // 尺寸已在自己轴上换算、角度不变。镜像（flip）由中心映射一并完成，
+        // 因此这条路径不需要 shift 补偿。
+        const centerX = orig.x + orig.width / 2;
+        const centerY = orig.y + orig.height / 2;
+        x = anchorX + flipFactorX * ((centerX - anchorX) * scaleX) - width / 2;
+        y = anchorY + flipFactorY * ((centerY - anchorY) * scaleY) - height / 2;
+      }
 
       const rescaledPoints = rescalePointsInElement(
         orig,

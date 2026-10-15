@@ -26,16 +26,19 @@ import {
   unmountComponent,
 } from "@excalidraw/excalidraw/_tests_/test-utils";
 
-import type { GlobalPoint } from "@excalidraw/math";
+import type { GlobalPoint, Radians } from "@excalidraw/math";
 
 import type { LocalPoint } from "@excalidraw/math";
 
 import { isLinearElement } from "../src/typeChecks";
-import { resizeSingleElement } from "../src/resizeElements";
+import {
+  getElementLocalScaleFactors,
+  resizeSingleElement,
+} from "../src/resizeElements";
 import { distanceToElement } from "../src/distance";
 import { getLinearElementPathSegments } from "../src/utils";
 import { LinearElementEditor } from "../src/linearElementEditor";
-import { getElementPointsCoords } from "../src/bounds";
+import { getCommonBounds, getElementPointsCoords } from "../src/bounds";
 import { getBoundTextContainerDimensions } from "../src/textElement";
 
 import type {
@@ -1538,9 +1541,10 @@ describe("multiple selection", () => {
     const scaleY = -scaleX;
     const lineOrigBounds = getBoundsFromPoints(line);
     const elementsMap = arrayToMap(h.elements);
-    UI.resize([line, image, rectangle, boundArrow], "se", move, {
-      shift: true,
-    });
+    // 不按 shift：选区里有图片，`proportionalByDefault` 已让图片选区默认等比，
+    // 按下 shift 反而会取消等比锁（pointerSelection 的 `proportionalByDefault`）。
+    // 这条用例考察的是"翻转"在等比缩放下的表现，自由缩放下的翻转另有用例。
+    UI.resize([line, image, rectangle, boundArrow], "se", move);
     const lineNewBounds = getBoundsFromPoints(line);
     const arrowLabelPos = LinearElementEditor.getBoundTextElementPosition(
       boundArrow,
@@ -1595,5 +1599,174 @@ describe("multiple selection", () => {
     );
     expect(arrowLabel.angle).toEqual(0);
     expect(arrowLabel.fontSize).toBeCloseTo(20 * scaleY);
+  });
+
+  it("scales a rotated element along its own axes when not locked", async () => {
+    // 0° 的参照物：它的 width/height 变化量就是选区的 scaleX / scaleY
+    const reference = UI.createElement("rectangle", {
+      position: 0,
+      width: 100,
+      height: 100,
+    });
+    const rotated = UI.createElement("rectangle", {
+      x: 200,
+      y: 0,
+      width: 100,
+      height: 100,
+      angle: Math.PI / 6,
+    });
+
+    // 旋转元素的 AABB 会比它自己高，选区左上角因此不在 (0, 0) —— 先记下来
+    const [originMinX, originMinY] = getCommonBounds([reference, rotated]);
+
+    UI.resize([reference, rotated], "se", [60, 20]);
+
+    const scaleX = reference.width / 100;
+    const scaleY = reference.height / 100;
+
+    // 选区里有旋转元素也不再强制等比 —— 这正是本次改动要松开的那把锁
+    expect(scaleX).not.toBeCloseTo(scaleY);
+
+    // 未旋转元素仍按世界轴缩放，与改动前逐位一致
+    expect(reference.width).toBeCloseTo(100 * scaleX);
+    expect(reference.height).toBeCloseTo(100 * scaleY);
+    expect(reference.angle).toEqual(0);
+
+    // 旋转元素按换算到自身两条轴上的量缩放：a/b 就是真值平行四边形
+    // 的边长，所以这两个值是精确值，不是"某一侧的近似"
+    const { a, b } = getElementLocalScaleFactors(
+      (Math.PI / 6) as Radians,
+      scaleX,
+      scaleY,
+    );
+    expect(rotated.width).toBeCloseTo(100 * a);
+    expect(rotated.height).toBeCloseTo(100 * b);
+    // 角度不变、仍是矩形（没有被剪切成平行四边形）
+    expect(rotated.angle).toEqual(Math.PI / 6);
+    // 换算确实发生了：不是把世界轴因子直接套到自身轴上
+    expect(rotated.width).not.toBeCloseTo(100 * scaleX);
+    // 斜角下两轴因子不同，元素沿自身轴被拉开
+    expect(rotated.width).not.toBeCloseTo(rotated.height);
+
+    // 落位按中心仿射：旋转元素中心落在"世界轴缩放该在的位置"上。
+    // 锚点是选区 AABB 的左上角（"se" 手柄的对角），所以要在缩放前取它。
+    expect(rotated.x + rotated.width / 2).toBeCloseTo(
+      originMinX + (250 - originMinX) * scaleX,
+    );
+    expect(rotated.y + rotated.height / 2).toBeCloseTo(
+      originMinY + (50 - originMinY) * scaleY,
+    );
+  });
+
+  it("stays exact at 90°, where an element's own axes are the world axes", async () => {
+    const reference = UI.createElement("rectangle", {
+      position: 0,
+      width: 100,
+      height: 100,
+    });
+    const rotated = UI.createElement("rectangle", {
+      x: 200,
+      y: 0,
+      width: 100,
+      height: 100,
+      angle: Math.PI / 2,
+    });
+
+    UI.resize([reference, rotated], "se", [60, 20]);
+
+    const scaleX = reference.width / 100;
+    const scaleY = reference.height / 100;
+
+    // φ=90° 时元素自身轴就是世界轴（只是互换），剪切项恒为零，换算是双射：
+    // 自己的宽吃世界纵向因子、高吃世界横向因子 —— 结果完全精确，
+    // 与"同尺寸元素放在 0° 再缩放"是同一件事，只是宽高对调。
+    expect(rotated.width).toBeCloseTo(100 * scaleY);
+    expect(rotated.height).toBeCloseTo(100 * scaleX);
+    expect(rotated.angle).toEqual(Math.PI / 2);
+    expect(rotated.width * rotated.height).toBeCloseTo(
+      reference.width * reference.height,
+    );
+  });
+
+  it("flips a rotated element along its own axes when not locked", async () => {
+    const reference = UI.createElement("rectangle", {
+      position: 0,
+      width: 100,
+      height: 100,
+    });
+    const rotated = UI.createElement("rectangle", {
+      x: 200,
+      y: 0,
+      width: 100,
+      height: 100,
+      angle: Math.PI / 6,
+    });
+    const [originMinX, originMinY] = getCommonBounds([reference, rotated]);
+
+    // 指针越过锚点 → x 方向翻转
+    UI.resize([reference, rotated], "se", [-500, 0]);
+
+    // width 恒为正，所以这里拿到的是幅度
+    const scaleX = reference.width / 100;
+    const scaleY = reference.height / 100;
+
+    // 0° 参照物：横向按世界横向因子、纵向不动（指针没纵向移动），位置镜像
+    expect(scaleY).toBeCloseTo(1);
+    expect(reference.x + reference.width / 2).toBeCloseTo(
+      originMinX - (50 - originMinX) * scaleX,
+    );
+    expect(reference.y + reference.height / 2).toBeCloseTo(50);
+
+    // 旋转元素：尺寸按换算到自身轴的量，角度取反（镜像），中心按世界轴镜像
+    const { a, b } = getElementLocalScaleFactors(
+      rotated.angle as Radians,
+      scaleX,
+      scaleY,
+    );
+    expect(rotated.width).toBeCloseTo(100 * a);
+    expect(rotated.height).toBeCloseTo(100 * b);
+    expect(rotated.angle).toBeCloseTo((Math.PI * 11) / 6);
+    expect(rotated.x + rotated.width / 2).toBeCloseTo(
+      originMinX - (250 - originMinX) * scaleX,
+    );
+    expect(rotated.y + rotated.height / 2).toBeCloseTo(
+      originMinY + (50 - originMinY) * scaleY,
+    );
+  });
+});
+
+describe("getElementLocalScaleFactors", () => {
+  it("degenerates to the world-axis factors at multiples of 90°", () => {
+    // 精确性判据：这些角度下没有剪切项可丢，双精度下逐位相等
+    expect(getElementLocalScaleFactors(0 as Radians, 2, 1)).toEqual({
+      a: 2,
+      b: 1,
+    });
+    expect(getElementLocalScaleFactors((Math.PI / 2) as Radians, 2, 1)).toEqual(
+      { a: 1, b: 2 },
+    );
+    expect(getElementLocalScaleFactors(Math.PI as Radians, 2, 1)).toEqual({
+      a: 2,
+      b: 1,
+    });
+  });
+
+  it("preserves the true side lengths and only inflates area elsewhere", () => {
+    for (const angle of [Math.PI / 6, Math.PI / 4, 1, 2.5]) {
+      const { a, b } = getElementLocalScaleFactors(angle as Radians, 2, 1);
+      // 两条边长夹在两个世界轴因子之间，且都不超过较大者
+      expect(a).toBeLessThanOrEqual(2);
+      expect(b).toBeGreaterThanOrEqual(1);
+      // 面积只多不少：|Su|·|Sv| ≥ |det S|，等号只在没有剪切项时成立
+      expect(a * b).toBeGreaterThan(2);
+    }
+    // 45° 是退化的对称点：两轴因子相等，元素看起来"等比放大"而不是
+    // 沿某一轴被拉长 —— 这正是"算上长度就必然有误差"的极端表现
+    const { a, b } = getElementLocalScaleFactors(
+      (Math.PI / 4) as Radians,
+      2,
+      1,
+    );
+    expect(a).toBeCloseTo(b);
   });
 });
