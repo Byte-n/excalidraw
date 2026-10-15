@@ -54,10 +54,13 @@ export const QUICK_CREATE_HANDLE_SIZE_HOVER_COMPACT = 16;
 export const QUICK_CREATE_HANDLE_SIZE_DOWN_COMPACT = 14;
 /** 紧凑档的圆心外移距离（屏幕 px） */
 export const QUICK_CREATE_OFFSET_COMPACT = 18;
-/** 结果预演的整体不透明度 */
+/**
+ * 结果预演的整体不透明度。预演画的就是**真实的**线条、箭头与图形样式
+ * （`renderElement` 同一套渲染），只把整层压到一半表示尚未提交。
+ */
 export const QUICK_CREATE_GHOST_ALPHA = 0.5;
-/** 结果预演中幽灵副本的填充不透明度 */
-export const QUICK_CREATE_GHOST_FILL_ALPHA = 0.08;
+/** 常态圆点的不透明度：安静地提示方向，悬停才转实 */
+export const QUICK_CREATE_HANDLE_REST_ALPHA = 0.4;
 /** 新图形与源图形的边缘间隙补偿 */
 export const QUICK_CREATE_GAP_EXTRA = 10;
 

@@ -82,22 +82,18 @@ import {
   getMindmapLayoutConfig,
   MINDMAP_COLLAPSE_STUB_LENGTH,
   getQuickCreateHandles,
-  getQuickCreateTargetElement,
-  getQuickCreateTargetCenter,
-  getQuickCreateDirectionVector,
   QUICK_CREATE_HANDLE_SIZE,
   QUICK_CREATE_HANDLE_SIZE_HOVER,
   QUICK_CREATE_HANDLE_SIZE_DOWN,
   QUICK_CREATE_HANDLE_SIZE_COMPACT,
   QUICK_CREATE_HANDLE_SIZE_HOVER_COMPACT,
   QUICK_CREATE_HANDLE_SIZE_DOWN_COMPACT,
+  QUICK_CREATE_HANDLE_REST_ALPHA,
   QUICK_CREATE_RING_HOVER_COMPACT,
   QUICK_CREATE_PLUS_SIZE,
   QUICK_CREATE_PLUS_SIZE_DOWN,
   QUICK_CREATE_PLUS_SIZE_COMPACT,
-  QUICK_CREATE_GHOST_ALPHA,
-  QUICK_CREATE_GHOST_FILL_ALPHA,
-  compositeShapePathToSvg,
+  renderElement,
 } from "@excalidraw/element";
 
 import { renderSelectionElement } from "@excalidraw/element";
@@ -137,8 +133,6 @@ import type {
 } from "@excalidraw/element/types";
 
 import { getTableTitle, getTableTitleBar } from "../components/app/tableTitle";
-import { getCurrentItemArrowProps } from "../components/app/arrowCreation";
-
 import { renderSnaps } from "../renderer/renderSnaps";
 import { getCompositeControlPointGlobal } from "../components/app/compositeShapeControls";
 import { roundRect } from "../renderer/roundRect";
@@ -172,6 +166,7 @@ import type {
   InteractiveCanvasRenderConfig,
   InteractiveSceneRenderConfig,
   RenderableElementsMap,
+  StaticCanvasRenderConfig,
 } from "../scene/types";
 
 // The interactive canvas used to be inverted in dark mode via a CSS filter
@@ -1511,99 +1506,59 @@ const getQuickCreateHandleSpec = (
 /**
  * 结果预演：幽灵副本 + 幽灵连线。仅悬停命中且无修饰键时画。
  *
- * 副本轮廓直接复用真实几何（`getCompositeShapeGlobalPath` 已绕元素中心旋转过，
- * 与副本的 angle 一致），按「目标中心 - 源中心」平移后填充 + 描边——不新建元素，
- * 预览因此不消耗 id / seed，也不需要自己拼一遍路径。
+ * 元素由 `AppQuickCreate.getGhostElements` 提供（不进场景、不消耗 id / 随机
+ * 序列），这里**用真实的元素渲染**（`renderElement`），所以线条、箭头、填充与
+ * 落地后的图形一模一样，只有不透明度压到一半表示尚未提交。
+ *
+ * 调用点在已按 scrollX/scrollY 平移过的上下文里，而 `renderElement` 自己还会
+ * 加一次 `appState.scrollX`：把 appState 的滚动归零，正好抵消外层那次平移。
  */
 const renderQuickCreateGhost = (
   context: CanvasRenderingContext2D,
   app: AppClassProperties,
   appState: InteractiveCanvasAppState,
-  handle: QuickCreateHandle,
-  selectionColor: string,
+  elements: readonly NonDeletedExcalidrawElement[],
+  allElementsMap: NonDeletedSceneElementsMap,
 ) => {
-  const source = getQuickCreateTargetElement(app);
-  if (!source || !isCompositeShapeElement(source)) {
+  if (!elements.length) {
     return;
   }
-  const zoom = appState.zoom.value;
-  const center = {
-    x: source.x + source.width / 2,
-    y: source.y + source.height / 2,
+  // 预演元素不在场景里，合并进本次绘制的映射表，`renderElement` 才查得到
+  const ghostMap = arrayToMap(elements);
+  const mergedElementsMap = new Map([
+    ...allElementsMap,
+    ...ghostMap,
+  ]) as RenderableElementsMap;
+  const mergedAllElementsMap = new Map([
+    ...allElementsMap,
+    ...ghostMap,
+  ]) as NonDeletedSceneElementsMap;
+
+  const renderConfig: StaticCanvasRenderConfig = {
+    imageCache: app.imageCache,
+    isExporting: false,
+    renderGrid: false,
+    canvasBackgroundColor: app.state.viewBackgroundColor,
+    embedsValidationStatus: app.embedsValidationStatus,
+    elementsPendingErasure: app.elementsPendingErasure,
+    pendingFlowchartNodes: null,
+    theme: appState.theme,
   };
-  // 副本与源同宽高同角度，所以中心沿旋转后的方向偏移「源半尺寸 + 间隙 + 源半尺寸」
-  const target = getQuickCreateTargetCenter(
-    {
-      center,
-      angle: source.angle,
-      width: source.width,
-      height: source.height,
-    },
-    handle.direction,
-    { width: source.width, height: source.height },
-  );
+  const previewAppState = { ...appState, scrollX: 0, scrollY: 0 };
 
   context.save();
-  context.translate(target.x - center.x, target.y - center.y);
-  context.setLineDash([5 / zoom, 4 / zoom]);
-  context.lineWidth = 1.5 / zoom;
-  context.strokeStyle = selectionColor;
-  context.fillStyle = setColorAlpha(
-    selectionColor,
-    QUICK_CREATE_GHOST_FILL_ALPHA,
-  );
-  const outline = new Path2D(
-    compositeShapePathToSvg(getCompositeShapeGlobalPath(source)),
-  );
-  context.fill(outline);
-  context.stroke(outline);
-  context.restore();
-
-  // 幽灵连线：从源朝向该方向的边缘中点，到副本的近端边缘中点，沿方向取直。
-  // 这是刻意的近似——真实创建后端点由 orbit 绑定重算，旋转或斜向时会有几像素出入。
-  const vector = getQuickCreateDirectionVector(handle.direction, source.angle);
-  const halfAlong =
-    handle.direction === "left" || handle.direction === "right"
-      ? source.width / 2
-      : source.height / 2;
-  const start = {
-    x: center.x + vector.x * halfAlong,
-    y: center.y + vector.y * halfAlong,
-  };
-  const end = {
-    x: target.x - vector.x * halfAlong,
-    y: target.y - vector.y * halfAlong,
-  };
-  // 样式取当前连接线（与真实创建同一套映射），压到 50% 并强制叠虚线表示尚未提交
-  const arrowProps = getCurrentItemArrowProps(app);
-  context.save();
-  context.globalAlpha = QUICK_CREATE_GHOST_ALPHA;
-  context.setLineDash([6 / zoom, 4 / zoom]);
-  context.lineWidth = arrowProps.strokeWidth;
-  context.strokeStyle = arrowProps.strokeColor;
-  context.beginPath();
-  context.moveTo(start.x, start.y);
-  context.lineTo(end.x, end.y);
-  context.stroke();
-  // 末端实心三角，指向副本
-  const head = 5 / zoom;
-  const normalX = -vector.y;
-  const normalY = vector.x;
-  const halfWidth = head * 0.6;
   context.setLineDash([]);
-  context.fillStyle = arrowProps.strokeColor;
-  context.beginPath();
-  context.moveTo(end.x, end.y);
-  context.lineTo(
-    end.x - vector.x * head + normalX * halfWidth,
-    end.y - vector.y * head + normalY * halfWidth,
-  );
-  context.lineTo(
-    end.x - vector.x * head - normalX * halfWidth,
-    end.y - vector.y * head - normalY * halfWidth,
-  );
-  context.closePath();
-  context.fill();
+  for (const element of elements) {
+    renderElement(
+      element,
+      mergedElementsMap,
+      mergedAllElementsMap,
+      app.rc,
+      context,
+      renderConfig,
+      previewAppState,
+    );
+  }
   context.restore();
 };
 
@@ -1612,12 +1567,16 @@ const renderQuickCreateGhost = (
  * 建图结果）。显隐与几何由 getQuickCreateHandles 统一收口，与指针命中
  * （hitTestQuickCreateHandle）共用，保证所见即可点；按住修饰键时该函数返回空，
  * 四个手柄与预演因此一起消失。
+ *
+ * 一帧内的次序：预演先画、四个圆点后画，创建入口永远压在预演之上——预演是
+ * 「点下去会得到什么」，而圆点才是此刻要点的东西。
  */
 const renderQuickCreateHandles = (
   context: CanvasRenderingContext2D,
   app: AppClassProperties,
   appState: InteractiveCanvasAppState,
   selectionColor: string,
+  allElementsMap: NonDeletedSceneElementsMap,
 ) => {
   // 修饰键状态由 App.quickCreate 维护（keydown / keyup / blur）：按住时整组不渲染
   const suppressed = app.quickCreate.isSuppressed();
@@ -1636,16 +1595,38 @@ const renderQuickCreateHandles = (
   // 调用点在已按 scrollX/scrollY 平移过的上下文内，这里直接用场景坐标
   context.save();
   context.setLineDash([]);
+  const hoveredHandle = hovered
+    ? handles.find(
+        (handle) =>
+          handle.elementId === hovered.elementId &&
+          handle.direction === hovered.direction,
+      )
+    : undefined;
+  // 预演先画，四个创建入口随后压在上面：预演是「点下去会得到什么」，而入口
+  // 是当前要操作的东西，不能被它盖住
+  if (hoveredHandle) {
+    renderQuickCreateGhost(
+      context,
+      app,
+      appState,
+      app.quickCreate.getGhostElements(hoveredHandle),
+      allElementsMap,
+    );
+  }
   for (const handle of handles) {
-    const isHovered =
-      hovered?.elementId === handle.elementId &&
-      hovered.direction === handle.direction;
+    const isHovered = handle === hoveredHandle;
     // 能 hover 就说明不是纯触屏，按悬停态画
     const spec = getQuickCreateHandleSpec(
       handle,
       isHovered ? "hover" : "rest",
       touchLike,
     );
+    // 常态圆点压低透明度：安静地提示「这儿能长出图形」，悬停才转实。触屏常态
+    // 画的是悬停档的完整手柄（没有 hover 可等），那是唯一的入口，不压暗。
+    context.globalAlpha =
+      !isHovered && !(touchLike && spec.plus)
+        ? QUICK_CREATE_HANDLE_REST_ALPHA
+        : 1;
     const radius = spec.size / 2 / zoom;
     context.beginPath();
     context.arc(handle.center.x, handle.center.y, radius, 0, Math.PI * 2);
@@ -1666,9 +1647,6 @@ const renderQuickCreateHandles = (
       context.lineTo(handle.center.x, handle.center.y + arm);
       context.stroke();
       context.lineCap = "butt";
-    }
-    if (isHovered) {
-      renderQuickCreateGhost(context, app, appState, handle, selectionColor);
     }
   }
   context.restore();
@@ -4084,7 +4062,13 @@ const _renderInteractiveScene = ({
           }
         }
         // 方向手柄：指示框四边外侧的圆点（悬停加号）
-        renderQuickCreateHandles(context, app, appState, selectionColor);
+        renderQuickCreateHandles(
+          context,
+          app,
+          appState,
+          selectionColor,
+          allElementsMap,
+        );
       }
 
       if (appState.croppingElementId && !appState.isCropping) {

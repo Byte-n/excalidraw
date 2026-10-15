@@ -1452,6 +1452,16 @@ export type AppClassProperties = {
     }
   >;
   files: BinaryFiles;
+  /**
+   * Renderer inputs an off-scene overlay needs when it reuses `renderElement`
+   * (e.g. the quick-create ghost preview on the interactive canvas): the rough
+   * canvas shapes are generated with, the embed-validation status, and the
+   * pending-erasure set the element render state reads. Everything else the
+   * renderer needs is already on `imageCache` / `state`.
+   */
+  rc: App["rc"];
+  embedsValidationStatus: App["embedsValidationStatus"];
+  elementsPendingErasure: App["elementsPendingErasure"];
   editorInterface: App["editorInterface"];
   scene: App["scene"];
   setState: App["setState"];

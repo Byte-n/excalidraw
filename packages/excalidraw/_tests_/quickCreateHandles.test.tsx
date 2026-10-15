@@ -1,18 +1,22 @@
 import { ROUNDNESS, reseed } from "@excalidraw/common";
 
 import {
-  compositeShapePathToSvg,
-  getCompositeShapeGlobalPath,
   getContainingFrame,
   getQuickCreateHandles,
   hitTestQuickCreateHandle,
   isArrowElement,
   isCompositeShapeElement,
   isMindmapNodeElement,
+  QUICK_CREATE_GHOST_ALPHA,
+  QUICK_CREATE_HANDLE_REST_ALPHA,
 } from "@excalidraw/element";
 
 import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 
+import {
+  QUICK_CREATE_GHOST_ARROW_ID,
+  QUICK_CREATE_GHOST_SHAPE_ID,
+} from "../components/App.quickCreate";
 import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
@@ -806,8 +810,8 @@ describe("quick create handles", () => {
      * 有没有这一帧，正是本组用例要盯住的东西——没有显式重绘调用就什么都画不出来。
      */
     const createFrameRecorder = () => {
-      const calls: { type: string; args: unknown[] }[] = [];
-      const outlines: string[] = [];
+      /** 每次调用都连当时的 globalAlpha 一起记下：圆点的透明度就靠它读 */
+      const calls: { type: string; args: unknown[]; alpha: number }[] = [];
       const canvas = h.app.interactiveCanvas!;
       const realGetContext = canvas.getContext.bind(canvas);
       (canvas as any).getContext = (...args: any[]) => {
@@ -817,7 +821,11 @@ describe("quick create handles", () => {
             const value = (target as any)[prop];
             if (typeof value === "function") {
               return (...callArgs: unknown[]) => {
-                calls.push({ type: prop, args: callArgs });
+                calls.push({
+                  type: prop,
+                  args: callArgs,
+                  alpha: (target as any).globalAlpha,
+                });
                 return value.apply(target, callArgs);
               };
             }
@@ -825,38 +833,60 @@ describe("quick create handles", () => {
           },
         });
       };
-      const RealPath2D = globalThis.Path2D;
-      (globalThis as any).Path2D = function (svgPath?: string) {
-        outlines.push(String(svgPath));
-        return new RealPath2D(svgPath);
-      };
 
-      const at = (type: string) => calls.filter((call) => call.type === type);
+      const at = (type: string) =>
+        calls
+          .filter((call) => call.type === type)
+          .map(({ type: callType, args }) => ({ type: callType, args }));
+      /** 调用序号（跨类型）：用来盯住预演与创建入口的绘制先后 */
+      const orderOf = (type: string) =>
+        calls
+          .map((call, index) => (call.type === type ? index : -1))
+          .filter((index) => index >= 0);
+      /** 画在四个手柄圆心上的圆弧（带当时的 globalAlpha） */
+      const dotArcs = () =>
+        calls.filter(
+          (call) =>
+            call.type === "arc" &&
+            Object.values(HANDLE_CENTERS).some(
+              (center) =>
+                center.x === call.args[0] && center.y === call.args[1],
+            ),
+        );
       /** 画在四个手柄圆心上的圆弧 → 半径，用来读每一档的直径 */
       const handleRadii = (): Record<string, number> =>
         Object.fromEntries(
-          at("arc")
-            .filter((call) =>
-              Object.values(HANDLE_CENTERS).some(
-                (center) =>
-                  center.x === call.args[0] && center.y === call.args[1],
-              ),
-            )
-            .map((call) => [
-              `${call.args[0]},${call.args[1]}`,
-              call.args[2] as number,
-            ]),
+          dotArcs().map((call) => [
+            `${call.args[0]},${call.args[1]}`,
+            call.args[2] as number,
+          ]),
         );
+      /** 四个圆点各自的透明度（画到它时的 globalAlpha） */
+      const alphasAtDots = (): Record<string, number> =>
+        Object.fromEntries(
+          dotArcs().map((call) => [
+            `${call.args[0]},${call.args[1]}`,
+            call.alpha,
+          ]),
+        );
+      /** 画四个圆点的调用序号（同一帧里还有别的圆弧，所以单独挑出来） */
+      const dotArcOrder = () => {
+        const dots = dotArcs();
+        return calls
+          .map((call, index) => (dots.includes(call) ? index : -1))
+          .filter((index) => index >= 0);
+      };
       return {
         at,
+        orderOf,
+        dotArcOrder,
         handleRadii,
-        outlines: () => outlines,
+        alphasAtDots,
         /** 画过帧没有：一帧里必然重画四个圆点，也很可能带上别的图元 */
         drewFrame: () => calls.length > 0,
         /** 丢掉已记下的帧，只看接下来的绘制 */
         clear: () => {
           calls.length = 0;
-          outlines.length = 0;
         },
       };
     };
@@ -910,41 +940,133 @@ describe("quick create handles", () => {
         throw new Error("Expected a composite shape");
       }
 
-      // 未悬停时没有预演
-      expect(frames.outlines()).toEqual([]);
+      // 未悬停时没有预演：预演整层都走真实元素渲染，落到画布上就是一次位图 blit
+      expect(frames.at("drawImage")).toEqual([]);
 
       frames.clear();
       mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
       expect(frames.drewFrame()).toBe(true);
 
-      // 幽灵副本的轮廓就是源图形旋转过的全局轮廓（不另拼一份路径）
-      expect(frames.outlines()).toEqual([
-        compositeShapePathToSvg(getCompositeShapeGlobalPath(source)),
+      // 预演的几何与样式就是落地后的那一份：副本 + 连线两个元素
+      const ghost = h.app.quickCreate.getGhostElements(handleFor("right"));
+      expect(ghost.map((element) => element.id)).toEqual([
+        QUICK_CREATE_GHOST_SHAPE_ID,
+        QUICK_CREATE_GHOST_ARROW_ID,
       ]);
-      // 画在真实落点上：目标中心 - 源中心 = 间隙 130 + 源宽 120
-      expect(frames.at("translate")).toContainEqual({
-        type: "translate",
-        args: [250, 0],
+      const [ghostShape, ghostArrow] = ghost;
+      // 副本落在真实落点上：目标中心 - 源中心 = 间隙 130 + 源宽 120
+      expect(ghostShape).toMatchObject({
+        x: 350,
+        y: 100,
+        width: 120,
+        height: 80,
+        // 样式原样照抄源图形，只有不透明度压到一半表示尚未提交
+        strokeColor: source.strokeColor,
+        backgroundColor: source.backgroundColor,
+        strokeStyle: source.strokeStyle,
+        strokeWidth: source.strokeWidth,
+        opacity: source.opacity * QUICK_CREATE_GHOST_ALPHA,
       });
-      // 幽灵连线：源右边缘中点到副本近端边缘中点，按下限 6/4 画虚线
-      expect(frames.at("setLineDash")).toContainEqual({
-        type: "setLineDash",
-        args: [[6, 4]],
+      // 连线：源右边缘中点到副本近端边缘中点，样式取当前连接线，同样压到一半
+      expect(ghostArrow).toMatchObject({
+        type: "arrow",
+        x: 220,
+        y: 140,
+        opacity: 100 * QUICK_CREATE_GHOST_ALPHA,
       });
-      expect(frames.at("moveTo")).toContainEqual({
-        type: "moveTo",
-        args: [220, 140],
-      });
-      expect(frames.at("lineTo")).toContainEqual({
-        type: "lineTo",
-        args: [350, 140],
-      });
+      if (!isArrowElement(ghostArrow)) {
+        throw new Error("Expected an arrow");
+      }
+      expect(ghostArrow.points).toEqual([
+        [0, 0],
+        [130, 0],
+      ]);
+
+      // 预演画在两个真实图元上（副本 + 连线各一次 blit），且**先于**四个创建
+      // 入口：预演不得盖住要点的那几个圆点
+      const blits = frames.orderOf("drawImage");
+      expect(blits).toHaveLength(2);
+      expect(Math.max(...blits)).toBeLessThan(
+        Math.min(...frames.dotArcOrder()),
+      );
 
       // 指针离开后重画一帧，预演跟着消失
       frames.clear();
       mouse.moveTo(1000, 1000);
       expect(frames.drewFrame()).toBe(true);
-      expect(frames.outlines()).toEqual([]);
+      expect(frames.at("drawImage")).toEqual([]);
+
+      // 连线照抄当前连接线样式（线条与两端箭头都会跟着变），样式一变就重建，
+      // 不会还画着上一套；没变则复用同一份（预演元素身上挂着位图缓存）
+      act(() => {
+        h.app.setState({
+          currentItemStrokeColor: "#ff00ff",
+          currentItemStrokeStyle: "dotted",
+          currentItemStartArrowhead: "triangle",
+          currentItemEndArrowhead: "circle",
+        });
+      });
+      const styled = h.app.quickCreate.getGhostElements(handleFor("right"));
+      expect(styled).not.toBe(ghost);
+      expect(styled[1]).toMatchObject({
+        strokeColor: "#ff00ff",
+        strokeStyle: "dotted",
+        startArrowhead: "triangle",
+        endArrowhead: "circle",
+      });
+      expect(h.app.quickCreate.getGhostElements(handleFor("right"))).toBe(
+        styled,
+      );
+    });
+
+    it("keeps the resting dots translucent and the creation entry fully opaque", () => {
+      const shape = createRectangle();
+      if (!isCompositeShapeElement(shape)) {
+        throw new Error("Expected a composite shape");
+      }
+
+      frames.clear();
+      selectShape(shape);
+      // 未悬停：四个圆点都是常态档，压到 REST_ALPHA
+      expect(frames.alphasAtDots()).toEqual({
+        "160,78": QUICK_CREATE_HANDLE_REST_ALPHA,
+        "242,140": QUICK_CREATE_HANDLE_REST_ALPHA,
+        "160,202": QUICK_CREATE_HANDLE_REST_ALPHA,
+        "78,140": QUICK_CREATE_HANDLE_REST_ALPHA,
+      });
+
+      // 悬停那一项就地长成创建入口（加号），恢复完全不透明
+      frames.clear();
+      mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
+      expect(frames.alphasAtDots()["242,140"]).toBe(1);
+      expect(frames.alphasAtDots()["160,78"]).toBe(
+        QUICK_CREATE_HANDLE_REST_ALPHA,
+      );
+    });
+
+    it("draws the touch resting entry whole instead of dimming it", () => {
+      const shape = createRectangle();
+      selectShape(shape);
+      // 触屏没有 hover 可等：常态画的就是悬停档的完整手柄（⌀20 + 加号），
+      // 那是唯一入口，不压暗
+      act(() => {
+        h.app.setState({ lastPointerDownWith: "touch" });
+      });
+
+      frames.clear();
+      mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
+      expect(frames.alphasAtDots()).toEqual({
+        "160,78": 1,
+        "242,140": 1,
+        "160,202": 1,
+        "78,140": 1,
+      });
+      expect(frames.handleRadii()).toEqual({
+        "160,78": 10,
+        "242,140": 10,
+        "160,202": 10,
+        "78,140": 10,
+      });
     });
 
     it("reports the hovered direction and clears when the pointer leaves", () => {

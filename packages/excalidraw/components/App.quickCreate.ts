@@ -8,15 +8,19 @@ import {
   getContainingFrame,
   getElementAbsoluteCoords,
   getElementWithTransformHandleType,
+  getQuickCreateDirectionVector,
   getQuickCreateHandles,
   getQuickCreateTargetCenter,
+  getQuickCreateTargetElement,
   getTransformHandles,
   hitTestQuickCreateHandle,
   isBindableElement,
+  isCompositeShapeElement,
   isFrameLikeElement,
   isLinearElement,
   newArrowElement,
   updateBoundPoint,
+  QUICK_CREATE_GHOST_ALPHA,
 } from "@excalidraw/element";
 
 import type { LocalPoint } from "@excalidraw/math";
@@ -31,9 +35,14 @@ import type {
   PointsPositionUpdates,
 } from "@excalidraw/element/types";
 
-import type { QuickCreateDirection } from "@excalidraw/element";
+import type {
+  QuickCreateDirection,
+  QuickCreateHandle,
+} from "@excalidraw/element";
 
 import { getCurrentItemArrowProps } from "./app/arrowCreation";
+
+import type { CreationIdentity } from "./app/createPresets";
 
 import type { PointerDownState } from "../types";
 
@@ -44,6 +53,22 @@ import type App from "./App";
 const MODIFIER_KEYS = new Set(["Shift", "Alt", "Control", "Meta"]);
 
 const isModifierKey = (key: string) => MODIFIER_KEYS.has(key);
+
+/**
+ * 预演元素的固定身份（沿用 `createPresets` 的 `preview:` 约定）：预演元素只画
+ * 进画布、不入场景，但一旦用构造函数默认的 `randomId()` / `randomInteger()`，
+ * 就会推进共享的 id / 随机序列，让**后续真实元素**的身份整体后移。
+ */
+export const QUICK_CREATE_GHOST_SHAPE_ID = "preview:quick-create";
+export const QUICK_CREATE_GHOST_ARROW_ID = "preview:quick-create:arrow";
+/**
+ * 连线的身份要按对象展开传给构造函数：`ElementConstructorOpts` 的类型不收 `id`
+ * （字面量写 `id` 会被多属性检查拦下，展开则不会），运行时是认的。
+ */
+const GHOST_ARROW_IDENTITY: CreationIdentity = {
+  id: QUICK_CREATE_GHOST_ARROW_ID,
+  seed: 1,
+};
 
 /**
  * 方向手柄：单选图形时在指示框四边外侧显示圆点，悬停换加号，点击在对应方向
@@ -65,6 +90,17 @@ export class AppQuickCreate {
    */
   private modifierHeld = false;
 
+  /**
+   * 悬停预演的缓存。渲染层每帧都会来取一遍预演元素，而元素对象身上挂着两份
+   * 缓存（`elementWithCanvasCache` 的离屏位图、`ShapeCache` 的图形命令）都是
+   * WeakMap、按对象身份命中：每帧新建对象等于每帧重画一张位图、再分配一块
+   * canvas。所以只在「源图形、方向、连接线样式」都没变时复用同一对元素。
+   */
+  private ghost: {
+    key: string;
+    elements: readonly NonDeletedExcalidrawElement[];
+  } | null = null;
+
   constructor(private readonly app: App) {}
 
   getHovered = () => this.hovered;
@@ -82,6 +118,7 @@ export class AppQuickCreate {
     }
     this.modifierHeld = held;
     this.hovered = null;
+    this.ghost = null;
     this.app.repaint.request();
   };
 
@@ -108,6 +145,9 @@ export class AppQuickCreate {
   };
 
   reset = () => {
+    // 预演缓存连同悬停一起丢：它带着离屏位图，没悬停就没必要留着占内存
+    // （重建一次不算贵，而且只在指针重新落到某个手柄上时才会发生）
+    this.ghost = null;
     if (this.hovered) {
       this.hovered = null;
       this.app.repaint.request();
@@ -162,6 +202,10 @@ export class AppQuickCreate {
             elementId: effectiveHit.elementId,
           }
         : null;
+      if (!effectiveHit) {
+        // 悬停离开：预演跟着收起，位图缓存一并丢掉（见 reset）
+        this.ghost = null;
+      }
       // 圆点 ↔ 加号的形态只存在组件字段里、不进 appState，setState({}) 不会让
       // 交互层重渲染（InteractiveCanvas 是 memo），必须显式重绘一帧
       this.app.repaint.request();
@@ -257,6 +301,7 @@ export class AppQuickCreate {
     pointerDownState.resize.handleType = false;
     pointerDownState.resize.isResizing = false;
     this.hovered = null;
+    this.ghost = null;
     this.createConnectedShape(source, hit.direction);
     return true;
   };
@@ -347,6 +392,132 @@ export class AppQuickCreate {
       point.y - dot.center.y,
     );
     return dotDistance < closestHandleDistance;
+  };
+
+  /**
+   * 悬停预演的两个元素：幽灵副本 + 幽灵连线。只用于绘制——不进 scene、不进
+   * store、不进历史，协作端看不到；身份固定，不消耗共享的 id / 随机序列。
+   *
+   * 几何取自与 `createConnectedShape` 同一套函数、样式原样照抄源图形与当前
+   * 连接线，渲染层用 `renderElement` 画，所以看到的线条、箭头、填充就是落地
+   * 之后的样子，只有不透明度不同（`QUICK_CREATE_GHOST_ALPHA`）。
+   */
+  getGhostElements = (
+    handle: QuickCreateHandle,
+  ): readonly NonDeletedExcalidrawElement[] => {
+    const source = getQuickCreateTargetElement(this.app);
+    if (!source || !isCompositeShapeElement(source)) {
+      return [];
+    }
+    const key = [
+      source.id,
+      source.version,
+      handle.direction,
+      this.getArrowStyleFingerprint(),
+    ].join("|");
+    if (this.ghost?.key !== key) {
+      this.ghost = {
+        key,
+        elements: this.buildGhostElements(source, handle.direction),
+      };
+    }
+    return this.ghost.elements;
+  };
+
+  /** 影响幽灵连线的样式切片：变了预演就得重建，否则会画着上一套样式 */
+  private getArrowStyleFingerprint = () => {
+    const { state } = this.app;
+    return [
+      state.currentItemStrokeColor,
+      state.currentItemStrokeWidthKey,
+      state.currentItemStrokeStyle,
+      state.currentItemOpacity,
+      state.currentItemArrowType,
+      state.currentItemStartArrowhead,
+      state.currentItemEndArrowhead,
+    ].join("|");
+  };
+
+  private buildGhostElements = (
+    source: NonDeleted<ExcalidrawCompositeShapeElement>,
+    direction: QuickCreateDirection,
+  ): readonly NonDeletedExcalidrawElement[] => {
+    const elementsMap = this.app.scene.getNonDeletedElementsMap();
+    const sourceBounds = getElementAbsoluteCoords(source, elementsMap);
+    const sourceCenter = {
+      x: (sourceBounds[0] + sourceBounds[2]) / 2,
+      y: (sourceBounds[1] + sourceBounds[3]) / 2,
+    };
+    const target = getQuickCreateTargetCenter(
+      {
+        center: sourceCenter,
+        angle: source.angle,
+        width: source.width,
+        height: source.height,
+      },
+      direction,
+      { width: source.width, height: source.height },
+    );
+    return [
+      this.buildGhostShape(source, target),
+      this.buildGhostArrow(source, direction, sourceCenter, target),
+    ];
+  };
+
+  /** 幽灵副本：与 `cloneShape` 同款（清掉分组/绑定/容器归属），只压暗一半 */
+  private buildGhostShape = (
+    source: NonDeleted<ExcalidrawCompositeShapeElement>,
+    target: { x: number; y: number },
+  ): NonDeletedExcalidrawElement =>
+    ({
+      ...source,
+      id: QUICK_CREATE_GHOST_SHAPE_ID,
+      x: target.x - source.width / 2,
+      y: target.y - source.height / 2,
+      groupIds: [],
+      boundElements: null,
+      index: null,
+      containerRef: undefined,
+      opacity: source.opacity * QUICK_CREATE_GHOST_ALPHA,
+    } as NonDeleted<ExcalidrawCompositeShapeElement>);
+
+  /**
+   * 幽灵连线：从源朝向该方向的边缘中点，到副本的近端边缘中点，沿方向取直。
+   * 这是刻意的近似——真实创建后端点由 orbit 绑定重算，旋转或斜向时会有几像素
+   * 出入（与 `createConnectedShape` 的起点同一套几何）。
+   */
+  private buildGhostArrow = (
+    source: NonDeleted<ExcalidrawCompositeShapeElement>,
+    direction: QuickCreateDirection,
+    sourceCenter: { x: number; y: number },
+    target: { x: number; y: number },
+  ): NonDeletedExcalidrawElement => {
+    const vector = getQuickCreateDirectionVector(direction, source.angle);
+    const halfAlong =
+      direction === "left" || direction === "right"
+        ? source.width / 2
+        : source.height / 2;
+    const start = {
+      x: sourceCenter.x + vector.x * halfAlong,
+      y: sourceCenter.y + vector.y * halfAlong,
+    };
+    const end = {
+      x: target.x - vector.x * halfAlong,
+      y: target.y - vector.y * halfAlong,
+    };
+    const arrowProps = getCurrentItemArrowProps(this.app);
+    return newArrowElement({
+      type: "arrow",
+      x: start.x,
+      y: start.y,
+      ...arrowProps,
+      points: [
+        pointFrom<LocalPoint>(0, 0),
+        pointFrom<LocalPoint>(end.x - start.x, end.y - start.y),
+      ],
+      opacity: arrowProps.opacity * QUICK_CREATE_GHOST_ALPHA,
+      ...GHOST_ARROW_IDENTITY,
+    });
   };
 
   /**
