@@ -34,6 +34,9 @@ export const handleInteractiveCanvasRef = (
 
 export const onBlur = (app: App) => {
   app.pan.setSpaceHeld(false);
+  // 窗口切走时 keyup 可能丢失（如 Cmd+Tab 后在别处松开修饰键），
+  // 一并复位方向手柄的修饰键状态，避免切回来仍停在隐藏态。
+  app.quickCreate.setModifierHeld(false);
   app.setState({
     isBindingEnabled: app.state.bindingPreference === "enabled",
   });
@@ -235,6 +238,21 @@ export function addEventListeners(app: App) {
     addEventListener(app.ownerDocument, EVENT.KEYUP, app["onKeyUp"], {
       passive: true,
     }),
+    // 方向手柄的修饰键隐藏：keydown/keyup 维护状态，状态变化时触发交互层重绘
+    // （不能只读 pointermove 的事件修饰键：指针不动时不会触发 pointermove，
+    // 要等指针挪动才隐藏）。keyup 丢失由上面的 window blur 兜底。
+    addEventListener(
+      app.ownerDocument,
+      EVENT.KEYDOWN,
+      app.quickCreate.handleModifierKeyDown as EventListener,
+      { passive: true },
+    ),
+    addEventListener(
+      app.ownerDocument,
+      EVENT.KEYUP,
+      app.quickCreate.handleModifierKeyUp as EventListener,
+      { passive: true },
+    ),
     addEventListener(
       app.ownerDocument,
       EVENT.POINTER_MOVE,

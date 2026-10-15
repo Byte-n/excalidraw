@@ -178,7 +178,6 @@ export class AppMindmap {
   private dimmedDragElementIds = new Set<string>();
   private cancelledPointerDown: PointerDownState | null = null;
   private blockedTouchPointerDown: PointerDownState | null = null;
-  private renderOverlay: (() => void) | null = null;
 
   constructor(private readonly app: App) {}
 
@@ -415,7 +414,7 @@ export class AppMindmap {
     if (this.dragSession) {
       if (this.hoveredAddButton) {
         this.hoveredAddButton = null;
-        this.app.setState({});
+        this.app.repaint.request();
       }
       return;
     }
@@ -429,7 +428,7 @@ export class AppMindmap {
       }
       if (this.hoveredAddButton) {
         this.hoveredAddButton = null;
-        this.app.setState({});
+        this.app.repaint.request();
       }
       return;
     }
@@ -457,7 +456,9 @@ export class AppMindmap {
     const hoveredAddButton = this.hitTestAddButton(sceneX, sceneY);
     if (hoveredAddButton !== this.hoveredAddButton) {
       this.hoveredAddButton = hoveredAddButton;
-      this.app.setState({});
+      // 「+」的悬停形态只存在组件字段里，不进 appState：setState({}) 不会
+      // 让交互层重渲染（memo 判定相等），必须显式重绘一帧
+      this.app.repaint.request();
     }
 
     // 折叠 affordance/「+」悬停指针（在 pointerCanvas 的工具光标之后运行，不被覆盖）
@@ -646,7 +647,7 @@ export class AppMindmap {
       session.invalid = false;
       session.previewElements = [];
     }
-    this.renderOverlay?.();
+    this.app.repaint.request();
     return true;
   };
 
@@ -793,7 +794,7 @@ export class AppMindmap {
       selectedElementsAreBeingDragged: false,
       hoveredElementIds: {},
     });
-    this.renderOverlay?.();
+    this.app.repaint.request();
   };
 
   cancelTouchDrag = () => {
@@ -826,10 +827,6 @@ export class AppMindmap {
       this.cancelDrag();
       this.notifyUnsupportedOperation();
     }
-  };
-
-  setOverlayRenderer = (render: (() => void) | null) => {
-    this.renderOverlay = render;
   };
 
   private updateDragOpacity = (ids: Iterable<string>) => {

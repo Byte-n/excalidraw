@@ -1643,7 +1643,7 @@ exports[`regression tests > Drags selected element when hitting only bounding bo
 
 exports[`regression tests > Drags selected element when hitting only bounding box and keeps element selected > [end of test] number of elements 1`] = `0`;
 
-exports[`regression tests > Drags selected element when hitting only bounding box and keeps element selected > [end of test] number of renders 1`] = `12`;
+exports[`regression tests > Drags selected element when hitting only bounding box and keeps element selected > [end of test] number of renders 1`] = `11`;
 
 exports[`regression tests > Drags selected element when hitting only bounding box and keeps element selected > [end of test] redo stack 1`] = `[]`;
 

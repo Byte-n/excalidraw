@@ -8,7 +8,6 @@ import {
   LINE_CONFIRM_THRESHOLD,
   ROUNDNESS,
   DEFAULT_COLLISION_THRESHOLD,
-  ARROW_TYPE,
   viewportCoordsToSceneCoords,
   invariant,
   getFeatureFlag,
@@ -100,6 +99,8 @@ import { getSelectedElements } from "../../scene";
 import { snapResizingElements } from "../../snapping";
 
 import { isSelectionDraft, newCreationDraft } from "./createPresets";
+
+import { getCurrentItemArrowProps } from "./arrowCreation";
 
 import * as tableController from "./table";
 
@@ -1412,42 +1413,14 @@ export const handleLinearElementOnPointerDown = (
 
     const containerRef = app.getContainerRefForDropAt({ x: gridX, y: gridY });
 
-    /* If arrow is pre-arrowheads, it will have undefined for both start and end arrowheads.
-      If so, we want it to be null for start and "arrow" for end. If the linear item is not
-      an arrow, we want it to be null for both. Otherwise, we want it to use the
-      values from appState. */
-
-    const { currentItemStartArrowhead, currentItemEndArrowhead } = app.state;
-    const [startArrowhead, endArrowhead] =
-      elementType === "arrow"
-        ? [currentItemStartArrowhead, currentItemEndArrowhead]
-        : [null, null];
-
     const element =
       elementType === "arrow"
         ? newArrowElement({
-            type: elementType,
+            type: "arrow",
             x: gridX,
             y: gridY,
-            strokeColor: app.state.currentItemStrokeColor,
-            backgroundColor: app.state.currentItemBackgroundColor,
-            fillStyle: app.state.currentItemFillStyle,
-            strokeWidth: app.getCurrentItemStrokeWidth(elementType),
-            strokeStyle: app.state.currentItemStrokeStyle,
-            opacity: app.state.currentItemOpacity,
-            roundness:
-              app.state.currentItemArrowType === ARROW_TYPE.round
-                ? { type: ROUNDNESS.PROPORTIONAL_RADIUS }
-                : // note, roundness doesn't have any effect for elbow arrows,
-                  // but it's best to set it to null as well
-                  null,
-            startArrowhead,
-            endArrowhead,
-            locked: false,
+            ...getCurrentItemArrowProps(app),
             containerRef,
-            elbowed: app.state.currentItemArrowType === ARROW_TYPE.elbow,
-            fixedSegments:
-              app.state.currentItemArrowType === ARROW_TYPE.elbow ? [] : null,
           })
         : newLinearElement({
             type: elementType,

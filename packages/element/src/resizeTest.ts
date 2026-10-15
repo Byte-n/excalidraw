@@ -232,6 +232,15 @@ const rotateResizeCursor = (cursor: string, angle: number) => {
 const ROTATION_CURSOR_PATH =
   "M7 7A11 11 0 0 1 17 17M3.5 7L8 3.5v7zM17 20.5L13.5 16h7z";
 const ROTATION_CURSOR_ANGLE_STEP = 2;
+/**
+ * The glyph's arc opens toward the selection. The handle is placed diagonally
+ * outside the *se* corner (see `getTransformHandlesFromCoords`), so the canvas
+ * turns its glyph a quarter turn clockwise on top of the element angle
+ * (`renderTransformHandles`). The cursor stands in for that handle — it is the
+ * hover feedback and the only indicator while rotating — so it takes the same
+ * quarter turn, or its arc would open the wrong way.
+ */
+const ROTATION_CURSOR_CORNER_TURN = 90;
 const rotationCursorCache = new Map<number, string>();
 
 // rotation cursor turned to match the (rotated) rotation handle
@@ -244,7 +253,8 @@ export const getRotationCursor = (angle: number): string => {
     360;
   let cursor = rotationCursorCache.get(deg);
   if (!cursor) {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(${deg} 12 12)"><path d="${ROTATION_CURSOR_PATH}" stroke="#fff" stroke-width="4"/><path d="${ROTATION_CURSOR_PATH}" stroke="#000" stroke-width="1.5"/><path d="M3.5 7L8 3.5v7zM17 20.5L13.5 16h7z" fill="#000"/></g></svg>`;
+    const rotation = (deg + ROTATION_CURSOR_CORNER_TURN) % 360;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(${rotation} 12 12)"><path d="${ROTATION_CURSOR_PATH}" stroke="#fff" stroke-width="4"/><path d="${ROTATION_CURSOR_PATH}" stroke="#000" stroke-width="1.5"/><path d="M3.5 7L8 3.5v7zM17 20.5L13.5 16h7z" fill="#000"/></g></svg>`;
     cursor = `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, grab`;
     rotationCursorCache.set(deg, cursor);
   }

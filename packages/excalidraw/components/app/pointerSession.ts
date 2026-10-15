@@ -713,6 +713,14 @@ export const handleCanvasPointerDown = (
     return;
   }
 
+  // 方向手柄早于选择/缩放判定：命中即在对应方向建副本+连线并吞掉本次手势，
+  // 否则这次点击会先被框选/拖拽吃掉（圆点落在指示框外的空白处）。会话监听
+  // 仍要挂上——抬起时由通用收尾把 cursorButton、指针状态复位。
+  if (app.quickCreate.preparePointerDown(pointerDownState, event)) {
+    attachPointerSessionListeners(app, event, pointerDownState);
+    return;
+  }
+
   const selectionHandled = app.handleSelectionOnPointerDown(
     event,
     pointerDownState,

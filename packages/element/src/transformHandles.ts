@@ -207,18 +207,22 @@ export const getTransformHandlesFromCoords = (
     rotation: omitSides.rotation
       ? undefined
       : generateTransformHandle(
-          // placed diagonally outside the top-right (ne) corner handle
+          // placed diagonally outside the bottom-right (se) corner handle:
+          // the se corner handle center, extrapolated one more
+          // ROTATION_RESIZE_HANDLE_GAP along the diagonal. Both axes use the
+          // same idiom as the se corner handle (`dashedLineMargin` and
+          // `centeringOffset` mirror the ne/se x coordinates), so the handle
+          // sits symmetric about the selection's diagonal.
           x2 +
             dashedLineMargin -
             centeringOffset +
             handleWidth / 2 +
             ROTATION_RESIZE_HANDLE_GAP / zoom.value -
             rotationHandleSize / 2,
-          y1 -
+          y2 +
             dashedLineMargin -
-            handleMarginY +
             centeringOffset +
-            handleHeight / 2 -
+            handleHeight / 2 +
             ROTATION_RESIZE_HANDLE_GAP / zoom.value -
             rotationHandleSize / 2,
           rotationHandleSize,

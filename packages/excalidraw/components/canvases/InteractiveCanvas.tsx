@@ -171,11 +171,13 @@ const InteractiveCanvas = (props: InteractiveCanvasProps) => {
       deltaTime: 0,
     };
 
-    props.app.mindmap.setOverlayRenderer(() => {
+    const repaintInteractiveScene = () => {
       if (rendererParams.current) {
         renderInteractiveScene(rendererParams.current);
       }
-    });
+    };
+    // 显式重绘入口：悬停高亮这类只改组件外部状态的反馈靠它画出来
+    props.app.repaint.setRenderer(repaintInteractiveScene);
 
     if (!AnimationController.running(INTERACTIVE_SCENE_ANIMATION_KEY)) {
       AnimationController.start<InteractiveSceneRenderAnimationState>(
@@ -205,10 +207,7 @@ const InteractiveCanvas = (props: InteractiveCanvasProps) => {
     }
   });
 
-  useEffect(
-    () => () => props.app.mindmap.setOverlayRenderer(null),
-    [props.app],
-  );
+  useEffect(() => () => props.app.repaint.setRenderer(null), [props.app]);
 
   return (
     <canvas

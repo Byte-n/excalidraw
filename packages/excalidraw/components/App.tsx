@@ -123,6 +123,8 @@ import { AppDrawShape } from "./App.drawshape";
 import { AppDuplicate } from "./App.duplicate";
 import { AppFlowchart } from "./App.flowchart";
 import { AppMindmap } from "./App.mindmap";
+import { AppQuickCreate } from "./App.quickCreate";
+import { AppRepaint } from "./App.repaint";
 import { AppPan } from "./App.pan";
 import { AppCreatePreview } from "./App.createPreview";
 import { AppToolDrag } from "./App.toolDrag";
@@ -302,6 +304,9 @@ class App extends React.Component<AppProps, AppState> {
   public createPreview: AppCreatePreview = new AppCreatePreview(this);
   public flowchart: AppFlowchart = new AppFlowchart(this);
   public mindmap: AppMindmap = new AppMindmap(this);
+  public quickCreate: AppQuickCreate = new AppQuickCreate(this);
+  /** 交互层画布的显式重绘入口（setState({}) 画不出来，见 App.repaint.ts） */
+  public repaint: AppRepaint = new AppRepaint();
   public cursor: AppCursor = new AppCursor(this);
   public arrowText: AppArrowText = new AppArrowText(this);
   public pan: AppPan = new AppPan(this, {

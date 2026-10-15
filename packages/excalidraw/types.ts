@@ -1479,6 +1479,8 @@ export type AppClassProperties = {
   cancelImageCropping: App["cancelImageCropping"];
   flowchart: App["flowchart"];
   mindmap: App["mindmap"];
+  quickCreate: App["quickCreate"];
+  repaint: App["repaint"];
   setMindmapDragOpacity: App["setMindmapDragOpacity"];
   drawShape: App["drawShape"];
   arrowText: App["arrowText"];

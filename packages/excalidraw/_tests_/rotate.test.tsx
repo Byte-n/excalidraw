@@ -30,13 +30,17 @@ test("unselected bound arrow updates when rotating its target element", async ()
 
   expect(arrow.endBinding?.elementId).toEqual(rectangle.id);
 
-  UI.rotate(rectangle, [60, 36], { shift: true });
+  // the rotation handle now sits diagonally outside the se corner; that spot
+  // is the mirror of the old ne spot about the element's horizontal centre
+  // line, so the drag is mirrored too (the delta's dy negated) and sweeps the
+  // same shift-snapped 15°, in the opposite direction
+  UI.rotate(rectangle, [60, -36], { shift: true });
 
   expect(arrow.endBinding?.elementId).toEqual(rectangle.id);
   expect(arrow.x).toBeCloseTo(-80);
   expect(arrow.y).toBeCloseTo(50);
-  expect(arrow.width).toBeCloseTo(88.234, 1);
-  expect(arrow.height).toBeCloseTo(24.578, 1);
+  expect(arrow.width).toBeCloseTo(88.24, 1);
+  expect(arrow.height).toBeCloseTo(24.597, 1);
 });
 
 test("unselected bound arrows update when rotating their target elements", async () => {
@@ -67,19 +71,21 @@ test("unselected bound arrows update when rotating their target elements", async
   expect(ellipseArrow.endBinding?.elementId).toEqual(ellipse.id);
   expect(textArrow.endBinding?.elementId).toEqual(text.id);
 
-  UI.rotate([ellipse, text], [-82, 23], { shift: true });
+  // mirrored for the same reason as above: the rotation handle of the common
+  // bounds moved from above the ne corner to below the se corner
+  UI.rotate([ellipse, text], [-82, -23], { shift: true });
 
   expect(ellipseArrow.endBinding?.elementId).toEqual(ellipse.id);
   expect(ellipseArrow.x).toEqual(-10);
   expect(ellipseArrow.y).toEqual(80);
   expect(ellipseArrow.points[0]).toEqual([0, 0]);
-  expect(ellipseArrow.points[1][0]).toBeCloseTo(47.928, 1);
-  expect(ellipseArrow.points[1][1]).toBeCloseTo(89.248, 1);
+  expect(ellipseArrow.points[1][0]).toBeCloseTo(59.568, 1);
+  expect(ellipseArrow.points[1][1]).toBeCloseTo(32.308, 1);
 
   expect(textArrow.endBinding?.elementId).toEqual(text.id);
   expect(textArrow.x).toEqual(360);
   expect(textArrow.y).toEqual(300);
   expect(textArrow.points[0]).toEqual([0, 0]);
-  expect(textArrow.points[1][0]).toBeCloseTo(-107.45183022321027, 0);
-  expect(textArrow.points[1][1]).toBeCloseTo(-73.35575731068823, 0);
+  expect(textArrow.points[1][0]).toBeCloseTo(-118.468, 0);
+  expect(textArrow.points[1][1]).toBeCloseTo(-30.914, 0);
 });

@@ -775,6 +775,9 @@ export const handleCanvasPointerMove = (
   // 在工具光标落定之后运行：思维导图折叠 affordance 的悬停指针不被覆盖
   app.mindmap.handlePointerMove(scenePointerX, scenePointerY);
 
+  // 同上：方向手柄的悬停加号与指针也不被工具光标覆盖
+  app.quickCreate.handlePointerMove(scenePointerX, scenePointerY);
+
   // 创建工具的预设预览：悬停时跟随光标的那半个透明图形。指针未按下、也不在
   // 任何会话里时才有意义——按下之后由真正的 newElement 接管。
   if (

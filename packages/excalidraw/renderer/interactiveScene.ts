@@ -81,6 +81,23 @@ import {
   getMindmapAddButtonAffordances,
   getMindmapLayoutConfig,
   MINDMAP_COLLAPSE_STUB_LENGTH,
+  getQuickCreateHandles,
+  getQuickCreateTargetElement,
+  getQuickCreateTargetCenter,
+  getQuickCreateDirectionVector,
+  QUICK_CREATE_HANDLE_SIZE,
+  QUICK_CREATE_HANDLE_SIZE_HOVER,
+  QUICK_CREATE_HANDLE_SIZE_DOWN,
+  QUICK_CREATE_HANDLE_SIZE_COMPACT,
+  QUICK_CREATE_HANDLE_SIZE_HOVER_COMPACT,
+  QUICK_CREATE_HANDLE_SIZE_DOWN_COMPACT,
+  QUICK_CREATE_RING_HOVER_COMPACT,
+  QUICK_CREATE_PLUS_SIZE,
+  QUICK_CREATE_PLUS_SIZE_DOWN,
+  QUICK_CREATE_PLUS_SIZE_COMPACT,
+  QUICK_CREATE_GHOST_ALPHA,
+  QUICK_CREATE_GHOST_FILL_ALPHA,
+  compositeShapePathToSvg,
 } from "@excalidraw/element";
 
 import { renderSelectionElement } from "@excalidraw/element";
@@ -96,6 +113,7 @@ import type { EditorInterface } from "@excalidraw/common";
 import type {
   TransformHandles,
   TransformHandleType,
+  QuickCreateHandle,
 } from "@excalidraw/element";
 
 import type {
@@ -119,6 +137,7 @@ import type {
 } from "@excalidraw/element/types";
 
 import { getTableTitle, getTableTitleBar } from "../components/app/tableTitle";
+import { getCurrentItemArrowProps } from "../components/app/arrowCreation";
 
 import { renderSnaps } from "../renderer/renderSnaps";
 import { getCompositeControlPointGlobal } from "../components/app/compositeShapeControls";
@@ -1424,6 +1443,233 @@ const renderMindmapAddButtons = (
     context.moveTo(center[0], center[1] - 3.5);
     context.lineTo(center[0], center[1] + 3.5);
     context.stroke();
+  }
+  context.restore();
+};
+
+/**
+ * 方向手柄的三个形态档（屏幕 px，除 `filled` 外都在绘制时除以 zoom）。
+ * 常态是极简点，悬停就地长成完整手柄（反色 + 加号），按下略缩一档。
+ */
+type QuickCreateHandleSpec = {
+  size: number;
+  ring: number;
+  /** 圆填充选中色；false 时是底色圆 + 选中色描边（触屏常态） */
+  filled: boolean;
+  /** 加号总长，0 表示不画 */
+  plus: number;
+};
+
+const getQuickCreateHandleSpec = (
+  handle: QuickCreateHandle,
+  state: "rest" | "hover" | "down",
+  /** 指针不能悬停（触屏）：常态直接画完整形态，否则功能被藏起来 */
+  touchLike: boolean,
+): QuickCreateHandleSpec => {
+  const compact = handle.compact;
+  if (state === "rest") {
+    if (touchLike) {
+      return {
+        size: QUICK_CREATE_HANDLE_SIZE_HOVER,
+        ring: 2,
+        filled: false,
+        plus: QUICK_CREATE_PLUS_SIZE,
+      };
+    }
+    return {
+      size: compact
+        ? QUICK_CREATE_HANDLE_SIZE_COMPACT
+        : QUICK_CREATE_HANDLE_SIZE,
+      ring: 1,
+      filled: true,
+      plus: 0,
+    };
+  }
+  if (state === "down") {
+    return {
+      size: compact
+        ? QUICK_CREATE_HANDLE_SIZE_DOWN_COMPACT
+        : QUICK_CREATE_HANDLE_SIZE_DOWN,
+      ring: 1.5,
+      filled: true,
+      plus: compact
+        ? QUICK_CREATE_PLUS_SIZE_COMPACT
+        : QUICK_CREATE_PLUS_SIZE_DOWN,
+    };
+  }
+  return {
+    size: compact
+      ? QUICK_CREATE_HANDLE_SIZE_HOVER_COMPACT
+      : QUICK_CREATE_HANDLE_SIZE_HOVER,
+    // 设计稿规格表：紧凑档悬停的描边比常规档细一档（1.25 vs 1.5）
+    ring: compact ? QUICK_CREATE_RING_HOVER_COMPACT : 1.5,
+    filled: true,
+    plus: compact ? QUICK_CREATE_PLUS_SIZE_COMPACT : QUICK_CREATE_PLUS_SIZE,
+  };
+};
+
+/**
+ * 结果预演：幽灵副本 + 幽灵连线。仅悬停命中且无修饰键时画。
+ *
+ * 副本轮廓直接复用真实几何（`getCompositeShapeGlobalPath` 已绕元素中心旋转过，
+ * 与副本的 angle 一致），按「目标中心 - 源中心」平移后填充 + 描边——不新建元素，
+ * 预览因此不消耗 id / seed，也不需要自己拼一遍路径。
+ */
+const renderQuickCreateGhost = (
+  context: CanvasRenderingContext2D,
+  app: AppClassProperties,
+  appState: InteractiveCanvasAppState,
+  handle: QuickCreateHandle,
+  selectionColor: string,
+) => {
+  const source = getQuickCreateTargetElement(app);
+  if (!source || !isCompositeShapeElement(source)) {
+    return;
+  }
+  const zoom = appState.zoom.value;
+  const center = {
+    x: source.x + source.width / 2,
+    y: source.y + source.height / 2,
+  };
+  // 副本与源同宽高同角度，所以中心沿旋转后的方向偏移「源半尺寸 + 间隙 + 源半尺寸」
+  const target = getQuickCreateTargetCenter(
+    {
+      center,
+      angle: source.angle,
+      width: source.width,
+      height: source.height,
+    },
+    handle.direction,
+    { width: source.width, height: source.height },
+  );
+
+  context.save();
+  context.translate(target.x - center.x, target.y - center.y);
+  context.setLineDash([5 / zoom, 4 / zoom]);
+  context.lineWidth = 1.5 / zoom;
+  context.strokeStyle = selectionColor;
+  context.fillStyle = setColorAlpha(
+    selectionColor,
+    QUICK_CREATE_GHOST_FILL_ALPHA,
+  );
+  const outline = new Path2D(
+    compositeShapePathToSvg(getCompositeShapeGlobalPath(source)),
+  );
+  context.fill(outline);
+  context.stroke(outline);
+  context.restore();
+
+  // 幽灵连线：从源朝向该方向的边缘中点，到副本的近端边缘中点，沿方向取直。
+  // 这是刻意的近似——真实创建后端点由 orbit 绑定重算，旋转或斜向时会有几像素出入。
+  const vector = getQuickCreateDirectionVector(handle.direction, source.angle);
+  const halfAlong =
+    handle.direction === "left" || handle.direction === "right"
+      ? source.width / 2
+      : source.height / 2;
+  const start = {
+    x: center.x + vector.x * halfAlong,
+    y: center.y + vector.y * halfAlong,
+  };
+  const end = {
+    x: target.x - vector.x * halfAlong,
+    y: target.y - vector.y * halfAlong,
+  };
+  // 样式取当前连接线（与真实创建同一套映射），压到 50% 并强制叠虚线表示尚未提交
+  const arrowProps = getCurrentItemArrowProps(app);
+  context.save();
+  context.globalAlpha = QUICK_CREATE_GHOST_ALPHA;
+  context.setLineDash([6 / zoom, 4 / zoom]);
+  context.lineWidth = arrowProps.strokeWidth;
+  context.strokeStyle = arrowProps.strokeColor;
+  context.beginPath();
+  context.moveTo(start.x, start.y);
+  context.lineTo(end.x, end.y);
+  context.stroke();
+  // 末端实心三角，指向副本
+  const head = 5 / zoom;
+  const normalX = -vector.y;
+  const normalY = vector.x;
+  const halfWidth = head * 0.6;
+  context.setLineDash([]);
+  context.fillStyle = arrowProps.strokeColor;
+  context.beginPath();
+  context.moveTo(end.x, end.y);
+  context.lineTo(
+    end.x - vector.x * head + normalX * halfWidth,
+    end.y - vector.y * head + normalY * halfWidth,
+  );
+  context.lineTo(
+    end.x - vector.x * head - normalX * halfWidth,
+    end.y - vector.y * head - normalY * halfWidth,
+  );
+  context.closePath();
+  context.fill();
+  context.restore();
+};
+
+/**
+ * 方向手柄：单选图形时在指示框四边外侧画实心圆点（悬停就地长成完整手柄并预演
+ * 建图结果）。显隐与几何由 getQuickCreateHandles 统一收口，与指针命中
+ * （hitTestQuickCreateHandle）共用，保证所见即可点；按住修饰键时该函数返回空，
+ * 四个手柄与预演因此一起消失。
+ */
+const renderQuickCreateHandles = (
+  context: CanvasRenderingContext2D,
+  app: AppClassProperties,
+  appState: InteractiveCanvasAppState,
+  selectionColor: string,
+) => {
+  // 修饰键状态由 App.quickCreate 维护（keydown / keyup / blur）：按住时整组不渲染
+  const suppressed = app.quickCreate.isSuppressed();
+  const handles = getQuickCreateHandles(app, "mouse", suppressed);
+  if (!handles.length) {
+    return;
+  }
+  const hovered = app.quickCreate.getHovered();
+  const zoom = appState.zoom.value;
+  const handleSurface = getThemedColor("#fff", appState.theme);
+  // 相机层拿不到当前指针类型（同 getTransformHandles 调用点的注释）：用「上一次
+  // 按下是触屏」与「移动设备」两个既有信号近似「当前指针不能悬停」。
+  const touchLike =
+    app.state.lastPointerDownWith === "touch" ||
+    app.editorInterface.userAgent.isMobileDevice;
+  // 调用点在已按 scrollX/scrollY 平移过的上下文内，这里直接用场景坐标
+  context.save();
+  context.setLineDash([]);
+  for (const handle of handles) {
+    const isHovered =
+      hovered?.elementId === handle.elementId &&
+      hovered.direction === handle.direction;
+    // 能 hover 就说明不是纯触屏，按悬停态画
+    const spec = getQuickCreateHandleSpec(
+      handle,
+      isHovered ? "hover" : "rest",
+      touchLike,
+    );
+    const radius = spec.size / 2 / zoom;
+    context.beginPath();
+    context.arc(handle.center.x, handle.center.y, radius, 0, Math.PI * 2);
+    context.fillStyle = spec.filled ? selectionColor : handleSurface;
+    context.fill();
+    context.lineWidth = spec.ring / zoom;
+    context.strokeStyle = spec.filled ? handleSurface : selectionColor;
+    context.stroke();
+    if (spec.plus) {
+      const arm = spec.plus / 2 / zoom;
+      context.lineWidth = 2 / zoom;
+      context.lineCap = "round";
+      context.strokeStyle = spec.filled ? handleSurface : selectionColor;
+      context.beginPath();
+      context.moveTo(handle.center.x - arm, handle.center.y);
+      context.lineTo(handle.center.x + arm, handle.center.y);
+      context.moveTo(handle.center.x, handle.center.y - arm);
+      context.lineTo(handle.center.x, handle.center.y + arm);
+      context.stroke();
+      context.lineCap = "butt";
+    }
+    if (isHovered) {
+      renderQuickCreateGhost(context, app, appState, handle, selectionColor);
+    }
   }
   context.restore();
 };
@@ -2890,6 +3136,13 @@ const renderTransformHandles = (
         // the handle is positioned in rotated space; rotate the glyph to match
         context.translate(x + width / 2, y + height / 2);
         context.rotate(angle);
+        // the glyph arcs around the bottom-left of its own box so that its
+        // opening faces the selection while it sits at the ne corner; the
+        // handle now sits at the se corner, so turn the glyph a further 90°
+        // clockwise to keep the opening pointed at that corner. Applied after
+        // the element angle, the glyph still follows the element's rotation
+        // while keeping its position relative to the corner.
+        context.rotate(Math.PI / 2);
         renderRotationHandle(
           context,
           -width / 2,
@@ -3830,6 +4083,8 @@ const _renderInteractiveScene = ({
             context.stroke();
           }
         }
+        // 方向手柄：指示框四边外侧的圆点（悬停加号）
+        renderQuickCreateHandles(context, app, appState, selectionColor);
       }
 
       if (appState.croppingElementId && !appState.isCropping) {
