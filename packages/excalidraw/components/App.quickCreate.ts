@@ -19,6 +19,7 @@ import {
   hitTestQuickCreateHandle,
   isBindableElement,
   isCompositeShapeElement,
+  isCurvedArrow,
   isElbowArrow,
   isFrameLikeElement,
   isLinearElement,
@@ -57,7 +58,11 @@ import { buildPresetElementsCentered } from "./app/presetPlacement";
 import { getCatalogItem, isFlowchartShapeId } from "./presetCatalog";
 
 import type { CreationIdentity } from "./app/createPresets";
-import type { PresetCatalogGroupId, PresetCatalogItem } from "./presetCatalog";
+import type {
+  CreationSpec,
+  PresetCatalogGroupId,
+  PresetCatalogItem,
+} from "./presetCatalog";
 
 import type { PointerDownState } from "../types";
 
@@ -82,6 +87,15 @@ export const QUICK_CREATE_GHOST_ARROW_ID = "preview:quick-create:arrow";
  */
 const GHOST_ARROW_IDENTITY: CreationIdentity = {
   id: QUICK_CREATE_GHOST_ARROW_ID,
+  seed: 1,
+};
+
+/**
+ * 探针副本的身份，约定同上：落地前用来量「图形该往外挪多少」的那份装配结果只
+ * 参与计算，却同样会推进共享的 id / 随机序列，固定身份才不让真实落地那份后移。
+ */
+const GHOST_SHAPE_IDENTITY: CreationIdentity = {
+  id: QUICK_CREATE_GHOST_SHAPE_ID,
   seed: 1,
 };
 
@@ -1258,11 +1272,92 @@ export class AppQuickCreate {
   };
 
   /**
+   * 落地补偿量的探针：返回 `delta = P − E`（直线 / 折线档落到图形位置上，圆角曲线档
+   * 落到末端焦点上，见下）。
+   *
+   * 口径（用户要求）：**箭头保持拖拽预演那条，一点都不能变**，但**绑定方式照旧**
+   * ——该吸附轮廓、该带 binding gap 就照旧。所以能动的只有**补偿**（图形位置或末端焦点）：
+   * 把 gap 算进去。
+   *
+   * 为什么平移图形即可精确抵消：
+   * 1. 落地时 `bindBindingElement(..., focusPoint = 松手点 P)` 走
+   *    `projectPointOntoBoundElementOutline`（轮廓交点 + 一个 binding gap，
+   *    `BASE_BINDING_GAP` 再加 `getBindingGap(...)`，随线宽），登记成
+   *    `endBinding.attachPoint`；
+   * 2. 端点最后由 `updateBoundPoint` 还原，它是**纯刚性**的：`attachPoint` 建连时
+   *    定死，此后只随图形平移 / 缩放 / 旋转，不再求交、也不再依赖另一端（见
+   *    `binding.ts` 里它的说明）。折线档同理：末端由 `updateElbowArrowPoints` 从同一
+   *    批锚点推出，锚点随图形平移、端点也就跟着平移。所以**图形平移多少，端点就
+   *    跟着平移多少**；
+   * 3. 于是先在图形位于 `placement.target`（轮廓恰好过 P，也就是拖拽预演的口径）时
+   *    算出「落地会得到的端点」E，再按补偿 `delta = P − E` 落实（直线 / 折线档把图形
+   *    整体平移 `delta`）——落地端点正好回到 P，而连线的几何（入口就是 P 的那条
+   *    预演连线）一点没动。
+   *
+   * 补偿如何落实（返回值里的 `curved` 只决定**要不要多补一步焦点**，判据取与
+   * `binding.ts:1747` 的末端分叉**同一个** `isCurvedArrow`）：
+   * - **图形位置一律外移 `delta`**（三档都做）：轮廓让到松手点之外一个 gap 处，箭头
+   *   末端才停在松手点上、且与轮廓之间留出正常的 binding gap；
+   * - **圆角曲线档再多补一步**：它的端点按「焦点 + 所依附边的外法线 × gap」算
+   *   （`projectPointOntoBoundElementOutline` 的曲线分支），**只看焦点与那条边的
+   *   法线、与图形位置无关** → 光挪图形末端一动不动（会留在轮廓上、零间隙），
+   *   得把**同一个 `delta`** 再加到末端**焦点**上：`end = (P + delta) + gap·n`，
+   *   代入 `delta = P − E = −gap·n` 得 `end = P`。
+   *   直线 / 折线档不需要这一步：它们的端点随图形刚性平移，挪图形就够了。
+   *
+   * E 由**预演那套纯函数**探针给出：`buildConnectorArrow` 走的就是 `getPreviewBindings`
+   * + `projectPreviewEndpoints`（折线档还跑 `routePreviewElbowArrow` 同一套路由），
+   * 与落地逐位同源（见那里的说明），所以这里不进场景、不插任何东西。
+   *
+   * 探针副本用固定身份装配（同 `GHOST_ARROW_IDENTITY` 的约定）：它不入场景，却会
+   * 消耗共享的 id / 随机序列，用真身份会让随后真实落地那份的身份整体后移。
+   */
+  private probeLandingEndOffset = (
+    source: NonDeletedExcalidrawElement,
+    spec: CreationSpec,
+    // 拖拽落位的几何（`getQuickCreateDragPlacement` 的返回值：只有 target 与 connector，
+    // 不带 sourceId），补上源的 id 就是一次完整的落位（`buildConnectorArrow` 起端要用它）
+    geometry: Omit<QuickCreatePlacement, "sourceId">,
+    pointer: QuickCreatePoint,
+  ): { delta: QuickCreatePoint; curved: boolean } => {
+    const placement: QuickCreatePlacement = {
+      sourceId: source.id,
+      ...geometry,
+    };
+    const probeShape = this.applySourceStyle(
+      source,
+      buildPresetElementsCentered(
+        this.app,
+        spec,
+        placement.target,
+        GHOST_SHAPE_IDENTITY,
+      ).elements[0],
+    );
+    const probe = this.buildConnectorArrow(placement, {
+      endTarget: { kind: "ghost", element: probeShape },
+    });
+    // 取探针末端的世界坐标（要含探针图形的元素表：解析它的绑定时会查它）。
+    // `GlobalPoint` 是 `[x, y]` 元组，不是 `{ x, y }`。
+    const end = LinearElementEditor.getPointAtIndexGlobalCoordinates(
+      probe,
+      -1,
+      this.getPreviewElementsMap({ kind: "ghost", element: probeShape }),
+    );
+    return {
+      delta: { x: pointer.x - end[0], y: pointer.y - end[1] },
+      // 判据与 `binding.ts:1747` 同一支：探针箭头就是落地那条的元素，直接问它
+      curved: isCurvedArrow(probe),
+    };
+  };
+
+  /**
    * 面板里选了图形：装配所选图形 + 连线，**一步撤销**。
    *
-   * 落点由 `getQuickCreateDragPlacement`（与拖拽预演同一个）给出——轮廓恰好过松手点，
-   * 于是连线入口与预演那条重合；再按所选图形**真实尺寸**重算连线（入口落在图形轮廓
-   * 上）。装配走 `buildPresetElementsCentered`（与抽屉同一条链路，含画框归属）。
+   * 落点仍由 `getQuickCreateDragPlacement`（与拖拽预演同一个）给出，**连线几何完全
+   * 不动**（入口就是松手点 P）；补偿 `delta = P − E`（见 `probeLandingEndOffset`）：图形
+   * 位置一律外移 `delta` 让出 binding gap，圆角曲线档再多补一次末端**焦点**（它的端点与
+   * 图形位置无关，见那里）。三档末端因此都回到松手点，且都与轮廓留着一个 gap。
+   * 装配走 `buildPresetElementsCentered`（与抽屉同一条链路，含画框归属）。
    *
    * **绝不 `setActiveTool`、绝不写 `preferredGenericShape`**：与 `presetPlacement` 的
    * 既有约定一致，弹窗起点与工具栏当前工具脱钩。
@@ -1282,47 +1377,69 @@ export class AppQuickCreate {
       width: source.width,
       height: source.height,
     };
-    const { target } = getQuickCreateDragPlacement(
+    const placement = getQuickCreateDragPlacement(
       this.getSourceGeometry(source),
       direction,
       pointer,
       size,
     );
+    // 只补偿、不动连线几何：先量出 `delta = P − E`，再按线型分两支落实。
+    // - **图形位置一律外移 `delta`**：轮廓让到松手点之外一个 gap 处，箭头末端才停在
+    //   松手点上、且与轮廓之间留出正常的 binding gap（三档视觉一致）；
+    // - 圆角曲线档**再多一步**：它的端点由「焦点 + 所依附边的外法线 × gap」定、
+    //   **与图形位置无关**（`binding.ts:1747`），光挪图形末端会一动不动地留在原处
+    //   （于是插进图形里、零间隙），所以要把**同一个 delta** 再加到末端**焦点**上。
+    const { delta, curved } = this.probeLandingEndOffset(
+      source,
+      spec,
+      placement,
+      pointer,
+    );
+    const target = {
+      x: placement.target.x + delta.x,
+      y: placement.target.y + delta.y,
+    };
     const built = buildPresetElementsCentered(this.app, spec, target);
     const shape = this.applySourceStyle(source, built.elements[0]);
-    const shapeCenter = {
-      x: shape.x + shape.width / 2,
-      y: shape.y + shape.height / 2,
-    };
-    // 用图形真实中心/尺寸重算连线（轮廓恰好过松手点，与预演同源）
-    const connector = getQuickCreateConnector(
-      this.getSourceGeometry(source),
-      direction,
-      shapeCenter,
-      { width: shape.width, height: shape.height },
-    );
+    // **落地必须沿用预演这条连线，不能重算**：预演的入口是「出口 → 松手点」这条
+    // 射线与轮廓的交点（`getQuickCreateDragPlacement`），而 `getQuickCreateConnector`
+    // 取的是图形**轴向中线**（左右手柄取水平中线）与轮廓的交点——两者不是同一个点，
+    // 重算会让箭头落点跳向、方向一转，肉眼看得见。连线的几何仍是预演那个 `target` /
+    // `connector`（`delta` 只进补偿：图形位置或末端焦点，都不进连线几何）。
     const arrow = this.buildConnectorArrow({
       sourceId: source.id,
-      target: shapeCenter,
-      connector,
+      target: placement.target,
+      connector: placement.connector,
     });
     // 与老路径同序：连线在下、图形压在上面。**插入的是盖过样式的那一份**——
     // `applySourceStyle` 返回新对象，插装配原件等于「样式跟随源」没生效。
     this.app.insertNewElements([arrow, shape]);
+    // 绑定照旧：锚点仍取几何解出来的出口 / 入口，与预演那条逐位一致
     bindBindingElement(
       arrow,
       source as NonDeleted<ExcalidrawBindableElement>,
       "start",
       this.app.scene,
-      pointFrom<GlobalPoint>(connector.exit.x, connector.exit.y),
+      pointFrom<GlobalPoint>(
+        placement.connector.exit.x,
+        placement.connector.exit.y,
+      ),
     );
     bindBindingElement(
       arrow,
       shape as NonDeleted<ExcalidrawBindableElement>,
       "end",
       this.app.scene,
-      pointFrom<GlobalPoint>(connector.entry.x, connector.entry.y),
+      pointFrom<GlobalPoint>(
+        // 末端焦点：曲线档把 delta 也加在焦点上（它的端点只看焦点与边法线，图形位置
+        // 挪了也拉不回来），其余档焦点就是松手点（位移已经加在图形位置上）。
+        // 拖拽落位的 `connector.entry` 本就等于松手点。
+        curved ? pointer.x + delta.x : pointer.x,
+        curved ? pointer.y + delta.y : pointer.y,
+      ),
     );
+    // 两端照旧投影（与 `createConnectedShape` 同口径）：末端带 binding gap 是仓库
+    // 统一口径，末端最终落在哪已由补偿 `delta` 抵消回松手点（见 `probeLandingEndOffset`）
     if (arrow.points.length === 2) {
       this.projectArrowEndpoints(arrow);
     }

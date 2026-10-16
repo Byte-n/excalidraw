@@ -2107,7 +2107,7 @@ describe("quick create handles", () => {
     const dragPreview = () =>
       h.app.quickCreate.getGhostElements(handleFor("right"));
 
-    it("lands the picked shape so its outline passes exactly through the pointer", () => {
+    it("lands the picked shape just outside the pointer, clearing the binding gap", () => {
       const source = createRectangle();
       selectShape(source);
       const before = liveIds();
@@ -2115,15 +2115,23 @@ describe("quick create handles", () => {
       // 右手柄 → 出口 (220,140)（源右边中点）；指针 (400,200) 在空白处 → 弹「插入图形」面板
       dragHandle("right", { x: 400, y: 200 });
       expect(screen.getByTestId("quick-create-menu")).toBeTruthy();
-      // 点「矩形」＝在指针处建出一份矩形（口径 A1：指针就是轮廓经过的那个点）
+      // 点「矩形」＝在指针处建出一份矩形。本次口径：轮廓**不**恰好过指针，而是从
+      // 指针处再往外退一个 binding gap——落地端点要停在松手点上，图形就得让开这个
+      // gap（见 `createConnectorAndShape` 的推导）。
       fireEvent.click(screen.getByTestId("quick-create-item-rectangle"));
 
       const shape = createdShape(before);
-      expect(outlineRatio(shape, { x: 400, y: 200 })).toBeCloseTo(1);
-      // 120×80：(180,60)/√10 方向上的轮廓距离是 60√10/3 ≈ 63.245，
-      // 沿它外推正好是 (+60, +20) —— 图形中心 (460,220)，左上角就是 (400,180)
-      expect(shape.x).toBeCloseTo(400);
-      expect(shape.y).toBeCloseTo(180);
+      // 轮廓退到松手点之外一个 binding gap（BASE_BINDING_GAP 5 + 随线宽，合计 ≈6px）
+      const ratio = outlineRatio(shape, { x: 400, y: 200 });
+      expect(ratio).toBeGreaterThan(1);
+      expect(ratio).toBeLessThan(1.3);
+      // 120×80：(180,60)/√10 方向上的轮廓距离是 60√10/3 ≈ 63.245，图形中心 (460,220)；
+      // 再沿该方向回退一个 gap ≈6px → 左上角约 (405.7, 181.9)，比「恰好过指针」的
+      // (400,180) 更靠右、更靠下一点点
+      expect(shape.x).toBeGreaterThan(402);
+      expect(shape.x).toBeLessThan(409);
+      expect(shape.y).toBeGreaterThan(180);
+      expect(shape.y).toBeLessThan(186);
       // 斜拖不再与源中点对齐（点击那条才对齐）
       expect(shape.y + shape.height / 2).not.toBeCloseTo(
         source.y + source.height / 2,
@@ -2489,6 +2497,100 @@ describe("quick create handles", () => {
           expect(API.getUndoStack()).toHaveLength(undoStepsBefore + 1);
           Keyboard.undo();
           expect(liveIds()).toEqual(before);
+        },
+      );
+
+      /**
+       * 本次口径的核心用例（三档线型）：拖到空白、在面板里点图形落地之后，
+       * **箭头保持拖拽预演那条，一点都不能变**——但**绑定方式照旧**（末端照样
+       * 吸附轮廓、照样带 binding gap）；变的只是「把 gap 算进去」的那一处补偿：
+       * 直线 / 折线档把图形整体平移 `delta = P − E`，圆角曲线档则把**同一个 delta**
+       * 加到末端**焦点**上（E 是「图形落在预演位置时落地会得到的端点」，由预演那套
+       * 纯函数探针算出，见 `createConnectorAndShape` / `probeLandingEndOffset`）。
+       * 两档用的是同一个 `delta`，三档末端因此都正好回到松手点。
+       *
+       * 两处回归背景：
+       * - 落地曾按图形**轴向中线**（左右手柄取水平中线）重算入口
+       *   （`getQuickCreateConnector`），而预演那条的入口是「出口 → 松手点」这条
+       *   射线与轮廓的交点——重算会让箭头落点跳向、肉眼转个头；
+       * - 落地曾对**两端都**投影（`projectArrowEndpoints` 循环两个 binding），
+       *   末端于是被 `updateBoundPoint` 沿绑定锚点往外推出一个 binding gap，
+       *   箭头肉眼短一截（用户口径「图形让箭头往后退了一下」）。本次不是少投一端，
+       *   而是把这个 gap 算进补偿里——绑定仍然照旧。
+       *
+       * 实测：三档末端都与松手点重合；直线档整条逐位一致、折线档末端一致（中间
+       * 拐点差 4px，路由各自定）；圆角档图形**不**平移（轮廓仍恰好过松手点）。
+       *
+       * 源 120×80 在 (100,100)、出口 (220,140)、松手点 (400,200)。
+       */
+      it.each(["sharp", "elbow", "round"] as const)(
+        "keeps the arrow the drag previewed when a picked shape lands (%s)",
+        (arrowType) => {
+          const source = createRectangle();
+          selectShape(source);
+          act(() => {
+            h.app.setState({ currentItemArrowType: arrowType });
+          });
+          const before = liveIds();
+          const pointer = { x: 400, y: 200 };
+
+          dragHandle("right", pointer);
+          expect(screen.getByTestId("quick-create-menu")).toBeTruthy();
+
+          // 松手前的待决预演：起点即出口 (220,140)，末端自由落在松手点
+          const previewPoints = worldPoints(
+            h.app.quickCreate.getPendingElements()[0],
+          );
+          const previewEnd = previewPoints.at(-1)!;
+          expect(previewEnd.x).toBeCloseTo(pointer.x);
+          expect(previewEnd.y).toBeCloseTo(pointer.y);
+
+          fireEvent.click(screen.getByTestId("quick-create-item-rectangle"));
+
+          const shape = createdShape(before);
+          const landedPoints = worldPoints(createdArrow(before));
+          const landedEnd = landedPoints.at(-1)!;
+          const tipGap = Math.hypot(
+            landedEnd.x - pointer.x,
+            landedEnd.y - pointer.y,
+          );
+          // 防回归：末端不在图形水平中线上（重算入口会落到那儿，如 (400,220)）
+          expect(
+            Math.abs(landedEnd.y - (shape.y + shape.height / 2)),
+          ).toBeGreaterThan(1);
+          // 三档**主轴**断言：落地连线末端与松手点重合——补偿量正是探针量出来的
+          // 「落地端点与松手点之差」（直线 / 折线加在图形位置上，曲线加在焦点上）
+          expect(tipGap).toBeLessThan(0.5);
+
+          // 三档的图形摆放口径一致：补偿 `delta` 一律加在图形位置上，轮廓整体退到松手点
+          // **之外**一个 binding gap，箭头末端才正好落在松手点上（binding gap ≈ 6px，
+          // 比值 ≈ 1.1；「轮廓恰好过松手点」那版是 ≈ 1，「图形被白挪两倍」那版更高）
+          const ratio = outlineRatio(shape, pointer);
+          expect(ratio).toBeGreaterThan(1);
+          expect(ratio).toBeLessThan(1.3);
+          if (arrowType === "sharp" || arrowType === "round") {
+            // 直线档与圆角曲线档都是两点连线、落地与预演逐位同源 → 整条逐位一致。
+            // （曲线档比直线档多补了一次末端焦点：它的端点按「焦点 + 边外法线 × gap」
+            // 算、与图形位置无关，光挪图形拉不回来，见 `createConnectorAndShape`）
+            expect(landedPoints).toHaveLength(previewPoints.length);
+            previewPoints.forEach((point, index) => {
+              expect(point.x).toBeCloseTo(landedPoints[index].x, 9);
+              expect(point.y).toBeCloseTo(landedPoints[index].y, 9);
+            });
+            return;
+          }
+          // 折线档：预演那条的末端是**自由端**（不写 endBinding），落地末端却是绑到
+          // 图形之后、带折线 gap 的拐点（两者端点是同一个点，见上），中间拐点由 A*
+          // 网格搜索各自定——实测差 4px，所以逐点放宽到 5px，不硬拗成 9 位
+          expect(landedPoints).toHaveLength(previewPoints.length);
+          previewPoints.forEach((point, index) => {
+            expect(
+              Math.hypot(
+                point.x - landedPoints[index].x,
+                point.y - landedPoints[index].y,
+              ),
+            ).toBeLessThan(5);
+          });
         },
       );
 
