@@ -1,12 +1,15 @@
 import React from "react";
 
 import {
+  applyDarkModeFilter,
   COLOR_PALETTE,
   DEFAULT_ELEMENT_STROKE_PICKS,
   DEFAULT_STICKY_NOTE_PRESET_SIZE,
   DEFAULT_STICKY_NOTE_SIZE,
   KEYS,
+  STICKY_NOTE_BACKGROUND_PICKS,
   STICKY_NOTE_MIN_FONT_SIZE,
+  THEME,
   arrayToMap,
 } from "@excalidraw/common";
 import { queryByTestId } from "@testing-library/react";
@@ -58,14 +61,19 @@ import {
 const { h } = window;
 const mouse = new Pointer("mouse");
 
-// T3 起便签/文本色板为浮动栏外露色板 + 弹层取色：打开色板弹层后用过
-// 色值输入框应用精确颜色（radix 弹层需要 ResizeObserver 桩）
-const pickColorViaPopup = (label: string, hex: string) => {
+// radix 弹层需要 ResizeObserver 桩
+const stubResizeObserver = () => {
   (global as any).ResizeObserver = class ResizeObserver {
     observe() {}
     unobserve() {}
     disconnect() {}
   };
+};
+
+// T3 起便签/文本色板为浮动栏外露色板 + 弹层取色：打开色板弹层后用过
+// 色值输入框应用精确颜色
+const pickColorViaPopup = (label: string, hex: string) => {
+  stubResizeObserver();
   UI.clickLabeledElement(label);
   fireEvent.change(document.querySelector(".color-picker-input")!, {
     target: { value: hex.replace(/^#/, "") },
@@ -377,6 +385,47 @@ describe("sticky notes", () => {
       expect(getElement(label.id).strokeColor).toBe(pick);
       expect(h.state.currentItemStrokeColor).toBe(pick);
       expect(h.state.currentItemStickynoteStrokeColor).toBe(pick);
+    });
+
+    it("深色主题下纸色预览为真实纸色（不过滤镜）；墨色色域仍走滤镜", () => {
+      // 纸色是「表面色」：预设行显示真实纸色，避免六色纸被深色滤镜压到同一
+      // 明度带、灰纸与弹层底色重合而隐形。画布渲染仍走滤镜（观感差异有意保留）。
+      const { note, label } = createNote({
+        id: "note",
+        text: "hi",
+        fontSize: 28,
+      });
+      API.setElements([note, label]);
+      layoutNotes(note.id);
+      API.setSelectedElements([getElement(note.id)]);
+      stubResizeObserver();
+      act(() => h.setState({ theme: THEME.DARK }));
+
+      // 纸色预设行：真实纸色（六色纸原值，不经 applyDarkModeFilter）
+      UI.clickLabeledElement("Paper color");
+      const paperSwatches = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          ".color-picker-content--presets .color-picker__button",
+        ),
+      );
+      expect(
+        paperSwatches.map((el) => el.style.getPropertyValue("--swatch-color")),
+      ).toEqual([...STICKY_NOTE_BACKGROUND_PICKS]);
+      // 守卫：这些纸色确有被滤镜压平过，否则「不过滤镜」就没有意义
+      expect(
+        STICKY_NOTE_BACKGROUND_PICKS.map((c) => applyDarkModeFilter(c, true)),
+      ).not.toEqual([...STICKY_NOTE_BACKGROUND_PICKS]);
+
+      // 墨色域（elementStroke 全色板网格）不受此改动影响，深色下仍走滤镜
+      fireEvent.keyDown(document, { key: KEYS.ESCAPE });
+      UI.clickLabeledElement("Font color");
+      const whiteSwatch = document.querySelector<HTMLElement>(
+        "[data-testid='color-white']",
+      );
+      expect(whiteSwatch).not.toBeNull();
+      expect(whiteSwatch!.style.getPropertyValue("--swatch-color")).toBe(
+        applyDarkModeFilter(COLOR_PALETTE.white, true),
+      );
     });
 
     it("creates notes from the sticky defaults, not the shape defaults", async () => {

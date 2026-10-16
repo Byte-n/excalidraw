@@ -2,18 +2,6 @@
 @use "../../css/variables.module" as *;
 
 .excalidraw {
-  &.theme--dark {
-    .color-picker__button.is-transparent::after {
-      background: linear-gradient(
-        to top right,
-        transparent 45%,
-        #ff7a8c 46%,
-        #ff7a8c 54%,
-        transparent 55%
-      );
-    }
-  }
-
   .focus-visible-none {
     &:focus-visible {
       outline: none !important;
@@ -72,12 +60,12 @@
 
   .color-picker-container {
     display: grid;
-    grid-template-columns: 1fr 20px 1.375rem;
+    grid-template-columns: 1fr 20px 1.75rem;
     padding: 0.25rem 0px;
     align-items: center;
 
     @include isMobile {
-      max-width: 11rem;
+      max-width: 13rem;
     }
 
     &.color-picker-container--no-top-picks {
@@ -94,14 +82,14 @@
   }
 
   .color-picker__button {
-    // 设计稿 tb-swatch：22px 圆形 + 1px 描边
-    --size: 1.375rem;
+    // 设计稿 tb-swatch：28px 圆形 + 1px 描边
+    --size: 1.75rem;
 
     padding: 0;
     margin: 0;
     width: var(--size);
     height: var(--size);
-    border: 1px solid rgba(0, 0, 0, 0.14);
+    border: 1px solid var(--swatch-border-color);
     border-radius: 50%;
     background-color: var(--swatch-color);
     background-position: left center;
@@ -128,8 +116,8 @@
       justify-content: center;
       svg {
         color: var(--color-gray-60);
-        width: 1.25rem;
-        height: 1.25rem;
+        width: 1.5rem;
+        height: 1.5rem;
       }
     }
 
@@ -152,23 +140,26 @@
       }
     }
 
-    // 透明 = 红斜线
+    // 透明 = 棋盘格（两色随主题：浅色白/浅灰，深色深灰两档）
     &.is-transparent {
-      background-color: var(--menu-bg);
-      overflow: hidden;
-
-      &::after {
-        content: "";
-        position: absolute;
-        inset: -1px;
-        background: linear-gradient(
-          to top right,
-          transparent 45%,
-          #d83a52 46%,
-          #d83a52 54%,
-          transparent 55%
+      background-color: var(--swatch-checker-a);
+      background-image: linear-gradient(
+          45deg,
+          var(--swatch-checker-b) 25%,
+          transparent 25%,
+          transparent 75%,
+          var(--swatch-checker-b) 75%
+        ),
+        linear-gradient(
+          45deg,
+          var(--swatch-checker-b) 25%,
+          transparent 25%,
+          transparent 75%,
+          var(--swatch-checker-b) 75%
         );
-      }
+      background-size: 8px 8px;
+      background-position: 0 0, 4px 4px;
+      overflow: hidden;
     }
 
     // 多值（多选属性不一致）= 虚线斜分
@@ -202,17 +193,29 @@
   }
 
   // 快捷键字符：铺满色板后 flex 居中。上游的 right/bottom 贴角是按 30px 色板
-  // 调的，22px 色板上会偏到右下（多字如「⇧1」也一并居中）
+  // 调的，28px 色板上会偏到右下（多字如「⇧1」也一并居中）
   .color-picker__button__hotkey-label {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1;
     font-family: monospace;
     font-weight: 500;
+
+    // 透明色块的棋盘格在深色主题下是深灰 → 字色由主题定（浅色黑、深色白）；
+    // 透明色不设内联字色（见 HotkeyLabel.tsx），故这里无需 !important
+    &--transparent {
+      color: #000;
+    }
+  }
+
+  &.theme--dark {
+    .color-picker__button__hotkey-label--transparent {
+      color: #fff;
+    }
   }
 
   .color-picker {
@@ -296,7 +299,7 @@
   .color-picker-content--default {
     padding: 0.5rem;
     display: grid;
-    grid-template-columns: repeat(5, 1.375rem);
+    grid-template-columns: repeat(5, 1.75rem);
     grid-gap: 6px;
     border-radius: 4px;
 
@@ -308,7 +311,7 @@
 
   // 预设行（设计稿「颜色弹层」）：单行平铺，最多 6 枚
   .color-picker-content--presets {
-    grid-template-columns: repeat(6, 1.375rem);
+    grid-template-columns: repeat(6, 1.75rem);
     padding: 0;
   }
 
@@ -534,6 +537,11 @@
 // drag & drop ghost — appended to document.body (outside the .excalidraw
 // scope) so it can follow the pointer without overflow clipping
 .excalidraw-color-dnd-ghost {
+  // ghost 不在 .excalidraw 作用域内，主题变量无从继承 → 就地给棋盘格两色；
+  // 主题类由 topPicksDnD 创建时同步到 ghost 根上
+  --swatch-checker-a: #ffffff;
+  --swatch-checker-b: #d6d6db;
+
   position: fixed;
   top: 0;
   left: 0;
@@ -544,6 +552,11 @@
   // every frame); --dropping adds it for the fly-to-target animation
   transition: width 0.15s ease, height 0.15s ease;
 
+  &.theme--dark {
+    --swatch-checker-a: #4a4a54;
+    --swatch-checker-b: #2e2e36;
+  }
+
   &__swatch {
     width: 100%;
     height: 100%;
@@ -552,37 +565,26 @@
     transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
 
     &.is-transparent {
-      background-color: #fff;
-      background-image: none;
+      background-color: var(--swatch-checker-a);
+      background-image: linear-gradient(
+          45deg,
+          var(--swatch-checker-b) 25%,
+          transparent 25%,
+          transparent 75%,
+          var(--swatch-checker-b) 75%
+        ),
+        linear-gradient(
+          45deg,
+          var(--swatch-checker-b) 25%,
+          transparent 25%,
+          transparent 75%,
+          var(--swatch-checker-b) 75%
+        );
+      background-size: 8px 8px;
+      background-position: 0 0, 4px 4px;
       position: relative;
       overflow: hidden;
-
-      &::after {
-        content: "";
-        position: absolute;
-        inset: -1px;
-        background: linear-gradient(
-          to top right,
-          transparent 45%,
-          #d83a52 46%,
-          #d83a52 54%,
-          transparent 55%
-        );
-      }
     }
-  }
-
-  // 暗色红斜线变体（同 .color-picker__button.is-transparent 的 theme--dark
-  // 覆盖）；ghost 挂在 body 上、不在 .excalidraw 作用域内，主题类由
-  // topPicksDnD 创建时同步
-  &.theme--dark &__swatch.is-transparent::after {
-    background: linear-gradient(
-      to top right,
-      transparent 45%,
-      #ff7a8c 46%,
-      #ff7a8c 54%,
-      transparent 55%
-    );
   }
 
   &--lifted &__swatch {

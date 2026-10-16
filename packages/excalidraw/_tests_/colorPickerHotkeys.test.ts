@@ -1,8 +1,13 @@
-import { COLOR_PALETTE } from "@excalidraw/common";
+import {
+  applyDarkModeFilter,
+  COLOR_PALETTE,
+  isColorDark,
+} from "@excalidraw/common";
 
 import type { ColorPaletteCustom } from "@excalidraw/common";
 
 import { colorPickerKeyNavHandler } from "../components/ColorPicker/keyboardNavHandlers";
+import { getSwatchLabelColor } from "../components/ColorPicker/colorPickerUtils";
 
 const handlerArgs = (
   key: string,
@@ -310,5 +315,77 @@ describe("color picker hotkeys", () => {
       ).toBe(true);
       expect(onEyeDropperToggle).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// WCAG relative luminance / contrast, written independently of the helper so
+// the assertions check the property rather than re-running the implementation
+const srgbToLinear = (channel: number) => {
+  const c = channel / 255;
+  return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+};
+
+const hexToLuminance = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 0xff;
+  const g = (n >> 8) & 0xff;
+  const b = n & 0xff;
+  return (
+    0.2126 * srgbToLinear(r) +
+    0.7152 * srgbToLinear(g) +
+    0.0722 * srgbToLinear(b)
+  );
+};
+
+const contrast = (a: number, b: number) =>
+  (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+
+describe("getSwatchLabelColor", () => {
+  it("picks black on light swatches and white on dark ones", () => {
+    expect(getSwatchLabelColor("#ffffff")).toBe("#000");
+    expect(getSwatchLabelColor("#fdecee")).toBe("#000");
+    expect(getSwatchLabelColor("#1e1e1e")).toBe("#fff");
+    expect(getSwatchLabelColor("#1f2329")).toBe("#fff");
+  });
+
+  it("picks the higher-contrast side for mid-tones (WCAG, not the YIQ threshold)", () => {
+    const darkFiltered = (color: string) => applyDarkModeFilter(color, true);
+    const cases = [
+      "#808080",
+      darkFiltered(COLOR_PALETTE.cyan[3]),
+      darkFiltered(COLOR_PALETTE.violet[3]),
+      darkFiltered(COLOR_PALETTE.pink[3]),
+      darkFiltered(COLOR_PALETTE.blue[3]),
+    ];
+    for (const color of cases) {
+      const chosen = getSwatchLabelColor(color);
+      expect(["#fff", "#000"]).toContain(chosen);
+      const other = chosen === "#fff" ? "#000" : "#fff";
+      const bg = hexToLuminance(color);
+      const chosenLuminance = chosen === "#fff" ? 1 : 0;
+      const otherLuminance = other === "#fff" ? 1 : 0;
+      expect(contrast(bg, chosenLuminance)).toBeGreaterThanOrEqual(
+        contrast(bg, otherLuminance),
+      );
+    }
+  });
+
+  it("regression: #808080 is black-on-gray where the old heuristic said white", () => {
+    // YIQ threshold 160 marks #808080 as "dark" → white text, but black reads
+    // with notably higher contrast (5.32 vs 3.95)
+    expect(isColorDark("#808080")).toBe(true);
+    expect(getSwatchLabelColor("#808080")).toBe("#000");
+  });
+
+  it("falls back gracefully on transparent / empty / unparseable input", () => {
+    expect(() => getSwatchLabelColor("transparent")).not.toThrow();
+    expect(() => getSwatchLabelColor("")).not.toThrow();
+    expect(() => getSwatchLabelColor("#00000000")).not.toThrow();
+    expect(getSwatchLabelColor("transparent")).toBe("#000");
+    expect(getSwatchLabelColor("#00000000")).toBe("#000");
+    // host custom colors in non-hex notation fall back to the YIQ heuristic
+    expect(getSwatchLabelColor("white")).toBe(
+      isColorDark("white") ? "#fff" : "#000",
+    );
   });
 });

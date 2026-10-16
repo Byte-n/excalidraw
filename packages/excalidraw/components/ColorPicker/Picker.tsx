@@ -206,7 +206,6 @@ export const Picker = React.forwardRef(
               明度 */}
           {picksOnly ? (
             <PresetColorList
-              theme={theme}
               colors={presetColors}
               color={color}
               onChange={onChange}

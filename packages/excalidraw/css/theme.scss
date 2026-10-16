@@ -84,6 +84,12 @@
   --color-selection-soft: rgba(22, 119, 255, 0.08);
   --color-selection-hover: rgba(22, 119, 255, 0.55);
 
+  // 色块（色板）令牌：圆形描边 + 「透明」棋盘格两色。深色主题下描边需为
+  // 浅色（黑描边在深色弹层上不可见），棋盘格需亮于弹层底但不能伪装成白填充
+  --swatch-border-color: rgba(0, 0, 0, 0.14);
+  --swatch-checker-a: #ffffff;
+  --swatch-checker-b: #d6d6db;
+
   // 选中工具栏设计令牌（docs/design-ui/excalidraw-canvas-toolbar.html §9）
   --menu-bg: #ffffff;
   --menu-border: rgba(31, 35, 41, 0.08);
@@ -246,6 +252,10 @@
     --color-selection: #4096ff;
     --color-selection-soft: rgba(64, 150, 255, 0.12);
     --color-selection-hover: rgba(64, 150, 255, 0.6);
+
+    --swatch-border-color: rgba(255, 255, 255, 0.22);
+    --swatch-checker-a: #4a4a54;
+    --swatch-checker-b: #2e2e36;
 
     // 选中工具栏设计令牌（暗色）
     --menu-bg: #26272b;

@@ -1,10 +1,6 @@
 import clsx from "clsx";
 import { useEffect, useRef } from "react";
 
-import { applyDarkModeFilter, THEME } from "@excalidraw/common";
-
-import type { Theme } from "@excalidraw/element/types";
-
 import { useAtom } from "../../editor-jotai";
 import { t } from "../../i18n";
 
@@ -15,7 +11,6 @@ import {
 } from "./colorPickerUtils";
 
 interface PresetColorListProps {
-  theme: Theme;
   /** 预设行色板（仅便签纸色 picksOnly 变体渲染：六色纸单行） */
   colors: readonly string[];
   color: string | null;
@@ -27,10 +22,14 @@ interface PresetColorListProps {
  * 便签纸色 picksOnly 变体的预设行：单行平铺（最多一行），快捷键
  * q/w/e/r/t/a… 按位绑定（超出行列的绑定键在弹层内为空键，不外泄到全局
  * 快捷键——见 keyboardNavHandlers）。当前色高亮按值匹配（预设不经 palette
- * 明度解析）。其余变体的基础色区是全色板网格（PickerColorList）。
+ * 明度解析）。
+ *
+ * 纸色是「表面色」：预览始终显示真实纸色，深色主题下**不**走
+ * `applyDarkModeFilter`——否则六色纸会被压到同一明度带，且灰色纸滤镜后与
+ * 弹层底色重合而隐形。画布上的便签仍按深色滤镜渲染，故预览与画布观感有意
+ * 保留差异。其余变体的基础色区是全色板网格（PickerColorList）。
  */
 export const PresetColorList = ({
-  theme,
   colors,
   color,
   onChange,
@@ -55,7 +54,6 @@ export const PresetColorList = ({
       aria-label={t("colorPicker.colors")}
     >
       {colors.map((preset, index) => {
-        const displayColor = applyDarkModeFilter(preset, theme === THEME.DARK);
         const keybinding = colorPickerHotkeyBindings[index] as
           | string
           | undefined;
@@ -81,13 +79,13 @@ export const PresetColorList = ({
             }
             aria-label={keybinding ? `${preset} — ${keybinding}` : preset}
             aria-keyshortcuts={keybinding}
-            style={{ "--swatch-color": displayColor }}
+            style={{ "--swatch-color": preset }}
             data-testid={`color-preset-${index}`}
             key={preset}
           >
             <div className="color-picker__button-outline" />
             {showHotKey && keybinding && (
-              <HotkeyLabel color={displayColor} keyLabel={keybinding} />
+              <HotkeyLabel color={preset} keyLabel={keybinding} />
             )}
           </button>
         );
