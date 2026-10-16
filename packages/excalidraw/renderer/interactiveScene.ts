@@ -1668,8 +1668,10 @@ const renderQuickCreateHandles = (
   selectionColor: string,
   allElementsMap: NonDeletedSceneElementsMap,
 ) => {
-  // 修饰键状态由 App.quickCreate 维护（keydown / keyup / blur）：按住时整组不渲染
-  const suppressed = app.quickCreate.isSuppressed();
+  // 修饰键状态由 App.quickCreate 维护（keydown / keyup / blur）：按住时整组不渲染。
+  // **手势一旦开始就不受修饰键影响**——拖到一半把预演整组抽掉，等于中途失去反馈
+  const dragging = app.quickCreate.getDrag();
+  const suppressed = app.quickCreate.isSuppressed() && !dragging;
   const handles = getQuickCreateHandles(app, "mouse", suppressed);
   if (!handles.length) {
     return;
@@ -1692,29 +1694,42 @@ const renderQuickCreateHandles = (
           handle.direction === hovered.direction,
       )
     : undefined;
-  // 预演先画，四个创建入口随后压在上面：预演是「点下去会得到什么」，而入口
+  // 被抓住的那个手柄：拖拽中它持有「按下档」，预演也按拖拽落位画
+  const activeHandle = dragging
+    ? handles.find(
+        (handle) =>
+          handle.elementId === dragging.elementId &&
+          handle.direction === dragging.direction,
+      )
+    : hoveredHandle;
+  // 预演先画，创建入口随后压在上面：预演是「点下去会得到什么」，而入口
   // 是当前要操作的东西，不能被它盖住
-  if (hoveredHandle) {
+  if (activeHandle) {
     renderQuickCreateGhost(
       context,
       app,
       appState,
-      app.quickCreate.getGhostElements(hoveredHandle),
+      app.quickCreate.getGhostElements(activeHandle),
       allElementsMap,
     );
   }
   for (const handle of handles) {
-    const isHovered = handle === hoveredHandle;
-    // 能 hover 就说明不是纯触屏，按悬停态画
+    // 拖拽中只留抓着的那一个：另外三个此刻既点不到（手势已归它所有），
+    // 画着反而像还能再开一路
+    if (dragging && handle !== activeHandle) {
+      continue;
+    }
+    const isActive = handle === activeHandle;
+    // 能 hover 就说明不是纯触屏，按悬停态画；拖拽中是按下档
     const spec = getQuickCreateHandleSpec(
       handle,
-      isHovered ? "hover" : "rest",
+      dragging ? "down" : isActive ? "hover" : "rest",
       touchLike,
     );
     // 常态圆点压低透明度：安静地提示「这儿能长出图形」，悬停才转实。触屏常态
     // 画的是悬停档的完整手柄（没有 hover 可等），那是唯一的入口，不压暗。
     context.globalAlpha =
-      !isHovered && !(touchLike && spec.plus)
+      !isActive && !(touchLike && spec.plus)
         ? QUICK_CREATE_HANDLE_REST_ALPHA
         : 1;
     const radius = spec.size / 2 / zoom;

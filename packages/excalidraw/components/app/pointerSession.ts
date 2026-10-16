@@ -1077,6 +1077,10 @@ export const onKeyDownFromPointerDownHandler = (
     if (app.mindmap.handlePointerKeyDown(pointerDownState, event)) {
       return;
     }
+    // 方向手柄拖拽中的 Esc：丢掉手势，什么都不建
+    if (app.quickCreate.handlePointerKeyDown(pointerDownState, event)) {
+      return;
+    }
     if (event.key === KEYS.ESCAPE && app.cancelTableGesture(pointerDownState)) {
       app.interactionState.isTableGestureActive = false;
       // Esc tears the gesture down from its arm-time snapshots, tracelessly;
@@ -1150,6 +1154,16 @@ export const onPointerMoveFromPointerDownHandler = (
     }
 
     if (app.handleTableGestureMove(pointerDownState, pointerCoords)) {
+      return;
+    }
+
+    // 方向手柄（拖拽创建）：按下时已接管本次手势，移动只维护指针位置与阈值
+    if (
+      app.quickCreate.handlePointerMoveFromPointerDown(
+        pointerDownState,
+        pointerCoords,
+      )
+    ) {
       return;
     }
 
@@ -2304,6 +2318,14 @@ export const onPointerUpFromPointerDownHandler = (
         app.store.scheduleCapture();
         app.scene.triggerUpdate();
       }
+      return;
+    }
+
+    // 方向手柄：抬起时按「拖过阈值没有」定落点（拖拽落指针处 / 点击落让位后的
+    // 基准位），pointercancel 与丢失抬起都只取消、不建图
+    if (
+      app.quickCreate.handlePointerUp(pointerDownState, childEvent, sceneCoords)
+    ) {
       return;
     }
 

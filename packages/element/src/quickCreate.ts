@@ -137,6 +137,48 @@ export const isQuickCreateTargetElement = (
   isBaseShapeId(element.shape.id);
 
 /**
+ * 出口 A：源在**出发方向**上的边缘中点——中心沿旋转后的方向向量走该轴的半尺寸。
+ * 点击建图与拖拽建图共用它：拖拽时手柄决定「从哪条边出手」，出口因此不随指针走。
+ */
+export const getQuickCreateExitPoint = (
+  source: QuickCreateSourceGeometry,
+  direction: QuickCreateDirection,
+): QuickCreatePoint => {
+  const vector = getQuickCreateDirectionVector(direction, source.angle);
+  const half =
+    (direction === "left" || direction === "right"
+      ? source.width
+      : source.height) / 2;
+  return {
+    x: source.center.x + vector.x * half,
+    y: source.center.y + vector.y * half,
+  };
+};
+
+/**
+ * 从矩形中心沿世界方向 `u` 走到**轮廓**的距离：世界方向在本体坐标里是 R(-angle)·u，
+ * 沿它走到矩形边界的距离是 `1 / max(|u_local.x| / 半宽, |u_local.y| / 半高)`。
+ * 矩形的边中垂到中心与到边界的距离同值，所以这个值在两个方向上都能用。
+ */
+const getOutlineDistance = (
+  size: { width: number; height: number },
+  angle: Radians,
+  u: { x: number; y: number },
+) => {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const localX = u.x * cos + u.y * sin;
+  const localY = -u.x * sin + u.y * cos;
+  return (
+    1 /
+    Math.max(
+      Math.abs(localX) / (size.width / 2),
+      Math.abs(localY) / (size.height / 2),
+    )
+  );
+};
+
+/**
  * 几何与命中只需要这几个字段，用结构类型收口，避免几何模块依赖 App 本体。
  */
 export type QuickCreateApp = {
@@ -459,9 +501,6 @@ export const getQuickCreateResolvedTargetCenter = (
  * 朝哪一侧不按 direction 判而按坐标比：旋转 180° 的源，右手柄的副本落在源的
  * 左侧、出口反而在副本右侧。旋转副本必须落在**真实轮廓**上——拿 AABB 当轮廓，
  * 交点会悬在图形外的半空中。
- *
- * 到边的距离：世界方向 u 在本体坐标里是 R(-angle)·u，沿它走到矩形边界的距离
- * 是 `1 / max(|u_local.x| / 半宽, |u_local.y| / 半高)`。
  */
 const getAxialOutlinePoint = (
   center: QuickCreatePoint,
@@ -470,45 +509,37 @@ const getAxialOutlinePoint = (
   horizontal: boolean,
   towards: number,
 ): QuickCreatePoint => {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  const [localX, localY] = horizontal ? [cos, -sin] : [sin, cos];
-  const distance =
-    1 /
-    Math.max(
-      Math.abs(localX) / (size.width / 2),
-      Math.abs(localY) / (size.height / 2),
-    );
+  const distance = getOutlineDistance(
+    size,
+    angle,
+    horizontal ? { x: 1, y: 0 } : { x: 0, y: 1 },
+  );
   const sign = towards < (horizontal ? center.x : center.y) ? -1 : 1;
   return horizontal
     ? { x: center.x + sign * distance, y: center.y }
     : { x: center.x, y: center.y + sign * distance };
 };
 
+/**
+ * 连线几何：出口 A（源在出发方向上的边缘中点）、入口 D（副本朝源一侧的轮廓交点）。
+ * **创建路径一律给这两个点**——直线与圆角曲线画出来就是这一条，折线箭头由内置
+ * 正交路由布线（预演与落地都跑它，见 `App.quickCreate.ts` 的 routePreviewElbowArrow），
+ * 所以这里不再算拐点。
+ */
 export type QuickCreateConnector = {
   /** 出口 A：源在出发方向上的边缘中点（沿旋转后的方向向量） */
   exit: QuickCreatePoint;
-  /** 入口 D：副本朝源一侧的轮廓交点，落在副本的轴向中线高度/宽度上 */
+  /** 入口 D：副本朝源一侧的轮廓交点 */
   entry: QuickCreatePoint;
-  /**
-   * 转折点 [B, C]；出口与副本在出线轴上对齐时为 null。**只有折线箭头（elbow）的
-   * 预演会用它**：直线与圆角曲线的连线恒为「出口 → 入口」两点，落地落成什么样的
-   * 斜线都认，拐点是折线线型的事（见 `App.quickCreate.ts` 的 buildConnectorArrow）。
-   */
-  bend: [QuickCreatePoint, QuickCreatePoint] | null;
 };
 
 /**
- * 悬停预演与真实创建共用的连线路径：出口 A、入口 D，以及错开时的两个转折点。
+ * 悬停预演、拖拽预演与真实创建共用的连线路径：出口 A 与入口 D。
  *
- * - 副本中心与出口在出线轴上对齐（没让位、且源没转）：两点直线（老行为）。
- *   旋转过但没让位的源也不满足这一条，同样给出转折点——那时的连线本来就是斜的。
- * - 错开时：转折点在出线轴上的**中点**（左右手柄取 x 的中点、上下手柄取 y 的
- *   中点），B / C 就是这条转折线上的两个拐角，A→B→C→D 每段都轴对齐，入口
- *   贴在副本朝源那一侧的轮廓上，两个拐点落在两图形之间的空档里、不穿过任何
- *   一方。中间两点同样可以当三次贝塞尔的控制点用（脑图连线就是这个画法，
- *   见 mindmap.ts 的 getMindmapEdgeGeometry / getMindmapEdgePath）：t = 0.5
- *   恰好落在 B–C 的中点，所以曲线严格经过转折段的正中。
+ * 副本中心与出口在出线轴上对齐时（没让位、且源没转），入口就是副本沿方向向量
+ * 退回来的那个边缘中点（两点连线退化成水平/垂直直线，老行为）；错开时入口改取
+ * 副本**轴向中线**上的轮廓交点（左右手柄取水平线、上下手柄取竖直线），取朝出口
+ * 那一侧的那个。
  */
 export const getQuickCreateConnector = (
   source: QuickCreateSourceGeometry,
@@ -517,12 +548,8 @@ export const getQuickCreateConnector = (
   copySize: { width: number; height: number },
 ): QuickCreateConnector => {
   const horizontal = direction === "left" || direction === "right";
+  const exit = getQuickCreateExitPoint(source, direction);
   const vector = getQuickCreateDirectionVector(direction, source.angle);
-  const exitHalf = (horizontal ? source.width : source.height) / 2;
-  const exit = {
-    x: source.center.x + vector.x * exitHalf,
-    y: source.center.y + vector.y * exitHalf,
-  };
   const offset = horizontal ? target.y - exit.y : target.x - exit.x;
   if (Math.abs(offset) < AXIAL_ALIGNMENT_EPSILON) {
     const entryHalf = (horizontal ? copySize.width : copySize.height) / 2;
@@ -532,28 +559,54 @@ export const getQuickCreateConnector = (
         x: target.x - vector.x * entryHalf,
         y: target.y - vector.y * entryHalf,
       },
-      bend: null,
     };
   }
-  const entry = getAxialOutlinePoint(
-    target,
-    copySize,
-    source.angle,
-    horizontal,
-    horizontal ? exit.x : exit.y,
-  );
-  const turn = horizontal ? (exit.x + entry.x) / 2 : (exit.y + entry.y) / 2;
   return {
     exit,
-    entry,
-    bend: horizontal
-      ? [
-          { x: turn, y: exit.y },
-          { x: turn, y: entry.y },
-        ]
-      : [
-          { x: exit.x, y: turn },
-          { x: entry.x, y: turn },
-        ],
+    entry: getAxialOutlinePoint(
+      target,
+      copySize,
+      source.angle,
+      horizontal,
+      horizontal ? exit.x : exit.y,
+    ),
+  };
+};
+
+/**
+ * 拖拽落位（口径 A1）：指针给的是**连线落在新副本上的那个点**（入点 D），
+ * 不是副本身心。
+ *
+ * - 出口 A 恒为所抓手柄那条边的中点（口径 B1，见 getQuickCreateExitPoint），
+ *   所以「哪个手柄 = 从哪条边出手」这条语义在拖拽里也不变。
+ * - 副本身心：沿「出口 → 指针」的方向再往外半个身位，使副本**轮廓恰好经过
+ *   指针**——于是箭头尖就压在指针上，指针指到哪、线就连到哪（所见即所得）。
+ * - 指针与出口重合（拖回起点）时没有方向可言，回落手柄方向：轮廓照样经过
+ *   指针，副本落在指针之外。
+ *
+ * 这里**不参与让位**：落点是用户自己选的，压着别的图形也照放（点击那条才让位）。
+ */
+export const getQuickCreateDragPlacement = (
+  source: QuickCreateSourceGeometry,
+  direction: QuickCreateDirection,
+  pointer: QuickCreatePoint,
+  copySize: { width: number; height: number },
+): { target: QuickCreatePoint; connector: QuickCreateConnector } => {
+  const exit = getQuickCreateExitPoint(source, direction);
+  const spanX = pointer.x - exit.x;
+  const spanY = pointer.y - exit.y;
+  const length = Math.hypot(spanX, spanY);
+  const u =
+    length > AXIAL_ALIGNMENT_EPSILON
+      ? { x: spanX / length, y: spanY / length }
+      : getQuickCreateDirectionVector(direction, source.angle);
+  const distance = getOutlineDistance(copySize, source.angle, u);
+  const entry = { x: pointer.x, y: pointer.y };
+  return {
+    target: { x: entry.x + u.x * distance, y: entry.y + u.y * distance },
+    connector: {
+      exit,
+      entry,
+    },
   };
 };

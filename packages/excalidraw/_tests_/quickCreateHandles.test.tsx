@@ -1,4 +1,4 @@
-import { ROUNDNESS, reseed } from "@excalidraw/common";
+import { KEYS, ROUNDNESS, reseed } from "@excalidraw/common";
 import { pointFrom } from "@excalidraw/math";
 import { getCurvePathOps } from "@excalidraw/utils/shape";
 
@@ -211,6 +211,92 @@ const setArrowPoints = (
       ...extra,
     } as ElementUpdate<NonDeleted<ExcalidrawLinearElement>>);
   });
+};
+
+/**
+ * 记录交互层画布**真实画出**的帧。
+ *
+ * 这里刻意不手动强制重绘：悬停形态只存在 `AppQuickCreate.hovered` 这个组件
+ * 字段里、不进 appState，而 `setState({})` 不会让交互层重渲染
+ * （InteractiveCanvas 是 memo，且交互层没有常驻动画帧）。所以指针事件之后
+ * 有没有这一帧，正是本组用例要盯住的东西——没有显式重绘调用就什么都画不出来。
+ */
+const createFrameRecorder = () => {
+  /** 每次调用都连当时的 globalAlpha 一起记下：圆点的透明度就靠它读 */
+  const calls: { type: string; args: unknown[]; alpha: number }[] = [];
+  const canvas = h.app.interactiveCanvas!;
+  const realGetContext = canvas.getContext.bind(canvas);
+  (canvas as any).getContext = (...args: any[]) => {
+    const context = (realGetContext as any)(...args);
+    return new Proxy(context, {
+      get(target, prop: string) {
+        const value = (target as any)[prop];
+        if (typeof value === "function") {
+          return (...callArgs: unknown[]) => {
+            calls.push({
+              type: prop,
+              args: callArgs,
+              alpha: (target as any).globalAlpha,
+            });
+            return value.apply(target, callArgs);
+          };
+        }
+        return value;
+      },
+    });
+  };
+
+  const at = (type: string) =>
+    calls
+      .filter((call) => call.type === type)
+      .map(({ type: callType, args }) => ({ type: callType, args }));
+  /** 调用序号（跨类型）：用来盯住预演与创建入口的绘制先后 */
+  const orderOf = (type: string) =>
+    calls
+      .map((call, index) => (call.type === type ? index : -1))
+      .filter((index) => index >= 0);
+  /** 画在四个手柄圆心上的圆弧（带当时的 globalAlpha） */
+  const dotArcs = () =>
+    calls.filter(
+      (call) =>
+        call.type === "arc" &&
+        Object.values(HANDLE_CENTERS).some(
+          (center) => center.x === call.args[0] && center.y === call.args[1],
+        ),
+    );
+  /** 画在四个手柄圆心上的圆弧 → 半径，用来读每一档的直径 */
+  const handleRadii = (): Record<string, number> =>
+    Object.fromEntries(
+      dotArcs().map((call) => [
+        `${call.args[0]},${call.args[1]}`,
+        call.args[2] as number,
+      ]),
+    );
+  /** 四个圆点各自的透明度（画到它时的 globalAlpha） */
+  const alphasAtDots = (): Record<string, number> =>
+    Object.fromEntries(
+      dotArcs().map((call) => [`${call.args[0]},${call.args[1]}`, call.alpha]),
+    );
+  /** 画四个圆点的调用序号（同一帧里还有别的圆弧，所以单独挑出来） */
+  const dotArcOrder = () => {
+    const dots = dotArcs();
+    return calls
+      .map((call, index) => (dots.includes(call) ? index : -1))
+      .filter((index) => index >= 0);
+  };
+  return {
+    at,
+    orderOf,
+    dotArcOrder,
+    handleRadii,
+    alphasAtDots,
+    /** 画过帧没有：一帧里必然重画四个圆点，也很可能带上别的图元 */
+    drewFrame: () => calls.length > 0,
+    /** 丢掉已记下的帧，只看接下来的绘制 */
+    clear: () => {
+      calls.length = 0;
+    },
+  };
 };
 
 describe("quick create handles", () => {
@@ -1401,7 +1487,7 @@ describe("quick create handles", () => {
       expect(curveOps(ghostArrow)).toEqual(curveOps(arrow));
     });
 
-    it("previews the elbow arrow with the same fold points", () => {
+    it("previews the elbow arrow along the very route the router will land", () => {
       const source = createRectangle();
       selectShape(source, [blocker(RIGHT_BASE)]);
       act(() => {
@@ -1409,17 +1495,37 @@ describe("quick create handles", () => {
       });
 
       mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
-      const ghost = h.app.quickCreate.getGhostElements(handleFor("right"));
+      const ghostArrow = h.app.quickCreate.getGhostElements(
+        handleFor("right"),
+      )[1];
+      expect(ghostArrow).toMatchObject({ elbowed: true, roundness: null });
+      if (!isArrowElement(ghostArrow)) {
+        throw new Error("Expected an arrow");
+      }
+      // 预演跑的是**内置正交路由**（落地那条走的就是它）：每段轴对齐，拐点由它定
+      const preview = worldPoints(ghostArrow);
+      expect(preview.length).toBeGreaterThanOrEqual(2);
+      for (let index = 1; index < preview.length; index++) {
+        expect(
+          preview[index - 1].x === preview[index].x ||
+            preview[index - 1].y === preview[index].y,
+        ).toBe(true);
+      }
 
-      // 预演没有绑定可依、内置正交路由跑不起来，所以直接画同一套拐点
-      // （画成「源中心 → 副本中心」的斜直线就是老版的不贴合之处）
-      expect(worldPoints(ghost[1])).toEqual([
-        { x: 220, y: 140 },
-        { x: 285, y: 140 },
-        { x: 285, y: 0 },
-        { x: 350, y: 0 },
-      ]);
-      expect(ghost[1]).toMatchObject({ elbowed: true, roundness: null });
+      const before = liveIds();
+      mouse.downAt(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
+      mouse.upAt();
+      const arrow = createdArrow(before);
+      // 逐点一致（含两端各一个折线 gap 的外推）——以前预演是自己拼的单折 Z，
+      // 只在落点与出口同轴时才和路由同形，所以这条断言当年是比不出来的
+      expect(worldPoints(arrow)).toEqual(preview);
+      // 固定点同源：折线档有自己的那一支口径，用错了会差一个 binding gap
+      expect(ghostArrow.startBinding?.fixedPoint).toEqual(
+        arrow.startBinding?.fixedPoint,
+      );
+      expect(ghostArrow.endBinding?.fixedPoint).toEqual(
+        arrow.endBinding?.fixedPoint,
+      );
     });
 
     it("rebuilds the preview when the scene changes the landing spot", () => {
@@ -1716,96 +1822,6 @@ describe("quick create handles", () => {
   });
 
   describe("hover", () => {
-    /**
-     * 记录交互层画布**真实画出**的帧。
-     *
-     * 这里刻意不手动强制重绘：悬停形态只存在 `AppQuickCreate.hovered` 这个组件
-     * 字段里、不进 appState，而 `setState({})` 不会让交互层重渲染
-     * （InteractiveCanvas 是 memo，且交互层没有常驻动画帧）。所以指针事件之后
-     * 有没有这一帧，正是本组用例要盯住的东西——没有显式重绘调用就什么都画不出来。
-     */
-    const createFrameRecorder = () => {
-      /** 每次调用都连当时的 globalAlpha 一起记下：圆点的透明度就靠它读 */
-      const calls: { type: string; args: unknown[]; alpha: number }[] = [];
-      const canvas = h.app.interactiveCanvas!;
-      const realGetContext = canvas.getContext.bind(canvas);
-      (canvas as any).getContext = (...args: any[]) => {
-        const context = (realGetContext as any)(...args);
-        return new Proxy(context, {
-          get(target, prop: string) {
-            const value = (target as any)[prop];
-            if (typeof value === "function") {
-              return (...callArgs: unknown[]) => {
-                calls.push({
-                  type: prop,
-                  args: callArgs,
-                  alpha: (target as any).globalAlpha,
-                });
-                return value.apply(target, callArgs);
-              };
-            }
-            return value;
-          },
-        });
-      };
-
-      const at = (type: string) =>
-        calls
-          .filter((call) => call.type === type)
-          .map(({ type: callType, args }) => ({ type: callType, args }));
-      /** 调用序号（跨类型）：用来盯住预演与创建入口的绘制先后 */
-      const orderOf = (type: string) =>
-        calls
-          .map((call, index) => (call.type === type ? index : -1))
-          .filter((index) => index >= 0);
-      /** 画在四个手柄圆心上的圆弧（带当时的 globalAlpha） */
-      const dotArcs = () =>
-        calls.filter(
-          (call) =>
-            call.type === "arc" &&
-            Object.values(HANDLE_CENTERS).some(
-              (center) =>
-                center.x === call.args[0] && center.y === call.args[1],
-            ),
-        );
-      /** 画在四个手柄圆心上的圆弧 → 半径，用来读每一档的直径 */
-      const handleRadii = (): Record<string, number> =>
-        Object.fromEntries(
-          dotArcs().map((call) => [
-            `${call.args[0]},${call.args[1]}`,
-            call.args[2] as number,
-          ]),
-        );
-      /** 四个圆点各自的透明度（画到它时的 globalAlpha） */
-      const alphasAtDots = (): Record<string, number> =>
-        Object.fromEntries(
-          dotArcs().map((call) => [
-            `${call.args[0]},${call.args[1]}`,
-            call.alpha,
-          ]),
-        );
-      /** 画四个圆点的调用序号（同一帧里还有别的圆弧，所以单独挑出来） */
-      const dotArcOrder = () => {
-        const dots = dotArcs();
-        return calls
-          .map((call, index) => (dots.includes(call) ? index : -1))
-          .filter((index) => index >= 0);
-      };
-      return {
-        at,
-        orderOf,
-        dotArcOrder,
-        handleRadii,
-        alphasAtDots,
-        /** 画过帧没有：一帧里必然重画四个圆点，也很可能带上别的图元 */
-        drewFrame: () => calls.length > 0,
-        /** 丢掉已记下的帧，只看接下来的绘制 */
-        clear: () => {
-          calls.length = 0;
-        },
-      };
-    };
-
     let frames: ReturnType<typeof createFrameRecorder>;
 
     beforeEach(() => {
@@ -2033,6 +2049,270 @@ describe("quick create handles", () => {
       expect(handles).toHaveLength(0);
       mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
       expect(h.app.quickCreate.getHovered()).toBeNull();
+    });
+  });
+
+  describe("dragging a handle", () => {
+    let frames: ReturnType<typeof createFrameRecorder>;
+
+    beforeEach(() => {
+      frames = createFrameRecorder();
+    });
+
+    /**
+     * 从手柄按下并**分步**拖到目标点，再在目标点抬起。分步是必须的：阈值是移动
+     * 过程中越过的，一步到位同样能越过，但分步更接近真实拖拽，也顺带覆盖了
+     * 「同一帧里更新指针 + 重绘预演」这条路径。
+     */
+    const dragHandle = (
+      direction: "top" | "right" | "bottom" | "left",
+      to: { x: number; y: number },
+      steps = 3,
+    ) => {
+      const { center } = handleFor(direction);
+      mouse.moveTo(center.x, center.y);
+      mouse.downAt(center.x, center.y);
+      for (let step = 1; step <= steps; step++) {
+        mouse.moveTo(
+          center.x + ((to.x - center.x) * step) / steps,
+          center.y + ((to.y - center.y) * step) / steps,
+        );
+      }
+      mouse.upAt(to.x, to.y);
+    };
+
+    it("lands the copy so its outline passes exactly through the pointer", () => {
+      const source = createRectangle();
+      selectShape(source);
+      const before = liveIds();
+
+      // 右手柄 → 出口 (220,140)（源右边中点）；指针 (400,200) 是 3:1 的斜向
+      dragHandle("right", { x: 400, y: 200 });
+
+      const copy = createdShape(before);
+      // 口径 A1：指针是连线落在副本上的那个点，所以它必须**正好在副本轮廓上**
+      expect(outlineRatio(copy, { x: 400, y: 200 })).toBeCloseTo(1);
+      // 副本 120×80：(180,60)/√10 方向上的轮廓距离是 60√10/3 ≈ 63.245，
+      // 沿它外推正好是 (+60, +20) —— 副本身心 (460,220)，左上角就是 (400,180)
+      expect(copy.x).toBeCloseTo(400);
+      expect(copy.y).toBeCloseTo(180);
+      // 斜拖不再与源中点对齐（点击那条才对齐）
+      expect(copy.y + copy.height / 2).not.toBeCloseTo(
+        source.y + source.height / 2,
+      );
+    });
+
+    it("puts the connector's end on the pointer, not on the copy's centre", () => {
+      const source = createRectangle();
+      selectShape(source);
+      const before = liveIds();
+
+      dragHandle("right", { x: 400, y: 200 });
+
+      const arrow = createdArrow(before);
+      const end = worldPoints(arrow).at(-1)!;
+      const pointer = { x: 400, y: 200 };
+      // 端点落在指针处：差的一个 binding gap（端点悬空 6px 是仓库的统一口径）
+      expect(Math.hypot(end.x - pointer.x, end.y - pointer.y)).toBeLessThan(8);
+      // 而且是在副本**外侧**贴近轮廓，不是陷在副本里（指针也不是副本身心）
+      expect(outlineRatio(createdShape(before), end)).toBeGreaterThan(1);
+      expect(end.x).not.toBeCloseTo(
+        createdShape(before).x + createdShape(before).width / 2,
+      );
+    });
+
+    it("drops where the pointer is even when something already sits there", () => {
+      const source = createRectangle();
+      // 落点位置本来站着另一个图形：拖拽落位不听让位规则，用户选哪儿就是哪儿
+      const obstacle = API.createElement({
+        type: "rectangle",
+        x: 380,
+        y: 170,
+        width: 120,
+        height: 80,
+      });
+      selectShape(source, [obstacle]);
+      const before = liveIds();
+
+      dragHandle("right", { x: 400, y: 200 });
+
+      const copy = createdShape(before);
+      expect(copy.x).toBeCloseTo(400);
+      expect(copy.y).toBeCloseTo(180);
+    });
+
+    it("keeps the click placement when the pointer stays under the threshold", () => {
+      const source = createRectangle();
+      selectShape(source);
+      const before = liveIds();
+
+      // 只挪 5 屏幕 px（阈值 10）：还是一次点击，落点仍是让位后的基准位
+      const { center } = handleFor("right");
+      mouse.moveTo(center.x, center.y);
+      mouse.downAt(center.x, center.y);
+      mouse.moveTo(center.x + 5, center.y);
+      mouse.upAt(center.x + 5, center.y);
+
+      const copy = createdShape(before);
+      expect(copy.x).toBeCloseTo(350);
+      expect(copy.y).toBeCloseTo(100);
+    });
+
+    it("creates nothing when the drag is cancelled with Escape", () => {
+      const source = createRectangle();
+      selectShape(source);
+      const before = liveIds();
+      const { center } = handleFor("right");
+
+      mouse.moveTo(center.x, center.y);
+      mouse.downAt(center.x, center.y);
+      mouse.moveTo(400, 200);
+      Keyboard.keyDown(KEYS.ESCAPE);
+      mouse.upAt(400, 200);
+
+      expect(liveIds()).toEqual(before);
+      expect(h.app.quickCreate.getDrag()).toBeNull();
+    });
+
+    it("previews the very same placement it will land", () => {
+      const source = createRectangle();
+      selectShape(source);
+      const before = liveIds();
+      const { center } = handleFor("right");
+
+      mouse.moveTo(center.x, center.y);
+      mouse.downAt(center.x, center.y);
+      mouse.moveTo(400, 200);
+
+      // 拖拽中的预演：幽灵副本 + 幽灵连线，几何与落地同源
+      const ghost = h.app.quickCreate.getGhostElements(
+        getQuickCreateHandles(h.app).find(
+          (handle) => handle.direction === "right",
+        )!,
+      );
+      const ghostShape = ghost.find(
+        (element) => element.id === QUICK_CREATE_GHOST_SHAPE_ID,
+      )!;
+      expect(ghostShape.x).toBeCloseTo(400);
+      expect(ghostShape.y).toBeCloseTo(180);
+      const ghostArrow = ghost.find(
+        (element) => element.id === QUICK_CREATE_GHOST_ARROW_ID,
+      )!;
+      if (!isArrowElement(ghostArrow)) {
+        throw new Error("Expected an arrow");
+      }
+      expect(ghostArrow.points).toHaveLength(2);
+      expect(outlineRatio(ghostShape, { x: 400, y: 200 })).toBeCloseTo(1);
+
+      mouse.upAt(400, 200);
+      const copy = createdShape(before);
+      // 落地与预演逐位一致（副本位置 + 连线端点）
+      expect(copy.x).toBeCloseTo(ghostShape.x);
+      expect(copy.y).toBeCloseTo(ghostShape.y);
+      const end = worldPoints(createdArrow(before)).at(-1)!;
+      expect(end.x).toBeCloseTo(ghostArrow.x + ghostArrow.points[1][0]);
+      expect(end.y).toBeCloseTo(ghostArrow.y + ghostArrow.points[1][1]);
+    });
+
+    it("keeps previewing the click placement until the pointer crosses the threshold", () => {
+      const source = createRectangle();
+      selectShape(source);
+      const { center } = handleFor("right");
+      const ghostShapeX = () =>
+        h.app.quickCreate
+          .getGhostElements(
+            getQuickCreateHandles(h.app).find(
+              (handle) => handle.direction === "right",
+            )!,
+          )
+          .find((element) => element.id === QUICK_CREATE_GHOST_SHAPE_ID)!.x;
+
+      mouse.moveTo(center.x, center.y);
+      mouse.downAt(center.x, center.y);
+      // 按下不拖：预演仍是悬停那一份（基准位），不该跳到指针那儿
+      expect(ghostShapeX()).toBeCloseTo(350);
+      // 还在阈值内：照旧
+      mouse.moveTo(center.x + 5, center.y);
+      expect(ghostShapeX()).toBeCloseTo(350);
+      // 越过阈值：预演改跟指针，落点也换成指针反推的那个位置
+      mouse.moveTo(400, 200);
+      expect(ghostShapeX()).toBeCloseTo(400);
+      mouse.upAt(400, 200);
+    });
+
+    it("lands the elbow arrow along the very route the drag previewed", () => {
+      // 自由落点会把入口放到副本的**任意**一条边上（不再只是轴向边），这正是当年
+      // 预演与落地分叉的地方：预演画的是我们自己的单折 Z、末段沿出线轴，而路由按
+      // 所依附边定末段朝向、拐点由 A* 定。现在两边跑同一个路由，逐点必须相等。
+      for (const to of [
+        { x: 400, y: 200 }, // 落在副本左边：两种算法当年也同形
+        { x: 300, y: 400 }, // 落在副本上边：预演横着贴上边、落地竖着扎进去
+        { x: 180, y: 320 }, // 出口反向：预演当年还会倒着穿回源图形
+      ]) {
+        const source = createRectangle();
+        selectShape(source);
+        act(() => {
+          h.app.setState({ currentItemArrowType: "elbow" });
+        });
+        const before = liveIds();
+
+        const { center } = handleFor("right");
+        mouse.moveTo(center.x, center.y);
+        mouse.downAt(center.x, center.y);
+        mouse.moveTo(to.x, to.y);
+        const ghostArrow = h.app.quickCreate.getGhostElements(
+          handleFor("right"),
+        )[1];
+        const preview = worldPoints(ghostArrow);
+        mouse.upAt(to.x, to.y);
+
+        const arrow = createdArrow(before);
+        expect(arrow.elbowed).toBe(true);
+        expect(worldPoints(arrow)).toEqual(preview);
+        // 每段轴对齐（路由的产物）
+        for (let index = 1; index < preview.length; index++) {
+          expect(
+            preview[index - 1].x === preview[index].x ||
+              preview[index - 1].y === preview[index].y,
+          ).toBe(true);
+        }
+        // 末段垂直于它所依附的那条边：指针落在副本上边时就是竖着进去
+        const [secondLast, last] = worldPoints(arrow).slice(-2);
+        const copy = createdShape(before);
+        if (
+          Math.abs(last.y - copy.y) < 1 ||
+          Math.abs(last.y - (copy.y + copy.height)) < 1
+        ) {
+          expect(secondLast.x).toBeCloseTo(last.x);
+        }
+      }
+    });
+
+    it("draws only the grabbed handle, in the pressed tier", () => {
+      const source = createRectangle();
+      selectShape(source);
+      frames.clear();
+
+      const { center } = handleFor("right");
+      mouse.moveTo(center.x, center.y);
+      mouse.downAt(center.x, center.y);
+      frames.clear();
+      mouse.moveTo(400, 200);
+
+      // 拖拽中只留抓着的那个：另外三个此刻既点不到、画着也像还能再开一路
+      expect(frames.handleRadii()).toEqual({ "242,140": 9 });
+      // 按下档 ⌀18 且不压暗（悬停/按下都是「活的」）
+      expect(frames.alphasAtDots()["242,140"]).toBe(1);
+      // 按下档加号总长 8：一半是 4
+      expect(frames.at("moveTo")).toContainEqual({
+        type: "moveTo",
+        args: [center.x - 4, center.y],
+      });
+
+      // 松手之后四个手柄回到常态档
+      frames.clear();
+      mouse.upAt(400, 200);
+      expect(Object.keys(frames.handleRadii())).toHaveLength(4);
     });
   });
 

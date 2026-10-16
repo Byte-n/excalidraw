@@ -1,15 +1,17 @@
-import { CURSOR_TYPE } from "@excalidraw/common";
+import { CURSOR_TYPE, DRAGGING_THRESHOLD, KEYS } from "@excalidraw/common";
 import { pointFrom } from "@excalidraw/math";
 
 import {
   LinearElementEditor,
   bindBindingElement,
+  calculateFixedPointForElbowArrowBinding,
   calculateFixedPointForNonElbowArrowBinding,
   duplicateElement,
   getContainingFrame,
   getElementAbsoluteCoords,
   getElementWithTransformHandleType,
   getQuickCreateConnector,
+  getQuickCreateDragPlacement,
   getQuickCreateHandles,
   getQuickCreateResolvedTargetCenter,
   getQuickCreateTargetElement,
@@ -17,10 +19,12 @@ import {
   hitTestQuickCreateHandle,
   isBindableElement,
   isCompositeShapeElement,
+  isElbowArrow,
   isFrameLikeElement,
   isLinearElement,
   newArrowElement,
   updateBoundPoint,
+  updateElbowArrowPoints,
   QUICK_CREATE_GHOST_ALPHA,
 } from "@excalidraw/element";
 
@@ -34,6 +38,7 @@ import type {
   FixedPointBinding,
   NonDeleted,
   NonDeletedExcalidrawElement,
+  NonDeletedSceneElementsMap,
   PointerType,
   PointsPositionUpdates,
 } from "@excalidraw/element/types";
@@ -88,15 +93,43 @@ type QuickCreatePlacement = {
 };
 
 /**
- * 方向手柄：单选图形时在指示框四边外侧显示圆点，悬停换加号，点击在对应方向
- * 生成同款副本并用当前连接线样式连一条线。形态对齐 `App.mindmap.ts` 的
- * 「+」按钮：悬停只改字形与光标，按下即建且吞掉本次手势。
+ * 一次进行中的方向手柄手势。按下即臂化（`preparePointerDown`），指针是否越过
+ * 阈值在移动相位里定：没越过就还是一次点击，越过才算拖拽。
+ *
+ * 状态放在 App 实例上而不是 `pointerDownState` 上：渲染层要读它画「按下档」的
+ * 手柄与跟随指针的预演（同 `App.mindmap` 的 dragSession）。三个相位各自返回
+ * true 吞掉本次手势，收尾口径见 `handlePointerUp`。
+ */
+type QuickCreateDrag = {
+  direction: QuickCreateDirection;
+  elementId: string;
+  /** 按下点（场景坐标），判阈值用 */
+  origin: QuickCreatePoint;
+  /** 当前指针（场景坐标）：拖拽时它就是连线落在新副本上的那个点 */
+  pointer: QuickCreatePoint;
+  /** 是否已越过拖拽阈值（屏幕 px）；越过前松手仍按点击处理 */
+  moved: boolean;
+};
+
+/**
+ * 方向手柄：单选图形时在指示框四边外侧显示圆点，悬停换加号，**按下后拖拽**在
+ * 指针处生成同款副本并用当前连接线样式连一条线（不拖直接松手则是老行为：建在
+ * 让位后的落点）。形态对齐 `App.mindmap.ts` 的「+」按钮：悬停只改字形与光标。
  */
 export class AppQuickCreate {
   private hovered: {
     direction: QuickCreateDirection;
     elementId: string;
   } | null = null;
+
+  /** 进行中的手势；为 null 时手柄按悬停/点击路径走 */
+  private drag: QuickCreateDrag | null = null;
+
+  /**
+   * 被 Esc 取消掉的那次按下：抬起时据此吞掉手势，免得取消之后又走一遍通用选择
+   * 路径（同 `App.mindmap` 的 cancelledPointerDown）。
+   */
+  private cancelledPointerDown: PointerDownState | null = null;
 
   /**
    * 是否有修饰键按住。按住时整组方向手柄与结果预演一起不渲染（渲染层读这个
@@ -121,6 +154,9 @@ export class AppQuickCreate {
   constructor(private readonly app: App) {}
 
   getHovered = () => this.hovered;
+
+  /** 进行中的手势（渲染层读它画「按下档」手柄与跟随指针的预演） */
+  getDrag = () => this.drag;
 
   isSuppressed = (): boolean => this.modifierHeld;
 
@@ -181,6 +217,11 @@ export class AppQuickCreate {
     );
 
   handlePointerMove = (sceneX: number, sceneY: number) => {
+    // 手势进行中：悬停判定整组让位（预演改由拖拽态驱动）。这里必须早退而不是
+    // 走下面的 reset 分支——reset 会把拖拽预演一起丢掉。
+    if (this.drag) {
+      return;
+    }
     // 修饰键按住时手柄整组不渲染也不命中，悬停态一并清掉。
     // 状态由键盘监听维护，这里只是不再做命中判定。
     if (this.modifierHeld) {
@@ -237,7 +278,10 @@ export class AppQuickCreate {
     }
   };
 
-  /** 命中方向手柄则消费本次手势并立即建图；返回 true 时调用方须提前 return。 */
+  /**
+   * 命中方向手柄则接管本次手势：**只臂化、不建图**，等到抬起时才按「有没有拖过
+   * 阈值」决定落点（见 handlePointerUp）。返回 true 时调用方须提前 return。
+   */
   preparePointerDown = (
     pointerDownState: PointerDownState,
     event: React.PointerEvent<HTMLElement>,
@@ -319,7 +363,94 @@ export class AppQuickCreate {
     pointerDownState.resize.isResizing = false;
     this.hovered = null;
     this.ghost = null;
-    this.createConnectedShape(source, hit.direction);
+    this.drag = {
+      direction: hit.direction,
+      elementId: source.id,
+      origin: point,
+      pointer: point,
+      moved: false,
+    };
+    // 按下即刻换「按下档」字形（组件字段，setState({}) 不会重绘 InteractiveCanvas）
+    this.app.repaint.request();
+    return true;
+  };
+
+  /**
+   * 移动相位：维护指针位置与「是否拖过阈值」。**没拖过阈值也返回 true**——手势
+   * 已经归方向手柄所有，让给选择路径会让同一次按下先选出别的元素。指针不动的
+   * 那些移动事件只更新坐标，阈值一次越过就不再回退（拖回去也算拖过）。
+   */
+  handlePointerMoveFromPointerDown = (
+    pointerDownState: PointerDownState,
+    scenePoint: QuickCreatePoint,
+  ): boolean => {
+    const drag = this.drag;
+    if (!drag) {
+      return false;
+    }
+    drag.pointer = { x: scenePoint.x, y: scenePoint.y };
+    if (!drag.moved) {
+      const distance = Math.hypot(
+        scenePoint.x - drag.origin.x,
+        scenePoint.y - drag.origin.y,
+      );
+      drag.moved = distance * this.app.state.zoom.value >= DRAGGING_THRESHOLD;
+    }
+    // 预演跟手：几何每帧都变，只能显式重绘（setState 不会让 memo 的交互层重画）
+    this.app.repaint.request();
+    return true;
+  };
+
+  /**
+   * 抬起相位：拖过阈值就落在**指针**处（连线端点即指针，见口径 A1），没拖过就
+   * 还是点击的老落点（基准位 + 让位）。两者都走同一条落地管线 `createConnectedShape`。
+   *
+   * 只有真正的 pointerup 才落地：pointercancel 与「丢失抬起」的补发都不建图
+   * （口径同 `App.mindmap` 与桶填充：取消的手势不留痕）。
+   */
+  handlePointerUp = (
+    pointerDownState: PointerDownState,
+    event: PointerEvent,
+    scenePoint: QuickCreatePoint,
+  ): boolean => {
+    if (this.cancelledPointerDown === pointerDownState) {
+      this.cancelledPointerDown = null;
+      return true;
+    }
+    const drag = this.drag;
+    if (!drag) {
+      return false;
+    }
+    this.drag = null;
+    this.ghost = null;
+    const source = this.app.scene.getNonDeletedElement(drag.elementId);
+    if (event.type === "pointerup" && source) {
+      this.createConnectedShape(
+        source,
+        drag.direction,
+        drag.moved ? scenePoint : undefined,
+      );
+    }
+    // 无论落地与否都算这次手势已处理：免得通用路径再排一次空的历史捕获
+    pointerDownState.drag.hasOccurred = true;
+    this.app.repaint.request();
+    return true;
+  };
+
+  /** Esc 取消：不建图、不留历史；抬起时由 cancelledPointerDown 吞掉收尾。 */
+  handlePointerKeyDown = (
+    pointerDownState: PointerDownState,
+    event: KeyboardEvent,
+  ): boolean => {
+    if (!this.drag || event.key !== KEYS.ESCAPE) {
+      return false;
+    }
+    this.cancelledPointerDown = pointerDownState;
+    this.drag = null;
+    this.ghost = null;
+    this.app.repaint.request();
+    event.preventDefault();
+    event.stopPropagation();
     return true;
   };
 
@@ -426,12 +557,17 @@ export class AppQuickCreate {
     if (!source || !isCompositeShapeElement(source)) {
       return [];
     }
-    const placement = this.resolvePlacement(source, handle.direction);
+    const placement = this.resolvePlacementFor(source, handle.direction);
     const key = [
       source.id,
       source.version,
       handle.direction,
       this.getArrowStyleFingerprint(),
+      // 落位由「出口 + 入口 + 落点」完全决定（出口只由源与方向决定），所以这三样
+      // 进缓存键就够了：拖拽中的预演与点击的预演可能落在同一个中心上，但入口不同
+      // （拖拽那条的入口就是指针），只比落点会把两种口径混成同一个键。
+      placement.connector.entry.x,
+      placement.connector.entry.y,
       // 落点还取决于场上别的图形：基准位被占时副本会沿绝对轴让位，所以解出来的
       // 目标位置也进缓存键——不然场景一变（别的图形挪过来/挪走）还会画着上一帧
       // 的旧落点与旧折线。
@@ -462,7 +598,43 @@ export class AppQuickCreate {
   };
 
   /**
-   * 落点与连线的**唯一**来源：悬停预演与真实创建都从这里取几何，所见即所得。
+   * 落位来源：**已越过阈值**的拖拽走指针落位，其余（悬停预演、按下但还没拖、
+   * 点击落地）走基准位 + 让位。
+   *
+   * 阈值前不看指针，是为了让「按下不拖」这条老路径全程所见即所得：悬停时预演
+   * 画在基准位，按下去它不该跳到指针那儿，松手也仍然落在基准位。
+   */
+  private resolvePlacementFor = (
+    source: NonDeletedExcalidrawElement,
+    direction: QuickCreateDirection,
+  ): QuickCreatePlacement =>
+    this.drag?.moved &&
+    this.drag.elementId === source.id &&
+    this.drag.direction === direction
+      ? this.resolveDragPlacement(source, direction, this.drag.pointer)
+      : this.resolvePlacement(source, direction);
+
+  /** 落位与连线几何只需要源的这几项（角度绕元素框中心旋转） */
+  private getSourceGeometry = (
+    source: NonDeletedExcalidrawElement,
+  ): QuickCreateSourceGeometry => {
+    const bounds = getElementAbsoluteCoords(
+      source,
+      this.app.scene.getNonDeletedElementsMap(),
+    );
+    return {
+      center: {
+        x: (bounds[0] + bounds[2]) / 2,
+        y: (bounds[1] + bounds[3]) / 2,
+      },
+      angle: source.angle,
+      width: source.width,
+      height: source.height,
+    };
+  };
+
+  /**
+   * 落点与连线的**唯一**来源：悬停预演、拖拽预演与真实创建都从这里取几何，所见即所得。
    *
    * 落点先用老规则算基准位（源中心沿旋转后的方向向量外移「源半尺寸 + 间隙 +
    * 副本半尺寸」），基准位压着已有图形时再沿**绝对轴**让位（见
@@ -475,16 +647,7 @@ export class AppQuickCreate {
     direction: QuickCreateDirection,
   ): QuickCreatePlacement => {
     const elementsMap = this.app.scene.getNonDeletedElementsMap();
-    const sourceBounds = getElementAbsoluteCoords(source, elementsMap);
-    const geometry: QuickCreateSourceGeometry = {
-      center: {
-        x: (sourceBounds[0] + sourceBounds[2]) / 2,
-        y: (sourceBounds[1] + sourceBounds[3]) / 2,
-      },
-      angle: source.angle,
-      width: source.width,
-      height: source.height,
-    };
+    const geometry = this.getSourceGeometry(source);
     const size = { width: source.width, height: source.height };
     const target = getQuickCreateResolvedTargetCenter(
       { ...geometry, id: source.id, boundElements: source.boundElements },
@@ -499,6 +662,24 @@ export class AppQuickCreate {
     };
   };
 
+  /**
+   * 拖拽落位（口径 A1）：指针就是连线落在新副本上的那个点，副本身心由它反推
+   * （轮廓恰好经过指针）。出口仍是手柄那条边的中点（口径 B1），**不参与让位**。
+   */
+  private resolveDragPlacement = (
+    source: NonDeletedExcalidrawElement,
+    direction: QuickCreateDirection,
+    pointer: QuickCreatePoint,
+  ): QuickCreatePlacement => ({
+    sourceId: source.id,
+    ...getQuickCreateDragPlacement(
+      this.getSourceGeometry(source),
+      direction,
+      pointer,
+      { width: source.width, height: source.height },
+    ),
+  });
+
   private buildGhostElements = (
     source: NonDeleted<ExcalidrawCompositeShapeElement>,
     direction: QuickCreateDirection,
@@ -510,7 +691,6 @@ export class AppQuickCreate {
       this.buildConnectorArrow(placement, {
         opacityScale: QUICK_CREATE_GHOST_ALPHA,
         identity: GHOST_ARROW_IDENTITY,
-        foldElbowRoute: true,
         ghostShape,
       }),
     ];
@@ -537,34 +717,26 @@ export class AppQuickCreate {
    * 连线：把几何解出来的路径按**当前线样式**落成箭头的 x/y 与 points
    * （points 是相对 x/y 的局部坐标，与画布上拖拽建的箭头同一套约定）。
    *
-   * **拐点只有折线箭头才配**：直线与圆角曲线恒为两点 [出口, 入口]，副本让位
-   * 错开时也只是斜着直连——线型是「直线」，画出来就该是直线；圆角的弯曲几何
-   * 另有归属（`element/curveConnector.ts`，判据只看圆角），创建路径一个弯曲
-   * 几何都不算，两端对齐时几何自然退化成水平/垂直直线。
+   * **点位数只由线型决定，创建路径一律给两点 [出口, 入口]**：
    *
-   * - 折线箭头（elbow）落地：**不塞我们的拐点**，仍旧给两点 + `elbowed`，交给
-   *   内置正交路由自己布线（老行为）。预演没有绑定可依、路由跑不起来，所以预演
-   *   改为直接拿同一套拐点画折线（`foldElbowRoute`）——渲染层对 elbowed 箭头做
-   *   的就是「把折角磨圆」，与落地后路由算出的那条直角线形状一致。
+   * - 直线：画出来就是这条（副本让位错开时也只是斜着直连——线型是「直线」）。
+   * - 圆角曲线：弯曲几何另有归属（`element/curveConnector.ts`，判据只看圆角），
+   *   创建路径一个弯曲几何都不算。
+   * - 折线箭头：两点 + `elbowed` 交给内置正交路由布线，**落地与预演都走它**
+   *   （预演那条见 `routePreviewElbowArrow`），所以这里不再自己拼拐点。
    */
   private buildConnectorArrow = (
     placement: QuickCreatePlacement,
     options: {
       opacityScale?: number;
       identity?: CreationIdentity;
-      /** 预演专用：折线箭头按我们的拐点画（内置路由依赖绑定，预演跑不起来） */
-      foldElbowRoute?: boolean;
       /** 预演副本元素：端绑定的锚点按它的轮廓算，与落地写进副本的固定点同源 */
       ghostShape?: NonDeletedExcalidrawElement;
     } = {},
   ): NonDeleted<ExcalidrawLinearElement> => {
     const { connector } = placement;
     const arrowProps = getCurrentItemArrowProps(this.app);
-    const { exit, bend, entry } = connector;
-    // 拐点的唯一出口：折线箭头的预演。落地交给内置正交路由，其余线型一律两点
-    const fold = arrowProps.elbowed && options.foldElbowRoute ? bend : null;
-    // 出口就是箭头的起点（x/y），所以这里只列**起点之后**的点
-    const tail: QuickCreatePoint[] = fold ? [...fold, entry] : [entry];
+    const { exit, entry } = connector;
     const created = newArrowElement({
       type: "arrow",
       x: exit.x,
@@ -572,9 +744,7 @@ export class AppQuickCreate {
       ...arrowProps,
       points: [
         pointFrom<LocalPoint>(0, 0),
-        ...tail.map((point) =>
-          pointFrom<LocalPoint>(point.x - exit.x, point.y - exit.y),
-        ),
+        pointFrom<LocalPoint>(entry.x - exit.x, entry.y - exit.y),
       ],
       ...(options.opacityScale === undefined
         ? {}
@@ -592,27 +762,24 @@ export class AppQuickCreate {
       ...arrow,
       ...this.getPreviewBindings(placement, arrow, options.ghostShape),
     };
-    // 再按与落地 `projectArrowEndpoints` 同一个 `updateBoundPoint` 把两端落到位。
-    // 条件也跟落地同一条（只有两点连线会落）：折线箭头的**预演**带着拐点、点数是 4，
-    // 落地那条只写绑定、不动点位，预演照做才逐点一致。
-    return arrow.points.length === 2
-      ? this.projectPreviewEndpoints(bound, options.ghostShape)
-      : bound;
+    // 再按与落地 `projectArrowEndpoints` 同一个 `updateBoundPoint` 把两端落到位，
+    // 折线档继续按内置路由收口（落地那条由 `movePoints` → `mutateElement` 接手）
+    return this.projectPreviewEndpoints(bound, options.ghostShape);
   };
 
   /**
    * 预演专用：把两端按**与落地同一个** `updateBoundPoint` 落到位（它是纯函数，
    * 返回元素局部坐标点）。预演元素不在场景里，没法走落地那条 `movePoints`，所以
    * 这里只把返回的点写回元素本身。副本要临时塞进 map：解析另一端的绑定时会查它。
+   *
+   * 最后一步与落地同一处收口：折线档的点位由内置正交路由决定，预演也跑它一遍
+   * （见 `routePreviewElbowArrow`）。
    */
   private projectPreviewEndpoints = (
     arrow: NonDeleted<ExcalidrawLinearElement>,
     ghostShape: NonDeletedExcalidrawElement,
   ): NonDeleted<ExcalidrawLinearElement> => {
-    const elementsMap: ElementsMap = new Map(
-      this.app.scene.getNonDeletedElementsMap(),
-    );
-    elementsMap.set(ghostShape.id, ghostShape);
+    const elementsMap = this.getPreviewElementsMap(ghostShape);
     const points = arrow.points.map((p) => pointFrom<LocalPoint>(p[0], p[1]));
     for (const field of ["startBinding", "endBinding"] as const) {
       const binding = arrow[field];
@@ -633,20 +800,71 @@ export class AppQuickCreate {
     // 与落地 `movePoints` 同款归位：端点的元素局部不变量是 points[0] 恒为 [0,0]，
     // 所以把投影后的起点搬回原点、元素 x/y 反向平移（场景位置不变）
     const [offsetX, offsetY] = points[0];
+    return this.routePreviewElbowArrow(
+      {
+        ...arrow,
+        x: arrow.x + offsetX,
+        y: arrow.y + offsetY,
+        points: points.map((p) =>
+          pointFrom<LocalPoint>(p[0] - offsetX, p[1] - offsetY),
+        ),
+      },
+      elementsMap,
+    );
+  };
+
+  /**
+   * 折线档的预演必须跑**同一套内置正交路由**：落地那条只给两点 + `elbowed`，
+   * `mutateElement` 会把 points 转交 `updateElbowArrowPoints` 重新布线（拐点由 A*
+   * 网格搜索定、每段轴对齐、两端各留一个折线 gap，末段恒垂直于所依附的那条边），
+   * 我们自己也拼不出这套结果。
+   *
+   * 之前预演是自己拼一个「出线轴中点」的单折 Z，只在落点与出口**同轴**时与路由
+   * 恰好同形——点击那条路正是如此（副本落在手柄轴或绝对轴上，入口永远在副本的
+   * 轴向边上），所以一直没暴露；拖拽的自由落点让入口落到任意一条边上，末段朝向
+   * 与拐点就都分叉了（对照数据见 `.tmp/a.md`）。
+   *
+   * 输入与落地逐项对齐：同一对绑定（含折线档自己的固定点口径）、同一个含副本的
+   * 元素表、同一组 options（落地那条经 `movePoints` 传下来的 `isDragging` 为假）；
+   * 返回值也照 `mutateElement` 那样整份套回元素（路由会把原点挪到首点、重算尺寸）。
+   */
+  private routePreviewElbowArrow = (
+    arrow: NonDeleted<ExcalidrawLinearElement>,
+    elementsMap: ElementsMap,
+  ): NonDeleted<ExcalidrawLinearElement> => {
+    if (!isElbowArrow(arrow)) {
+      return arrow;
+    }
     return {
       ...arrow,
-      x: arrow.x + offsetX,
-      y: arrow.y + offsetY,
-      points: points.map((p) =>
-        pointFrom<LocalPoint>(p[0] - offsetX, p[1] - offsetY),
+      ...updateElbowArrowPoints(
+        arrow,
+        elementsMap as NonDeletedSceneElementsMap,
+        {
+          points: arrow.points,
+          startBinding: arrow.startBinding,
+          endBinding: arrow.endBinding,
+        },
+        { isDragging: false },
       ),
-    };
+    } as NonDeleted<ExcalidrawLinearElement>;
+  };
+
+  /** 预演用的元素表：场景 + 幽灵副本（绑定求解与路由都要按 id 查它） */
+  private getPreviewElementsMap = (
+    ghostShape: NonDeletedExcalidrawElement,
+  ): ElementsMap => {
+    const elementsMap: ElementsMap = new Map(
+      this.app.scene.getNonDeletedElementsMap(),
+    );
+    elementsMap.set(ghostShape.id, ghostShape);
+    return elementsMap;
   };
 
   /**
    * 预演连线的等效绑定：附着点的归一化盒坐标。用与落地 `bindBindingElement` 内部
-   * **同一个**函数算（传出口 / 入口当 `focusPoint`），两边因此逐位一致；该函数在
-   * 给定 `focusPoint` 时不读 `elementsMap`，这里按签名照传。
+   * **同一个**函数算，两边因此逐位一致——注意落地是按 `isElbowArrow` 分叉的
+   * （`binding.ts:1158`），折线档走它自己那一支：不照做的话两端会差一个 binding gap。
    */
   private getPreviewBindings = (
     placement: QuickCreatePlacement,
@@ -657,34 +875,42 @@ export class AppQuickCreate {
     endBinding: FixedPointBinding | null;
   } => {
     const { sourceId, connector } = placement;
-    const elementsMap = this.app.scene.getNonDeletedElementsMap();
+    const elementsMap = this.getPreviewElementsMap(ghostShape);
     const source = this.app.scene.getNonDeletedElement(sourceId);
+    const elbowed = isElbowArrow(arrow) ? arrow : null;
+    const fixedPointFor = (
+      target: NonDeleted<ExcalidrawBindableElement>,
+      startOrEnd: "start" | "end",
+      focusPoint: QuickCreatePoint,
+    ) =>
+      elbowed
+        ? calculateFixedPointForElbowArrowBinding(
+            elbowed,
+            target,
+            startOrEnd,
+            elementsMap,
+          )
+        : calculateFixedPointForNonElbowArrowBinding(
+            arrow,
+            target,
+            startOrEnd,
+            elementsMap,
+            pointFrom<GlobalPoint>(focusPoint.x, focusPoint.y),
+          );
     return {
       startBinding:
         source && isBindableElement(source)
           ? {
               elementId: sourceId,
               mode: "orbit" as const,
-              ...calculateFixedPointForNonElbowArrowBinding(
-                arrow,
-                source,
-                "start",
-                elementsMap,
-                pointFrom<GlobalPoint>(connector.exit.x, connector.exit.y),
-              ),
+              ...fixedPointFor(source, "start", connector.exit),
             }
           : null,
       endBinding: isBindableElement(ghostShape)
         ? {
             elementId: QUICK_CREATE_GHOST_SHAPE_ID,
             mode: "orbit" as const,
-            ...calculateFixedPointForNonElbowArrowBinding(
-              arrow,
-              ghostShape,
-              "end",
-              elementsMap,
-              pointFrom<GlobalPoint>(connector.entry.x, connector.entry.y),
-            ),
+            ...fixedPointFor(ghostShape, "end", connector.entry),
           }
         : null,
     };
@@ -694,12 +920,18 @@ export class AppQuickCreate {
    * 副本 = 除文字外完全一致（同 shape.id/宽高/角度/圆角/样式与 shape 配置），
    * 只换新 id/seed/version，并清掉原图形的绑定、分组与容器归属。
    * 连线先插入，图形压在上面；两者同一次捕获，撤销一步同时移除。
+   *
+   * `pointer` 给出时走**拖拽落位**（指针 = 连线端点，不让位），缺省走点击的
+   * 基准位 + 让位。
    */
   createConnectedShape = (
     source: NonDeletedExcalidrawElement,
     direction: QuickCreateDirection,
+    pointer?: QuickCreatePoint,
   ) => {
-    const placement = this.resolvePlacement(source, direction);
+    const placement = pointer
+      ? this.resolveDragPlacement(source, direction, pointer)
+      : this.resolvePlacement(source, direction);
     const clone = this.cloneShape(
       source,
       placement.target.x,
