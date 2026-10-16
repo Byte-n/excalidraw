@@ -32,8 +32,8 @@ import {
   QUICK_CREATE_GHOST_ARROW_ID,
   QUICK_CREATE_GHOST_SHAPE_ID,
 } from "../components/App.quickCreate";
-import { PRESET_SIZES } from "../components/app/createPresets";
 import { getCatalogGroup } from "../components/presetCatalog";
+import { SHAPE_PRESET_DEFAULTS } from "../components/shapePresetDefaults";
 import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
@@ -810,6 +810,33 @@ describe("quick create handles", () => {
       expect(
         copy.boundElements?.some((bound) => bound.id === "old-arrow") ?? false,
       ).toBe(false);
+    });
+
+    it("keeps a flowchart source's custom style on the copy (预设默认值不参与 quick create)", () => {
+      // quick create 是源元素的深拷贝：预设默认值表只作用于创建路径，副本逐项
+      // 保留源样式。将来谁把默认值挪进 newElement/duplicateElement，这条立刻红。
+      const source = API.createElement({
+        type: "fc-terminator",
+        x: 100,
+        y: 100,
+        width: 120,
+        height: 80,
+        backgroundColor: "#00ff00",
+        strokeColor: "#ff0000",
+        strokeWidth: 2,
+        opacity: 50,
+      });
+      selectShape(source);
+      clickDirection("right");
+
+      expect(newShape(source.id)).toMatchObject({
+        type: "composite_shape",
+        shape: { id: "fc-terminator" },
+        backgroundColor: "#00ff00",
+        strokeColor: "#ff0000",
+        strokeWidth: 2,
+        opacity: 50,
+      });
     });
 
     it("connects the two shapes with one arrow carrying the current styles", () => {
@@ -2125,13 +2152,16 @@ describe("quick create handles", () => {
       const ratio = outlineRatio(shape, { x: 400, y: 200 });
       expect(ratio).toBeGreaterThan(1);
       expect(ratio).toBeLessThan(1.3);
-      // 120×80：(180,60)/√10 方向上的轮廓距离是 60√10/3 ≈ 63.245，图形中心 (460,220)；
-      // 再沿该方向回退一个 gap ≈6px → 左上角约 (405.7, 181.9)，比「恰好过指针」的
-      // (400,180) 更靠右、更靠下一点点
+      // 选中的是「矩形」预设：本分支起其默认尺寸是 120×120（见
+      // `shapePresetDefaults.ts`），不再是 120×80。(180,60) 方向 u = (3,1)/√10 上
+      // 的轮廓距离是 60·(3+1)/√10 = 240/√10 ≈ 75.895，图形中心 (472,224) 恰好过
+      // 指针；再沿该方向回退一个 gap ≈6px → 左上角 ≈(406.3,162.1)
+      expect(shape.width).toBe(120);
+      expect(shape.height).toBe(120);
       expect(shape.x).toBeGreaterThan(402);
       expect(shape.x).toBeLessThan(409);
-      expect(shape.y).toBeGreaterThan(180);
-      expect(shape.y).toBeLessThan(186);
+      expect(shape.y).toBeGreaterThan(158);
+      expect(shape.y).toBeLessThan(166);
       // 斜拖不再与源中点对齐（点击那条才对齐）
       expect(shape.y + shape.height / 2).not.toBeCloseTo(
         source.y + source.height / 2,
@@ -2620,9 +2650,81 @@ describe("quick create handles", () => {
           opacity: 50,
           angle: 0.5,
         });
-        // 尺寸用所选图形自己的预设（源是 300×150），不是源尺寸
-        expect(shape.width).toBe(PRESET_SIZES.rectangle!.width);
-        expect(shape.height).toBe(PRESET_SIZES.rectangle!.height);
+        // 尺寸用所选图形自己的预设（源是 300×150），不是源尺寸。本分支起矩形预设的
+        // 默认尺寸只在 `SHAPE_PRESET_DEFAULTS` 里（`PRESET_SIZES` 已不含图形）。
+        expect(shape.width).toBe(SHAPE_PRESET_DEFAULTS.rectangle.width);
+        expect(shape.height).toBe(SHAPE_PRESET_DEFAULTS.rectangle.height);
+      });
+
+      it("gives the picked shape its own preset size (cube, ≠ source) while still copying the source's style", () => {
+        // 钉住拖入空白面板这条链路的落地口径，用尺寸与源都不同的 `cube`
+        // （预设 148×106 vs 源 300×150；其余菜单条目与源同尺寸或 120×120，尺寸断言
+        // 区分得出来）：
+        //  ① 所选图形的**尺寸**取它自己的预设，不是源尺寸——守卫
+        //     `buildPresetElementsCentered` 这条装配链路将来被套上源尺寸；
+        //  ② 所选图形的**样式**逐项跟随源，不是预设默认值——守卫 `applySourceStyle`；
+        //  ③ 连线落地端仍与松手点重合——守卫落位几何；
+        //  ④ 副本轮廓落在指针**之外**约一个 binding gap（`outlineRatio ∈ (1, 1.3)`）
+        //     ——这一条抓 `getPresetSize` 回归：`createConnectorAndShape` 用
+        //     `getPresetSize` 算落位间隙、又用 `buildPresetElementsCentered` 装配同一
+        //     尺寸。源**足够大**（这里 300×150）时，若落位错用源尺寸，
+        //     `probeLandingEndOffset` 的 delta 补偿无法完全抵消——副本轮廓会缩到指针
+        //     **之内**（实测 ratio 0.979 < 1），④ 随之为红。小源（120×80）残差 < 1px
+        //     抓不住，故刻意用大源。（角度取 0.5 与相邻用例一致；此角度下正确值实测
+        //     ≈1.113。）
+        const source = createRectangle({
+          width: 300,
+          height: 150,
+          strokeColor: "#ff0000",
+          backgroundColor: "#00ff00",
+          fillStyle: "solid",
+          strokeWidth: 2,
+          strokeStyle: "dashed",
+          opacity: 50,
+          angle: 0.5,
+        });
+        selectShape(source);
+        const before = liveIds();
+        const pointer = { x: 500, y: 1000 };
+
+        dragHandle("right", pointer);
+        expect(screen.getByTestId("quick-create-menu")).toBeTruthy();
+        fireEvent.click(screen.getByTestId("quick-create-item-cube"));
+
+        const shape = createdShape(before);
+        const cubePreset = SHAPE_PRESET_DEFAULTS.cube;
+        expect(shape).toMatchObject({
+          type: "composite_shape",
+          shape: { id: "cube" },
+        });
+        // ① 尺寸 = 所选图形自己的预设，且与源尺寸不同（否则这条不辨真伪）
+        expect(shape.width).toBe(cubePreset.width);
+        expect(shape.height).toBe(cubePreset.height);
+        expect(cubePreset.width).not.toBe(source.width);
+        expect(cubePreset.height).not.toBe(source.height);
+
+        // ② 样式逐项照抄源（不是预设默认值）
+        expect(shape).toMatchObject({
+          strokeColor: source.strokeColor,
+          backgroundColor: source.backgroundColor,
+          fillStyle: source.fillStyle,
+          strokeWidth: source.strokeWidth,
+          strokeStyle: source.strokeStyle,
+          opacity: source.opacity,
+          angle: source.angle,
+        });
+
+        // ③ 连线落地端仍与松手点重合（delta 补偿的守卫）
+        const landedEnd = worldPoints(createdArrow(before)).at(-1)!;
+        expect(
+          Math.hypot(landedEnd.x - pointer.x, landedEnd.y - pointer.y),
+        ).toBeLessThan(0.5);
+
+        // ④ 判别性断言：副本轮廓退到指针之外约一个 binding gap（正确 ≈1.113；
+        // 落位错用源尺寸时 ≈0.979，轮廓缩进指针之内 → 红）
+        const ratio = outlineRatio(shape, pointer);
+        expect(ratio).toBeGreaterThan(1);
+        expect(ratio).toBeLessThan(1.3);
       });
 
       it("keeps only the connector when the menu is closed, undone in one step", () => {

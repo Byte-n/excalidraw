@@ -490,13 +490,13 @@ describe("Test dragCreate", () => {
 
       expect(h.state.selectionElement).toBeNull();
 
-      // 左上角落在按下点，尺寸是预设的 120×80
+      // 左上角落在按下点，尺寸是预设的 120×120
       expect(h.elements.length).toEqual(1);
       expect(h.elements[0]).toMatchObject({
         x: 30,
         y: 20,
         width: 120,
-        height: 80,
+        height: 120,
       });
     });
 
@@ -520,7 +520,7 @@ describe("Test dragCreate", () => {
         shape: { id: "ellipse", schemaVersion: 1 },
         x: 30,
         y: 20,
-        width: 120,
+        width: 80,
         height: 80,
       });
     });
@@ -546,7 +546,7 @@ describe("Test dragCreate", () => {
         x: 30,
         y: 20,
         width: 120,
-        height: 80,
+        height: 120,
       });
     });
 

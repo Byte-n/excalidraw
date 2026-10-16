@@ -1,4 +1,4 @@
-import { CURSOR_TYPE, reseed } from "@excalidraw/common";
+import { COLOR_PALETTE, CURSOR_TYPE, reseed } from "@excalidraw/common";
 
 import {
   isMindmapEdgeElement,
@@ -11,7 +11,7 @@ import { Keyboard, Pointer, UI } from "./helpers/ui";
 import { API } from "./helpers/api";
 import { act, fireEvent, render, GlobalTestState } from "./test-utils";
 
-import type { ToolType } from "../types";
+import type { AppState, ToolType } from "../types";
 
 const { h } = window;
 
@@ -25,10 +25,35 @@ describe("creation preset preview", () => {
     await render(<Excalidraw />);
   });
 
-  const PRESETS: { tool: ToolType; width: number; height: number }[] = [
-    { tool: "rectangle", width: 120, height: 80 },
-    { tool: "diamond", width: 120, height: 80 },
-    { tool: "ellipse", width: 120, height: 80 },
+  const PRESETS: {
+    tool: ToolType;
+    width: number;
+    height: number;
+    /** 复合图形预览用各自预设的默认样式：填色按图形区分、描边固定墨色/线宽 1 */
+    backgroundColor?: string;
+    strokeWidth?: number;
+  }[] = [
+    {
+      tool: "rectangle",
+      width: 120,
+      height: 120,
+      backgroundColor: COLOR_PALETTE.blue[0],
+      strokeWidth: 1,
+    },
+    {
+      tool: "diamond",
+      width: 120,
+      height: 120,
+      backgroundColor: COLOR_PALETTE.yellow[0],
+      strokeWidth: 1,
+    },
+    {
+      tool: "ellipse",
+      width: 80,
+      height: 80,
+      backgroundColor: COLOR_PALETTE.violet[0],
+      strokeWidth: 1,
+    },
     { tool: "stickynote", width: 160, height: 160 },
     // 表格没有单独的预设尺寸常量：newTableElement 建出来的默认 3×3 就是预设
     { tool: "table", width: 480, height: 168 },
@@ -37,14 +62,23 @@ describe("creation preset preview", () => {
 
   it.each(PRESETS)(
     "$tool follows the pointer at its preset size",
-    async ({ tool, width, height }) => {
+    async ({ tool, width, height, backgroundColor, strokeWidth }) => {
       UI.clickTool(tool);
       pointer().moveTo(400, 300);
 
       const preview = h.app.createPreview.elements;
       expect(preview).toHaveLength(1);
-      // 鼠标点即元素左上角（与按下拖拽的起点同一锚点）
-      expect(preview![0]).toMatchObject({ x: 400, y: 300, width, height });
+      // 鼠标点即元素左上角（与按下拖拽的起点同一锚点）；复合图形预览用的是
+      // 各自预设的默认尺寸与填色，描边固定墨色/线宽 1
+      expect(preview![0]).toMatchObject({
+        x: 400,
+        y: 300,
+        width,
+        height,
+        ...(backgroundColor === undefined
+          ? {}
+          : { backgroundColor, strokeWidth }),
+      });
 
       // 预览不在场景里：没按下就什么都不会留下
       expect(h.elements).toHaveLength(0);
@@ -143,7 +177,7 @@ describe("creation preset placement", () => {
     height: number;
     type: string;
   }[] = [
-    { tool: "rectangle", width: 120, height: 80, type: "composite_shape" },
+    { tool: "rectangle", width: 120, height: 120, type: "composite_shape" },
     { tool: "stickynote", width: 160, height: 160, type: "stickynote" },
     { tool: "table", width: 480, height: 168, type: "table" },
     { tool: "frame", width: 400, height: 300, type: "frame" },
@@ -199,6 +233,14 @@ describe("creation preset placement", () => {
       y: 100,
       width: 60,
       height: 50,
+      // 拖拽只自定大小：样式仍是预设默认——这是「拖拽例外」的回归哨，样式在
+      // pointerdown 装配草稿时就写死了，拖拽只写几何、不碰任何样式字段
+      backgroundColor: COLOR_PALETTE.blue[0],
+      strokeColor: "#1f2329",
+      strokeWidth: 1,
+      strokeStyle: "solid",
+      fillStyle: "solid",
+      opacity: 100,
     });
   });
 
@@ -212,6 +254,101 @@ describe("creation preset placement", () => {
     // 按下之后由真正的 newElement 画在新元素画布上
     expect(h.state.newElement).not.toBeNull();
     mouse.upAt();
+  });
+});
+
+/** 工具栏路径：把「当前图形」换成某个预设（含流程图 fc-* 与三角形伪 id）后点击/拖拽 */
+describe("工具栏路径用当前图形的预设默认", () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    await render(<Excalidraw handleKeyboardGlobally />);
+  });
+
+  /** 先武装矩形工具，再把「当前图形」换成目标预设——点工具本身会把当前图形复位 */
+  const armRectangleWith = (shape: AppState["preferredGenericShape"]) => {
+    UI.clickTool("rectangle");
+    act(() => {
+      h.app.setAppState({ preferredGenericShape: shape });
+    });
+  };
+
+  it("单击当前图形 fc-cylinder → 落 80×100 + 默认绿 + 线宽 1", async () => {
+    armRectangleWith("fc-cylinder");
+    pointer().clickAt(300, 240);
+
+    const placed = h.elements.filter(
+      (element) => element.type === "composite_shape",
+    );
+    expect(placed).toHaveLength(1);
+    expect(placed[0]).toMatchObject({
+      shape: { id: "fc-cylinder", schemaVersion: 1 },
+      x: 300,
+      y: 240,
+      width: 80,
+      height: 100,
+      backgroundColor: COLOR_PALETTE.green[0],
+      strokeWidth: 1,
+    });
+  });
+
+  it("同条件按住拖拽 60×50 → 尺寸是 60×50，样式仍是预设默认", async () => {
+    armRectangleWith("fc-cylinder");
+    const mouse = pointer();
+    mouse.downAt(100, 100);
+    mouse.moveTo(160, 150);
+    mouse.upAt();
+
+    expect(h.elements[0]).toMatchObject({
+      shape: { id: "fc-cylinder" },
+      x: 100,
+      y: 100,
+      width: 60,
+      height: 50,
+      backgroundColor: COLOR_PALETTE.green[0],
+      strokeColor: "#1f2329",
+      strokeWidth: 1,
+      fillStyle: "solid",
+    });
+  });
+
+  it("当前图形 right-triangle → 落直角三角（apexX 0）120×80", async () => {
+    armRectangleWith("right-triangle");
+    pointer().clickAt(300, 240);
+
+    expect(h.elements[0]).toMatchObject({
+      shape: { id: "triangle", schemaVersion: 1, triangle: { apexX: 0 } },
+      x: 300,
+      y: 240,
+      width: 120,
+      height: 80,
+      backgroundColor: COLOR_PALETTE.gray[0],
+    });
+  });
+
+  it("悬停预览与落地一致（fc-hexagon 130×80）", async () => {
+    armRectangleWith("fc-hexagon");
+    const mouse = pointer();
+    mouse.moveTo(400, 300);
+
+    const preview = h.app.createPreview.elements![0];
+    expect(preview).toMatchObject({
+      shape: { id: "fc-hexagon" },
+      x: 400,
+      y: 300,
+      width: 130,
+      height: 80,
+      backgroundColor: COLOR_PALETTE.violet[0],
+    });
+
+    mouse.clickAt(400, 300);
+    expect(h.elements[0]).toMatchObject({
+      shape: { id: "fc-hexagon" },
+      x: preview.x,
+      y: preview.y,
+      width: preview.width,
+      height: preview.height,
+      backgroundColor: preview.backgroundColor,
+    });
   });
 });
 

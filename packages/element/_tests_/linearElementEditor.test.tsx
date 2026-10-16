@@ -1614,8 +1614,10 @@ describe("Test Linear Elements", () => {
       const textElement = h.elements[2] as ExcalidrawTextElementWithContainer;
 
       expect(arrow.endBinding?.elementId).toBe(rect.id);
-      // 端点贴在矩形轮廓外一个 binding gap 处
-      expect(arrow.width).toBeCloseTo(404);
+      // 端点贴在矩形轮廓外一个 binding gap 处；gap = BASE_BINDING_GAP(5) +
+      // 矩形 strokeWidth/2（binding.ts 的 getBindingGap），预设图形默认 strokeWidth
+      // 现为 thin(1)（旧 medium(2)），gap 6 → 5.5，端点半像素内移，宽 404 → 404.5
+      expect(arrow.width).toBeCloseTo(404.5);
       expect(rect.x).toBe(400);
       expect(rect.y).toBe(0);
       expect(
@@ -1634,7 +1636,10 @@ describe("Test Linear Elements", () => {
       mouse.downAt(rect.x, rect.y);
       mouse.moveTo(200, 0);
       mouse.upAt(200, 0);
-      expect(arrow.width).toBeCloseTo(198);
+      // 上面那次 nw 拖拽把矩形宽度 200 → 400：初始 gap 烘进归一化 attachPoint
+      // （x_norm = -gap/宽度），因此随宽度翻倍而翻倍 —— 旧 gap6→12、新 gap5.5→11，
+      // 端点 x 188 → 189，宽 198 → 199
+      expect(arrow.width).toBeCloseTo(199);
       expect(rect.x).toBe(200);
       expect(rect.y).toBe(0);
       expect(handleBindTextResizeSpy).toHaveBeenCalledWith(

@@ -56,13 +56,13 @@ describe("a click places the preset instead of nothing", () => {
     fireEvent.pointerDown(canvas, { clientX: 30, clientY: 20 });
     fireEvent.pointerUp(canvas, { clientX: 30, clientY: 30 });
 
-    // 单击不再「尺寸太小被丢弃」，而是落下 120×80 的预设
+    // 单击不再「尺寸太小被丢弃」，而是落下 120×120 的预设
     expect(h.elements.length).toEqual(1);
     expect(h.elements[0]).toMatchObject({
       type: "composite_shape",
       shape: { id: "rectangle", schemaVersion: 1 },
       width: 120,
-      height: 80,
+      height: 120,
     });
   });
 
@@ -79,7 +79,7 @@ describe("a click places the preset instead of nothing", () => {
     expect(h.elements[0]).toMatchObject({
       type: "composite_shape",
       shape: { id: "ellipse", schemaVersion: 1 },
-      width: 120,
+      width: 80,
       height: 80,
     });
   });
@@ -98,7 +98,7 @@ describe("a click places the preset instead of nothing", () => {
       type: "composite_shape",
       shape: { id: "diamond", schemaVersion: 1 },
       width: 120,
-      height: 80,
+      height: 120,
     });
   });
 });

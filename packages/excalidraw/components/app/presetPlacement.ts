@@ -16,6 +16,7 @@ import type {
 import {
   createTablePresetDrafts,
   getMindmapPresetTree,
+  getPresetSize,
   newCreationDraft,
   PRESET_SIZES,
 } from "./createPresets";
@@ -124,10 +125,9 @@ export const buildPresetElementsAt = (
             spec.shapeId as CreationDraftOverrides["preferredGenericShape"],
         },
       ) as NonDeleted<ExcalidrawNonSelectionElement>;
-      const size = PRESET_SIZES[spec.tool] ?? {
-        width: draft.width,
-        height: draft.height,
-      };
+      // `spec.shapeId` 就是预设 id（含 `right-triangle`/`left-triangle`），
+      // 尺寸走图形默认值表
+      const size = getPresetSize(spec.tool, spec.shapeId, draft);
       return {
         elements: [
           {

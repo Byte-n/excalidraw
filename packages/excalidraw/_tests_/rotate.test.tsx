@@ -48,9 +48,12 @@ test("unselected bound arrow updates when rotating its target element", async ()
   expect(arrow.x).toBeCloseTo(-80);
   expect(arrow.y).toBeCloseTo(50);
   // 数值口径：端点贴在目标轮廓外一个 binding gap 处（端点就是 attachPoint 本身，
-  // 见 binding.ts 的 updateBoundPoint），因此 bbox 比「锚点在图形内部」的时代小
-  expect(arrow.width).toBeCloseTo(77.614, 1);
-  expect(arrow.height).toBeCloseTo(27.444, 1);
+  // 见 binding.ts 的 updateBoundPoint），因此 bbox 比「锚点在图形内部」的时代小。
+  // gap = BASE_BINDING_GAP(5) + 目标 strokeWidth/2（见 binding.ts 的 getBindingGap），
+  // 预设图形默认 strokeWidth 现在是 thin(1)（旧值 medium(2)），gap 因此 6 → 5.5，
+  // 端点随之移动约 0.5px，bbox 跟着变。
+  expect(arrow.width).toBeCloseTo(78.097, 1);
+  expect(arrow.height).toBeCloseTo(27.315, 1);
 });
 
 test("unselected bound arrows update when rotating their target elements", async () => {
@@ -89,8 +92,10 @@ test("unselected bound arrows update when rotating their target elements", async
   expect(ellipseArrow.x).toEqual(-10);
   expect(ellipseArrow.y).toEqual(80);
   expect(ellipseArrow.points[0]).toEqual([0, 0]);
-  expect(ellipseArrow.points[1][0]).toBeCloseTo(42.154, 1);
-  expect(ellipseArrow.points[1][1]).toBeCloseTo(-5.388, 1);
+  // 椭圆目标留 binding gap，gap 随其 strokeWidth 走（thin(1) → gap 5.5，旧的
+  // medium(2) → 6），故端点比旧值更贴轮廓
+  expect(ellipseArrow.points[1][0]).toBeCloseTo(42.347, 1);
+  expect(ellipseArrow.points[1][1]).toBeCloseTo(-4.972, 1);
 
   expect(textArrow.endBinding?.elementId).toEqual(text.id);
   expect(textArrow.x).toEqual(360);

@@ -60,6 +60,8 @@ import { getDefaultAppState } from "../appState";
 import { Excalidraw } from "../index";
 import { createPasteEvent } from "../clipboard";
 
+import { SHAPE_PRESET_DEFAULTS } from "../components/shapePresetDefaults";
+
 import * as blobModule from "../data/blob";
 
 import {
@@ -113,7 +115,9 @@ const checkpoint = (name: string) => {
 
 const renderStaticScene = vi.spyOn(StaticScene, "renderStaticScene");
 
-const transparent = COLOR_PALETTE.transparent;
+// 预设矩形经 `UI.createElement("rectangle")` 建出时的默认填充色（见
+// `../components/shapePresetDefaults.ts`）—— 本文件里所有该矩形的「初始」背景色
+const rectangleBackground = SHAPE_PRESET_DEFAULTS.rectangle.backgroundColor;
 // 新建元素默认描边色
 const defaultStroke = DEFAULT_NEW_ELEMENT_STROKE_COLOR;
 const red = "#e6f4f1"; // 背景色板网格 teal 族（color-teal，明度档 0）
@@ -425,7 +429,10 @@ describe("history", () => {
       expect(API.getRedoStack().length).toBe(2);
       assertSelectedElements(rect);
       expect(h.elements).toEqual([
-        expect.objectContaining({ id: rect.id, backgroundColor: transparent }),
+        expect.objectContaining({
+          id: rect.id,
+          backgroundColor: rectangleBackground,
+        }),
       ]);
 
       mouse.clickAt(-10, -10);
@@ -433,7 +440,10 @@ describe("history", () => {
       expect(API.getRedoStack().length).toBe(2); // redo stack is not cleared
       expect(API.getSelectedElements().length).toBe(0);
       expect(h.elements).toEqual([
-        expect.objectContaining({ id: rect.id, backgroundColor: transparent }),
+        expect.objectContaining({
+          id: rect.id,
+          backgroundColor: rectangleBackground,
+        }),
       ]);
 
       Keyboard.redo();
@@ -465,7 +475,10 @@ describe("history", () => {
       expect(API.getRedoStack().length).toBe(2);
       expect(API.getSelectedElements().length).toBe(0);
       expect(h.elements).toEqual([
-        expect.objectContaining({ id: rect.id, backgroundColor: transparent }),
+        expect.objectContaining({
+          id: rect.id,
+          backgroundColor: rectangleBackground,
+        }),
       ]);
 
       Keyboard.undo();
@@ -473,7 +486,10 @@ describe("history", () => {
       expect(API.getRedoStack().length).toBe(3);
       assertSelectedElements(rect); // get's reselected with out pushed entry!
       expect(h.elements).toEqual([
-        expect.objectContaining({ id: rect.id, backgroundColor: transparent }),
+        expect.objectContaining({
+          id: rect.id,
+          backgroundColor: rectangleBackground,
+        }),
       ]);
     });
 
@@ -2161,7 +2177,7 @@ describe("history", () => {
 
       Keyboard.undo();
       expect(h.elements).toEqual([
-        expect.objectContaining({ backgroundColor: transparent }),
+        expect.objectContaining({ backgroundColor: rectangleBackground }),
         expect.objectContaining({ strokeColor: blue }),
       ]);
 
@@ -2175,7 +2191,7 @@ describe("history", () => {
       expect(API.getUndoStack().length).toBe(1);
       expect(API.getUndoStack().length).toBe(1);
       expect(h.elements).toEqual([
-        expect.objectContaining({ backgroundColor: transparent }),
+        expect.objectContaining({ backgroundColor: rectangleBackground }),
         expect.objectContaining({ strokeColor: blue }),
       ]);
     });
@@ -2200,7 +2216,7 @@ describe("history", () => {
       Keyboard.undo();
       expect(h.elements).toEqual([
         expect.objectContaining({
-          backgroundColor: transparent,
+          backgroundColor: rectangleBackground,
           strokeColor: yellow,
         }),
       ]);
@@ -2274,7 +2290,7 @@ describe("history", () => {
 
       Keyboard.undo();
       expect(h.elements).toEqual([
-        expect.objectContaining({ backgroundColor: transparent }),
+        expect.objectContaining({ backgroundColor: rectangleBackground }),
       ]);
     });
 
@@ -2522,7 +2538,7 @@ describe("history", () => {
       expect(API.getUndoStack().length).toBe(2);
       expect(h.elements).toEqual([
         expect.objectContaining({
-          backgroundColor: transparent,
+          backgroundColor: rectangleBackground,
           isDeleted: true,
         }),
       ]);
@@ -2629,7 +2645,7 @@ describe("history", () => {
       expect(API.getRedoStack().length).toBe(2);
       expect(h.elements).toEqual([
         expect.objectContaining({
-          backgroundColor: transparent,
+          backgroundColor: rectangleBackground,
           isDeleted: true,
         }),
       ]);
@@ -2691,7 +2707,7 @@ describe("history", () => {
         expect.objectContaining({
           id: rect2.id,
           isDeleted: true,
-          backgroundColor: transparent,
+          backgroundColor: rectangleBackground,
         }),
         expect.objectContaining({
           id: rect3.id,

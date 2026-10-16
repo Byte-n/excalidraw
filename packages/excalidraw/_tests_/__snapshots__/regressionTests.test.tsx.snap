@@ -171,7 +171,7 @@ exports[`given element A and group of elements B and given both are selected whe
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -191,7 +191,7 @@ exports[`given element A and group of elements B and given both are selected whe
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -229,7 +229,7 @@ exports[`given element A and group of elements B and given both are selected whe
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -249,7 +249,7 @@ exports[`given element A and group of elements B and given both are selected whe
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -287,7 +287,7 @@ exports[`given element A and group of elements B and given both are selected whe
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -307,7 +307,7 @@ exports[`given element A and group of elements B and given both are selected whe
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -631,7 +631,7 @@ exports[`given element A and group of elements B and given both are selected whe
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -651,7 +651,7 @@ exports[`given element A and group of elements B and given both are selected whe
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 100,
@@ -689,7 +689,7 @@ exports[`given element A and group of elements B and given both are selected whe
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -709,7 +709,7 @@ exports[`given element A and group of elements B and given both are selected whe
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 100,
@@ -747,7 +747,7 @@ exports[`given element A and group of elements B and given both are selected whe
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -767,7 +767,7 @@ exports[`given element A and group of elements B and given both are selected whe
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 100,
@@ -1070,7 +1070,7 @@ exports[`regression tests > Cmd/Ctrl-click exclusively select element under poin
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -1090,7 +1090,7 @@ exports[`regression tests > Cmd/Ctrl-click exclusively select element under poin
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -1128,7 +1128,7 @@ exports[`regression tests > Cmd/Ctrl-click exclusively select element under poin
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -1148,7 +1148,7 @@ exports[`regression tests > Cmd/Ctrl-click exclusively select element under poin
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -1301,7 +1301,7 @@ exports[`regression tests > Cmd/Ctrl-click exclusively select element under poin
         "id19": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -1321,7 +1321,7 @@ exports[`regression tests > Cmd/Ctrl-click exclusively select element under poin
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -1668,7 +1668,7 @@ exports[`regression tests > Drags selected element when hitting only bounding bo
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#f0ebfc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -1688,7 +1688,7 @@ exports[`regression tests > Drags selected element when hitting only bounding bo
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -1904,7 +1904,7 @@ exports[`regression tests > adjusts z order when grouping > [end of test] undo s
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -1924,7 +1924,7 @@ exports[`regression tests > adjusts z order when grouping > [end of test] undo s
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -1962,7 +1962,7 @@ exports[`regression tests > adjusts z order when grouping > [end of test] undo s
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -1982,7 +1982,7 @@ exports[`regression tests > adjusts z order when grouping > [end of test] undo s
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -2020,7 +2020,7 @@ exports[`regression tests > adjusts z order when grouping > [end of test] undo s
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -2040,7 +2040,7 @@ exports[`regression tests > adjusts z order when grouping > [end of test] undo s
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -2317,7 +2317,7 @@ exports[`regression tests > alt-drag duplicates an element > [end of test] undo 
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -2337,7 +2337,7 @@ exports[`regression tests > alt-drag duplicates an element > [end of test] undo 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -2375,7 +2375,7 @@ exports[`regression tests > alt-drag duplicates an element > [end of test] undo 
         "id4": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -2395,7 +2395,7 @@ exports[`regression tests > alt-drag duplicates an element > [end of test] undo 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 6,
             "width": 10,
@@ -2588,7 +2588,7 @@ exports[`regression tests > arrow keys > [end of test] undo stack 1`] = `
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -2608,7 +2608,7 @@ exports[`regression tests > arrow keys > [end of test] undo stack 1`] = `
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -2794,7 +2794,7 @@ exports[`regression tests > can drag element that covers another element, while 
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -2814,7 +2814,7 @@ exports[`regression tests > can drag element that covers another element, while 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 200,
@@ -2852,7 +2852,7 @@ exports[`regression tests > can drag element that covers another element, while 
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -2872,7 +2872,7 @@ exports[`regression tests > can drag element that covers another element, while 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 200,
@@ -2910,7 +2910,7 @@ exports[`regression tests > can drag element that covers another element, while 
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#f0ebfc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -2930,7 +2930,7 @@ exports[`regression tests > can drag element that covers another element, while 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 350,
@@ -3149,7 +3149,7 @@ exports[`regression tests > change the properties of a shape > [end of test] und
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -3169,7 +3169,7 @@ exports[`regression tests > change the properties of a shape > [end of test] und
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -3203,7 +3203,7 @@ exports[`regression tests > change the properties of a shape > [end of test] und
             "version": 4,
           },
           "inserted": {
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "version": 3,
           },
         },
@@ -3406,7 +3406,7 @@ exports[`regression tests > click on an element and drag it > [dragged] appState
 exports[`regression tests > click on an element and drag it > [dragged] element 0 1`] = `
 {
   "angle": 0,
-  "backgroundColor": "transparent",
+  "backgroundColor": "#e8f0f8",
   "boundElements": null,
   "containerRef": undefined,
   "created": 1,
@@ -3428,7 +3428,7 @@ exports[`regression tests > click on an element and drag it > [dragged] element 
   },
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
-  "strokeWidth": 2,
+  "strokeWidth": 1,
   "type": "composite_shape",
   "updated": 1,
   "version": 4,
@@ -3466,7 +3466,7 @@ exports[`regression tests > click on an element and drag it > [dragged] undo sta
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -3486,7 +3486,7 @@ exports[`regression tests > click on an element and drag it > [dragged] undo sta
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -3699,7 +3699,7 @@ exports[`regression tests > click on an element and drag it > [end of test] undo
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -3719,7 +3719,7 @@ exports[`regression tests > click on an element and drag it > [end of test] undo
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -3959,7 +3959,7 @@ exports[`regression tests > click to select a shape > [end of test] undo stack 1
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -3979,7 +3979,7 @@ exports[`regression tests > click to select a shape > [end of test] undo stack 1
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -4017,7 +4017,7 @@ exports[`regression tests > click to select a shape > [end of test] undo stack 1
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -4037,7 +4037,7 @@ exports[`regression tests > click to select a shape > [end of test] undo stack 1
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -4246,7 +4246,7 @@ exports[`regression tests > click-drag to select a group > [end of test] undo st
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -4266,7 +4266,7 @@ exports[`regression tests > click-drag to select a group > [end of test] undo st
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -4304,7 +4304,7 @@ exports[`regression tests > click-drag to select a group > [end of test] undo st
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -4324,7 +4324,7 @@ exports[`regression tests > click-drag to select a group > [end of test] undo st
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -4362,7 +4362,7 @@ exports[`regression tests > click-drag to select a group > [end of test] undo st
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -4382,7 +4382,7 @@ exports[`regression tests > click-drag to select a group > [end of test] undo st
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -4591,7 +4591,7 @@ exports[`regression tests > deleting last but one element in editing group shoul
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -4611,7 +4611,7 @@ exports[`regression tests > deleting last but one element in editing group shoul
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -4649,7 +4649,7 @@ exports[`regression tests > deleting last but one element in editing group shoul
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -4669,7 +4669,7 @@ exports[`regression tests > deleting last but one element in editing group shoul
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -5082,7 +5082,7 @@ exports[`regression tests > deselects group of selected elements on pointer down
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -5102,7 +5102,7 @@ exports[`regression tests > deselects group of selected elements on pointer down
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -5140,7 +5140,7 @@ exports[`regression tests > deselects group of selected elements on pointer down
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#f0ebfc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -5160,7 +5160,7 @@ exports[`regression tests > deselects group of selected elements on pointer down
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -5365,7 +5365,7 @@ exports[`regression tests > deselects group of selected elements on pointer up w
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -5385,7 +5385,7 @@ exports[`regression tests > deselects group of selected elements on pointer up w
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -5423,7 +5423,7 @@ exports[`regression tests > deselects group of selected elements on pointer up w
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#f0ebfc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -5443,7 +5443,7 @@ exports[`regression tests > deselects group of selected elements on pointer up w
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -5696,7 +5696,7 @@ exports[`regression tests > deselects selected element on pointer down when poin
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -5716,7 +5716,7 @@ exports[`regression tests > deselects selected element on pointer down when poin
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -5900,7 +5900,7 @@ exports[`regression tests > deselects selected element, on pointer up, when clic
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#f0ebfc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -5920,7 +5920,7 @@ exports[`regression tests > deselects selected element, on pointer up, when clic
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 100,
@@ -6124,7 +6124,7 @@ exports[`regression tests > double click to edit a group > [end of test] undo st
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -6144,7 +6144,7 @@ exports[`regression tests > double click to edit a group > [end of test] undo st
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -6182,7 +6182,7 @@ exports[`regression tests > double click to edit a group > [end of test] undo st
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -6202,7 +6202,7 @@ exports[`regression tests > double click to edit a group > [end of test] undo st
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -6240,7 +6240,7 @@ exports[`regression tests > double click to edit a group > [end of test] undo st
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -6260,7 +6260,7 @@ exports[`regression tests > double click to edit a group > [end of test] undo st
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -6553,7 +6553,7 @@ exports[`regression tests > drags selected elements from point inside common bou
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -6573,7 +6573,7 @@ exports[`regression tests > drags selected elements from point inside common bou
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -6611,7 +6611,7 @@ exports[`regression tests > drags selected elements from point inside common bou
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#f0ebfc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -6631,7 +6631,7 @@ exports[`regression tests > drags selected elements from point inside common bou
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -6872,7 +6872,7 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -6892,7 +6892,7 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 20,
@@ -6930,7 +6930,7 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#fff3dc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -6950,7 +6950,7 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 20,
@@ -6988,7 +6988,7 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#f0ebfc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -7008,7 +7008,7 @@ exports[`regression tests > draw every type of shape > [end of test] undo stack 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 20,
@@ -7697,7 +7697,7 @@ exports[`regression tests > given a group of selected elements with an element t
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -7717,7 +7717,7 @@ exports[`regression tests > given a group of selected elements with an element t
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -7755,7 +7755,7 @@ exports[`regression tests > given a group of selected elements with an element t
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#f0ebfc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -7775,7 +7775,7 @@ exports[`regression tests > given a group of selected elements with an element t
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 100,
@@ -7813,7 +7813,7 @@ exports[`regression tests > given a group of selected elements with an element t
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#fff3dc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -7833,7 +7833,7 @@ exports[`regression tests > given a group of selected elements with an element t
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 100,
@@ -8063,7 +8063,7 @@ exports[`regression tests > given a selected element A and a not selected elemen
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "#e6f4f1",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -8083,7 +8083,7 @@ exports[`regression tests > given a selected element A and a not selected elemen
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 1000,
@@ -8121,7 +8121,7 @@ exports[`regression tests > given a selected element A and a not selected elemen
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "#e6f4f1",
+            "backgroundColor": "#f0ebfc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -8141,7 +8141,7 @@ exports[`regression tests > given a selected element A and a not selected elemen
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 1000,
@@ -8898,7 +8898,7 @@ exports[`regression tests > key 2 selects rectangle tool > [end of test] undo st
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -8918,7 +8918,7 @@ exports[`regression tests > key 2 selects rectangle tool > [end of test] undo st
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 30,
@@ -10526,7 +10526,7 @@ exports[`regression tests > key r selects rectangle tool > [end of test] undo st
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -10546,7 +10546,7 @@ exports[`regression tests > key r selects rectangle tool > [end of test] undo st
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 30,
@@ -10738,7 +10738,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -10758,7 +10758,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -10796,7 +10796,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -10816,7 +10816,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -10854,7 +10854,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -10874,7 +10874,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -11000,7 +11000,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
         "id16": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -11022,7 +11022,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 7,
             "width": 10,
@@ -11037,7 +11037,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
         "id18": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -11059,7 +11059,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 7,
             "width": 10,
@@ -11074,7 +11074,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
         "id19": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -11096,7 +11096,7 @@ exports[`regression tests > make a group and duplicate it > [end of test] undo s
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 7,
             "width": 10,
@@ -11307,7 +11307,7 @@ exports[`regression tests > noop interaction after undo shouldn't create history
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -11327,7 +11327,7 @@ exports[`regression tests > noop interaction after undo shouldn't create history
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -11365,7 +11365,7 @@ exports[`regression tests > noop interaction after undo shouldn't create history
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -11385,7 +11385,7 @@ exports[`regression tests > noop interaction after undo shouldn't create history
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 5,
             "width": 10,
@@ -11756,7 +11756,7 @@ exports[`regression tests > shift click on selected element should deselect it o
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -11776,7 +11776,7 @@ exports[`regression tests > shift click on selected element should deselect it o
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -11984,7 +11984,7 @@ exports[`regression tests > shift-click to multiselect, then drag > [end of test
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -12004,7 +12004,7 @@ exports[`regression tests > shift-click to multiselect, then drag > [end of test
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -12042,7 +12042,7 @@ exports[`regression tests > shift-click to multiselect, then drag > [end of test
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -12062,7 +12062,7 @@ exports[`regression tests > shift-click to multiselect, then drag > [end of test
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -12333,7 +12333,7 @@ exports[`regression tests > should group elements and ungroup them > [end of tes
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -12353,7 +12353,7 @@ exports[`regression tests > should group elements and ungroup them > [end of tes
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -12391,7 +12391,7 @@ exports[`regression tests > should group elements and ungroup them > [end of tes
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -12411,7 +12411,7 @@ exports[`regression tests > should group elements and ungroup them > [end of tes
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -12449,7 +12449,7 @@ exports[`regression tests > should group elements and ungroup them > [end of tes
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -12469,7 +12469,7 @@ exports[`regression tests > should group elements and ungroup them > [end of tes
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -12798,7 +12798,7 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -12818,7 +12818,7 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -12856,7 +12856,7 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -12876,7 +12876,7 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -13006,7 +13006,7 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
         "id15": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -13026,7 +13026,7 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -13064,7 +13064,7 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
         "id18": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -13084,7 +13084,7 @@ exports[`regression tests > single-clicking on a subgroup of a selected group sh
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -13612,7 +13612,7 @@ exports[`regression tests > supports nested groups > [end of test] undo stack 1`
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -13632,7 +13632,7 @@ exports[`regression tests > supports nested groups > [end of test] undo stack 1`
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 50,
@@ -13670,7 +13670,7 @@ exports[`regression tests > supports nested groups > [end of test] undo stack 1`
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -13690,7 +13690,7 @@ exports[`regression tests > supports nested groups > [end of test] undo stack 1`
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 50,
@@ -13728,7 +13728,7 @@ exports[`regression tests > supports nested groups > [end of test] undo stack 1`
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -13748,7 +13748,7 @@ exports[`regression tests > supports nested groups > [end of test] undo stack 1`
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 50,
@@ -14304,7 +14304,7 @@ exports[`regression tests > switches from group of selected elements to another 
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -14324,7 +14324,7 @@ exports[`regression tests > switches from group of selected elements to another 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -14362,7 +14362,7 @@ exports[`regression tests > switches from group of selected elements to another 
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#f0ebfc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -14382,7 +14382,7 @@ exports[`regression tests > switches from group of selected elements to another 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 100,
@@ -14420,7 +14420,7 @@ exports[`regression tests > switches from group of selected elements to another 
         "id6": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#fff3dc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -14440,7 +14440,7 @@ exports[`regression tests > switches from group of selected elements to another 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 100,
@@ -14674,7 +14674,7 @@ exports[`regression tests > switches selected element on pointer down > [end of 
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -14694,7 +14694,7 @@ exports[`regression tests > switches selected element on pointer down > [end of 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -14732,7 +14732,7 @@ exports[`regression tests > switches selected element on pointer down > [end of 
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#f0ebfc",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -14752,7 +14752,7 @@ exports[`regression tests > switches selected element on pointer down > [end of 
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 10,
@@ -15207,7 +15207,7 @@ exports[`regression tests > undo/redo drawing an element > [end of test] undo st
         "id0": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -15227,7 +15227,7 @@ exports[`regression tests > undo/redo drawing an element > [end of test] undo st
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 3,
             "width": 20,
@@ -15265,7 +15265,7 @@ exports[`regression tests > undo/redo drawing an element > [end of test] undo st
         "id3": {
           "deleted": {
             "angle": 0,
-            "backgroundColor": "transparent",
+            "backgroundColor": "#e8f0f8",
             "boundElements": null,
             "containerRef": undefined,
             "created": 1,
@@ -15285,7 +15285,7 @@ exports[`regression tests > undo/redo drawing an element > [end of test] undo st
             },
             "strokeColor": "#1f2329",
             "strokeStyle": "solid",
-            "strokeWidth": 2,
+            "strokeWidth": 1,
             "type": "composite_shape",
             "version": 5,
             "width": 30,

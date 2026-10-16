@@ -53,7 +53,7 @@ import type {
 } from "@excalidraw/element";
 
 import { getCurrentItemArrowProps } from "./app/arrowCreation";
-import { PRESET_SIZES } from "./app/createPresets";
+import { getPresetSize } from "./app/createPresets";
 import { buildPresetElementsCentered } from "./app/presetPlacement";
 import { getCatalogItem, isFlowchartShapeId } from "./presetCatalog";
 
@@ -1373,10 +1373,15 @@ export class AppQuickCreate {
     if (spec.kind !== "shape") {
       return;
     }
-    const size = PRESET_SIZES[spec.tool] ?? {
+    // 尺寸取**所选图形自己的预设**（`getPresetSize` 与抽屉、预览同源），不是
+    // `PRESET_SIZES[spec.tool]` —— 后者只覆盖便签/画框这类按工具定尺寸的预设，
+    // 图形预设的尺寸按 shape id 区分（见 `components/shapePresetDefaults.ts`）。
+    // 落位间隙算的就是这个 size，落地那条又走 `buildPresetElementsCentered` →
+    // 同一个解析，两边必须同源，否则图形会与箭头末端错开。
+    const size = getPresetSize(spec.tool, spec.shapeId, {
       width: source.width,
       height: source.height,
-    };
+    });
     const placement = getQuickCreateDragPlacement(
       this.getSourceGeometry(source),
       direction,

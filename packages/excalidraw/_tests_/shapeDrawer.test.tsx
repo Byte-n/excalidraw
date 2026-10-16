@@ -1,6 +1,7 @@
 import {
+  COLOR_PALETTE,
   DEFAULT_FRAME_PRESET_SIZE,
-  DEFAULT_SHAPE_PRESET_SIZE,
+  DEFAULT_NEW_ELEMENT_STROKE_COLOR,
   DEFAULT_STICKY_NOTE_PRESET_SIZE,
   KEYS,
   reseed,
@@ -10,6 +11,7 @@ import {
 import {
   STICKY_NOTE_PRESETS,
   getCommonBounds,
+  isCompositeShapeElement,
   isMindmapNodeElement,
 } from "@excalidraw/element";
 
@@ -24,6 +26,7 @@ import {
   SHAPE_DRAWER_WIDTH_PX,
   SHAPE_SHEET_HEIGHT_RATIO,
 } from "../components/app/presetPlacement";
+import { SHAPE_PRESET_DEFAULTS } from "../components/shapePresetDefaults";
 import { Excalidraw } from "../index";
 import { t } from "../i18n";
 
@@ -291,8 +294,11 @@ describe("图形抽屉的单击放置", () => {
     expect(created[0]).toMatchObject({
       type: "composite_shape",
       shape: { id: "fc-diamond", schemaVersion: 1 },
-      width: DEFAULT_SHAPE_PRESET_SIZE.width,
-      height: DEFAULT_SHAPE_PRESET_SIZE.height,
+      width: SHAPE_PRESET_DEFAULTS["fc-diamond"].width,
+      height: SHAPE_PRESET_DEFAULTS["fc-diamond"].height,
+      // 抽屉放置用的是该图形的预设默认填色，不是工具栏当前色
+      backgroundColor: COLOR_PALETTE.yellow[0],
+      strokeWidth: 1,
     });
 
     // 包围盒中心 == 可见区域中心（视口中心 + 半个抽屉宽度 ÷ zoom）
@@ -313,6 +319,60 @@ describe("图形抽屉的单击放置", () => {
     expect(created[0]).toMatchObject({
       type: "composite_shape",
       shape: { id: "cube", schemaVersion: 1 },
+    });
+  });
+
+  it("尺寸可区分的预设：fc-cylinder 落 80×100、cube 落 148×106，都带默认填色与线宽 1", () => {
+    expandGroup("flowchart");
+    placeItem("fc-cylinder");
+    placeItem("cube");
+
+    const composites = live().filter(isCompositeShapeElement);
+    expect(composites).toHaveLength(2);
+
+    const cylinder = composites.find(
+      (element) => element.shape.id === "fc-cylinder",
+    )!;
+    expect(cylinder).toMatchObject({
+      width: SHAPE_PRESET_DEFAULTS["fc-cylinder"].width,
+      height: SHAPE_PRESET_DEFAULTS["fc-cylinder"].height,
+      backgroundColor: COLOR_PALETTE.green[0],
+      strokeWidth: 1,
+    });
+
+    const cube = composites.find((element) => element.shape.id === "cube")!;
+    expect(cube).toMatchObject({
+      width: SHAPE_PRESET_DEFAULTS.cube.width,
+      height: SHAPE_PRESET_DEFAULTS.cube.height,
+      backgroundColor: COLOR_PALETTE.violet[0],
+      strokeWidth: 1,
+    });
+  });
+
+  it("先把 currentItem* 设成非默认值 → 落地的仍是图形预设默认样式", () => {
+    act(() => {
+      h.app.setAppState({
+        currentItemBackgroundColor: "#ff0000",
+        currentItemStrokeColor: "#00ff00",
+        currentItemFillStyle: "hachure",
+        currentItemStrokeStyle: "dashed",
+        currentItemStrokeWidthKey: "bold",
+        currentItemOpacity: 30,
+      });
+    });
+
+    expandGroup("flowchart");
+    placeItem("fc-cylinder");
+
+    // 放置链路与工具栏当前样式脱钩：填色/描边/线型/线宽/不透明度都是预设默认
+    expect(live()[0]).toMatchObject({
+      shape: { id: "fc-cylinder" },
+      backgroundColor: COLOR_PALETTE.green[0],
+      strokeColor: DEFAULT_NEW_ELEMENT_STROKE_COLOR,
+      fillStyle: "solid",
+      strokeStyle: "solid",
+      strokeWidth: 1,
+      opacity: 100,
     });
   });
 
@@ -472,6 +532,53 @@ describe("图形抽屉的拖入", () => {
       .filter(isMindmapNodeElement)
       .find((node) => node.role === "root")!;
     expect(root.layoutDirection).toBe("top-to-bottom");
+    expect(h.state.activeTool.type).toBe("selection");
+    expect(API.getUndoStack()).toHaveLength(1);
+  });
+
+  it("拖图形入画布：落一份预设默认尺寸的复合图形，包围盒中心在松手处", () => {
+    expandGroup("flowchart");
+    const dropClient = { clientX: 320, clientY: 240 };
+
+    dragOut("fc-cylinder", dropClient.clientX, dropClient.clientY);
+
+    // 预览是单个元素（跨过拖拽阈值后出现），尚不入场景，样式即预设默认
+    const preview = h.app.toolDrag.previewElements!;
+    expect(preview).toHaveLength(1);
+    expect(preview[0]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "fc-cylinder" },
+      width: SHAPE_PRESET_DEFAULTS["fc-cylinder"].width,
+      height: SHAPE_PRESET_DEFAULTS["fc-cylinder"].height,
+      backgroundColor: COLOR_PALETTE.green[0],
+      strokeWidth: 1,
+    });
+    expect(live()).toHaveLength(0);
+
+    fireEvent.pointerUp(GlobalTestState.interactiveCanvas, {
+      ...POINTER,
+      button: 0,
+      ...dropClient,
+    });
+
+    // 预览清空，图形落在松手处：包围盒中心对到指针，不是 x/y
+    expect(h.app.toolDrag.previewElements).toBeNull();
+    const dropped = live();
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "fc-cylinder", schemaVersion: 1 },
+      width: SHAPE_PRESET_DEFAULTS["fc-cylinder"].width,
+      height: SHAPE_PRESET_DEFAULTS["fc-cylinder"].height,
+      backgroundColor: COLOR_PALETTE.green[0],
+      strokeWidth: 1,
+    });
+    const dropScene = viewportCoordsToSceneCoords(dropClient, h.state);
+    const center = boundsCenter(dropped);
+    expect(center.x).toBeCloseTo(dropScene.x);
+    expect(center.y).toBeCloseTo(dropScene.y);
+
+    // 工具复位为选择工具，整次拖入一步可撤销
     expect(h.state.activeTool.type).toBe("selection");
     expect(API.getUndoStack()).toHaveLength(1);
   });

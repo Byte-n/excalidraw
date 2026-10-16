@@ -1,6 +1,5 @@
 import {
   DEFAULT_FRAME_PRESET_SIZE,
-  DEFAULT_SHAPE_PRESET_SIZE,
   DEFAULT_STICKY_NOTE_PRESET_SIZE,
   FRAME_STYLE,
   KEYS,
@@ -35,8 +34,14 @@ import type { MindmapTreeSpec, TablePresetId } from "@excalidraw/element";
 
 import { t } from "../../i18n";
 
+import {
+  SHAPE_PRESET_STYLE,
+  getShapePresetDefaults,
+} from "../shapePresetDefaults";
+
 import { buildTableCellBackgroundText } from "./tableCellText";
 
+import type { ShapePresetDefault } from "../shapePresetDefaults";
 import type App from "../App";
 import type { AppState, KeyboardModifiersObject, ToolType } from "../../types";
 
@@ -75,20 +80,60 @@ export type CreationDraftType =
   | "table";
 
 /**
- * 有预设的工具 → 预设尺寸。缺省的（表格）用元素自带的默认尺寸——表格的
- * 默认 3×3 就是它的预设，不在这里重复推导。
+ * 有预设的**非复合图形**工具 → 预设尺寸。复合图形（矩形/菱形/椭圆及全部 43 个
+ * 预设图形）的默认尺寸唯一来源是 `SHAPE_PRESET_DEFAULTS`，由 `getPresetSize`
+ * 解析，不在这里重复推导；表格用元素自带的默认 3×3，也不在这里。
  */
 export const PRESET_SIZES: Partial<
   Record<ToolType, { width: number; height: number }>
 > = {
-  rectangle: DEFAULT_SHAPE_PRESET_SIZE,
-  diamond: DEFAULT_SHAPE_PRESET_SIZE,
-  ellipse: DEFAULT_SHAPE_PRESET_SIZE,
   stickynote: {
     width: DEFAULT_STICKY_NOTE_PRESET_SIZE,
     height: DEFAULT_STICKY_NOTE_PRESET_SIZE,
   },
   frame: DEFAULT_FRAME_PRESET_SIZE,
+};
+
+/**
+ * 默认值表（`SHAPE_PRESET_DEFAULTS`）键的**唯一**计算处。不能只看 `shape.id`：
+ * 三角形家族三个预设持久化后同为 `shape.id: "triangle"`，但预设尺寸/形状不同
+ * （`triangle` 108×76、`right-triangle` 120×80、`left-triangle` 120×80）。
+ * 规则与 `newCreationDraft` 里 `genericShapeId` 的解析同源：三角形伪 id 原样
+ * 返回，矩形工具用「当前图形」，菱形/椭圆工具各自成键。
+ */
+export const getPresetShapeId = (
+  elementType: ToolType | "custom",
+  preferredShape: AppState["preferredGenericShape"] | undefined,
+): string =>
+  preferredShape === "right-triangle" || preferredShape === "left-triangle"
+    ? preferredShape
+    : elementType === "rectangle"
+    ? preferredShape ?? elementType
+    : elementType;
+
+/**
+ * 预设尺寸的解析顺序：图形默认值表 → `PRESET_SIZES`（便签/画框；`custom` 无
+ * 预设）→ 元素自带尺寸（表格、脑图根节点）。只服务「悬停预览」与「单击落地」
+ * 两条路径；按住拖拽仍按拖出范围自定大小，因为 `dragNewElement` 只写几何、
+ * 不碰样式。
+ */
+export const getPresetSize = (
+  tool: ToolType | "custom",
+  presetShapeId: string | undefined,
+  element: { width: number; height: number },
+): { width: number; height: number } => {
+  const presetDefaults: ShapePresetDefault | undefined =
+    getShapePresetDefaults(presetShapeId);
+  if (presetDefaults) {
+    return { width: presetDefaults.width, height: presetDefaults.height };
+  }
+  if (tool !== "custom") {
+    const toolSize = PRESET_SIZES[tool];
+    if (toolSize) {
+      return toolSize;
+    }
+  }
+  return { width: element.width, height: element.height };
 };
 
 /**
@@ -267,6 +312,15 @@ export function newCreationDraft(
       : elementType === "rectangle"
       ? preferredShape
       : elementType;
+  // 预设图形的默认样式 + 该图形填色：命中默认值表则覆盖上面的 currentItem*
+  // （描边色/线宽/线型/填充/不透明度/背景色），未命中（理论上不会）保持现状。
+  // 三角形分支解析到 triangle/right-triangle/left-triangle，同样由这张表覆盖。
+  const presetDefaults = getShapePresetDefaults(
+    getPresetShapeId(elementType, preferredShape),
+  );
+  const presetStyle = presetDefaults
+    ? { ...SHAPE_PRESET_STYLE, backgroundColor: presetDefaults.backgroundColor }
+    : {};
   if (
     preferredShape === "right-triangle" ||
     preferredShape === "left-triangle"
@@ -281,11 +335,13 @@ export function newCreationDraft(
         },
       },
       ...baseElementAttributes,
+      ...presetStyle,
     });
   }
   return newElement({
     type: genericShapeId,
     ...baseElementAttributes,
+    ...presetStyle,
   });
 }
 
@@ -380,7 +436,7 @@ export const createTablePresetDrafts = (
  * 预览元素：与「按下即建」同源装配，再落到预设尺寸上。**鼠标点即元素左上角**
  * ——与按下拖拽的锚点一致，所以悬停、拖拽、单击三者的落点不会互相跳。表格用
  * 元素自带的默认尺寸（`plain` 是 3×3，泳道预设是自带行列尺寸与标签的整张表），
- * 其余读 `PRESET_SIZES`。
+ * 其余走 `getPresetSize`（图形默认值表 → `PRESET_SIZES`）。
  *
  * 表格可能不止一个元素：泳道预设自带标签文字，预览要把它们一起画出来，所以
  * 这里返回数组（调用方只有 `AppCreatePreview`，锚点取第一个元素）。
@@ -417,10 +473,11 @@ export const buildPresetPreviewElements = (
       seed: PREVIEW_ELEMENT_SEED,
     },
   ) as NonDeleted<ExcalidrawNonSelectionElement>;
-  const size = PRESET_SIZES[tool] ?? {
-    width: draft.width,
-    height: draft.height,
-  };
+  const size = getPresetSize(
+    tool,
+    getPresetShapeId(tool, app.state.preferredGenericShape),
+    draft,
+  );
   return [
     { ...draft, x: at.x, y: at.y, width: size.width, height: size.height },
   ];
@@ -437,10 +494,11 @@ export const getPresetPlacement = (
   origin: { x: number; y: number },
   event: KeyboardModifiersObject,
 ): { x: number; y: number; width: number; height: number } => {
-  const size = (tool === "custom" ? undefined : PRESET_SIZES[tool]) ?? {
-    width: element.width,
-    height: element.height,
-  };
+  const size = getPresetSize(
+    tool,
+    getPresetShapeId(tool, app.state.preferredGenericShape),
+    element,
+  );
   const [x, y] = getGridPoint(
     origin.x,
     origin.y,

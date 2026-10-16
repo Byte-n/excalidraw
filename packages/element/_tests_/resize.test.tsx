@@ -1596,8 +1596,11 @@ describe("multiple selection", () => {
 
     expect(boundArrow.x).toBeCloseTo(380 * scaleX);
     expect(boundArrow.y).toBeCloseTo(240 * scaleY);
-    expect(boundArrow.points[1][0]).toBeCloseTo(63.40354208105561);
-    expect(boundArrow.points[1][1]).toBeCloseTo(-84.53805610807356);
+    // 端点贴在目标轮廓外一个 binding gap 处，gap = BASE_BINDING_GAP(5) +
+    // 目标 strokeWidth/2（binding.ts 的 getBindingGap）；预设图形默认 strokeWidth
+    // 现在是 thin(1)（旧 medium(2)），gap 6 → 5.5，端点随之移动约 0.5px
+    expect(boundArrow.points[1][0]).toBeCloseTo(63.76421562141153);
+    expect(boundArrow.points[1][1]).toBeCloseTo(-85.01895416188147);
 
     expect(arrowLabelPos.x + arrowLabel.width / 2).toBeCloseTo(
       boundArrow.x + boundArrow.points[1][0] / 2,

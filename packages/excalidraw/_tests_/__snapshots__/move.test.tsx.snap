@@ -3,7 +3,7 @@
 exports[`duplicate element on move when ALT is clicked > rectangle 5`] = `
 {
   "angle": 0,
-  "backgroundColor": "transparent",
+  "backgroundColor": "#e8f0f8",
   "boundElements": null,
   "containerRef": undefined,
   "created": 1,
@@ -25,7 +25,7 @@ exports[`duplicate element on move when ALT is clicked > rectangle 5`] = `
   },
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
-  "strokeWidth": 2,
+  "strokeWidth": 1,
   "type": "composite_shape",
   "updated": 1,
   "version": 5,
@@ -39,7 +39,7 @@ exports[`duplicate element on move when ALT is clicked > rectangle 5`] = `
 exports[`duplicate element on move when ALT is clicked > rectangle 6`] = `
 {
   "angle": 0,
-  "backgroundColor": "transparent",
+  "backgroundColor": "#e8f0f8",
   "boundElements": null,
   "containerRef": undefined,
   "created": 1,
@@ -61,7 +61,7 @@ exports[`duplicate element on move when ALT is clicked > rectangle 6`] = `
   },
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
-  "strokeWidth": 2,
+  "strokeWidth": 1,
   "type": "composite_shape",
   "updated": 1,
   "version": 7,
@@ -75,7 +75,7 @@ exports[`duplicate element on move when ALT is clicked > rectangle 6`] = `
 exports[`move element > rectangle 5`] = `
 {
   "angle": 0,
-  "backgroundColor": "transparent",
+  "backgroundColor": "#e8f0f8",
   "boundElements": null,
   "containerRef": undefined,
   "created": 1,
@@ -97,7 +97,7 @@ exports[`move element > rectangle 5`] = `
   },
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
-  "strokeWidth": 2,
+  "strokeWidth": 1,
   "type": "composite_shape",
   "updated": 1,
   "version": 4,
@@ -111,7 +111,7 @@ exports[`move element > rectangle 5`] = `
 exports[`move element > rectangles with binding arrow 5`] = `
 {
   "angle": 0,
-  "backgroundColor": "transparent",
+  "backgroundColor": "#e8f0f8",
   "boundElements": [
     {
       "id": "id6",
@@ -138,7 +138,7 @@ exports[`move element > rectangles with binding arrow 5`] = `
   },
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
-  "strokeWidth": 2,
+  "strokeWidth": 1,
   "type": "composite_shape",
   "updated": 1,
   "version": 4,
@@ -152,7 +152,7 @@ exports[`move element > rectangles with binding arrow 5`] = `
 exports[`move element > rectangles with binding arrow 6`] = `
 {
   "angle": 0,
-  "backgroundColor": "transparent",
+  "backgroundColor": "#e8f0f8",
   "boundElements": [
     {
       "id": "id6",
@@ -179,7 +179,7 @@ exports[`move element > rectangles with binding arrow 6`] = `
   },
   "strokeColor": "#1f2329",
   "strokeStyle": "solid",
-  "strokeWidth": 2,
+  "strokeWidth": 1,
   "type": "composite_shape",
   "updated": 1,
   "version": 7,
@@ -202,14 +202,14 @@ exports[`move element > rectangles with binding arrow 7`] = `
   "endArrowhead": "triangle",
   "endBinding": {
     "attachPoint": [
-      "-0.02000",
-      "0.47873",
+      "-0.01833",
+      "0.48060",
     ],
     "elementId": "id3",
   },
   "fillStyle": "solid",
   "groupIds": [],
-  "height": "95.60766",
+  "height": "96.17048",
   "id": "id6",
   "index": "a2",
   "isDeleted": false,
@@ -223,8 +223,8 @@ exports[`move element > rectangles with binding arrow 7`] = `
       0,
     ],
     [
-      89,
-      "95.60766",
+      90,
+      "96.17048",
     ],
   ],
   "roundness": null,
@@ -232,7 +232,7 @@ exports[`move element > rectangles with binding arrow 7`] = `
   "startArrowhead": null,
   "startBinding": {
     "attachPoint": [
-      "1.06000",
+      "1.05500",
       "0.50010",
     ],
     "elementId": "id0",
@@ -244,8 +244,8 @@ exports[`move element > rectangles with binding arrow 7`] = `
   "updated": 1,
   "version": 12,
   "versionNonce": 2066753033,
-  "width": 89,
-  "x": 106,
+  "width": 90,
+  "x": "105.50000",
   "y": "50.01000",
 }
 `;

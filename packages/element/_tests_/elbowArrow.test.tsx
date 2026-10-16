@@ -303,13 +303,17 @@ describe("elbow arrow ui", () => {
     ) as HTMLInputElement;
     UI.updateInput(inputAngle, String("40"));
 
+    // 端点贴在两个矩形轮廓外一个 binding gap 处，gap = BASE_BINDING_GAP_ELBOW(5) +
+    // 目标 strokeWidth/2（binding.ts 的 getBindingGap）；预设图形默认 strokeWidth
+    // 现为 thin(1)（旧 medium(2)），gap 6 → 5.5，正交路由把这 0.5px 端点位移放大成
+    // 中间竖段约 3px 的横移
     expect(arrow.points.map((point) => point.map(Math.round))).toEqual([
       [0, 0],
       [36, 0],
       [36, 90],
-      [28, 90],
-      [28, 164],
-      [101, 164],
+      [31, 90],
+      [31, 164],
+      [102, 164],
     ]);
   });
 
