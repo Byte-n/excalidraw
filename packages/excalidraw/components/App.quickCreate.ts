@@ -537,26 +537,22 @@ export class AppQuickCreate {
    * 连线：把几何解出来的路径按**当前线样式**落成箭头的 x/y 与 points
    * （points 是相对 x/y 的局部坐标，与画布上拖拽建的箭头同一套约定）。
    *
-   * - 出口与副本在出线轴上对齐（没让位、源也没转）：两点直线，三种样式都是
-   *   老行为。
-   * - 错开 + 折线（sharp）：直接用四个拐点 [A, B, C, D]，`roundness` 为 null、
-   *   不 elbowed → 画出来就是直角折线（roundness 非 null 会被画成圆角拐弯，
-   *   偏 13 个场景单位）。
-   * - 错开 + 圆角曲线（round）：**恒为两点** [出口, 入口]（错开时的拐点不塞进
-   *   points）。弯曲几何完全归 `element/curveConnector.ts`——它按「圆角 + 非折线」
-   *   收下所有箭头，这里只负责把这条箭头建出来，创建路径一个弯曲几何都不算；
-   *   两端对齐时几何自然退化成直线。
-   * - 错开 + 折线箭头（elbow）：**不塞我们的拐点**，仍旧给两点 + `elbowed`，
-   *   交给内置正交路由自己布线（老行为）。预演没有绑定可依、路由跑不起来，
-   *   所以预演改为直接拿同一套拐点画折线（`foldElbowRoute`）——渲染层对 elbowed
-   *   箭头做的就是「把折角磨圆」，与落地后路由算出的那条直角线形状一致。
+   * **拐点只有折线箭头才配**：直线与圆角曲线恒为两点 [出口, 入口]，副本让位
+   * 错开时也只是斜着直连——线型是「直线」，画出来就该是直线；圆角的弯曲几何
+   * 另有归属（`element/curveConnector.ts`，判据只看圆角），创建路径一个弯曲
+   * 几何都不算，两端对齐时几何自然退化成水平/垂直直线。
+   *
+   * - 折线箭头（elbow）落地：**不塞我们的拐点**，仍旧给两点 + `elbowed`，交给
+   *   内置正交路由自己布线（老行为）。预演没有绑定可依、路由跑不起来，所以预演
+   *   改为直接拿同一套拐点画折线（`foldElbowRoute`）——渲染层对 elbowed 箭头做
+   *   的就是「把折角磨圆」，与落地后路由算出的那条直角线形状一致。
    */
   private buildConnectorArrow = (
     placement: QuickCreatePlacement,
     options: {
       opacityScale?: number;
       identity?: CreationIdentity;
-      /** 预演专用：折线箭头也按拐点画，避免画成一条斜直线 */
+      /** 预演专用：折线箭头按我们的拐点画（内置路由依赖绑定，预演跑不起来） */
       foldElbowRoute?: boolean;
       /** 预演副本元素：端绑定的锚点按它的轮廓算，与落地写进副本的固定点同源 */
       ghostShape?: NonDeletedExcalidrawElement;
@@ -565,13 +561,10 @@ export class AppQuickCreate {
     const { connector } = placement;
     const arrowProps = getCurrentItemArrowProps(this.app);
     const { exit, bend, entry } = connector;
-    const fold =
-      bend && (options.foldElbowRoute || !arrowProps.elbowed) ? bend : null;
-    const rounded = !!arrowProps.roundness;
-    // 出口就是箭头的起点（x/y），所以这里只列**起点之后**的点。圆角样式恒为两点：
-    // 弯曲几何留给渲染期推导，创建路径不碰它。
-    const tail: QuickCreatePoint[] =
-      fold && !rounded ? [...fold, entry] : [entry];
+    // 拐点的唯一出口：折线箭头的预演。落地交给内置正交路由，其余线型一律两点
+    const fold = arrowProps.elbowed && options.foldElbowRoute ? bend : null;
+    // 出口就是箭头的起点（x/y），所以这里只列**起点之后**的点
+    const tail: QuickCreatePoint[] = fold ? [...fold, entry] : [entry];
     const created = newArrowElement({
       type: "arrow",
       x: exit.x,
@@ -600,8 +593,8 @@ export class AppQuickCreate {
       ...this.getPreviewBindings(placement, arrow, options.ghostShape),
     };
     // 再按与落地 `projectArrowEndpoints` 同一个 `updateBoundPoint` 把两端落到位。
-    // 条件也跟落地同一条（只有两点连线会落）：折线样式错开时点数是 4，落地只写
-    // 绑定、不动点位，预演照做才逐点一致。
+    // 条件也跟落地同一条（只有两点连线会落）：折线箭头的**预演**带着拐点、点数是 4，
+    // 落地那条只写绑定、不动点位，预演照做才逐点一致。
     return arrow.points.length === 2
       ? this.projectPreviewEndpoints(bound, options.ghostShape)
       : bound;

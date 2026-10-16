@@ -972,8 +972,11 @@ describe("quick create handles", () => {
       },
     );
 
-    it("spills 上 1 when the base spot is taken, and bends the connector there", () => {
-      const { copy, arrow } = placeAndClick([blocker(RIGHT_BASE)], "right");
+    it("spills 上 1 when the base spot is taken, and keeps a two-point straight connector", () => {
+      const { source, copy, arrow } = placeAndClick(
+        [blocker(RIGHT_BASE)],
+        "right",
+      );
 
       // ① 上 1 = 基准位沿**绝对 Y** 上移一档（不随旋转改变）
       expect(copyCenter(copy)).toEqual({
@@ -982,19 +985,26 @@ describe("quick create handles", () => {
       });
       expect(copy).toMatchObject({ x: 350, y: -40, width: 120, height: 80 });
 
-      // 折线四点：出口 A(220,140) → 转折线 x = 285 上的两个拐角 → 入口 D(350,0)
-      expect(arrow.points).toHaveLength(4);
-      expect(worldPoints(arrow)).toEqual([
-        { x: 220, y: 140 },
-        { x: 285, y: 140 },
-        { x: 285, y: 0 },
-        { x: 350, y: 0 },
-      ]);
-      // 入口落在副本朝源一侧的**轮廓**上（左边中段，不是包围盒角）
-      const entry = worldPoints(arrow)[3];
-      expect(outlineRatio(copy, entry)).toBeCloseTo(1);
-      expect(entry.x).toBeCloseTo(copy.x);
-      expect(entry.y).toBeCloseTo(copy.y + copy.height / 2);
+      // ② 直线档让位也只给两点：出口贴源右边缘、入口贴副本左边缘，中间没有拐点
+      expect(arrow).toMatchObject({ elbowed: false, roundness: null });
+      expect(arrow.points).toHaveLength(2);
+      const [exit, entry] = worldPoints(arrow);
+      expect(Math.abs(exit.x - 220)).toBeLessThan(10);
+      expect(Math.abs(exit.y - 140)).toBeLessThan(10);
+      expect(Math.abs(entry.x - 350)).toBeLessThan(10);
+      expect(Math.abs(entry.y - 0)).toBeLessThan(10);
+      // 一条**斜**的直线：两端既不共 x 也不共 y（折线的每段都轴对齐，给的拐点
+      // 会把这里变成 4 个点）
+      expect(exit.y).not.toBeCloseTo(entry.y, 3);
+      expect(exit.x).not.toBeCloseTo(entry.x, 3);
+      // 端点各落在自己轮廓外一个 binding gap 上：贴边，但不悬空
+      for (const [element, point] of [
+        [source, exit],
+        [copy, entry],
+      ] as const) {
+        expect(outlineRatio(element, point)).toBeGreaterThan(1);
+        expect(outlineRatio(element, point)).toBeLessThan(1.2);
+      }
     });
 
     it("tries 下 1 next, then 上 2, each measured from the base", () => {
@@ -1028,7 +1038,7 @@ describe("quick create handles", () => {
     });
 
     it("spills 右 1 from the bottom handle when the base and 左 1 are taken", () => {
-      const { copy, arrow } = placeAndClick(
+      const { source, copy, arrow } = placeAndClick(
         [
           blocker(BOTTOM_BASE),
           blocker({ x: BOTTOM_BASE.x - BOTTOM_STEP, y: BOTTOM_BASE.y }),
@@ -1042,14 +1052,19 @@ describe("quick create handles", () => {
         y: BOTTOM_BASE.y,
       });
       expect(copy).toMatchObject({ x: 310, y: 270 });
-      // 竖向手柄的转折线是 y = (180 + 270) / 2 = 225
-      expect(worldPoints(arrow)).toEqual([
-        { x: 160, y: 180 },
-        { x: 160, y: 225 },
-        { x: 370, y: 225 },
-        { x: 370, y: 270 },
-      ]);
-      expect(outlineRatio(copy, worldPoints(arrow)[3])).toBeCloseTo(1);
+      // 竖向手柄的直线档同样是两点：出口贴源下边中点(160,180)、入口贴副本上边
+      // 中点(370,270)，斜着直连；没有 y = 225 那条转折线上的两个拐点
+      const points = worldPoints(arrow);
+      expect(points).toHaveLength(2);
+      expect(Math.abs(points[0].x - 160)).toBeLessThan(20);
+      expect(Math.abs(points[0].y - 180)).toBeLessThan(20);
+      expect(Math.abs(points[1].x - 370)).toBeLessThan(20);
+      expect(Math.abs(points[1].y - 270)).toBeLessThan(20);
+      expect(points[0].x).not.toBeCloseTo(points[1].x, 3);
+      expect(outlineRatio(copy, points[1])).toBeGreaterThan(1);
+      expect(outlineRatio(copy, points[1])).toBeLessThan(1.2);
+      expect(outlineRatio(source, points[0])).toBeGreaterThan(1);
+      expect(outlineRatio(source, points[0])).toBeLessThan(1.2);
     });
 
     it("spills along the absolute axis and lands on the rotated copy's outline", () => {
@@ -1075,14 +1090,27 @@ describe("quick create handles", () => {
       expect(center.y).toBeCloseTo(base.y - RIGHT_STEP);
       expect(copy.angle).toBeCloseTo(angle);
 
-      const entry = worldPoints(arrow)[3];
-      // 入口落在**旋转后**的轮廓上、与副本中心同高（绝对水平线）
-      expect(entry.y).toBeCloseTo(center.y);
-      expect(outlineRatio(copy, entry)).toBeCloseTo(1);
-      // 取包围盒当轮廓的话会落在 中心 − (120·cos30 + 80·sin30)/2 ≈ 中心 − 71.96，
-      // 而真轮廓（本体坐标 |x| = 半宽 60）在 中心 − 60/cos30 ≈ 中心 − 69.28
-      expect(entry.x).toBeCloseTo(base.x - 60 / Math.cos(angle), 6);
-      expect(entry.x).not.toBeCloseTo(base.x - 71.9615, 1);
+      // 直线档：出口 → 入口一条斜直线（让位不塞拐点，四点折线已成历史）
+      const points = worldPoints(arrow);
+      expect(points).toHaveLength(2);
+      expect(arrow).toMatchObject({ elbowed: false, roundness: null });
+      const entry = points[1];
+      // 入口落在**旋转后**的真轮廓上（本体坐标 |x| = 半宽 60 再加一个 binding gap）。
+      // 取包围盒当轮廓会落在另一个位置：锚点的本体 x 会缩到左边缘之内。
+      const cos = Math.cos(-angle);
+      const sin = Math.sin(-angle);
+      const dx = entry.x - center.x;
+      const dy = entry.y - center.y;
+      const localX = dx * cos - dy * sin;
+      expect(localX).toBeLessThan(0); // 朝源那一侧
+      expect(Math.abs(localX)).toBeGreaterThan(60);
+      expect(Math.abs(localX)).toBeLessThan(71.9615);
+      expect(outlineRatio(copy, entry)).toBeGreaterThan(1);
+      expect(outlineRatio(copy, entry)).toBeLessThan(1.2);
+      // 几何上仍在副本中心的绝对水平线上，投影沿射线外推一个 gap 后会略偏
+      expect(Math.abs(entry.y - center.y)).toBeLessThan(10);
+      // 锚点钉在副本**本体**的左边缘（fx = 0）：按包围盒算会落在边缘之内
+      expect(arrow.endBinding?.fixedPoint[0]).toBeCloseTo(0, 6);
     });
 
     it("falls back to the base spot when all ten candidates are taken", () => {
@@ -1193,18 +1221,65 @@ describe("quick create handles", () => {
     });
 
     describe("connector style handling", () => {
-      it("turns the sharp arrow into a four-point polyline", () => {
-        const { arrow } = placeAndClick(
+      it("keeps the sharp arrow a two-point straight line", () => {
+        const { source, copy, arrow } = placeAndClick(
           [blocker(RIGHT_BASE)],
           "right",
           "sharp",
         );
 
-        expect(arrow.points).toHaveLength(4);
+        // 线型是直线 ⇒ 画出来就是直线：让位错开也不带拐点，就是出口 → 入口的
+        // 一条斜线（旧行为是 (285,140) / (285,0) 那两个拐角拼出来的直角折线）
+        expect(arrow.points).toHaveLength(2);
         expect(arrow.elbowed).toBe(false);
-        // 折线要的就是直角折线，不能留圆角（留着会被画成圆角拐弯）
         expect(arrow.roundness).toBeNull();
-        expect(worldPoints(arrow)[1]).toEqual({ x: 285, y: 140 });
+        const [exit, entry] = worldPoints(arrow);
+        expect(exit.y).not.toBeCloseTo(entry.y, 3);
+        expect(exit.x).not.toBeCloseTo(entry.x, 3);
+        // 两端仍旧各自贴在轮廓上（各自外扩一个 binding gap）
+        expect(outlineRatio(source, exit)).toBeLessThan(1.2);
+        expect(outlineRatio(copy, entry)).toBeLessThan(1.2);
+      });
+
+      it("keeps the sharp connector two points after the copy is dragged", () => {
+        // 直线档的连线上没有任何拐点可留：拖动副本只刷首末两点，不会像四点折线
+        // 那样把旧拐点冻在原地（那会让连线跟着走后变成一条带斜尾巴的折线）
+        const { source, copy, arrow } = placeAndClick(
+          [blocker(RIGHT_BASE)],
+          "right",
+          "sharp",
+        );
+        const landed = worldPoints(arrow);
+        expect(landed).toHaveLength(2);
+
+        moveShape(copy, 0, -140);
+
+        const after = worldPoints(arrow);
+        expect(after).toHaveLength(2);
+        // 斜着直连（副本已挪到源上方），仍旧是直线
+        expect(after[0].y).not.toBeCloseTo(after[1].y, 3);
+        // 出口那端仍钉在源右边缘上（沿边滑一点：投影是沿「另一端 → 端点」的射线
+        // 求交，方向变了就会滑）
+        expect(after[0].x).toBeCloseTo(landed[0].x, 6);
+        expect(outlineRatio(source, after[0])).toBeLessThan(1.2);
+      });
+
+      it("keeps a rotated source's sharp connector two points too", () => {
+        // 源一转，位移方向与右手柄的**绝对轴**就不再一致 ⇒ 旧行为在这里同样会塞
+        // 拐点（上一轮定位出的第二个触发点）。直线档只给两点
+        const source = createRectangle({ angle: Math.PI / 6 });
+        selectShape(source);
+        act(() => {
+          h.app.setState({ currentItemArrowType: "sharp" });
+        });
+        const before = liveIds();
+        clickHandle("right");
+        const points = worldPoints(createdArrow(before));
+
+        expect(points).toHaveLength(2);
+        // 斜着直连：两端的 x / y 都不相等（有拐点的话每段都轴对齐）
+        expect(points[0].x).not.toBeCloseTo(points[1].x, 3);
+        expect(points[0].y).not.toBeCloseTo(points[1].y, 3);
       });
 
       it("leaves the elbow arrow to the built-in orthogonal router", () => {
@@ -1214,8 +1289,8 @@ describe("quick create handles", () => {
           "elbow",
         );
 
-        // 老行为：仍旧 elbowed，路径由内置正交路由算——不把我们算出来的那四个
-        // 拐点塞给它（塞进去会绕开它自己那一套布线）
+        // 老行为：仍旧 elbowed，路径由内置正交路由算——几何解出来的拐点不塞给它
+        // （塞进去会绕开它自己那一套布线；直线档的拐点则根本不进 points，见上面用例）
         expect(arrow.elbowed).toBe(true);
         expect(arrow.roundness).toBeNull();
         const points = worldPoints(arrow);
@@ -1285,8 +1360,8 @@ describe("quick create handles", () => {
       // 预演落在让位后的位置上，连线点与落地**逐个一致**（所见即所得）
       expect(ghost[0]).toMatchObject({ x: copy.x, y: copy.y });
       expect(worldPoints(ghost[1])).toEqual(worldPoints(arrow));
-      expect(worldPoints(ghost[1])).toHaveLength(4);
-      // 预演与落地都是那四个拐点，预演没有消耗共享的 id
+      expect(worldPoints(ghost[1])).toHaveLength(2);
+      // 预演与落地都是同一条两点斜直线，预演没有消耗共享的 id
       expect(arrow.id).not.toBe(QUICK_CREATE_GHOST_ARROW_ID);
     });
 

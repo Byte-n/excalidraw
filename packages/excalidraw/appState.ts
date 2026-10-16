@@ -45,7 +45,7 @@ export const getDefaultAppState = (): Omit<
     currentItemRoundness: isTestEnv() ? "sharp" : "round",
     // 新建箭头默认直箭头：随手拖出来的箭头是折线，要连接线曲线的人显式切到
     // 「曲线箭头」档（工具栏的箭头类型，或选中箭头工具时按 A 循环）。方向手柄
-    // 拉出来的连线同样读这个档位，所以它默认也画成折线。
+    // 拉出来的连线同样读这个档位：直箭头 ⇒ 直线，折线箭头 ⇒ 直角折线。
     currentItemArrowType: ARROW_TYPE.sharp,
     currentItemStrokeStyle: DEFAULT_ELEMENT_PROPS.strokeStyle,
     currentItemStrokeWidthKey: DEFAULT_ELEMENT_STROKE_WIDTH_KEY,
