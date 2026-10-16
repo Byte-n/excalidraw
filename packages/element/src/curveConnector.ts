@@ -1,7 +1,7 @@
 import { pointFrom, pointRotateRads, type GlobalPoint } from "@excalidraw/math";
 
 import { getElementAbsoluteCoords } from "./bounds";
-import { isArrowElement } from "./typeChecks";
+import { isCurvedArrow } from "./typeChecks";
 
 import type {
   ElementsMap,
@@ -10,13 +10,15 @@ import type {
 } from "./types";
 
 /**
- * 曲线连接线的纯几何模块。
+ * 箭头曲线的纯几何模块 —— **全局唯一**的一份（不论箭头是箭头工具拖的、方向手柄建
+ * 的、转换来的还是读回来的）：判据只看 `isCurvedArrow`（arrow + 非折线 +
+ * roundness 非空），没有任何元素字段开关。
  *
- * 职责只有两件：把两端所依附的边解成端切线（轴对齐外法线），以及把 `points`
- * （端点在数组首尾，中间是用户控制点）转成局部几何。渲染、包围盒、命中三处都读
- * 同一个 `getCurvedConnectorPath`（由 `getCurvedConnectorLocalPath` 拼出），交互
- * 层的悬停高亮则用同一份局部几何的 canvas 描边 `traceCurvedConnectorPath`——四条
- * 消费路径不存在第二套口径。
+ * 职责只有两件：把两端解成端切线（所依附边的轴对齐外法线；判不出边时，两点看弦的
+ * 主轴、多点看相邻段方向），以及把 `points`（端点在数组首尾，中间是用户控制点）
+ * 转成局部几何。渲染、包围盒、命中三处都读同一个 `getCurvedConnectorPath`（由
+ * `getCurvedConnectorLocalPath` 拼出），交互层的悬停高亮则用同一份局部几何的
+ * canvas 描边 `traceCurvedConnectorPath`——四条消费路径不存在第二套口径。
  *
  * 边界：
  * - 不解析 `elementsMap`：端切线只读元素自己的 `binding.fixedPoint`（只有把局部
@@ -26,8 +28,11 @@ import type {
  *   方向由解析出的切线决定，不需要靠短段近似。
  */
 
-/** 轴对齐单位向量（外法线，离开图形指向连接线空间）；分量恒为 -1 / 0 / 1 */
-export type CurveNormal = Readonly<{ x: -1 | 0 | 1; y: -1 | 0 | 1 }>;
+/**
+ * 该端的**单位**方向。所依附边解出来的外法线天然轴对齐（分量 -1 / 0 / 1）；回落
+ * 取到相邻段或弦的方向时是任意单位向量。
+ */
+export type CurveNormal = Readonly<{ x: number; y: number }>;
 
 /** 局部坐标点 */
 type Point = { x: number; y: number };
@@ -45,6 +50,36 @@ const axisNormal = (axis: "x" | "y", sign: -1 | 1): CurveNormal =>
   axis === "x" ? { x: sign, y: 0 } : { x: 0, y: sign };
 
 const oppositeSign = (sign: -1 | 1): -1 | 1 => (sign === 1 ? -1 : 1);
+
+/**
+ * 弦的主轴：`A → D` 上绝对值更大的那根轴，符号指向 D。两端点重合（`dx = dy = 0`）
+ * 时取 +x 与 −x 这对兜底。
+ *
+ * 这一支只服务「两点、未绑定」——那时弦就是拖拽方向，而拖拽方向正是用户唯一表达
+ * 过的走向，所以两端切线取它的主轴：完全水平或垂直时与弦共线（于是是直线），其余
+ * 角度都是默认弓形，尖端因此正水平或正竖直。
+ */
+const chordMainAxis = (
+  A: readonly [number, number],
+  D: readonly [number, number],
+): { axis: "x" | "y"; sign: -1 | 1 } => {
+  const dx = D[0] - A[0];
+  const dy = D[1] - A[1];
+  return Math.abs(dx) >= Math.abs(dy)
+    ? { axis: "x", sign: dx >= 0 ? 1 : -1 }
+    : { axis: "y", sign: dy >= 0 ? 1 : -1 };
+};
+
+/** 单位方向；零向量（两端重合）返回 null，交回调用方继续往下级回落 */
+const unitDirection = (
+  from: readonly [number, number],
+  to: readonly [number, number],
+): CurveNormal | null => {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const length = Math.hypot(dx, dy);
+  return length > 0 ? { x: dx / length, y: dy / length } : null;
+};
 
 /**
  * 由归一化盒坐标（0..1，与 `binding.fixedPoint` 同口径）判定所依附的边：
@@ -66,22 +101,24 @@ const normalFromFixedPoint = (
   return null;
 };
 
-/** 弦主轴：`A → D` 上绝对值更大的那根轴，符号指向 D */
-const chordMainAxis = (
-  A: Point,
-  D: Point,
-): { axis: "x" | "y"; sign: -1 | 1 } => {
-  const dx = D.x - A.x;
-  const dy = D.y - A.y;
-  return Math.abs(dx) >= Math.abs(dy)
-    ? { axis: "x", sign: dx >= 0 ? 1 : -1 }
-    : { axis: "y", sign: dy >= 0 ? 1 : -1 };
-};
-
 /**
- * 该端所依附边的外法线：唯一来源是该端自己的 `binding.fixedPoint`。
- * 未绑定、`fixedPoint` 缺失（占位绑定）、或判不出确定边时，回落弦主轴
- * ——起点取 `â`、终点取 `−â`，两端都自由时曲线因此退化成直线弦。
+ * 该端的端切线方向，按三种情况决定：
+ *
+ * 1. **该端绑在图形上**（`binding.fixedPoint` 判得出确定的边）→ 那条边的轴对齐
+ *    外法线，于是曲线垂直出/入边。手柄建的、复制图形出来的连线都走这一支。
+ * 2. **没绑、且只有两个点**（没有控制点）→ 弦的**主轴**：水平与垂直里更长的
+ *    那根轴，符号由起点指向终点。弦完全水平或垂直时两端切线与弦共线，曲线自然
+ *    退化成直线；其余任何角度都是默认弓形，尖端因此正水平或正竖直。
+ * 3. **没绑、但有控制点** → 按控制点走：端切线取贴着这一端的**相邻段方向**
+ *    （起点段 `P0→P1`、终点段 `P_{n−1}→P_n` 反向），不做主轴量化——手画的斜段
+ *    不该被凭空加一道弓。与 `arrowEndpointText` 取标签朝向的取源一致。
+ *
+ * 相邻段退化成零长（相邻两点重合）时回落弦方向，全都不成立时落 ±x 轴；
+ * 点数不足两点（元素刚创建、`points` 还空着）直接落 ±x 轴。
+ *
+ * 两个消费方对方向的用法不同，三支的符号约定因此统一成「指向另一端所在的一侧」：
+ * 起点处曲线沿它离开（`c1 = P0 + t/3`），终点处它是接近方向的反向
+ * （`c2 = P_last + endNormal · 段长/3`，见 `getCurvedConnectorLocalPath`）。
  */
 export const getCurvedConnectorEndNormal = (
   element: ExcalidrawArrowElement,
@@ -96,27 +133,25 @@ export const getCurvedConnectorEndNormal = (
     }
   }
   const points = element.points;
-  const A = points[0];
-  const D = points[points.length - 1];
-  const { axis, sign } = chordMainAxis(
-    { x: A[0], y: A[1] },
-    { x: D[0], y: D[1] },
-  );
-  return axisNormal(axis, end === "start" ? sign : oppositeSign(sign));
+  const last = points.length - 1;
+  if (last === 1) {
+    // 情况 2：只有弦，没有走向信息 → 默认弓形
+    const { axis, sign } = chordMainAxis(points[0], points[1]);
+    return axisNormal(axis, end === "start" ? sign : oppositeSign(sign));
+  }
+  if (last > 1) {
+    // 情况 3：按控制点走
+    const own = end === "start" ? points[0] : points[last];
+    const adjacent = end === "start" ? points[1] : points[last - 1];
+    const other = end === "start" ? points[last] : points[0];
+    return (
+      unitDirection(own, adjacent) ??
+      unitDirection(own, other) ??
+      axisNormal("x", end === "start" ? 1 : -1)
+    );
+  }
+  return axisNormal("x", end === "start" ? 1 : -1);
 };
-
-/**
- * 曲线连接线判据：`arrow` + 非折线 + 圆角非空 + `curvedConnector === true`。
- * **绝不看点数**——用户手画的圆角箭头（无论几个点）、折线箭头、直箭头一律不算。
- */
-export const isCurvedConnector = <T extends ExcalidrawElement>(
-  element?: T | null,
-): element is T & ExcalidrawArrowElement =>
-  !!element &&
-  isArrowElement(element) &&
-  !element.elbowed &&
-  element.roundness !== null &&
-  element.curvedConnector === true;
 
 /**
  * 曲线连接线的局部几何（元素局部坐标、未旋转）：起点 + 每段的三次贝塞尔控制点
@@ -128,18 +163,18 @@ type CurvedConnectorLocalPath = Readonly<{
 }>;
 
 /**
- * 渲染 / 包围盒 / 命中 / 悬停高亮共用的局部几何；非曲线连接线（或点数不足）返回
+ * 渲染 / 包围盒 / 命中 / 悬停高亮共用的局部几何；非圆角箭头（或点数不足）返回
  * null。
  *
- * `points` 的相邻两项是每段的端点，段在端点的切线方向取端法线（起点沿 `t̂_A`、
- * 终点沿 `−t̂_D`），内部点取相邻点中心差分（Catmull-Rom）；切线大小取相邻段长，
+ * `points` 的相邻两项是每段的端点，段在端点的切线方向取端法线（起点沿该端方向、
+ * 终点取其反向），内部点取相邻点中心差分（Catmull-Rom）；切线大小取相邻段长，
  * 于是「相邻两点重合」也不会产生零长手柄。曲线必然经过每个 `points` 项，
  * `points.length − 1` 就是段数。
  */
 const getCurvedConnectorLocalPath = (
   element: ExcalidrawElement,
 ): CurvedConnectorLocalPath | null => {
-  if (!isCurvedConnector(element)) {
+  if (!isCurvedArrow(element)) {
     return null;
   }
   const points = element.points;

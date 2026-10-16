@@ -9,7 +9,6 @@ exports[`Test dragCreate > add element to the scene when pointer dragging long e
   "boundElements": null,
   "containerRef": undefined,
   "created": 1,
-  "curvedConnector": false,
   "customData": undefined,
   "elbowed": false,
   "endArrowhead": "triangle",
@@ -33,9 +32,7 @@ exports[`Test dragCreate > add element to the scene when pointer dragging long e
       50,
     ],
   ],
-  "roundness": {
-    "type": 2,
-  },
+  "roundness": null,
   "seed": 1278240551,
   "startArrowhead": null,
   "startBinding": null,

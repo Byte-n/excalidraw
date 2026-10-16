@@ -97,7 +97,6 @@ const fixtures: {
         x: 100,
         y: 100,
         roundness: { type: 2 },
-        curvedConnector: true,
         points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 0)],
       }),
     hitPoint: [200, 100],

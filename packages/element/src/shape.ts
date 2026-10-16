@@ -717,10 +717,10 @@ export const generateLinearCollisionShape = (
         ? element.points
         : [pointFrom<LocalPoint>(0, 0)];
 
-      // 曲线连接线与渲染 / 包围盒同源：路径取 getCurvedConnectorPath。形状 ops
-      // 是渲染、命中距离、碰撞、包围盒的共同来源，所以两处形状函数必须输出同
-      // 一条曲线。旋转口径与下面的圆角分支一致（先在全局坐标绕元素中心旋转，
-      // 再折回元素局部坐标）。
+      // 箭头曲线与渲染 / 包围盒同源：路径取 getCurvedConnectorPath。形状 ops 是
+      // 渲染、命中距离、碰撞、包围盒的共同来源，所以两处形状函数必须输出同一条
+      // 曲线。旋转口径与下面的圆角分支一致（先在全局坐标绕元素中心旋转，再折回
+      // 元素局部坐标）。
       const curveConnectorPath = getCurvedConnectorPath(element);
 
       if (isElbowArrow(element)) {
@@ -1207,8 +1207,10 @@ const _generateElementShape = (
         ? element.points
         : [pointFrom<LocalPoint>(0, 0)];
 
-      // 曲线连接线与包围盒 / 命中同源：路径由两端法线 + 控制点推导，渲染、包围盒
-      // （bounds.ts 读这里的形状 ops）与命中永远同一条曲线。
+      // 箭头曲线与包围盒 / 命中同源：路径由两端端切线 + 控制点推导，渲染、包围盒
+      // （bounds.ts 读这里的形状 ops）与命中永远同一条曲线。`isCurvedArrow` 收下了
+      // 全部圆角非折线箭头——不论它是箭头工具拖的、方向手柄建的还是从旧文件读回来
+      // 的，这里不再有第二个入口。
       const curveConnectorPath = getCurvedConnectorPath(element);
 
       if (isElbowArrow(element)) {
@@ -1252,6 +1254,8 @@ const _generateElementShape = (
           ];
         }
       } else {
+        // 到这里的只有 `line`：圆角箭头已被上面的曲线分支收走（roundness 非空
+        // 的箭头不会再落到这里），直箭头走 `!roundness` 那支
         shape = [generator.curve(points as unknown as RoughPoint[], options)];
       }
 

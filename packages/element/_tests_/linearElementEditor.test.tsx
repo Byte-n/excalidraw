@@ -37,6 +37,7 @@ import * as textElementUtils from "../src/textElement";
 import { getBoundTextElementPosition, getBoundTextMaxWidth } from "../src";
 import { LinearElementEditor } from "../src";
 import { newArrowElement } from "../src";
+import { isCurvedArrow } from "../src/typeChecks";
 import { transformElements } from "../src/resizeElements";
 import { getLinearElementPathSegments } from "../src/utils";
 import {
@@ -139,9 +140,8 @@ describe("Test Linear Elements", () => {
   };
 
   /**
-   * 2 点曲线连接线：对角线两端、无绑定（端切线回落弦主轴）⇒ 一条非退化的 S
-   * 曲线。`curvedConnector` 是显式字段（判据只看该字段、不看点数），直接作为
-   * `newArrowElement` 的构造参数传入。
+   * 2 点曲线箭头：对角线两端、无绑定 ⇒ 端切线取弦的主轴（这里两轴打平取水平），
+   * 于是是一条非退化的 S 曲线。判据只看「圆角 + 非折线」，没有额外字段。
    */
   const createCurvedConnector = (): NonDeleted<ExcalidrawArrowElement> => {
     const arrow = newArrowElement({
@@ -152,7 +152,6 @@ describe("Test Linear Elements", () => {
       height: 40,
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(40, 40)],
       roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
-      curvedConnector: true,
     });
     API.setElements([arrow]);
     mouse.clickAt(p1[0], p1[1]);
@@ -1255,8 +1254,8 @@ describe("Test Linear Elements", () => {
         );
         expect(position).toMatchInlineSnapshot(`
           {
-            "x": "86.17305",
-            "y": "76.11251",
+            "x": "86.17325",
+            "y": "76.11480",
           }
         `);
       });
@@ -1462,7 +1461,7 @@ describe("Test Linear Elements", () => {
           20,
           105,
           80,
-          "55.45894",
+          "55.52876",
           45,
         ]
       `);
@@ -1531,7 +1530,7 @@ describe("Test Linear Elements", () => {
           45,
           "515.01702",
           220,
-          "212.50000",
+          "212.87785",
           145,
         ]
       `);
@@ -2161,8 +2160,8 @@ describe("Test Linear Elements", () => {
     dragSegmentMidpointOfCurvedConnector(arrow);
 
     expect(arrow.points).toHaveLength(3);
-    // 判据不看点数：加了控制点依然是曲线连接线
-    expect(arrow.curvedConnector).toBe(true);
+    // 判据不看点数：加了控制点依然是曲线
+    expect(isCurvedArrow(arrow)).toBe(true);
 
     // 曲线经过新加的控制点
     const controlPoint = pointFrom<GlobalPoint>(
@@ -2189,8 +2188,8 @@ describe("Test Linear Elements", () => {
     });
 
     expect(arrow.points).toHaveLength(2);
-    // 判据不看点数：删光控制点后仍是曲线连接线（回到自动态）
-    expect(arrow.curvedConnector).toBe(true);
+    // 判据不看点数：删光控制点后仍是曲线（回到自动态）
+    expect(isCurvedArrow(arrow)).toBe(true);
   });
 
   it("should derive a curved connector's bounds from the same curve it renders", () => {

@@ -48,7 +48,6 @@ import {
   isArrowElement,
   isBindableElement,
   isCurvedArrow,
-  isCurvedConnector,
   isElbowArrow,
   isFrameLikeElement,
   isImageElement,
@@ -470,14 +469,15 @@ const drawElbowSegmentMidpointHandle = (
 
 /**
  * Hover trace for a hovered-but-unselected linear element: an 8px/zoom
- * translucent primary stroke painted along the element's geometry. A curved
- * connector is traced along the cubic curve it actually renders
+ * translucent primary stroke painted along the element's geometry. A round
+ * arrow is traced along the cubic curve it actually renders
  * (`traceCurvedConnectorPath`, shared with render/bounds/hit) so the trace
  * follows the curve rather than the chord between its endpoints. Every other
- * linear element keeps the polyline through its `points`; those points come
- * from `getPointsGlobalCoordinates` and already carry the element's rotation,
- * so the trace follows the path. This replaces the rectangular box highlight
- * that non-linear hovered elements receive.
+ * linear element (straight/elbow arrow, `line`, freedraw) keeps the polyline
+ * through its `points`; those points come from `getPointsGlobalCoordinates`
+ * and already carry the element's rotation, so the trace follows the path.
+ * This replaces the rectangular box highlight that non-linear hovered
+ * elements receive.
  */
 const renderHoveredLinearTrace = (
   context: CanvasRenderingContext2D,
@@ -492,7 +492,7 @@ const renderHoveredLinearTrace = (
   if (points.length < 2) {
     return;
   }
-  const isCurve = isCurvedConnector(element);
+  const isCurve = isCurvedArrow(element);
   const zoom = appState.zoom.value;
   const alpha = appState.theme === THEME.DARK ? 0.24 : 0.18;
 

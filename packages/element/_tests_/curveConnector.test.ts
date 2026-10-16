@@ -12,10 +12,10 @@ import { getElementAbsoluteCoords } from "../src/bounds";
 import {
   getCurvedConnectorEndNormal,
   getCurvedConnectorPath,
-  isCurvedConnector,
   traceCurvedConnectorPath,
 } from "../src/curveConnector";
 import { LinearElementEditor } from "../src/linearElementEditor";
+import { isCurvedArrow } from "../src/typeChecks";
 
 import type {
   ElementsMap,
@@ -35,7 +35,6 @@ type ArrowOverrides = {
   points?: readonly LocalPoint[];
   elbowed?: boolean;
   roundness?: ExcalidrawArrowElement["roundness"];
-  curvedConnector?: boolean;
   startBinding?: ExcalidrawArrowElement["startBinding"];
   endBinding?: ExcalidrawArrowElement["endBinding"];
 };
@@ -67,7 +66,6 @@ const createArrow = (
     points = DEFAULT_POINTS,
     elbowed = false,
     roundness = { type: ROUNDNESS.PROPORTIONAL_RADIUS },
-    curvedConnector = false,
     startBinding = null,
     endBinding = null,
   } = overrides;
@@ -87,7 +85,6 @@ const createArrow = (
     ...element,
     type: "arrow",
     elbowed,
-    curvedConnector,
     roundness,
     angle,
   };
@@ -173,9 +170,9 @@ const chordDeviationRange = (
 
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
-describe("isCurvedConnector", () => {
-  it("requires the explicit field, never the point count", () => {
-    // 反劫持护栏：用户手画的圆角箭头（2 点 / 3 点）不能被判成连接线
+describe("the curve model's predicate", () => {
+  it("is roundness + non-elbow, and never the point count", () => {
+    // 全局唯一判据：一个圆角非折线箭头就是曲线，不论它是哪个入口建的、有几个点
     const twoPoint = createArrow({
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(240, -300)],
     });
@@ -186,44 +183,35 @@ describe("isCurvedConnector", () => {
         pointFrom<LocalPoint>(240, -300),
       ],
     });
-    expect(isCurvedConnector(twoPoint)).toBe(false);
-    expect(isCurvedConnector(threePoint)).toBe(false);
+    expect(isCurvedArrow(twoPoint)).toBe(true);
+    expect(isCurvedArrow(threePoint)).toBe(true);
+    expect(getCurvedConnectorPath(twoPoint)).not.toBeNull();
+    expect(getCurvedConnectorPath(threePoint)).not.toBeNull();
 
-    expect(isCurvedConnector(createArrow({ elbowed: true }))).toBe(false);
-    expect(isCurvedConnector(createArrow({ roundness: null }))).toBe(false);
-
-    expect(isCurvedConnector(createArrow({ curvedConnector: true }))).toBe(
-      true,
-    );
-    // 手动态（控制点非空）同样是连接线：段数由 points 决定，判据不看点数
-    expect(
-      isCurvedConnector(
-        createArrow({
-          curvedConnector: true,
-          points: [
-            pointFrom<LocalPoint>(0, 0),
-            pointFrom<LocalPoint>(120, -150),
-            pointFrom<LocalPoint>(240, -300),
-          ],
-        }),
-      ),
-    ).toBe(true);
+    // 折线箭头与直箭头不走这条曲线
+    expect(isCurvedArrow(createArrow({ elbowed: true }))).toBe(false);
+    expect(isCurvedArrow(createArrow({ roundness: null }))).toBe(false);
   });
 
-  it("rejects null, undefined and non-arrow elements", () => {
-    expect(isCurvedConnector(null)).toBe(false);
-    expect(isCurvedConnector(undefined)).toBe(false);
-    expect(isCurvedConnector(API.createElement({ type: "rectangle" }))).toBe(
-      false,
-    );
+  it("rejects undefined and non-arrow elements", () => {
+    expect(isCurvedArrow(undefined)).toBe(false);
+    expect(isCurvedArrow(API.createElement({ type: "rectangle" }))).toBe(false);
   });
 
   it("returns null from the path builder for everything else", () => {
     expect(getCurvedConnectorPath(createArrow({ roundness: null }))).toBeNull();
     expect(getCurvedConnectorPath(createArrow({ elbowed: true }))).toBeNull();
-    expect(getCurvedConnectorPath(createArrow())).toBeNull();
     expect(
       getCurvedConnectorPath(API.createElement({ type: "rectangle" })),
+    ).toBeNull();
+    // `line` 元素自带圆角也不走这条曲线（判据要求是箭头）
+    expect(
+      getCurvedConnectorPath(
+        API.createElement({
+          type: "line",
+          points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 0)],
+        }),
+      ),
     ).toBeNull();
   });
 });
@@ -273,20 +261,6 @@ describe("getCurvedConnectorEndNormal", () => {
     });
   });
 
-  it("falls back to the chord main axis when nothing is bound", () => {
-    const free = createArrow({
-      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 100)],
-    });
-    expect(getCurvedConnectorEndNormal(free, "start")).toEqual({ x: 1, y: 0 });
-    expect(getCurvedConnectorEndNormal(free, "end")).toEqual({ x: -1, y: 0 });
-
-    const steep = createArrow({
-      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(100, 300)],
-    });
-    expect(getCurvedConnectorEndNormal(steep, "start")).toEqual({ x: 0, y: 1 });
-    expect(getCurvedConnectorEndNormal(steep, "end")).toEqual({ x: 0, y: -1 });
-  });
-
   it("falls back when the binding carries no fixed point", () => {
     const arrow = createArrow({
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 100)],
@@ -295,9 +269,62 @@ describe("getCurvedConnectorEndNormal", () => {
     injectPlaceholderBinding(arrow, "end");
     expect(getCurvedConnectorEndNormal(arrow, "start")).toEqual({ x: 1, y: 0 });
     expect(getCurvedConnectorEndNormal(arrow, "end")).toEqual({ x: -1, y: 0 });
-    expect(getCurvedConnectorPath({ ...arrow, curvedConnector: true })).toBe(
+    expect(getCurvedConnectorPath(arrow)).toBe(
       "M 0 0 C 74.54 0, 125.46 100, 200 100",
     );
+  });
+
+  it("takes the chord main axis for a free two-point arrow", () => {
+    // 情况 2：没有控制点，弦就是拖拽方向 —— 两端切线取它的主轴
+    const shallow = createArrow({
+      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 100)],
+    });
+    expect(getCurvedConnectorEndNormal(shallow, "start")).toEqual({
+      x: 1,
+      y: 0,
+    });
+    expect(getCurvedConnectorEndNormal(shallow, "end")).toEqual({
+      x: -1,
+      y: 0,
+    });
+
+    const steep = createArrow({
+      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(100, 300)],
+    });
+    expect(getCurvedConnectorEndNormal(steep, "start")).toEqual({ x: 0, y: 1 });
+    expect(getCurvedConnectorEndNormal(steep, "end")).toEqual({ x: 0, y: -1 });
+  });
+
+  it("takes the adjacent segment for a free multi-point arrow", () => {
+    // 情况 3：有控制点就按控制点走。L 形（先向右再向下）的末端走向是竖直的，
+    // 若按弦主轴回落会取成水平，末端箭头会歪 45°
+    const elbowish = createArrow({
+      points: [
+        pointFrom<LocalPoint>(0, 0),
+        pointFrom<LocalPoint>(100, 0),
+        pointFrom<LocalPoint>(100, 100),
+      ],
+    });
+    expect(getCurvedConnectorEndNormal(elbowish, "start")).toEqual({
+      x: 1,
+      y: 0,
+    });
+    expect(getCurvedConnectorEndNormal(elbowish, "end")).toEqual({
+      x: 0,
+      y: -1,
+    });
+
+    // 斜向的相邻段按真实方向回落，不做主轴量化
+    const diagonal = createArrow({
+      points: [
+        pointFrom<LocalPoint>(0, 0),
+        pointFrom<LocalPoint>(100, 0),
+        pointFrom<LocalPoint>(200, 100),
+      ],
+    });
+    const end = getCurvedConnectorEndNormal(diagonal, "end");
+    expect(end.x).toBeCloseTo(-Math.SQRT1_2, 6);
+    expect(end.y).toBeCloseTo(-Math.SQRT1_2, 6);
   });
 });
 
@@ -305,7 +332,6 @@ describe("automatic curve (two points, no control points)", () => {
   it("emits a single cubic with both tangents on the edge normals", () => {
     const arrow = createArrow({
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 40)],
-      curvedConnector: true,
       ...horizontalBindings(),
     });
     const path = getCurvedConnectorPath(arrow)!;
@@ -327,7 +353,6 @@ describe("automatic curve (two points, no control points)", () => {
   it("produces an S shape when the two ends are offset", () => {
     const arrow = createArrow({
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(240, -300)],
-      curvedConnector: true,
       ...horizontalBindings(),
     });
     const path = getCurvedConnectorPath(arrow)!;
@@ -352,7 +377,6 @@ describe("automatic curve (two points, no control points)", () => {
   it("degenerates to a straight line when the ends are aligned", () => {
     const arrow = createArrow({
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 0)],
-      curvedConnector: true,
       ...horizontalBindings(),
     });
     const path = getCurvedConnectorPath(arrow)!;
@@ -368,6 +392,99 @@ describe("automatic curve (two points, no control points)", () => {
   });
 });
 
+describe("default bow (free two-point arrow, no attached edge)", () => {
+  it("bows when the chord is neither horizontal nor vertical", () => {
+    const arrow = createArrow({
+      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 100)],
+    });
+    const segments = parsePath(getCurvedConnectorPath(arrow)!);
+    const A = segments[0].p0;
+    const D = segments[0].p1;
+
+    // 两端切线都水平 ⇒ 起点手柄水平引出、终点手柄水平引入（尖端正水平）
+    expect(segments[0].c1.y).toBe(A.y);
+    expect(segments[0].c2.y).toBe(D.y);
+    // 于是整条曲线鼓出弦外，且两侧都鼓（S 形）
+    const { min, max, length } = chordDeviationRange(segments, A, D);
+    expect(min).toBeLessThan(0);
+    expect(max).toBeGreaterThan(0);
+    expect(Math.max(-min, max)).toBeGreaterThan(0.02 * length);
+  });
+
+  it("stays a straight line when the chord is exactly horizontal or vertical", () => {
+    for (const D of [
+      pointFrom<LocalPoint>(200, 0),
+      pointFrom<LocalPoint>(0, 200),
+      pointFrom<LocalPoint>(-200, 0),
+      pointFrom<LocalPoint>(0, -200),
+    ]) {
+      const arrow = createArrow({
+        points: [pointFrom<LocalPoint>(0, 0), D],
+      });
+      const segments = parsePath(getCurvedConnectorPath(arrow)!);
+      const { min, max } = chordDeviationRange(
+        segments,
+        segments[0].p0,
+        segments[0].p1,
+      );
+      expect(Math.max(-min, max)).toBe(0);
+    }
+  });
+
+  it("gives a multi-point arrow vertical arrival when its last segment is vertical", () => {
+    // 先向右再向下的 L 形：末端手柄必须在终点正上方（走向竖直），
+    // 若按弦主轴回落则会变成水平，尖端会歪 45°
+    const arrow = createArrow({
+      points: [
+        pointFrom<LocalPoint>(0, 0),
+        pointFrom<LocalPoint>(100, 0),
+        pointFrom<LocalPoint>(100, 100),
+      ],
+    });
+    const segments = parsePath(getCurvedConnectorPath(arrow)!);
+    const last = segments[segments.length - 1];
+    expect(last.c2.x).toBe(last.p1.x);
+    expect(last.c2.y).toBeLessThan(last.p1.y);
+  });
+
+  it("keeps the seam smooth when the polyline closes back on its start", () => {
+    // 闭合回路：首尾点重合，弦长 0。端切线必须取相邻段（竖直），
+    // 老的主轴兜底会在这里取到 ±x，接缝处冒出一个折角
+    const arrow = createArrow({
+      points: [
+        pointFrom<LocalPoint>(0, 0),
+        pointFrom<LocalPoint>(100, 0),
+        pointFrom<LocalPoint>(100, 100),
+        pointFrom<LocalPoint>(0, 100),
+        pointFrom<LocalPoint>(0, 0),
+      ],
+    });
+    const segments = parsePath(getCurvedConnectorPath(arrow)!);
+    expect(segments.length).toBe(4);
+    const last = segments[segments.length - 1];
+    expect(last.c2.x).toBe(last.p1.x);
+    expect(last.c2.y).toBeCloseTo(last.p1.y + 100 / 3, 2);
+    for (const segment of segments) {
+      for (const value of [
+        segment.c1.x,
+        segment.c1.y,
+        segment.c2.x,
+        segment.c2.y,
+      ]) {
+        expect(Number.isFinite(value)).toBe(true);
+      }
+    }
+  });
+
+  it("keeps the default bow out of `line` elements", () => {
+    const line = API.createElement({
+      type: "line",
+      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 100)],
+    });
+    expect(getCurvedConnectorPath(line)).toBeNull();
+  });
+});
+
 describe("manual curve (control points in points[])", () => {
   it("draws one cubic per segment and passes through every control point", () => {
     const control = pointFrom<LocalPoint>(120, -400);
@@ -377,7 +494,6 @@ describe("manual curve (control points in points[])", () => {
         control,
         pointFrom<LocalPoint>(240, 0),
       ],
-      curvedConnector: true,
       ...horizontalBindings(),
     });
     const path = getCurvedConnectorPath(arrow)!;
@@ -401,7 +517,6 @@ describe("manual curve (control points in points[])", () => {
         pointFrom<LocalPoint>(120, 200),
         pointFrom<LocalPoint>(240, 0),
       ],
-      curvedConnector: true,
       ...horizontalBindings(),
     });
     const path = getCurvedConnectorPath(arrow)!;
@@ -430,7 +545,6 @@ describe("manual curve (control points in points[])", () => {
     ]) {
       const arrow = createArrow({
         points,
-        curvedConnector: true,
         ...horizontalBindings(),
       });
       const path = getCurvedConnectorPath(arrow)!;
@@ -506,7 +620,6 @@ describe("traceCurvedConnectorPath", () => {
   it("traces the curve, not the chord, for an automatic two-point connector", () => {
     const arrow = createArrow({
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(240, -300)],
-      curvedConnector: true,
       ...horizontalBindings(),
     });
     const { context, calls } = createTraceRecorder();
@@ -534,7 +647,6 @@ describe("traceCurvedConnectorPath", () => {
     // 最直白的「中点离轴量」把弦与曲线分开
     const arrow = createArrow({
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(240, -300)],
-      curvedConnector: true,
       startBinding: binding("source", [1, 0.5]),
       endBinding: binding("target", [0.5, 0]),
     });
@@ -559,7 +671,6 @@ describe("traceCurvedConnectorPath", () => {
       x: 40,
       y: -25,
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 40)],
-      curvedConnector: true,
       ...horizontalBindings(),
     });
     const flatTrace = createTraceRecorder();
@@ -578,7 +689,6 @@ describe("traceCurvedConnectorPath", () => {
       y: -25,
       angle,
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 40)],
-      curvedConnector: true,
       ...horizontalBindings(),
     });
     const rotatedTrace = createTraceRecorder();
@@ -627,13 +737,10 @@ describe("traceCurvedConnectorPath", () => {
     ).toBeGreaterThan(1);
   });
 
-  it("touches nothing for elements that are not curved connectors", () => {
+  it("touches nothing for elements that are not round arrows", () => {
     const others = [
-      // 圆角（非曲线）箭头
-      createArrow({
-        points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 40)],
-        curvedConnector: false,
-      }),
+      // 直箭头（roundness 为 null）
+      createArrow({ roundness: null }),
       // 普通直线
       API.createElement({
         type: "line",
@@ -644,7 +751,7 @@ describe("traceCurvedConnectorPath", () => {
         points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 0)],
       }),
       // elbow 箭头
-      createArrow({ elbowed: true, curvedConnector: true }),
+      createArrow({ elbowed: true }),
     ];
     for (const element of others) {
       const { context, calls } = createTraceRecorder();
@@ -662,7 +769,6 @@ describe("traceCurvedConnectorPath", () => {
         pointFrom<LocalPoint>(120, -400),
         pointFrom<LocalPoint>(240, 0),
       ],
-      curvedConnector: true,
       ...horizontalBindings(),
     });
     expect(getCurvedConnectorPath(manual)).toBe(
@@ -671,7 +777,6 @@ describe("traceCurvedConnectorPath", () => {
 
     const automatic = createArrow({
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 40)],
-      curvedConnector: true,
       ...horizontalBindings(),
     });
     expect(getCurvedConnectorPath(automatic)).toBe(

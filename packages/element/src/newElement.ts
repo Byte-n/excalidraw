@@ -804,8 +804,6 @@ export const newArrowElement = <T extends boolean>(
     points?: ExcalidrawArrowElement["points"];
     elbowed?: T;
     fixedSegments?: ExcalidrawElbowArrowElement["fixedSegments"] | null;
-    /** 曲线连接线（圆角样式下单列），默认 false：只有显式置位才走曲线模型 */
-    curvedConnector?: boolean;
   } & ElementConstructorOpts,
 ): T extends true
   ? NonDeleted<ExcalidrawElbowArrowElement>
@@ -829,8 +827,6 @@ export const newArrowElement = <T extends boolean>(
       startArrowhead: opts.startArrowhead || null,
       endArrowhead: opts.endArrowhead || null,
       elbowed: true,
-      // 折线样式没有曲线连接线语义，恒为 false
-      curvedConnector: false,
       fixedSegments: opts.fixedSegments || [],
       startIsSpecial: false,
       endIsSpecial: false,
@@ -845,8 +841,6 @@ export const newArrowElement = <T extends boolean>(
     startArrowhead: opts.startArrowhead || null,
     endArrowhead: opts.endArrowhead || null,
     elbowed: false,
-    // 曲线连接线由调用方（方向手柄在圆角样式下）显式传入，默认不是
-    curvedConnector: opts.curvedConnector ?? false,
   } as T extends true
     ? NonDeleted<ExcalidrawElbowArrowElement>
     : NonDeleted<ExcalidrawArrowElement>;

@@ -238,9 +238,8 @@ const binding = (elementId: string, fixedPoint: [number, number]) => ({
 type Binding = ReturnType<typeof binding>;
 
 /**
- * 2 点曲线连接线：两端各自挂在一条边上（默认起点右边缘、终点左边缘）。
- * `curvedConnector` 是显式字段——`API.createElement` 的 arrow 分支不接收它，
- * 所以构造后再置位（判据只看这个字段，不看点数）。
+ * 2 点曲线箭头：两端各自挂在一条边上（默认起点右边缘、终点左边缘）。
+ * 判据只看「圆角 + 非折线」，没有额外字段——`API.createElement` 造出来就是它。
  */
 const createCurvedConnector = ({
   points = [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 40)],
@@ -266,7 +265,6 @@ const createCurvedConnector = ({
     ...element,
     type: "arrow",
     elbowed: false,
-    curvedConnector: true,
     roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
   };
 };
@@ -336,5 +334,27 @@ describe("getArrowheadPoints for curved connectors", () => {
     expect(axis.x).toBeCloseTo(0, 6);
     expect(axis.y).toBeCloseTo(1, 6);
     expect(diagonal.x * axis.x + diagonal.y * axis.y).toBeCloseTo(0, 6);
+  });
+
+  it("points a free two-point arrow's head along its chord main axis", () => {
+    // 没绑任何图形：端切线取弦的主轴。斜拖时箭头因此正水平/正竖直，
+    // 而不是沿弦 —— 用形状 ops 的 B(0.3) 近似会给出沿弦的方向
+    const element = API.createElement({
+      type: "arrow",
+      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 100)],
+      roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
+    });
+    const { axis } = arrowheadVectors(element, "end");
+    expect(axis.x).toBeCloseTo(1, 6);
+    expect(axis.y).toBeCloseTo(0, 6);
+
+    const steep = API.createElement({
+      type: "arrow",
+      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(100, 300)],
+      roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
+    });
+    const steepAxis = arrowheadVectors(steep, "end").axis;
+    expect(steepAxis.x).toBeCloseTo(0, 6);
+    expect(steepAxis.y).toBeCloseTo(1, 6);
   });
 });

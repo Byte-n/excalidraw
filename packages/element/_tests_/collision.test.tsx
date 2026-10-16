@@ -25,6 +25,9 @@ describe("check rotated elements can be hit:", () => {
   });
 
   it("arrow", () => {
+    // 显式选圆角档：这条命中点是为**曲线**形状定的（箭头工具的圆角来自
+    // 「箭头类型」档位，与 `currentItemRoundness` 无关）
+    window.h.app.setState({ currentItemArrowType: "round" });
     UI.createElement("arrow", {
       x: 0,
       y: 0,

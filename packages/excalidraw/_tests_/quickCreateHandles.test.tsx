@@ -10,6 +10,7 @@ import {
   hitTestQuickCreateHandle,
   isArrowElement,
   isCompositeShapeElement,
+  isCurvedArrow,
   isMindmapNodeElement,
   QUICK_CREATE_GHOST_ALPHA,
   QUICK_CREATE_HANDLE_REST_ALPHA,
@@ -19,6 +20,7 @@ import {
 import type { LocalPoint } from "@excalidraw/math";
 import type { ElementUpdate } from "@excalidraw/element/mutateElement";
 import type {
+  ExcalidrawArrowElement,
   ExcalidrawElement,
   ExcalidrawLinearElement,
   ExcalidrawSelectionElement,
@@ -1235,13 +1237,13 @@ describe("quick create handles", () => {
         clickHandle("right");
         const arrow = createdArrow(before);
 
-        // 圆角样式 ⇒ curvedConnector 置位、恒为两点。错开时的拐点不塞进 points：
+        // 圆角样式 ⇒ 圆角非折线箭头，恒为两点。错开时的拐点不塞进 points：
         // 弯曲几何在渲染期由两端 + 各自所依附边的外法线推导，创建路径不算它。
         expect(arrow.roundness).toEqual({
           type: ROUNDNESS.PROPORTIONAL_RADIUS,
         });
         expect(arrow.elbowed).toBe(false);
-        expect(arrow.curvedConnector).toBe(true);
+        expect(isCurvedArrow(arrow)).toBe(true);
         expect(arrow.points).toHaveLength(2);
 
         // 两端锚点落在朝对侧的边上：出口贴源右边缘（fx ≈ 1）、入口贴副本左边缘
@@ -1302,15 +1304,15 @@ describe("quick create handles", () => {
       clickHandle("right");
       const arrow = createdArrow(before);
 
-      // 圆角连接线恒为两点，且预演与落地同 `curvedConnector`、同绑定锚点
+      // 圆角连接线恒为两点，且预演与落地同判据、同绑定锚点
       // （fixedPoint 决定该端贴在哪条边、曲线朝哪弯，渲染期读它解端切线）
       const ghostArrow = ghost[1];
       if (!isArrowElement(ghostArrow)) {
         throw new Error("Expected an arrow");
       }
       expect(worldPoints(ghostArrow)).toHaveLength(2);
-      expect(ghostArrow.curvedConnector).toBe(true);
-      expect(arrow.curvedConnector).toBe(true);
+      expect(isCurvedArrow(ghostArrow)).toBe(true);
+      expect(isCurvedArrow(arrow)).toBe(true);
       expect(ghostArrow.startBinding?.fixedPoint).toEqual(
         arrow.startBinding?.fixedPoint,
       );
@@ -1419,7 +1421,7 @@ describe("quick create handles", () => {
         expect(points[1].y).toBeLessThan(-100);
         // 锚点（贴哪条边）不变：弯曲几何在渲染期由新两端重解
         expect(arrow.endBinding?.fixedPoint[0]).toBeCloseTo(0, 3);
-        expect(arrow.curvedConnector).toBe(true);
+        expect(isCurvedArrow(arrow)).toBe(true);
       });
 
       it("keeps a user-added control point in place when the shape moves", () => {
@@ -1580,8 +1582,8 @@ describe("quick create handles", () => {
           ).toBe(true);
         }
 
-        // 直箭头（无圆角）带 3 个点时也不是新模型（判据看 curvedConnector、不看
-        // 点数）：中间点不跟着重算
+        // 直箭头（无圆角）带 3 个点时也不是新模型（判据看圆角、不看点数）：
+        // 中间点不跟着重算
         const sharp = placeAndClick([blocker(RIGHT_BASE)], "right", "round");
         setArrowPoints(
           sharp.arrow,
@@ -1956,6 +1958,68 @@ describe("quick create handles", () => {
       expect(handles).toHaveLength(0);
       mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
       expect(h.app.quickCreate.getHovered()).toBeNull();
+    });
+  });
+
+  describe("one curve model for both entry points", () => {
+    /**
+     * 这次统一要的证据：箭头工具拖出来的圆角箭头，与方向手柄建出来的那条
+     * 走**同一套**曲线——判据只看「圆角 + 非折线」，没有第二个开关。上面那些
+     * 用例验的是手柄入口，这一条验箭头工具入口：两端同样垂直于所依附的边。
+     */
+    it("gives an arrow-tool arrow the same perpendicular in/out curve", () => {
+      const source = API.createElement({
+        type: "rectangle",
+        x: 100,
+        y: 100,
+        width: 120,
+        height: 80,
+      });
+      const target = API.createElement({
+        type: "rectangle",
+        x: 400,
+        y: 320,
+        width: 120,
+        height: 80,
+      });
+      API.setElements([source, target]);
+      // 默认档就是圆角箭头；这里显式置一次，免得依赖默认值
+      act(() => {
+        h.app.setState({ currentItemArrowType: "round" });
+      });
+
+      // 从源右边缘中段拖到目标左边缘中段
+      const startX = source.x + source.width;
+      const startY = source.y + source.height / 2;
+      const endX = target.x;
+      const endY = target.y + target.height / 2;
+      const drawn = UI.createElement("arrow", {
+        x: startX,
+        y: startY,
+        width: endX - startX,
+        height: endY - startY,
+      }).get() as ExcalidrawArrowElement;
+
+      const arrow = h.app.scene.getNonDeletedElement(
+        drawn.id,
+      )! as NonDeleted<ExcalidrawArrowElement>;
+      expect(isCurvedArrow(arrow)).toBe(true);
+      // 两端都绑上了图形，于是端切线由所依附的边决定
+      expect(arrow.startBinding?.elementId).toBe(source.id);
+      expect(arrow.endBinding?.elementId).toBe(target.id);
+
+      const ops = curveOps(arrow);
+      const A = { x: ops[0].data[0], y: ops[0].data[1] };
+      const D = {
+        x: ops[ops.length - 1].data[4],
+        y: ops[ops.length - 1].data[5],
+      };
+      // 源右边缘、目标左边缘都是竖边 ⇒ 两端切线水平：起点手柄与起点同高、
+      // 终点手柄与终点同高。若还走着旧样条（沿弦），这两条都不成立
+      expect(ops[1].data[1]).toBeCloseTo(A.y, 2);
+      expect(ops[ops.length - 1].data[3]).toBeCloseTo(D.y, 2);
+      // 而曲线明显鼓出弦外（斜向的两点箭头在旧模型下是直线）
+      expect(Math.abs(ops[1].data[1] - D.y)).toBeGreaterThan(1);
     });
   });
 });

@@ -543,8 +543,9 @@ export class AppQuickCreate {
    *   不 elbowed → 画出来就是直角折线（roundness 非 null 会被画成圆角拐弯，
    *   偏 13 个场景单位）。
    * - 错开 + 圆角曲线（round）：**恒为两点** [出口, 入口]（错开时的拐点不塞进
-   *   points），并置 `curvedConnector`。弯曲几何在渲染期由两端 + 各自所依附边的
-   *   外法线推导，创建路径一个弯曲几何都不算；两端对齐时几何自然退化成直线。
+   *   points）。弯曲几何完全归 `element/curveConnector.ts`——它按「圆角 + 非折线」
+   *   收下所有箭头，这里只负责把这条箭头建出来，创建路径一个弯曲几何都不算；
+   *   两端对齐时几何自然退化成直线。
    * - 错开 + 折线箭头（elbow）：**不塞我们的拐点**，仍旧给两点 + `elbowed`，
    *   交给内置正交路由自己布线（老行为）。预演没有绑定可依、路由跑不起来，
    *   所以预演改为直接拿同一套拐点画折线（`foldElbowRoute`）——渲染层对 elbowed
@@ -576,7 +577,6 @@ export class AppQuickCreate {
       x: exit.x,
       y: exit.y,
       ...arrowProps,
-      curvedConnector: rounded,
       points: [
         pointFrom<LocalPoint>(0, 0),
         ...tail.map((point) =>
@@ -589,18 +589,22 @@ export class AppQuickCreate {
       ...options.identity,
     });
     const arrow: NonDeleted<ExcalidrawLinearElement> = created;
-    if (!rounded || !options.ghostShape) {
+    if (!options.ghostShape) {
       return arrow;
     }
     // 预演元素不在场景里、没有绑定：补上与落地 `bindBindingElement` 写进去的
     // 同源固定点（口径同 `binding.fixedPoint`）。渲染期正是读它解端切线、决定该端
-    // 贴在哪条边、曲线朝哪弯，缺了会退回弦主轴、画出错的轴向。补完再按与落地
-    // `reflowArrowEndpoints` 同一个函数把两端落到轮廓上，预演才与落地逐点一致。
+    // 贴在哪条边、曲线朝哪弯，缺了会退回弦主轴、画出错的轴向。
     const bound: NonDeleted<ExcalidrawLinearElement> = {
       ...arrow,
       ...this.getPreviewBindings(placement, arrow, options.ghostShape),
     };
-    return this.projectPreviewEndpoints(bound, options.ghostShape);
+    // 再按与落地 `reflowArrowEndpoints` 同一个函数把两端落到轮廓上。条件也跟落地
+    // 同一口径（只有两点连线会 reflow）：折线样式错开时点数是 4，落地只写绑定、
+    // 不动点位，预演照做才逐点一致。
+    return arrow.points.length === 2
+      ? this.projectPreviewEndpoints(bound, options.ghostShape)
+      : bound;
   };
 
   /**

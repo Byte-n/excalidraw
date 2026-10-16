@@ -40,16 +40,16 @@ describe("cursor hint", () => {
     UI.clickTool("arrow");
     expect(getCursorHint()).toBeNull();
 
-    // default arrow type is `round`, so cycling continues to `elbow`
+    // 默认档是直箭头，所以第一次循环走到 `round`
     pressKey(KEYS.A);
 
-    expect(h.state.currentItemArrowType).toBe(ARROW_TYPE.elbow);
+    expect(h.state.currentItemArrowType).toBe(ARROW_TYPE.round);
     expect(getCursorHint()).not.toBeNull();
     expect(getCursorHint()!.querySelector("svg")).not.toBeNull();
 
     pressKey(KEYS.A);
 
-    expect(h.state.currentItemArrowType).toBe(ARROW_TYPE.sharp);
+    expect(h.state.currentItemArrowType).toBe(ARROW_TYPE.elbow);
     expect(getCursorHint()).not.toBeNull();
 
     await waitFor(() => {
@@ -188,7 +188,7 @@ describe("cursor hint", () => {
     UI.clickTool("arrow");
     pressKey(KEYS.A);
 
-    expect(h.state.currentItemArrowType).toBe(ARROW_TYPE.elbow);
+    expect(h.state.currentItemArrowType).toBe(ARROW_TYPE.round);
     expect(getCursorHint()).toBeNull();
   });
 

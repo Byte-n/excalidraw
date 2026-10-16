@@ -651,12 +651,11 @@ export type FixedSegment = {
 export type ExcalidrawArrowElement = ExcalidrawLinearElement &
   Readonly<{
     type: "arrow";
-    elbowed: boolean;
     /**
-     * 曲线连接线：两端附着点 + 用户控制点推导出的平滑曲线（见
-     * `element/curveConnector.ts`）。判据看这个字段，不看点数。
+     * 折线箭头（正交路由）。圆角箭头（`roundness` 非空且非折线）的曲线几何由
+     * `element/curveConnector.ts` 统一推导，没有第二套实现，也没有额外的开关字段。
      */
-    curvedConnector: boolean;
+    elbowed: boolean;
   }>;
 
 export type ExcalidrawElbowArrowElement = Merge<

@@ -31,7 +31,6 @@ import { generateRoughOptions } from "./shape";
 import {
   getCurvedConnectorEndNormal,
   getCurvedConnectorPath,
-  isCurvedConnector,
 } from "./curveConnector";
 import {
   getCompositeShapeGeometry,
@@ -46,6 +45,7 @@ import { getBoundTextElement, getContainerElement } from "./textElement";
 import {
   isArrowElement,
   isBoundToContainer,
+  isCurvedArrow,
   isFrameLikeElement,
   isFreeDrawElement,
   isLinearElement,
@@ -779,16 +779,17 @@ export const getArrowheadPoints = (
     return null;
   }
 
-  // 方向向量与箭头 tip 点的来源。曲线连接线取解析端切线（该端所依附边的外法
-  // 线反向），不读形状 ops——方向只由两端法线决定，与曲线是否退化无关，不必把
-  // 曲线切成短段近似；tip 点直接用元素端点（ops 与 points 同为元素局部坐标）。
-  // 其余箭头保持上游按最后一个贝塞尔段的 B(0.3) 弦近似。
+  // 方向向量与箭头 tip 点的来源。圆角箭头取解析端切线（该端所依附边的外法线
+  // 反向，判不出边时是相邻段方向），不读形状 ops——方向只由端切线决定，与曲线
+  // 是否退化无关，不必把曲线切成短段近似；tip 点直接用元素端点（ops 与 points
+  // 同为元素局部坐标）。其余箭头（直箭头、折线箭头、`line`）保持上游按最后一个
+  // 贝塞尔段的 B(0.3) 弦近似。
   let nx: number;
   let ny: number;
   let x2: number;
   let y2: number;
 
-  if (isCurvedConnector(element)) {
+  if (isCurvedArrow(element)) {
     const normal = getCurvedConnectorEndNormal(element, position);
     nx = -normal.x;
     ny = -normal.y;
@@ -1003,10 +1004,10 @@ const generateLinearElementShape = (
   const generator = rough.generator();
   const options = generateRoughOptions(element);
 
-  // 曲线连接线：形状缓存没命中时也必须算同一条曲线——下面那套 roughjs
-  // `curve` 是「穿过每个点」的样条，与渲染出来的曲线不是同一条，包围盒会对不
-  // 上。缓存通常已被 `getElementAbsoluteCoords` 先热好，这条分支平时不走；一旦
-  // 走到就不能给出另一个盒子。非曲线连接线返回 null，落入下面的原分支。
+  // 箭头曲线：形状缓存没命中时也必须算同一条曲线——下面那套 roughjs `curve`
+  // 是「穿过每个点」的样条，与渲染出来的曲线不是同一条，包围盒会对不上。缓存通常
+  // 已被 `getElementAbsoluteCoords` 先热好，这条分支平时不走；一旦走到就不能给出
+  // 另一个盒子。非圆角箭头（直箭头、折线箭头、`line`）返回 null，落入下面的原分支。
   const curveConnectorPath = getCurvedConnectorPath(element);
   if (curveConnectorPath) {
     return generator.path(curveConnectorPath, options);
@@ -1195,11 +1196,11 @@ export const getElementPointsCoords = (
   // This might be computationally heavey
   const gen = rough.generator();
 
-  // 曲线连接线：与渲染 / 命中同源，形状取 getCurvedConnectorPath（用传入的
-  // points 临时替换元素点位，端点切线仍读该端 binding）。否则会落到下面 roughjs
-  // 的过点样条，与画出来的曲线不是同一条，拖手势算出的原点偏移会让元素相对指针
-  // 漂移。非曲线连接线返回 null，保持原有 roundness 分支不变。
-  const curvedPath = isCurvedConnector(element)
+  // 箭头曲线：与渲染 / 命中同源，形状取 `getCurvedConnectorPath`（用传入的 points
+  // 临时替换元素点位，端点切线仍读该端 binding）。否则会落到下面 roughjs 的过点样条，
+  // 与画出来的曲线不是同一条，拖手势算出的原点偏移会让元素相对指针漂移。圆角箭头
+  // 一律走这条；直箭头与 `line` 返回 null，保持原有 roundness 分支不变。
+  const curvedPath = isCurvedArrow(element)
     ? getCurvedConnectorPath({ ...element, points: points as LocalPoint[] })
     : null;
   const curve = curvedPath

@@ -197,7 +197,6 @@ exports[`move element > rectangles with binding arrow 7`] = `
   "boundElements": null,
   "containerRef": undefined,
   "created": 1,
-  "curvedConnector": false,
   "customData": undefined,
   "elbowed": false,
   "endArrowhead": "triangle",
@@ -229,9 +228,7 @@ exports[`move element > rectangles with binding arrow 7`] = `
       "90.01760",
     ],
   ],
-  "roundness": {
-    "type": 2,
-  },
+  "roundness": null,
   "seed": 23633383,
   "startArrowhead": null,
   "startBinding": {

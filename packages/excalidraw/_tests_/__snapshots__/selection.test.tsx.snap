@@ -7,7 +7,6 @@ exports[`select single element on the scene > arrow 1`] = `
   "boundElements": null,
   "containerRef": undefined,
   "created": 1,
-  "curvedConnector": false,
   "customData": undefined,
   "elbowed": false,
   "endArrowhead": "triangle",
@@ -31,9 +30,7 @@ exports[`select single element on the scene > arrow 1`] = `
       50,
     ],
   ],
-  "roundness": {
-    "type": 2,
-  },
+  "roundness": null,
   "seed": 1278240551,
   "startArrowhead": null,
   "startBinding": null,

@@ -32,6 +32,8 @@ const makeElement = (
   ({
     type: "arrow",
     strokeWidth,
+    // 直箭头：判据是 `roundness !== null`，这里不给值会让它落到曲线分支
+    roundness: null,
     points: [pointFrom(0, 0), pointFrom(endX, 0)],
   } as unknown as ExcalidrawLinearElement);
 
