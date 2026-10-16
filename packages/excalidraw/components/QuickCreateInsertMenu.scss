@@ -1,0 +1,69 @@
+@use "../css/variables.module" as *;
+
+.excalidraw {
+  // —— 方向手柄拖到空白处弹出的「插入图形」面板（见 App.quickCreate）——
+  //
+  // 复用 `Popover` 做定位/视口内收（top/left/fitInViewport + onCloseRequest），
+  // 面板容器沿用右键菜单一系的变量（--menu-bg/--menu-border/--menu-shadow），
+  // 与既有弹层保持一致的圆角/描边/背景；z-index 与右键菜单同档。
+  .quick-create-menu {
+    z-index: var(--zIndex-ui-context-menu);
+  }
+
+  .quick-create-menu__panel {
+    box-sizing: border-box;
+    width: 244px;
+    padding: 0.5rem;
+    color: var(--page-ink);
+    background: var(--menu-bg);
+    border: 1px solid var(--menu-border);
+    border-radius: 10px;
+    box-shadow: var(--menu-shadow);
+    font-size: 13px;
+    user-select: none;
+  }
+
+  .quick-create-menu__title {
+    padding: 0.25rem 0.25rem 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  // 网格照 ShapeDrawer.scss 的 .shape-drawer__grid，本面板按截图用 5 列
+  .quick-create-menu__grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.375rem;
+    padding: 0.25rem 0.25rem 0.5rem;
+  }
+
+  .quick-create-menu__item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    padding: 0.25rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--page-ink);
+    cursor: pointer;
+
+    svg {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+
+    &:hover {
+      background: var(--button-hover-bg);
+      border-color: var(--menu-border);
+    }
+  }
+
+  .quick-create-menu__item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

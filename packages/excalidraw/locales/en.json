@@ -539,6 +539,9 @@
     "directionDown": "Grow down",
     "directionUp": "Grow up"
   },
+  "quickCreate": {
+    "insertShape": "Insert shape"
+  },
   "shapeDrawer": {
     "title": "Shapes",
     "more": "More",

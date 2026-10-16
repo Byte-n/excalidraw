@@ -1382,6 +1382,23 @@ const renderQuickCreateHandles = (
   selectionColor: string,
   allElementsMap: NonDeletedSceneElementsMap,
 ) => {
+  // 面板待决（拖到空白松手后）：四个圆点与悬停/拖拽预演一起收起，只画那条待决连线
+  // ——它是用户已经确认的那次拖拽，面板只是在问「末端要不要再长一个图形」。圆点此刻
+  // 既点不到（手势归面板）又会被画在线上，所以不画。注意必须排在下面「handles 为空就
+  // 早退」之前：待决时 `isSuppressed()` 让 handles 为空，早退会把待决连线一起吞掉。
+  if (app.quickCreate.hasPendingInsert()) {
+    context.save();
+    context.setLineDash([]);
+    renderQuickCreateGhost(
+      context,
+      app,
+      appState,
+      app.quickCreate.getPendingElements(),
+      allElementsMap,
+    );
+    context.restore();
+    return;
+  }
   // 修饰键状态由 App.quickCreate 维护（keydown / keyup / blur）：按住时整组不渲染。
   // **手势一旦开始就不受修饰键影响**——拖到一半把预演整组抽掉，等于中途失去反馈
   const dragging = app.quickCreate.getDrag();

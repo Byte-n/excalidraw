@@ -63,6 +63,7 @@ import type { ClipboardData } from "./clipboard";
 import type App from "./components/App";
 import type Library from "./data/library";
 import type { ContextMenuItems } from "./components/ContextMenu";
+import type { PresetCatalogGroupId } from "./components/presetCatalog";
 import type { SnapLine } from "./snapping";
 import type { ImportedDataState } from "./data/types";
 import type { ImportContext, PreparedImport } from "./data/import";
@@ -492,12 +493,31 @@ export type ScrollConstraints = {
   offsets?: Offsets;
 };
 
+/**
+ * 「插入图形」面板的定位与分组：`top`/`left` 是相对 Excalidraw 容器的屏幕坐标
+ * （同 `contextMenu` 的落点口径），`groupId` 是源图形所属的目录分组——面板据此
+ * 取 `getCatalogGroup(groupId).items` 铺网格。分组由源图形的 `shape.id` 推出
+ * （`fc-*` → flowchart，其余 → basic），不新增「当前分组」状态。
+ */
+export type QuickCreateMenuState = {
+  top: number;
+  left: number;
+  groupId: PresetCatalogGroupId;
+};
+
 export interface AppState {
   contextMenu: {
     items: ContextMenuItems;
     top: number;
     left: number;
   } | null;
+  /**
+   * 「插入图形」面板的待决态：方向手柄拖到空白松手后弹出，镜像给 React 树用的
+   * 最小信息（定位 + 源图形所属分组）。**待决的布局/连线几何不在 appState 里**，
+   * 留在 `AppQuickCreate` 私有字段上——这里只负责让面板渲染出来，同 `contextMenu`
+   * 的既有做法。`Store.getObservedAppState` 不观察它，因此不会产生额外的 undo 条目。
+   */
+  quickCreateMenu: QuickCreateMenuState | null;
   showWelcomeScreen: boolean;
   isLoading: boolean;
   errorMessage: React.ReactNode;

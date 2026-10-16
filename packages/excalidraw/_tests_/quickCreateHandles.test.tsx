@@ -32,12 +32,15 @@ import {
   QUICK_CREATE_GHOST_ARROW_ID,
   QUICK_CREATE_GHOST_SHAPE_ID,
 } from "../components/App.quickCreate";
+import { PRESET_SIZES } from "../components/app/createPresets";
+import { getCatalogGroup } from "../components/presetCatalog";
 import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
 import { Keyboard, Pointer, UI } from "./helpers/ui";
-import { act, fireEvent, render } from "./test-utils";
+import { act, fireEvent, render, screen } from "./test-utils";
 
+import type { PresetCatalogGroupId } from "../components/presetCatalog";
 import type { Drawable } from "roughjs/bin/core";
 import type { NormalizedZoomValue } from "../types";
 
@@ -2093,64 +2096,84 @@ describe("quick create handles", () => {
       mouse.upAt(to.x, to.y);
     };
 
-    it("lands the copy so its outline passes exactly through the pointer", () => {
+    /** 指针下的可绑定目标图形（拖到它上面松手 → 只连一条线，不再叠一份副本） */
+    const targetAt = (x: number, y: number, width = 120, height = 80) =>
+      API.createElement({ type: "rectangle", x, y, width, height });
+
+    /**
+     * 拖拽中的预演元素：语义变更后拖拽档**只剩连线**（悬停/点击档才是
+     * `[幽灵副本, 幽灵连线]`）。只有源被单选、这一路手势已越过阈值时才走这一支。
+     */
+    const dragPreview = () =>
+      h.app.quickCreate.getGhostElements(handleFor("right"));
+
+    it("lands the picked shape so its outline passes exactly through the pointer", () => {
       const source = createRectangle();
       selectShape(source);
       const before = liveIds();
 
-      // 右手柄 → 出口 (220,140)（源右边中点）；指针 (400,200) 是 3:1 的斜向
+      // 右手柄 → 出口 (220,140)（源右边中点）；指针 (400,200) 在空白处 → 弹「插入图形」面板
       dragHandle("right", { x: 400, y: 200 });
+      expect(screen.getByTestId("quick-create-menu")).toBeTruthy();
+      // 点「矩形」＝在指针处建出一份矩形（口径 A1：指针就是轮廓经过的那个点）
+      fireEvent.click(screen.getByTestId("quick-create-item-rectangle"));
 
-      const copy = createdShape(before);
-      // 口径 A1：指针是连线落在副本上的那个点，所以它必须**正好在副本轮廓上**
-      expect(outlineRatio(copy, { x: 400, y: 200 })).toBeCloseTo(1);
-      // 副本 120×80：(180,60)/√10 方向上的轮廓距离是 60√10/3 ≈ 63.245，
-      // 沿它外推正好是 (+60, +20) —— 副本身心 (460,220)，左上角就是 (400,180)
-      expect(copy.x).toBeCloseTo(400);
-      expect(copy.y).toBeCloseTo(180);
+      const shape = createdShape(before);
+      expect(outlineRatio(shape, { x: 400, y: 200 })).toBeCloseTo(1);
+      // 120×80：(180,60)/√10 方向上的轮廓距离是 60√10/3 ≈ 63.245，
+      // 沿它外推正好是 (+60, +20) —— 图形中心 (460,220)，左上角就是 (400,180)
+      expect(shape.x).toBeCloseTo(400);
+      expect(shape.y).toBeCloseTo(180);
       // 斜拖不再与源中点对齐（点击那条才对齐）
-      expect(copy.y + copy.height / 2).not.toBeCloseTo(
+      expect(shape.y + shape.height / 2).not.toBeCloseTo(
         source.y + source.height / 2,
       );
     });
 
-    it("puts the connector's end on the pointer, not on the copy's centre", () => {
+    it("keeps the pending connector's end on the pointer, not on any shape's centre", () => {
       const source = createRectangle();
       selectShape(source);
       const before = liveIds();
 
       dragHandle("right", { x: 400, y: 200 });
 
-      const arrow = createdArrow(before);
+      // 落在空白：还没落地任何元素，画布上那条是待决连线（预演）
+      expect(liveIds()).toEqual(before);
+      const pending = h.app.quickCreate.getPendingElements();
+      expect(pending).toHaveLength(1);
+      const arrow = pending[0];
+      if (!isArrowElement(arrow)) {
+        throw new Error("Expected an arrow");
+      }
+      // 末端自由（没写 endBinding），正好落在指针上
+      expect(arrow.endBinding ?? null).toBeNull();
       const end = worldPoints(arrow).at(-1)!;
       const pointer = { x: 400, y: 200 };
-      // 端点落在指针处：差的一个 binding gap（端点悬空 6px 是仓库的统一口径）
-      expect(Math.hypot(end.x - pointer.x, end.y - pointer.y)).toBeLessThan(8);
-      // 而且是在副本**外侧**贴近轮廓，不是陷在副本里（指针也不是副本身心）
-      expect(outlineRatio(createdShape(before), end)).toBeGreaterThan(1);
-      expect(end.x).not.toBeCloseTo(
-        createdShape(before).x + createdShape(before).width / 2,
-      );
+      expect(Math.hypot(end.x - pointer.x, end.y - pointer.y)).toBeCloseTo(0);
+      // 而且不是源图形的中心（自由端确实取的是指针，不是别的锚点）
+      expect(end.x).not.toBeCloseTo(source.x + source.width / 2);
     });
 
-    it("drops where the pointer is even when something already sits there", () => {
+    it("connects to the shape under the pointer instead of dropping a copy onto it", () => {
       const source = createRectangle();
-      // 落点位置本来站着另一个图形：拖拽落位不听让位规则，用户选哪儿就是哪儿
-      const obstacle = API.createElement({
-        type: "rectangle",
-        x: 380,
-        y: 170,
-        width: 120,
-        height: 80,
-      });
+      // 落点位置本来站着另一个图形：拖到它上面松手 → 把源连到它，而不是再叠一份副本
+      const obstacle = targetAt(380, 170);
       selectShape(source, [obstacle]);
       const before = liveIds();
 
       dragHandle("right", { x: 400, y: 200 });
 
-      const copy = createdShape(before);
-      expect(copy.x).toBeCloseTo(400);
-      expect(copy.y).toBeCloseTo(180);
+      // 场上只多这一条连线，没有任何副本落在占位图形身上
+      expect(live()).toHaveLength(before.length + 1);
+      expect(
+        live().some(
+          (element) =>
+            isCompositeShapeElement(element) && !before.includes(element.id),
+        ),
+      ).toBe(false);
+      const arrow = createdArrow(before);
+      expect(arrow.startBinding?.elementId).toBe(source.id);
+      expect(arrow.endBinding?.elementId).toBe(obstacle.id);
     });
 
     it("keeps the click placement when the pointer stays under the threshold", () => {
@@ -2186,9 +2209,10 @@ describe("quick create handles", () => {
       expect(h.app.quickCreate.getDrag()).toBeNull();
     });
 
-    it("previews the very same placement it will land", () => {
+    it("previews the very same connector it will land", () => {
       const source = createRectangle();
-      selectShape(source);
+      const target = targetAt(340, 160);
+      selectShape(source, [target]);
       const before = liveIds();
       const { center } = handleFor("right");
 
@@ -2196,66 +2220,68 @@ describe("quick create handles", () => {
       mouse.downAt(center.x, center.y);
       mouse.moveTo(400, 200);
 
-      // 拖拽中的预演：幽灵副本 + 幽灵连线，几何与落地同源
-      const ghost = h.app.quickCreate.getGhostElements(
-        getQuickCreateHandles(h.app).find(
-          (handle) => handle.direction === "right",
-        )!,
-      );
-      const ghostShape = ghost.find(
-        (element) => element.id === QUICK_CREATE_GHOST_SHAPE_ID,
-      )!;
-      expect(ghostShape.x).toBeCloseTo(400);
-      expect(ghostShape.y).toBeCloseTo(180);
-      const ghostArrow = ghost.find(
-        (element) => element.id === QUICK_CREATE_GHOST_ARROW_ID,
-      )!;
+      // 拖拽中的预演：只剩一条连线，末端已投影到目标图形轮廓上
+      const ghost = dragPreview();
+      expect(ghost).toHaveLength(1);
+      const ghostArrow = ghost[0];
       if (!isArrowElement(ghostArrow)) {
         throw new Error("Expected an arrow");
       }
       expect(ghostArrow.points).toHaveLength(2);
-      expect(outlineRatio(ghostShape, { x: 400, y: 200 })).toBeCloseTo(1);
+      // 末端投影到目标**轮廓**上：本体坐标恰在外缘再加一个 binding gap（悬空几 px）
+      expect(
+        outlineRatio(target, worldPoints(ghostArrow).at(-1)!),
+      ).toBeGreaterThan(1);
+      expect(
+        outlineRatio(target, worldPoints(ghostArrow).at(-1)!),
+      ).toBeLessThan(1.2);
 
       mouse.upAt(400, 200);
-      const copy = createdShape(before);
-      // 落地与预演逐位一致（副本位置 + 连线端点）
-      expect(copy.x).toBeCloseTo(ghostShape.x);
-      expect(copy.y).toBeCloseTo(ghostShape.y);
-      const end = worldPoints(createdArrow(before)).at(-1)!;
-      expect(end.x).toBeCloseTo(ghostArrow.x + ghostArrow.points[1][0]);
-      expect(end.y).toBeCloseTo(ghostArrow.y + ghostArrow.points[1][1]);
+      const arrow = createdArrow(before);
+      // 落地与预演逐位一致（同一对绑定 + 同一个 `updateBoundPoint` 投影）
+      const previewPoints = worldPoints(ghostArrow);
+      const landedPoints = worldPoints(arrow);
+      expect(landedPoints).toHaveLength(previewPoints.length);
+      previewPoints.forEach((point, index) => {
+        expect(point.x).toBeCloseTo(landedPoints[index].x, 9);
+        expect(point.y).toBeCloseTo(landedPoints[index].y, 9);
+      });
     });
 
     it("keeps previewing the click placement until the pointer crosses the threshold", () => {
       const source = createRectangle();
       selectShape(source);
       const { center } = handleFor("right");
+      const ghost = () => dragPreview();
       const ghostShapeX = () =>
-        h.app.quickCreate
-          .getGhostElements(
-            getQuickCreateHandles(h.app).find(
-              (handle) => handle.direction === "right",
-            )!,
-          )
-          .find((element) => element.id === QUICK_CREATE_GHOST_SHAPE_ID)!.x;
+        ghost().find((element) => element.id === QUICK_CREATE_GHOST_SHAPE_ID)!
+          .x;
 
       mouse.moveTo(center.x, center.y);
       mouse.downAt(center.x, center.y);
-      // 按下不拖：预演仍是悬停那一份（基准位），不该跳到指针那儿
+      // 按下不拖：预演仍是悬停那一份（幽灵副本 + 幽灵连线，落在基准位）
+      expect(ghost()).toHaveLength(2);
       expect(ghostShapeX()).toBeCloseTo(350);
       // 还在阈值内：照旧
       mouse.moveTo(center.x + 5, center.y);
+      expect(ghost()).toHaveLength(2);
       expect(ghostShapeX()).toBeCloseTo(350);
-      // 越过阈值：预演改跟指针，落点也换成指针反推的那个位置
+      // 越过阈值：预演只剩连线，末端跟指针（不再画幽灵副本）
       mouse.moveTo(400, 200);
-      expect(ghostShapeX()).toBeCloseTo(400);
+      expect(ghost()).toHaveLength(1);
+      expect(
+        ghost().some((element) => element.id === QUICK_CREATE_GHOST_SHAPE_ID),
+      ).toBe(false);
+      const end = worldPoints(ghost()[0]).at(-1)!;
+      expect(end.x).toBeCloseTo(400);
+      expect(end.y).toBeCloseTo(200);
       mouse.upAt(400, 200);
     });
 
     it("lands the elbow arrow along the very route the drag previewed", () => {
-      // 自由落点会把入口放到副本的**任意**一条边上（不再只是轴向边），这正是当年
-      // 预演与落地分叉的地方：预演画的是我们自己的单折 Z、末段沿出线轴，而路由按
-      // 所依附边定末段朝向、拐点由 A* 定。现在两边跑同一个路由，逐点必须相等。
+      // 自由落点会把入口放到任意一条边上（不再只是轴向边），这正是当年预演与落地
+      // 分叉的地方：预演画的是我们自己的单折 Z、末段沿出线轴，而路由按所依附边定
+      // 末段朝向、拐点由 A* 定。现在两边跑同一个路由，逐点必须相等。
       for (const to of [
         { x: 400, y: 200 }, // 落在副本左边：两种算法当年也同形
         { x: 300, y: 400 }, // 落在副本上边：预演横着贴上边、落地竖着扎进去
@@ -2272,11 +2298,12 @@ describe("quick create handles", () => {
         mouse.moveTo(center.x, center.y);
         mouse.downAt(center.x, center.y);
         mouse.moveTo(to.x, to.y);
-        const ghostArrow = h.app.quickCreate.getGhostElements(
-          handleFor("right"),
-        )[1];
-        const preview = worldPoints(ghostArrow);
         mouse.upAt(to.x, to.y);
+
+        // 拖到空白松手 → 面板；那条待决连线正是拖拽预演出来的折线（末端自由）
+        const preview = worldPoints(h.app.quickCreate.getPendingElements()[0]);
+        // 关面板但保留连线：走 `createConnectorOnly` 的等价收口
+        Keyboard.keyDown(KEYS.ESCAPE);
 
         const arrow = createdArrow(before);
         expect(arrow.elbowed).toBe(true);
@@ -2287,15 +2314,6 @@ describe("quick create handles", () => {
             preview[index - 1].x === preview[index].x ||
               preview[index - 1].y === preview[index].y,
           ).toBe(true);
-        }
-        // 末段垂直于它所依附的那条边：指针落在副本上边时就是竖着进去
-        const [secondLast, last] = worldPoints(arrow).slice(-2);
-        const copy = createdShape(before);
-        if (
-          Math.abs(last.y - copy.y) < 1 ||
-          Math.abs(last.y - (copy.y + copy.height)) < 1
-        ) {
-          expect(secondLast.x).toBeCloseTo(last.x);
         }
       }
     });
@@ -2321,10 +2339,238 @@ describe("quick create handles", () => {
         args: [center.x - 4, center.y],
       });
 
-      // 松手之后四个手柄回到常态档
+      // 收尾：Esc 取消这次手势（不落地、不弹面板）→ 四个手柄回到常态档
       frames.clear();
-      mouse.upAt(400, 200);
+      Keyboard.keyDown(KEYS.ESCAPE);
       expect(Object.keys(frames.handleRadii())).toHaveLength(4);
+      mouse.upAt(400, 200);
+      expect(liveIds()).toEqual([source.id]);
+    });
+
+    describe("free-pointing onto a shape or blank", () => {
+      it("previews only the connector while dragging, ending on the pointer", () => {
+        const source = createRectangle();
+        selectShape(source);
+        const { center } = handleFor("right");
+
+        mouse.moveTo(center.x, center.y);
+        mouse.downAt(center.x, center.y);
+        mouse.moveTo(400, 200);
+
+        const preview = dragPreview();
+        // 拖拽档只剩连线，幽灵副本不再画（拖到的位置本来就没有图形）
+        expect(preview).toHaveLength(1);
+        expect(preview[0].type).toBe("arrow");
+        expect(
+          preview.some((element) => element.id === QUICK_CREATE_GHOST_SHAPE_ID),
+        ).toBe(false);
+        const end = worldPoints(preview[0]).at(-1)!;
+        expect(end.x).toBeCloseTo(400);
+        expect(end.y).toBeCloseTo(200);
+        mouse.upAt(400, 200);
+      });
+
+      it("projects the drag preview's end onto the shape it hovers", () => {
+        const source = createRectangle();
+        const target = targetAt(340, 160);
+        selectShape(source, [target]);
+        const { center } = handleFor("right");
+
+        mouse.moveTo(center.x, center.y);
+        mouse.downAt(center.x, center.y);
+        // 先停在空白：末端自由，就在指针上
+        mouse.moveTo(300, 120);
+        let preview = dragPreview();
+        expect(preview).toHaveLength(1);
+        const freeArrow = preview[0];
+        if (!isArrowElement(freeArrow)) {
+          throw new Error("Expected an arrow");
+        }
+        expect(freeArrow.endBinding ?? null).toBeNull();
+
+        // 指针滑到目标图形上：预演末端改投影到它的轮廓（与落地同源）
+        mouse.moveTo(400, 200);
+        preview = dragPreview();
+        const arrow = preview[0];
+        if (!isArrowElement(arrow)) {
+          throw new Error("Expected an arrow");
+        }
+        expect(arrow.endBinding?.elementId).toBe(target.id);
+        // 末端投影到目标轮廓上（外缘再加一个 binding gap）
+        expect(
+          outlineRatio(target, worldPoints(arrow).at(-1)!),
+        ).toBeGreaterThan(1);
+        expect(outlineRatio(target, worldPoints(arrow).at(-1)!)).toBeLessThan(
+          1.2,
+        );
+        mouse.upAt(400, 200);
+      });
+
+      it("drops a single connector onto an existing shape, both ends bound, undone in one step", () => {
+        const source = createRectangle();
+        const target = targetAt(340, 160);
+        selectShape(source, [target]);
+        const before = liveIds();
+        const undoStepsBefore = API.getUndoStack().length;
+
+        dragHandle("right", { x: 400, y: 200 });
+
+        const arrow = createdArrow(before);
+        // 场上只多一条连线，没有多图形
+        expect(live()).toHaveLength(before.length + 1);
+        expect(arrow.startBinding?.elementId).toBe(source.id);
+        expect(arrow.endBinding?.elementId).toBe(target.id);
+        // 绑定也记在目标图形的 boundElements 上
+        expect(
+          h.app.scene
+            .getNonDeletedElement(target.id)!
+            .boundElements?.some((bound) => bound.id === arrow.id),
+        ).toBe(true);
+        // 选中新连线
+        expect(Object.keys(h.state.selectedElementIds)).toEqual([arrow.id]);
+        // 一步撤销：回到拖拽前的场景（源 + 目标图形）
+        expect(API.getUndoStack()).toHaveLength(undoStepsBefore + 1);
+        Keyboard.undo();
+        expect(liveIds()).toEqual(before);
+      });
+
+      const sourceGroups: [PresetCatalogGroupId, string][] = [
+        ["basic", "rectangle"],
+        ["flowchart", "fc-diamond"],
+      ];
+
+      it.each(sourceGroups)(
+        "opens the menu with the source group's items (%s), picking builds shape + connector in one step",
+        (groupId, itemId) => {
+          const source =
+            groupId === "flowchart"
+              ? API.createElement({
+                  type: "fc-terminator",
+                  x: 100,
+                  y: 100,
+                  width: 120,
+                  height: 80,
+                })
+              : createRectangle();
+          selectShape(source);
+          const before = liveIds();
+          const undoStepsBefore = API.getUndoStack().length;
+
+          // 拖到空白松手 → 弹「插入图形」面板，此刻还没落地任何元素
+          dragHandle("right", { x: 400, y: 200 });
+          expect(screen.getByTestId("quick-create-menu")).toBeTruthy();
+          expect(liveIds()).toEqual(before);
+
+          // 条目 = 源图形所属分组
+          const items = getCatalogGroup(groupId).items;
+          expect(screen.getAllByTestId(/^quick-create-item-/)).toHaveLength(
+            items.length,
+          );
+          for (const item of items) {
+            expect(
+              screen.getByTestId(`quick-create-item-${item.id}`),
+            ).toBeTruthy();
+          }
+
+          // 点一个条目 → 图形 + 连线同时在场、连线两端绑定
+          fireEvent.click(screen.getByTestId(`quick-create-item-${itemId}`));
+          expect(screen.queryByTestId("quick-create-menu")).toBeNull();
+
+          const shape = createdShape(before);
+          const arrow = createdArrow(before);
+          expect(live()).toHaveLength(before.length + 2);
+          expect(shape).toMatchObject({
+            type: "composite_shape",
+            shape: { id: itemId },
+          });
+          expect(arrow.startBinding?.elementId).toBe(source.id);
+          expect(arrow.endBinding?.elementId).toBe(shape.id);
+          // 一次 undo 同时移除图形与连线
+          expect(API.getUndoStack()).toHaveLength(undoStepsBefore + 1);
+          Keyboard.undo();
+          expect(liveIds()).toEqual(before);
+        },
+      );
+
+      it("gives the picked shape the source's style and its own preset size", () => {
+        // 口径「新图形跟随源」：样式照抄源图形，轮廓换成所选的那个。这条同时守着
+        // `createConnectorAndShape` 的一条坑——`applySourceStyle` 返回的是**新对象**，
+        // 插场景的必须是那一份；插装配原件就会得到默认样式（本用例先于修复跑挂过）。
+        const source = createRectangle({
+          x: 100,
+          y: 100,
+          width: 300,
+          height: 150,
+          strokeColor: "#ff0000",
+          opacity: 50,
+          angle: 0.5,
+        });
+        selectShape(source);
+        const before = liveIds();
+
+        dragHandle("right", { x: 700, y: 500 });
+        fireEvent.click(screen.getByTestId("quick-create-item-rectangle"));
+
+        const shape = createdShape(before);
+        // 样式跟随源：描边色 / 角度 / 透明度照抄
+        expect(shape).toMatchObject({
+          strokeColor: "#ff0000",
+          opacity: 50,
+          angle: 0.5,
+        });
+        // 尺寸用所选图形自己的预设（源是 300×150），不是源尺寸
+        expect(shape.width).toBe(PRESET_SIZES.rectangle!.width);
+        expect(shape.height).toBe(PRESET_SIZES.rectangle!.height);
+      });
+
+      it("keeps only the connector when the menu is closed, undone in one step", () => {
+        const source = createRectangle();
+        selectShape(source);
+        const before = liveIds();
+        const undoStepsBefore = API.getUndoStack().length;
+
+        dragHandle("right", { x: 400, y: 200 });
+        expect(screen.getByTestId("quick-create-menu")).toBeTruthy();
+
+        // Esc 关面板（不选图形）→ 保留那条自由端连线
+        Keyboard.keyPress(KEYS.ESCAPE);
+
+        expect(screen.queryByTestId("quick-create-menu")).toBeNull();
+        const arrow = createdArrow(before);
+        expect(live()).toHaveLength(before.length + 1);
+        expect(arrow.startBinding?.elementId).toBe(source.id);
+        expect(arrow.endBinding ?? null).toBeNull();
+        // 末端自由，落在松手点
+        const end = worldPoints(arrow).at(-1)!;
+        expect(end.x).toBeCloseTo(400);
+        expect(end.y).toBeCloseTo(200);
+        // 一步撤销
+        expect(API.getUndoStack()).toHaveLength(undoStepsBefore + 1);
+        Keyboard.undo();
+        expect(liveIds()).toEqual(before);
+      });
+
+      it("hides and disables the whole handle set while the menu is open", () => {
+        const source = createRectangle();
+        selectShape(source);
+        const { center } = handleFor("right");
+        expect(h.app.quickCreate.isSuppressed()).toBe(false);
+
+        dragHandle("right", { x: 400, y: 200 });
+
+        expect(h.app.quickCreate.hasPendingInsert()).toBe(true);
+        expect(h.app.quickCreate.isSuppressed()).toBe(true);
+        // 渲染层口径：整组不画
+        expect(
+          getQuickCreateHandles(
+            h.app,
+            "mouse",
+            h.app.quickCreate.isSuppressed(),
+          ),
+        ).toEqual([]);
+        // 命中层口径：点也点不到
+        expect(h.app.quickCreate.hitTest(center.x, center.y)).toBeNull();
+      });
     });
   });
 

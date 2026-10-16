@@ -52,8 +52,12 @@ import type {
 } from "@excalidraw/element";
 
 import { getCurrentItemArrowProps } from "./app/arrowCreation";
+import { PRESET_SIZES } from "./app/createPresets";
+import { buildPresetElementsCentered } from "./app/presetPlacement";
+import { getCatalogItem, isFlowchartShapeId } from "./presetCatalog";
 
 import type { CreationIdentity } from "./app/createPresets";
+import type { PresetCatalogGroupId, PresetCatalogItem } from "./presetCatalog";
 
 import type { PointerDownState } from "../types";
 
@@ -112,6 +116,37 @@ type QuickCreateDrag = {
 };
 
 /**
+ * 预演连线的**末端目标**。把原来只认「幽灵副本」的 `ghostShape` 泛化出来：拖拽
+ * 期间末端可能压在已有图形上（预演就该连到它的轮廓、与落地同源），也可能落在空白
+ * （末端就是指针，不写 `endBinding`）。
+ *
+ * - `{ kind: "ghost" }` → 悬停/点击预演，末端绑到幽灵副本；
+ * - `{ kind: "scene" }` → 拖拽经过已有图形，末端绑到它（元素表里现成有）；
+ * - `null` → 拖拽末端自由（落在指针上）。
+ *
+ * 另一档「不给 endTarget」（落地那条）由调用方直接传裸 `buildConnectorArrow` 表达，
+ * 真正的绑定交给 `bindBindingElement`，不走预演这套等效绑定。
+ */
+type QuickCreatePreviewEnd =
+  | { kind: "ghost"; element: NonDeletedExcalidrawElement }
+  | { kind: "scene"; elementId: string }
+  | null;
+
+/**
+ * 拖到空白松手后的待决态：面板开着、连线还没落地。松手点、方向、源都留在这里，
+ * appState 只镜像面板要读的定位与分组（见 `QuickCreateMenuState`）。
+ */
+type QuickCreatePending = {
+  sourceId: string;
+  direction: QuickCreateDirection;
+  /** 松手点（场景坐标）：末端自由时连线就落在这里 */
+  pointer: QuickCreatePoint;
+  /** 面板定位（相对容器的屏幕坐标），同 contextMenu 的落点口径 */
+  screenPoint: { top: number; left: number };
+  groupId: PresetCatalogGroupId;
+};
+
+/**
  * 方向手柄：单选图形时在指示框四边外侧显示圆点，悬停换加号，**按下后拖拽**在
  * 指针处生成同款副本并用当前连接线样式连一条线（不拖直接松手则是老行为：建在
  * 让位后的落点）。形态对齐 `App.mindmap.ts` 的「+」按钮：悬停只改字形与光标。
@@ -151,6 +186,19 @@ export class AppQuickCreate {
     elements: readonly NonDeletedExcalidrawElement[];
   } | null = null;
 
+  /**
+   * 拖到空白松手后的待决态：面板开着、连线还没落地。松手点、方向、源都留在这里
+   * （appState 只镜像面板要读的定位与分组，见 `QuickCreateMenuState`）。提交/取消
+   * 时都从场景**重新取源**——待决期间源被撤销/删除就整条作废。
+   */
+  private pendingInsert: QuickCreatePending | null = null;
+
+  /** 待决连线的预演缓存，口径同 `ghost`（面板开着时渲染层每帧来取一遍）。 */
+  private pendingGhost: {
+    key: string;
+    elements: readonly NonDeletedExcalidrawElement[];
+  } | null = null;
+
   constructor(private readonly app: App) {}
 
   getHovered = () => this.hovered;
@@ -158,7 +206,11 @@ export class AppQuickCreate {
   /** 进行中的手势（渲染层读它画「按下档」手柄与跟随指针的预演） */
   getDrag = () => this.drag;
 
-  isSuppressed = (): boolean => this.modifierHeld;
+  /** 面板是否待决：渲染层据此把手柄整组收起、只画那条待决连线。 */
+  hasPendingInsert = (): boolean => this.pendingInsert !== null;
+
+  /** 修饰键按住或面板待决时，手柄整组与命中一起消失（`suppressed` 并入待决）。 */
+  isSuppressed = (): boolean => this.modifierHeld || this.hasPendingInsert();
 
   /**
    * 修饰键状态变化时调用。状态没变时直接返回（按住修饰键会重复触发 keydown，
@@ -213,10 +265,16 @@ export class AppQuickCreate {
       sceneX,
       sceneY,
       pointerType,
-      this.modifierHeld,
+      // 面板待决时命中整组返回空（同修饰键口径）：圆点已收起，点得到的也要跟着消失
+      this.modifierHeld || this.hasPendingInsert(),
     );
 
   handlePointerMove = (sceneX: number, sceneY: number) => {
+    // 面板待决：手柄整组收起、只留待决连线，不做任何悬停判定（也不 reset——
+    // reset 会把待决连线的预演缓存一起丢掉）
+    if (this.pendingInsert) {
+      return;
+    }
     // 手势进行中：悬停判定整组让位（预演改由拖拽态驱动）。这里必须早退而不是
     // 走下面的 reset 分支——reset 会把拖拽预演一起丢掉。
     if (this.drag) {
@@ -286,6 +344,12 @@ export class AppQuickCreate {
     pointerDownState: PointerDownState,
     event: React.PointerEvent<HTMLElement>,
   ): boolean => {
+    // 面板待决：这次 pointerdown 放给通用路径——面板的 Popover 在 pointerdown
+    // （落在面板外）时调 cancelPendingInsert 把待决连线落地并关面板。让手柄接管
+    // 会让这次点击既不关面板、又长出第二路手势。
+    if (this.pendingInsert) {
+      return false;
+    }
     // 只接管裸的主键点击：带修饰键的点击是选择手势（shift 多选、alt 复制等），
     // 右键留给上下文菜单，一律不吞。
     if (
@@ -402,11 +466,13 @@ export class AppQuickCreate {
   };
 
   /**
-   * 抬起相位：拖过阈值就落在**指针**处（连线端点即指针，见口径 A1），没拖过就
-   * 还是点击的老落点（基准位 + 让位）。两者都走同一条落地管线 `createConnectedShape`。
+   * 抬起相位三分支（只认真正的 `pointerup`，pointercancel 与「丢失抬起」一律不落地）：
    *
-   * 只有真正的 pointerup 才落地：pointercancel 与「丢失抬起」的补发都不建图
-   * （口径同 `App.mindmap` 与桶填充：取消的手势不留痕）。
+   * - **没拖过阈值** → 老的点击路径 `createConnectedShape`（基准位 + 让位，行为不变）；
+   * - **拖过阈值且指针下压着可绑定的图形** → `createConnectorOnly`：只建一条两端绑定
+   *   的连线（自由指向的语义：把源连到那个图形上）；
+   * - **拖过阈值落在空白** → `openInsertMenu`：先不落地，弹「插入图形」面板（§待决态），
+   *   预演继续留着，等提交/取消时再收口。
    */
   handlePointerUp = (
     pointerDownState: PointerDownState,
@@ -425,11 +491,23 @@ export class AppQuickCreate {
     this.ghost = null;
     const source = this.app.scene.getNonDeletedElement(drag.elementId);
     if (event.type === "pointerup" && source) {
-      this.createConnectedShape(
-        source,
-        drag.direction,
-        drag.moved ? scenePoint : undefined,
-      );
+      if (!drag.moved) {
+        this.createConnectedShape(source, drag.direction);
+      } else {
+        // 落点判定与预演同源：都按松手点的场景坐标查「指针下有谁」（锁定元素
+        // 天然不命中 → 当空白），于是「预演连到哪个图形」与「落地连到哪个图形」
+        // 不会分叉。
+        const target = this.resolveDragEndTarget(
+          scenePoint.x,
+          scenePoint.y,
+          source,
+        );
+        if (target) {
+          this.createConnectorOnly(source, drag.direction, scenePoint, target);
+        } else {
+          this.openInsertMenu(source, drag.direction, scenePoint, event);
+        }
+      }
     }
     // 无论落地与否都算这次手势已处理：免得通用路径再排一次空的历史捕获
     pointerDownState.drag.hasOccurred = true;
@@ -543,12 +621,17 @@ export class AppQuickCreate {
   };
 
   /**
-   * 悬停预演的两个元素：幽灵副本 + 幽灵连线。只用于绘制——不进 scene、不进
-   * store、不进历史，协作端看不到；身份固定，不消耗共享的 id / 随机序列。
+   * 预演元素：悬停/点击档是「幽灵副本 + 幽灵连线」，拖拽档**只剩连线**。
    *
-   * 几何取自与 `createConnectedShape` 同一套函数、样式原样照抄源图形与当前
-   * 连接线，渲染层用 `renderElement` 画，所以看到的线条、箭头、填充就是落地
-   * 之后的样子，只有不透明度不同（`QUICK_CREATE_GHOST_ALPHA`）。
+   * 只用于绘制——不进 scene、不进 store、不进历史，协作端看不到；身份固定，
+   * 不消耗共享的 id / 随机序列。
+   *
+   * 几何取自与落地同一套函数、样式原样照抄源图形与当前连接线，渲染层用
+   * `renderElement` 画，所以看到的线条、箭头、填充就是落地之后的样子，只有不
+   * 透明度不同（`QUICK_CREATE_GHOST_ALPHA`）。
+   *
+   * 拖拽档末端口径分两支（与落地同源，见 `resolveDragEndTarget`）：指针压在可
+   * 绑定图形上 → 预演就连到它的轮廓；空白 → 末端就是指针（不写 `endBinding`）。
    */
   getGhostElements = (
     handle: QuickCreateHandle,
@@ -558,6 +641,15 @@ export class AppQuickCreate {
       return [];
     }
     const placement = this.resolvePlacementFor(source, handle.direction);
+    const dragging = this.isDraggingHandle(source.id, handle.direction);
+    // 拖拽档的末端目标（悬停/点击档不在这里定：那条末端恒是幽灵副本）
+    const draggingEnd: QuickCreatePreviewEnd = dragging
+      ? this.resolveDragPreviewEnd(
+          placement.connector.entry.x,
+          placement.connector.entry.y,
+          source,
+        )
+      : null;
     const key = [
       source.id,
       source.version,
@@ -573,15 +665,37 @@ export class AppQuickCreate {
       // 的旧落点与旧折线。
       placement.target.x,
       placement.target.y,
+      // 拖拽末端目标也进键：指针从某个图形上空划过去时绑定不同、线也不同，少了
+      // 这截会一直画着上一帧的旧绑定 / 旧自由端。按 `kind` 收窄（拖拽档只会是
+      // `scene` 或 `null`，但类型上是三档，直接读 `elementId` 过不了类型检查）。
+      dragging
+        ? draggingEnd?.kind === "scene"
+          ? `scene:${draggingEnd.elementId}`
+          : "free"
+        : "ghost",
     ].join("|");
     if (this.ghost?.key !== key) {
       this.ghost = {
         key,
-        elements: this.buildGhostElements(source, handle.direction, placement),
+        elements: this.buildGhostElements(
+          source,
+          placement,
+          dragging,
+          draggingEnd,
+        ),
       };
     }
     return this.ghost.elements;
   };
+
+  /** 当前拖拽是否正是这个源的这个方向（预演与落位判定共用，避免两处口径分叉） */
+  private isDraggingHandle = (
+    sourceId: string,
+    direction: QuickCreateDirection,
+  ) =>
+    this.drag?.moved === true &&
+    this.drag.elementId === sourceId &&
+    this.drag.direction === direction;
 
   /** 影响幽灵连线的样式切片：变了预演就得重建，否则会画着上一套样式 */
   private getArrowStyleFingerprint = () => {
@@ -680,18 +794,35 @@ export class AppQuickCreate {
     ),
   });
 
+  /**
+   * 预演元素：
+   * - **悬停/点击档** → `[幽灵副本, 幽灵连线]`，末端绑到副本（老口径）；
+   * - **拖拽档** → 只剩 `[连线]`——拖到的位置还没有图形，画一个预演副本是假
+   *   承诺；末端按 `draggingEnd` 定：压在可绑定图形上就绑到它，空白则自由落在
+   *   指针上（不写 `endBinding`）。
+   */
   private buildGhostElements = (
     source: NonDeleted<ExcalidrawCompositeShapeElement>,
-    direction: QuickCreateDirection,
     placement: QuickCreatePlacement,
+    dragging: boolean,
+    draggingEnd: QuickCreatePreviewEnd,
   ): readonly NonDeletedExcalidrawElement[] => {
+    if (dragging) {
+      return [
+        this.buildConnectorArrow(placement, {
+          opacityScale: QUICK_CREATE_GHOST_ALPHA,
+          identity: GHOST_ARROW_IDENTITY,
+          endTarget: draggingEnd,
+        }),
+      ];
+    }
     const ghostShape = this.buildGhostShape(source, placement.target);
     return [
       ghostShape,
       this.buildConnectorArrow(placement, {
         opacityScale: QUICK_CREATE_GHOST_ALPHA,
         identity: GHOST_ARROW_IDENTITY,
-        ghostShape,
+        endTarget: { kind: "ghost", element: ghostShape },
       }),
     ];
   };
@@ -730,8 +861,12 @@ export class AppQuickCreate {
     options: {
       opacityScale?: number;
       identity?: CreationIdentity;
-      /** 预演副本元素：端绑定的锚点按它的轮廓算，与落地写进副本的固定点同源 */
-      ghostShape?: NonDeletedExcalidrawElement;
+      /**
+       * 预演末端目标（见 `QuickCreatePreviewEnd`）：**缺省**表示不做预演——落地
+       * 那条自己走 `bindBindingElement`；给了（含 `null`）就补上与落地同源的等效
+       * 绑定并把两端落到位。
+       */
+      endTarget?: QuickCreatePreviewEnd;
     } = {},
   ): NonDeleted<ExcalidrawLinearElement> => {
     const { connector } = placement;
@@ -752,7 +887,8 @@ export class AppQuickCreate {
       ...options.identity,
     });
     const arrow: NonDeleted<ExcalidrawLinearElement> = created;
-    if (!options.ghostShape) {
+    // 落地那条（不给 endTarget）：只出裸箭头，两端绑定交给 bindBindingElement
+    if (options.endTarget === undefined) {
       return arrow;
     }
     // 预演元素不在场景里、没有绑定：补上与落地 `bindBindingElement` 写进去的
@@ -760,26 +896,26 @@ export class AppQuickCreate {
     // 贴在哪条边、曲线朝哪弯，缺了会退回弦主轴、画出错的轴向。
     const bound: NonDeleted<ExcalidrawLinearElement> = {
       ...arrow,
-      ...this.getPreviewBindings(placement, arrow, options.ghostShape),
+      ...this.getPreviewBindings(placement, arrow, options.endTarget),
     };
     // 再按与落地 `projectArrowEndpoints` 同一个 `updateBoundPoint` 把两端落到位，
     // 折线档继续按内置路由收口（落地那条由 `movePoints` → `mutateElement` 接手）
-    return this.projectPreviewEndpoints(bound, options.ghostShape);
+    return this.projectPreviewEndpoints(bound, options.endTarget);
   };
 
   /**
    * 预演专用：把两端按**与落地同一个** `updateBoundPoint` 落到位（它是纯函数，
    * 返回元素局部坐标点）。预演元素不在场景里，没法走落地那条 `movePoints`，所以
-   * 这里只把返回的点写回元素本身。副本要临时塞进 map：解析另一端的绑定时会查它。
+   * 这里只把返回的点写回元素本身。幽灵副本要临时塞进 map：解析另一端的绑定时会查它。
    *
    * 最后一步与落地同一处收口：折线档的点位由内置正交路由决定，预演也跑它一遍
    * （见 `routePreviewElbowArrow`）。
    */
   private projectPreviewEndpoints = (
     arrow: NonDeleted<ExcalidrawLinearElement>,
-    ghostShape: NonDeletedExcalidrawElement,
+    endTarget: QuickCreatePreviewEnd,
   ): NonDeleted<ExcalidrawLinearElement> => {
-    const elementsMap = this.getPreviewElementsMap(ghostShape);
+    const elementsMap = this.getPreviewElementsMap(endTarget);
     const points = arrow.points.map((p) => pointFrom<LocalPoint>(p[0], p[1]));
     for (const field of ["startBinding", "endBinding"] as const) {
       const binding = arrow[field];
@@ -844,14 +980,17 @@ export class AppQuickCreate {
     } as NonDeleted<ExcalidrawLinearElement>;
   };
 
-  /** 预演用的元素表：场景 + 幽灵副本（绑定求解与路由都要按 id 查它） */
+  /** 预演用的元素表：场景 + 幽灵副本（绑定求解与路由都要按 id 查它）。
+   *  `scene` 档的目标本就在场景里，`null` 档没有末端元素，都不用额外塞。 */
   private getPreviewElementsMap = (
-    ghostShape: NonDeletedExcalidrawElement,
+    endTarget: QuickCreatePreviewEnd,
   ): ElementsMap => {
     const elementsMap: ElementsMap = new Map(
       this.app.scene.getNonDeletedElementsMap(),
     );
-    elementsMap.set(ghostShape.id, ghostShape);
+    if (endTarget?.kind === "ghost") {
+      elementsMap.set(endTarget.element.id, endTarget.element);
+    }
     return elementsMap;
   };
 
@@ -859,18 +998,27 @@ export class AppQuickCreate {
    * 预演连线的等效绑定：附着点的归一化盒坐标。用与落地 `bindBindingElement` 内部
    * **同一个**函数算，两边因此逐位一致——注意落地是按 `isElbowArrow` 分叉的
    * （`binding.ts:1158`），折线档走它自己那一支：不照做的话两端会差一个 binding gap。
+   *
+   * 起端恒绑源（末端与否无关）；末端按 `endTarget` 定：`ghost`/`scene` 各有元素，
+   * `null` 则留空（自由端不写 `endBinding`）。
    */
   private getPreviewBindings = (
     placement: QuickCreatePlacement,
     arrow: NonDeleted<ExcalidrawLinearElement>,
-    ghostShape: NonDeletedExcalidrawElement,
+    endTarget: QuickCreatePreviewEnd,
   ): {
     startBinding: ElementBinding | null;
     endBinding: ElementBinding | null;
   } => {
     const { sourceId, connector } = placement;
-    const elementsMap = this.getPreviewElementsMap(ghostShape);
+    const elementsMap = this.getPreviewElementsMap(endTarget);
     const source = this.app.scene.getNonDeletedElement(sourceId);
+    const endElement =
+      endTarget?.kind === "ghost"
+        ? endTarget.element
+        : endTarget?.kind === "scene"
+        ? this.app.scene.getNonDeletedElement(endTarget.elementId)
+        : null;
     const elbowed = isElbowArrow(arrow) ? arrow : null;
     const attachPointFor = (
       target: NonDeleted<ExcalidrawBindableElement>,
@@ -899,12 +1047,13 @@ export class AppQuickCreate {
               ...attachPointFor(source, "start", connector.exit),
             }
           : null,
-      endBinding: isBindableElement(ghostShape)
-        ? {
-            elementId: QUICK_CREATE_GHOST_SHAPE_ID,
-            ...attachPointFor(ghostShape, "end", connector.entry),
-          }
-        : null,
+      endBinding:
+        endElement && isBindableElement(endElement)
+          ? {
+              elementId: endElement.id,
+              ...attachPointFor(endElement, "end", connector.entry),
+            }
+          : null,
     };
   };
 
@@ -1016,5 +1165,349 @@ export class AppQuickCreate {
     if (updates.size) {
       LinearElementEditor.movePoints(arrow, this.app.scene, updates);
     }
+  };
+
+  // ---------------------------------------------------------------------------
+  // 拖拽档落地与「插入图形」待决态
+  // ---------------------------------------------------------------------------
+
+  /**
+   * 落点判定（拖拽档）：松手点下压着的**可绑定**图形。命中不了就当空白处理——
+   * 口径与 `isBlockedByElementAt` 一致：锁定元素 `getElementAtPosition` 默认不命中，
+   * 因此算空白；连线（arrow/line）与画框不是「能连到的东西」，一并排除；源自身排除。
+   */
+  private resolveDragEndTarget = (
+    sceneX: number,
+    sceneY: number,
+    source: NonDeletedExcalidrawElement,
+  ): NonDeleted<ExcalidrawBindableElement> | null => {
+    const under = this.app.getElementAtPosition(sceneX, sceneY);
+    if (
+      !under ||
+      under.id === source.id ||
+      isLinearElement(under) ||
+      isFrameLikeElement(under) ||
+      !isBindableElement(under)
+    ) {
+      return null;
+    }
+    return under as NonDeleted<ExcalidrawBindableElement>;
+  };
+
+  /** 预演用的末端目标：把 `resolveDragEndTarget` 的结果包成 `scene` 档或自由端 */
+  private resolveDragPreviewEnd = (
+    sceneX: number,
+    sceneY: number,
+    source: NonDeletedExcalidrawElement,
+  ): QuickCreatePreviewEnd => {
+    const target = this.resolveDragEndTarget(sceneX, sceneY, source);
+    return target ? { kind: "scene", elementId: target.id } : null;
+  };
+
+  /**
+   * 只建一条连线：拖到已有图形松手，或面板取消（保留连线）都走这里。两端都绑定
+   * （起端源、末端目标），选中新连线，**一步撤销**。
+   *
+   * `target` 为空表示末端自由（面板取消那条口径）：末端落在松手点、不写 `endBinding`。
+   */
+  createConnectorOnly = (
+    source: NonDeletedExcalidrawElement,
+    direction: QuickCreateDirection,
+    pointer: QuickCreatePoint,
+    target: NonDeleted<ExcalidrawBindableElement> | null,
+  ): void => {
+    const placement = this.resolveDragPlacement(source, direction, pointer);
+    const arrow = this.buildConnectorArrow(placement);
+    this.app.insertNewElements([arrow]);
+    // 绑定锚点用几何解出来的出口 / 入口：与预演逐位一致（预演走同一个更新函数）
+    bindBindingElement(
+      arrow,
+      source as NonDeleted<ExcalidrawBindableElement>,
+      "start",
+      this.app.scene,
+      pointFrom<GlobalPoint>(
+        placement.connector.exit.x,
+        placement.connector.exit.y,
+      ),
+    );
+    if (target) {
+      bindBindingElement(
+        arrow,
+        target,
+        "end",
+        this.app.scene,
+        pointFrom<GlobalPoint>(
+          placement.connector.entry.x,
+          placement.connector.entry.y,
+        ),
+      );
+    }
+    // 两点连线的两端按 orbit 绑定落到位（口径同 createConnectedShape，折线档已按几何落好）
+    if (arrow.points.length === 2) {
+      this.projectArrowEndpoints(arrow);
+    }
+    this.app.setState({
+      selectedElementIds: { [arrow.id]: true },
+      selectedGroupIds: {},
+      selectedLinearElement: null,
+      hoveredElementIds: {},
+      editingGroupId: null,
+    });
+    // 只这一条连线，一步可撤销
+    this.app.store.scheduleCapture();
+  };
+
+  /**
+   * 面板里选了图形：装配所选图形 + 连线，**一步撤销**。
+   *
+   * 落点由 `getQuickCreateDragPlacement`（与拖拽预演同一个）给出——轮廓恰好过松手点，
+   * 于是连线入口与预演那条重合；再按所选图形**真实尺寸**重算连线（入口落在图形轮廓
+   * 上）。装配走 `buildPresetElementsCentered`（与抽屉同一条链路，含画框归属）。
+   *
+   * **绝不 `setActiveTool`、绝不写 `preferredGenericShape`**：与 `presetPlacement` 的
+   * 既有约定一致，弹窗起点与工具栏当前工具脱钩。
+   */
+  createConnectorAndShape = (
+    source: NonDeletedExcalidrawElement,
+    direction: QuickCreateDirection,
+    pointer: QuickCreatePoint,
+    item: PresetCatalogItem,
+  ): void => {
+    const spec = item.creation;
+    // 两组目录（basic / flowchart）的条目全是 shape，别的 kind 不作数
+    if (spec.kind !== "shape") {
+      return;
+    }
+    const size = PRESET_SIZES[spec.tool] ?? {
+      width: source.width,
+      height: source.height,
+    };
+    const { target } = getQuickCreateDragPlacement(
+      this.getSourceGeometry(source),
+      direction,
+      pointer,
+      size,
+    );
+    const built = buildPresetElementsCentered(this.app, spec, target);
+    const shape = this.applySourceStyle(source, built.elements[0]);
+    const shapeCenter = {
+      x: shape.x + shape.width / 2,
+      y: shape.y + shape.height / 2,
+    };
+    // 用图形真实中心/尺寸重算连线（轮廓恰好过松手点，与预演同源）
+    const connector = getQuickCreateConnector(
+      this.getSourceGeometry(source),
+      direction,
+      shapeCenter,
+      { width: shape.width, height: shape.height },
+    );
+    const arrow = this.buildConnectorArrow({
+      sourceId: source.id,
+      target: shapeCenter,
+      connector,
+    });
+    // 与老路径同序：连线在下、图形压在上面。**插入的是盖过样式的那一份**——
+    // `applySourceStyle` 返回新对象，插装配原件等于「样式跟随源」没生效。
+    this.app.insertNewElements([arrow, shape]);
+    bindBindingElement(
+      arrow,
+      source as NonDeleted<ExcalidrawBindableElement>,
+      "start",
+      this.app.scene,
+      pointFrom<GlobalPoint>(connector.exit.x, connector.exit.y),
+    );
+    bindBindingElement(
+      arrow,
+      shape as NonDeleted<ExcalidrawBindableElement>,
+      "end",
+      this.app.scene,
+      pointFrom<GlobalPoint>(connector.entry.x, connector.entry.y),
+    );
+    if (arrow.points.length === 2) {
+      this.projectArrowEndpoints(arrow);
+    }
+    this.app.setState({
+      selectedElementIds: { [shape.id]: true },
+      selectedGroupIds: {},
+      selectedLinearElement: null,
+      hoveredElementIds: {},
+      editingGroupId: null,
+    });
+    // 连线 + 图形同一次插入，一步可撤销
+    this.app.store.scheduleCapture();
+  };
+
+  /**
+   * 源样式覆盖：把源的描边色 / 填充色 / 填充样式 / 描边粗细 / 描边线型 / 透明度 /
+   * 角度照抄到新图形上（口径「新图形跟随源」）。**不碰圆角**——本 fork 复合矩形刻意
+   * 直角，圆角只由所选图形自己的 `shape.id` 决定（见 `shape.ts` 的 mindmap-node 分支）。
+   *
+   * 返回的是**新对象**（id 不变），所以调用方必须插这一份、不能插装配原件。
+   * 泛型只为保住入参的元素类型（装配结果是 `ExcalidrawNonSelectionElement`），
+   * 否则 `insertNewElements` 收不下。
+   */
+  private applySourceStyle = <TElement extends NonDeletedExcalidrawElement>(
+    source: NonDeletedExcalidrawElement,
+    element: TElement,
+  ): TElement =>
+    ({
+      ...element,
+      strokeColor: source.strokeColor,
+      backgroundColor: source.backgroundColor,
+      fillStyle: source.fillStyle,
+      strokeWidth: source.strokeWidth,
+      strokeStyle: source.strokeStyle,
+      opacity: source.opacity,
+      angle: source.angle,
+    } as TElement);
+
+  /**
+   * 拖到空白松手：先不落地，弹出「插入图形」面板。面板定位用 pointerup 的客户区坐标
+   * 减容器偏移（同 `contextMenu.ts` 的既有做法）；分组由源图形的 `shape.id` 推出
+   * （`fc-*` → flowchart，其余 → basic）。面板要读的最小信息同时镜像进 appState。
+   */
+  private openInsertMenu = (
+    source: NonDeletedExcalidrawElement,
+    direction: QuickCreateDirection,
+    pointer: QuickCreatePoint,
+    event: PointerEvent,
+  ): void => {
+    if (!isCompositeShapeElement(source)) {
+      return;
+    }
+    const container = this.app.excalidrawContainerRef.current;
+    const { top: offsetTop, left: offsetLeft } = container
+      ? container.getBoundingClientRect()
+      : { top: 0, left: 0 };
+    const screenPoint = {
+      top: event.clientY - offsetTop,
+      left: event.clientX - offsetLeft,
+    };
+    const groupId: PresetCatalogGroupId = isFlowchartShapeId(source.shape.id)
+      ? "flowchart"
+      : "basic";
+    this.pendingInsert = {
+      sourceId: source.id,
+      direction,
+      pointer,
+      screenPoint,
+      groupId,
+    };
+    this.pendingGhost = null;
+    this.app.setState({
+      quickCreateMenu: {
+        top: screenPoint.top,
+        left: screenPoint.left,
+        groupId,
+      },
+    });
+    this.app.repaint.request();
+  };
+
+  /**
+   * 待决连线的预演（渲染层在待决期间画它）：末端自由、落在松手点。缓存口径同 `ghost`
+   * ——面板开着时渲染层每帧来取一遍，不能每帧新建对象。
+   */
+  getPendingElements = (): readonly NonDeletedExcalidrawElement[] => {
+    const pending = this.pendingInsert;
+    if (!pending) {
+      return [];
+    }
+    const source = this.app.scene.getNonDeletedElement(pending.sourceId);
+    if (!source || !isCompositeShapeElement(source)) {
+      return [];
+    }
+    const key = [
+      pending.sourceId,
+      source.version,
+      pending.direction,
+      this.getArrowStyleFingerprint(),
+      pending.pointer.x,
+      pending.pointer.y,
+    ].join("|");
+    if (this.pendingGhost?.key !== key) {
+      const placement = this.resolveDragPlacement(
+        source,
+        pending.direction,
+        pending.pointer,
+      );
+      this.pendingGhost = {
+        key,
+        elements: [
+          this.buildConnectorArrow(placement, {
+            opacityScale: QUICK_CREATE_GHOST_ALPHA,
+            identity: GHOST_ARROW_IDENTITY,
+            endTarget: null,
+          }),
+        ],
+      };
+    }
+    return this.pendingGhost.elements;
+  };
+
+  /**
+   * 面板里点了某个图形：落地那条**待决连线 + 所选图形**。先关面板、清待决，再从场景
+   * 重新取源——待决期间源被撤销/删除（或取不到目录条目）就作废，别把用户那次拖拽吞掉。
+   */
+  commitPendingInsert = (itemId: string): void => {
+    const pending = this.takePendingInsert();
+    if (!pending) {
+      return;
+    }
+    const source = this.app.scene.getNonDeletedElement(pending.sourceId);
+    if (!source || !isCompositeShapeElement(source)) {
+      this.app.repaint.request();
+      return;
+    }
+    const item = getCatalogItem(itemId);
+    if (item && item.creation.kind === "shape") {
+      this.createConnectorAndShape(
+        source,
+        pending.direction,
+        pending.pointer,
+        item,
+      );
+    } else {
+      // 条目取不到（不该发生）→ 退化成只落连线，别把用户那次拖拽一起吞掉
+      this.createConnectorOnly(
+        source,
+        pending.direction,
+        pending.pointer,
+        null,
+      );
+    }
+    this.app.repaint.request();
+  };
+
+  /**
+   * 面板未选就关闭（Esc / 点面板外）：**保留连线**（用户口径），末端自由落在松手点，
+   * 一步撤销。与提交共用收口——差别只是「要不要多建一个图形」。
+   */
+  cancelPendingInsert = (): void => {
+    const pending = this.takePendingInsert();
+    if (!pending) {
+      return;
+    }
+    const source = this.app.scene.getNonDeletedElement(pending.sourceId);
+    if (!source || !isCompositeShapeElement(source)) {
+      this.app.repaint.request();
+      return;
+    }
+    this.createConnectorOnly(source, pending.direction, pending.pointer, null);
+    this.app.repaint.request();
+  };
+
+  /**
+   * 关面板 + 清待决（**幂等**）：提交/取消共用，也供面板外 pointerdown 收口——重复
+   * 调用第二次拿到 null 直接返回。取回待决是为了让调用方接着走落地分支。
+   */
+  private takePendingInsert = (): QuickCreatePending | null => {
+    const pending = this.pendingInsert;
+    this.pendingInsert = null;
+    this.pendingGhost = null;
+    if (this.app.state.quickCreateMenu) {
+      this.app.setState({ quickCreateMenu: null });
+    }
+    return pending;
   };
 }

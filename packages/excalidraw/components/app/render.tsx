@@ -21,6 +21,7 @@ import ConvertElementTypePopup, {
 import { TOOL_DRAG_PREVIEW_OPACITY } from "../App.toolDrag";
 import { RIGHT_SIDEBAR_WIDTH } from "../App.viewport";
 import { ContextMenu } from "../ContextMenu";
+import { QuickCreateInsertMenu } from "../QuickCreateInsertMenu";
 import { ViewportStatusBorder } from "../ViewportStatusFrame/ViewportStatusFrame";
 import LayerUI from "../LayerUI";
 import { ElementCanvasButton } from "../MagicButton";
@@ -400,6 +401,18 @@ export const AppView = ({ app }: { app: App }) => {
                             }}
                           />
                         )}
+                        {app.isDefaultUIEnabled() &&
+                          app.state.quickCreateMenu && (
+                            <QuickCreateInsertMenu
+                              menu={app.state.quickCreateMenu}
+                              onPick={(id) =>
+                                app.quickCreate.commitPendingInsert(id)
+                              }
+                              onClose={() =>
+                                app.quickCreate.cancelPendingInsert()
+                              }
+                            />
+                          )}
                         <StaticCanvas
                           canvas={app.canvas}
                           rc={app.rc}

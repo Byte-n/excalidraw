@@ -499,6 +499,9 @@
     "directionDown": "向下生长",
     "directionUp": "向上生长"
   },
+  "quickCreate": {
+    "insertShape": "插入图形"
+  },
   "shapeDrawer": {
     "title": "图形",
     "more": "更多功能",
