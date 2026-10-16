@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+[AGENTS.md](AGENTS.md)
+
 ## Project Structure
 
 Excalidraw is a **monorepo** with a clear separation between the core library and the application:
