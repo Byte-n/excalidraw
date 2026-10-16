@@ -35,6 +35,12 @@ import type { AppClassProperties } from "../types";
  *   `SHAPE_DRAWER_WIDTH_PX`，`:root[dir="rtl"]` 下从右侧滑入）；
  * - 手机竖屏：底部 `BottomSheet`（最大高度吃 `SHAPE_SHEET_HEIGHT_RATIO`）。
  *
+ * 非模态关闭模型：抽屉是常驻取用面板，**只有两种收起方式**——抽屉内的收起
+ * 按钮、Esc。以下操作一律**不**收起：点画板、在画板上选中图形、放完预设继续
+ * 操作、点工具栏/属性面板/菜单等抽屉以外的其他 UI、再次点击入口按钮「更多
+ * 功能」。故组件不监听画布 pointerdown，也不做「点外部关闭」；手机竖屏的分支
+ * 点遮罩同样不收起（遮罩只压暗、拦截画布手势），只由弹层内收起按钮 / Esc 收起。
+ *
  * 组件本身**常挂载**（分区折叠状态因此在会话内保留）：
  *
  * - 桌面/平板/手机横屏的左侧抽屉常挂载、仅以 `data-open` 控制显隐——关闭态
@@ -111,17 +117,6 @@ export const ShapeDrawer = ({ app }: { app: AppClassProperties }) => {
     ownerDocument.addEventListener("keydown", onKeyDown, true);
     return () => ownerDocument.removeEventListener("keydown", onKeyDown, true);
   }, [open, container, app]);
-
-  // 画布 pointerdown 关闭（复用既有 app.onPointerDownEmitter，同 ToolPopover）
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const unsubscribe = app.onPointerDownEmitter.on(() => {
-      app.setAppState({ openShapeDrawer: false });
-    });
-    return () => unsubscribe?.();
-  }, [open, app]);
 
   const content = (
     <>
@@ -247,9 +242,9 @@ export const ShapeDrawer = ({ app }: { app: AppClassProperties }) => {
           } as CSSProperties
         }
       >
-        <BottomSheetOverlay
-          onPointerDown={() => app.setAppState({ openShapeDrawer: false })}
-        />
+        {/* 点遮罩不收起（与桌面一致）：遮罩只负责压暗与拦截画布手势，收起重
+            只由弹层内的收起按钮 / Esc 触发，不再传 onPointerDown 自行关闭 */}
+        <BottomSheetOverlay />
         <div className="tb-sheet-anchor shape-drawer-sheet-anchor">
           <BottomSheet
             className="shape-drawer-sheet"

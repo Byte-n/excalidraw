@@ -189,7 +189,7 @@ describe("图形抽屉的开合", () => {
     expect(drawerRoot()).toHaveAttribute("data-open", "false");
   });
 
-  it("画布 pointerdown 关闭抽屉", () => {
+  it("画板 pointerdown / 选中图形不关闭抽屉", () => {
     openDrawer();
     expect(h.state.openShapeDrawer).toBe(true);
 
@@ -200,8 +200,26 @@ describe("图形抽屉的开合", () => {
       clientY: 120,
     });
 
-    expect(h.state.openShapeDrawer).toBe(false);
-    expect(drawerRoot()).toHaveAttribute("data-open", "false");
+    // 非模态：点画板、选中图形一律不收起
+    expect(h.state.openShapeDrawer).toBe(true);
+    expect(drawerRoot()).toHaveAttribute("data-open", "true");
+  });
+
+  it("点击抽屉外的其他 UI 不关闭抽屉", () => {
+    openDrawer();
+    expect(h.state.openShapeDrawer).toBe(true);
+
+    // 打到工具栏上「矩形」触发按钮（普通按钮，非 data-prevent-outside-click）
+    fireEvent.pointerDown(screen.getByTestId("toolbar-rectangle"), {
+      ...POINTER,
+      button: 0,
+      clientX: 100,
+      clientY: 700,
+    });
+
+    // 非模态：抽屉以外的其他 UI（工具栏/属性面板/菜单）也不收起
+    expect(h.state.openShapeDrawer).toBe(true);
+    expect(drawerRoot()).toHaveAttribute("data-open", "true");
   });
 });
 
@@ -263,6 +281,10 @@ describe("图形抽屉的单击放置", () => {
     const center = expectedVisibleCenter();
 
     placeItem("fc-diamond");
+
+    // 非模态：放完预设抽屉保持展开，便于连续取用
+    expect(h.state.openShapeDrawer).toBe(true);
+    expect(drawerRoot()).toHaveAttribute("data-open", "true");
 
     const created = live();
     expect(created).toHaveLength(1);
@@ -507,5 +529,29 @@ describe("手机竖屏走底部面板分支", () => {
     expect(
       document.querySelectorAll('[data-testid^="shape-drawer-group-"]'),
     ).toHaveLength(6);
+  });
+
+  it("点遮罩不收起，点弹层内收起按钮才收起", () => {
+    openDrawer();
+    expect(h.state.openShapeDrawer).toBe(true);
+
+    const overlay = document.querySelector<HTMLElement>(".tb-sheet__overlay")!;
+    expect(overlay).not.toBeNull();
+
+    fireEvent.pointerDown(overlay, {
+      ...POINTER,
+      button: 0,
+      clientX: 195,
+      clientY: 800,
+    });
+
+    // 非模态：手机竖屏点遮罩同样不收起（与桌面一致）
+    expect(h.state.openShapeDrawer).toBe(true);
+    expect(drawerRoot()).not.toBeNull();
+
+    // 弹层内的收起按钮才收起
+    fireEvent.click(screen.getByTestId("shape-drawer-close"));
+    expect(h.state.openShapeDrawer).toBe(false);
+    expect(drawerRoot()).toBeNull();
   });
 });
