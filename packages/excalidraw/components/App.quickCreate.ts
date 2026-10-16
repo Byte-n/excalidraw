@@ -599,19 +599,18 @@ export class AppQuickCreate {
       ...arrow,
       ...this.getPreviewBindings(placement, arrow, options.ghostShape),
     };
-    // 再按与落地 `reflowArrowEndpoints` 同一个函数把两端落到轮廓上。条件也跟落地
-    // 同一口径（只有两点连线会 reflow）：折线样式错开时点数是 4，落地只写绑定、
-    // 不动点位，预演照做才逐点一致。
+    // 再按与落地 `projectArrowEndpoints` 同一个 `updateBoundPoint` 把两端落到位。
+    // 条件也跟落地同一条（只有两点连线会落）：折线样式错开时点数是 4，落地只写
+    // 绑定、不动点位，预演照做才逐点一致。
     return arrow.points.length === 2
       ? this.projectPreviewEndpoints(bound, options.ghostShape)
       : bound;
   };
 
   /**
-   * 预演专用：把两端按**与落地 `reflowArrowEndpoints` 同一个** `updateBoundPoint`
-   * 落到轮廓上（`updateBoundPoint` 是纯函数，返回元素局部坐标点）。预演元素不在
-   * 场景里，没法走落地那条 `movePoints`，所以这里只把返回的点写回元素本身。
-   * 副本要临时塞进 map：`updateBoundPoint` 解析另一端的绑定时会查它。
+   * 预演专用：把两端按**与落地同一个** `updateBoundPoint` 落到位（它是纯函数，
+   * 返回元素局部坐标点）。预演元素不在场景里，没法走落地那条 `movePoints`，所以
+   * 这里只把返回的点写回元素本身。副本要临时塞进 map：解析另一端的绑定时会查它。
    */
   private projectPreviewEndpoints = (
     arrow: NonDeleted<ExcalidrawLinearElement>,
@@ -743,12 +742,12 @@ export class AppQuickCreate {
       ),
     );
     // 两点连线（直线、圆角连接线，以及交给内置正交路由的折线箭头）按 orbit 绑定
-    // 把两端落到图形轮廓上；折线样式的端点**已经**按几何落在两个轮廓上（入口就是
-    // 副本轮廓的轴向交点），不能再来一次：reflow 只会沿「副本中心 → 倒数第二个点」
-    // 这条射线求交点——对折线来说是错的那条射线，会把入口从轮廓上拽走，旋转副本
-    // 尤其明显。圆角连接线现在恒为两点，走的就是这条 reflow。
+    // 把两端落到位（`updateBoundPoint`）；折线样式的端点**已经**按几何落在两个
+    // 轮廓上（入口就是副本轮廓的轴向交点），不能再来一次：那条规则只会沿「副本
+    // 中心 → 倒数第二个点」这条射线求交点——对折线来说是错的那条射线，会把入口
+    // 从轮廓上拽走，旋转副本尤其明显。圆角连接线现在恒为两点，走的就是这一步。
     if (arrow.points.length === 2) {
-      this.reflowArrowEndpoints(arrow);
+      this.projectArrowEndpoints(arrow);
     }
 
     this.app.setState({
@@ -781,8 +780,8 @@ export class AppQuickCreate {
     } as NonDeleted<ExcalidrawCompositeShapeElement>;
   };
 
-  /** 按已建立的绑定把两端落到图形轮廓上，弹头才不会藏在图形下面。 */
-  private reflowArrowEndpoints = (
+  /** 按已建立的绑定把两端落到位；落点口径在共享的 `updateBoundPoint` 里。 */
+  private projectArrowEndpoints = (
     arrow: NonDeleted<ExcalidrawLinearElement>,
   ) => {
     const elementsMap = this.app.scene.getNonDeletedElementsMap();

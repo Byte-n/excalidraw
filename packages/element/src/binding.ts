@@ -59,11 +59,14 @@ import {
   isLinearElement,
   isBindableElement,
   isBoundToContainer,
+  isCurvedArrow,
   isElbowArrow,
   isRectangularElement,
   isRectanguloidElement,
   isTextElement,
 } from "./typeChecks";
+
+import { normalFromFixedPoint } from "./curveConnector";
 
 import { aabbForElement, elementCenterPoint } from "./bounds";
 import { updateElbowArrowPoints } from "./elbowArrow";
@@ -2127,6 +2130,59 @@ const snapBoundPointToGrid = (
 const elementArea = (element: ExcalidrawBindableElement) =>
   element.width * element.height;
 
+/**
+ * 曲线档（`isCurvedArrow`）该端的落点：锚点沿**所依附边的外法线**外推一个绑定
+ * 间隙 —— 曲线档的端切线取自同一条法线（见 `curveConnector.ts`），端点落在它
+ * 上面才与切线自洽。通用规则的「与另一端的斜射线 ∩ 外扩轮廓」则会让端点顺着
+ * 射线沿边滑动（≈ gap × |dy/dx|，与另一端的位置成正比）。
+ *
+ * 锚点没贴着这条边、或外法线不指向另一端（图形被拖到另一侧时，端点得绕到朝向
+ * 对方的那条边上，箭头才不会横穿图形）时返回 null，交回通用规则。
+ */
+const getEdgeNormalEndpoint = (
+  arrow: NonDeleted<ExcalidrawLinearElement>,
+  binding: FixedPointBinding,
+  bindableElement: ExcalidrawBindableElement,
+  focusPoint: GlobalPoint,
+  otherFocusPointOrArrowPoint: GlobalPoint | undefined,
+  elementsMap: ElementsMap,
+): GlobalPoint | null => {
+  const normal = normalFromFixedPoint(normalizeFixedPoint(binding.fixedPoint));
+  if (!normal) {
+    return null;
+  }
+  const gap = getBindingGap(bindableElement, arrow);
+  if (
+    !hitElementItself({
+      element: bindableElement,
+      point: focusPoint,
+      elementsMap,
+      threshold: gap,
+      overrideShouldTestInside: true,
+    })
+  ) {
+    return null;
+  }
+  // 法线是**本体**坐标里的轴向，要按元素 angle 转成场景方向（锚点已是场景坐标）
+  const [normalX, normalY] = pointRotateRads<GlobalPoint>(
+    pointFrom<GlobalPoint>(normal.x, normal.y),
+    pointFrom<GlobalPoint>(0, 0),
+    bindableElement.angle,
+  );
+  if (
+    !otherFocusPointOrArrowPoint ||
+    normalX * (otherFocusPointOrArrowPoint[0] - focusPoint[0]) +
+      normalY * (otherFocusPointOrArrowPoint[1] - focusPoint[1]) <=
+      0
+  ) {
+    return null;
+  }
+  return pointFrom<GlobalPoint>(
+    focusPoint[0] + normalX * gap,
+    focusPoint[1] + normalY * gap,
+  );
+};
+
 export const updateBoundPoint = (
   arrow: NonDeleted<ExcalidrawLinearElement>,
   startOrEnd: "startBinding" | "endBinding",
@@ -2195,9 +2251,20 @@ export const updateBoundPoint = (
     ).sort(
       (a, b) => pointDistanceSq(a, focusPoint) - pointDistanceSq(b, focusPoint),
     )[0];
-  const outlinePoint =
-    intersector &&
-    intersectElementWithLineSegment(
+  // 曲线档按所依附边的外法线落（见 getEdgeNormalEndpoint），其余档按斜射线与外扩
+  // 轮廓的交点落
+  let outlinePoint = isCurvedArrow(arrow)
+    ? getEdgeNormalEndpoint(
+        arrow,
+        binding,
+        bindableElement,
+        focusPoint,
+        otherFocusPointOrArrowPoint,
+        elementsMap,
+      )
+    : null;
+  if (!outlinePoint && intersector) {
+    outlinePoint = intersectElementWithLineSegment(
       bindableElement,
       elementsMap,
       intersector,
@@ -2207,6 +2274,7 @@ export const updateBoundPoint = (
         pointDistanceSq(a, otherFocusPointOrArrowPoint) -
         pointDistanceSq(b, otherFocusPointOrArrowPoint),
     )[0];
+  }
   const startHasArrowhead = arrow.startArrowhead !== null;
   const endHasArrowhead = arrow.endArrowhead !== null;
   const resolvedTarget =

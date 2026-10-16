@@ -82,11 +82,14 @@ const unitDirection = (
 };
 
 /**
- * 由归一化盒坐标（0..1，与 `binding.fixedPoint` 同口径）判定所依附的边：
- * 偏离中心更大的那根轴胜出，方向取该轴上 `f − 0.5` 的符号。两轴打平（正角点、
- * 点状目标、内部锚点）时没有确定边，返回 null 交给调用方回落。
+ * 由归一化盒坐标（0..1，与 `binding.fixedPoint` 同口径）判定所依附的边：偏离
+ * 中心更大的那根轴胜出，方向取该轴上 `f − 0.5` 的符号（即该边的外法线）。两轴
+ * 打平（正角点、点状目标、内部锚点）时没有确定边，返回 null 交给调用方回落。
+ *
+ * 曲线档的端切线与端点落点（`binding.ts`）共用它：切线指向哪条边，端点就沿
+ * 那条边的外法线外移。
  */
-const normalFromFixedPoint = (
+export const normalFromFixedPoint = (
   fixedPoint: readonly [number, number],
 ): CurveNormal | null => {
   const [fx, fy] = fixedPoint;
