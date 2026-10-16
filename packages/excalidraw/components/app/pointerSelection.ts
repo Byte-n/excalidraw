@@ -43,6 +43,7 @@ import {
   cropElement,
   getElementsInResizingFrame,
   getFrameChildren,
+  hasBoundingBox,
   isElbowArrow,
   isFrameLikeElement,
   isImageElement,
@@ -482,13 +483,9 @@ export const handleSelectionOnPointerDown = (
 
     if (
       selectedElements.length === 1 &&
-      !app.state.selectedLinearElement?.isEditing &&
-      !isElbowArrow(selectedElements[0]) &&
-      !(
-        isLinearElement(selectedElements[0]) &&
-        (app.editorInterface.userAgent.isMobileDevice ||
-          (selectedElements[0] as any).points.length === 2)
-      ) &&
+      // 「能不能拿手柄」与「画不画框」同源：这里原本把 isElbowArrow / isEditing
+      // / 连接线两点 / 移动端 又重写了一遍，与 hasBoundingBox 慢慢就会各说各话。
+      hasBoundingBox([selectedElements[0]], app.state, app.editorInterface) &&
       !(
         app.state.selectedLinearElement &&
         app.state.selectedLinearElement.hoverPointIndex !== -1

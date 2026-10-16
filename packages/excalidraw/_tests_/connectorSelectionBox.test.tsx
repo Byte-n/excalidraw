@@ -4,6 +4,7 @@ import {
   getElementAbsoluteCoords,
   getElementWithTransformHandleType,
   getTransformHandles,
+  hasBoundingBox,
   newArrowElement,
   newLinearElement,
 } from "@excalidraw/element";
@@ -52,6 +53,11 @@ const fixtures: {
   name: string;
   element: () => NonDeletedExcalidrawElement;
   hitPoint: [number, number];
+  /**
+   * 包围盒内、但离路径很远的点。两点连接线的包围盒是退化的（宽或高为 0），
+   * 没有这种点；只有多拐点形态曾经留着一块「看不见的框」，所以只有它有。
+   */
+  emptyInsideBBox?: [number, number];
 }[] = [
   {
     name: "直线连接线（两点）",
@@ -80,6 +86,8 @@ const fixtures: {
       }),
     // 第三点 → 第四点这条横线上的中点
     hitPoint: [200, 200],
+    // 包围盒 (100,100)-(300,300) 里的空白处：路径只落在 x=200 竖线与 y=200 横线上
+    emptyInsideBBox: [280, 130],
   },
   {
     name: "曲线连接线（圆角，两点）",
@@ -206,6 +214,50 @@ describe("连接线选中不画矩形框", () => {
           h.app.editorInterface,
         ),
       ).toBe(null);
+
+      // 「有没有框」的唯一判据：它同时管画框、抓手柄、以及 hitTest 里
+      // 「只命中包围盒也算点到」那条路。连接线必须一律为 false，否则框不画了
+      // 却仍在某处生效。
+      expect(hasBoundingBox([connector], h.state, h.app.editorInterface)).toBe(
+        false,
+      );
+    },
+  );
+
+  // 曾经漏掉的半边：框不画了，但 `hasBoundingBox` 对多拐点连接线仍返回
+  // true，于是 `hitElement` 里的「只命中包围盒」那条路照样把包围盒内的空白处
+  // 判成命中——按住拖动会把连接线拖走，而画面上那个框并不存在。
+  const withEmptyInsideBBox = fixtures.filter(
+    (
+      fixture,
+    ): fixture is typeof fixtures[number] & {
+      emptyInsideBBox: [number, number];
+    } => !!fixture.emptyInsideBBox,
+  );
+  it.each(withEmptyInsideBBox)(
+    "$name：包围盒里的空白处不再能拖动它",
+    async ({ element, hitPoint, emptyInsideBBox }) => {
+      const connector = element();
+      await render(<Excalidraw initialData={{ elements: [connector] }} />);
+      const mouse = new Pointer("mouse");
+      const read = () =>
+        h.app.scene.getNonDeletedElement(
+          connector.id,
+        )! as NonDeletedExcalidrawElement;
+
+      mouse.clickAt(...hitPoint);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(h.state.selectedElementIds[connector.id]).toBe(true);
+
+      const before = { x: read().x, y: read().y };
+      mouse.downAt(...emptyInsideBBox);
+      mouse.moveTo(emptyInsideBBox[0] + 20, emptyInsideBBox[1] + 20);
+      mouse.up();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // 那里是一块普通空白：拖动只是拉了一个没捞到东西的橡皮筋
+      expect({ x: read().x, y: read().y }).toEqual(before);
+      expect(!!h.state.selectedElementIds[connector.id]).toBe(false);
     },
   );
 });

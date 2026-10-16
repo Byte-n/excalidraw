@@ -15,7 +15,6 @@ import type { Bounds } from "@excalidraw/common";
 
 import { getElementAbsoluteCoords } from "./bounds";
 import {
-  isElbowArrow,
   isFrameLikeElement,
   isImageElement,
   isLinearElement,
@@ -296,16 +295,15 @@ export const getTransformHandles = (
   pointerType: PointerType = "mouse",
   omitSides: { [T in TransformHandleType]?: boolean } = DEFAULT_OMIT_SIDES,
 ): TransformHandles => {
-  // 连接线（直线/曲线/折线）不画变换手柄：选中时它连矩形选中框都不画（见
-  // renderer/interactiveScene「Paint selected elements」），手柄再挂上去就既
-  // 悬空、又没有框可供指认。命中测试同源（resizeTest 走的也是这个函数），
-  // 所以「看不见」与「拖不动」始终是一条口径。
+  // 手柄只挂在框上：没有框（连接线）就没有手柄可挂，也不需要另写一套元素
+  // 类型判据（见 canHaveSelectionFrame）。命中测试同源——resizeTest 走的也
+  // 是这个函数，所以「看不见」与「拖不动」始终是一条口径。
   //
-  // 锁定元素与思维导图边同理：一画出来就是「能拖」的承诺。
+  // 锁定元素与思维导图边另有理由：一画出来就是「能拖」的承诺。
   if (
     element.locked ||
     element.type === "mindmap-edge" ||
-    isLinearElement(element)
+    !canHaveSelectionFrame(element)
   ) {
     return {};
   }
@@ -380,6 +378,22 @@ export const getTransformHandles = (
   );
 };
 
+/**
+ * 选中框的显隐（只看元素本身，与 app 状态无关）：连接线（直线/曲线/折线）
+ * 没有框——矩形只会把一条斜线圈进它的包围盒，选中反馈交给端点/拐点手柄与
+ * 线本身。
+ *
+ * 这个判断有四个消费者，必须同源，否则就会出现「框不画了、可它还在某处生
+ * 效」这种看不见的陷阱：
+ * - `hasBoundingBox`：画框（renderer/interactiveScene）+ 只命中包围盒也算
+ *   点到（app/hitTest）
+ * - `getTransformHandles`：画手柄 + 抓手柄（resizeTest）
+ * - `resizeTest` 贴着包围盒的边带兜底：悬停即变缩放光标的那圈热区
+ * - `pointerSelection` 按下时拿手柄的门槛
+ */
+export const canHaveSelectionFrame = (element: ExcalidrawElement) =>
+  !isLinearElement(element);
+
 export const hasBoundingBox = (
   elements: readonly NonDeletedExcalidrawElement[],
   appState: InteractiveCanvasAppState,
@@ -394,16 +408,6 @@ export const hasBoundingBox = (
   if (elements.length > 1) {
     return true;
   }
-  const element = elements[0];
-  if (isElbowArrow(element)) {
-    // Elbow arrows cannot be resized as single selected elements
-    return false;
-  }
-  if (!isLinearElement(element)) {
-    return true;
-  }
 
-  // on mobile/tablet we currently don't show bbox because of resize issues
-  // (also prob best for simplicity's sake)
-  return element.points.length > 2 && !editorInterface.userAgent.isMobileDevice;
+  return canHaveSelectionFrame(elements[0]);
 };

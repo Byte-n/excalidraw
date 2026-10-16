@@ -42,6 +42,7 @@ import {
   FOCUS_POINT_SIZE,
   getTransformHandles,
   getTransformHandlesFromCoords,
+  canHaveSelectionFrame,
   hasBoundingBox,
   hitElementItself,
   isArrowElement,
@@ -3773,7 +3774,7 @@ const _renderInteractiveScene = ({
       if (suppressedMindmapSelectionIds.has(element.id)) {
         continue;
       }
-      if (isLinearElement(element) && !element.locked) {
+      if (!canHaveSelectionFrame(element) && !element.locked) {
         renderHoveredLinearTrace(context, appState, element, elementsMap);
         continue;
       }
@@ -4019,7 +4020,7 @@ const _renderInteractiveScene = ({
             // 圈进它的包围盒，选中反馈交给沿路径的端点手柄（见
             // renderLinearPointHandles）与线本身。锁定的连接线例外——它没有
             // 可拖的端点手柄，灰色虚框是它唯一的选中指示。
-            (!isLinearElement(element) || element.locked)
+            (canHaveSelectionFrame(element) || element.locked)
           ) {
             selectionColors.push(selectionColor);
           }

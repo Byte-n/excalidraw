@@ -21,8 +21,9 @@ import {
   getTransformHandles,
   getOmitSidesForEditorInterface,
   canResizeFromSides,
+  canHaveSelectionFrame,
 } from "./transformHandles";
-import { isImageElement, isLinearElement } from "./typeChecks";
+import { isImageElement } from "./typeChecks";
 
 import type {
   TransformHandleType,
@@ -93,10 +94,11 @@ export const resizeTest = <Point extends GlobalPoint | LocalPoint>(
       elementsMap,
     );
 
-    // 连接线（直线/曲线/折线）没有选中框：边带贴着包围盒，框不画了它就成了
-    // 一圈看不见的缩放区——悬停上去光标还会变成缩放光标。手柄那边已由
-    // getTransformHandles 收口（不再返回手柄），边带这条兜底路径在此一并关掉。
-    if (!isLinearElement(element)) {
+    // 边带贴着包围盒，只有真的有框时才该存在：连接线没有框（见
+    // canHaveSelectionFrame），留着它就是一圈看不见的缩放区——悬停上去光标
+    // 还会变成缩放光标。手柄那边已由 getTransformHandles 收口，这条兜底路径
+    // 听同一个判据。
+    if (canHaveSelectionFrame(element)) {
       const SPACING = isImageElement(element)
         ? 0
         : SIDE_RESIZING_THRESHOLD / zoom.value;
