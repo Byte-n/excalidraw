@@ -540,19 +540,9 @@ describe("line element", () => {
     });
   });
 
-  it("resizes with locked aspect ratio", async () => {
-    UI.createElement("line", { points });
-    const element = h.elements[0] as ExcalidrawLinearElement;
-
-    const { width: prevWidth, height: prevHeight } = element;
-
-    UI.resize(element, "ne", [30, -60], { shift: true });
-
-    const scaleHeight = element.width / prevWidth;
-    const scaleWidth = element.height / prevHeight;
-
-    expect(scaleHeight).toBeCloseTo(scaleWidth);
-  });
+  // 「拖 ne 手柄 + shift 锁宽高比」这条用例随连接线变换手柄一并退役：单条连接线
+  // 已没有手柄可拖（改形走端点/拐点，或尺寸面板的数字输入）。
+  // freedraw 的同名用例仍在上面 "freedraw element" 里。
 
   it("resizes from center", async () => {
     UI.createElement("line", {
@@ -669,12 +659,30 @@ describe("arrow element", () => {
 
     expectLabelAtPathMidpoint();
 
-    UI.resize(arrow, "se", [50, 30]);
+    // 连接线不再有变换手柄：原来 UI.resize 拖的是 "se"/"w" 手柄，这里直接调用
+    // 手柄拖拽落地的同一个入口，位移量保持一致（se 拖 (+50,+30)、w 拖 (+20,0)）。
+    const resizeByDrag = (direction: "se" | "w", dx: number, dy: number) => {
+      const latest = h.app.scene.getNonDeletedElement(arrow.id)!;
+      act(() => {
+        resizeSingleElement(
+          direction === "se" ? latest.width + dx : latest.width - dx,
+          direction === "se" ? latest.height + dy : latest.height,
+          latest,
+          { ...latest },
+          arrayToMap(h.elements.map((element) => ({ ...element }))),
+          h.app.scene,
+          direction,
+          {},
+        );
+      });
+    };
+
+    resizeByDrag("se", 50, 30);
     expectLabelAtPathMidpoint();
     expect(label.angle).toBeCloseTo(0);
     expect(label.fontSize).toEqual(20);
 
-    UI.resize(arrow, "w", [20, 0]);
+    resizeByDrag("w", 20, 0);
     expectLabelAtPathMidpoint();
     expect(label.angle).toBeCloseTo(0);
     expect(label.fontSize).toEqual(20);

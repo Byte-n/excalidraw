@@ -93,8 +93,10 @@ export const resizeTest = <Point extends GlobalPoint | LocalPoint>(
       elementsMap,
     );
 
-    // do not resize from the sides for linear elements with only two points
-    if (!(isLinearElement(element) && element.points.length <= 2)) {
+    // 连接线（直线/曲线/折线）没有选中框：边带贴着包围盒，框不画了它就成了
+    // 一圈看不见的缩放区——悬停上去光标还会变成缩放光标。手柄那边已由
+    // getTransformHandles 收口（不再返回手柄），边带这条兜底路径在此一并关掉。
+    if (!isLinearElement(element)) {
       const SPACING = isImageElement(element)
         ? 0
         : SIDE_RESIZING_THRESHOLD / zoom.value;

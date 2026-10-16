@@ -296,14 +296,16 @@ export const getTransformHandles = (
   pointerType: PointerType = "mouse",
   omitSides: { [T in TransformHandleType]?: boolean } = DEFAULT_OMIT_SIDES,
 ): TransformHandles => {
-  // so that when locked element is selected (especially when you toggle lock
-  // via keyboard) the locked element is visually distinct, indicating
-  // you can't move/resize
+  // 连接线（直线/曲线/折线）不画变换手柄：选中时它连矩形选中框都不画（见
+  // renderer/interactiveScene「Paint selected elements」），手柄再挂上去就既
+  // 悬空、又没有框可供指认。命中测试同源（resizeTest 走的也是这个函数），
+  // 所以「看不见」与「拖不动」始终是一条口径。
+  //
+  // 锁定元素与思维导图边同理：一画出来就是「能拖」的承诺。
   if (
     element.locked ||
     element.type === "mindmap-edge" ||
-    // Elbow arrows cannot be rotated
-    isElbowArrow(element)
+    isLinearElement(element)
   ) {
     return {};
   }
@@ -343,7 +345,7 @@ export const getTransformHandles = (
     );
   }
 
-  if (element.type === "freedraw" || isLinearElement(element)) {
+  if (element.type === "freedraw") {
     if (element.points.length === 2) {
       // only check the last point because starting point is always (0,0)
       const [, p1] = element.points;
@@ -366,11 +368,7 @@ export const getTransformHandles = (
       rotation: true,
     };
   }
-  const margin = isLinearElement(element)
-    ? DEFAULT_TRANSFORM_HANDLE_SPACING + 8
-    : isImageElement(element)
-    ? 0
-    : DEFAULT_TRANSFORM_HANDLE_SPACING;
+  const margin = isImageElement(element) ? 0 : DEFAULT_TRANSFORM_HANDLE_SPACING;
   return getTransformHandlesFromCoords(
     getElementAbsoluteCoords(element, elementsMap, true),
     element.angle,

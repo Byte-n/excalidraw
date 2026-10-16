@@ -37,6 +37,7 @@ import * as textElementUtils from "../src/textElement";
 import { getBoundTextElementPosition, getBoundTextMaxWidth } from "../src";
 import { LinearElementEditor } from "../src";
 import { newArrowElement } from "../src";
+import { transformElements } from "../src/resizeElements";
 import { getLinearElementPathSegments } from "../src/utils";
 import {
   distanceToElement,
@@ -1466,13 +1467,40 @@ describe("Test Linear Elements", () => {
         ]
       `);
 
-      UI.resize(container, "ne", [300, 200]);
+      // 连接线不再有变换手柄：原用例拖的是 "ne" 手柄（位移 +300/+200），这里
+      // 直接调用手柄拖拽落地的入口，指针终点取同一个位移。
+      const [bx1, by1, bx2, by2] = LinearElementEditor.getElementAbsoluteCoords(
+        container,
+        h.app.scene.getNonDeletedElementsMap(),
+        true,
+      );
+      act(() => {
+        transformElements(
+          // 按下瞬间的原元素快照，与 PointerDownState.originalElements 同形
+          new Map([
+            [
+              container.id,
+              { ...container } as NonDeleted<ExcalidrawLinearElement>,
+            ],
+          ]),
+          "ne",
+          [container as NonDeletedExcalidrawElement],
+          h.app.scene,
+          false,
+          false,
+          false,
+          bx2 + 300,
+          by1 + 200,
+          (bx1 + bx2) / 2,
+          (by1 + by2) / 2,
+        );
+      });
 
       expect({ width: container.width, height: container.height })
         .toMatchInlineSnapshot(`
           {
             "height": 150,
-            "width": "366.11716",
+            "width": "380.01702",
           }
         `);
 
@@ -1484,7 +1512,7 @@ describe("Test Linear Elements", () => {
         ),
       ).toMatchInlineSnapshot(`
         {
-          "x": "271.11716",
+          "x": "285.01702",
           "y": 45,
         }
       `);
@@ -1501,9 +1529,9 @@ describe("Test Linear Elements", () => {
         [
           20,
           45,
-          "501.11716",
+          "515.01702",
           220,
-          "205.45894",
+          "212.50000",
           145,
         ]
       `);

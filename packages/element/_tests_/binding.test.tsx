@@ -23,7 +23,7 @@ import { defaultLang, setLanguage } from "@excalidraw/excalidraw/i18n";
 import { bindBindingElement, updateBoundElements } from "../src/binding";
 import { getElementAbsoluteCoords } from "../src/bounds";
 import { isCompositeShapeId } from "../src/compositeShape";
-import { getTransformHandles } from "../src/transformHandles";
+import { transformElements } from "../src/resizeElements";
 import {
   getTextEditor,
   TEXT_EDITOR_SELECTOR,
@@ -35,6 +35,7 @@ import type {
   ExcalidrawLinearElement,
   FixedPointBinding,
   NonDeleted,
+  NonDeletedExcalidrawElement,
 } from "../src/types";
 
 const { h } = window;
@@ -482,22 +483,30 @@ describe("binding for simple arrows", () => {
       expect(arrow.startBinding?.elementId).toBe(rectLeft.id);
       expect(arrow.endBinding?.elementId).toBe(rectRight.id);
 
-      // Drag arrow off of bound rectangle range
-      const handles = getTransformHandles(
+      // Drag arrow off of bound rectangle range.
+      //
+      // 连接线（含已绑定的箭头）不再有变换手柄，这里改为直接走手柄拖拽落地的
+      // 那条入口（`transformElements` 就是 maybeHandleResize 每帧调的函数），
+      // 落点沿用原用例的指针终点。
+      const [ax1, ay1, ax2, ay2] = getElementAbsoluteCoords(
         arrow,
-        h.state.zoom,
         arrayToMap(h.elements),
-        "mouse",
-      ).se!;
-
-      const elX = handles[0] + handles[2] / 2;
-      const elY = handles[1] + handles[3] / 2;
-      // move first, as a real pointer would — the hover state from the spot
-      // where arrow creation finished must clear before the pointerdown
-      mouse.moveTo(elX, elY);
-      mouse.downAt(elX, elY);
-      mouse.moveTo(300, 400);
-      mouse.up();
+      );
+      act(() => {
+        transformElements(
+          new Map([[arrow.id, { ...arrow }]]),
+          "se",
+          [arrow],
+          h.app.scene,
+          false,
+          false,
+          false,
+          300,
+          400,
+          (ax1 + ax2) / 2,
+          (ay1 + ay2) / 2,
+        );
+      });
 
       expect(arrow.startBinding).toBe(null);
       expect(arrow.endBinding).toBe(null);
@@ -531,31 +540,38 @@ describe("binding for simple arrows", () => {
       expect(arrow.startBinding?.elementId).toBe(rectLeft.id);
       expect(arrow.endBinding?.elementId).toBe(rectRight.id);
 
-      const rotation = getTransformHandles(
-        arrow,
-        h.state.zoom,
-        arrayToMap(h.elements),
-        "mouse",
-      ).rotation!;
-      const rotationHandleX = rotation[0] + rotation[2] / 2;
-      const rotationHandleY = rotation[1] + rotation[3] / 2;
-      // Rotation is now computed as the angular delta swept from the drag
-      // origin around the element's center. Dragging the handle to the point
+      // Rotation is computed as the angular delta swept from the drag origin
+      // around the element's center. Rotating the handle to the point
       // diametrically opposite its start (its reflection through the center)
       // sweeps exactly half a turn, flipping the arrow and unbinding it.
+      // 连接线没有旋转手柄了，这里直接调用手柄拖拽落地的同一个入口。
       const [ax1, ay1, ax2, ay2] = getElementAbsoluteCoords(
         arrow,
         arrayToMap(h.elements),
       );
       const centerX = (ax1 + ax2) / 2;
       const centerY = (ay1 + ay2) / 2;
-      mouse.reset();
-      mouse.down(rotationHandleX, rotationHandleY);
-      mouse.moveTo(
-        2 * centerX - rotationHandleX,
-        2 * centerY - rotationHandleY,
-      );
-      mouse.up();
+      const rotationHandleX = ax2;
+      const rotationHandleY = ay2;
+      act(() => {
+        transformElements(
+          // 按下瞬间的原元素快照，与 PointerDownState.originalElements 同形
+          new Map([
+            [arrow.id, { ...arrow } as NonDeleted<ExcalidrawArrowElement>],
+          ]),
+          "rotation",
+          [arrow as NonDeletedExcalidrawElement],
+          h.app.scene,
+          false,
+          false,
+          false,
+          2 * centerX - rotationHandleX,
+          2 * centerY - rotationHandleY,
+          centerX,
+          centerY,
+          { x: rotationHandleX, y: rotationHandleY },
+        );
+      });
       expect(arrow.angle).toBeGreaterThan(0.7 * Math.PI);
       expect(arrow.angle).toBeLessThan(1.3 * Math.PI);
       expect(arrow.startBinding).toBeNull();

@@ -3765,9 +3765,20 @@ const _renderInteractiveScene = ({
         allElementsMap.values(),
         appState.selectedElementIds,
       );
-    const elementsToBoxHighlight = selectedElements.filter(
-      (element) => !suppressedMindmapSelectionIds.has(element.id),
-    );
+    // 连接线与提交态同一口径：不画矩形选中框（按住不放时它已经在选中集里，
+    // 沿用逐元素矩形会让一条斜线被圈进包围盒）。改用悬停那条沿路径的描线，
+    // 「框选有没有捞到这条线」仍旧看得见。
+    const elementsToBoxHighlight: NonDeletedExcalidrawElement[] = [];
+    for (const element of selectedElements) {
+      if (suppressedMindmapSelectionIds.has(element.id)) {
+        continue;
+      }
+      if (isLinearElement(element) && !element.locked) {
+        renderHoveredLinearTrace(context, appState, element, elementsMap);
+        continue;
+      }
+      elementsToBoxHighlight.push(element);
+    }
     if (elementsToBoxHighlight.length) {
       renderElementsBoxHighlight(
         context,
@@ -4003,7 +4014,12 @@ const _renderInteractiveScene = ({
           if (
             locallySelectedIds.has(element.id) &&
             !isSelectedViaGroup(appState, element) &&
-            !suppressedMindmapSelectionIds.has(element.id)
+            !suppressedMindmapSelectionIds.has(element.id) &&
+            // 连接线（直线/曲线/折线）不画矩形选中框：矩形只会把一条斜线
+            // 圈进它的包围盒，选中反馈交给沿路径的端点手柄（见
+            // renderLinearPointHandles）与线本身。锁定的连接线例外——它没有
+            // 可拖的端点手柄，灰色虚框是它唯一的选中指示。
+            (!isLinearElement(element) || element.locked)
           ) {
             selectionColors.push(selectionColor);
           }
