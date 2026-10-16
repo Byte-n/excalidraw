@@ -13,7 +13,6 @@ export const maybeHandleArrowPointlikeDrag = ({
 }): boolean => {
   const appState = app.state;
   if (appState.selectedLinearElement && app.lastPointerMoveCoords) {
-    // Update focus point status if the binding mode is changing
     if (appState.selectedLinearElement.draggedFocusPointBinding) {
       handleFocusPointDrag(
         appState.selectedLinearElement,
@@ -22,7 +21,6 @@ export const maybeHandleArrowPointlikeDrag = ({
         app.scene,
         appState,
         app.getEffectiveGridSize(),
-        event.altKey,
       );
       return true;
     } else if (

@@ -24,8 +24,7 @@ const make = (
 };
 const endpoint = (elementId: string) => ({
   elementId,
-  fixedPoint: [0.5, 0.5] as [number, number],
-  mode: "orbit" as const,
+  attachPoint: [0.5, 0.5] as [number, number],
 });
 
 test("factory creates fresh IDs and commands update versions and preserve full tombstones", () => {

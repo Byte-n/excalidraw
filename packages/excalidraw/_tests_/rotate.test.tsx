@@ -3,10 +3,18 @@ import { expect } from "vitest";
 
 import { reseed } from "@excalidraw/common";
 
+import { pointFrom } from "@excalidraw/math";
+
+import { distanceToElement } from "@excalidraw/element";
+
+import type { GlobalPoint } from "@excalidraw/math";
+
 import { Excalidraw } from "../index";
 
 import { UI } from "./helpers/ui";
 import { render, unmountComponent } from "./test-utils";
+
+const { h } = window;
 
 unmountComponent();
 
@@ -39,8 +47,10 @@ test("unselected bound arrow updates when rotating its target element", async ()
   expect(arrow.endBinding?.elementId).toEqual(rectangle.id);
   expect(arrow.x).toBeCloseTo(-80);
   expect(arrow.y).toBeCloseTo(50);
-  expect(arrow.width).toBeCloseTo(88.24, 1);
-  expect(arrow.height).toBeCloseTo(24.597, 1);
+  // 数值口径：端点贴在目标轮廓外一个 binding gap 处（端点就是 attachPoint 本身，
+  // 见 binding.ts 的 updateBoundPoint），因此 bbox 比「锚点在图形内部」的时代小
+  expect(arrow.width).toBeCloseTo(77.614, 1);
+  expect(arrow.height).toBeCloseTo(27.444, 1);
 });
 
 test("unselected bound arrows update when rotating their target elements", async () => {
@@ -79,13 +89,26 @@ test("unselected bound arrows update when rotating their target elements", async
   expect(ellipseArrow.x).toEqual(-10);
   expect(ellipseArrow.y).toEqual(80);
   expect(ellipseArrow.points[0]).toEqual([0, 0]);
-  expect(ellipseArrow.points[1][0]).toBeCloseTo(59.568, 1);
-  expect(ellipseArrow.points[1][1]).toBeCloseTo(32.308, 1);
+  expect(ellipseArrow.points[1][0]).toBeCloseTo(42.154, 1);
+  expect(ellipseArrow.points[1][1]).toBeCloseTo(-5.388, 1);
 
   expect(textArrow.endBinding?.elementId).toEqual(text.id);
   expect(textArrow.x).toEqual(360);
   expect(textArrow.y).toEqual(300);
   expect(textArrow.points[0]).toEqual([0, 0]);
-  expect(textArrow.points[1][0]).toBeCloseTo(-118.468, 0);
-  expect(textArrow.points[1][1]).toBeCloseTo(-30.914, 0);
+  // 文本目标不留 binding gap（见 binding.ts 的 getProjectionBindingGap）：端点正落在
+  // 文本的绑定边上，而不是再往外一个 gap —— 所以比带 gap 的旧值更贴近文本
+  expect(textArrow.points[1][0]).toBeCloseTo(-152.469, 1);
+  expect(textArrow.points[1][1]).toBeCloseTo(-36.674, 1);
+  // ... 而「落在边上」是可验的几何事实，不只是两个凑出来的数
+  expect(
+    distanceToElement(
+      text,
+      h.app.scene.getNonDeletedElementsMap(),
+      pointFrom<GlobalPoint>(
+        textArrow.x + textArrow.points[1][0],
+        textArrow.y + textArrow.points[1][1],
+      ),
+    ),
+  ).toBeCloseTo(0, 1);
 });

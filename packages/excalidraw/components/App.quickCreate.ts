@@ -4,8 +4,8 @@ import { pointFrom } from "@excalidraw/math";
 import {
   LinearElementEditor,
   bindBindingElement,
-  calculateFixedPointForElbowArrowBinding,
-  calculateFixedPointForNonElbowArrowBinding,
+  calculateAttachPointForElbowArrowBinding,
+  resolveAttachPointForNonElbowBinding,
   duplicateElement,
   getContainingFrame,
   getElementAbsoluteCoords,
@@ -35,7 +35,7 @@ import type {
   ExcalidrawBindableElement,
   ExcalidrawCompositeShapeElement,
   ExcalidrawLinearElement,
-  FixedPointBinding,
+  ElementBinding,
   NonDeleted,
   NonDeletedExcalidrawElement,
   NonDeletedSceneElementsMap,
@@ -756,7 +756,7 @@ export class AppQuickCreate {
       return arrow;
     }
     // 预演元素不在场景里、没有绑定：补上与落地 `bindBindingElement` 写进去的
-    // 同源固定点（口径同 `binding.fixedPoint`）。渲染期正是读它解端切线、决定该端
+    // 同源固定点（口径同 `binding.attachPoint`）。渲染期正是读它解端切线、决定该端
     // 贴在哪条边、曲线朝哪弯，缺了会退回弦主轴、画出错的轴向。
     const bound: NonDeleted<ExcalidrawLinearElement> = {
       ...arrow,
@@ -785,13 +785,7 @@ export class AppQuickCreate {
       const binding = arrow[field];
       const target = binding && elementsMap.get(binding.elementId);
       if (binding && target && isBindableElement(target)) {
-        const point = updateBoundPoint(
-          arrow,
-          field,
-          binding,
-          target,
-          elementsMap,
-        );
+        const point = updateBoundPoint(arrow, binding, target, elementsMap);
         if (point) {
           points[field === "startBinding" ? 0 : points.length - 1] = point;
         }
@@ -871,26 +865,26 @@ export class AppQuickCreate {
     arrow: NonDeleted<ExcalidrawLinearElement>,
     ghostShape: NonDeletedExcalidrawElement,
   ): {
-    startBinding: FixedPointBinding | null;
-    endBinding: FixedPointBinding | null;
+    startBinding: ElementBinding | null;
+    endBinding: ElementBinding | null;
   } => {
     const { sourceId, connector } = placement;
     const elementsMap = this.getPreviewElementsMap(ghostShape);
     const source = this.app.scene.getNonDeletedElement(sourceId);
     const elbowed = isElbowArrow(arrow) ? arrow : null;
-    const fixedPointFor = (
+    const attachPointFor = (
       target: NonDeleted<ExcalidrawBindableElement>,
       startOrEnd: "start" | "end",
       focusPoint: QuickCreatePoint,
     ) =>
       elbowed
-        ? calculateFixedPointForElbowArrowBinding(
+        ? calculateAttachPointForElbowArrowBinding(
             elbowed,
             target,
             startOrEnd,
             elementsMap,
           )
-        : calculateFixedPointForNonElbowArrowBinding(
+        : resolveAttachPointForNonElbowBinding(
             arrow,
             target,
             startOrEnd,
@@ -902,15 +896,13 @@ export class AppQuickCreate {
         source && isBindableElement(source)
           ? {
               elementId: sourceId,
-              mode: "orbit" as const,
-              ...fixedPointFor(source, "start", connector.exit),
+              ...attachPointFor(source, "start", connector.exit),
             }
           : null,
       endBinding: isBindableElement(ghostShape)
         ? {
             elementId: QUICK_CREATE_GHOST_SHAPE_ID,
-            mode: "orbit" as const,
-            ...fixedPointFor(ghostShape, "end", connector.entry),
+            ...attachPointFor(ghostShape, "end", connector.entry),
           }
         : null,
     };
@@ -941,13 +933,12 @@ export class AppQuickCreate {
 
     this.app.insertNewElements([arrow, clone]);
     // 两端绑定的**锚点**（决定该端贴在哪条边、曲线朝哪弯）用几何解出来的出口 /
-    // 入口：这里显式传 `focusPoint`，落地写进 `fixedPoint` 的值因此与预演逐位一致
+    // 入口：这里显式传 `focusPoint`，落地写进 `attachPoint` 的值因此与预演逐位一致
     // （预演走的是同一个函数）。创建路径的端点本来就落在出口 / 入口上，显式传是
     // 把「锚点取这里」写成明确意图，不改变结果。
     bindBindingElement(
       arrow,
       source as NonDeleted<ExcalidrawBindableElement>,
-      "orbit",
       "start",
       this.app.scene,
       pointFrom<GlobalPoint>(
@@ -958,7 +949,6 @@ export class AppQuickCreate {
     bindBindingElement(
       arrow,
       clone as NonDeleted<ExcalidrawBindableElement>,
-      "orbit",
       "end",
       this.app.scene,
       pointFrom<GlobalPoint>(
@@ -1015,13 +1005,7 @@ export class AppQuickCreate {
       const binding = arrow[field];
       const target = binding && elementsMap.get(binding.elementId);
       if (binding && target && isBindableElement(target)) {
-        const point = updateBoundPoint(
-          arrow,
-          field,
-          binding,
-          target,
-          elementsMap,
-        );
+        const point = updateBoundPoint(arrow, binding, target, elementsMap);
         if (point) {
           updates.set(field === "startBinding" ? 0 : arrow.points.length - 1, {
             point,

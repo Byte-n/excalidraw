@@ -1,13 +1,19 @@
 import { KEYS } from "@excalidraw/common";
 
-import { isTextElement } from "@excalidraw/element";
+import {
+  distanceToElement,
+  getGlobalAttachPointForBindableElement,
+  isTextElement,
+} from "@excalidraw/element";
 
 import { pointFrom } from "@excalidraw/math";
 
-import type { LocalPoint } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
 import type {
   ExcalidrawArrowElement,
+  ExcalidrawBindableElement,
   ExcalidrawTextElement,
+  NonDeleted,
 } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
@@ -16,7 +22,7 @@ import { actionTextAutoResize } from "../actions/actionTextAutoResize";
 import { API } from "./helpers/api";
 import { Keyboard, Pointer, UI } from "./helpers/ui";
 import { getTextEditor, updateTextEditor } from "./queries/dom";
-import { render, unmountComponent } from "./test-utils";
+import { act, render, unmountComponent } from "./test-utils";
 
 unmountComponent();
 
@@ -63,7 +69,7 @@ const endpointOf = (arrow: ExcalidrawArrowElement, which: "start" | "end") => {
 };
 
 /**
- * `normalizeFixedPoint` nudges exact side midpoints off 0.5 by 1e-4 to keep
+ * `normalizeAttachPoint` nudges exact side midpoints off 0.5 by 1e-4 to keep
  * headings unambiguous, which shows up as a sub-pixel offset scaled by the
  * text size.
  */
@@ -271,8 +277,7 @@ describe("binding text to an arrow endpoint", () => {
         createArrow("arrow", [100, 300], [100, 100], {
           endBinding: {
             elementId: "other",
-            fixedPoint: [0.5001, 0.5001],
-            mode: "orbit",
+            attachPoint: [0.5001, 0.5001],
           },
         }),
         API.createElement({
@@ -317,7 +322,7 @@ describe("binding text to an arrow endpoint", () => {
         name: "arrow pointing up binds the text's bottom side midpoint",
         from: [100, 300] as [number, number],
         to: [100, 100] as [number, number],
-        fixedPoint: [0.5001, 1],
+        attachPoint: [0.5001, 1],
         textAlign: "center",
         verticalAlign: "bottom",
       },
@@ -325,7 +330,7 @@ describe("binding text to an arrow endpoint", () => {
         name: "arrow pointing right binds the text's left side midpoint",
         from: [100, 100] as [number, number],
         to: [300, 100] as [number, number],
-        fixedPoint: [0, 0.5001],
+        attachPoint: [0, 0.5001],
         textAlign: "left",
         verticalAlign: "middle",
       },
@@ -333,7 +338,7 @@ describe("binding text to an arrow endpoint", () => {
         name: "arrow pointing down binds the text's top side midpoint",
         from: [100, 100] as [number, number],
         to: [100, 300] as [number, number],
-        fixedPoint: [0.5001, 0],
+        attachPoint: [0.5001, 0],
         textAlign: "center",
         verticalAlign: "top",
       },
@@ -341,11 +346,11 @@ describe("binding text to an arrow endpoint", () => {
         name: "arrow pointing left binds the text's right side midpoint",
         from: [300, 100] as [number, number],
         to: [100, 100] as [number, number],
-        fixedPoint: [1, 0.5001],
+        attachPoint: [1, 0.5001],
         textAlign: "right",
         verticalAlign: "middle",
       },
-    ])("$name", async ({ from, to, fixedPoint, textAlign, verticalAlign }) => {
+    ])("$name", async ({ from, to, attachPoint, textAlign, verticalAlign }) => {
       API.setElements([createArrow("arrow", from, to)]);
 
       await bindTextAt(to[0], to[1], "label");
@@ -353,8 +358,7 @@ describe("binding text to an arrow endpoint", () => {
       const text = getText();
       expect(getArrow("arrow").endBinding).toEqual({
         elementId: text.id,
-        fixedPoint,
-        mode: "orbit",
+        attachPoint,
       });
       expect(text.textAlign).toBe(textAlign);
       expect(text.verticalAlign).toBe(verticalAlign);
@@ -373,7 +377,7 @@ describe("binding text to an arrow endpoint", () => {
       expect(arrow.startBinding?.elementId).toBe(text.id);
       expect(arrow.endBinding).toBeNull();
       // the arrow leaves the tip heading right, so the text sits to its left
-      expect(arrow.startBinding?.fixedPoint).toEqual([1, 0.5001]);
+      expect(arrow.startBinding?.attachPoint).toEqual([1, 0.5001]);
       expect(text.textAlign).toBe("right");
     });
   });
@@ -406,11 +410,11 @@ describe("binding text to an arrow endpoint", () => {
       expectPointsClose(bottomMidOf(text), anchorBefore);
     });
 
-    // An orbit binding resolves the endpoint by intersecting the arrow's own
-    // line with the gap-grown text outline. Anchoring along the bound side's
-    // normal instead used to leave the tip `gap * tan(angle)` off to the side
-    // — invisible on orthogonal arrows, several px on diagonal ones, and only
-    // once the first keystroke triggered `updateBoundElements`.
+    // 文本作为绑定目标**不留 binding gap**：文本是按「绑定边的中点落在箭头端点
+    // 上」摆的（见 `arrowEndpointText.ts` 的 getTextBindingForArrowEndpoint），
+    // 端点就是箭头自己那个点。反过来沿绑定边法线外推一个 gap 去锚定，会让尖端
+    // 偏出去 `gap * tan(angle)`——正交箭头上看不出来，斜箭头上就是几个像素，
+    // 而且要到第一次敲键盘触发 `updateBoundElements` 才显形。
     it.each([
       { name: "45°", from: [100, 100] as [number, number] },
       { name: "steep", from: [160, 100] as [number, number] },
@@ -454,6 +458,131 @@ describe("binding text to an arrow endpoint", () => {
     );
   });
 
+  describe("dragging an arrow endpoint onto a text", () => {
+    /**
+     * 文本作为绑定目标**不留 binding gap**（见 `binding.ts` 的
+     * `getProjectionBindingGap`）：`attachPoint` 是归一化比例而 gap 是固定像素，
+     * 文本随输入长高会改包围盒 —— 比例不变、端点就会每长一行漂一个 gap。所以端点
+     * 落在文本的**绑定边**上。
+     *
+     * 这条入口（把端点拖到文本上）曾经漏掉这个口径：通用投影对文本也加 gap，端点
+     * 落在 `text.x - 6`。另两条入口（文本工具建标签、`convertToExcalidrawElements`
+     * 的 start/end id）一直不留 gap。
+     */
+    it("lands the endpoint on the text's edge, not one gap outside it", async () => {
+      const textProxy = UI.createElement("text", { position: 220 });
+      await UI.editText(textProxy, "test");
+      const text = textProxy.get() as NonDeleted<ExcalidrawBindableElement>;
+      API.setElements([text]);
+
+      // 用箭头工具画一条箭头：画完后它仍在点编辑态，端点是可抓的点手柄
+      UI.clickTool("arrow");
+      mouse.reset();
+      mouse.downAt(100, 300);
+      mouse.moveTo(500, 300);
+      mouse.up();
+
+      // 把终点拖到文本中心：松开时应当建连、且端点贴到文本边上
+      mouse.reset();
+      mouse.downAt(500, 300);
+      expect(h.state.selectedLinearElement?.selectedPointsIndices).toEqual([1]);
+      mouse.moveTo(text.x + text.width / 2, text.y + text.height / 2);
+      mouse.up();
+
+      const arrow = h.elements.find(
+        (element): element is ExcalidrawArrowElement =>
+          element.type === "arrow",
+      )!;
+      const elementsMap = h.app.scene.getNonDeletedElementsMap();
+
+      expect(arrow.endBinding?.elementId).toBe(text.id);
+
+      // 端点在文本边界上（不许再往外一个 gap）
+      const endpoint = pointFrom<GlobalPoint>(
+        arrow.x + arrow.points[arrow.points.length - 1][0],
+        arrow.y + arrow.points[arrow.points.length - 1][1],
+      );
+      expect(distanceToElement(text, elementsMap, endpoint)).toBeCloseTo(0, 1);
+      // ... 而且就是文本左边那条绑定边：x 落在 text.x 上，y 在文本高度范围内
+      expect(endpoint[0]).toBeCloseTo(text.x, 1);
+      expect(endpoint[1]).toBeGreaterThan(text.y);
+      expect(endpoint[1]).toBeLessThan(text.y + text.height);
+
+      // 绑定的比例解出来的就是端点本身
+      expect(
+        getGlobalAttachPointForBindableElement(
+          arrow.endBinding!.attachPoint,
+          text,
+          elementsMap,
+        ),
+      ).toEqual(endpoint);
+    });
+
+    /**
+     * 折线档走的是**另一条投影**（`binding.ts` 的
+     * `bindPointToSnapToElementOutline` —— 求「最近那条外扩边的交点」），它的 gap
+     * 一度仍是 `getBindingGap`：同一个手势在折线档上端点会落在文本外**一个 gap**
+     * （文本 120×25 + 默认折线箭头时就是 6px），而直线档是 0px。
+     */
+    it("lands the endpoint on the text's edge for an elbow arrow", async () => {
+      const textProxy = UI.createElement("text", { position: 220 });
+      await UI.editText(textProxy, "test");
+      const text = textProxy.get() as NonDeleted<ExcalidrawBindableElement>;
+      API.setElements([text]);
+
+      act(() => {
+        h.app.setState({ currentItemArrowType: "elbow" });
+      });
+      UI.clickTool("arrow");
+      mouse.reset();
+      // 折线箭头：拖出来之后它的终点手柄可以抓（下面的 downAt(500, 300)）
+      mouse.downAt(100, 300);
+      mouse.moveTo(500, 300);
+      mouse.up();
+
+      // 落点取文本**内部靠左**：正中心是折线档既有的退化档（射线两支都退化成零长，
+      // 端点钉在目标中心；见 `binding.ts` 中 `bindPointToSnapToElementOutline` 末尾的
+      // 「落点贴着目标中心」说明），与本条无关。
+      const dropX = text.x + text.width / 4;
+      const dropY = text.y + text.height / 2;
+
+      mouse.reset();
+      mouse.downAt(500, 300);
+      expect(h.state.selectedLinearElement?.selectedPointsIndices).toEqual([1]);
+      mouse.moveTo(dropX, dropY);
+      mouse.up();
+
+      const arrow = h.elements.find(
+        (element): element is ExcalidrawArrowElement =>
+          element.type === "arrow",
+      )!;
+      const elementsMap = h.app.scene.getNonDeletedElementsMap();
+
+      expect(arrow.elbowed).toBe(true);
+      expect(arrow.endBinding?.elementId).toBe(text.id);
+
+      // 端点在文本边界上（不许再往外一个 gap）
+      const endpoint = pointFrom<GlobalPoint>(
+        arrow.x + arrow.points[arrow.points.length - 1][0],
+        arrow.y + arrow.points[arrow.points.length - 1][1],
+      );
+      expect(distanceToElement(text, elementsMap, endpoint)).toBeCloseTo(0, 1);
+      // ... 而且落在文本左边那条边上：x 落在 text.x 上，y 在文本高度范围内
+      expect(endpoint[0]).toBeCloseTo(text.x, 1);
+      expect(endpoint[1]).toBeGreaterThan(text.y);
+      expect(endpoint[1]).toBeLessThan(text.y + text.height);
+
+      // 绑定的比例解出来的就是端点本身
+      expect(
+        getGlobalAttachPointForBindableElement(
+          arrow.endBinding!.attachPoint,
+          text,
+          elementsMap,
+        ),
+      ).toEqual(endpoint);
+    });
+  });
+
   describe("drag-sizing", () => {
     /** press at the endpoint, drag to `toX`, release */
     const dragTextAt = async (
@@ -477,15 +606,15 @@ describe("binding text to an arrow endpoint", () => {
     it("sets a fixed width without moving the anchor (left-bound)", async () => {
       API.setElements([createArrow("arrow", [100, 100], [300, 100])]);
 
-      // arrow points right, so the text hangs off its left edge at x = tip+gap
+      // 箭头朝右，文本挂在它的左边缘：左边缘 = 尖端（文本目标不留 gap）
       await dragTextAt([300, 100], 520, "a label long enough to wrap");
 
       const text = getText();
       expect(text.autoResize).toBe(false);
       expect(text.textAlign).toBe("left");
       // left edge is the anchor and must be untouched by the drag
-      expect(text.x).toBeCloseTo(306, 0);
-      expect(text.width).toBeCloseTo(214, 0);
+      expect(text.x).toBeCloseTo(300, 0);
+      expect(text.width).toBeCloseTo(220, 0);
     });
 
     it("grows leftwards for a right-bound text, pinning its right edge", async () => {
@@ -496,8 +625,8 @@ describe("binding text to an arrow endpoint", () => {
       const text = getText();
       expect(text.autoResize).toBe(false);
       expect(text.textAlign).toBe("right");
-      // the right edge is the anchor
-      expect(text.x + text.width).toBeCloseTo(294, 0);
+      // 右边缘就是锚点（= 尖端）
+      expect(text.x + text.width).toBeCloseTo(300, 0);
     });
 
     it("keeps a centred text centred on the anchor", async () => {
@@ -520,7 +649,7 @@ describe("binding text to an arrow endpoint", () => {
       const text = getText();
       // treated as no drag at all — the text keeps autogrowing
       expect(text.autoResize).toBe(true);
-      expect(text.x).toBeCloseTo(306, 0);
+      expect(text.x).toBeCloseTo(300, 0);
     });
 
     // the autoResize handle unwraps the text back to one line; anchoring that
@@ -571,8 +700,7 @@ describe("binding text to an arrow endpoint", () => {
       const fromTop = createArrow("fromTop", [350, 120], [350, 260], {
         endBinding: {
           elementId: "text",
-          fixedPoint: [0.5001, 0],
-          mode: "orbit",
+          attachPoint: [0.5001, 0],
         },
       });
       API.setElements([wrapped, fromTop]);
@@ -587,15 +715,12 @@ describe("binding text to an arrow endpoint", () => {
 
       const tipAfter = endpointOf(getArrow("fromTop"), "end");
       expect(tipAfter).not.toEqual(tipBefore);
-      // still just clear of the top edge it is bound to...
-      expect(tipAfter[1]).toBeLessThan(text.y);
-      // ...and it chased the box's new centre. Not asserting the centre
-      // exactly: the arrow is diagonal now, so the outline intersection sits
-      // slightly to one side of the fixed point.
+      // ...正落在它所依附的那条顶边上（文本目标不留 gap）
+      expect(tipAfter[1]).toBeCloseTo(text.y, 6);
+      // ...and it sits on the box's new centre: 组合 A 下端点就是绑定点本身
+      // （顶边中点），不再有「按斜射线求交、落在中心一侧」的偏移。
       const centre = text.x + text.width / 2;
-      expect(Math.abs(tipAfter[0] - centre)).toBeLessThan(
-        Math.abs(tipBefore[0] - centre),
-      );
+      expect(tipAfter[0]).toBeCloseTo(centre, 0);
     });
 
     it("leaves the arrow endpoint where it was", async () => {

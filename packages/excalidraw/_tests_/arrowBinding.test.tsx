@@ -1,7 +1,7 @@
 import { reseed } from "@excalidraw/common";
 import {
   isElbowArrow,
-  projectFixedPointOntoDiagonal,
+  projectAttachPointOntoDiagonal,
 } from "@excalidraw/element";
 
 import { pointFrom } from "@excalidraw/math";
@@ -353,7 +353,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
       ]);
       const point = pointFrom<GlobalPoint>(502, 202);
 
-      const snappedWithMidpoint = projectFixedPointOntoDiagonal(
+      const snappedWithMidpoint = projectAttachPointOntoDiagonal(
         arrow,
         point,
         rect,
@@ -362,7 +362,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
         h.state.zoom,
         true,
       );
-      const snappedWithoutMidpoint = projectFixedPointOntoDiagonal(
+      const snappedWithoutMidpoint = projectAttachPointOntoDiagonal(
         arrow,
         point,
         rect,

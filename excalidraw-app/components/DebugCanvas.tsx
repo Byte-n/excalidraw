@@ -12,7 +12,7 @@ import { arrayToMap, throttleRAF } from "@excalidraw/common";
 import { useCallback } from "react";
 
 import {
-  getGlobalFixedPointForBindableElement,
+  getGlobalAttachPointForBindableElement,
   isArrowElement,
   isBindableElement,
 } from "@excalidraw/element";
@@ -35,7 +35,7 @@ import type {
   ElementsMap,
   ExcalidrawArrowElement,
   ExcalidrawBindableElement,
-  FixedPointBinding,
+  ElementBinding,
   OrderedExcalidrawElement,
 } from "@excalidraw/element/types";
 
@@ -116,6 +116,12 @@ const renderPolygon = (
 const isDebugPolygon = (data: DebugElement["data"]): data is DebugPolygon =>
   (data as DebugPolygon).type === "polygon";
 
+// 绑定两端的调试配色：箭头侧和它绑到的元素侧各画一条同色的半环，颜色区分两侧。
+// 两侧各自只有一个调用点、颜色恒定，所以不再当参数传（原先按 `mode` 分岔取值的
+// 那个实参已随 `mode` 删除）。
+const ARROW_SIDE_BINDING_COLOR = "red";
+const BINDABLE_SIDE_BINDING_COLOR = "green";
+
 const renderOrigin = (context: CanvasRenderingContext2D, zoom: number) => {
   context.strokeStyle = "#888";
   context.save();
@@ -130,29 +136,28 @@ const renderOrigin = (context: CanvasRenderingContext2D, zoom: number) => {
 
 const _renderBinding = (
   context: CanvasRenderingContext2D,
-  binding: FixedPointBinding,
+  binding: ElementBinding,
   elementsMap: ElementsMap,
   zoom: number,
   width: number,
   height: number,
-  color: string,
 ) => {
-  if (!binding.fixedPoint) {
-    console.warn("Binding must have a fixedPoint");
+  if (!binding.attachPoint) {
+    console.warn("Binding must have an attachPoint");
     return;
   }
 
   const bindable = elementsMap.get(
     binding.elementId,
   ) as ExcalidrawBindableElement;
-  const [x, y] = getGlobalFixedPointForBindableElement(
-    binding.fixedPoint,
+  const [x, y] = getGlobalAttachPointForBindableElement(
+    binding.attachPoint,
     bindable,
     elementsMap,
   );
 
   context.save();
-  context.strokeStyle = color;
+  context.strokeStyle = ARROW_SIDE_BINDING_COLOR;
   context.lineWidth = 1;
   context.beginPath();
   context.moveTo(x * zoom, y * zoom);
@@ -169,30 +174,29 @@ const _renderBinding = (
 };
 
 const _renderBindableBinding = (
-  binding: FixedPointBinding,
+  binding: ElementBinding,
   context: CanvasRenderingContext2D,
   elementsMap: ElementsMap,
   zoom: number,
   width: number,
   height: number,
-  color: string,
 ) => {
   const bindable = elementsMap.get(
     binding.elementId,
   ) as ExcalidrawBindableElement;
-  if (!binding.fixedPoint) {
-    console.warn("Binding must have a fixedPoint");
+  if (!binding.attachPoint) {
+    console.warn("Binding must have an attachPoint");
     return;
   }
 
-  const [x, y] = getGlobalFixedPointForBindableElement(
-    binding.fixedPoint,
+  const [x, y] = getGlobalAttachPointForBindableElement(
+    binding.attachPoint,
     bindable,
     elementsMap,
   );
 
   context.save();
-  context.strokeStyle = color;
+  context.strokeStyle = BINDABLE_SIDE_BINDING_COLOR;
   context.lineWidth = 1;
   context.beginPath();
   context.moveTo(x * zoom, y * zoom);
@@ -237,7 +241,6 @@ const renderBindings = (
           zoom,
           dim,
           dim,
-          element.startBinding?.mode === "orbit" ? "red" : "black",
         );
       }
 
@@ -256,7 +259,6 @@ const renderBindings = (
           zoom,
           dim,
           dim,
-          element.endBinding?.mode === "orbit" ? "red" : "black",
         );
       }
     }
@@ -279,7 +281,6 @@ const renderBindings = (
             zoom,
             dim,
             dim,
-            "green",
           );
         }
         if (arrow && arrow.endBinding?.elementId === element.id) {
@@ -290,7 +291,6 @@ const renderBindings = (
             zoom,
             dim,
             dim,
-            "green",
           );
         }
       });

@@ -830,8 +830,7 @@ describe("table range clipboard", () => {
     const outside = API.createElement({ type: "diamond", x: 700 });
     const binding = (elementId: string) => ({
       elementId,
-      fixedPoint: [0.5, 0.5] as [number, number],
-      mode: "orbit" as const,
+      attachPoint: [0.5, 0.5] as [number, number],
     });
     const internal = API.createElement({
       type: "arrow",

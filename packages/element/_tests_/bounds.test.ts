@@ -229,10 +229,9 @@ describe("elementsOverlappingBBox()", () => {
   });
 });
 
-const binding = (elementId: string, fixedPoint: [number, number]) => ({
+const binding = (elementId: string, attachPoint: [number, number]) => ({
   elementId,
-  mode: "orbit" as const,
-  fixedPoint,
+  attachPoint,
 });
 
 type Binding = ReturnType<typeof binding>;

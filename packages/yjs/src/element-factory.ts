@@ -1,6 +1,6 @@
 import {
-  calculateFixedPointForElbowArrowBinding,
-  calculateFixedPointForNonElbowArrowBinding,
+  calculateAttachPointForElbowArrowBinding,
+  calculateAttachPointForNonElbowArrowBinding,
   newArrowElement,
   isElbowArrow,
   newElement,
@@ -51,17 +51,19 @@ export const createSceneConnectionEndpoint = ({
   target,
   end,
   elements,
-  mode = "orbit",
 }: {
   arrow: NonDeleted<ExcalidrawArrowElement | ExcalidrawElbowArrowElement>;
   target: NonDeleted<ExcalidrawBindableElement>;
   end: "start" | "end";
   elements: ElementsMap;
-  mode?: SceneConnectionEndpoint["mode"];
 }): SceneConnectionEndpoint => ({
   elementId: target.id,
-  mode,
   ...(isElbowArrow(arrow)
-    ? calculateFixedPointForElbowArrowBinding(arrow, target, end, elements)
-    : calculateFixedPointForNonElbowArrowBinding(arrow, target, end, elements)),
+    ? calculateAttachPointForElbowArrowBinding(arrow, target, end, elements)
+    : calculateAttachPointForNonElbowArrowBinding(
+        arrow,
+        target,
+        end,
+        elements,
+      )),
 });

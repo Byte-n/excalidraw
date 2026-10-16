@@ -93,9 +93,13 @@ export type StaticSceneRenderConfig = {
   renderConfig: StaticCanvasRenderConfig;
 };
 
-export type InteractiveSceneRenderAnimationState = {
-  bindingHighlight: { runtime: number } | undefined;
-};
+/**
+ * Payload the interactive scene carries between animation frames. Nothing
+ * populates it at the moment — the bind-mode hover highlight it used to hold
+ * went away with the bind-mode state machine — but the renderer still passes
+ * it through, so the shell stays until that pass-through is removed too.
+ */
+export type InteractiveSceneRenderAnimationState = Record<string, never>;
 
 export type InteractiveSceneRenderConfig = {
   app: AppClassProperties;
@@ -110,7 +114,6 @@ export type InteractiveSceneRenderConfig = {
   editorInterface: EditorInterface;
   callback: (data: RenderInteractiveSceneCallback) => void;
   animationState?: InteractiveSceneRenderAnimationState;
-  deltaTime: number;
 };
 
 export type NewElementSceneRenderConfig = {

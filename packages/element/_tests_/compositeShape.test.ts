@@ -12,7 +12,6 @@ import { getElementBounds, getElementLineSegments } from "../src/bounds";
 import {
   isPointInElement,
   intersectElementWithLineSegment,
-  isBindableElementInsideOtherBindable,
 } from "../src/collision";
 import {
   assertBaseShapeData,
@@ -1649,33 +1648,5 @@ describe("composite shape data", () => {
     expect(getCompositeShapeGlobalPath(element)).toEqual(
       getCompositeShapeGeometry(element).outline,
     );
-  });
-
-  it("does not treat an open brace as a contained filled shape", () => {
-    const outer = newElement({
-      type: "rectangle",
-      x: 0,
-      y: 0,
-      width: 200,
-      height: 200,
-    });
-    const brace = newElement({
-      type: "brace",
-      x: 20,
-      y: 20,
-      width: 100,
-      height: 100,
-    });
-    if (outer.type !== "composite_shape" || brace.type !== "composite_shape") {
-      throw new Error("Expected composite shape elements");
-    }
-
-    expect(
-      isBindableElementInsideOtherBindable(
-        brace,
-        outer,
-        arrayToMap([outer, brace]),
-      ),
-    ).toBe(false);
   });
 });

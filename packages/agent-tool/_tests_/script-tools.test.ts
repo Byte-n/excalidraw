@@ -55,7 +55,7 @@ test("生成文档展开参数类型、返回字段和默认能力限制", async
   const tool = createCanvasScriptTools(port)[1];
   const mutation = (await tool.execute({ member: "mutate" })).result.text;
   expect(mutation).toContain('type: "connect"');
-  expect(mutation).toContain("fixedPoint: [number, number]");
+  expect(mutation).toContain("attachPoint: [number, number]");
   expect(mutation).toContain("changedElementIds: string[]");
   expect(mutation).toContain("1–1000");
   expect(mutation).not.toContain("仅 write 模式公开");

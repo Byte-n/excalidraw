@@ -97,12 +97,11 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to existing s
   "elbowed": false,
   "endArrowhead": "arrow",
   "endBinding": {
-    "elementId": "ellipse-1",
-    "fixedPoint": [
-      0.04,
-      0.4633333333333333,
+    "attachPoint": [
+      -0.01831451381244354,
+      0.4581662245145092,
     ],
-    "mode": "orbit",
+    "elementId": "ellipse-1",
   },
   "fillStyle": "solid",
   "groupIds": [],
@@ -127,12 +126,11 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to existing s
   "seed": Any<Number>,
   "startArrowhead": null,
   "startBinding": {
-    "elementId": "id49",
-    "fixedPoint": [
-      1,
-      0.5001,
+    "attachPoint": [
+      1.02,
+      0.5017721518987341,
     ],
-    "mode": "orbit",
+    "elementId": "id49",
   },
   "strokeColor": "#1864ab",
   "strokeStyle": "solid",
@@ -158,12 +156,11 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to existing s
   "elbowed": false,
   "endArrowhead": "arrow",
   "endBinding": {
-    "elementId": "ellipse-1",
-    "fixedPoint": [
-      -0.01,
-      0.44666666666666666,
+    "attachPoint": [
+      -0.017257745855714195,
+      0.446666855031177,
     ],
-    "mode": "orbit",
+    "elementId": "ellipse-1",
   },
   "fillStyle": "solid",
   "groupIds": [],
@@ -188,12 +185,11 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to existing s
   "seed": Any<Number>,
   "startArrowhead": null,
   "startBinding": {
-    "elementId": "diamond-1",
-    "fixedPoint": [
-      0.9357142857142857,
+    "attachPoint": [
+      1.0406910505430242,
       0.5001,
     ],
-    "mode": "orbit",
+    "elementId": "diamond-1",
   },
   "strokeColor": "#e67700",
   "strokeStyle": "solid",
@@ -361,12 +357,11 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to existing t
   "elbowed": false,
   "endArrowhead": "arrow",
   "endBinding": {
-    "elementId": "text-2",
-    "fixedPoint": [
-      -2.05,
+    "attachPoint": [
+      0,
       0.5001,
     ],
-    "mode": "orbit",
+    "elementId": "text-2",
   },
   "fillStyle": "solid",
   "groupIds": [],
@@ -391,12 +386,11 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to existing t
   "seed": Any<Number>,
   "startArrowhead": null,
   "startBinding": {
-    "elementId": "text-1",
-    "fixedPoint": [
+    "attachPoint": [
       1,
       0.5001,
     ],
-    "mode": "orbit",
+    "elementId": "text-1",
   },
   "strokeColor": "#646a73",
   "strokeStyle": "solid",
@@ -470,12 +464,11 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to shapes whe
   "elbowed": false,
   "endArrowhead": "arrow",
   "endBinding": {
-    "elementId": "id42",
-    "fixedPoint": [
-      0,
+    "attachPoint": [
+      -0.06,
       0.5001,
     ],
-    "mode": "orbit",
+    "elementId": "id42",
   },
   "fillStyle": "solid",
   "groupIds": [],
@@ -500,12 +493,11 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to shapes whe
   "seed": Any<Number>,
   "startArrowhead": null,
   "startBinding": {
-    "elementId": "id41",
-    "fixedPoint": [
-      1,
+    "attachPoint": [
+      1.06,
       0.5001,
     ],
-    "mode": "orbit",
+    "elementId": "id41",
   },
   "strokeColor": "#646a73",
   "strokeStyle": "solid",
@@ -661,12 +653,11 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to text when 
   "elbowed": false,
   "endArrowhead": "arrow",
   "endBinding": {
-    "elementId": "id46",
-    "fixedPoint": [
+    "attachPoint": [
       0,
       0.5001,
     ],
-    "mode": "orbit",
+    "elementId": "id46",
   },
   "fillStyle": "solid",
   "groupIds": [],
@@ -691,12 +682,11 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to text when 
   "seed": Any<Number>,
   "startArrowhead": null,
   "startBinding": {
-    "elementId": "id45",
-    "fixedPoint": [
+    "attachPoint": [
       1,
       0.5001,
     ],
-    "mode": "orbit",
+    "elementId": "id45",
   },
   "strokeColor": "#646a73",
   "strokeStyle": "solid",
@@ -1580,12 +1570,11 @@ exports[`Test Transform > should transform the elements correctly when linear el
   "elbowed": false,
   "endArrowhead": "arrow",
   "endBinding": {
-    "elementId": "Alice",
-    "fixedPoint": [
-      -0.07542628418945944,
+    "attachPoint": [
+      -0.1608165443629084,
       0.5001,
     ],
-    "mode": "orbit",
+    "elementId": "Alice",
   },
   "fillStyle": "solid",
   "groupIds": [],
@@ -1612,12 +1601,11 @@ exports[`Test Transform > should transform the elements correctly when linear el
   "seed": Any<Number>,
   "startArrowhead": null,
   "startBinding": {
-    "elementId": "Bob",
-    "fixedPoint": [
-      1.000004978564514,
+    "attachPoint": [
+      1.106214354861015,
       0.5001,
     ],
-    "mode": "orbit",
+    "elementId": "Bob",
   },
   "strokeColor": "#646a73",
   "strokeStyle": "solid",
@@ -1648,12 +1636,11 @@ exports[`Test Transform > should transform the elements correctly when linear el
   "elbowed": false,
   "endArrowhead": "arrow",
   "endBinding": {
-    "elementId": "B",
-    "fixedPoint": [
-      0.46387050630528887,
+    "attachPoint": [
+      -0.03613777526821005,
       0.48466257668711654,
     ],
-    "mode": "orbit",
+    "elementId": "B",
   },
   "fillStyle": "solid",
   "groupIds": [],
@@ -1676,12 +1663,11 @@ exports[`Test Transform > should transform the elements correctly when linear el
   "seed": Any<Number>,
   "startArrowhead": null,
   "startBinding": {
-    "elementId": "Bob",
-    "fixedPoint": [
+    "attachPoint": [
       0.39381496335223337,
-      1,
+      1.1363636363636365,
     ],
-    "mode": "orbit",
+    "elementId": "Bob",
   },
   "strokeColor": "#646a73",
   "strokeStyle": "solid",

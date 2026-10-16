@@ -5,10 +5,8 @@ import type { AppState, NullableGridSize } from "@excalidraw/excalidraw/types";
 
 import {
   bindBindingElement,
-  calculateFixedPointForNonElbowArrowBinding,
   FOCUS_POINT_SIZE,
-  getBindingGap,
-  getGlobalFixedPointForBindableElement,
+  getGlobalAttachPointForBindableElement,
   isBindingEnabled,
   maxBindingDistance_simple,
   unbindBindingElement,
@@ -20,32 +18,43 @@ import {
   isElbowArrow,
 } from "../typeChecks";
 import { LinearElementEditor } from "../linearElementEditor";
-import { getHoveredElementForFocusPoint, hitElementItself } from "../collision";
+import { getHoveredElementForFocusPoint } from "../collision";
 import { moveArrowAboveBindable } from "../zindex";
 
 import type {
-  ElementsMap,
   ExcalidrawLinearElement,
   ExcalidrawBindableElement,
   NonDeleted,
-  FixedPointBinding,
   NonDeletedSceneElementsMap,
   PointsPositionUpdates,
 } from "../types";
 
 import type { Scene } from "../Scene";
 
+/**
+ * 这一端的连接点手柄是否显示。
+ *
+ * 组合 A 下 `binding.attachPoint` 存的就是**端点本身**，于是 `focusPoint`
+ * （`getGlobalAttachPointForBindableElement` 的解）与箭头端点恒等，手柄语义就是
+ * "拖这一端的连接点"。所以原来那条隐藏判据（代码里出现两遍：开头 `ignoreOverlap`
+ * 块里与「所属端」的箭头点比距离，返回处又与「这一端」的箭头点比距离）必须在组合 A
+ * 下丢掉 —— 端点与手柄重合是**正常状态**，留着就变成手柄永远不显示。
+ *
+ * 另一条"手柄须落在轮廓外扩 strokeWidth+gap 范围内"（`hitElementItself`）也不能留：
+ * 端点建连时被投在「外扩一个 binding gap 的轮廓」上，此后只随图形刚性变换，于是
+ * 图形放大 N 倍、端点离轮廓的像素距离也放大 N 倍（比例不变），固定像素阈值时对时错；
+ * 复合图形尖角处外扩轮廓还会沿斜接方向多出 gap/sin(半顶角)，更卡不住。
+ *
+ * 因此判据回到绑定本身：这一端确实绑在这个元素上 → 显示手柄（目标元素是否
+ * 可绑定、是否已删除由调用方先行判定）。
+ */
 export const isFocusPointVisible = (
-  focusPoint: GlobalPoint,
   arrow: ExcalidrawLinearElement,
   bindableElement: ExcalidrawBindableElement,
-  elementsMap: ElementsMap,
   appState: {
     isBindingEnabled: AppState["isBindingEnabled"];
-    zoom: AppState["zoom"];
   },
   startOrEnd: "start" | "end",
-  ignoreOverlap = false,
 ): boolean => {
   // No focus point management for elbow arrows, because elbow arrows
   // always have their focus point at the arrow point itself
@@ -57,100 +66,34 @@ export const isFocusPointVisible = (
     return false;
   }
 
-  // Avoid showing the focus point indicator if the focus point is essentially
-  // on top of the arrow point it belongs to itself, if not ignoring specifically
-  if (!ignoreOverlap) {
-    const associatedPointIdx =
-      arrow.startBinding?.elementId === bindableElement.id
-        ? 0
-        : arrow.points.length - 1;
-    const associatedArrowPoint =
-      LinearElementEditor.getPointAtIndexGlobalCoordinates(
-        arrow,
-        associatedPointIdx,
-        elementsMap,
-      );
+  // 手柄只画「这一端自己的绑定」所指的元素上，避免错画到另一端的连接点
+  const binding = startOrEnd === "end" ? arrow.endBinding : arrow.startBinding;
 
-    if (
-      pointDistance(focusPoint, associatedArrowPoint) <
-      (FOCUS_POINT_SIZE * 1.5) / appState.zoom.value
-    ) {
-      return false;
-    }
-  }
-
-  const arrowPoint = LinearElementEditor.getPointAtIndexGlobalCoordinates(
-    arrow,
-    startOrEnd === "end" ? arrow.points.length - 1 : 0,
-    elementsMap,
-  );
-
-  // Check if the focus point is within the element's shape bounds
-  // Endpoint dragging takes precedence
-  return (
-    pointDistance(focusPoint, arrowPoint) >=
-      (FOCUS_POINT_SIZE * 1.5) / appState.zoom.value &&
-    hitElementItself({
-      element: bindableElement,
-      elementsMap,
-      point: focusPoint,
-      threshold: getBindingGap(bindableElement, arrow),
-      overrideShouldTestInside: true,
-    })
-  );
+  return !!binding && binding.elementId === bindableElement.id;
 };
 
-// Updates the arrow endpoints in "orbit" configuration
+// 按当前绑定把被拖的这一端解出来（拖 focus 手柄 = 直接改这一端的连接点）
 const focusPointUpdate = (
   arrow: NonDeleted<ExcalidrawLinearElement>,
   bindableElement: ExcalidrawBindableElement | null,
   isStartBinding: boolean,
   elementsMap: NonDeletedSceneElementsMap,
   scene: Scene,
-  appState: AppState,
-  switchToInsideBinding: boolean,
-) => {
-  const pointUpdates = new Map();
-
-  const originalAdjacentBinding =
-    appState.selectedLinearElement?.initialState
-      .arrowOtherEndpointInitialBinding;
+): void => {
+  const pointUpdates: PointsPositionUpdates = new Map();
   const bindingField = isStartBinding ? "startBinding" : "endBinding";
-  const adjacentBindingField = isStartBinding ? "endBinding" : "startBinding";
-  let currentBinding = arrow[bindingField];
-  let adjacentBinding =
-    originalAdjacentBinding?.mode === "orbit" &&
-    arrow[adjacentBindingField]?.mode === "inside"
-      ? originalAdjacentBinding
-      : arrow[adjacentBindingField];
+  const currentBinding = arrow[bindingField];
 
-  // Update the dragged focus point related end
+  // 只动被拖的这一端。原先这里还会连带重算另一端（按旧锚点语义在「落点在图形
+  // 内部 / 轮廓上」之间来回切换、同图双端则都留在内部），那是为旧锚点语义服务的；
+  // 端点各自在建连时定死，拖这一端不改写另一端。
   if (currentBinding && bindableElement) {
-    // Update the targeted bindings
-    const boundToSameElement =
-      bindableElement &&
-      adjacentBinding &&
-      currentBinding.elementId === adjacentBinding.elementId;
-    if (switchToInsideBinding || boundToSameElement) {
-      currentBinding = {
-        ...currentBinding,
-        mode: "inside",
-      };
-    } else {
-      currentBinding = {
-        ...currentBinding,
-        mode: "orbit",
-      };
-    }
-
     const pointIndex = isStartBinding ? 0 : arrow.points.length - 1;
     const newPoint = updateBoundPoint(
       arrow,
-      bindingField as "startBinding" | "endBinding",
       currentBinding,
       bindableElement,
       elementsMap,
-      true,
     );
 
     if (newPoint) {
@@ -158,53 +101,9 @@ const focusPointUpdate = (
     }
   }
 
-  // Also update the adjacent end if it has a binding
-  if (adjacentBinding && adjacentBinding.mode === "orbit") {
-    const adjacentBindableElement = elementsMap.get(
-      adjacentBinding.elementId,
-    ) as ExcalidrawBindableElement;
-
-    if (
-      adjacentBindableElement &&
-      isBindableElement(adjacentBindableElement) &&
-      isBindingEnabled(appState)
-    ) {
-      // Same shape bound on both ends
-      const boundToSameElementAfterUpdate =
-        bindableElement && adjacentBinding.elementId === bindableElement.id;
-      if (boundToSameElementAfterUpdate) {
-        adjacentBinding = {
-          ...adjacentBinding,
-          mode: "inside",
-        };
-      } else {
-        adjacentBinding = {
-          ...adjacentBinding,
-          mode: "orbit",
-        };
-      }
-
-      const adjacentPointIndex = isStartBinding ? arrow.points.length - 1 : 0;
-      const adjacentNewPoint = updateBoundPoint(
-        arrow,
-        adjacentBindingField,
-        adjacentBinding,
-        adjacentBindableElement,
-        elementsMap,
-      );
-
-      if (adjacentNewPoint) {
-        pointUpdates.set(adjacentPointIndex, {
-          point: adjacentNewPoint,
-        });
-      }
-    }
-  }
-
   if (pointUpdates.size > 0) {
     LinearElementEditor.movePoints(arrow, scene, pointUpdates, {
       [bindingField]: currentBinding,
-      [adjacentBindingField]: adjacentBinding,
     });
   }
 };
@@ -216,7 +115,6 @@ export const handleFocusPointDrag = (
   scene: Scene,
   appState: AppState,
   gridSize: NullableGridSize,
-  switchToInsideBinding: boolean,
 ) => {
   const arrow = LinearElementEditor.getElement(
     linearElementEditor.elementId,
@@ -262,42 +160,19 @@ export const handleFocusPointDrag = (
       );
     }
 
-    // Handle binding mode switch
-    const newMode =
-      switchToInsideBinding && arrow[bindingField]?.mode === "orbit"
-        ? "inside"
-        : !switchToInsideBinding && arrow[bindingField]?.mode === "inside"
-        ? "orbit"
-        : null;
-
-    // If no existing binding, create it
-    if (!arrow[bindingField] || newMode) {
-      // Create a new binding if none exists
-      bindBindingElement(
-        arrow,
-        hit,
-        newMode || "orbit",
-        linearElementEditor.draggedFocusPointBinding,
-        scene,
-        point,
-      );
-    }
-
-    // Update the binding's fixed point
-    scene.mutateElement(arrow, {
-      [bindingField]: {
-        ...arrow[bindingField],
-        elementId: hit.id,
-        mode: newMode || arrow[bindingField]?.mode || "orbit",
-        ...calculateFixedPointForNonElbowArrowBinding(
-          arrow,
-          hit,
-          linearElementEditor.draggedFocusPointBinding,
-          elementsMap,
-          point,
-        ),
-      },
-    });
+    // (Re)bind to the hovered element. `bindBindingElement` resolves the attach
+    // point through `resolveAttachPointForNonElbowBinding`, i.e. it projects the
+    // pointer onto the element's outline **inflated by one binding gap** before
+    // taking the ratio — the same rule as at binding creation. Writing the ratio
+    // of the raw pointer instead (as this used to do, on top of the brand new
+    // binding) drops the endpoint inside the element it is bound to.
+    bindBindingElement(
+      arrow,
+      hit,
+      linearElementEditor.draggedFocusPointBinding,
+      scene,
+      point,
+    );
   } else {
     // Not hovering any bindable element, move the arrow endpoint
     const pointUpdates: PointsPositionUpdates = new Map();
@@ -318,15 +193,7 @@ export const handleFocusPointDrag = (
   }
 
   // Update the arrow endpoints
-  focusPointUpdate(
-    arrow,
-    hit,
-    isStartBinding,
-    elementsMap,
-    scene,
-    appState,
-    switchToInsideBinding,
-  );
+  focusPointUpdate(arrow, hit, isStartBinding, elementsMap, scene);
 
   if (hit && isBindingEnabled(appState)) {
     moveArrowAboveBindable(
@@ -348,7 +215,6 @@ export const handleFocusPointPointerDown = (
 ): {
   hitFocusPoint: "start" | "end" | null;
   pointerOffset: { x: number; y: number };
-  arrowOtherEndpointInitialBinding: FixedPointBinding | null;
 } => {
   const pointerPos = pointFrom(
     pointerDownState.origin.x,
@@ -364,20 +230,13 @@ export const handleFocusPointPointerDown = (
       isBindableElement(bindableElement) &&
       !bindableElement.isDeleted
     ) {
-      const focusPoint = getGlobalFixedPointForBindableElement(
-        arrow.startBinding.fixedPoint,
+      const focusPoint = getGlobalAttachPointForBindableElement(
+        arrow.startBinding.attachPoint,
         bindableElement,
         elementsMap,
       );
       if (
-        isFocusPointVisible(
-          focusPoint,
-          arrow,
-          bindableElement,
-          elementsMap,
-          appState,
-          "start",
-        ) &&
+        isFocusPointVisible(arrow, bindableElement, appState, "start") &&
         pointDistance(pointerPos, focusPoint) <= hitThreshold
       ) {
         return {
@@ -386,7 +245,6 @@ export const handleFocusPointPointerDown = (
             x: pointerPos[0] - focusPoint[0],
             y: pointerPos[1] - focusPoint[1],
           },
-          arrowOtherEndpointInitialBinding: arrow.endBinding,
         };
       }
     }
@@ -400,20 +258,13 @@ export const handleFocusPointPointerDown = (
       isBindableElement(bindableElement) &&
       !bindableElement.isDeleted
     ) {
-      const focusPoint = getGlobalFixedPointForBindableElement(
-        arrow.endBinding.fixedPoint,
+      const focusPoint = getGlobalAttachPointForBindableElement(
+        arrow.endBinding.attachPoint,
         bindableElement,
         elementsMap,
       );
       if (
-        isFocusPointVisible(
-          focusPoint,
-          arrow,
-          bindableElement,
-          elementsMap,
-          appState,
-          "end",
-        ) &&
+        isFocusPointVisible(arrow, bindableElement, appState, "end") &&
         pointDistance(pointerPos, focusPoint) <= hitThreshold
       ) {
         return {
@@ -422,7 +273,6 @@ export const handleFocusPointPointerDown = (
             x: pointerPos[0] - focusPoint[0],
             y: pointerPos[1] - focusPoint[1],
           },
-          arrowOtherEndpointInitialBinding: arrow.startBinding,
         };
       }
     }
@@ -431,7 +281,6 @@ export const handleFocusPointPointerDown = (
   return {
     hitFocusPoint: null,
     pointerOffset: { x: 0, y: 0 },
-    arrowOtherEndpointInitialBinding: null,
   };
 };
 
@@ -496,10 +345,6 @@ export const handleFocusPointPointerUp = (
       ],
     });
   }
-
-  return {
-    arrowOtherEndpointInitialBinding: null,
-  };
 };
 
 export const handleFocusPointHover = (
@@ -521,20 +366,13 @@ export const handleFocusPointHover = (
       isBindableElement(bindableElement) &&
       !bindableElement.isDeleted
     ) {
-      const focusPoint = getGlobalFixedPointForBindableElement(
-        arrow.startBinding.fixedPoint,
+      const focusPoint = getGlobalAttachPointForBindableElement(
+        arrow.startBinding.attachPoint,
         bindableElement,
         elementsMap,
       );
       if (
-        isFocusPointVisible(
-          focusPoint,
-          arrow,
-          bindableElement,
-          elementsMap,
-          appState,
-          "start",
-        ) &&
+        isFocusPointVisible(arrow, bindableElement, appState, "start") &&
         pointDistance(pointerPos, focusPoint) <= hitThreshold
       ) {
         return "start";
@@ -550,20 +388,13 @@ export const handleFocusPointHover = (
       isBindableElement(bindableElement) &&
       !bindableElement.isDeleted
     ) {
-      const focusPoint = getGlobalFixedPointForBindableElement(
-        arrow.endBinding.fixedPoint,
+      const focusPoint = getGlobalAttachPointForBindableElement(
+        arrow.endBinding.attachPoint,
         bindableElement,
         elementsMap,
       );
       if (
-        isFocusPointVisible(
-          focusPoint,
-          arrow,
-          bindableElement,
-          elementsMap,
-          appState,
-          "end",
-        ) &&
+        isFocusPointVisible(arrow, bindableElement, appState, "end") &&
         pointDistance(pointerPos, focusPoint) <= hitThreshold
       ) {
         return "end";

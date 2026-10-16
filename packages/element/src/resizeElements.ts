@@ -22,7 +22,7 @@ import type { PointerDownState } from "@excalidraw/excalidraw/types";
 import type { Mutable } from "@excalidraw/common/utility-types";
 
 import {
-  getArrowLocalFixedPoints,
+  getArrowLocalAttachPoints,
   unbindBindingElement,
   updateBoundElements,
 } from "./binding";
@@ -523,7 +523,7 @@ const rotateMultipleElements = (
       const updates = isElbowArrow(element)
         ? {
             // Needed to re-route the arrow
-            points: getArrowLocalFixedPoints(element, elementsMap),
+            points: getArrowLocalAttachPoints(element, elementsMap),
           }
         : {
             x: element.x + (rotatedCX - cx),
@@ -1673,42 +1673,42 @@ export const resizeMultipleElements = (
           }),
       };
 
-      if (isElbowArrow(orig)) {
-        // Mirror fixed point binding for elbow arrows
-        // when resize goes into the negative direction
+      // 翻转时把绑定比例镜像成 `-f + 1`。端点对**所有**箭头都是刚性比例（组合 A），
+      // 不镜像就会跟着翻到另一侧；原先只对折线做，其余靠运行时重投影兜住。
+      if (isLinearElement(orig)) {
         if (orig.startBinding) {
           update.startBinding = {
             ...orig.startBinding,
-            fixedPoint: [
+            attachPoint: [
               flipByX
-                ? -orig.startBinding.fixedPoint[0] + 1
-                : orig.startBinding.fixedPoint[0],
+                ? -orig.startBinding.attachPoint[0] + 1
+                : orig.startBinding.attachPoint[0],
               flipByY
-                ? -orig.startBinding.fixedPoint[1] + 1
-                : orig.startBinding.fixedPoint[1],
+                ? -orig.startBinding.attachPoint[1] + 1
+                : orig.startBinding.attachPoint[1],
             ],
           };
         }
         if (orig.endBinding) {
           update.endBinding = {
             ...orig.endBinding,
-            fixedPoint: [
+            attachPoint: [
               flipByX
-                ? -orig.endBinding.fixedPoint[0] + 1
-                : orig.endBinding.fixedPoint[0],
+                ? -orig.endBinding.attachPoint[0] + 1
+                : orig.endBinding.attachPoint[0],
               flipByY
-                ? -orig.endBinding.fixedPoint[1] + 1
-                : orig.endBinding.fixedPoint[1],
+                ? -orig.endBinding.attachPoint[1] + 1
+                : orig.endBinding.attachPoint[1],
             ],
           };
         }
-        if (orig.fixedSegments && rescaledPoints.points) {
-          update.fixedSegments = orig.fixedSegments.map((segment) => ({
-            ...segment,
-            start: rescaledPoints.points[segment.index - 1],
-            end: rescaledPoints.points[segment.index],
-          }));
-        }
+      }
+      if (isElbowArrow(orig) && orig.fixedSegments && rescaledPoints.points) {
+        update.fixedSegments = orig.fixedSegments.map((segment) => ({
+          ...segment,
+          start: rescaledPoints.points[segment.index - 1],
+          end: rescaledPoints.points[segment.index],
+        }));
       }
 
       if (isImageElement(orig)) {

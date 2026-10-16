@@ -525,8 +525,7 @@ describe("完整表格纯场景操作", () => {
       }),
       endBinding: {
         elementId: nested.id,
-        fixedPoint: [0.5, 0.5],
-        mode: "orbit" as const,
+        attachPoint: [0.5, 0.5],
       },
     };
     const result = applyTableOperation(

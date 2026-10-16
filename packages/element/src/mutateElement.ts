@@ -159,9 +159,11 @@ export const mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
     typeof fileId != "undefined" ||
     typeof points !== "undefined" ||
     typeof shape !== "undefined" ||
-    // 圆角箭头的曲线还要读两端绑定的附着点（端切线由 `binding.fixedPoint` 解出），
-    // 所以只改绑定的 mutate（容器缩放时的 reanchor、解绑、箭头花环重新锚定）也必须
-    // 让形状缓存失效，否则渲染与包围盒会停在旧曲线上，而命中/标签已经按新绑定算了
+    // 圆角箭头的曲线要读两端绑定解出的端切线：`binding.attachPoint` 既决定端点本身
+    // （端点在未旋转包围盒里的归一化比例），也由比例判出所依附的边、从而定出端切线
+    // 方向（见 curveConnector 的 normalFromAttachPoint）。所以只改绑定的 mutate
+    // （容器缩放时的 reanchor、解绑、箭头花环重新锚定）也必须让形状缓存失效，
+    // 否则渲染与包围盒会停在旧曲线上，而命中/标签已经按新绑定算了
     typeof startBinding !== "undefined" ||
     typeof endBinding !== "undefined"
   ) {

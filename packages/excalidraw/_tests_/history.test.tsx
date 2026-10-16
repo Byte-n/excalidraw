@@ -10,6 +10,8 @@ import { pointFrom } from "@excalidraw/math";
 
 import { newElementWith } from "@excalidraw/element";
 
+import { BASE_BINDING_GAP } from "@excalidraw/element";
+
 import {
   EXPORT_DATA_TYPES,
   VERSIONS,
@@ -39,7 +41,7 @@ import type {
   ExcalidrawLinearElement,
   ExcalidrawTextElement,
   FileId,
-  FixedPointBinding,
+  ElementBinding,
   FractionalIndex,
   SceneElementsMap,
 } from "@excalidraw/element/types";
@@ -118,6 +120,63 @@ const red = "#e6f4f1"; // 背景色板网格 teal 族（color-teal，明度档 0
 const blue = "#fdecee"; // 背景色板网格 red 族（color-red，明度档 0）
 const yellow = COLOR_PALETTE.yellow[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX];
 const violet = COLOR_PALETTE.violet[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX];
+
+/**
+ * 期望某个 `attachPoint` 落在**目标外扩一个 binding gap 的轮廓**上。
+ *
+ * 组合 A 里 `attachPoint` 存的就是端点本身（见 `binding.ts` 的
+ * `resolveAttachPointForNonElbowBinding`），建连时端点被投到外扩轮廓上，所以比例
+ * 能直接从图形几何推出来 —— 不必把某个具体数字抄进测试，也不必回退成
+ * `toBeNonNaNNumber()` 那种什么都不验的写法。
+ *
+ * `side` 是端点贴住的那条外扩边，`along` 是另一轴上的归一化位置（0.5 = 中线）。
+ * 容差 1e-3：`normalizeAttachPoint` 会把精确的 0.5 抬成 0.5001，而「落在外扩边上」
+ * 这个几何含义本身容许的误差远小于 1e-3 —— 差半个像素（比例上 ~0.005）就会红。
+ */
+const attachPointOnInflatedSide = (
+  target: { id: string; width: number; height: number; strokeWidth: number },
+  side: "left" | "right" | "top" | "bottom",
+  along: number,
+) => ({
+  asymmetricMatch: (received: readonly number[]) => {
+    const gap = BASE_BINDING_GAP + target.strokeWidth / 2;
+    const [expectedX, expectedY] =
+      side === "left"
+        ? [-gap / target.width, along]
+        : side === "right"
+        ? [1 + gap / target.width, along]
+        : side === "top"
+        ? [along, -gap / target.height]
+        : [along, 1 + gap / target.height];
+
+    return (
+      Array.isArray(received) &&
+      Math.abs(received[0] - expectedX) < 1e-3 &&
+      Math.abs(received[1] - expectedY) < 1e-3
+    );
+  },
+  toString: () =>
+    `attachPoint on the ${side} inflated side of "${target.id}" (gap ${
+      BASE_BINDING_GAP + target.strokeWidth / 2
+    })`,
+});
+
+/**
+ * 同上，直接断言一整个绑定：`elementId` 指向 `target`，且比例落在指定的那条外扩边上。
+ * 给了个函数形态是为了在没有 `toEqual` 可比的对象时（例如从 `arrow.startBinding`
+ * 直接取值）读起来不别扭。
+ */
+const expectAttachPoint = (
+  binding: ElementBinding | null | undefined,
+  target: { id: string; width: number; height: number; strokeWidth: number },
+  side: "left" | "right" | "top" | "bottom",
+  along: number,
+) => {
+  expect(binding?.elementId).toBe(target.id);
+  expect(binding?.attachPoint).toEqual(
+    attachPointOnInflatedSide(target, side, along),
+  );
+};
 
 describe("history", () => {
   beforeEach(() => {
@@ -1599,16 +1658,12 @@ describe("history", () => {
         arrow = h.elements[3] as ExcalidrawLinearElement;
 
         expect(API.getUndoStack().length).toBe(5);
-        expect(arrow.startBinding).toEqual({
-          elementId: rect1.id,
-          fixedPoint: expect.arrayContaining([1, 0.5001]),
-          mode: "orbit",
-        });
-        expect(arrow.endBinding).toEqual({
-          elementId: rect2.id,
-          fixedPoint: expect.arrayContaining([0.5001, 0.5001]),
-          mode: "orbit",
-        });
+        // 指针落在 rect1 右边缘外 3px 处、终点落在 rect2 左边缘外 3px 处；建连时
+        // 两个端点都被投到各自目标**外扩一个 binding gap 的轮廓**上，比例因此是
+        // `1 + gap/width`（rect1 的右外扩边）与 `-gap/width`（rect2 的左外扩边），
+        // 纵坐标就是指针所在的中线。
+        expectAttachPoint(arrow.startBinding, rect1, "right", 0.5);
+        expectAttachPoint(arrow.endBinding, rect2, "left", 0.5);
         expect(rect1.boundElements).toStrictEqual([
           { id: text.id, type: "text" },
           { id: arrow.id, type: "arrow" },
@@ -1622,16 +1677,12 @@ describe("history", () => {
         Keyboard.undo();
         expect(API.getUndoStack().length).toBe(4);
         expect(API.getRedoStack().length).toBe(1);
-        expect(arrow.startBinding).toEqual({
-          elementId: rect1.id,
-          fixedPoint: expect.arrayContaining([1, 0.5001]),
-          mode: "orbit",
-        });
-        expect(arrow.endBinding).toEqual({
-          elementId: rect2.id,
-          fixedPoint: expect.arrayContaining([0.5001, 0.5001]),
-          mode: "orbit",
-        });
+        // 指针落在 rect1 右边缘外 3px 处、终点落在 rect2 左边缘外 3px 处；建连时
+        // 两个端点都被投到各自目标**外扩一个 binding gap 的轮廓**上，比例因此是
+        // `1 + gap/width`（rect1 的右外扩边）与 `-gap/width`（rect2 的左外扩边），
+        // 纵坐标就是指针所在的中线。
+        expectAttachPoint(arrow.startBinding, rect1, "right", 0.5);
+        expectAttachPoint(arrow.endBinding, rect2, "left", 0.5);
         expect(h.elements).toEqual([
           expect.objectContaining({
             id: rect1.id,
@@ -1645,16 +1696,12 @@ describe("history", () => {
         Keyboard.redo();
         expect(API.getUndoStack().length).toBe(5);
         expect(API.getRedoStack().length).toBe(0);
-        expect(arrow.startBinding).toEqual({
-          elementId: rect1.id,
-          fixedPoint: expect.arrayContaining([1, 0.5001]),
-          mode: "orbit",
-        });
-        expect(arrow.endBinding).toEqual({
-          elementId: rect2.id,
-          fixedPoint: expect.arrayContaining([0.5001, 0.5001]),
-          mode: "orbit",
-        });
+        // 指针落在 rect1 右边缘外 3px 处、终点落在 rect2 左边缘外 3px 处；建连时
+        // 两个端点都被投到各自目标**外扩一个 binding gap 的轮廓**上，比例因此是
+        // `1 + gap/width`（rect1 的右外扩边）与 `-gap/width`（rect2 的左外扩边），
+        // 纵坐标就是指针所在的中线。
+        expectAttachPoint(arrow.startBinding, rect1, "right", 0.5);
+        expectAttachPoint(arrow.endBinding, rect2, "left", 0.5);
         expect(h.elements).toEqual([
           expect.objectContaining({
             id: rect1.id,
@@ -1676,16 +1723,12 @@ describe("history", () => {
         Keyboard.keyDown(KEYS.DELETE);
         expect(API.getUndoStack().length).toBe(6);
         expect(API.getRedoStack().length).toBe(0);
-        expect(arrow.startBinding).toEqual({
-          elementId: rect1.id,
-          fixedPoint: expect.arrayContaining([1, 0.5001]),
-          mode: "orbit",
-        });
-        expect(arrow.endBinding).toEqual({
-          elementId: rect2.id,
-          fixedPoint: expect.arrayContaining([0.5001, 0.5001]),
-          mode: "orbit",
-        });
+        // 指针落在 rect1 右边缘外 3px 处、终点落在 rect2 左边缘外 3px 处；建连时
+        // 两个端点都被投到各自目标**外扩一个 binding gap 的轮廓**上，比例因此是
+        // `1 + gap/width`（rect1 的右外扩边）与 `-gap/width`（rect2 的左外扩边），
+        // 纵坐标就是指针所在的中线。
+        expectAttachPoint(arrow.startBinding, rect1, "right", 0.5);
+        expectAttachPoint(arrow.endBinding, rect2, "left", 0.5);
         expect(h.elements).toEqual([
           expect.objectContaining({
             id: rect1.id,
@@ -1699,16 +1742,12 @@ describe("history", () => {
         Keyboard.undo();
         expect(API.getUndoStack().length).toBe(5);
         expect(API.getRedoStack().length).toBe(1);
-        expect(arrow.startBinding).toEqual({
-          elementId: rect1.id,
-          fixedPoint: expect.arrayContaining([1, 0.5001]),
-          mode: "orbit",
-        });
-        expect(arrow.endBinding).toEqual({
-          elementId: rect2.id,
-          fixedPoint: expect.arrayContaining([0.5001, 0.5001]),
-          mode: "orbit",
-        });
+        // 指针落在 rect1 右边缘外 3px 处、终点落在 rect2 左边缘外 3px 处；建连时
+        // 两个端点都被投到各自目标**外扩一个 binding gap 的轮廓**上，比例因此是
+        // `1 + gap/width`（rect1 的右外扩边）与 `-gap/width`（rect2 的左外扩边），
+        // 纵坐标就是指针所在的中线。
+        expectAttachPoint(arrow.startBinding, rect1, "right", 0.5);
+        expectAttachPoint(arrow.endBinding, rect2, "left", 0.5);
         expect(h.elements).toEqual([
           expect.objectContaining({
             id: rect1.id,
@@ -1756,19 +1795,11 @@ describe("history", () => {
               id: arrow.id,
               startBinding: expect.objectContaining({
                 elementId: rect1.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: attachPointOnInflatedSide(rect1, "right", 0.5),
               }),
               endBinding: expect.objectContaining({
                 elementId: rect2.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: attachPointOnInflatedSide(rect2, "left", 0.5),
               }),
               isDeleted: true,
             }),
@@ -1807,19 +1838,11 @@ describe("history", () => {
               id: arrow.id,
               startBinding: expect.objectContaining({
                 elementId: rect1.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: attachPointOnInflatedSide(rect1, "right", 0.5),
               }),
               endBinding: expect.objectContaining({
                 elementId: rect2.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: attachPointOnInflatedSide(rect2, "left", 0.5),
               }),
               isDeleted: false,
             }),
@@ -1857,11 +1880,7 @@ describe("history", () => {
               startBinding: null,
               endBinding: expect.objectContaining({
                 elementId: rect2.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: attachPointOnInflatedSide(rect2, "left", 0.5),
               }),
               isDeleted: false,
             }),
@@ -1895,19 +1914,11 @@ describe("history", () => {
               id: arrow.id,
               startBinding: expect.objectContaining({
                 elementId: rect1.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: attachPointOnInflatedSide(rect1, "right", 0.5),
               }),
               endBinding: expect.objectContaining({
                 elementId: rect2.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: attachPointOnInflatedSide(rect2, "left", 0.5),
               }),
               isDeleted: false,
             }),
@@ -1974,19 +1985,11 @@ describe("history", () => {
               id: arrow.id,
               startBinding: expect.objectContaining({
                 elementId: rect1.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: attachPointOnInflatedSide(rect1, "right", 0.5),
               }),
               endBinding: expect.objectContaining({
                 elementId: rect2.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: attachPointOnInflatedSide(rect2, "left", 0.5),
               }),
               isDeleted: false,
             }),
@@ -2337,14 +2340,12 @@ describe("history", () => {
             ],
             startBinding: {
               elementId: "KPrBI4g_v9qUB1XxYLgSz",
-              fixedPoint: [1.0318471337579618, 0.49920634920634904],
-              mode: "orbit",
-            } as FixedPointBinding,
+              attachPoint: [1.0318471337579618, 0.49920634920634904],
+            } as ElementBinding,
             endBinding: {
               elementId: "u2JGnnmoJ0VATV4vCNJE5",
-              fixedPoint: [0.4991935483870975, -0.03875193720914723],
-              mode: "orbit",
-            } as FixedPointBinding,
+              attachPoint: [0.4991935483870975, -0.03875193720914723],
+            } as ElementBinding,
           },
         ],
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
@@ -4627,17 +4628,11 @@ describe("history", () => {
 
         expect(
           (h.elements[2] as ExcalidrawElbowArrowElement).startBinding
-            ?.fixedPoint,
-        ).toEqual([0.5436893203883493, 0.5436893203883493]);
-        expect(
-          (h.elements[2] as ExcalidrawElbowArrowElement).startBinding?.mode,
-        ).toBe("orbit");
+            ?.attachPoint,
+        ).toEqual([1.06, 0.5281999999999999]);
         expect(
           (h.elements[2] as ExcalidrawElbowArrowElement).endBinding,
         ).not.toEqual([1, 0.5001]);
-        expect(
-          (h.elements[2] as ExcalidrawElbowArrowElement).endBinding?.mode,
-        ).toBe("inside");
 
         expect(h.elements).toEqual(
           expect.arrayContaining([
@@ -4651,21 +4646,16 @@ describe("history", () => {
             }),
             expect.objectContaining({
               id: arrowId,
+              // x 落在目标**外扩一个 binding gap 的轮廓**上：`1 + gap/width`
+              // （rect1 的右外扩边）/ `-gap/width`（rect2 的左外扩边），gap = 6、
+              // 宽 100。y 是指针 y 经折线路由的中点吸附后的落点比例。
               startBinding: expect.objectContaining({
                 elementId: rect1.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: [1.06, 0.5281999999999999],
               }),
               endBinding: expect.objectContaining({
                 elementId: rect2.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "inside",
+                attachPoint: [-0.06, 0.5298851063829787],
               }),
             }),
           ]),
@@ -4728,13 +4718,11 @@ describe("history", () => {
                 id: arrowId,
                 startBinding: expect.objectContaining({
                   elementId: rect1.id,
-                  fixedPoint: [0.5436893203883493, 0.5436893203883493],
-                  mode: "orbit",
+                  attachPoint: [1.06, 0.5281999999999999],
                 }),
                 endBinding: expect.objectContaining({
                   elementId: rect2.id,
-                  fixedPoint: [0, 0.53],
-                  mode: "inside",
+                  attachPoint: [-0.06, 0.5298851063829787],
                 }),
               }),
             ]),
@@ -4791,21 +4779,16 @@ describe("history", () => {
             }),
             expect.objectContaining({
               id: arrowId,
+              // x 落在目标**外扩一个 binding gap 的轮廓**上：`1 + gap/width`
+              // （rect1 的右外扩边）/ `-gap/width`（rect2 的左外扩边），gap = 6、
+              // 宽 100。y 是指针 y 经折线路由的中点吸附后的落点比例。
               startBinding: expect.objectContaining({
                 elementId: rect1.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: [1.06, 0.5281999999999999],
               }),
               endBinding: expect.objectContaining({
                 elementId: rect2.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "inside",
+                attachPoint: [-0.06, 0.5298851063829787],
               }),
             }),
           ]),
@@ -4843,8 +4826,7 @@ describe("history", () => {
             newElementWith(h.elements[2] as ExcalidrawElbowArrowElement, {
               endBinding: {
                 elementId: remoteContainer.id,
-                fixedPoint: [0.5001, 1],
-                mode: "orbit",
+                attachPoint: [0.5001, 1],
               },
             }),
             remoteContainer,
@@ -4871,14 +4853,12 @@ describe("history", () => {
                 id: arrowId,
                 startBinding: expect.objectContaining({
                   elementId: rect1.id,
-                  fixedPoint: [0.5436893203883493, 0.5436893203883493],
-                  mode: "orbit",
+                  attachPoint: [1.06, 0.5281999999999999],
                 }),
                 // rebound with previous rectangle
                 endBinding: expect.objectContaining({
                   elementId: rect2.id,
-                  fixedPoint: [0, 0.53],
-                  mode: "inside",
+                  attachPoint: [-0.06, 0.5298851063829787],
                 }),
               }),
               expect.objectContaining({
@@ -4908,8 +4888,7 @@ describe("history", () => {
                 endBinding: expect.objectContaining({
                   // now we are back in the previous state!
                   elementId: remoteContainer.id,
-                  fixedPoint: [0.5001, 1],
-                  mode: "orbit",
+                  attachPoint: [0.5001, 1],
                 }),
               }),
               expect.objectContaining({
@@ -4927,13 +4906,11 @@ describe("history", () => {
           type: "arrow",
           startBinding: {
             elementId: rect1.id,
-            fixedPoint: [1, 0.5],
-            mode: "orbit",
+            attachPoint: [1, 0.5],
           },
           endBinding: {
             elementId: rect2.id,
-            fixedPoint: [0.5, 1],
-            mode: "orbit",
+            attachPoint: [0.5, 1],
           },
         });
 
@@ -4980,23 +4957,16 @@ describe("history", () => {
             expect.arrayContaining([
               expect.objectContaining({
                 id: arrow.id,
+                // 绑定原样穿过 history：就是上面手写下来的那对比例
                 startBinding: expect.objectContaining({
                   // now we are back in the previous state!
                   elementId: rect1.id,
-                  fixedPoint: [
-                    expect.toBeNonNaNNumber(),
-                    expect.toBeNonNaNNumber(),
-                  ],
-                  mode: "orbit",
+                  attachPoint: [1, 0.5],
                 }),
                 endBinding: expect.objectContaining({
                   // now we are back in the previous state!
                   elementId: rect2.id,
-                  fixedPoint: [
-                    expect.toBeNonNaNNumber(),
-                    expect.toBeNonNaNNumber(),
-                  ],
-                  mode: "orbit",
+                  attachPoint: [0.5, 1],
                 }),
               }),
               expect.objectContaining({
@@ -5032,13 +5002,11 @@ describe("history", () => {
             newElementWith(h.elements[0] as ExcalidrawElbowArrowElement, {
               startBinding: {
                 elementId: rect1.id,
-                fixedPoint: [0.5, 1],
-                mode: "orbit",
+                attachPoint: [0.5, 1],
               },
               endBinding: {
                 elementId: rect2.id,
-                fixedPoint: [1, 0.5],
-                mode: "orbit",
+                attachPoint: [1, 0.5],
               },
             }),
             newElementWith(rect1, {
@@ -5059,21 +5027,14 @@ describe("history", () => {
             expect.arrayContaining([
               expect.objectContaining({
                 id: arrow.id,
+                // 同上：这对比例是上面手写下来的，只经由 history 传递
                 startBinding: expect.objectContaining({
                   elementId: rect1.id,
-                  fixedPoint: [
-                    expect.toBeNonNaNNumber(),
-                    expect.toBeNonNaNNumber(),
-                  ],
-                  mode: "orbit",
+                  attachPoint: [0.5, 1],
                 }),
                 endBinding: expect.objectContaining({
                   elementId: rect2.id,
-                  fixedPoint: [
-                    expect.toBeNonNaNNumber(),
-                    expect.toBeNonNaNNumber(),
-                  ],
-                  mode: "orbit",
+                  attachPoint: [1, 0.5],
                 }),
                 isDeleted: true,
               }),
@@ -5099,19 +5060,11 @@ describe("history", () => {
                 id: arrow.id,
                 startBinding: {
                   elementId: rect1.id,
-                  fixedPoint: [
-                    expect.toBeNonNaNNumber(),
-                    expect.toBeNonNaNNumber(),
-                  ],
-                  mode: "orbit",
+                  attachPoint: [0.5, 1],
                 },
                 endBinding: expect.objectContaining({
                   elementId: rect2.id,
-                  fixedPoint: [
-                    expect.toBeNonNaNNumber(),
-                    expect.toBeNonNaNNumber(),
-                  ],
-                  mode: "orbit",
+                  attachPoint: [1, 0.5],
                 }),
                 isDeleted: false,
               }),
@@ -5157,11 +5110,14 @@ describe("history", () => {
               id: arrowId,
               startBinding: expect.objectContaining({
                 elementId: rect1.id,
-                fixedPoint: expect.arrayContaining([1, 0.5001]),
+                // 端点建连时被投到各自目标**外扩一个 binding gap 的轮廓**上
+                // （指针贴着 rect1 的右边缘 / rect2 的左边缘落下）：比例因此是
+                // `1 + gap/width` / `-gap/width`（gap 6、宽 100），纵坐标在中线。
+                attachPoint: [1.06, 0.5001],
               }),
               endBinding: expect.objectContaining({
                 elementId: rect2.id,
-                fixedPoint: expect.arrayContaining([0, 0.5001]),
+                attachPoint: [-0.06, 0.5001],
               }),
               isDeleted: true,
             }),
@@ -5203,19 +5159,11 @@ describe("history", () => {
               id: arrowId,
               startBinding: expect.objectContaining({
                 elementId: rect1.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: [1.06, 0.5001],
               }),
               endBinding: expect.objectContaining({
                 elementId: rect2.id,
-                fixedPoint: expect.arrayContaining([
-                  expect.toBeNonNaNNumber(),
-                  expect.toBeNonNaNNumber(),
-                ]),
-                mode: "orbit",
+                attachPoint: [-0.06, 0.5001],
               }),
               isDeleted: false,
             }),

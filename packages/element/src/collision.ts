@@ -37,7 +37,6 @@ import {
   getCompositeShapeGlobalPoints,
   getCompositeShapeOffsetPaths,
   isCompositeShapeOpen,
-  isCompositeShapeId,
 } from "./compositeShape";
 import {
   getMindmapNodeGeometry,
@@ -49,7 +48,6 @@ import {
   elementCenterPoint,
   getCenterForBounds,
   getCubicBezierCurveBound,
-  getDiamondPoints,
   getElementBounds,
   pointInsideBounds,
 } from "./bounds";
@@ -1004,83 +1002,4 @@ export const isPointInElement = (
   ).filter((p, pos, arr) => arr.findIndex((q) => pointsEqual(q, p)) === pos);
 
   return intersections.length % 2 === 1;
-};
-
-export const isBindableElementInsideOtherBindable = (
-  innerElement: ExcalidrawBindableElement,
-  outerElement: ExcalidrawBindableElement,
-  elementsMap: ElementsMap,
-): boolean => {
-  // Get corner points of the inner element based on its type
-  const getCornerPoints = (
-    element: ExcalidrawElement,
-    offset: number,
-  ): GlobalPoint[] => {
-    const { x, y, width, height, angle } = element;
-    const center = elementCenterPoint(element, elementsMap);
-
-    if (element.type === "composite_shape") {
-      if (isCompositeShapeOpen(element.shape.id)) {
-        return [];
-      }
-      const paths = getCompositeShapeOffsetPaths(element, offset);
-      if (paths.length > 0) {
-        return paths.flatMap((path) =>
-          path.map(([px, py]) => pointFrom<GlobalPoint>(px, py)),
-        );
-      }
-      return getCompositeShapeGlobalPoints(element);
-    }
-
-    if (isCompositeShapeId(element, "diamond")) {
-      // Diamond has 4 corner points at the middle of each side
-      const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
-        getDiamondPoints(element);
-      const corners: GlobalPoint[] = [
-        pointFrom(x + topX, y + topY - offset), // top
-        pointFrom(x + rightX + offset, y + rightY), // right
-        pointFrom(x + bottomX, y + bottomY + offset), // bottom
-        pointFrom(x + leftX - offset, y + leftY), // left
-      ];
-      return corners.map((corner) => pointRotateRads(corner, center, angle));
-    }
-    if (isCompositeShapeId(element, "ellipse")) {
-      // For ellipse, test points at the extremes (top, right, bottom, left)
-      const primitive = getCompositeShapeGeometry(element).primitive;
-      if (primitive?.kind !== "ellipse") {
-        throw new Error("Missing ellipse geometry");
-      }
-      const cx = x + primitive.center[0];
-      const cy = y + primitive.center[1];
-      const rx = primitive.radiusX;
-      const ry = primitive.radiusY;
-      const corners: GlobalPoint[] = [
-        pointFrom(cx, cy - ry - offset), // top
-        pointFrom(cx + rx + offset, cy), // right
-        pointFrom(cx, cy + ry + offset), // bottom
-        pointFrom(cx - rx - offset, cy), // left
-      ];
-      return corners.map((corner) => pointRotateRads(corner, center, angle));
-    }
-    // Rectangle and other rectangular shapes (image, text, etc.)
-    const corners: GlobalPoint[] = [
-      pointFrom(x - offset, y - offset), // top-left
-      pointFrom(x + width + offset, y - offset), // top-right
-      pointFrom(x + width + offset, y + height + offset), // bottom-right
-      pointFrom(x - offset, y + height + offset), // bottom-left
-    ];
-    return corners.map((corner) => pointRotateRads(corner, center, angle));
-  };
-
-  const offset = (-1 * Math.max(innerElement.width, innerElement.height)) / 20; // 5% offset
-  const innerCorners = getCornerPoints(innerElement, offset);
-
-  if (innerCorners.length === 0) {
-    return false;
-  }
-
-  // Check if all corner points of the inner element are inside the outer element
-  return innerCorners.every((corner) =>
-    isPointInElement(corner, outerElement, elementsMap),
-  );
 };

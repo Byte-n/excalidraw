@@ -44,10 +44,9 @@ const DEFAULT_POINTS: readonly LocalPoint[] = [
   pointFrom<LocalPoint>(240, -300),
 ];
 
-const binding = (elementId: string, fixedPoint: [number, number]) => ({
+const binding = (elementId: string, attachPoint: [number, number]) => ({
   elementId,
-  mode: "orbit" as const,
-  fixedPoint,
+  attachPoint,
 });
 
 /** 起点挂右边缘、终点挂左边缘：端切线水平且反向 */
@@ -91,9 +90,9 @@ const createArrow = (
 };
 
 /**
- * 占位绑定：`fixedPoint` 在类型上不可为空，但「绑定已建立、附着点尚未解出」的
- * 中间态在运行时就是 null。用 defineProperty 注入这个状态，而不是用类型断言把
- * 类型系统的洞遮住。
+ * 占位绑定：`attachPoint` 在类型上不可为空（`ElementBinding` 只有 `elementId` 与
+ * `attachPoint` 两项），但「绑定已建立、附着点尚未解出」的中间态在运行时就是
+ * null。用 defineProperty 注入这个状态，而不是用类型断言把类型系统的洞遮住。
  */
 const injectPlaceholderBinding = (
   element: NonDeleted<ExcalidrawArrowElement>,
@@ -103,7 +102,7 @@ const injectPlaceholderBinding = (
     element,
     end === "start" ? "startBinding" : "endBinding",
     {
-      value: { elementId: "placeholder", mode: "orbit", fixedPoint: null },
+      value: { elementId: "placeholder", attachPoint: null },
       configurable: true,
       writable: true,
     },

@@ -70,11 +70,6 @@ export const terminateActiveInteraction = (app: App) => {
 
   resetContextMenuTimer(app);
 
-  if (app.bindModeHandler) {
-    app.ownerWindow.clearTimeout(app.bindModeHandler);
-    app.bindModeHandler = null;
-  }
-
   app.flowchart.clear();
   app.mindmap.clear();
 
@@ -102,7 +97,6 @@ export const terminateActiveInteraction = (app: App) => {
     openMenu: null,
     openPopup: null,
     cursorButton: "up",
-    bindMode: "orbit",
     activeEmbeddable: null,
     activeLockedId: null,
     selectedElementsAreBeingDragged: false,

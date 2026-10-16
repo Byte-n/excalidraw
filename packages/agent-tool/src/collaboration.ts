@@ -102,8 +102,7 @@ const sceneElement = z.custom<ExcalidrawSceneElement>(
 const endpoint = z
   .object({
     elementId: z.string().min(1),
-    fixedPoint: z.tuple([z.number().finite(), z.number().finite()]),
-    mode: z.enum(["inside", "orbit", "skip"]),
+    attachPoint: z.tuple([z.number().finite(), z.number().finite()]),
   })
   .strict()
   .nullable();

@@ -29,18 +29,15 @@ import {
   isShallowEqual,
   MINIMUM_ARROW_SIZE,
   invariant,
-  getFeatureFlag,
   isSelectionLikeTool,
 } from "@excalidraw/common";
 import {
   getCommonBounds,
   getElementAbsoluteCoords,
   bindOrUnbindBindingElements,
-  getHoveredElementForBinding,
   LinearElementEditor,
   deepCopyElement,
   isArrowElement,
-  isBindingElement,
   isFrameLikeElement,
   isImageElement,
   isEmbeddableElement,
@@ -88,11 +85,12 @@ import {
   redrawTextBoundingBox,
   updateBoundElements,
   updateCompositeShapeControlPoint,
+  getBindingGap,
 } from "@excalidraw/element";
 
 import { EVENT } from "@excalidraw/common";
 
-import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
+import type { LocalPoint } from "@excalidraw/math";
 import type {
   ExcalidrawElement,
   ExcalidrawFreeDrawElement,
@@ -1298,11 +1296,11 @@ export const onPointerMoveFromPointerDownHandler = (
           }).find((point) => point.kind === control.kind);
           app.scene.mutateElement(element, { shape });
           if (oldPoint && newPoint) {
-            const oldFixedPoint = [
+            const oldAttachPoint = [
               oldPoint.x / element.width,
               oldPoint.y / element.height,
             ];
-            const newFixedPoint = [
+            const newAttachPoint = [
               newPoint.x / element.width,
               newPoint.y / element.height,
             ] as [number, number];
@@ -1311,6 +1309,13 @@ export const onPointerMoveFromPointerDownHandler = (
               if (!isArrowElement(arrow)) {
                 continue;
               }
+              // 组合 A 下 attachPoint 存的是**端点本身**（建连时把落点投到「外扩一个
+              // binding gap 的轮廓」上再取比例），所以"端点贴在这个控制点上"时，两者的
+              // 比例差不确定等于某个固定小数，而是**一个 gap 量级的像素距离**（尖角处
+              // 外扩轮廓沿斜接方向还会多出 gap/sin(半顶角)，约 2 gap）。原来直接比
+              // 比例、阈值 0.01 的口径属于「锚点=落点」的旧语义，会把跟着控制点走的
+              // 端点漏掉，故改为按像素比长度。
+              const tolerance = 2 * getBindingGap(element, arrow);
               const bindingUpdates: {
                 startBinding?: typeof arrow.startBinding;
                 endBinding?: typeof arrow.endBinding;
@@ -1320,13 +1325,22 @@ export const onPointerMoveFromPointerDownHandler = (
                 if (
                   binding?.elementId === element.id &&
                   Math.hypot(
-                    binding.fixedPoint[0] - oldFixedPoint[0],
-                    binding.fixedPoint[1] - oldFixedPoint[1],
-                  ) < 0.01
+                    (binding.attachPoint[0] - oldAttachPoint[0]) *
+                      element.width,
+                    (binding.attachPoint[1] - oldAttachPoint[1]) *
+                      element.height,
+                  ) <= tolerance
                 ) {
                   bindingUpdates[key] = {
                     ...binding,
-                    fixedPoint: newFixedPoint,
+                    // 把控制点的比例位移加到端点比例上（而不是把端点改写成控制点
+                    // 比例），端点与轮廓之间那一个 gap 的偏移才得以保留
+                    attachPoint: [
+                      binding.attachPoint[0] +
+                        (newAttachPoint[0] - oldAttachPoint[0]),
+                      binding.attachPoint[1] +
+                        (newAttachPoint[1] - oldAttachPoint[1]),
+                    ] as [number, number],
                   };
                 }
               }
@@ -1373,7 +1387,6 @@ export const onPointerMoveFromPointerDownHandler = (
           app.scene,
           app.state,
           app.getEffectiveGridSize(),
-          event.altKey,
         );
         app.setState({
           selectedLinearElement: {
@@ -1452,26 +1465,6 @@ export const onPointerMoveFromPointerDownHandler = (
           return;
         }
 
-        if (isBindingElement(element)) {
-          const hoveredElement = getHoveredElementForBinding(
-            pointFrom<GlobalPoint>(pointerCoords.x, pointerCoords.y),
-            app.scene.getNonDeletedElements(),
-            elementsMap,
-          );
-
-          if (getFeatureFlag("COMPLEX_BINDINGS")) {
-            app.handleDelayedBindModeChange(element, hoveredElement);
-          }
-        }
-
-        if (
-          event.altKey &&
-          !app.state.selectedLinearElement?.initialState?.arrowStartIsInside &&
-          getFeatureFlag("COMPLEX_BINDINGS")
-        ) {
-          app.handleSkipBindMode();
-        }
-
         // Ignore drag requests if the arrow modification already happened
         if (linearElementEditor.initialState.lastClickedPoint === -1) {
           return;
@@ -1503,9 +1496,7 @@ export const onPointerMoveFromPointerDownHandler = (
             newState.selectedLinearElement?.customLineAngle !==
               app.state.selectedLinearElement?.customLineAngle ||
             app.state.selectedLinearElement.isDragging !==
-              newState.selectedLinearElement?.isDragging ||
-            app.state.selectedLinearElement?.initialState?.altFocusPoint !==
-              newState.selectedLinearElement?.initialState?.altFocusPoint
+              newState.selectedLinearElement?.isDragging
           ) {
             app.setState(newState);
           }
@@ -2158,13 +2149,8 @@ export const onPointerUpFromPointerDownHandler = (
       });
     }
 
-    if (getFeatureFlag("COMPLEX_BINDINGS")) {
-      app.resetDelayedBindMode();
-    }
-
     app.setState({
       selectedElementsAreBeingDragged: false,
-      bindMode: "orbit",
     });
 
     if (
@@ -2235,10 +2221,6 @@ export const onPointerUpFromPointerDownHandler = (
           selectedLinearElement: {
             ...app.state.selectedLinearElement,
             draggedFocusPointBinding: null,
-            initialState: {
-              ...app.state.selectedLinearElement.initialState,
-              arrowOtherEndpointInitialBinding: null,
-            },
           },
         });
       } else if (

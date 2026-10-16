@@ -3,6 +3,7 @@ import {
   DEFAULT_STICKY_NOTE_SIZE,
   STICKY_NOTE_MIN_FONT_SIZE,
   STICKY_NOTE_MIN_SIZE,
+  arrayToMap,
   getUpdatedTimestamp,
 } from "@excalidraw/common";
 import { pointFrom } from "@excalidraw/math";
@@ -15,13 +16,18 @@ import {
   newIframeElement,
 } from "../src/newElement";
 
+import { getGlobalAttachPointForBindableElement } from "../src/binding";
+import { distanceToElement } from "../src/distance";
+
 import {
   convertToExcalidrawElements,
   type ExcalidrawElementSkeleton,
 } from "../src/transform";
 
+import type { ElementsMap } from "../src/types";
 import type {
   ExcalidrawArrowElement,
+  ExcalidrawBindableElement,
   ExcalidrawStickyNoteElement,
   ExcalidrawTextElement,
 } from "../src/types";
@@ -579,6 +585,33 @@ describe("Test Transform", () => {
         ],
       });
 
+      // 文本作为绑定目标**不留 binding gap**（见 binding.ts 的
+      // `getProjectionBindingGap`）：这两条入口写下的 `attachPoint` 解出来必须落在
+      // 文本**边界**上 —— 打在文本外一个 gap（默认 6px）时，端点会随文本每长一行
+      // 漂一个 gap（比例不变、包围盒变）。
+      const elementsMap = arrayToMap([text2, text3]) as ElementsMap;
+      const startEndpoint = getGlobalAttachPointForBindableElement(
+        (arrow as ExcalidrawArrowElement).startBinding!.attachPoint,
+        text2 as unknown as ExcalidrawBindableElement,
+        elementsMap,
+      );
+      const endEndpoint = getGlobalAttachPointForBindableElement(
+        (arrow as ExcalidrawArrowElement).endBinding!.attachPoint,
+        text3 as unknown as ExcalidrawBindableElement,
+        elementsMap,
+      );
+      expect(distanceToElement(text2, elementsMap, startEndpoint)).toBeCloseTo(
+        0,
+        1,
+      );
+      expect(distanceToElement(text3, elementsMap, endEndpoint)).toBeCloseTo(
+        0,
+        1,
+      );
+      // ...而且正落在箭头这一侧的那条边上（start 贴右边缘、end 贴左边缘）
+      expect(startEndpoint[0]).toBeCloseTo(text2.x + text2.width, 1);
+      expect(endEndpoint[0]).toBeCloseTo(text3.x, 1);
+
       excalidrawElements.forEach((ele) => {
         expect(ele).toMatchSnapshot({
           seed: expect.any(Number),
@@ -799,10 +832,11 @@ describe("Test Transform", () => {
       );
       expect(excalidrawElements.length).toBe(2);
       const [arrow, rect] = excalidrawElements;
+      // 端点被投到 rect-1 外扩一个 gap 的轮廓上：箭头原本的水平线在 x 方向够不到
+      // rect-1（射线整条错过轮廓），于是走就近吸附，落到 rect-1 左外扩边 x=554。
       expect((arrow as ExcalidrawArrowElement).endBinding).toStrictEqual({
         elementId: "rect-1",
-        fixedPoint: [-2.05, 0.5001],
-        mode: "orbit",
+        attachPoint: [-0.06, 0.5001],
       });
       expect(rect.boundElements).toStrictEqual([
         {

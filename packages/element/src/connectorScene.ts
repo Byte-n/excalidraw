@@ -165,7 +165,7 @@ const bindEndpoint = (
   const target = endpointTarget(endpoint, scene, connector);
   unbindBindingElement(connector, end, scene);
   if (target) {
-    bindBindingElement(connector, target, "orbit", end, scene);
+    bindBindingElement(connector, target, end, scene);
   }
 };
 
@@ -179,13 +179,7 @@ const reflowEndpoints = (
     const binding = connector[field];
     const target = binding && elementsMap.get(binding.elementId);
     if (target && isBindableElement(target)) {
-      const point = updateBoundPoint(
-        connector,
-        field,
-        binding,
-        target,
-        elementsMap,
-      );
+      const point = updateBoundPoint(connector, binding, target, elementsMap);
       if (point) {
         updates.set(
           field === "startBinding" ? 0 : connector.points.length - 1,

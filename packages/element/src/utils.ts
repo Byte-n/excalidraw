@@ -37,7 +37,6 @@ import { elementCenterPoint } from "./bounds";
 import {
   getCompositeShapeAnchors,
   getCompositeShapeCornerRadius,
-  getCompositeShapeGeometry,
   isCompositeShapeElement,
   isCompositeShapeId,
 } from "./compositeShape";
@@ -51,15 +50,14 @@ import { isElbowArrow, isRectangularElement } from "./typeChecks";
 import { maxBindingDistance_simple } from "./binding";
 
 import {
-  getGlobalFixedPointForBindableElement,
-  normalizeFixedPoint,
+  getGlobalAttachPointForBindableElement,
+  normalizeAttachPoint,
 } from "./binding";
 import { getStickyNoteCornerRadius } from "./stickyNote";
 
 import type {
   ElementsMap,
   ExcalidrawBindableElement,
-  ExcalidrawDiamondElement,
   ExcalidrawElement,
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
@@ -379,106 +377,6 @@ export function deconstructRectanguloidElement(
   return shape;
 }
 
-export function getDiamondBaseCorners(
-  element: ExcalidrawDiamondElement,
-): Curve<GlobalPoint>[] {
-  const geometry = getCompositeShapeGeometry(element);
-  const primitive = geometry.primitive;
-  if (primitive?.kind !== "diamond") {
-    throw new Error("Missing diamond geometry");
-  }
-  const toGlobal = ([x, y]: [number, number]) =>
-    pointFrom<GlobalPoint>(element.x + x, element.y + y);
-  const corners: Curve<GlobalPoint>[] = [];
-  let previous = geometry.outline.start;
-  for (const command of geometry.outline.commands) {
-    if (command.type === "cubic") {
-      corners.push(
-        curve(
-          toGlobal(previous),
-          toGlobal(command.control1),
-          toGlobal(command.control2),
-          toGlobal(command.to),
-        ),
-      );
-    }
-    previous = command.to;
-  }
-  if (corners.length) {
-    return corners;
-  }
-  return [
-    primitive.points[1],
-    primitive.points[2],
-    primitive.points[3],
-    primitive.points[0],
-  ].map((point) => {
-    const vertex = toGlobal(point);
-    return curve(vertex, vertex, vertex, vertex);
-  });
-}
-
-/**
- * Get the **unrotated** building components of a diamond element
- * in the form of line segments and curves as a tuple, in this order.
- *
- * @param element The element to deconstruct
- * @param offset An optional offset
- * @returns Tuple of line **unrotated** segments (0) and curves (1)
- */
-export function deconstructDiamondElement(
-  element: ExcalidrawDiamondElement,
-  offset: number = 0,
-): ElementShape {
-  const cachedShape = getElementShapesCacheEntry(element, offset);
-
-  if (cachedShape) {
-    return cachedShape;
-  }
-
-  const baseCorners = getDiamondBaseCorners(element);
-
-  const corners =
-    offset > 0
-      ? baseCorners.map(
-          (corner) =>
-            curveCatmullRomCubicApproxPoints(
-              curveOffsetPoints(corner, offset),
-            )!,
-        )
-      : [
-          [baseCorners[0]],
-          [baseCorners[1]],
-          [baseCorners[2]],
-          [baseCorners[3]],
-        ];
-
-  const sides = [
-    lineSegment<GlobalPoint>(
-      corners[0][corners[0].length - 1][3],
-      corners[1][0][0],
-    ),
-    lineSegment<GlobalPoint>(
-      corners[1][corners[1].length - 1][3],
-      corners[2][0][0],
-    ),
-    lineSegment<GlobalPoint>(
-      corners[2][corners[2].length - 1][3],
-      corners[3][0][0],
-    ),
-    lineSegment<GlobalPoint>(
-      corners[3][corners[3].length - 1][3],
-      corners[0][0][0],
-    ),
-  ];
-
-  const shape = [sides, corners.flat()] as ElementShape;
-
-  setElementShapesCacheEntry(element, shape, offset);
-
-  return shape;
-}
-
 // Checks if the first and last point are close enough
 // to be considered a loop
 export const isPathALoop = (
@@ -673,7 +571,7 @@ export const getSnapOutlineMidPoint = (
   return candidate;
 };
 
-export const projectFixedPointOntoDiagonal = (
+export const projectAttachPointOntoDiagonal = (
   arrow: ExcalidrawLinearElement,
   point: GlobalPoint,
   element: ExcalidrawBindableElement,
@@ -725,8 +623,8 @@ export const projectFixedPointOntoDiagonal = (
     const otherFocusPoint =
       otherBinding &&
       otherBindable &&
-      getGlobalFixedPointForBindableElement(
-        normalizeFixedPoint(otherBinding.fixedPoint),
+      getGlobalAttachPointForBindableElement(
+        normalizeAttachPoint(otherBinding.attachPoint),
         otherBindable,
         elementsMap,
       );

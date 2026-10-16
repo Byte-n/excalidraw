@@ -7,7 +7,7 @@ import {
   supportsFill,
 } from "@excalidraw/element";
 
-import type { FixedPointBinding } from "@excalidraw/element/types";
+import type { ElementBinding } from "@excalidraw/element/types";
 
 import {
   actionBringToFront,
@@ -491,9 +491,8 @@ describe.each([
       startBinding: null,
       endBinding: {
         elementId: triangle.id,
-        fixedPoint: [0.5, 0],
-        mode: "orbit",
-      } as FixedPointBinding,
+        attachPoint: [0.5, 0],
+      } as ElementBinding,
     });
     const container = {
       ...triangle,
@@ -544,7 +543,7 @@ describe.each([
       shape: { id: "triangle", triangle: { apexX: 0.5 } },
     });
     expect(h.app.scene.getNonDeletedElement(arrow.id)).toMatchObject({
-      endBinding: { elementId: triangle.id, fixedPoint: [0.5, 0] },
+      endBinding: { elementId: triangle.id, attachPoint: [0.5, 0] },
     });
     Keyboard.redo();
     expect(h.app.scene.getNonDeletedElement(triangle.id)).toMatchObject({
@@ -554,7 +553,7 @@ describe.each([
       containerId: triangle.id,
     });
     expect(h.app.scene.getNonDeletedElement(arrow.id)).toMatchObject({
-      endBinding: { elementId: triangle.id, fixedPoint: [0.75, 0] },
+      endBinding: { elementId: triangle.id, attachPoint: [0.75, 0] },
     });
   });
 });

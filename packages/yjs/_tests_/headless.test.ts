@@ -50,7 +50,7 @@ test.each(["development", "production", "default"])(
           const elements = new Map([left, right, arrow, elbow].map(e => [e.id, e]));
           const start = createSceneConnectionEndpoint({arrow, target: left, end: 'start', elements});
           const end = createSceneConnectionEndpoint({arrow, target: right, end: 'end', elements});
-          assert.equal(createSceneConnectionEndpoint({arrow: elbow, target: left, end: 'start', elements}).fixedPoint.length, 2);
+          assert.equal(createSceneConnectionEndpoint({arrow: elbow, target: left, end: 'start', elements}).attachPoint.length, 2);
           const doc = new Y.Doc(); let updates = 0;
           doc.on('update', () => updates++);
           const binding = createSceneBinding({doc});

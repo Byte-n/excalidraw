@@ -772,13 +772,11 @@ describe("reconcileDuplicatedElements()", () => {
       type: "arrow",
       startBinding: {
         elementId: rectangle.id,
-        fixedPoint: [0.5, 0.5],
-        mode: "orbit",
+        attachPoint: [0.5, 0.5],
       },
       endBinding: {
         elementId: ellipse.id,
-        fixedPoint: [0.5, 0.5],
-        mode: "orbit",
+        attachPoint: [0.5, 0.5],
       },
     });
     const elements = [rectangle, text, frame, ellipse, arrow];

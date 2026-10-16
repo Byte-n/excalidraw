@@ -1291,8 +1291,7 @@ describe("repairing bindings", () => {
       id: "id-arrow01",
       endBinding: {
         elementId: container.id,
-        fixedPoint: [0.5, 0.5],
-        mode: "inside",
+        attachPoint: [0.5, 0.5],
       },
     });
 

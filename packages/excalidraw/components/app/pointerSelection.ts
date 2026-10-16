@@ -10,7 +10,6 @@ import {
   DEFAULT_COLLISION_THRESHOLD,
   viewportCoordsToSceneCoords,
   invariant,
-  getFeatureFlag,
 } from "@excalidraw/common";
 import {
   getHoveredElementForBinding,
@@ -622,11 +621,7 @@ export const handleSelectionOnPointerDown = (
         ) as any;
 
         if (arrow && isBindingElement(arrow)) {
-          const {
-            hitFocusPoint,
-            pointerOffset,
-            arrowOtherEndpointInitialBinding,
-          } = handleFocusPointPointerDown(
+          const { hitFocusPoint, pointerOffset } = handleFocusPointPointerDown(
             arrow,
             pointerDownState,
             elementsMap,
@@ -641,10 +636,6 @@ export const handleSelectionOnPointerDown = (
                 hoveredFocusPointBinding: hitFocusPoint,
                 draggedFocusPointBinding: hitFocusPoint,
                 pointerOffset,
-                initialState: {
-                  ...linearElementEditor.initialState,
-                  arrowOtherEndpointInitialBinding,
-                },
               },
             });
             return false;
@@ -1342,7 +1333,7 @@ export const handleLinearElementOnPointerDown = (
     const { x: rx, y: ry } = multiElement;
     const { lastCommittedPoint } = selectedLinearElement;
     const sceneCoords = viewportCoordsToSceneCoords(event, app.state);
-    const { start, end } =
+    const { end } =
       isBindingElement(multiElement) && isBindingEnabled(app.state)
         ? getBindingStrategyForDraggingBindingElementEndpoints(
             multiElement,
@@ -1365,19 +1356,25 @@ export const handleLinearElementOnPointerDown = (
               zoom: app.state.zoom,
             },
           )
-        : { end: { mode: undefined } };
+        : { end: { element: undefined } };
 
     const elementsMap = app.scene.getNonDeletedElementsMap();
     // Auto-confirm when both ends bind to the SAME element and the end point
     // lands on the outline rather than inside it
-    const endOutsideSameElement =
-      start?.mode != null &&
-      end.mode != null &&
-      start.element.id === end.element.id &&
-      !isPointInElement(end.focusPoint, end.element, elementsMap);
-    const boundOutsideFromElsewhere =
-      end.mode === "orbit" &&
-      multiElement.startBinding?.elementId !== end.element?.id;
+    const endOutsideSameElement = !!(
+      multiElement.startBinding &&
+      end.element &&
+      multiElement.startBinding.elementId === end.element.id &&
+      !isPointInElement(end.focusPoint, end.element, elementsMap)
+    );
+    // 端点贴在起点之外另一个元素的**轮廓外**（而不是落在它内部）→ 立刻确认。
+    // 原先这条写作 `end.mode === "orbit"`；没有档位之分后，等价的判据是「端点不在
+    // 该元素内部」—— 落进另一个图形内部仍算意图不明，要再点一次才确认。
+    const boundOutsideFromElsewhere = !!(
+      end.element &&
+      !isPointInElement(end.focusPoint, end.element, elementsMap) &&
+      multiElement.startBinding?.elementId !== end.element.id
+    );
     const lastCommittedPointIsInsideCommitZone =
       lastCommittedPoint &&
       pointDistance(
@@ -1390,7 +1387,7 @@ export const handleLinearElementOnPointerDown = (
 
     // clicking inside commit zone → finalize arrow
     if (
-      boundOutsideFromElsewhere || // Outside -> orbit: Bind immediately
+      boundOutsideFromElsewhere || // Bound outside another element: Bind immediately
       endOutsideSameElement || // End outside the start's element: Bind immediately
       (multiElement.points.length > 1 && lastCommittedPointIsInsideCommitZone)
     ) {
@@ -1496,9 +1493,9 @@ export const handleLinearElementOnPointerDown = (
       );
     }
 
-    // NOTE: We need the flushSync here for the
-    // delayed bind mode change to see the right state
-    // (specifically the `newElement`)
+    // NOTE: We need the flushSync here so the state
+    // (specifically `newElement`) is settled before the pointer-move
+    // handlers that read it run
     flushSync(() => {
       app.setState((prevState) => {
         let linearElementEditor = null;
@@ -1515,7 +1512,6 @@ export const handleLinearElementOnPointerDown = (
             selectedPointsIndices: [endIdx],
             initialState: {
               ...linearElementEditor.initialState,
-              arrowStartIsInside: event.altKey,
               lastClickedPoint: endIdx,
               origin: pointFrom<GlobalPoint>(
                 pointerDownState.origin.x,
@@ -1531,7 +1527,6 @@ export const handleLinearElementOnPointerDown = (
 
         return {
           ...prevState,
-          bindMode: "orbit",
           newElement: element,
           suggestedBinding:
             boundElement && isBindingElement(element)
@@ -1550,10 +1545,6 @@ export const handleLinearElementOnPointerDown = (
         };
       });
     });
-
-    if (isBindingElement(element) && getFeatureFlag("COMPLEX_BINDINGS")) {
-      app.handleDelayedBindModeChange(element, boundElement);
-    }
   }
 };
 

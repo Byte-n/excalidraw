@@ -5,7 +5,7 @@ import { getBindingGap, distanceToElement } from "@excalidraw/element";
 import type {
   ExcalidrawArrowElement,
   ExcalidrawBindableElement,
-  FixedPointBinding,
+  ElementBinding,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
 
@@ -32,7 +32,7 @@ describe("convert element type keeps bound arrows attached", () => {
   for (const elbowed of [false, true]) {
     it.each(cases)(
       `elbowed=${elbowed}: %s -> %s`,
-      (fromType, toType, fixedPoint) => {
+      (fromType, toType, attachPoint) => {
         const shape = API.createElement({
           type: fromType,
           x: 0,
@@ -50,9 +50,8 @@ describe("convert element type keeps bound arrows attached", () => {
           points: [pointFrom(0, 0), pointFrom(-200, 0)],
           endBinding: {
             elementId: shape.id,
-            fixedPoint,
-            mode: "orbit",
-          } as FixedPointBinding,
+            attachPoint,
+          } as ElementBinding,
           startBinding: null,
         });
         API.setElements([
@@ -156,9 +155,8 @@ describe("convert element type keeps bound arrows attached", () => {
       points: [pointFrom(0, 0), pointFrom(-100, 0)],
       endBinding: {
         elementId: shape.id,
-        fixedPoint: [1, 0.5],
-        mode: "orbit",
-      } as FixedPointBinding,
+        attachPoint: [1, 0.5],
+      } as ElementBinding,
       startBinding: null,
     });
     API.setElements([
@@ -242,9 +240,8 @@ describe("convert element type keeps bound arrows attached", () => {
         points: [pointFrom(0, 0), pointFrom(100, 0)],
         endBinding: {
           elementId: shape.id,
-          fixedPoint: [0, 0.5],
-          mode: "orbit",
-        } as FixedPointBinding,
+          attachPoint: [0, 0.5],
+        } as ElementBinding,
         startBinding: null,
       });
       API.setElements([

@@ -1048,7 +1048,8 @@ describe("quick create handles", () => {
         expect(copy).toMatchObject({ x: 350, y: 100 });
         const points = worldPoints(createdArrow(before));
         // 轴向对齐：两点直线，从左往右、同一高度。端点正好贴在两图形的朝对侧
-        // 边缘上（几像素的出入来自 orbit 绑定把端点落到轮廓上，不属于落位几何）
+        // 边缘上（几像素的出入来自建连时端点被投到「外扩一个 binding gap 的
+        // 轮廓」上，不属于落位几何）
         expect(points).toHaveLength(2);
         expect(points[0].y).toBeCloseTo(140, 0);
         expect(points[1].y).toBeCloseTo(140, 0);
@@ -1195,8 +1196,9 @@ describe("quick create handles", () => {
       expect(outlineRatio(copy, entry)).toBeLessThan(1.2);
       // 几何上仍在副本中心的绝对水平线上，投影沿射线外推一个 gap 后会略偏
       expect(Math.abs(entry.y - center.y)).toBeLessThan(10);
-      // 锚点钉在副本**本体**的左边缘（fx = 0）：按包围盒算会落在边缘之内
-      expect(arrow.endBinding?.fixedPoint[0]).toBeCloseTo(0, 6);
+      // 锚点钉在副本**本体**的左边缘**外侧**（存的是端点本身，悬空一个 gap；
+      // 副本转了 30°，gap 沿旋转后的轴算，实测 -0.045265）：按包围盒算会落在边缘之内
+      expect(arrow.endBinding?.attachPoint[0]).toBeCloseTo(-0.045265, 6);
     });
 
     it("falls back to the base spot when all ten candidates are taken", () => {
@@ -1407,14 +1409,14 @@ describe("quick create handles", () => {
         expect(isCurvedArrow(arrow)).toBe(true);
         expect(arrow.points).toHaveLength(2);
 
-        // 两端锚点落在朝对侧的边上：出口贴源右边缘（fx ≈ 1）、入口贴副本左边缘
-        // （fx ≈ 0），另一轴都是中线（normalizeFixedPoint 会避开正 0.5，故给容差）
-        expect(arrow.startBinding?.fixedPoint[0]).toBeCloseTo(1, 6);
-        expect(arrow.startBinding?.fixedPoint[1]).toBeCloseTo(0.5, 3);
-        expect(arrow.endBinding?.fixedPoint[0]).toBeCloseTo(0, 6);
-        expect(arrow.endBinding?.fixedPoint[1]).toBeCloseTo(0.5, 3);
+        // 两端落在朝对侧的边上：出口贴源右边缘、入口贴副本左边缘，另一轴都是中线
+        // （normalizeAttachPoint 会避开正 0.5，故给容差）。存的是**端点**本身：悬空一个 binding gap（宽 120 ⇒ 6/120 = 0.05）
+        expect(arrow.startBinding?.attachPoint[0]).toBeCloseTo(1.05, 6);
+        expect(arrow.startBinding?.attachPoint[1]).toBeCloseTo(0.5, 3);
+        expect(arrow.endBinding?.attachPoint[0]).toBeCloseTo(-0.05, 6);
+        expect(arrow.endBinding?.attachPoint[1]).toBeCloseTo(0.5, 3);
 
-        // 端点在轮廓外一个 binding gap 上（orbit 绑定把端点落到轮廓外侧）
+        // 端点在轮廓外一个 binding gap 上（建连时端点被投到外扩轮廓上）
         expect(outlineRatio(source, worldPoints(arrow)[0])).toBeGreaterThan(1);
 
         // 渲染出来是一条三次贝塞尔（一个 C）：两端切线水平 → 首段控制点与 A 同高、
@@ -1445,7 +1447,17 @@ describe("quick create handles", () => {
 
       // 预演落在让位后的位置上，连线点与落地**逐个一致**（所见即所得）
       expect(ghost[0]).toMatchObject({ x: copy.x, y: copy.y });
-      expect(worldPoints(ghost[1])).toEqual(worldPoints(arrow));
+      // 预演与落地共用 resolveAttachPointForNonElbowBinding，但两条路径的算术次序
+      // 不同，仍会差在最后几个 ulp（~1e-14），故放到 1e-9 容差
+      const [ghostPoints, arrowPoints] = [
+        worldPoints(ghost[1]),
+        worldPoints(arrow),
+      ];
+      expect(ghostPoints).toHaveLength(arrowPoints.length);
+      ghostPoints.forEach((p, i) => {
+        expect(p.x).toBeCloseTo(arrowPoints[i].x, 9);
+        expect(p.y).toBeCloseTo(arrowPoints[i].y, 9);
+      });
       expect(worldPoints(ghost[1])).toHaveLength(2);
       // 预演与落地都是同一条两点斜直线，预演没有消耗共享的 id
       expect(arrow.id).not.toBe(QUICK_CREATE_GHOST_ARROW_ID);
@@ -1466,7 +1478,7 @@ describe("quick create handles", () => {
       const arrow = createdArrow(before);
 
       // 圆角连接线恒为两点，且预演与落地同判据、同绑定锚点
-      // （fixedPoint 决定该端贴在哪条边、曲线朝哪弯，渲染期读它解端切线）
+      // （attachPoint 决定该端贴在哪条边、曲线朝哪弯，渲染期读它解端切线）
       const ghostArrow = ghost[1];
       if (!isArrowElement(ghostArrow)) {
         throw new Error("Expected an arrow");
@@ -1474,16 +1486,16 @@ describe("quick create handles", () => {
       expect(worldPoints(ghostArrow)).toHaveLength(2);
       expect(isCurvedArrow(ghostArrow)).toBe(true);
       expect(isCurvedArrow(arrow)).toBe(true);
-      expect(ghostArrow.startBinding?.fixedPoint).toEqual(
-        arrow.startBinding?.fixedPoint,
+      expect(ghostArrow.startBinding?.attachPoint).toEqual(
+        arrow.startBinding?.attachPoint,
       );
-      expect(ghostArrow.endBinding?.fixedPoint).toEqual(
-        arrow.endBinding?.fixedPoint,
+      expect(ghostArrow.endBinding?.attachPoint).toEqual(
+        arrow.endBinding?.attachPoint,
       );
       // 几何逐点一致：预演按与落地 `reflowArrowEndpoints` 同一个 `updateBoundPoint`
       // 把两端落到轮廓上，所以两边的点（含 binding gap 那几像素外推）完全相同
       expect(worldPoints(ghostArrow)).toEqual(worldPoints(arrow));
-      // 渲染出的曲线也一样（点与 fixedPoint 都同源）
+      // 渲染出的曲线也一样（点与 attachPoint 都同源）
       expect(curveOps(ghostArrow)).toEqual(curveOps(arrow));
     });
 
@@ -1520,11 +1532,11 @@ describe("quick create handles", () => {
       // 只在落点与出口同轴时才和路由同形，所以这条断言当年是比不出来的
       expect(worldPoints(arrow)).toEqual(preview);
       // 固定点同源：折线档有自己的那一支口径，用错了会差一个 binding gap
-      expect(ghostArrow.startBinding?.fixedPoint).toEqual(
-        arrow.startBinding?.fixedPoint,
+      expect(ghostArrow.startBinding?.attachPoint).toEqual(
+        arrow.startBinding?.attachPoint,
       );
-      expect(ghostArrow.endBinding?.fixedPoint).toEqual(
-        arrow.endBinding?.fixedPoint,
+      expect(ghostArrow.endBinding?.attachPoint).toEqual(
+        arrow.endBinding?.attachPoint,
       );
     });
 
@@ -1577,9 +1589,9 @@ describe("quick create handles", () => {
         );
         expect(Math.abs(outlineRatio(copy, points[1]) - 1)).toBeLessThan(0.15);
 
-        // 锚点落在各自的上下边（fy ≈ 1 / 0），另一轴是中线
-        expect(arrow.startBinding?.fixedPoint[1]).toBeCloseTo(1, 3);
-        expect(arrow.endBinding?.fixedPoint[1]).toBeCloseTo(0, 3);
+        // 落在各自的上下边外侧（高 80 ⇒ 6/80 = 0.075），另一轴是中线
+        expect(arrow.startBinding?.attachPoint[1]).toBeCloseTo(1.075, 3);
+        expect(arrow.endBinding?.attachPoint[1]).toBeCloseTo(-0.075, 3);
 
         // 端切线**竖直**：首段第一个控制点的 x 与 A 相同、末段最后一个控制点与 D 相同
         const ops = curveOps(arrow);
@@ -1600,8 +1612,8 @@ describe("quick create handles", () => {
         // 入口跟着副本落到新位置（副本左边中段，几像素的出入来自 binding gap）
         expect(Math.abs(points[1].x - 350)).toBeLessThan(10);
         expect(points[1].y).toBeLessThan(-100);
-        // 锚点（贴哪条边）不变：弯曲几何在渲染期由新两端重解
-        expect(arrow.endBinding?.fixedPoint[0]).toBeCloseTo(0, 3);
+        // 贴哪条边不变（仍是左边缘外侧）：弯曲几何在渲染期由新两端重解
+        expect(arrow.endBinding?.attachPoint[0]).toBeCloseTo(-0.05, 3);
         expect(isCurvedArrow(arrow)).toBe(true);
       });
 
@@ -1704,9 +1716,9 @@ describe("quick create handles", () => {
       });
 
       it("keeps the connector's shape after the copy is moved away and back", () => {
-        // 端点在创建时与模型重解时走的是同一套：把副本挪开再挪回原位，两端回到
-        // 原处、切线方向不变（orbit 求解的射线方向依赖当前另一端，所以位置允许
-        // binding gap 量级的出入）
+        // 端点的比例在创建时就定死（组合 A：attachPoint 就是端点本身），此后只随
+        // 图形刚性跟随：把副本挪开再挪回原位（位置会被吸附取整）时两端回到原处、
+        // 切线方向不变，允许几个像素的出入
         const { copy, arrow } = placeRound([blocker(RIGHT_BASE)]);
         const landed = worldPoints(arrow);
 
@@ -1906,7 +1918,7 @@ describe("quick create handles", () => {
       if (!isArrowElement(ghostArrow)) {
         throw new Error("Expected an arrow");
       }
-      // 端点由 orbit 绑定解出（沿外法线外推一个 binding gap），所以世界坐标略在
+      // 端点由建连时的投影解出（落在目标外扩一个 binding gap 的轮廓上），世界坐标略在
       // 两边轮廓之外；默认是圆角样式 ⇒ 恒为两点
       const ghostConnector = worldPoints(ghostArrow);
       expect(ghostConnector).toHaveLength(2);

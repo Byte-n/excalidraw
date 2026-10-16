@@ -49,7 +49,6 @@ import {
 
 import {
   CURSOR_TYPE,
-  getFeatureFlag,
   isLocalLink,
   normalizeLink,
   DRAGGING_THRESHOLD,
@@ -228,9 +227,6 @@ export const handleCanvasPointerUp = (
       app.handleInteractiveContentPointerUp(event);
     }
     return;
-  }
-  if (getFeatureFlag("COMPLEX_BINDINGS")) {
-    app.resetDelayedBindMode();
   }
 
   app.removePointer(event);
@@ -1058,20 +1054,6 @@ export const handleCanvasPointerMove = (
       }
 
       // Update arrow points
-      const elementsMap = app.scene.getNonDeletedElementsMap();
-
-      if (isSimpleArrow(multiElement)) {
-        const hoveredElement = getHoveredElementForBinding(
-          pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
-          app.scene.getNonDeletedElements(),
-          elementsMap,
-        );
-
-        if (getFeatureFlag("COMPLEX_BINDINGS")) {
-          app.handleDelayedBindModeChange(multiElement, hoveredElement);
-        }
-      }
-
       invariant(
         app.state.selectedLinearElement,
         "Expected selectedLinearElement to be set to operate on a linear element",

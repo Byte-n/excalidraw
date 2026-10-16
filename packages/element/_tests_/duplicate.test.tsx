@@ -190,8 +190,7 @@ describe("duplicating multiple elements", () => {
       id: "arrow1",
       startBinding: {
         elementId: "rectangle1",
-        fixedPoint: [0.5, 1],
-        mode: "orbit",
+        attachPoint: [0.5, 1],
       },
     });
 
@@ -200,8 +199,7 @@ describe("duplicating multiple elements", () => {
       id: "arrow2",
       endBinding: {
         elementId: "rectangle1",
-        fixedPoint: [0.5, 1],
-        mode: "orbit",
+        attachPoint: [0.5, 1],
       },
       boundElements: [{ id: "text2", type: "text" }],
     });
@@ -320,8 +318,7 @@ describe("duplicating multiple elements", () => {
       id: "arrow1",
       startBinding: {
         elementId: "rectangle1",
-        fixedPoint: [0.5, 1],
-        mode: "orbit",
+        attachPoint: [0.5, 1],
       },
     });
 
@@ -336,13 +333,11 @@ describe("duplicating multiple elements", () => {
       id: "arrow2",
       startBinding: {
         elementId: "rectangle1",
-        fixedPoint: [0.5, 1],
-        mode: "orbit",
+        attachPoint: [0.5, 1],
       },
       endBinding: {
         elementId: "rectangle-not-exists",
-        fixedPoint: [0.5, 1],
-        mode: "orbit",
+        attachPoint: [0.5, 1],
       },
     });
 
@@ -351,13 +346,11 @@ describe("duplicating multiple elements", () => {
       id: "arrow3",
       startBinding: {
         elementId: "rectangle-not-exists",
-        fixedPoint: [0.5, 1],
-        mode: "orbit",
+        attachPoint: [0.5, 1],
       },
       endBinding: {
         elementId: "rectangle1",
-        fixedPoint: [0.5, 1],
-        mode: "orbit",
+        attachPoint: [0.5, 1],
       },
     });
 

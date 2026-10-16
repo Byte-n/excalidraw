@@ -182,7 +182,7 @@ describe("App controller boundaries", () => {
     hitTest.mockRestore();
   });
 
-  it("opens the canvas menu and switches arrow binding mode", () => {
+  it("opens the canvas menu", () => {
     const app = window.h.app;
     act(() => {
       app.openContextMenu({ clientX: 100, clientY: 100 });
@@ -196,11 +196,5 @@ describe("App controller boundaries", () => {
           item.name === "paste",
       ),
     ).toBe(true);
-
-    act(() => {
-      app.setState({ bindMode: "orbit" });
-      app.handleSkipBindMode();
-    });
-    expect(app.state.bindMode).toBe("skip");
   });
 });

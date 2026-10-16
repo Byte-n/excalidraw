@@ -37,7 +37,7 @@ import {
 
 import {
   bindBindingElement,
-  calculateFixedPointForElbowArrowBinding,
+  calculateAttachPointForElbowArrowBinding,
   updateBoundElements,
 } from "@excalidraw/element";
 
@@ -2188,7 +2188,7 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
             ? {
                 // @ts-ignore TS cannot discern check above
                 ...newElement.startBinding!,
-                ...calculateFixedPointForElbowArrowBinding(
+                ...calculateAttachPointForElbowArrowBinding(
                   newElement,
                   startElement,
                   "start",
@@ -2202,7 +2202,7 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
             ? {
                 // @ts-ignore TS cannot discern check above
                 ...newElement.endBinding,
-                ...calculateFixedPointForElbowArrowBinding(
+                ...calculateAttachPointForElbowArrowBinding(
                   newElement,
                   endElement,
                   "end",
@@ -2233,13 +2233,7 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
             newElement.startBinding.elementId,
           ) as NonDeleted<ExcalidrawBindableElement>;
           if (startElement) {
-            bindBindingElement(
-              newElement,
-              startElement,
-              appState.bindMode === "inside" ? "inside" : "orbit",
-              "start",
-              app.scene,
-            );
+            bindBindingElement(newElement, startElement, "start", app.scene);
           }
         }
         if (newElement.endBinding) {
@@ -2247,13 +2241,7 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
             newElement.endBinding.elementId,
           ) as NonDeleted<ExcalidrawBindableElement>;
           if (endElement) {
-            bindBindingElement(
-              newElement,
-              endElement,
-              appState.bindMode === "inside" ? "inside" : "orbit",
-              "end",
-              app.scene,
-            );
+            bindBindingElement(newElement, endElement, "end", app.scene);
           }
         }
       }

@@ -20,8 +20,15 @@ import {
 
 import { defaultLang, setLanguage } from "@excalidraw/excalidraw/i18n";
 
-import { bindBindingElement, updateBoundElements } from "../src/binding";
+import {
+  bindBindingElement,
+  updateBoundElements,
+  BASE_BINDING_GAP,
+  getGlobalAttachPointForBindableElement,
+} from "../src/binding";
 import { getElementAbsoluteCoords } from "../src/bounds";
+import { isPointInElement } from "../src/collision";
+import { distanceToElement } from "../src/distance";
 import { isCompositeShapeId } from "../src/compositeShape";
 import { transformElements } from "../src/resizeElements";
 import {
@@ -33,7 +40,7 @@ import type {
   ExcalidrawArrowElement,
   ExcalidrawBindableElement,
   ExcalidrawLinearElement,
-  FixedPointBinding,
+  ElementBinding,
   NonDeleted,
   NonDeletedExcalidrawElement,
 } from "../src/types";
@@ -43,7 +50,7 @@ const { h } = window;
 const mouse = new Pointer("mouse");
 
 describe("binding for simple arrows", () => {
-  describe("when both endpoints are bound inside the same element", () => {
+  describe("when both endpoints are bound to the same element", () => {
     beforeEach(async () => {
       mouse.reset();
 
@@ -53,7 +60,7 @@ describe("binding for simple arrows", () => {
       await render(<Excalidraw handleKeyboardGlobally={true} />);
     });
 
-    it("should create an `inside` binding", () => {
+    it("should pull both endpoints onto the outline of the single bound element", () => {
       // Create a rectangle
       UI.clickTool("rectangle");
       mouse.reset();
@@ -70,34 +77,44 @@ describe("binding for simple arrows", () => {
       mouse.up();
 
       const arrow = API.getSelectedElement() as ExcalidrawLinearElement;
-      expect(arrow.x).toBe(110);
+
+      // 端点不再停在指针落下的位置（矩形内部）：起点的落点被吸附到最近的那条
+      // **外扩边**上 —— 这里就是矩形左边缘外一个 binding gap，元素原点随它一起走
+      const gap = BASE_BINDING_GAP + rect.strokeWidth / 2;
+      expect(arrow.x).toBe(rect.x - gap);
       expect(arrow.y).toBe(110);
 
       // Should bind to the rectangle since endpoint is inside
       expect(arrow.startBinding?.elementId).toBe(rect.id);
       expect(arrow.endBinding?.elementId).toBe(rect.id);
 
-      const startBinding = arrow.startBinding as FixedPointBinding;
-      expect(startBinding.fixedPoint[0]).toBeGreaterThanOrEqual(0);
-      expect(startBinding.fixedPoint[0]).toBeLessThanOrEqual(1);
-      expect(startBinding.fixedPoint[1]).toBeGreaterThanOrEqual(0);
-      expect(startBinding.fixedPoint[1]).toBeLessThanOrEqual(1);
-      expect(startBinding.mode).toBe("inside");
-
-      const endBinding = arrow.endBinding as FixedPointBinding;
-      expect(endBinding.fixedPoint[0]).toBeGreaterThanOrEqual(0);
-      expect(endBinding.fixedPoint[0]).toBeLessThanOrEqual(1);
-      expect(endBinding.fixedPoint[1]).toBeGreaterThanOrEqual(0);
-      expect(endBinding.fixedPoint[1]).toBeLessThanOrEqual(1);
-      expect(endBinding.mode).toBe("inside");
+      // 两端都不留在图形内部：`attachPoint` 就是端点本身，落点悬在轮廓外一个 gap，
+      // 所以归一化比例会略微超出 0..1（不再按 0..1 夹取）。断言的是几何。
+      for (const binding of [arrow.startBinding, arrow.endBinding]) {
+        const point = getGlobalAttachPointForBindableElement(
+          binding!.attachPoint,
+          rect as ExcalidrawBindableElement,
+          h.app.scene.getNonDeletedElementsMap(),
+        );
+        expect(
+          isPointInElement(point, rect, h.app.scene.getNonDeletedElementsMap()),
+        ).toBe(false);
+        expect(
+          distanceToElement(
+            rect,
+            h.app.scene.getNonDeletedElementsMap(),
+            point,
+          ),
+        ).toBeCloseTo(gap, 0);
+      }
 
       // Move the bindable
       mouse.downAt(100, 150);
       mouse.moveTo(280, 110);
       mouse.up();
 
-      // Check if the arrow moved
-      expect(arrow.x).toBe(290);
+      // Check if the arrow moved (起点仍贴在左边缘外一个 gap 处)
+      expect(arrow.x).toBe(rect.x - gap);
       expect(arrow.y).toBe(70);
 
       // Restore bindable. Grab the rect's interior (not its left-edge midpoint)
@@ -122,7 +139,7 @@ describe("binding for simple arrows", () => {
       mouse.up();
 
       // Check if the arrow moved
-      expect(arrow.x).toBe(290);
+      expect(arrow.x).toBe(rect.x - gap);
       expect(arrow.y).toBe(70);
     });
 
@@ -159,13 +176,11 @@ describe("binding for simple arrows", () => {
         ],
         startBinding: {
           elementId: rectLeft.id,
-          fixedPoint: [0.5, 0.5],
-          mode: "orbit",
+          attachPoint: [0.5, 0.5],
         },
         endBinding: {
           elementId: rectRight.id,
-          fixedPoint: [0.5, 0.5],
-          mode: "orbit",
+          attachPoint: [0.5, 0.5],
         },
       });
 
@@ -191,10 +206,11 @@ describe("binding for simple arrows", () => {
   });
 
   describe("self-binding (both ends to the same element) single-click finalize", () => {
-    // rect spans x:200..400, y:200..400; orbit ring is ~15px outside the outline
+    // rect spans x:200..400, y:200..400; the two "outside" points below sit just
+    // outside its left/right edges (inside the binding distance)
     const INSIDE: [number, number] = [250, 250];
-    const ORBIT_LEFT: [number, number] = [187, 300];
-    const ORBIT_RIGHT: [number, number] = [413, 300];
+    const OUTSIDE_LEFT: [number, number] = [187, 300];
+    const OUTSIDE_RIGHT: [number, number] = [413, 300];
     const MIDDLE: [number, number] = [550, 100];
 
     beforeEach(async () => {
@@ -219,8 +235,8 @@ describe("binding for simple arrows", () => {
       mouse.clickAt(...end); // single click at the end
     };
 
-    it("orbit -> orbit finalizes on a single click", () => {
-      drawSelfArrow(ORBIT_LEFT, ORBIT_RIGHT);
+    it("outside -> outside finalizes on a single click", () => {
+      drawSelfArrow(OUTSIDE_LEFT, OUTSIDE_RIGHT);
 
       const arrow = h.elements[h.elements.length - 1] as ExcalidrawArrowElement;
       expect(h.state.multiElement).toBe(null);
@@ -229,8 +245,8 @@ describe("binding for simple arrows", () => {
       expect(arrow.endBinding?.elementId).not.toBe(undefined);
     });
 
-    it("inside -> orbit finalizes on a single click", () => {
-      drawSelfArrow(INSIDE, ORBIT_RIGHT);
+    it("inside -> outside finalizes on a single click", () => {
+      drawSelfArrow(INSIDE, OUTSIDE_RIGHT);
 
       const arrow = h.elements[h.elements.length - 1] as ExcalidrawArrowElement;
       expect(h.state.multiElement).toBe(null);
@@ -239,7 +255,7 @@ describe("binding for simple arrows", () => {
       expect(arrow.endBinding?.elementId).not.toBe(undefined);
     });
 
-    it("inside -> inside keep in multi-point mode (no single-click finalize)", () => {
+    it("inside -> inside stays in multi-point mode (no single-click finalize)", () => {
       drawSelfArrow(INSIDE, [INSIDE[0] + 50, INSIDE[1] + 50]); // end dropped inside the rect
 
       // ambiguous → must be confirmed with a second click, so still in progress
@@ -277,7 +293,6 @@ describe("binding for simple arrows", () => {
 
       // Arrow should have start binding to rectangle
       expect(arrow.startBinding?.elementId).toBe(rectangle.id);
-      expect(arrow.startBinding?.mode).toBe("orbit"); // Default is orbit, not inside
       expect(arrow.endBinding).toBeNull();
     });
 
@@ -293,18 +308,17 @@ describe("binding for simple arrows", () => {
       // Create arrow with end point in binding zone
       UI.clickTool("arrow");
       mouse.downAt(50, 150); // Start outside
-      mouse.moveTo(95, 95); // End near rectangle edge (should bind as orbit)
+      mouse.moveTo(95, 95); // End near rectangle edge (should bind to it)
       mouse.up();
 
       const arrow = API.getSelectedElement() as ExcalidrawLinearElement;
 
       // Arrow should have end binding to rectangle
       expect(arrow.endBinding?.elementId).toBe(rectangle.id);
-      expect(arrow.endBinding?.mode).toBe("orbit");
       expect(arrow.startBinding).toBeNull();
     });
 
-    it.skip("should create orbit binding when one of the cursor is inside rectangle", () => {
+    it.skip("should create a binding when one of the cursors is inside the rectangle", () => {
       // Create a filled solid rectangle
       UI.clickTool("rectangle");
       mouse.downAt(100, 100);
@@ -334,11 +348,11 @@ describe("binding for simple arrows", () => {
       expect(arrow.startBinding).toBe(null);
       expect(arrow.endBinding?.elementId).toBe(rect.id);
 
-      const endBinding = arrow.endBinding as FixedPointBinding;
-      expect(endBinding.fixedPoint[0]).toBeGreaterThanOrEqual(0);
-      expect(endBinding.fixedPoint[0]).toBeLessThanOrEqual(1);
-      expect(endBinding.fixedPoint[1]).toBeGreaterThanOrEqual(0);
-      expect(endBinding.fixedPoint[1]).toBeLessThanOrEqual(1);
+      const endBinding = arrow.endBinding as ElementBinding;
+      expect(endBinding.attachPoint[0]).toBeGreaterThanOrEqual(0);
+      expect(endBinding.attachPoint[0]).toBeLessThanOrEqual(1);
+      expect(endBinding.attachPoint[1]).toBeGreaterThanOrEqual(0);
+      expect(endBinding.attachPoint[1]).toBeLessThanOrEqual(1);
 
       mouse.reset();
 
@@ -653,13 +667,11 @@ describe("binding for simple arrows", () => {
         points: [pointFrom(0, 0), pointFrom(0, -87.45777932247563)],
         startBinding: {
           elementId: "rectangle1",
-          fixedPoint: [0.5, 1],
-          mode: "orbit",
+          attachPoint: [0.5, 1],
         },
         endBinding: {
           elementId: "text1",
-          fixedPoint: [1, 0.5],
-          mode: "orbit",
+          attachPoint: [1, 0.5],
         },
       });
 
@@ -669,13 +681,11 @@ describe("binding for simple arrows", () => {
         points: [pointFrom(0, 0), pointFrom(0, -87.45777932247563)],
         startBinding: {
           elementId: "text1",
-          fixedPoint: [0.5, 1],
-          mode: "orbit",
+          attachPoint: [0.5, 1],
         },
         endBinding: {
           elementId: "rectangle1",
-          fixedPoint: [1, 0.5],
-          mode: "orbit",
+          attachPoint: [1, 0.5],
         },
       });
 
@@ -800,6 +810,100 @@ describe("binding for simple arrows", () => {
       expect(document.querySelector(TEXT_EDITOR_SELECTOR)).toBe(null);
       expect(arrow.endBinding).toBe(null);
     });
+
+    /**
+     * 折线档走的是另一条投影（`bindPointToSnapToElementOutline` 求「轮廓交点」）：
+     * 主射线拿不到交点时还有**兜底那一趟**求交，两处的 gap 都曾用 `getBindingGap` ——
+     * 于是同一个手势在折线档上会把端点顶到文本外一个 gap（默认 6px）。
+     *
+     * 落点选在文本**上方外侧**：比 `text.y - height / 2` 还高时 heading 落到 LEFT，
+     * 主射线是一条够不着文本的水平线，真正定落点的是兜底那一趟（x 刻意错开 text.x：
+     * 与左边线同平面时射线会与轮廓共线，是另一档几何，见 `binding.ts` 中
+     * `bindPointToSnapToElementOutline` 末尾的「轴对齐相切」说明）。
+     *
+     * 侧向落点（主求交那一趟）由 `arrowEndpointTextBinding.test.tsx` 里的 UI 用例覆盖。
+     */
+    it("keeps an elbow endpoint on the text's edge when the first ray misses the outline", () => {
+      const text = API.createElement({
+        type: "text",
+        x: 200,
+        y: 100,
+        width: 120,
+        height: 25,
+        text: "label",
+      }) as NonDeleted<ExcalidrawBindableElement>;
+      // 端点落在文本左上角外侧：(205, 85) —— 比文本顶边高 15px（仍在建连距离内）
+      const arrow = API.createElement({
+        type: "arrow",
+        elbowed: true,
+        x: 100,
+        y: 300,
+        width: 105,
+        height: -215,
+        points: [pointFrom(0, 0), pointFrom(105, -215)],
+      }) as NonDeleted<ExcalidrawArrowElement>;
+      API.setElements([text, arrow]);
+
+      act(() => {
+        bindBindingElement(arrow, text, "end", h.scene);
+      });
+
+      const binding = arrow.endBinding as ElementBinding;
+      expect(binding.elementId).toBe(text.id);
+
+      const elementsMap = h.app.scene.getNonDeletedElementsMap();
+      const endpoint = getGlobalAttachPointForBindableElement(
+        binding.attachPoint,
+        text,
+        elementsMap,
+      );
+      // 端点在文本边界上（文本目标不留 gap），而且落在那条顶边上
+      expect(distanceToElement(text, elementsMap, endpoint)).toBeCloseTo(0, 1);
+      expect(endpoint[1]).toBeCloseTo(text.y, 1);
+    });
+
+    // 落点落在矩形类目标的**角区**时，投影先经过 `avoidRectangularCorner` 把它从
+    // 角点外挪开；那一处的 gap 同样是「端点落在哪」的口径 —— 文本目标要落在文本的
+    // 角上，而不是角外一个 gap（改前是 6px）。
+    it("keeps an elbow endpoint on the text's corner when it lands in the corner zone", () => {
+      const text = API.createElement({
+        type: "text",
+        x: 200,
+        y: 100,
+        width: 120,
+        height: 25,
+        text: "label",
+      }) as NonDeleted<ExcalidrawBindableElement>;
+      // (194, 97)：在文本左上角外侧 6px 内，正落在角区（x < text.x 且 y 贴近顶边）
+      const arrow = API.createElement({
+        type: "arrow",
+        elbowed: true,
+        x: 100,
+        y: 300,
+        width: 94,
+        height: -203,
+        points: [pointFrom(0, 0), pointFrom(94, -203)],
+      }) as NonDeleted<ExcalidrawArrowElement>;
+      API.setElements([text, arrow]);
+
+      act(() => {
+        bindBindingElement(arrow, text, "end", h.scene);
+      });
+
+      const binding = arrow.endBinding as ElementBinding;
+      const elementsMap = h.app.scene.getNonDeletedElementsMap();
+      const endpoint = getGlobalAttachPointForBindableElement(
+        binding.attachPoint,
+        text,
+        elementsMap,
+      );
+
+      expect(binding.elementId).toBe(text.id);
+      expect(distanceToElement(text, elementsMap, endpoint)).toBeCloseTo(0, 1);
+      // 顶上那个角，不是角外一个 gap
+      expect(endpoint[0]).toBeCloseTo(text.x, 1);
+      expect(endpoint[1]).toBeCloseTo(text.y, 1);
+    });
   });
 });
 
@@ -811,7 +915,7 @@ describe("binding to a point-like (sub-pixel) element", () => {
   });
 
   // Regression: binding to a zero/near-zero-size element used to yield an
-  // enormous fixedPoint ratio (offset / ~0), which exploded into an arrow
+  // enormous attachPoint ratio (offset / ~0), which exploded into an arrow
   // hundreds of thousands of px wide once the element was resized to a normal
   // size
   it.each([
@@ -839,14 +943,14 @@ describe("binding to a point-like (sub-pixel) element", () => {
       API.setElements([rect, arrow]);
 
       act(() => {
-        bindBindingElement(arrow, rect, "orbit", "end", h.scene);
+        bindBindingElement(arrow, rect, "end", h.scene);
       });
 
-      const endBinding = arrow.endBinding as FixedPointBinding;
+      const endBinding = arrow.endBinding as ElementBinding;
       expect(endBinding.elementId).toBe(rect.id);
       // Point-like element => bind to center (0.5 is normalized to 0.5001)
-      expect(endBinding.fixedPoint[0]).toBeCloseTo(0.5001);
-      expect(endBinding.fixedPoint[1]).toBeCloseTo(0.5001);
+      expect(endBinding.attachPoint[0]).toBeCloseTo(0.5001);
+      expect(endBinding.attachPoint[1]).toBeCloseTo(0.5001);
 
       // Grow the element to a normal size and let bound arrows follow
       act(() => {

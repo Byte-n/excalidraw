@@ -7,8 +7,7 @@ import type { SceneBinding, SceneSnapshot } from "./types";
 
 export type SceneConnectionEndpoint = {
   elementId: string;
-  fixedPoint: [number, number];
-  mode: "inside" | "orbit" | "skip";
+  attachPoint: [number, number];
 };
 
 export type SceneMutation<TElement extends ExcalidrawSceneElement> =
@@ -144,9 +143,8 @@ export const createExcalidrawSceneCommands = <
         for (const endpoint of endpoints) {
           if (
             endpoint.elementId === element.id ||
-            endpoint.fixedPoint.length !== 2 ||
-            !endpoint.fixedPoint.every(Number.isFinite) ||
-            !["inside", "orbit", "skip"].includes(endpoint.mode)
+            endpoint.attachPoint.length !== 2 ||
+            !endpoint.attachPoint.every(Number.isFinite)
           ) {
             throw new YjsSceneError("invalid_input", "场景连接端点无效");
           }

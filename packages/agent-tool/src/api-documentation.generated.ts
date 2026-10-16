@@ -59,7 +59,7 @@ export const collaborationApiDocumentation = {
         },
       ],
       returns:
-        '{ [key: string]: unknown; id: string; type: string; index: string; version: number; versionNonce: number; isDeleted: boolean; x: number; y: number; width?: number; height?: number; angle: number; updated: number; fileId?: string | null; status?: string; containerId?: string | null; containerRef?: { kind: "frameLike"; elementId: string; } | { kind: "tableTitle"; elementId: string; } | { kind: "tableCell"; elementId: string; cellId: string; role: "content" | "backgroundText"; }; boundElements?: readonly { id: string; type: string; }[] | null; startBinding?: { elementId: string; fixedPoint: [number, number]; mode: "inside" | "orbit" | "skip"; } | null; endBinding?: { elementId: string; fixedPoint: [number, number]; mode: "inside" | "orbit" | "skip"; } | null; table?: { cells: readonly { id: string; [key: string]: unknown; }[]; [key: string]: unknown; }; }',
+        '{ [key: string]: unknown; id: string; type: string; index: string; version: number; versionNonce: number; isDeleted: boolean; x: number; y: number; width?: number; height?: number; angle: number; updated: number; fileId?: string | null; status?: string; containerId?: string | null; containerRef?: { kind: "frameLike"; elementId: string; } | { kind: "tableTitle"; elementId: string; } | { kind: "tableCell"; elementId: string; cellId: string; role: "content" | "backgroundText"; }; boundElements?: readonly { id: string; type: string; }[] | null; startBinding?: { elementId: string; attachPoint: [number, number]; } | null; endBinding?: { elementId: string; attachPoint: [number, number]; } | null; table?: { cells: readonly { id: string; [key: string]: unknown; }[]; [key: string]: unknown; }; }',
     },
     {
       name: "mutate",
@@ -72,7 +72,7 @@ export const collaborationApiDocumentation = {
         {
           name: "input",
           optional: false,
-          type: '{ mutations: ({ type: "add"; element: ExcalidrawSceneElement; } | { type: "update"; id: string; patch: Record<string, unknown>; expectedVersion?: number | undefined; } | { type: "delete"; id: string; expectedVersion?: number | undefined; } | { type: "connect"; id: string; start: { elementId: string; fixedPoint: [number, number]; mode: "inside" | "orbit" | "skip"; } | null; end: { elementId: string; fixedPoint: [number, number]; mode: "inside" | "orbit" | "skip"; } | null; expectedVersion?: number | undefined; })[]; }',
+          type: '{ mutations: ({ type: "add"; element: ExcalidrawSceneElement; } | { type: "update"; id: string; patch: Record<string, unknown>; expectedVersion?: number | undefined; } | { type: "delete"; id: string; expectedVersion?: number | undefined; } | { type: "connect"; id: string; start: { elementId: string; attachPoint: [number, number]; } | null; end: { elementId: string; attachPoint: [number, number]; } | null; expectedVersion?: number | undefined; })[]; }',
         },
       ],
       returns: "{ changedElementIds: string[]; }",
@@ -112,7 +112,7 @@ export const collaborationApiDocumentation = {
     {
       name: "CanvasMutationInput",
       definition:
-        '{ mutations: ({ type: "add"; element: ExcalidrawSceneElement; } | { type: "update"; id: string; patch: Record<string, unknown>; expectedVersion?: number | undefined; } | { type: "delete"; id: string; expectedVersion?: number | undefined; } | { type: "connect"; id: string; start: { elementId: string; fixedPoint: [number, number]; mode: "inside" | "orbit" | "skip"; } | null; end: { elementId: string; fixedPoint: [number, number]; mode: "inside" | "orbit" | "skip"; } | null; expectedVersion?: number | undefined; })[]; }',
+        '{ mutations: ({ type: "add"; element: ExcalidrawSceneElement; } | { type: "update"; id: string; patch: Record<string, unknown>; expectedVersion?: number | undefined; } | { type: "delete"; id: string; expectedVersion?: number | undefined; } | { type: "connect"; id: string; start: { elementId: string; attachPoint: [number, number]; } | null; end: { elementId: string; attachPoint: [number, number]; } | null; expectedVersion?: number | undefined; })[]; }',
     },
     {
       name: "CanvasMutationReceipt",
@@ -156,7 +156,7 @@ export const collaborationApiDocumentation = {
     {
       name: "ExcalidrawSceneElement",
       definition:
-        '{ [key: string]: unknown; id: string; type: string; index: string; version: number; versionNonce: number; isDeleted: boolean; x: number; y: number; width?: number; height?: number; angle: number; updated: number; fileId?: string | null; status?: string; containerId?: string | null; containerRef?: { kind: "frameLike"; elementId: string; } | { kind: "tableTitle"; elementId: string; } | { kind: "tableCell"; elementId: string; cellId: string; role: "content" | "backgroundText"; }; boundElements?: readonly { id: string; type: string; }[] | null; startBinding?: { elementId: string; fixedPoint: [number, number]; mode: "inside" | "orbit" | "skip"; } | null; endBinding?: { elementId: string; fixedPoint: [number, number]; mode: "inside" | "orbit" | "skip"; } | null; table?: { cells: readonly { id: string; [key: string]: unknown; }[]; [key: string]: unknown; }; }',
+        '{ [key: string]: unknown; id: string; type: string; index: string; version: number; versionNonce: number; isDeleted: boolean; x: number; y: number; width?: number; height?: number; angle: number; updated: number; fileId?: string | null; status?: string; containerId?: string | null; containerRef?: { kind: "frameLike"; elementId: string; } | { kind: "tableTitle"; elementId: string; } | { kind: "tableCell"; elementId: string; cellId: string; role: "content" | "backgroundText"; }; boundElements?: readonly { id: string; type: string; }[] | null; startBinding?: { elementId: string; attachPoint: [number, number]; } | null; endBinding?: { elementId: string; attachPoint: [number, number]; } | null; table?: { cells: readonly { id: string; [key: string]: unknown; }[]; [key: string]: unknown; }; }',
     },
   ],
 } as const;

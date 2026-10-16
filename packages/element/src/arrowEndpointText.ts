@@ -9,22 +9,13 @@
  */
 import { TEXT_ALIGN, VERTICAL_ALIGN } from "@excalidraw/common";
 
-import {
-  pointDistance,
-  pointFromVector,
-  pointsEqual,
-  vector,
-  vectorDot,
-  vectorFromPoint,
-  vectorNormalize,
-  vectorScale,
-} from "@excalidraw/math";
+import { pointDistance, pointsEqual, vectorFromPoint } from "@excalidraw/math";
 
 import type { GlobalPoint } from "@excalidraw/math";
 
 import type { AppState } from "@excalidraw/excalidraw/types";
 
-import { getBindingGap, normalizeFixedPoint } from "./binding";
+import { normalizeAttachPoint } from "./binding";
 import {
   HEADING_DOWN,
   HEADING_LEFT,
@@ -34,14 +25,14 @@ import {
 } from "./heading";
 import { LinearElementEditor } from "./linearElementEditor";
 import { getTextAnchorRatios } from "./newElement";
-import { isArrowElement, isElbowArrow } from "./typeChecks";
+import { isArrowElement } from "./typeChecks";
 
 import type { Heading } from "./heading";
 import type {
   ElementsMap,
   ExcalidrawArrowElement,
   ExcalidrawTextElement,
-  FixedPoint,
+  AttachPoint,
   NonDeleted,
   NonDeletedExcalidrawElement,
   TextAlign,
@@ -142,7 +133,7 @@ export const getTextBindingForArrowEndpoint = (
   targetStrokeWidth: number,
 ): {
   /** the text-local ratio the arrow binds to (a side midpoint) */
-  fixedPoint: FixedPoint;
+  attachPoint: AttachPoint;
   textAlign: TextAlign;
   verticalAlign: VerticalAlign;
   /** scene position the text's bound side midpoint should sit at */
@@ -181,41 +172,18 @@ export const getTextBindingForArrowEndpoint = (
       ? HEADING_DOWN
       : HEADING_UP;
 
-  // Keep the tip off the text's bounding box by the usual binding gap so the
-  // arrowhead doesn't collide with the glyphs. Must match the gap
-  // `updateBoundPoint` will resolve the binding with, or the first text update
-  // shifts the arrow. Elbow arrows terminate on the fixed point itself rather
-  // than gap-outside the outline, so offsetting there would just shift them.
-  const gap = isElbowArrow(arrow)
-    ? 0
-    : getBindingGap({ strokeWidth: targetStrokeWidth }, arrow);
-
-  // How far back along the arrow the bound side has to sit for the tip to
-  // stay exactly where it is.
+  // 文本作为绑定目标时**不留 binding gap**：端点就落在文本绑定边的中点上。
   //
-  // `updateBoundPoint` resolves an orbit binding by intersecting the arrow's
-  // own line with the target's outline grown by `gap`; it does not step along
-  // the bound side's normal. Offsetting the anchor perpendicular to the side
-  // would therefore leave the tip `gap * tan(angle)` off to one side on a
-  // diagonal arrow. Walking back along the arrow instead keeps the anchor both
-  // `gap` clear of the tip and collinear with the arrow, so the intersection
-  // lands back on the tip itself.
-  //
-  // `heading` is the dominant axis of the arrow direction, so it is never more
-  // than 45° away from it and the divisor stays >= cos(45°).
-  const awayFromTip = vectorNormalize(vectorFromPoint(neighbor, endpoint));
-  const alongHeading = Math.abs(
-    vectorDot(awayFromTip, vector(heading[0], heading[1])),
-  );
-  const anchor = pointFromVector(
-    vectorScale(awayFromTip, -gap / alongHeading),
-    endpoint,
-  );
+  // 硬性理由：`attachPoint` 是归一化比例，而 gap 是固定像素。把 gap 烘进比例需要
+  // 知道文本高度，而文本随输入增长时包围盒会变 —— 绑定边被钉住、比例不变，端点
+  // 于是会漂（每增长一行漂一个 gap）。端点落在边上则「边长住哪儿，尖端就在哪儿」，
+  // 与「创建 / 输入 / 改描边都不许移动尖端」这条不变量一致。折线档一直如此。
+  const anchor = endpoint;
 
   if (compareHeading(heading, HEADING_RIGHT)) {
     // text sits to the right of the tip -> bind its left side
     return {
-      fixedPoint: normalizeFixedPoint([0, 0.5]),
+      attachPoint: normalizeAttachPoint([0, 0.5]),
       anchor,
       textAlign: TEXT_ALIGN.LEFT as TextAlign,
       verticalAlign: VERTICAL_ALIGN.MIDDLE as VerticalAlign,
@@ -225,7 +193,7 @@ export const getTextBindingForArrowEndpoint = (
   if (compareHeading(heading, HEADING_LEFT)) {
     // text sits to the left of the tip -> bind its right side
     return {
-      fixedPoint: normalizeFixedPoint([1, 0.5]),
+      attachPoint: normalizeAttachPoint([1, 0.5]),
       anchor,
       textAlign: TEXT_ALIGN.RIGHT as TextAlign,
       verticalAlign: VERTICAL_ALIGN.MIDDLE as VerticalAlign,
@@ -235,7 +203,7 @@ export const getTextBindingForArrowEndpoint = (
   if (compareHeading(heading, HEADING_DOWN)) {
     // text sits below the tip -> bind its top side
     return {
-      fixedPoint: normalizeFixedPoint([0.5, 0]),
+      attachPoint: normalizeAttachPoint([0.5, 0]),
       anchor,
       textAlign: TEXT_ALIGN.CENTER as TextAlign,
       verticalAlign: VERTICAL_ALIGN.TOP as VerticalAlign,
@@ -244,7 +212,7 @@ export const getTextBindingForArrowEndpoint = (
 
   // text sits above the tip -> bind its bottom side
   return {
-    fixedPoint: normalizeFixedPoint([0.5, 1]),
+    attachPoint: normalizeAttachPoint([0.5, 1]),
     anchor,
     textAlign: TEXT_ALIGN.CENTER as TextAlign,
     verticalAlign: VERTICAL_ALIGN.BOTTOM as VerticalAlign,

@@ -580,23 +580,22 @@ export type ExcalidrawTextElementWithContainer = {
   containerId: ExcalidrawTextContainer["id"];
 } & ExcalidrawTextElement;
 
-export type FixedPoint = [number, number];
+export type AttachPoint = [number, number];
 
-export type BindMode = "inside" | "orbit" | "skip";
-
-export type FixedPointBinding = {
+/**
+ * 连线一端与某个可绑元素的关系。
+ *
+ * `attachPoint` 是**端点落点本身**在被绑元素**未旋转包围盒**里的归一化位置
+ * （`x = element.x + width * attachPoint[0]`，再绕元素中心旋 `angle`）。0..1 是
+ * 盒内；端点悬空一个 binding gap 落在轮廓外时它会略超出 1，所以不要按 0..1 夹取。
+ *
+ * 它在建连时定死，此后**只随图形做刚性变换**（平移 / 缩放 / 旋转）：不再重算、
+ * 不再投影到当前轮廓、也不再与另一端求交 —— 端点漂移与「自动换边」都由此消失。
+ * 端的实际落点同时存在 `points` 里（折线端点的 `points` 只存拐点，两端由本字段解出）。
+ */
+export type ElementBinding = {
   elementId: ExcalidrawBindableElement["id"];
-
-  // Represents the fixed point binding information in form of a vertical and
-  // horizontal ratio (i.e. a percentage value in the 0.0-1.0 range). This ratio
-  // gives the user selected fixed point by multiplying the bound element width
-  // with fixedPoint[0] and the bound element height with fixedPoint[1] to get the
-  // bound element-local point coordinate.
-  fixedPoint: FixedPoint;
-
-  // Determines whether the arrow remains outside the shape or is allowed to
-  // go all the way inside the shape up to the exact fixed point.
-  mode: BindMode;
+  attachPoint: AttachPoint;
 };
 
 type Index = number;
@@ -630,8 +629,8 @@ export type ExcalidrawLinearElement = _ExcalidrawElementBase &
   Readonly<{
     type: "line" | "arrow";
     points: readonly LocalPoint[];
-    startBinding: FixedPointBinding | null;
-    endBinding: FixedPointBinding | null;
+    startBinding: ElementBinding | null;
+    endBinding: ElementBinding | null;
     startArrowhead: Arrowhead | null;
     endArrowhead: Arrowhead | null;
   }>;
@@ -663,8 +662,8 @@ export type ExcalidrawElbowArrowElement = Merge<
   {
     elbowed: true;
     fixedSegments: readonly FixedSegment[] | null;
-    startBinding: FixedPointBinding | null;
-    endBinding: FixedPointBinding | null;
+    startBinding: ElementBinding | null;
+    endBinding: ElementBinding | null;
     /**
      * Marks that the 3rd point should be used as the 2nd point of the arrow in
      * order to temporarily hide the first segment of the arrow without losing

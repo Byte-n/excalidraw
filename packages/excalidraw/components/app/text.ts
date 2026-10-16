@@ -631,7 +631,7 @@ export const startTextEditing = (
     app.arrowText.bindText(
       arrowEndpoint,
       element,
-      arrowEndpointBinding.fixedPoint,
+      arrowEndpointBinding.attachPoint,
     );
   }
 

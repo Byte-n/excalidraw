@@ -173,8 +173,7 @@ describe("sticky notes", () => {
       points: [pointFrom(0, 0), pointFrom(0, -300)],
       endBinding: {
         elementId: note.id,
-        fixedPoint: [0.5, 1],
-        mode: "orbit",
+        attachPoint: [0.5, 1],
       },
     });
     API.setElements([note, label, arrow]);
@@ -194,7 +193,8 @@ describe("sticky notes", () => {
     expect(grown.height).toBeGreaterThan(heightBefore);
     expect(grown.baseHeight).toBe(DEFAULT_STICKY_NOTE_SIZE);
     // the bottom edge moved by the growth, and so did the arrow's end (the
-    // orbit ring re-solves the exact contact point, hence the tolerance)
+    // endpoint follows its normalized ratio on the note rather than the pixel
+    // growth, hence the tolerance)
     const growth = grown.height - heightBefore;
     const endDelta = arrowEndY(arrow.id) - endYBefore;
     expect(Math.abs(endDelta - growth)).toBeLessThan(10);
@@ -502,8 +502,7 @@ describe("sticky notes", () => {
         points: [pointFrom(0, 0), pointFrom(0, -500)],
         endBinding: {
           elementId: note.id,
-          fixedPoint: [0.5, 1],
-          mode: "orbit",
+          attachPoint: [0.5, 1],
         },
       });
       API.setElements([note, label, arrow]);
@@ -526,7 +525,7 @@ describe("sticky notes", () => {
       API.executeAction(actionUnbindText);
 
       expect(getElement(note.id).height).toBe(DEFAULT_STICKY_NOTE_SIZE);
-      // the orbit ring re-solves the contact point, hence the tolerance
+      // the endpoint follows its normalized ratio on the note, hence the tolerance
       expect(
         Math.abs(arrowEndY(arrow.id) - noteBottom(note.id) - gap),
       ).toBeLessThan(10);

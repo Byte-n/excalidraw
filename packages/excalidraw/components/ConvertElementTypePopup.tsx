@@ -552,6 +552,7 @@ export const convertElementTypes = (
 
       for (const element of Object.values(convertedElements)) {
         if (isBindableElement(element)) {
+          // 类型转换换了轮廓（保包围盒），先按新轮廓重锚，再更新绑定
           reanchorBindingsToOutline(element, app.scene);
           updateBindings(element, app.scene, app.state);
         }

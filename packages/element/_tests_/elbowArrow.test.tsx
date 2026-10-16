@@ -191,8 +191,8 @@ describe("elbow arrow routing", () => {
     API.setElements([rectangle1, rectangle2, arrow]);
 
     act(() => {
-      bindBindingElement(arrow, rectangle1, "orbit", "start", h.scene);
-      bindBindingElement(arrow, rectangle2, "orbit", "end", h.scene);
+      bindBindingElement(arrow, rectangle1, "start", h.scene);
+      bindBindingElement(arrow, rectangle2, "end", h.scene);
     });
 
     expect(arrow.startBinding).not.toBe(null);

@@ -1,12 +1,135 @@
 import { pointFrom } from "@excalidraw/math";
 
+import {
+  LinearElementEditor,
+  distanceToElement,
+  getBindingGap,
+} from "@excalidraw/element";
+
+import type {
+  ExcalidrawArrowElement,
+  ExcalidrawLinearElement,
+  NonDeleted,
+} from "@excalidraw/element/types";
+
 import { Excalidraw } from "../index";
+
 import { API } from "../_tests_/helpers/api";
 import { render } from "../_tests_/test-utils";
 
 import { actionFlipHorizontal, actionFlipVertical } from "./actionFlip";
 
 const { h } = window;
+
+describe("flipping mirrors the binding of a non-elbow arrow", () => {
+  beforeEach(async () => {
+    await render(<Excalidraw />);
+  });
+
+  /**
+   * 一个非折线箭头绑在矩形右边缘外一个 binding gap 处（端点就是画出来的那个点）：
+   * 比例 `1.06 = 1 + gap/width`（gap 6、宽 100），纵向在四分之一处。
+   */
+  const setup = () => {
+    const rect = API.createElement({
+      type: "rectangle",
+      id: "rec1",
+      x: 100,
+      y: 100,
+      width: 100,
+      height: 100,
+      boundElements: [{ id: "arr", type: "arrow" }],
+    });
+    const arrow = API.createElement({
+      type: "arrow",
+      id: "arr",
+      x: 206,
+      y: 125,
+      width: 106,
+      height: 0,
+      points: [pointFrom(0, 0), pointFrom(106, 0)],
+      startBinding: { elementId: "rec1", attachPoint: [1.06, 0.25] },
+      endBinding: null,
+      elbowed: false,
+    }) as NonDeleted<ExcalidrawArrowElement>;
+
+    API.setElements([rect, arrow]);
+    // 组选才会走到 resizeMultipleElements 的镜像分支：只选箭头时 flip 仅换箭头头部
+    API.setSelectedElements([rect, arrow]);
+
+    return { rect, arrow };
+  };
+
+  const startEndpoint = (arrow: NonDeleted<ExcalidrawLinearElement>) =>
+    LinearElementEditor.getPointAtIndexGlobalCoordinates(
+      arrow,
+      0,
+      h.app.scene.getNonDeletedElementsMap(),
+    );
+
+  it("mirrors `attachPoint` to `-f + 1` and keeps the endpoint on the mirrored side's outline", () => {
+    const { rect, arrow } = setup();
+    const elementsMap = h.app.scene.getNonDeletedElementsMap();
+
+    // 前提：非折线（这个分支原先只对 isElbowArrow 生效）
+    expect(arrow.elbowed).toBe(false);
+    // 翻转前：端点在矩形**右**边缘外一个 gap 处
+    expect(arrow.startBinding?.attachPoint).toEqual([1.06, 0.25]);
+    expect(
+      distanceToElement(rect, elementsMap, startEndpoint(arrow)),
+    ).toBeCloseTo(getBindingGap(rect, arrow), 1);
+    expect(startEndpoint(arrow)[0]).toBeGreaterThan(rect.x + rect.width);
+
+    API.executeAction(actionFlipHorizontal);
+
+    const flippedRect = h.elements.find((el) => el.id === "rec1")!;
+    const flippedArrow = h.elements.find(
+      (el) => el.id === "arr",
+    )! as NonDeleted<ExcalidrawArrowElement>;
+    const flippedMap = h.app.scene.getNonDeletedElementsMap();
+    const endpoint = startEndpoint(flippedArrow);
+
+    // 比例按 `-f + 1` 镜像（纵向那一轴不动）
+    expect(flippedArrow.startBinding?.attachPoint?.[0]).toBeCloseTo(
+      -1.06 + 1,
+      3,
+    );
+    expect(flippedArrow.startBinding?.attachPoint?.[1]).toBeCloseTo(0.25, 3);
+
+    // ... 而且端点真的落在**镜像后那侧**（矩形左边缘）的外扩轮廓上
+    expect(endpoint[0]).toBeLessThan(flippedRect.x);
+    expect(distanceToElement(flippedRect, flippedMap, endpoint)).toBeCloseTo(
+      getBindingGap(flippedRect, flippedArrow),
+      1,
+    );
+
+    // 再翻一次镜像回到原处（镜像是对合）：比例、方位都复原
+    API.executeAction(actionFlipHorizontal);
+    const backArrow = h.elements.find(
+      (el) => el.id === "arr",
+    )! as NonDeleted<ExcalidrawArrowElement>;
+    const backRect = h.elements.find((el) => el.id === "rec1")!;
+    expect(backArrow.startBinding?.attachPoint?.[0]).toBeCloseTo(1.06, 3);
+    expect(backArrow.startBinding?.attachPoint?.[1]).toBeCloseTo(0.25, 3);
+    expect(startEndpoint(backArrow)[0]).toBeGreaterThan(
+      backRect.x + backRect.width,
+    );
+
+    // 纵向翻转镜像的是另一轴
+    API.executeAction(actionFlipVertical);
+    const verticallyFlipped = h.elements.find(
+      (el) => el.id === "arr",
+    )! as NonDeleted<ExcalidrawArrowElement>;
+    expect(verticallyFlipped.startBinding?.attachPoint?.[0]).toBeCloseTo(
+      1.06,
+      3,
+    );
+    expect(verticallyFlipped.startBinding?.attachPoint?.[1]).toBeCloseTo(
+      -0.25 + 1,
+      3,
+    );
+  });
+});
 
 describe("flipping re-centers selection", () => {
   it("elbow arrow touches group selection side yet it remains in place after multiple moves", async () => {
@@ -38,13 +161,11 @@ describe("flipping re-centers selection", () => {
         height: 239.9,
         startBinding: {
           elementId: "rec1",
-          fixedPoint: [0.49, -0.05],
-          mode: "orbit",
+          attachPoint: [0.49, -0.05],
         },
         endBinding: {
           elementId: "rec2",
-          fixedPoint: [-0.05, 0.49],
-          mode: "orbit",
+          attachPoint: [-0.05, 0.49],
         },
         startArrowhead: null,
         endArrowhead: "arrow",
@@ -97,8 +218,7 @@ describe("flipping arrowheads", () => {
       endArrowhead: null,
       endBinding: {
         elementId: rect.id,
-        fixedPoint: [0.5, 0.5],
-        mode: "orbit",
+        attachPoint: [0.5, 0.5],
       },
     });
 
@@ -137,13 +257,11 @@ describe("flipping arrowheads", () => {
       endArrowhead: "circle",
       startBinding: {
         elementId: rect.id,
-        fixedPoint: [0.5, 0.5],
-        mode: "orbit",
+        attachPoint: [0.5, 0.5],
       },
       endBinding: {
         elementId: rect2.id,
-        fixedPoint: [0.5, 0.5],
-        mode: "orbit",
+        attachPoint: [0.5, 0.5],
       },
     });
 
@@ -193,8 +311,7 @@ describe("flipping arrowheads", () => {
       endArrowhead: null,
       endBinding: {
         elementId: rect.id,
-        fixedPoint: [0.5, 0.5],
-        mode: "orbit",
+        attachPoint: [0.5, 0.5],
       },
     });
 

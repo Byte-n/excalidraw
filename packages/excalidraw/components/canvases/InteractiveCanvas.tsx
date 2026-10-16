@@ -165,10 +165,6 @@ const InteractiveCanvas = (props: InteractiveCanvasProps) => {
       },
       editorInterface: props.editorInterface,
       callback: props.renderInteractiveSceneCallback,
-      animationState: {
-        bindingHighlight: undefined,
-      },
-      deltaTime: 0,
     };
 
     const repaintInteractiveScene = () => {
@@ -182,10 +178,9 @@ const InteractiveCanvas = (props: InteractiveCanvasProps) => {
     if (!AnimationController.running(INTERACTIVE_SCENE_ANIMATION_KEY)) {
       AnimationController.start<InteractiveSceneRenderAnimationState>(
         INTERACTIVE_SCENE_ANIMATION_KEY,
-        ({ deltaTime, state }) => {
+        ({ state }) => {
           const nextAnimationState = renderInteractiveScene({
             ...rendererParams.current!,
-            deltaTime,
             animationState: state,
           }).animationState;
 

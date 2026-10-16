@@ -39,13 +39,11 @@ export type ExcalidrawSceneElement = {
   boundElements?: readonly { id: string; type: string }[] | null;
   startBinding?: {
     elementId: string;
-    fixedPoint: [number, number];
-    mode: "inside" | "orbit" | "skip";
+    attachPoint: [number, number];
   } | null;
   endBinding?: {
     elementId: string;
-    fixedPoint: [number, number];
-    mode: "inside" | "orbit" | "skip";
+    attachPoint: [number, number];
   } | null;
   table?: {
     cells: readonly { id: string; [key: string]: unknown }[];

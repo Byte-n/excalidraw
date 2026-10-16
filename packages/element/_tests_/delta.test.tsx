@@ -191,8 +191,7 @@ describe("ElementsDelta", () => {
         points: [pointFrom(0, 0), pointFrom(100, 0)],
         startBinding: {
           elementId: container.id,
-          mode: "orbit",
-          fixedPoint: [1, 0.5],
+          attachPoint: [1, 0.5],
         },
       });
       const before = arrayToMap([container, arrow]) as SceneElementsMap;
@@ -274,8 +273,7 @@ describe("ElementsDelta", () => {
         index: "a1" as FractionalIndex,
         startBinding: {
           elementId: label.id,
-          mode: "orbit",
-          fixedPoint: [1, 0.5],
+          attachPoint: [1, 0.5],
         },
       });
       const before = arrayToMap([label, arrow]) as SceneElementsMap;

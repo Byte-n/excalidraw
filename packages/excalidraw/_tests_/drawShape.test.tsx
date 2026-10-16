@@ -1,6 +1,13 @@
 import * as common from "@excalidraw/common";
 
-import { getTargetElements, isArrowElement } from "@excalidraw/element";
+import {
+  BASE_BINDING_GAP,
+  LinearElementEditor,
+  distanceToElement,
+  getTargetElements,
+  isArrowElement,
+  isPointInElement,
+} from "@excalidraw/element";
 
 import type { ExcalidrawTextElement } from "@excalidraw/element/types";
 
@@ -293,7 +300,7 @@ describe("autoshape tool", () => {
     expect(h.state.selectedLinearElement).toBeNull();
   });
 
-  it("orbit-binds arrows sketched from inside one shape into another, endpoints on the outlines", () => {
+  it("pulls the endpoints of an arrow sketched from inside one shape into another onto the outlines", () => {
     const start = API.createElement({
       type: "rectangle",
       x: 100,
@@ -316,9 +323,6 @@ describe("autoshape tool", () => {
     const arrow = h.elements.find((element) => element.type === "arrow");
     assert(isArrowElement(arrow));
 
-    expect(arrow.startBinding?.mode).toBe("orbit");
-    expect(arrow.endBinding?.mode).toBe("orbit");
-
     // the endpoints were pulled out of the shape interiors onto the outlines
     const [endDx, endDy] = arrow.points[arrow.points.length - 1];
     expect(arrow.x).toBeGreaterThan(200);
@@ -327,7 +331,7 @@ describe("autoshape tool", () => {
     expect(arrow.y + endDy).toBeLessThan(400);
   });
 
-  it("keeps inside-bindings for an arrow sketched within a single shape", () => {
+  it("pulls both endpoints onto the outline for an arrow sketched within a single shape", () => {
     const container = API.createElement({
       type: "rectangle",
       x: 50,
@@ -342,10 +346,32 @@ describe("autoshape tool", () => {
     const arrow = h.elements.find((element) => element.type === "arrow");
     assert(isArrowElement(arrow));
 
-    expect(arrow.startBinding?.mode).toBe("inside");
-    expect(arrow.endBinding?.mode).toBe("inside");
-    // the endpoints stay where they were drawn
-    expect(arrow.x).toBeCloseTo(150, 0);
+    const elementsMap = h.app.scene.getNonDeletedElementsMap();
+
+    // 起止落在同一个容器上时不再有「内部就原地不动」的例外：绑定的端点就是画出来
+    // 的端点，而绑定的端点必须落在容器**外扩一个 binding gap 的轮廓**上 —— 否则
+    // 绑定记录（轮廓上）与画出来的点（容器内部）当场对不上。
+    expect(arrow.startBinding?.elementId).toBe(container.id);
+    expect(arrow.endBinding?.elementId).toBe(container.id);
+
+    const gap = BASE_BINDING_GAP + container.strokeWidth / 2;
+    for (const index of [0, arrow.points.length - 1]) {
+      const endpoint = LinearElementEditor.getPointAtIndexGlobalCoordinates(
+        arrow,
+        index,
+        elementsMap,
+      );
+      // 严格在容器之外（旧行为：起止都留在容器内部）
+      expect(isPointInElement(endpoint, container, elementsMap)).toBe(false);
+      // 且正好落在外扩一个 gap 的轮廓上
+      expect(distanceToElement(container, elementsMap, endpoint)).toBeCloseTo(
+        gap,
+        0,
+      );
+    }
+
+    // 箭头的元素原点随起点一起被拉到容器的左外扩边上，纵坐标不变
+    expect(arrow.x).toBeCloseTo(container.x - gap, 0);
     expect(arrow.y).toBeCloseTo(300, 0);
   });
 
@@ -367,7 +393,7 @@ describe("autoshape tool", () => {
     ]);
   });
 
-  it("upgrades a line from inside a shape to blank canvas into an arrow orbit-bound at the shape", () => {
+  it("upgrades a line from inside a shape to blank canvas into an arrow bound at the shape outline", () => {
     const only = API.createElement({
       type: "rectangle",
       x: 100,
@@ -383,14 +409,13 @@ describe("autoshape tool", () => {
     assert(isArrowElement(arrow));
 
     expect(arrow.startBinding?.elementId).toBe(only.id);
-    expect(arrow.startBinding?.mode).toBe("orbit");
     expect(arrow.endBinding).toBeNull();
     // the start was pulled out of the shape interior onto the outline
     expect(arrow.x).toBeGreaterThan(200);
     expect(arrow.y).toBeGreaterThan(200);
   });
 
-  it("upgrades a line from blank canvas into a shape into an arrow orbit-bound at the shape", () => {
+  it("upgrades a line from blank canvas into a shape into an arrow bound at the shape outline", () => {
     const only = API.createElement({
       type: "rectangle",
       x: 400,
@@ -407,7 +432,6 @@ describe("autoshape tool", () => {
 
     expect(arrow.startBinding).toBeNull();
     expect(arrow.endBinding?.elementId).toBe(only.id);
-    expect(arrow.endBinding?.mode).toBe("orbit");
     // the end was pulled back onto the outline
     const [endDx, endDy] = arrow.points[arrow.points.length - 1];
     expect(arrow.x + endDx).toBeLessThan(400);

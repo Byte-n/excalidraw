@@ -34,12 +34,8 @@ import {
   isTransparent,
 } from "@excalidraw/common";
 import {
-  calculateFixedPointForNonElbowArrowBinding,
   getNonDeletedElements,
-  isPointInElement,
   isValidPolygon,
-  projectFixedPointOntoDiagonal,
-  isNonDeletedElement,
   isMindmapNodeElement,
   isMindmapEdgeElement,
   isValidMindmapOrder,
@@ -53,7 +49,7 @@ import {
   assertValidContainerRefs,
   normalizeTableDimensions,
 } from "@excalidraw/element";
-import { normalizeFixedPoint } from "@excalidraw/element";
+import { normalizeAttachPoint } from "@excalidraw/element";
 import {
   updateElbowArrowPoints,
   validateElbowPoints,
@@ -98,16 +94,14 @@ import type {
   ElementsMap,
   ElementsMapOrArray,
   ExcalidrawArrowElement,
-  ExcalidrawBindableElement,
   ExcalidrawElbowArrowElement,
   ExcalidrawElement,
   ExcalidrawLinearElement,
   ExcalidrawSelectionElement,
   ExcalidrawTextElement,
   ExcalidrawTextElementWithContainer,
-  FixedPointBinding,
+  ElementBinding,
   FontFamilyValues,
-  NonDeleted,
   NonDeletedSceneElementsMap,
   OrderedExcalidrawElement,
   StrokeVariability,
@@ -129,7 +123,6 @@ import type {
   BinaryFiles,
   LibraryItem,
   LibraryItems,
-  NormalizedZoomValue,
 } from "../types";
 import type { ImportedDataState, LegacyAppState } from "./types";
 
@@ -312,131 +305,32 @@ const getFontFamilyByName = (fontFamilyName: string): FontFamilyValues => {
   return DEFAULT_FONT_FAMILY;
 };
 
-const repairBinding = <T extends ExcalidrawLinearElement>(
-  element: T,
-  binding: FixedPointBinding | null,
+const repairBinding = (
+  binding: ElementBinding | null,
   targetElementsMap: Readonly<ElementsMap>,
-  /** used for context (arrow bindings) */
   existingElementsMap: Readonly<ElementsMap> | null | undefined,
-  startOrEnd: "start" | "end",
-): FixedPointBinding | null => {
+): ElementBinding | null => {
+  // 本项目没有存量数据，因此不做旧 schema 的迁移：绑定就是 elementId +
+  // 归一化的 attachPoint，读回来只做一次归一化即可。
+  // （原先这里还有 v1 → v2 那条「把旧锚点重投影到外扩轮廓再反算比率、
+  // 并按点是否在图形内决定 inside/orbit」的迁移路径，随 mode 一并删除。）
   try {
-    if (!binding) {
+    if (!binding || !binding.elementId) {
       return null;
     }
 
-    // ---------------------------------------------------------------------------
-    // elbow arrows
-    // ---------------------------------------------------------------------------
-
-    if (isElbowArrow(element)) {
-      const fixedPointBinding:
-        | ExcalidrawElbowArrowElement["startBinding"]
-        | ExcalidrawElbowArrowElement["endBinding"] = {
-        ...binding,
-        fixedPoint: normalizeFixedPoint(binding.fixedPoint),
-        mode: binding.mode || "orbit",
-      };
-
-      return fixedPointBinding;
-    }
-
-    // ---------------------------------------------------------------------------
-    // simple arrows
-    // ---------------------------------------------------------------------------
-
-    // binding schema v2
-    // ---------------------------------------------------------------------------
-
-    if (binding.mode) {
-      // if latest binding schema, don't check if binding.elementId exists
-      // (it's done in a separate pass)
-      if (binding.elementId) {
-        return {
-          elementId: binding.elementId,
-          mode: binding.mode,
-          fixedPoint: normalizeFixedPoint(binding.fixedPoint),
-        } as FixedPointBinding | null;
-      }
+    // 悬空引用照旧丢掉绑定（这一步与 v1 迁移无关，必须保留）
+    const target =
+      targetElementsMap.get(binding.elementId) ??
+      existingElementsMap?.get(binding.elementId);
+    if (!target) {
       return null;
     }
 
-    // binding schema v1 (legacy) -> attempt to migrate to v2
-    // ---------------------------------------------------------------------------
-
-    const targetBoundElement = targetElementsMap.get(binding.elementId) as
-      | ExcalidrawBindableElement
-      | undefined;
-    const boundElement =
-      targetBoundElement ||
-      (existingElementsMap?.get(binding.elementId) as
-        | ExcalidrawBindableElement
-        | undefined);
-    const elementsMap = targetBoundElement
-      ? targetElementsMap
-      : existingElementsMap;
-
-    // migrating legacy focus point bindings
-    if (boundElement && elementsMap) {
-      const p = LinearElementEditor.getPointAtIndexGlobalCoordinates(
-        element,
-        startOrEnd === "start" ? 0 : element.points.length - 1,
-        elementsMap,
-      );
-      const mode = isPointInElement(p, boundElement, elementsMap)
-        ? "inside"
-        : "orbit";
-
-      if (!isNonDeletedElement(element)) {
-        console.error("[NONDELETED][INVARIANT] Restoring a deleted element");
-      }
-
-      const safeElement = {
-        ...element,
-        startBinding: element.startBinding?.elementId
-          ? {
-              ...element.startBinding,
-              mode,
-              fixedPoint: normalizeFixedPoint(element.startBinding.fixedPoint),
-            }
-          : null,
-        endBinding: element.endBinding?.elementId
-          ? {
-              ...element.endBinding,
-              mode,
-              fixedPoint: normalizeFixedPoint(element.endBinding.fixedPoint),
-            }
-          : null,
-      };
-      const focusPoint =
-        mode === "inside"
-          ? p
-          : projectFixedPointOntoDiagonal(
-              safeElement,
-              p,
-              boundElement,
-              startOrEnd,
-              elementsMap,
-              { value: 1 as NormalizedZoomValue },
-            ) || p;
-      const { fixedPoint } = calculateFixedPointForNonElbowArrowBinding(
-        safeElement as NonDeleted<ExcalidrawLinearElement>,
-        boundElement as NonDeleted<ExcalidrawBindableElement>,
-        startOrEnd,
-        elementsMap,
-        focusPoint,
-      );
-
-      return {
-        mode,
-        elementId: binding.elementId,
-        fixedPoint,
-      };
-    }
-
-    console.error(
-      `Could not repair binding for element "${boundElement?.id}" out of (${elementsMap?.size}) elements`,
-    );
+    return {
+      elementId: binding.elementId,
+      attachPoint: normalizeAttachPoint(binding.attachPoint),
+    };
   } catch (error) {
     console.error("Error repairing binding:", error);
   }
@@ -655,18 +549,14 @@ export const restoreElement = (
       const restoredLine = restoreElementWithProperties(element, {
         type: "line",
         startBinding: repairBinding(
-          { ...element, x, y, points },
           element.startBinding,
           targetElementsMap,
           existingElementsMap,
-          "start",
         ),
         endBinding: repairBinding(
-          { ...element, x, y, points },
           element.endBinding,
           targetElementsMap,
           existingElementsMap,
-          "end",
         ),
         startArrowhead,
         endArrowhead,
@@ -697,28 +587,17 @@ export const restoreElement = (
         element.width,
         element.height,
       );
-      const elementWithRestoredPoints = {
-        ...element,
-        points,
-        x: x ?? 0,
-        y: y ?? 0,
-      } as ExcalidrawArrowElement;
-
       const base = {
         type: element.type,
         startBinding: repairBinding(
-          elementWithRestoredPoints,
           element.startBinding,
           targetElementsMap,
           existingElementsMap,
-          "start",
         ),
         endBinding: repairBinding(
-          elementWithRestoredPoints,
           element.endBinding,
           targetElementsMap,
           existingElementsMap,
-          "end",
         ),
         startArrowhead,
         endArrowhead,

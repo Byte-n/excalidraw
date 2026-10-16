@@ -27,7 +27,6 @@ import {
   getGridPoint,
   invariant,
   isShallowEqual,
-  getFeatureFlag,
 } from "@excalidraw/common";
 
 import {
@@ -35,7 +34,6 @@ import {
   getSnapOutlineMidPoint,
   isPathALoop,
   moveArrowAboveBindable,
-  projectFixedPointOntoDiagonal,
   type Store,
   getLinearElementPathSegments,
 } from "@excalidraw/element";
@@ -55,7 +53,7 @@ import type {
 import type { Bounds } from "@excalidraw/common";
 
 import {
-  calculateFixedPointForNonElbowArrowBinding,
+  resolveAttachPointForNonElbowBinding,
   getBindingStrategyForDraggingBindingElementEndpoints,
   isBindingEnabled,
   snapToMid,
@@ -92,7 +90,7 @@ import type {
   ExcalidrawTextElementWithContainer,
   ElementsMap,
   NonDeletedSceneElementsMap,
-  FixedPointBinding,
+  ElementBinding,
   FixedSegment,
   ExcalidrawElbowArrowElement,
   PointsPositionUpdates,
@@ -131,8 +129,8 @@ const getNormalizedPoints = ({
 };
 
 type PointMoveOtherUpdates = {
-  startBinding?: FixedPointBinding | null;
-  endBinding?: FixedPointBinding | null;
+  startBinding?: ElementBinding | null;
+  endBinding?: ElementBinding | null;
   moveMidPointsWithElement?: boolean | null;
   suggestedBinding?: AppState["suggestedBinding"] | null;
 };
@@ -164,9 +162,6 @@ export class LinearElementEditor {
       index: number | null;
       added: boolean;
     };
-    arrowStartIsInside: boolean;
-    altFocusPoint: Readonly<GlobalPoint> | null;
-    arrowOtherEndpointInitialBinding: FixedPointBinding | null;
   }>;
 
   /** whether you're dragging a point */
@@ -218,9 +213,6 @@ export class LinearElementEditor {
         index: null,
         added: false,
       },
-      arrowStartIsInside: false,
-      arrowOtherEndpointInitialBinding: null,
-      altFocusPoint: null,
     };
     this.hoverPointIndex = -1;
     this.segmentMidPointHoveredCoords = null;
@@ -429,41 +421,15 @@ export class LinearElementEditor {
     // PERF: Avoid state updates if not absolutely necessary
     if (
       app.state.selectedLinearElement?.customLineAngle === customLineAngle &&
-      linearElementEditor.initialState.altFocusPoint &&
       (!suggestedBinding ||
         isShallowEqual(app.state.suggestedBinding ?? [], suggestedBinding))
     ) {
       return null;
     }
 
-    const startBindingElement =
-      isBindingElement(element) &&
-      element.startBinding &&
-      (elementsMap.get(
-        element.startBinding.elementId,
-      ) as ExcalidrawBindableElement | null);
     const newLinearElementEditor = {
       ...linearElementEditor,
       customLineAngle,
-      initialState: {
-        ...linearElementEditor.initialState,
-        altFocusPoint:
-          !linearElementEditor.initialState.altFocusPoint &&
-          startBindingElement &&
-          updates?.suggestedBinding?.element.id !== startBindingElement.id
-            ? projectFixedPointOntoDiagonal(
-                element,
-                pointFrom<GlobalPoint>(element.x, element.y),
-                startBindingElement,
-                "start",
-                elementsMap,
-                app.state.zoom,
-                app.state.isMidpointSnappingEnabled &&
-                  !angleLocked &&
-                  !app.state.gridModeEnabled,
-              )
-            : linearElementEditor.initialState.altFocusPoint,
-      },
     };
 
     return {
@@ -659,28 +625,6 @@ export class LinearElementEditor {
         : null;
 
     const newHoverPointIndex = newLastClickedPoint;
-    const startBindingElement =
-      isBindingElement(element) &&
-      element.startBinding &&
-      (elementsMap.get(
-        element.startBinding.elementId,
-      ) as ExcalidrawBindableElement | null);
-    const endBindingElement =
-      isBindingElement(element) &&
-      element.endBinding &&
-      (elementsMap.get(
-        element.endBinding.elementId,
-      ) as ExcalidrawBindableElement | null);
-    const altFocusPointBindableElement =
-      endIsSelected && // The "other" end (i.e. "end") is dragged
-      startBindingElement &&
-      updates?.suggestedBinding?.element.id !== startBindingElement.id // The end point is not hovering the start bindable + it's binding gap
-        ? startBindingElement
-        : startIsSelected && // The "other" end (i.e. "start") is dragged
-          endBindingElement &&
-          updates?.suggestedBinding?.element.id !== endBindingElement.id // The start point is not hovering the end bindable + it's binding gap
-        ? endBindingElement
-        : null;
 
     const newLinearElementEditor: LinearElementEditor = {
       ...linearElementEditor,
@@ -688,22 +632,6 @@ export class LinearElementEditor {
       initialState: {
         ...linearElementEditor.initialState,
         lastClickedPoint: newLastClickedPoint,
-        altFocusPoint:
-          !linearElementEditor.initialState.altFocusPoint && // We only set it once per arrow drag
-          isBindingElement(element) &&
-          altFocusPointBindableElement
-            ? projectFixedPointOntoDiagonal(
-                element,
-                pointFrom<GlobalPoint>(element.x, element.y),
-                altFocusPointBindableElement,
-                "start",
-                elementsMap,
-                app.state.zoom,
-                app.state.isMidpointSnappingEnabled &&
-                  !angleLocked &&
-                  !app.state.gridModeEnabled,
-              )
-            : linearElementEditor.initialState.altFocusPoint,
       },
       segmentMidPointHoveredCoords: newSelectedMidPointHoveredCoords,
       hoverPointIndex: newHoverPointIndex,
@@ -803,8 +731,6 @@ export class LinearElementEditor {
       initialState: {
         ...editingLinearElement.initialState,
         origin: null,
-        arrowStartIsInside: false,
-        arrowOtherEndpointInitialBinding: null,
       },
     };
   }
@@ -1127,11 +1053,6 @@ export class LinearElementEditor {
             index: segmentMidpointIndex,
             added: false,
           },
-          arrowStartIsInside:
-            !!app.state.newElement &&
-            (app.state.bindMode === "inside" || app.state.bindMode === "skip"),
-          altFocusPoint: null,
-          arrowOtherEndpointInitialBinding: element.startBinding,
         },
         selectedPointsIndices: [element.points.length - 1],
         lastUncommittedPoint: null,
@@ -1225,13 +1146,6 @@ export class LinearElementEditor {
           index: segmentMidpointIndex,
           added: false,
         },
-        arrowStartIsInside:
-          !!app.state.newElement &&
-          (app.state.bindMode === "inside" || app.state.bindMode === "skip"),
-        altFocusPoint: null,
-        arrowOtherEndpointInitialBinding: nextSelectedPointsIndices?.includes(0)
-          ? element.endBinding
-          : element.startBinding,
       },
       selectedPointsIndices: nextSelectedPointsIndices,
       pointerOffset: targetPoint
@@ -1654,8 +1568,8 @@ export class LinearElementEditor {
     scene: Scene,
     pointUpdates: PointsPositionUpdates,
     otherUpdates?: {
-      startBinding?: FixedPointBinding | null;
-      endBinding?: FixedPointBinding | null;
+      startBinding?: ElementBinding | null;
+      endBinding?: ElementBinding | null;
       moveMidPointsWithElement?: boolean | null;
     },
     options?: {
@@ -1839,8 +1753,8 @@ export class LinearElementEditor {
     offsetX: number,
     offsetY: number,
     otherUpdates?: {
-      startBinding?: FixedPointBinding | null;
-      endBinding?: FixedPointBinding | null;
+      startBinding?: ElementBinding | null;
+      endBinding?: ElementBinding | null;
     },
     options?: {
       isDragging?: boolean;
@@ -1852,8 +1766,8 @@ export class LinearElementEditor {
   ) {
     if (isElbowArrow(element)) {
       const updates: {
-        startBinding?: FixedPointBinding | null;
-        endBinding?: FixedPointBinding | null;
+        startBinding?: ElementBinding | null;
+        endBinding?: ElementBinding | null;
         points?: LocalPoint[];
       } = {};
       if (otherUpdates?.startBinding !== undefined) {
@@ -2498,7 +2412,6 @@ const pointDraggingUpdates = (
         const startPoint =
           updateBoundPoint(
             nextArrow,
-            "startBinding",
             element.startBinding,
             startBindable,
             elementsMap,
@@ -2517,7 +2430,6 @@ const pointDraggingUpdates = (
         const endPoint =
           updateBoundPoint(
             nextArrow,
-            "endBinding",
             element.endBinding,
             endBindable,
             elementsMap,
@@ -2546,13 +2458,12 @@ const pointDraggingUpdates = (
   const updates: PointMoveOtherUpdates = {
     suggestedBinding: null,
   };
-  if (start.mode === null) {
+  if (start.element === null) {
     updates.startBinding = null;
-  } else if (start.mode) {
+  } else if (start.element) {
     updates.startBinding = {
       elementId: start.element.id,
-      mode: start.mode,
-      ...calculateFixedPointForNonElbowArrowBinding(
+      ...resolveAttachPointForNonElbowBinding(
         element,
         start.element,
         "start",
@@ -2561,11 +2472,7 @@ const pointDraggingUpdates = (
       ),
     };
 
-    if (
-      startIsDragged &&
-      (updates.startBinding.mode === "orbit" ||
-        !getFeatureFlag("COMPLEX_BINDINGS"))
-    ) {
+    if (startIsDragged) {
       updates.suggestedBinding = start.element
         ? {
             element: start.element,
@@ -2585,13 +2492,12 @@ const pointDraggingUpdates = (
     updates.suggestedBinding = app.state.suggestedBinding;
   }
 
-  if (end.mode === null) {
+  if (end.element === null) {
     updates.endBinding = null;
-  } else if (end.mode) {
+  } else if (end.element) {
     updates.endBinding = {
       elementId: end.element.id,
-      mode: end.mode,
-      ...calculateFixedPointForNonElbowArrowBinding(
+      ...resolveAttachPointForNonElbowBinding(
         element,
         end.element,
         "end",
@@ -2600,11 +2506,7 @@ const pointDraggingUpdates = (
       ),
     };
 
-    if (
-      endIsDragged &&
-      (updates.endBinding.mode === "orbit" ||
-        !getFeatureFlag("COMPLEX_BINDINGS"))
-    ) {
+    if (endIsDragged) {
       updates.suggestedBinding = end.element
         ? {
             element: end.element,
@@ -2658,19 +2560,6 @@ const pointDraggingUpdates = (
         : updates.endBinding,
   };
 
-  // Needed to handle a special case where an existing arrow is dragged over
-  // the same element it is bound to on the other side
-  const startIsDraggingOverEndElement =
-    element.endBinding &&
-    nextArrow.startBinding &&
-    startIsDragged &&
-    nextArrow.startBinding.elementId === element.endBinding.elementId;
-  const endIsDraggingOverStartElement =
-    element.startBinding &&
-    nextArrow.endBinding &&
-    endIsDragged &&
-    element.startBinding.elementId === nextArrow.endBinding.elementId;
-
   // We need to update the non-dragged point too if bound,
   // so we look up the old binding to trigger updateBoundPoint
   const endBindable = nextArrow.endBinding
@@ -2680,21 +2569,14 @@ const pointDraggingUpdates = (
       )! as ExcalidrawBindableElement)
     : null;
 
-  const endLocalPoint =
-    endIsDraggingOverStartElement &&
-    app.state.bindMode !== "inside" &&
-    getFeatureFlag("COMPLEX_BINDINGS")
-      ? nextArrow.points[0]
-      : endBindable
-      ? updateBoundPoint(
-          nextArrow,
-          "endBinding",
-          nextArrow.endBinding,
-          endBindable,
-          elementsMap,
-          endIsDragged,
-        ) || nextArrow.points[nextArrow.points.length - 1]
-      : nextArrow.points[nextArrow.points.length - 1];
+  const endLocalPoint = endBindable
+    ? updateBoundPoint(
+        nextArrow,
+        nextArrow.endBinding,
+        endBindable,
+        elementsMap,
+      ) || nextArrow.points[nextArrow.points.length - 1]
+    : nextArrow.points[nextArrow.points.length - 1];
 
   // We need to keep the simulated next arrow up-to-date, because
   // updateBoundPoint looks at the opposite point
@@ -2709,30 +2591,16 @@ const pointDraggingUpdates = (
       )! as ExcalidrawBindableElement)
     : null;
 
-  const startLocalPoint =
-    endIsDraggingOverStartElement && getFeatureFlag("COMPLEX_BINDINGS")
-      ? nextArrow.points[0]
-      : startIsDraggingOverEndElement &&
-        app.state.bindMode !== "inside" &&
-        getFeatureFlag("COMPLEX_BINDINGS")
-      ? endLocalPoint
-      : startBindable
-      ? updateBoundPoint(
-          nextArrow,
-          "startBinding",
-          nextArrow.startBinding,
-          startBindable,
-          elementsMap,
-          startIsDragged,
-        ) || nextArrow.points[0]
-      : nextArrow.points[0];
+  const startLocalPoint = startBindable
+    ? updateBoundPoint(
+        nextArrow,
+        nextArrow.startBinding,
+        startBindable,
+        elementsMap,
+      ) || nextArrow.points[0]
+    : nextArrow.points[0];
 
-  const endChanged =
-    !(
-      endIsDraggingOverStartElement &&
-      app.state.bindMode !== "inside" &&
-      getFeatureFlag("COMPLEX_BINDINGS")
-    ) && !!endBindable;
+  const endChanged = !!endBindable;
   const startChanged =
     pointDistance(startLocalPoint, nextArrow.points[0]) !== 0;
 

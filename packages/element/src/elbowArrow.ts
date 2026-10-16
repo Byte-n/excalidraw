@@ -28,7 +28,7 @@ import type { AppState } from "@excalidraw/excalidraw/types";
 import {
   bindPointToSnapToElementOutline,
   getHeadingForElbowArrowSnap,
-  getGlobalFixedPointForBindableElement,
+  getGlobalAttachPointForBindableElement,
   getBindingGap,
   maxBindingDistance_simple,
   BASE_BINDING_GAP_ELBOW,
@@ -60,7 +60,7 @@ import type {
   Arrowhead,
   ElementsMap,
   ExcalidrawBindableElement,
-  FixedPointBinding,
+  ElementBinding,
   FixedSegment,
   NonDeletedExcalidrawElement,
   Ordered,
@@ -88,8 +88,8 @@ type Grid = {
 type ElbowArrowState = {
   x: number;
   y: number;
-  startBinding: FixedPointBinding | null;
-  endBinding: FixedPointBinding | null;
+  startBinding: ElementBinding | null;
+  endBinding: ElementBinding | null;
   startArrowhead: Arrowhead | null;
   endArrowhead: Arrowhead | null;
 };
@@ -910,8 +910,8 @@ export const updateElbowArrowPoints = (
   updates: {
     points?: readonly LocalPoint[];
     fixedSegments?: readonly FixedSegment[] | null;
-    startBinding?: FixedPointBinding | null;
-    endBinding?: FixedPointBinding | null;
+    startBinding?: ElementBinding | null;
+    endBinding?: ElementBinding | null;
   },
   options?: {
     isDragging?: boolean;
@@ -1193,8 +1193,8 @@ const getElbowArrowData = (
   arrow: {
     x: number;
     y: number;
-    startBinding: FixedPointBinding | null;
-    endBinding: FixedPointBinding | null;
+    startBinding: ElementBinding | null;
+    endBinding: ElementBinding | null;
     startArrowhead: Arrowhead | null;
     endArrowhead: Arrowhead | null;
     points: readonly LocalPoint[];
@@ -1254,7 +1254,7 @@ const getElbowArrowData = (
       points: nextPoints,
     } as ExcalidrawElbowArrowElement,
     "start",
-    arrow.startBinding?.fixedPoint,
+    arrow.startBinding?.attachPoint,
     origStartGlobalPoint,
     hoveredStartElement,
     elementsMap,
@@ -1271,7 +1271,7 @@ const getElbowArrowData = (
       points: nextPoints,
     } as ExcalidrawElbowArrowElement,
     "end",
-    arrow.endBinding?.fixedPoint,
+    arrow.endBinding?.attachPoint,
     origEndGlobalPoint,
     hoveredEndElement,
     elementsMap,
@@ -2216,7 +2216,7 @@ const neighborIndexToHeading = (idx: number): Heading => {
 const getGlobalPoint = (
   arrow: ExcalidrawElbowArrowElement,
   startOrEnd: "start" | "end",
-  fixedPointRatio: [number, number] | undefined | null,
+  attachPointRatio: [number, number] | undefined | null,
   initialPoint: GlobalPoint,
   element?: ExcalidrawBindableElement | null,
   elementsMap?: ElementsMap,
@@ -2240,8 +2240,8 @@ const getGlobalPoint = (
   }
 
   if (element) {
-    return getGlobalFixedPointForBindableElement(
-      fixedPointRatio || [0, 0],
+    return getGlobalAttachPointForBindableElement(
+      attachPointRatio || [0, 0],
       element,
       elementsMap ?? arrayToMap([element]),
     );

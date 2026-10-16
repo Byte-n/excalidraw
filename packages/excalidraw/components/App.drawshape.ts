@@ -79,14 +79,15 @@ export class AppDrawShape {
 
   /**
    * Binds both endpoints of a freshly inserted drawShape arrow to the
-   * bindable elements they hover, if any.
+   * bindable elements they hover, if any, and then pulls both endpoints onto
+   * the targets' gap-inflated outlines.
    *
-   * Endpoints bind in "orbit" mode — the arrow starts/ends at the target's
-   * outline — even when the stroke was started or released inside the shape
-   * (a sketched connector aims at the shape, not at a point inside it). The
-   * exception is a sketch contained in a single shape: both ends then bind
-   * "inside" and stay where they were drawn, like the interactive
-   * inside→inside flow.
+   * 端点一律落到目标**外扩一个 binding gap 的轮廓**上，即使笔画起止都在同一个
+   * 图形内部 —— 连线的语义是「指向这个图形」，不是「指向图形内部的某个点」。
+   * 起止都落在同一个图形上时不再有例外：`attachPoint` 就是端点本身，端点若留在
+   * 图形内部，绑定与画出来的点会立刻对不上（随后的任何一次求解都会让它跳出图形），
+   * 所以这里和其余入口一样把端点拉出来。与交互式箭头（拖焦点手柄、在图形内部
+   * 起笔画箭头）的口径一致。
    */
   private bindRecognizedArrow = (
     arrow: NonDeleted<ExcalidrawLinearElement>,
@@ -114,8 +115,6 @@ export class AppDrawShape {
       };
     });
 
-    const sameTarget =
-      !!endpoints[0].target && endpoints[0].target === endpoints[1].target;
     const isMidpointSnappingEnabled =
       app.state.isMidpointSnappingEnabled && !app.state.gridModeEnabled;
 
@@ -124,7 +123,6 @@ export class AppDrawShape {
         bindBindingElement(
           arrow,
           target,
-          sameTarget ? "inside" : "orbit",
           startOrEnd,
           app.scene,
           globalPoint,
@@ -134,13 +132,9 @@ export class AppDrawShape {
       }
     }
 
-    if (sameTarget) {
-      return;
-    }
-
-    // pull the orbit-bound endpoints onto the target outlines; both bindings
-    // exist by now, so each endpoint clips the segment between the two focus
-    // points (mirrors the focusPoint branch of bindOrUnbindBindingElement)
+    // pull the endpoints onto the target outlines; both bindings exist by now,
+    // so each endpoint clips the segment between the two focus points
+    // (mirrors the focusPoint branch of bindOrUnbindBindingElement)
     const updates: PointsPositionUpdates = new Map();
     for (const { startOrEnd, target } of endpoints) {
       if (!target) {
@@ -148,7 +142,6 @@ export class AppDrawShape {
       }
       const point = updateBoundPoint(
         arrow,
-        startOrEnd === "start" ? "startBinding" : "endBinding",
         startOrEnd === "start" ? arrow.startBinding : arrow.endBinding,
         target,
         elementsMap,

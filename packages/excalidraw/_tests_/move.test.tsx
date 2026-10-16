@@ -1,7 +1,7 @@
 import React from "react";
 import { vi } from "vitest";
 import { KEYS, reseed } from "@excalidraw/common";
-import { bindBindingElement } from "@excalidraw/element";
+import { bindBindingElement, BASE_BINDING_GAP } from "@excalidraw/element";
 import "@excalidraw/utils/test-utils";
 
 import type {
@@ -100,14 +100,12 @@ describe("move element", () => {
       bindBindingElement(
         arrow.get() as NonDeleted<ExcalidrawArrowElement>,
         rectA.get() as NonDeleted<ExcalidrawBindableElement>,
-        "orbit",
         "start",
         h.app.scene,
       );
       bindBindingElement(
         arrow.get() as NonDeleted<ExcalidrawArrowElement>,
         rectB.get() as NonDeleted<ExcalidrawBindableElement>,
-        "orbit",
         "end",
         h.app.scene,
       );
@@ -125,11 +123,17 @@ describe("move element", () => {
     expect(h.state.selectedElementIds[rectB.id]).toBeTruthy();
     expect([rectA.x, rectA.y]).toEqual([0, 0]);
     expect([rectB.x, rectB.y]).toEqual([200, 0]);
+    // 端点贴在目标轮廓外**一个 binding gap** 处：起点落在
+    // rectA 右边缘外一个 gap，终点落在 rectB 左边缘外一个 gap
+    const bindingGap = BASE_BINDING_GAP + rectA.strokeWidth / 2;
     expect([[arrow.x, arrow.y]]).toCloselyEqualPoints(
-      [[106.00000000000001, 55.6867741935484]],
+      [[rectA.x + rectA.width + bindingGap, 50.01]],
       0,
     );
-    expect([[arrow.width, arrow.height]]).toCloselyEqualPoints([[88, 88]], 0);
+    expect([[arrow.width, arrow.height]]).toCloselyEqualPoints(
+      [[rectB.x - bindingGap - arrow.x, 93.60765957446813]],
+      0,
+    );
 
     renderInteractiveScene.mockClear();
     renderStaticScene.mockClear();
@@ -148,10 +152,13 @@ describe("move element", () => {
     expect([rectA.x, rectA.y]).toEqual([0, 0]);
     expect([rectB.x, rectB.y]).toEqual([201, 2]);
     expect([[arrow.x, arrow.y]]).toCloselyEqualPoints(
-      [[106, 55.6867741935484]],
+      [[rectA.x + rectA.width + bindingGap, 50.01]],
       0,
     );
-    expect([[arrow.width, arrow.height]]).toCloselyEqualPoints([[89, 90]], 0);
+    expect([[arrow.width, arrow.height]]).toCloselyEqualPoints(
+      [[rectB.x - bindingGap - arrow.x, 95.60765957446813]],
+      0,
+    );
 
     h.elements.forEach((element) => expect(element).toMatchSnapshot());
   });

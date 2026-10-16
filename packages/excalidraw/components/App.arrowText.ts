@@ -1,7 +1,7 @@
 import { CURSOR_TYPE, DRAGGING_THRESHOLD } from "@excalidraw/common";
 
 import {
-  bindBindingElementToFixedPoint,
+  bindBindingElementToAttachPoint,
   dragNewTextElement,
   getBoundTextElement,
   getEndpointBoundTextDragAnchor,
@@ -21,7 +21,7 @@ import type { ArrowEndpoint } from "@excalidraw/element";
 import type {
   ExcalidrawElement,
   ExcalidrawTextElement,
-  FixedPoint,
+  AttachPoint,
   NonDeleted,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
@@ -201,18 +201,18 @@ export class AppArrowText {
 
   /**
    * Binds the arrow endpoint to the created text, at the side midpoint the
-   * placement resolved (`getTextBinding`'s `fixedPoint`).
+   * placement resolved (`getTextBinding`'s `attachPoint`).
    */
   bindText(
     { arrow, startOrEnd }: ArrowEndpoint,
     text: NonDeleted<ExcalidrawTextElement>,
-    fixedPoint: FixedPoint,
+    attachPoint: AttachPoint,
   ): void {
-    bindBindingElementToFixedPoint(
+    bindBindingElementToAttachPoint(
       arrow,
       text,
       startOrEnd,
-      fixedPoint,
+      attachPoint,
       this.app.scene,
     );
   }

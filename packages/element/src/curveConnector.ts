@@ -21,7 +21,7 @@ import type {
  * canvas 描边 `traceCurvedConnectorPath`——四条消费路径不存在第二套口径。
  *
  * 边界：
- * - 不解析 `elementsMap`：端切线只读元素自己的 `binding.fixedPoint`（只有把局部
+ * - 不解析 `elementsMap`：端切线只读元素自己的 `binding.attachPoint`（只有把局部
  *   点搬到场景坐标的 `traceCurvedConnectorPath` 才需要它）。
  * - 不改 `points`：控制点的增删与端点的重投影分别归上游编辑与绑定机制。
  * - 不切分、不采样：`points` 有几段就输出几个 `C` / 一段 `bezierCurveTo`，箭头
@@ -82,17 +82,17 @@ const unitDirection = (
 };
 
 /**
- * 由归一化盒坐标（0..1，与 `binding.fixedPoint` 同口径）判定所依附的边：偏离
+ * 由归一化盒坐标（0..1，与 `binding.attachPoint` 同口径）判定所依附的边：偏离
  * 中心更大的那根轴胜出，方向取该轴上 `f − 0.5` 的符号（即该边的外法线）。两轴
  * 打平（正角点、点状目标、内部锚点）时没有确定边，返回 null 交给调用方回落。
  *
  * 曲线档的端切线与端点落点（`binding.ts`）共用它：切线指向哪条边，端点就沿
  * 那条边的外法线外移。
  */
-export const normalFromFixedPoint = (
-  fixedPoint: readonly [number, number],
+export const normalFromAttachPoint = (
+  attachPoint: readonly [number, number],
 ): CurveNormal | null => {
-  const [fx, fy] = fixedPoint;
+  const [fx, fy] = attachPoint;
   const offsetX = Math.abs(fx - 0.5);
   const offsetY = Math.abs(fy - 0.5);
   if (offsetX - offsetY > EDGE_AXIS_EPSILON) {
@@ -107,7 +107,7 @@ export const normalFromFixedPoint = (
 /**
  * 该端的端切线方向，按三种情况决定：
  *
- * 1. **该端绑在图形上**（`binding.fixedPoint` 判得出确定的边）→ 那条边的轴对齐
+ * 1. **该端绑在图形上**（`binding.attachPoint` 判得出确定的边）→ 那条边的轴对齐
  *    外法线，于是曲线垂直出/入边。手柄建的、复制图形出来的连线都走这一支。
  * 2. **没绑、且只有两个点**（没有控制点）→ 弦的**主轴**：水平与垂直里更长的
  *    那根轴，符号由起点指向终点。弦完全水平或垂直时两端切线与弦共线，曲线自然
@@ -128,9 +128,9 @@ export const getCurvedConnectorEndNormal = (
   end: "start" | "end",
 ): CurveNormal => {
   const binding = end === "start" ? element.startBinding : element.endBinding;
-  const fixedPoint = binding?.fixedPoint;
-  if (fixedPoint) {
-    const normal = normalFromFixedPoint(fixedPoint);
+  const attachPoint = binding?.attachPoint;
+  if (attachPoint) {
+    const normal = normalFromAttachPoint(attachPoint);
     if (normal) {
       return normal;
     }

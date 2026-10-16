@@ -321,7 +321,6 @@ class App extends React.Component<AppProps, AppState> {
   });
   public wheel: AppWheel = new AppWheel(this);
 
-  bindModeHandler: ReturnType<typeof setTimeout> | null = null;
   public textWysiwygSubmitHandler: ReturnType<typeof textWysiwyg> | null = null;
 
   hitLinkElement?: NonDeletedExcalidrawElement;
@@ -722,28 +721,6 @@ class App extends React.Component<AppProps, AppState> {
 
   private onWindowMessage = (event: MessageEvent) =>
     this.embeds.onWindowMessage(event);
-
-  public handleSkipBindMode() {
-    return keyboardController.handleSkipBindMode(this);
-  }
-
-  public resetDelayedBindMode() {
-    return keyboardController.resetDelayedBindMode(this);
-  }
-
-  private previousHoveredBindableElement: NonDeletedExcalidrawElement | null =
-    null;
-
-  public handleDelayedBindModeChange(
-    arrow: ExcalidrawLinearElement,
-    hoveredElement: NonDeletedExcalidrawElement | null,
-  ) {
-    return keyboardController.handleDelayedBindModeChange(
-      this,
-      arrow,
-      hoveredElement,
-    );
-  }
 
   /**
    * Returns gridSize taking into account `gridModeEnabled`.
