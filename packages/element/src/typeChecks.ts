@@ -425,6 +425,8 @@ export const isBindableElement = <T extends ExcalidrawElement>(
   return (
     element != null &&
     (!element.locked || includeLocked === true) &&
+    // 时序图形（`sc-*`）刻意不在此列：把箭头/消息绑到生命线与激活条属尚未实现的
+    // 交互，将来也只按「只有激活条可连、生命线不直连」的口径补。
     (element.type === "composite" ||
       element.type === "flow" ||
       element.type === "stickynote" ||

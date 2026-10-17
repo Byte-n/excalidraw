@@ -215,7 +215,7 @@ export class API {
       ? ExcalidrawTextElement["verticalAlign"]
       : never;
     boundElements?: ExcalidrawGenericElement["boundElements"];
-    shape?: T extends "composite" | "flow" | ShapeId
+    shape?: T extends "composite" | "flow" | "sequence" | ShapeId
       ? ExcalidrawShapeElement["shape"]
       : never;
     baseHeight?: T extends "stickynote"
