@@ -12,3 +12,4 @@
 
 - 绘制**不入场景**的元素（跟随光标的预设预览、拖出预览等）时，必须传显式 `id` 与 `seed`：构造函数默认会消耗全局的 id 计数器与随机序列，把同一会话里后续真实元素的 id/seed 整体推后一位，导致一批无关的快照测试失败。见 [docs/offscreen-preview-identity.md](docs/offscreen-preview-identity.md)。
 - 断言「元素没了」用 `h.elements.filter((el) => !el.isDeleted)`：`window.h.elements` 是 `getElementsIncludingDeleted()`，撤销只置墓碑。
+- 目前项目没有任何历史数据，所以任何变更都不需要处理兼容性问题，也严格禁止做兼容性处理，甚至代码注释中也不能提及任何历史数据结构、逻辑等。 
