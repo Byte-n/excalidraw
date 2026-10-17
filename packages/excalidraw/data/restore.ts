@@ -684,6 +684,7 @@ export const restoreElement = (
     // generic elements
     case "composite":
     case "flow":
+    case "sequence":
       assertShapeElementType(element.type, element.shape);
       return restoreElementWithProperties(element, { shape: element.shape });
     case "table": {
@@ -988,7 +989,11 @@ export const restoreElements = <T extends ExcalidrawElement>(
       if (element.type === "selection") {
         return elements;
       }
-      if (element.type === "composite" || element.type === "flow") {
+      if (
+        element.type === "composite" ||
+        element.type === "flow" ||
+        element.type === "sequence"
+      ) {
         assertShapeElementType(element.type, element.shape);
       } else if (element.type === "mindmap-node") {
         assertMindmapShapeData(element.shape);

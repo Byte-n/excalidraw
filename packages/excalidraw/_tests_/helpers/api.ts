@@ -402,6 +402,16 @@ export class API {
       case "fc-hexagon":
       case "fc-off-page-connector":
       case "fc-circle":
+      case "sc-lifeline-entity":
+      case "sc-lifeline-control":
+      case "sc-lifeline-boundary":
+      case "sc-lifeline-actor":
+      case "sc-lifeline-queue":
+      case "sc-lifeline-data-base":
+      case "sc-lifeline-object":
+      case "sc-lifeline-collection":
+      case "sc-activation":
+      case "sc-fragment":
         element = rest.shape
           ? newElement({
               type: shapeElementType(rest.shape.id),
@@ -423,6 +433,13 @@ export class API {
       case "flow":
         element = newElement({
           type: "flow",
+          shape: rest.shape!,
+          ...base,
+        });
+        break;
+      case "sequence":
+        element = newElement({
+          type: "sequence",
           shape: rest.shape!,
           ...base,
         });

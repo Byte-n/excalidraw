@@ -124,7 +124,7 @@ describe("图形抽屉的开合", () => {
 
   afterEach(() => restoreOriginalGetBoundingClientRect());
 
-  it("点「更多功能」打开抽屉，标题与六个分区按 基础→流程图→便签→画框→表格→脑图 出现", () => {
+  it("点「更多功能」打开抽屉，标题与七个分区按 基础→流程图→时序图→便签→画框→表格→脑图 出现", () => {
     // 抽屉常挂载：打开前即已存在，但为关闭态
     expect(drawerRoot()).not.toBeNull();
     expect(drawerRoot()).toHaveAttribute("data-open", "false");
@@ -143,7 +143,7 @@ describe("图形抽屉的开合", () => {
       drawerRoot()!.querySelector(".shape-drawer__title")?.textContent,
     ).toBe(t("shapeDrawer.title"));
 
-    // 六个分区标题与顺序
+    // 七个分区标题与顺序
     expect(
       Array.from(
         document.querySelectorAll<HTMLElement>(
@@ -153,6 +153,7 @@ describe("图形抽屉的开合", () => {
     ).toEqual([
       "shape-drawer-group-basic",
       "shape-drawer-group-flowchart",
+      "shape-drawer-group-sequence",
       "shape-drawer-group-sticky",
       "shape-drawer-group-frame",
       "shape-drawer-group-table",
@@ -165,6 +166,7 @@ describe("图形抽屉的开合", () => {
     ).toEqual([
       t("shapeDrawer.basic"),
       t("shapeDrawer.flowchart"),
+      t("shapeDrawer.sequence"),
       t("shapeDrawer.sticky"),
       t("shapeDrawer.frame"),
       t("shapeDrawer.table"),
@@ -238,11 +240,18 @@ describe("图形抽屉的分区折叠", () => {
 
   afterEach(() => restoreOriginalGetBoundingClientRect());
 
-  it("默认只展开「基础图形」，其余五个分区的网格不可见", () => {
+  it("默认只展开「基础图形」，其余六个分区的网格不可见", () => {
     expect(groupToggle("basic")).toHaveAttribute("aria-expanded", "true");
     expect(groupPanel("basic")).not.toHaveAttribute("hidden");
 
-    for (const id of ["flowchart", "sticky", "frame", "table", "mindmap"]) {
+    for (const id of [
+      "flowchart",
+      "sequence",
+      "sticky",
+      "frame",
+      "table",
+      "mindmap",
+    ]) {
       expect(groupToggle(id)).toHaveAttribute("aria-expanded", "false");
       expect(groupPanel(id)).toHaveAttribute("hidden");
     }
@@ -261,6 +270,21 @@ describe("图形抽屉的分区折叠", () => {
     expect(
       panel.querySelector('[data-testid="shape-drawer-item-fc-diamond"]'),
     ).not.toBeNull();
+  });
+
+  it("展开时序图分区后其 10 个 sc-* 格子可见", () => {
+    const toggle = groupToggle("sequence");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(groupPanel("sequence")).toHaveAttribute("hidden");
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const panel = groupPanel("sequence");
+    expect(panel).not.toHaveAttribute("hidden");
+    expect(
+      panel.querySelectorAll('[data-testid^="shape-drawer-item-sc-"]'),
+    ).toHaveLength(10);
   });
 });
 
@@ -309,6 +333,40 @@ describe("图形抽屉的单击放置", () => {
     // 取用面板语义：不武装工具、不动工具栏的「当前图形」
     expect(h.state.activeTool.type).toBe(toolBefore);
     expect(h.state.preferredGenericShape).toBe(shapeBefore);
+  });
+
+  it("时序图：点 sc-* → 落一份 type=sequence 的图形，尺寸/填色/线宽取预设", () => {
+    expandGroup("sequence");
+
+    placeItem("sc-lifeline-entity");
+    placeItem("sc-fragment");
+
+    const created = live().filter(isShapeElement);
+    expect(created).toHaveLength(2);
+
+    const lifeline = created.find(
+      (element) => element.shape.id === "sc-lifeline-entity",
+    )!;
+    expect(lifeline).toMatchObject({
+      type: "sequence",
+      shape: { id: "sc-lifeline-entity", schemaVersion: 1 },
+      width: SHAPE_PRESET_DEFAULTS["sc-lifeline-entity"].width,
+      height: SHAPE_PRESET_DEFAULTS["sc-lifeline-entity"].height,
+      backgroundColor: COLOR_PALETTE.blue[0],
+      strokeWidth: 1,
+    });
+
+    const fragment = created.find(
+      (element) => element.shape.id === "sc-fragment",
+    )!;
+    expect(fragment).toMatchObject({
+      type: "sequence",
+      shape: { id: "sc-fragment", schemaVersion: 1 },
+      width: SHAPE_PRESET_DEFAULTS["sc-fragment"].width,
+      height: SHAPE_PRESET_DEFAULTS["sc-fragment"].height,
+      backgroundColor: COLOR_PALETTE.gray[0],
+      strokeWidth: 1,
+    });
   });
 
   it("基础图形：点 cube → 落一份 cube 复合图形", () => {
@@ -655,11 +713,11 @@ describe("手机竖屏走底部面板分支", () => {
       `${SHAPE_SHEET_HEIGHT_RATIO * 100}%`,
     );
 
-    // 桌面左侧抽屉分支没有出现；内容仍是同一份目录（六个分区）
+    // 桌面左侧抽屉分支没有出现；内容仍是同一份目录（七个分区）
     expect(document.querySelector("aside.shape-drawer")).toBeNull();
     expect(
       document.querySelectorAll('[data-testid^="shape-drawer-group-"]'),
-    ).toHaveLength(6);
+    ).toHaveLength(7);
   });
 
   it("点遮罩不收起，点弹层内收起按钮才收起", () => {

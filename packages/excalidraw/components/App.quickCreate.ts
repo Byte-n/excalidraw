@@ -55,7 +55,11 @@ import type {
 import { getCurrentItemArrowProps } from "./app/arrowCreation";
 import { getPresetSize } from "./app/createPresets";
 import { buildPresetElementsCentered } from "./app/presetPlacement";
-import { getCatalogItem, isFlowchartShapeId } from "./presetCatalog";
+import {
+  getCatalogItem,
+  isFlowchartShapeId,
+  isSequenceShapeId,
+} from "./presetCatalog";
 
 import type { CreationIdentity } from "./app/createPresets";
 import type {
@@ -1505,7 +1509,9 @@ export class AppQuickCreate {
       top: event.clientY - offsetTop,
       left: event.clientX - offsetLeft,
     };
-    const groupId: PresetCatalogGroupId = isFlowchartShapeId(source.shape.id)
+    const groupId: PresetCatalogGroupId = isSequenceShapeId(source.shape.id)
+      ? "sequence"
+      : isFlowchartShapeId(source.shape.id)
       ? "flowchart"
       : "basic";
     this.pendingInsert = {

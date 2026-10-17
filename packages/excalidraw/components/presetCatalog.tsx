@@ -4,6 +4,7 @@ import {
   supportsFill,
   BASIC_SHAPE_IDS,
   FLOWCHART_SHAPE_IDS,
+  SEQUENCE_SHAPE_IDS,
 } from "@excalidraw/element";
 
 import type {
@@ -15,6 +16,7 @@ import type {
 import type { MindmapLayoutDirection, Theme } from "@excalidraw/element/types";
 
 import { getCompositeShapeIcon } from "./CompositeShapeIcon";
+import { getSequenceShapeIcon } from "./SequenceShapeIcon";
 import { getStickyNotePresetIcon } from "./StickyNotePresetIcon";
 import { getTablePresetIcon } from "./TablePresetIcon";
 import {
@@ -61,6 +63,7 @@ export type PresetCatalogItem = {
 export type PresetCatalogGroupId =
   | "basic"
   | "flowchart"
+  | "sequence"
   | "sticky"
   | "frame"
   | "table"
@@ -77,10 +80,14 @@ export type PresetCatalogGroup = {
  * place — `@excalidraw/element` (`compositeShape/family.ts`). They are
  * re-exported here so the rest of the app keeps its import paths.
  */
-export type { BasicShapeId, FlowchartShapeId } from "@excalidraw/element";
-export { isFlowchartShapeId } from "@excalidraw/element";
+export type {
+  BasicShapeId,
+  FlowchartShapeId,
+  SequenceShapeId,
+} from "@excalidraw/element";
+export { isFlowchartShapeId, isSequenceShapeId } from "@excalidraw/element";
 
-/** The full 43-id shape union (basic + flowchart). */
+/** The full 53-id shape union (basic + flowchart + sequence). */
 export type GenericShapeId = ShapeId;
 
 export { isShapeId as isGenericShapeId } from "@excalidraw/element";
@@ -120,6 +127,16 @@ const FLOWCHART_ITEMS: readonly PresetCatalogItem[] = FLOWCHART_SHAPE_IDS.map(
     titleKey: `toolBar.${id}`,
     fillable: supportsFill(id),
     getIcon: () => getCompositeShapeIcon(id),
+    creation: { kind: "shape", tool: "rectangle", shapeId: id },
+  }),
+);
+
+const SEQUENCE_ITEMS: readonly PresetCatalogItem[] = SEQUENCE_SHAPE_IDS.map(
+  (id): PresetCatalogItem => ({
+    id,
+    titleKey: `toolBar.${id}`,
+    fillable: supportsFill(id),
+    getIcon: () => getSequenceShapeIcon(id),
     creation: { kind: "shape", tool: "rectangle", shapeId: id },
   }),
 );
@@ -203,7 +220,7 @@ const MINDMAP_ITEMS: readonly PresetCatalogItem[] = [
 ];
 
 /**
- * 形状/预设的**唯一**目录，六个分组按抽屉的展示顺序排列。顶部 popover 与
+ * 形状/预设的**唯一**目录，七个分组按抽屉的展示顺序排列。顶部 popover 与
  * 抽屉都从这里取数，禁止各渲染点自维护清单。
  */
 export const SHAPE_CATALOG: readonly PresetCatalogGroup[] = [
@@ -213,13 +230,18 @@ export const SHAPE_CATALOG: readonly PresetCatalogGroup[] = [
     titleKey: "shapeDrawer.flowchart",
     items: FLOWCHART_ITEMS,
   },
+  {
+    id: "sequence",
+    titleKey: "shapeDrawer.sequence",
+    items: SEQUENCE_ITEMS,
+  },
   { id: "sticky", titleKey: "shapeDrawer.sticky", items: STICKY_ITEMS },
   { id: "frame", titleKey: "shapeDrawer.frame", items: FRAME_ITEMS },
   { id: "table", titleKey: "shapeDrawer.table", items: TABLE_ITEMS },
   { id: "mindmap", titleKey: "shapeDrawer.mindmap", items: MINDMAP_ITEMS },
 ];
 
-/** 六个分组的全部条目，按目录顺序展平 —— 放置/拖拽按 id 查项时用 */
+/** 七个分组的全部条目，按目录顺序展平 —— 放置/拖拽按 id 查项时用 */
 export const ALL_PRESET_ITEMS: readonly PresetCatalogItem[] =
   SHAPE_CATALOG.flatMap((group) => group.items);
 

@@ -314,7 +314,8 @@ const renderElementToSvg = (
     case "mindmap-node":
     case "mindmap-edge":
     case "composite":
-    case "flow": {
+    case "flow":
+    case "sequence": {
       const shape = ShapeCache.generateElementShape(element, renderConfig);
       const nodes = (Array.isArray(shape) ? shape : [shape]).map((drawable) =>
         roughSVGDrawWithPrecision(rsvg, drawable, MAX_DECIMALS_FOR_SVG_EXPORT),

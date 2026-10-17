@@ -17,10 +17,11 @@ const PALETTE_COLORS = Object.values(COLOR_PALETTE).flatMap((value) =>
 );
 
 describe("SHAPE_PRESET_DEFAULTS", () => {
-  it("键集合 == 目录 basic + flowchart 的预设 id 集合（加预设忘配默认值会红）", () => {
+  it("键集合 == 目录 basic + flowchart + sequence 的预设 id 集合（加预设忘配默认值会红）", () => {
     const catalogIds = [
       ...getCatalogGroup("basic").items,
       ...getCatalogGroup("flowchart").items,
+      ...getCatalogGroup("sequence").items,
     ].map((item) => item.id);
 
     expect(Object.keys(SHAPE_PRESET_DEFAULTS).sort()).toEqual(
@@ -53,7 +54,7 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
   });
 
   /**
-   * 43 行逐条对照样本：填色为**映射后**的色板值、尺寸取样本取整。表里写的是
+   * 53 行逐条对照样本：填色为**映射后**的色板值、尺寸取样本取整。表里写的是
    * 字面量（不是 `COLOR_PALETTE.*`），所以有人悄悄改实现表会在这一条上红。
    */
   const ROWS: {
@@ -193,11 +194,64 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
       height: 100,
     },
     { id: "fc-circle", backgroundColor: "#ebfbee", width: 80, height: 80 },
+
+    // —— 时序图形（10）——
+    // 生命线填色来自样本 `#f0f4fc` → blue[0]；尺寸 = 头部盒宽 ×（头部高 + 360）
+    {
+      id: "sc-lifeline-entity",
+      backgroundColor: "#e8f0f8",
+      width: 64,
+      height: 428.272,
+    },
+    {
+      id: "sc-lifeline-control",
+      backgroundColor: "#e8f0f8",
+      width: 64,
+      height: 434.272,
+    },
+    {
+      id: "sc-lifeline-boundary",
+      backgroundColor: "#e8f0f8",
+      width: 76,
+      height: 428.272,
+    },
+    {
+      id: "sc-lifeline-actor",
+      backgroundColor: "#e8f0f8",
+      width: 84,
+      height: 478.272,
+    },
+    {
+      id: "sc-lifeline-queue",
+      backgroundColor: "#e8f0f8",
+      width: 100,
+      height: 420,
+    },
+    {
+      id: "sc-lifeline-data-base",
+      backgroundColor: "#e8f0f8",
+      width: 68,
+      height: 450,
+    },
+    {
+      id: "sc-lifeline-object",
+      backgroundColor: "#e8f0f8",
+      width: 120,
+      height: 420,
+    },
+    {
+      id: "sc-lifeline-collection",
+      backgroundColor: "#e8f0f8",
+      width: 118,
+      height: 428,
+    },
+    { id: "sc-activation", backgroundColor: "#c5d7e9", width: 30, height: 100 },
+    { id: "sc-fragment", backgroundColor: "#f4f4f4", width: 400, height: 240 },
   ];
 
-  it("恰好 43 行（29 基础 + 14 流程图），与表本身逐条对照", () => {
-    expect(ROWS).toHaveLength(43);
-    expect(Object.keys(SHAPE_PRESET_DEFAULTS)).toHaveLength(43);
+  it("恰好 53 行（29 基础 + 14 流程图 + 10 时序），与表本身逐条对照", () => {
+    expect(ROWS).toHaveLength(53);
+    expect(Object.keys(SHAPE_PRESET_DEFAULTS)).toHaveLength(53);
   });
 
   it.each(ROWS)(

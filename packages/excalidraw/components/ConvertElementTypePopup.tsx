@@ -112,6 +112,11 @@ type ExcalidrawConvertibleElement =
   | ExcalidrawEllipseElement
   | ExcalidrawLinearElement;
 
+// Sequence (`sc-*`) ids are intentionally absent. The popup paints every option
+// via `getCompositeShapeIcon` (whole-element outline in a 16px box), which
+// misrenders the sequence head boxes, and `convertElementType` carries the
+// source box over without the lifeline `headHeight + 360` preset sizing. Every
+// sequence shape is created from the shape drawer instead.
 // indicates order of switching
 const GENERIC_TYPES: readonly ShapeId[] = [
   "rectangle",

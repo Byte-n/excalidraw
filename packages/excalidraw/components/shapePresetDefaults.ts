@@ -7,7 +7,8 @@ import {
 import type { GenericShapeId } from "./presetCatalog";
 
 /**
- * 预设图形的**默认填充色与默认尺寸**表（43 行：29 个基础图形 + 14 个流程图图形）。
+ * 预设图形的**默认填充色与默认尺寸**表（53 行：29 个基础图形 + 14 个流程图图形
+ * + 10 个时序图形）。
  *
  * 取值来源是平台样本（Lark 侧 `composite`）——
  * `docs/lark-exmples/flow-chart/lark-examples-data.json` 与
@@ -44,7 +45,7 @@ export type ShapePresetDefault = {
 };
 
 /**
- * 全部 43 个预设共用的**规范样式**（除 shape / 填色 / 尺寸外完全一致，
+ * 全部 53 个预设共用的**规范样式**（除 shape / 填色 / 尺寸外完全一致，
  * 文本为空）。逐项对应样本：`strokeColor` = `DEFAULT_NEW_ELEMENT_STROKE_COLOR`
  * （`#1f2329` 既是 `#000000` 的最近色板色也是项目墨色）、`strokeWidth` =
  * `STROKE_WIDTH.thin`（1，对应样本 `narrow`）、`strokeStyle` = `solid`、
@@ -60,9 +61,9 @@ export const SHAPE_PRESET_STYLE = {
 } as const;
 
 /**
- * 43 行默认值：key 用 `GenericShapeId`（`import type` 自 `./presetCatalog`），
+ * 53 行默认值：key 用 `GenericShapeId`（`import type` 自 `./presetCatalog`），
  * 目录里加预设而忘配默认值会直接 typecheck 失败。顺序为基础组（`BASIC_SHAPE_IDS`
- * 顺序）在前，14 个 `fc-*` 在后。
+ * 顺序）在前，14 个 `fc-*`、10 个 `sc-*` 依次在后。
  */
 export const SHAPE_PRESET_DEFAULTS: Readonly<
   Record<GenericShapeId, ShapePresetDefault>
@@ -228,6 +229,63 @@ export const SHAPE_PRESET_DEFAULTS: Readonly<
     backgroundColor: COLOR_PALETTE.green[0],
     width: 80,
     height: 80,
+  },
+
+  // —— 时序图形（10）——
+  // 8 个生命线填色来自样本 `#f0f4fc`（蓝系浅档，与 round-rect 同源 → blue[0]）；
+  // 尺寸 = 头部盒宽 ×（头部高 + 360 虚线杆），头部高逐 id 取自样本。
+  "sc-lifeline-entity": {
+    backgroundColor: COLOR_PALETTE.blue[0],
+    width: 64,
+    height: 428.272,
+  },
+  "sc-lifeline-control": {
+    backgroundColor: COLOR_PALETTE.blue[0],
+    width: 64,
+    height: 434.272,
+  },
+  "sc-lifeline-boundary": {
+    backgroundColor: COLOR_PALETTE.blue[0],
+    width: 76,
+    height: 428.272,
+  },
+  "sc-lifeline-actor": {
+    backgroundColor: COLOR_PALETTE.blue[0],
+    width: 84,
+    height: 478.272,
+  },
+  "sc-lifeline-queue": {
+    backgroundColor: COLOR_PALETTE.blue[0],
+    width: 100,
+    height: 420,
+  },
+  "sc-lifeline-data-base": {
+    backgroundColor: COLOR_PALETTE.blue[0],
+    width: 68,
+    height: 450,
+  },
+  "sc-lifeline-object": {
+    backgroundColor: COLOR_PALETTE.blue[0],
+    width: 120,
+    height: 420,
+  },
+  "sc-lifeline-collection": {
+    backgroundColor: COLOR_PALETTE.blue[0],
+    width: 118,
+    height: 428,
+  },
+  // 激活条样本填 `#d6dcf3`（蓝系深档，与 fc 的 blue[1] 规则一致）
+  "sc-activation": {
+    backgroundColor: COLOR_PALETTE.blue[1],
+    width: 30,
+    height: 100,
+  },
+  // 组合片段外框不填、只填左上页签；页签填 `#f5f5f5` → gray[0]（不填则 options.fill
+  // 为空、页签不填）
+  "sc-fragment": {
+    backgroundColor: COLOR_PALETTE.gray[0],
+    width: 400,
+    height: 240,
   },
 };
 

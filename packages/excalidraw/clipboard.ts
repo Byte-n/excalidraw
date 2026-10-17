@@ -573,7 +573,11 @@ export const parseClipboard = async (
         return { errorMessage: "Unsupported clipboard format" };
       }
       for (const element of systemClipboardData.elements) {
-        if (element.type === "composite" || element.type === "flow") {
+        if (
+          element.type === "composite" ||
+          element.type === "flow" ||
+          element.type === "sequence"
+        ) {
           try {
             assertShapeElementType(element.type, element.shape);
           } catch {
