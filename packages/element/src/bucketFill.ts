@@ -576,6 +576,7 @@ export const rendersOpaqueFill = (element: ExcalidrawElement): boolean => {
 const FILL_BOUNDARY_TYPES = new Set<ExcalidrawElement["type"]>([
   "composite",
   "flow",
+  "sequence",
   "frame",
   "magicframe",
   "line",

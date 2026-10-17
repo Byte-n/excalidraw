@@ -680,6 +680,7 @@ const VALID_CONTAINER_TYPES = new Set([
   "mindmap-node",
   "composite",
   "flow",
+  "sequence",
   "rectangle",
   "stickynote",
   "ellipse",

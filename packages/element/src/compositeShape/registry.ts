@@ -48,6 +48,16 @@ import {
   insetRect,
   type CompositeShapeTextBounds,
 } from "./textBounds";
+import {
+  SEQUENCE_LIFELINE_HEAD_HEIGHTS,
+  drawSequenceLifeline,
+  getSequenceElementBox,
+  getSequenceFragmentTabPath,
+  getSequenceFragmentTextBounds,
+  getSequenceLifelineGeometry,
+  getSequenceLifelineTextBounds,
+  type SequenceLifelineId,
+} from "./sequenceOutline";
 
 import { SHAPE_IDS } from "./family";
 
@@ -289,6 +299,17 @@ const validateCircularParams = (data: unknown) => {
     isFiniteInRange(value.radius, 0.01, 1e6) &&
     isFiniteInRange(value.sectorRatio, 0, 1) &&
     isFiniteInRange(value.startRadialLineAngle, -360, 360)
+  );
+};
+
+const validateLifelineParams = (data: unknown) => {
+  const value = data as Record<string, unknown> | undefined;
+  return (
+    !!value &&
+    hasOnlyKeys(value, ["headHeight"]) &&
+    typeof value.headHeight === "number" &&
+    Number.isFinite(value.headHeight) &&
+    value.headHeight > 0
   );
 };
 
@@ -818,6 +839,35 @@ const stepPoints: ShapePoints<"step"> = (input) => {
     [0, h],
     [w * 0.2, h * 0.5],
   ];
+};
+
+/**
+ * A lifeline: element-box outline envelope, stroke-only attachments in
+ * `details`, and the id's dedicated head/pole drawing.
+ */
+const sequenceLifelineShape = <K extends SequenceLifelineId>(
+  id: K,
+): ShapeRegistration<K> => {
+  const headHeightOf = (shape: ShapeData): number =>
+    "lifeline" in shape ? shape.lifeline.headHeight : 0;
+  return {
+    defaultParams: {
+      lifeline: { headHeight: SEQUENCE_LIFELINE_HEAD_HEIGHTS[id] },
+    } as ShapeParams<K>,
+    points: (input) =>
+      flattenCompositeShapePath(
+        getSequenceElementBox(input.width, input.height),
+      ),
+    textBounds: (input) =>
+      getSequenceLifelineTextBounds(id, input.width, headHeightOf(input.shape)),
+    open: false,
+    outline: (input) => getSequenceElementBox(input.width, input.height),
+    details: (input) =>
+      getSequenceLifelineGeometry(id, input.width, headHeightOf(input.shape))
+        .attachments,
+    draw: drawSequenceLifeline,
+    param: { key: "lifeline", validate: validateLifelineParams },
+  };
 };
 
 export const SHAPES: { [K in ShapeId]: ShapeRegistration<K> } = {
@@ -1504,6 +1554,43 @@ export const SHAPES: { [K in ShapeId]: ShapeRegistration<K> } = {
     (input) => getFcCircleOutline(input.width, input.height),
     ellipseInscribedTextBounds,
   ),
+  // Sequence lives below. Lifelines declare the whole element box as their
+  // outline (envelope) and paint the head glyph, attachments and dashed pole
+  // only in `draw`, so the pole stays inside the bounds and is selectable.
+  "sc-lifeline-entity": sequenceLifelineShape("sc-lifeline-entity"),
+  "sc-lifeline-control": sequenceLifelineShape("sc-lifeline-control"),
+  "sc-lifeline-boundary": sequenceLifelineShape("sc-lifeline-boundary"),
+  "sc-lifeline-actor": sequenceLifelineShape("sc-lifeline-actor"),
+  "sc-lifeline-queue": sequenceLifelineShape("sc-lifeline-queue"),
+  "sc-lifeline-data-base": sequenceLifelineShape("sc-lifeline-data-base"),
+  "sc-lifeline-object": sequenceLifelineShape("sc-lifeline-object"),
+  "sc-lifeline-collection": sequenceLifelineShape("sc-lifeline-collection"),
+  // Activation is the plain rounded rect, drawn by the default outline path.
+  "sc-activation": defineShape(
+    (input) => getRoundedRectOutline(input.width, input.height, 5),
+    roundedCornerTextBounds(() => 5),
+  ),
+  // Fragment: box outline stroked only, the top tab filled via the shaded-face
+  // drawing (the tab also lives in `details` as a stroke-only contour).
+  "sc-fragment": {
+    defaultParams: {} as ShapeParams<"sc-fragment">,
+    points: (input) =>
+      flattenCompositeShapePath(
+        getSequenceElementBox(input.width, input.height),
+      ),
+    textBounds: (input) =>
+      getSequenceFragmentTextBounds(input.width, input.height),
+    open: false,
+    outline: (input) => getSequenceElementBox(input.width, input.height),
+    details: (input) => [getSequenceFragmentTabPath(input.width, input.height)],
+    fillFaces: (input) => [
+      {
+        path: getSequenceFragmentTabPath(input.width, input.height),
+        tone: "base",
+      },
+    ],
+    draw: drawShadedFaces,
+  },
 };
 
 /**
@@ -1527,7 +1614,9 @@ export const getShapeRegistration = (
 export const isShapeElement = <T extends ExcalidrawElement>(
   element: T | null | undefined,
 ): element is T & ExcalidrawShapeElement =>
-  element?.type === "composite" || element?.type === "flow";
+  element?.type === "composite" ||
+  element?.type === "flow" ||
+  element?.type === "sequence";
 
 export const isShapeWithId = <K extends ShapeId>(
   element: ExcalidrawElement | null | undefined,

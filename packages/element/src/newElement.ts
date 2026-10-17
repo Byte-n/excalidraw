@@ -45,6 +45,7 @@ import {
   getCompositeShapeTextFitMode,
   isBasicShapeId,
   isCompositeShapeOpen,
+  isFlowchartShapeId,
   isShapeElement,
 } from "./compositeShape";
 import { DEFAULT_MINDMAP_EDGE_ROUTING, mindmapShapeData } from "./mindmap";
@@ -87,11 +88,14 @@ import type {
   MindmapEdgeRouting,
   ShapeData,
   BasicShapeData,
+  FlowchartShapeData,
+  SequenceShapeData,
   ShapeId,
   ShapeElementType,
   ExcalidrawShapeElement,
   ExcalidrawCompositeElement,
   ExcalidrawFlowElement,
+  ExcalidrawSequenceElement,
   ExcalidrawSelectionElement,
   ExcalidrawTableElement,
 } from "./types";
@@ -218,11 +222,13 @@ const _newElementBase = <T extends ExcalidrawElement>(
 };
 
 /**
- * Type guard narrowing `ShapeData` to its basic family. Used by `newElement`
+ * Type guards narrowing `ShapeData` to a single family. Used by `newElement`
  * to pair the element `type` with the shape's family without a cast.
  */
 const isBasicShapeData = (shape: ShapeData): shape is BasicShapeData =>
   isBasicShapeId(shape.id);
+const isFlowchartShapeData = (shape: ShapeData): shape is FlowchartShapeData =>
+  isFlowchartShapeId(shape.id);
 
 export const newElement = (
   opts:
@@ -237,7 +243,9 @@ export const newElement = (
     return _newElementBase<ExcalidrawSelectionElement>("selection", opts);
   }
   const shape =
-    opts.type === "composite" || opts.type === "flow"
+    opts.type === "composite" ||
+    opts.type === "flow" ||
+    opts.type === "sequence"
       ? (assertShapeElementType(opts.type, opts.shape), opts.shape)
       : buildShapeData(opts.type);
   const baseOpts = {
@@ -262,19 +270,29 @@ export const newElement = (
             ? {}
             : { textFitMinHeight: opts.textFitMinHeight }),
         };
-  return isBasicShapeData(shape)
-    ? {
-        ..._newElementBase<ExcalidrawCompositeElement>("composite", baseOpts),
-        type: "composite",
-        shape,
-        ...textFit,
-      }
-    : {
-        ..._newElementBase<ExcalidrawFlowElement>("flow", baseOpts),
-        type: "flow",
-        shape,
-        ...textFit,
-      };
+  if (isBasicShapeData(shape)) {
+    return {
+      ..._newElementBase<ExcalidrawCompositeElement>("composite", baseOpts),
+      type: "composite",
+      shape,
+      ...textFit,
+    };
+  }
+  if (isFlowchartShapeData(shape)) {
+    return {
+      ..._newElementBase<ExcalidrawFlowElement>("flow", baseOpts),
+      type: "flow",
+      shape,
+      ...textFit,
+    };
+  }
+  const sequenceShape: SequenceShapeData = shape;
+  return {
+    ..._newElementBase<ExcalidrawSequenceElement>("sequence", baseOpts),
+    type: "sequence",
+    shape: sequenceShape,
+    ...textFit,
+  };
 };
 
 /**

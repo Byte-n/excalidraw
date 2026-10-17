@@ -84,6 +84,7 @@ export const distanceToElement = (
       return distanceToRectanguloidElement(element, elementsMap, p);
     case "composite":
     case "flow":
+    case "sequence":
       return element.shape.id === "ellipse"
         ? distanceToEllipseElement(
             element as ExcalidrawEllipseElement,

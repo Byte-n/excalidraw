@@ -482,6 +482,7 @@ export const isTextBindableContainer = <T extends ExcalidrawElement>(
     (!element.locked || includeLocked === true) &&
     (element.type === "composite" ||
       element.type === "flow" ||
+      element.type === "sequence" ||
       element.type === "stickynote" ||
       element.type === "mindmap-node" ||
       isLinearElement(element))
@@ -498,6 +499,7 @@ export const isExcalidrawElement = (
   switch (type) {
     case "composite":
     case "flow":
+    case "sequence":
       assertShapeElementType(type, element.shape);
       return true;
     case "mindmap-node":
@@ -533,6 +535,7 @@ export const isFlowchartNodeElement = <T extends ExcalidrawElement>(
   return (
     element.type === "composite" ||
     element.type === "flow" ||
+    element.type === "sequence" ||
     element.type === "stickynote"
   );
 };
@@ -660,6 +663,7 @@ export const isEligibleFrameChildType = (type: ElementOrToolType) => {
   switch (type) {
     case "composite":
     case "flow":
+    case "sequence":
     case "rectangle":
     case "stickynote":
     case "diamond":

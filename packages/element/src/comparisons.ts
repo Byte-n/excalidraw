@@ -21,6 +21,7 @@ export const supportsFill = (target: FillTarget) => {
   return (
     type === "composite" ||
     type === "flow" ||
+    type === "sequence" ||
     type === "mindmap-node" ||
     type === "stickynote" ||
     type === "iframe" ||
@@ -52,6 +53,7 @@ export const hasFillStyle = (target: FillTarget) =>
 export const hasStrokeColor = (type: ElementOrToolType) =>
   type === "composite" ||
   type === "flow" ||
+  type === "sequence" ||
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "stickynote" ||
@@ -67,6 +69,7 @@ export const hasStrokeColor = (type: ElementOrToolType) =>
 export const hasStrokeWidth = (type: ElementOrToolType) =>
   type === "composite" ||
   type === "flow" ||
+  type === "sequence" ||
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "iframe" ||
@@ -81,6 +84,7 @@ export const hasStrokeWidth = (type: ElementOrToolType) =>
 export const hasStrokeStyle = (type: ElementOrToolType) =>
   type === "composite" ||
   type === "flow" ||
+  type === "sequence" ||
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "iframe" ||

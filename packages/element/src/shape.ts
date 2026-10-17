@@ -247,6 +247,7 @@ export const generateRoughOptions = (
   switch (element.type) {
     case "composite":
     case "flow":
+    case "sequence":
     case "mindmap-node":
     case "iframe":
     case "embeddable": {
@@ -977,6 +978,7 @@ const _generateElementShape = (
       );
     case "composite":
     case "flow":
+    case "sequence":
     case "iframe":
     case "embeddable": {
       if (isShapeElement(element)) {
@@ -1275,6 +1277,7 @@ export const getElementShape = <Point extends GlobalPoint | LocalPoint>(
       );
     case "composite":
     case "flow":
+    case "sequence":
     case "stickynote":
     case "frame":
     case "magicframe":

@@ -34,6 +34,7 @@ import {
   updateCompositeShapeControlPoint,
   BASIC_SHAPE_IDS,
   FLOWCHART_SHAPE_IDS,
+  SEQUENCE_SHAPE_IDS,
   SHAPE_IDS,
   shapeElementType,
 } from "../src/compositeShape";
@@ -1649,14 +1650,19 @@ describe("composite shape data", () => {
   it("maps every shape id to its family element type", () => {
     expect(BASIC_SHAPE_IDS).toHaveLength(29);
     expect(FLOWCHART_SHAPE_IDS).toHaveLength(14);
-    expect(SHAPE_IDS).toHaveLength(43);
-    expect([...BASIC_SHAPE_IDS, ...FLOWCHART_SHAPE_IDS]).toEqual([
-      ...SHAPE_IDS,
-    ]);
+    expect(SEQUENCE_SHAPE_IDS).toHaveLength(10);
+    expect(SHAPE_IDS).toHaveLength(53);
+    expect([
+      ...BASIC_SHAPE_IDS,
+      ...FLOWCHART_SHAPE_IDS,
+      ...SEQUENCE_SHAPE_IDS,
+    ]).toEqual([...SHAPE_IDS]);
     for (const id of SHAPE_IDS) {
       const expected = (BASIC_SHAPE_IDS as readonly string[]).includes(id)
         ? "composite"
-        : "flow";
+        : (FLOWCHART_SHAPE_IDS as readonly string[]).includes(id)
+        ? "flow"
+        : "sequence";
       expect(shapeElementType(id)).toBe(expected);
     }
   });

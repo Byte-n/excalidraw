@@ -103,7 +103,11 @@ export const shouldTestInside = (element: ExcalidrawElement) => {
   // Composite shapes are selectable from their full range regardless of
   // background or bound text. Open shapes use their rectangular text area;
   // closed shapes are further constrained by their actual outline below.
-  if (element.type === "composite" || element.type === "flow") {
+  if (
+    element.type === "composite" ||
+    element.type === "flow" ||
+    element.type === "sequence"
+  ) {
     return true;
   }
 
@@ -546,6 +550,7 @@ export const intersectElementWithLineSegment = (
       );
     case "composite":
     case "flow":
+    case "sequence":
       return element.shape.id === "ellipse"
         ? intersectEllipseWithLineSegment(
             element as ExcalidrawEllipseElement,

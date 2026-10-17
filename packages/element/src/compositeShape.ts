@@ -57,12 +57,37 @@ export {
   SHAPE_FAMILIES,
   BASIC_SHAPE_IDS,
   FLOWCHART_SHAPE_IDS,
+  SEQUENCE_SHAPE_IDS,
   ELEMENT_TYPE_BY_FAMILY,
   shapeFamily,
   shapeElementType,
   isBasicShapeId,
   isFlowchartShapeId,
+  isSequenceShapeId,
 } from "./compositeShape/family";
 
 export type { ShapeFamily } from "./compositeShape/family";
-export type { ShapeElementType, BasicShapeId, FlowchartShapeId } from "./types";
+export type {
+  ShapeElementType,
+  BasicShapeId,
+  FlowchartShapeId,
+  SequenceShapeId,
+} from "./types";
+
+export {
+  SEQUENCE_POLE_LENGTH,
+  SEQUENCE_LIFELINE_HEAD_HEIGHTS,
+  isSequenceLifelineShapeId,
+  getSequenceLifelineGeometry,
+  getSequenceLifelineTextBounds,
+  getSequencePolePath,
+  getSequenceElementBox,
+  getSequenceFragmentTabPath,
+  getSequenceFragmentTextBounds,
+  drawSequenceLifeline,
+} from "./compositeShape/sequenceOutline";
+
+export type {
+  SequenceLifelineId,
+  SequenceHeadGeometry,
+} from "./compositeShape/sequenceOutline";

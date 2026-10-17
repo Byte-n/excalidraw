@@ -278,14 +278,65 @@ export type FlowchartShapeData =
   | Readonly<{ id: "fc-off-page-connector"; schemaVersion: 1 }>
   | Readonly<{ id: "fc-circle"; schemaVersion: 1 }>;
 
-export type ShapeData = BasicShapeData | FlowchartShapeData;
+/**
+ * Persisted data for a sequence (Lark whiteboard sequence-diagram) shape. The
+ * eight lifeline ids persist their head height (the element height is
+ * `headHeight + 360`, so the head box must be distinguishable from the pole
+ * after scaling); activation and fragment carry no parameters.
+ */
+export type SequenceShapeData =
+  | Readonly<{
+      id: "sc-lifeline-entity";
+      schemaVersion: 1;
+      lifeline: Readonly<{ headHeight: number }>;
+    }>
+  | Readonly<{
+      id: "sc-lifeline-control";
+      schemaVersion: 1;
+      lifeline: Readonly<{ headHeight: number }>;
+    }>
+  | Readonly<{
+      id: "sc-lifeline-boundary";
+      schemaVersion: 1;
+      lifeline: Readonly<{ headHeight: number }>;
+    }>
+  | Readonly<{
+      id: "sc-lifeline-actor";
+      schemaVersion: 1;
+      lifeline: Readonly<{ headHeight: number }>;
+    }>
+  | Readonly<{
+      id: "sc-lifeline-queue";
+      schemaVersion: 1;
+      lifeline: Readonly<{ headHeight: number }>;
+    }>
+  | Readonly<{
+      id: "sc-lifeline-data-base";
+      schemaVersion: 1;
+      lifeline: Readonly<{ headHeight: number }>;
+    }>
+  | Readonly<{
+      id: "sc-lifeline-object";
+      schemaVersion: 1;
+      lifeline: Readonly<{ headHeight: number }>;
+    }>
+  | Readonly<{
+      id: "sc-lifeline-collection";
+      schemaVersion: 1;
+      lifeline: Readonly<{ headHeight: number }>;
+    }>
+  | Readonly<{ id: "sc-activation"; schemaVersion: 1 }>
+  | Readonly<{ id: "sc-fragment"; schemaVersion: 1 }>;
+
+export type ShapeData = BasicShapeData | FlowchartShapeData | SequenceShapeData;
 
 export type BasicShapeId = BasicShapeData["id"];
 export type FlowchartShapeId = FlowchartShapeData["id"];
+export type SequenceShapeId = SequenceShapeData["id"];
 export type ShapeId = ShapeData["id"];
 
 /** Top-level element `type` values for the shape families. */
-export type ShapeElementType = "composite" | "flow";
+export type ShapeElementType = "composite" | "flow" | "sequence";
 
 /** Optional text-fit fields shared by every shape element. */
 type ShapeTextFit = Readonly<{
@@ -310,9 +361,17 @@ export type ExcalidrawFlowElement = _ExcalidrawElementBase &
   }> &
   ShapeTextFit;
 
+export type ExcalidrawSequenceElement = _ExcalidrawElementBase &
+  Readonly<{
+    type: "sequence";
+    shape: SequenceShapeData;
+  }> &
+  ShapeTextFit;
+
 export type ExcalidrawShapeElement =
   | ExcalidrawCompositeElement
-  | ExcalidrawFlowElement;
+  | ExcalidrawFlowElement
+  | ExcalidrawSequenceElement;
 
 export type ExcalidrawRectangleElement = Merge<
   ExcalidrawCompositeElement,

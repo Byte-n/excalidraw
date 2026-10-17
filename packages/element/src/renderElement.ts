@@ -603,6 +603,7 @@ const drawElementOnCanvas = (
     case "mindmap-edge":
     case "composite":
     case "flow":
+    case "sequence":
     case "iframe":
     case "embeddable": {
       context.lineJoin = "round";
@@ -1349,6 +1350,7 @@ const drawElement = (
     case "mindmap-edge":
     case "composite":
     case "flow":
+    case "sequence":
     case "stickynote":
     case "line":
     case "arrow":

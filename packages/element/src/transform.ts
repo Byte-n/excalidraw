@@ -682,6 +682,7 @@ export const convertToExcalidrawElements = (
     switch (element.type) {
       case "composite":
       case "flow":
+      case "sequence":
       case "rectangle":
       case "ellipse":
       case "diamond":
@@ -724,7 +725,17 @@ export const convertToExcalidrawElements = (
       case "fc-delay":
       case "fc-hexagon":
       case "fc-off-page-connector":
-      case "fc-circle": {
+      case "fc-circle":
+      case "sc-lifeline-entity":
+      case "sc-lifeline-control":
+      case "sc-lifeline-boundary":
+      case "sc-lifeline-actor":
+      case "sc-lifeline-queue":
+      case "sc-lifeline-data-base":
+      case "sc-lifeline-object":
+      case "sc-lifeline-collection":
+      case "sc-activation":
+      case "sc-fragment": {
         const width =
           element?.label?.text && element.width === undefined
             ? 0
@@ -734,7 +745,9 @@ export const convertToExcalidrawElements = (
             ? 0
             : element?.height || DEFAULT_DIMENSION;
         excalidrawElement =
-          element.type === "composite" || element.type === "flow"
+          element.type === "composite" ||
+          element.type === "flow" ||
+          element.type === "sequence"
             ? newElement({
                 ...element,
                 type: element.type,
@@ -1052,6 +1065,7 @@ export const convertToExcalidrawElements = (
     switch (element.type) {
       case "composite":
       case "flow":
+      case "sequence":
       case "rectangle":
       case "ellipse":
       case "diamond":
@@ -1093,6 +1107,16 @@ export const convertToExcalidrawElements = (
       case "fc-hexagon":
       case "fc-off-page-connector":
       case "fc-circle":
+      case "sc-lifeline-entity":
+      case "sc-lifeline-control":
+      case "sc-lifeline-boundary":
+      case "sc-lifeline-actor":
+      case "sc-lifeline-queue":
+      case "sc-lifeline-data-base":
+      case "sc-lifeline-object":
+      case "sc-lifeline-collection":
+      case "sc-activation":
+      case "sc-fragment":
       case "stickynote":
       case "arrow": {
         if (element.label?.text) {
