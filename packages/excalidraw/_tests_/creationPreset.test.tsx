@@ -311,12 +311,26 @@ describe("工具栏路径用当前图形的预设默认", () => {
     });
   });
 
-  it("当前图形 right-triangle → 落直角三角（apexX 0）120×80", async () => {
+  it("当前图形 right-triangle → 落直角三角（无参数 id）120×80", async () => {
     armRectangleWith("right-triangle");
     pointer().clickAt(300, 240);
 
     expect(h.elements[0]).toMatchObject({
-      shape: { id: "triangle", schemaVersion: 1, triangle: { apexX: 0 } },
+      shape: { id: "right-triangle", schemaVersion: 1 },
+      x: 300,
+      y: 240,
+      width: 120,
+      height: 80,
+      backgroundColor: COLOR_PALETTE.gray[0],
+    });
+  });
+
+  it("当前图形 left-triangle → 落左直角三角（无参数 id）120×80", async () => {
+    armRectangleWith("left-triangle");
+    pointer().clickAt(300, 240);
+
+    expect(h.elements[0]).toMatchObject({
+      shape: { id: "left-triangle", schemaVersion: 1 },
       x: 300,
       y: 240,
       width: 120,

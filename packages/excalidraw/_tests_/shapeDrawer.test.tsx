@@ -322,6 +322,30 @@ describe("图形抽屉的单击放置", () => {
     });
   });
 
+  it("基础图形：直角三角是无参 id，点 right-triangle / left-triangle 各落 120×80", () => {
+    placeItem("right-triangle");
+    placeItem("left-triangle");
+
+    const created = live().filter(isCompositeShapeElement);
+    expect(created).toHaveLength(2);
+
+    const right = created.find((el) => el.shape.id === "right-triangle")!;
+    expect(right).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "right-triangle", schemaVersion: 1 },
+      width: 120,
+      height: 80,
+    });
+
+    const left = created.find((el) => el.shape.id === "left-triangle")!;
+    expect(left).toMatchObject({
+      type: "composite_shape",
+      shape: { id: "left-triangle", schemaVersion: 1 },
+      width: 120,
+      height: 80,
+    });
+  });
+
   it("尺寸可区分的预设：fc-cylinder 落 80×100、cube 落 148×106，都带默认填色与线宽 1", () => {
     expandGroup("flowchart");
     placeItem("fc-cylinder");

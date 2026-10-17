@@ -326,3 +326,135 @@ describe("flipping arrowheads", () => {
     expect(API.getElement(arrow).endArrowhead).toBe(null);
   });
 });
+
+describe("flipping reflects the triangle family", () => {
+  beforeEach(async () => {
+    await render(<Excalidraw />);
+  });
+
+  const place = <T extends ReturnType<typeof API.createElement>>(element: T) => {
+    API.setElements([element]);
+    API.setSelectedElements([element]);
+    return element;
+  };
+
+  it("swaps right-triangle ⇄ left-triangle on horizontal flip", () => {
+    // right-triangle 与 left-triangle 是无参的独立 id：斜边朝向由 id 本身决定，
+    // 横向翻转就是互换 id（而不是镜像某个 apexX 参数）
+    const triangle = place(
+      API.createElement({
+        type: "right-triangle",
+        x: 150,
+        y: 150,
+        width: 100,
+        height: 80,
+      }),
+    );
+
+    API.executeAction(actionFlipHorizontal);
+    expect(API.getElement(triangle)).toMatchObject({
+      id: triangle.id,
+      shape: { id: "left-triangle", schemaVersion: 1 },
+    });
+
+    // 翻回去（镜像是对合）
+    API.executeAction(actionFlipHorizontal);
+    expect(API.getElement(triangle)).toMatchObject({
+      id: triangle.id,
+      shape: { id: "right-triangle", schemaVersion: 1 },
+    });
+  });
+
+  it("swaps left-triangle → right-triangle on horizontal flip", () => {
+    const triangle = place(
+      API.createElement({
+        type: "left-triangle",
+        x: 150,
+        y: 150,
+        width: 100,
+        height: 80,
+      }),
+    );
+
+    API.executeAction(actionFlipHorizontal);
+    expect(API.getElement(triangle)).toMatchObject({
+      id: triangle.id,
+      shape: { id: "right-triangle", schemaVersion: 1 },
+    });
+  });
+
+  it("mirrors the apexX of the parametric triangle on horizontal flip", () => {
+    // 带参数的 `triangle` 仍走几何镜像：apexX → 1 - apexX
+    const triangle = place(
+      API.createElement({
+        type: "triangle",
+        x: 150,
+        y: 150,
+        width: 100,
+        height: 80,
+        shape: { id: "triangle", schemaVersion: 1, triangle: { apexX: 0.25 } },
+      }),
+    );
+
+    API.executeAction(actionFlipHorizontal);
+    expect(API.getElement(triangle)).toMatchObject({
+      id: triangle.id,
+      shape: { id: "triangle", triangle: { apexX: 0.75 } },
+    });
+
+    API.executeAction(actionFlipHorizontal);
+    expect(API.getElement(triangle)).toMatchObject({
+      id: triangle.id,
+      shape: { id: "triangle", triangle: { apexX: 0.25 } },
+    });
+  });
+
+  it("leaves every triangle id unchanged on vertical flip", () => {
+    // 垂直翻转不改斜边朝向：三个 id 及其参数都原样保留
+    const rightTriangle = place(
+      API.createElement({
+        type: "right-triangle",
+        x: 150,
+        y: 150,
+        width: 100,
+        height: 80,
+      }),
+    );
+    API.executeAction(actionFlipVertical);
+    expect(API.getElement(rightTriangle)).toMatchObject({
+      id: rightTriangle.id,
+      shape: { id: "right-triangle", schemaVersion: 1 },
+    });
+
+    const leftTriangle = place(
+      API.createElement({
+        type: "left-triangle",
+        x: 150,
+        y: 150,
+        width: 100,
+        height: 80,
+      }),
+    );
+    API.executeAction(actionFlipVertical);
+    expect(API.getElement(leftTriangle)).toMatchObject({
+      id: leftTriangle.id,
+      shape: { id: "left-triangle", schemaVersion: 1 },
+    });
+
+    const triangle = place(
+      API.createElement({
+        type: "triangle",
+        x: 150,
+        y: 150,
+        width: 100,
+        height: 80,
+        shape: { id: "triangle", schemaVersion: 1, triangle: { apexX: 0.25 } },
+      }),
+    );
+    API.executeAction(actionFlipVertical);
+    expect(API.getElement(triangle)).toMatchObject({
+      id: triangle.id,
+      shape: { id: "triangle", triangle: { apexX: 0.25 } },
+    });
+  });
+});

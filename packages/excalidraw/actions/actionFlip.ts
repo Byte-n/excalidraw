@@ -16,6 +16,7 @@ import { CODES, KEYS, arrayToMap } from "@excalidraw/common";
 import { CaptureUpdateAction } from "@excalidraw/element";
 
 import type {
+  BaseShapeData,
   ExcalidrawArrowElement,
   ExcalidrawElbowArrowElement,
   ExcalidrawElement,
@@ -154,6 +155,9 @@ const flipElements = (
     },
   );
 
+  // 外观由 `shape.id` 及它的参数决定，所以翻转不只是镜像几何，还要改 id/参数：
+  // `trapezoid` 的窄边分上下，垂直翻转互换；三角形的斜边分左右，横向翻转时
+  // `triangle` 镜像 `apexX`，`right-triangle` / `left-triangle` 互换 id。
   for (const element of selectedElements) {
     if (
       flipDirection === "vertical" &&
@@ -180,6 +184,21 @@ const flipElements = (
           ...shape,
           triangle: { apexX: 1 - shape.triangle.apexX },
         },
+      });
+      updateBoundElements(element, app.scene);
+    } else if (
+      flipDirection === "horizontal" &&
+      (isCompositeShapeId(element, "right-triangle") ||
+        isCompositeShapeId(element, "left-triangle"))
+    ) {
+      const nextShape: BaseShapeData = isCompositeShapeId(
+        element,
+        "right-triangle",
+      )
+        ? { id: "left-triangle", schemaVersion: 1 }
+        : { id: "right-triangle", schemaVersion: 1 };
+      app.scene.mutateElement(element, {
+        shape: nextShape as typeof element.shape,
       });
       updateBoundElements(element, app.scene);
     }

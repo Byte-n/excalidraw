@@ -87,6 +87,8 @@ describe("exportToSvg", () => {
     "hexagon",
     "star",
     "triangle",
+    "right-triangle",
+    "left-triangle",
     "round-rect",
     "rectangle-bubble",
     "pill",

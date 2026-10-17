@@ -112,8 +112,8 @@ export const SHAPE_PRESET_DEFAULTS: Readonly<
   pentagon: { backgroundColor: COLOR_PALETTE.blue[1], width: 88, height: 86 },
   hexagon: { backgroundColor: COLOR_PALETTE.violet[0], width: 98, height: 88 },
   star: { backgroundColor: COLOR_PALETTE.blue[1], width: 104, height: 100 },
-  // 三角形家族同一 shape.id，三个预设尺寸不同：triangle 108×76、
-  // right-triangle / left-triangle 120×80（left 是本地预设，沿用 right 的值）
+  // 三个三角形是三个独立的 `shape.id`，默认尺寸各自不同：
+  // triangle 108×76、right-triangle / left-triangle 120×80
   triangle: { backgroundColor: COLOR_PALETTE.gray[0], width: 108, height: 76 },
   "right-triangle": {
     backgroundColor: COLOR_PALETTE.gray[0],

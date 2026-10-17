@@ -2474,6 +2474,7 @@ describe("quick create handles", () => {
 
       const sourceGroups: [PresetCatalogGroupId, string][] = [
         ["basic", "rectangle"],
+        ["basic", "right-triangle"],
         ["flowchart", "fc-diamond"],
       ];
 

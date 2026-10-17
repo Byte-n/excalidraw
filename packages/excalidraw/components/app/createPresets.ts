@@ -95,21 +95,15 @@ export const PRESET_SIZES: Partial<
 };
 
 /**
- * 默认值表（`SHAPE_PRESET_DEFAULTS`）键的**唯一**计算处。不能只看 `shape.id`：
- * 三角形家族三个预设持久化后同为 `shape.id: "triangle"`，但预设尺寸/形状不同
- * （`triangle` 108×76、`right-triangle` 120×80、`left-triangle` 120×80）。
- * 规则与 `newCreationDraft` 里 `genericShapeId` 的解析同源：三角形伪 id 原样
- * 返回，矩形工具用「当前图形」，菱形/椭圆工具各自成键。
+ * 默认值表（`SHAPE_PRESET_DEFAULTS`）键的**唯一**计算处，与 `newCreationDraft`
+ * 里 `genericShapeId` 的解析同源：矩形工具用「当前图形」（`preferredGenericShape`
+ * 就是一个元素的 `shape.id`），菱形/椭圆及其余工具各自成键。
  */
 export const getPresetShapeId = (
   elementType: ToolType | "custom",
   preferredShape: AppState["preferredGenericShape"] | undefined,
 ): string =>
-  preferredShape === "right-triangle" || preferredShape === "left-triangle"
-    ? preferredShape
-    : elementType === "rectangle"
-    ? preferredShape ?? elementType
-    : elementType;
+  elementType === "rectangle" ? preferredShape ?? elementType : elementType;
 
 /**
  * 预设尺寸的解析顺序：图形默认值表 → `PRESET_SIZES`（便签/画框；`custom` 无
@@ -303,41 +297,20 @@ export function newCreationDraft(
     });
   }
 
-  // 抽屉放置会带上预设的图形 id，其余调用点用 appState 现值
+  // 抽屉放置会带上预设的图形 id，其余调用点用 appState 现值；两者都是元素的
+  // `shape.id`（`preferredGenericShape` 亦然）
   const preferredShape =
     overrides?.preferredGenericShape ?? state.preferredGenericShape;
   const genericShapeId: BaseShapeId =
-    preferredShape === "right-triangle" || preferredShape === "left-triangle"
-      ? "triangle"
-      : elementType === "rectangle"
-      ? preferredShape
-      : elementType;
+    elementType === "rectangle" ? preferredShape : elementType;
   // 预设图形的默认样式 + 该图形填色：命中默认值表则覆盖上面的 currentItem*
   // （描边色/线宽/线型/填充/不透明度/背景色），未命中（理论上不会）保持现状。
-  // 三角形分支解析到 triangle/right-triangle/left-triangle，同样由这张表覆盖。
   const presetDefaults = getShapePresetDefaults(
     getPresetShapeId(elementType, preferredShape),
   );
   const presetStyle = presetDefaults
     ? { ...SHAPE_PRESET_STYLE, backgroundColor: presetDefaults.backgroundColor }
     : {};
-  if (
-    preferredShape === "right-triangle" ||
-    preferredShape === "left-triangle"
-  ) {
-    return newElement({
-      type: "composite_shape",
-      shape: {
-        id: "triangle",
-        schemaVersion: 1,
-        triangle: {
-          apexX: preferredShape === "right-triangle" ? 0 : 1,
-        },
-      },
-      ...baseElementAttributes,
-      ...presetStyle,
-    });
-  }
   return newElement({
     type: genericShapeId,
     ...baseElementAttributes,

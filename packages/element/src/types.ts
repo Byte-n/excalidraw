@@ -215,6 +215,8 @@ export type BaseShapeData =
       schemaVersion: 1;
       triangle: Readonly<{ apexX: number }>;
     }>
+  | Readonly<{ id: "right-triangle"; schemaVersion: 1 }>
+  | Readonly<{ id: "left-triangle"; schemaVersion: 1 }>
   | Readonly<{ id: "round-rect"; schemaVersion: 1 }>
   | Readonly<{ id: "rectangle-bubble"; schemaVersion: 1 }>
   | Readonly<{ id: "pill"; schemaVersion: 1 }>

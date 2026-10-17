@@ -128,6 +128,8 @@ const GENERIC_TYPES: readonly BaseShapeId[] = [
   "hexagon",
   "star",
   "triangle",
+  "right-triangle",
+  "left-triangle",
   "round-rect",
   "rectangle-bubble",
   "pill",

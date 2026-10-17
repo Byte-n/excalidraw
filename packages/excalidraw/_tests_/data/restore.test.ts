@@ -163,6 +163,48 @@ describe("restoreElements", () => {
     ).toThrow("Unsupported composite shape data");
   });
 
+  it("round-trips the parameterless triangle ids through a file", () => {
+    // right-triangle / left-triangle 是无参的独立 id：文件往返后应原样保留
+    const right = API.createElement({
+      type: "right-triangle",
+      width: 120,
+      height: 80,
+    });
+    const left = API.createElement({
+      type: "left-triangle",
+      width: 120,
+      height: 80,
+    });
+    const file = JSON.parse(
+      serializeAsJSON([right, left], getDefaultAppState(), {}, "local"),
+    );
+
+    expect(restore.restoreElements(file.elements, null)).toMatchObject([
+      { type: "composite_shape", shape: { id: "right-triangle", schemaVersion: 1 } },
+      { type: "composite_shape", shape: { id: "left-triangle", schemaVersion: 1 } },
+    ]);
+  });
+
+  it("rejects parameterless triangle ids carrying a shape parameter", () => {
+    // 无参 id 只允许 { id, schemaVersion }：多带一个 triangle 参数应被拒
+    const right = API.createElement({ type: "right-triangle" });
+    expect(() =>
+      restore.restoreElements(
+        [
+          {
+            ...right,
+            shape: {
+              id: "right-triangle",
+              schemaVersion: 1,
+              triangle: { apexX: 0 },
+            },
+          },
+        ] as any,
+        null,
+      ),
+    ).toThrow("Unsupported composite shape data");
+  });
+
   it("preserves composite shape text-fit fields when reopening a file", () => {
     const element = newElement({
       type: "cube",

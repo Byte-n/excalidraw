@@ -544,4 +544,23 @@ describe("toolbar", () => {
       expect(h.state.activeTool.type).toBe(shape);
     },
   );
+
+  it("keeps rectangle for the R shortcut when a non-triangle preset is preferred", async () => {
+    // 只有 rectangle/diamond/ellipse 是「矩形工具的当前图形」：其余预设
+    // （如 right-triangle）不参与按键切换，R 仍落 rectangle，且不会覆盖用户所选
+    await render(<Excalidraw handleKeyboardGlobally />);
+
+    fireEvent.click(queryTool("rectangle")!);
+    fireEvent.click(
+      h.app.ownerDocument.querySelector<HTMLButtonElement>(
+        '.tool-popover-content [data-testid="toolbar-right-triangle"]',
+      )!,
+    );
+    expect(h.state.preferredGenericShape).toBe("right-triangle");
+
+    fireEvent.click(queryTool("arrow")!);
+    fireEvent.keyDown(h.app.ownerDocument, { key: "r" });
+    expect(h.state.activeTool.type).toBe("rectangle");
+    expect(h.state.preferredGenericShape).toBe("right-triangle");
+  });
 });

@@ -373,6 +373,8 @@ export class API {
       case "hexagon":
       case "star":
       case "triangle":
+      case "right-triangle":
+      case "left-triangle":
       case "round-rect":
       case "rectangle-bubble":
       case "pill":

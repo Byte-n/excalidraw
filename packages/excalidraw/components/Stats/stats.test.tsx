@@ -983,7 +983,12 @@ describe("element type labels", () => {
     expect(elementTypeLabel()).toBe(t("element.table"));
   });
 
-  it.each(["pie", "circular-ring"] as const)("composite shape %s", (type) => {
+  it.each([
+    "pie",
+    "circular-ring",
+    "right-triangle",
+    "left-triangle",
+  ] as const)("composite shape %s", (type) => {
     const shape = API.createElement({ type, width: 120 });
     API.setElements([shape]);
     API.setSelectedElements([shape]);

@@ -31,7 +31,7 @@ export type CreationSpec =
       kind: "shape";
       /** 落定时激活的工具：复合图形走 rectangle，菱形/椭圆各自独立 */
       tool: "rectangle" | "diamond" | "ellipse";
-      /** 真实的元素 `shape.id`（`right-triangle`/`left-triangle` 仍是 triangle） */
+      /** 元素的 `shape.id`（矩形工具的当前图形，或菱形/椭圆/预设图形各自的 id） */
       shapeId: string;
     }
   | { kind: "sticky"; preset: StickyNotePreset }
@@ -66,9 +66,8 @@ export type PresetCatalogGroup = {
 };
 
 /**
- * 基础图形 id（原 `Tools.tsx` 的 `SHAPE_TOOLS`）。`right-triangle`/
- * `left-triangle` 是伪 id：真实 `shape.id` 仍是 `triangle`，以 `apexX`
- * 区分（见 `CompositeShapeIcon` / `createPresets`）。
+ * 基础图形 id（原 `Tools.tsx` 的 `SHAPE_TOOLS`），每一项都是一个元素的
+ * `shape.id`。
  */
 const BASIC_SHAPE_IDS = [
   "rectangle",
@@ -156,8 +155,7 @@ const BASIC_ITEMS: readonly PresetCatalogItem[] = BASIC_SHAPE_IDS.map(
   (id): PresetCatalogItem => ({
     id,
     titleKey: `toolBar.${id}`,
-    fillable:
-      id === "right-triangle" || id === "left-triangle" || supportsFill(id),
+    fillable: supportsFill(id),
     getIcon: () => getBasicShapeIcon(id),
     creation: {
       kind: "shape",

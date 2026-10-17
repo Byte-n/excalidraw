@@ -477,6 +477,10 @@ export const GenericShapeToolPopover = ({
   activeTool: UIAppState["activeTool"];
   hideShortcut?: boolean;
 }) => {
+  // 当前工具若是本组的图形（经快捷键/命令面板武装），把「当前形状」同步过去。
+  // 矩形工具 + 扩展形状跳过：矩形工具承载本组所有非菱形/椭圆的 `shape.id`（含
+  // `right-triangle` / `left-triangle` 这类普通 id），此时 preferredGenericShape
+  // 正是用户刚选定的形状，不能被重置成 activeType。
   useEffect(() => {
     const activeType = activeTool.type as string;
     const preferredIsExtended =
@@ -486,11 +490,6 @@ export const GenericShapeToolPopover = ({
     if (
       isGenericShapeType(activeType) &&
       !(activeType === "rectangle" && preferredIsExtended) &&
-      !(
-        activeType === "triangle" &&
-        (app.state.preferredGenericShape === "right-triangle" ||
-          app.state.preferredGenericShape === "left-triangle")
-      ) &&
       app.state.preferredGenericShape !== activeType
     ) {
       app.setAppState({ preferredGenericShape: activeType });

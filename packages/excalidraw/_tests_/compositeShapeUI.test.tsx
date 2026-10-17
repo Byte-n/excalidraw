@@ -93,16 +93,8 @@ const flowchartPresets = [
 
 const presets = [...genericPresets, ...flowchartPresets] as const;
 
-const shapeForPreset = (preset: typeof presets[number]) => {
-  if (preset === "right-triangle" || preset === "left-triangle") {
-    return {
-      id: "triangle" as const,
-      schemaVersion: 1 as const,
-      triangle: { apexX: preset === "right-triangle" ? 0 : 1 },
-    };
-  }
-  return baseShapeData(preset as BaseShapeId);
-};
+const shapeForPreset = (preset: typeof presets[number]) =>
+  baseShapeData(preset as BaseShapeId);
 
 describe.each([
   { name: "desktop", width: 1200, height: 800, formFactor: "desktop" },
@@ -248,25 +240,15 @@ describe.each([
       const created = h.elements[h.elements.length - 1];
       expect(created).toMatchObject({
         type: "composite_shape",
-        shape: {
-          id:
-            preset === "right-triangle" || preset === "left-triangle"
-              ? "triangle"
-              : preset,
-          schemaVersion: 1,
-        },
+        shape: { id: preset, schemaVersion: 1 },
       });
+      // 只有参数化的 `triangle` 带 apexX；right-triangle / left-triangle 是
+      // 无参的独立 id，形状本身已经决定斜边朝向
       if (
         created.type === "composite_shape" &&
         created.shape.id === "triangle"
       ) {
-        expect(created.shape.triangle.apexX).toBe(
-          preset === "right-triangle"
-            ? 0
-            : preset === "left-triangle"
-            ? 1
-            : 0.5,
-        );
+        expect(created.shape.triangle.apexX).toBe(0.5);
       }
     }
     expect(h.app.scene.getNonDeletedElements()).toHaveLength(presets.length);

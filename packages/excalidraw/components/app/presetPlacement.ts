@@ -125,8 +125,8 @@ export const buildPresetElementsAt = (
             spec.shapeId as CreationDraftOverrides["preferredGenericShape"],
         },
       ) as NonDeleted<ExcalidrawNonSelectionElement>;
-      // `spec.shapeId` 就是预设 id（含 `right-triangle`/`left-triangle`），
-      // 尺寸走图形默认值表
+      // `spec.shapeId` 就是元素的 `shape.id`（`right-triangle`/`left-triangle`
+      // 亦然），尺寸走图形默认值表
       const size = getPresetSize(spec.tool, spec.shapeId, draft);
       return {
         elements: [

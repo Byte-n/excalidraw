@@ -202,6 +202,8 @@ export const BASE_SHAPE_IDS: readonly BaseShapeId[] = [
   "hexagon",
   "star",
   "triangle",
+  "right-triangle",
+  "left-triangle",
   "round-rect",
   "rectangle-bubble",
   "pill",
@@ -718,13 +720,39 @@ const roundedCornerTextBounds =
 const rectangleOutline = (input: ShapeSizeInput) =>
   getBaseRectangleOutline(input.width, input.height, 0);
 
-const trianglePoints: ShapePoints<"triangle"> = (input) => {
-  const apexX = input.shape.triangle.apexX * input.width;
-  return [
-    [apexX, 0],
-    [input.width, input.height],
-    [0, input.height],
-  ];
+/** Triangle vertex table with the apex standing at `apexX` of the width. */
+const trianglePointsAtApex = (
+  apexX: number,
+  { width, height }: ShapeSizeInput,
+): ShapePoint[] => [
+  [apexX * width, 0],
+  [width, height],
+  [0, height],
+];
+
+const trianglePoints: ShapePoints<"triangle"> = (input) =>
+  trianglePointsAtApex(input.shape.triangle.apexX, input);
+
+const rightTrianglePoints: ShapePoints<"right-triangle"> = (input) =>
+  trianglePointsAtApex(0, input);
+
+const leftTrianglePoints: ShapePoints<"left-triangle"> = (input) =>
+  trianglePointsAtApex(1, input);
+
+/** Text area of a triangle whose apex sits at `apexX` of the width. */
+const triangleTextBoundsAt = (
+  apexX: number,
+  input: ShapeSizeInput,
+): CompositeShapeTextBounds => {
+  const { width: w, height: h } = input;
+  const top = Math.min(h - TEXT_GAP, h * 0.55);
+  const left = apexX * (1 - top / h) + TEXT_GAP / w;
+  return insetRect(
+    left * w,
+    top,
+    Math.min(w - TEXT_GAP, (left + top / h - 0.08) * w),
+    h - TEXT_GAP,
+  );
 };
 
 const trapezoidPoints: ShapePoints<"trapezoid"> = (input) => {
@@ -1035,17 +1063,7 @@ export const SHAPES: { [K in BaseShapeId]: ShapeRegistration<K> } = {
   ),
   triangle: polygonShape(
     trianglePoints,
-    () => (input) => {
-      const { width: w, height: h, shape } = input;
-      const top = Math.min(h - TEXT_GAP, h * 0.55);
-      const left = shape.triangle.apexX * (1 - top / h) + TEXT_GAP / w;
-      return insetRect(
-        left * w,
-        top,
-        Math.min(w - TEXT_GAP, (left + top / h - 0.08) * w),
-        h - TEXT_GAP,
-      );
-    },
+    () => (input) => triangleTextBoundsAt(input.shape.triangle.apexX, input),
     {
       defaultParams: { triangle: { apexX: 0.5 } },
       param: { key: "triangle", validate: validateTriangleParams },
@@ -1067,6 +1085,14 @@ export const SHAPES: { [K in BaseShapeId]: ShapeRegistration<K> } = {
         return { ...shape, triangle: { apexX } };
       },
     },
+  ),
+  "right-triangle": polygonShape(
+    rightTrianglePoints,
+    () => (input) => triangleTextBoundsAt(0, input),
+  ),
+  "left-triangle": polygonShape(
+    leftTrianglePoints,
+    () => (input) => triangleTextBoundsAt(1, input),
   ),
   "round-rect": defineShape(
     (input) =>

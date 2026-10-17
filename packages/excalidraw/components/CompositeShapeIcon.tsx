@@ -10,23 +10,15 @@ import type { BaseShapeId } from "@excalidraw/element/types";
 
 import { createIcon } from "./icons";
 
-type ShapeIconId = BaseShapeId | "right-triangle" | "left-triangle";
+type ShapeIconId = BaseShapeId;
 
 export const getCompositeShapeIcon = (id: ShapeIconId) => {
-  const shapeId =
-    id === "right-triangle" || id === "left-triangle" ? "triangle" : id;
-  const shape =
-    shapeId === "triangle" && id !== "triangle"
-      ? {
-          ...baseShapeData("triangle"),
-          triangle: { apexX: id === "right-triangle" ? 0 : 1 },
-        }
-      : baseShapeData(shapeId);
+  const shape = baseShapeData(id);
   const width = id === "pill" || id === "round-rect" ? 18 : 16;
   const height = id === "pill" || id === "round-rect" ? 12 : 16;
   const x = (24 - width) / 2;
   const y = (24 - height) / 2;
-  const isOpenPath = shapeId === "cloud" || isCompositeShapeOpen(shapeId);
+  const isOpenPath = id === "cloud" || isCompositeShapeOpen(id);
   const geometry = getCompositeShapeGeometry({ width, height, shape });
   const outline = isOpenPath
     ? compositeShapePathToSvg(geometry.outline)
@@ -39,7 +31,7 @@ export const getCompositeShapeIcon = (id: ShapeIconId) => {
   // rims) render generically from the geometry; the classic cylinder keeps
   // its hand-drawn rim arc below
   const details =
-    shapeId === "cylinder" || geometry.details.length === 0
+    id === "cylinder" || geometry.details.length === 0
       ? null
       : geometry.details.map(compositeShapePathToSvg).join(" ");
 
@@ -52,7 +44,7 @@ export const getCompositeShapeIcon = (id: ShapeIconId) => {
       {details && (
         <path fill="none" d={details} transform={`translate(${x} ${y})`} />
       )}
-      {shapeId === "cylinder" && <path fill="none" d="M4 6.24 Q12 3 20 6.24" />}
+      {id === "cylinder" && <path fill="none" d="M4 6.24 Q12 3 20 6.24" />}
     </>,
     {
       width: 24,

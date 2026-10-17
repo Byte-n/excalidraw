@@ -570,6 +570,8 @@
     "hexagon": "Hexagon",
     "star": "Star",
     "triangle": "Triangle",
+    "right-triangle": "Right triangle",
+    "left-triangle": "Left triangle",
     "round-rect": "Round rectangle",
     "rectangle-bubble": "Rectangle bubble",
     "pill": "Pill",
