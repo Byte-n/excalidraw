@@ -3,7 +3,7 @@
  * derived calculations live under `./compositeShape/`; this module re-exports
  * the public surface.
  */
-export type { BaseShapeId } from "./types";
+export type { ShapeId } from "./types";
 
 export type { CompositeShapePath } from "./compositeShape/outline";
 export {
@@ -14,17 +14,17 @@ export {
 
 export type { CompositeShapeControlPoint } from "./compositeShape/registry";
 export {
-  BASE_SHAPE_IDS,
+  SHAPE_IDS,
   CUBE_CONTROL_POINT_MAX,
   CUBE_CONTROL_POINT_MIN,
-  baseShapeData,
+  buildShapeData,
   getCompositeShapeControlPoints,
   getCompositeShapePoints,
   getCompositeShapeTextBounds,
-  isBaseShapeId,
-  isCompositeShapeElement,
-  isCompositeShapeId,
-  isCompositeShapeIdIn,
+  isShapeId,
+  isShapeElement,
+  isShapeWithId,
+  isShapeWithIdIn,
   isCompositeShapeOpen,
   updateCompositeShapeControlPoint,
 } from "./compositeShape/registry";
@@ -48,4 +48,21 @@ export {
   getCompositeShapeOffsetPaths,
 } from "./compositeShape/geometry";
 
-export { assertBaseShapeData } from "./compositeShape/validation";
+export {
+  assertShapeData,
+  assertShapeElementType,
+} from "./compositeShape/validation";
+
+export {
+  SHAPE_FAMILIES,
+  BASIC_SHAPE_IDS,
+  FLOWCHART_SHAPE_IDS,
+  ELEMENT_TYPE_BY_FAMILY,
+  shapeFamily,
+  shapeElementType,
+  isBasicShapeId,
+  isFlowchartShapeId,
+} from "./compositeShape/family";
+
+export type { ShapeFamily } from "./compositeShape/family";
+export type { ShapeElementType, BasicShapeId, FlowchartShapeId } from "./types";

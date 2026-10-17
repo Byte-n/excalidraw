@@ -3,6 +3,7 @@ import { COLOR_PALETTE, CURSOR_TYPE, reseed } from "@excalidraw/common";
 import {
   isMindmapEdgeElement,
   isMindmapNodeElement,
+  isShapeElement,
 } from "@excalidraw/element";
 
 import { Excalidraw } from "../index";
@@ -177,7 +178,7 @@ describe("creation preset placement", () => {
     height: number;
     type: string;
   }[] = [
-    { tool: "rectangle", width: 120, height: 120, type: "composite_shape" },
+    { tool: "rectangle", width: 120, height: 120, type: "composite" },
     { tool: "stickynote", width: 160, height: 160, type: "stickynote" },
     { tool: "table", width: 480, height: 168, type: "table" },
     { tool: "frame", width: 400, height: 300, type: "frame" },
@@ -276,9 +277,7 @@ describe("工具栏路径用当前图形的预设默认", () => {
     armRectangleWith("fc-cylinder");
     pointer().clickAt(300, 240);
 
-    const placed = h.elements.filter(
-      (element) => element.type === "composite_shape",
-    );
+    const placed = h.elements.filter((element) => isShapeElement(element));
     expect(placed).toHaveLength(1);
     expect(placed[0]).toMatchObject({
       shape: { id: "fc-cylinder", schemaVersion: 1 },

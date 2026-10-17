@@ -203,7 +203,7 @@ describe("mindmap 场景恢复与渲染基础", () => {
     const restored = restore([rectangle]);
     expect(restored).toHaveLength(1);
     expect(restored[0]).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "rectangle", schemaVersion: 1 },
       x: 20,
       y: 60,

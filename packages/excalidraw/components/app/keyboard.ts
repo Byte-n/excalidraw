@@ -24,7 +24,7 @@ import {
   getContainerCenter,
   getBoundTextElement,
   isImageElement,
-  isBaseShapeId,
+  isShapeId,
   isTextElement,
   isValidTextContainer,
   isLineElement,
@@ -707,7 +707,7 @@ export const onKeyDown = (
       event.key === KEYS.G &&
       (hasBackground(
         app.state.activeTool.type === "rectangle" &&
-          isBaseShapeId(app.state.preferredGenericShape)
+          isShapeId(app.state.preferredGenericShape)
           ? app.state.preferredGenericShape
           : app.state.activeTool.type,
       ) ||

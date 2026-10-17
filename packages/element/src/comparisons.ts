@@ -1,21 +1,26 @@
 import type { ElementOrToolType } from "@excalidraw/excalidraw/types";
 
-import { isBaseShapeId, isCompositeShapeOpen } from "./compositeShape";
+import {
+  isShapeId,
+  isCompositeShapeOpen,
+  isShapeElement,
+} from "./compositeShape";
 
-import type { BaseShapeId, ExcalidrawElement } from "./types";
+import type { ShapeId, ExcalidrawElement } from "./types";
 
-type FillTarget = ElementOrToolType | BaseShapeId | ExcalidrawElement;
+type FillTarget = ElementOrToolType | ShapeId | ExcalidrawElement;
 
 export const supportsFill = (target: FillTarget) => {
-  if (typeof target !== "string" && target.type === "composite_shape") {
+  if (typeof target !== "string" && isShapeElement(target)) {
     return !isCompositeShapeOpen(target.shape.id);
   }
   const type = typeof target === "string" ? target : target.type;
-  if (isBaseShapeId(type)) {
+  if (isShapeId(type)) {
     return !isCompositeShapeOpen(type);
   }
   return (
-    type === "composite_shape" ||
+    type === "composite" ||
+    type === "flow" ||
     type === "mindmap-node" ||
     type === "stickynote" ||
     type === "iframe" ||
@@ -45,7 +50,8 @@ export const hasFillStyle = (target: FillTarget) =>
   (typeof target === "string" ? target : target.type) !== "stickynote";
 
 export const hasStrokeColor = (type: ElementOrToolType) =>
-  type === "composite_shape" ||
+  type === "composite" ||
+  type === "flow" ||
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "stickynote" ||
@@ -59,7 +65,8 @@ export const hasStrokeColor = (type: ElementOrToolType) =>
   type === "autoshape";
 
 export const hasStrokeWidth = (type: ElementOrToolType) =>
-  type === "composite_shape" ||
+  type === "composite" ||
+  type === "flow" ||
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "iframe" ||
@@ -72,7 +79,8 @@ export const hasStrokeWidth = (type: ElementOrToolType) =>
   type === "autoshape";
 
 export const hasStrokeStyle = (type: ElementOrToolType) =>
-  type === "composite_shape" ||
+  type === "composite" ||
+  type === "flow" ||
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "iframe" ||
@@ -85,7 +93,7 @@ export const hasStrokeStyle = (type: ElementOrToolType) =>
 
 export const hasFreedrawMode = (type: ElementOrToolType) => type === "freedraw";
 
-export const canChangeRoundness = (type: ElementOrToolType | BaseShapeId) =>
+export const canChangeRoundness = (type: ElementOrToolType | ShapeId) =>
   type === "rectangle" ||
   type === "mindmap-node" ||
   type === "iframe" ||

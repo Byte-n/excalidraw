@@ -10,7 +10,7 @@ import {
 } from "@excalidraw/common";
 
 import { setDateTimeForTests } from "@excalidraw/common";
-import { isCompositeShapeId } from "@excalidraw/element";
+import { isShapeWithId } from "@excalidraw/element";
 
 import { Excalidraw } from "../index";
 import * as StaticScene from "../renderer/staticScene";
@@ -113,7 +113,7 @@ describe("regression tests", () => {
 
     expect(
       h.elements.map((element) =>
-        element.type === "composite_shape" ? element.shape.id : element.type,
+        element.type === "composite" ? element.shape.id : element.type,
       ),
     ).toEqual([
       "rectangle",
@@ -171,7 +171,7 @@ describe("regression tests", () => {
             shape === "diamond" ||
             shape === "ellipse"
           ) {
-            expect(isCompositeShapeId(selected, shape)).toBe(true);
+            expect(isShapeWithId(selected, shape)).toBe(true);
           } else {
             expect(selected.type).toBe(shape);
           }
@@ -224,7 +224,7 @@ describe("regression tests", () => {
     mouse.up(10, 10);
 
     expect(
-      h.elements.filter((element) => isCompositeShapeId(element, "rectangle"))
+      h.elements.filter((element) => isShapeWithId(element, "rectangle"))
         .length,
     ).toBe(1);
     Keyboard.withModifierKeys({ alt: true }, () => {
@@ -233,7 +233,7 @@ describe("regression tests", () => {
     });
 
     expect(
-      h.elements.filter((element) => isCompositeShapeId(element, "rectangle"))
+      h.elements.filter((element) => isShapeWithId(element, "rectangle"))
         .length,
     ).toBe(2);
   });
@@ -274,7 +274,7 @@ describe("regression tests", () => {
     mouse.up(10, 10);
 
     const prevRectsXY = h.elements
-      .filter((element) => isCompositeShapeId(element, "rectangle"))
+      .filter((element) => isShapeWithId(element, "rectangle"))
       .map((element) => ({ x: element.x, y: element.y }));
 
     mouse.reset();
@@ -287,7 +287,7 @@ describe("regression tests", () => {
     mouse.up(10, 10);
 
     h.elements
-      .filter((element) => isCompositeShapeId(element, "rectangle"))
+      .filter((element) => isShapeWithId(element, "rectangle"))
       .forEach((element, i) => {
         expect(element.x).toBeGreaterThan(prevRectsXY[i].x);
         expect(element.y).toBeGreaterThan(prevRectsXY[i].y);
@@ -713,15 +713,13 @@ describe("regression tests", () => {
     mouse.down(10, 10);
     mouse.up(10, 10);
 
-    expect(isCompositeShapeId(API.getSelectedElement(), "ellipse")).toBe(true);
+    expect(isShapeWithId(API.getSelectedElement(), "ellipse")).toBe(true);
 
     // pointer down on rectangle
     mouse.reset();
     mouse.down();
 
-    expect(isCompositeShapeId(API.getSelectedElement(), "rectangle")).toBe(
-      true,
-    );
+    expect(isShapeWithId(API.getSelectedElement(), "rectangle")).toBe(true);
   });
 
   it("can drag element that covers another element, while another elem is selected", () => {
@@ -739,16 +737,14 @@ describe("regression tests", () => {
     mouse.down(300, 300);
     mouse.up(350, 350);
 
-    expect(isCompositeShapeId(API.getSelectedElement(), "ellipse")).toBe(true);
+    expect(isShapeWithId(API.getSelectedElement(), "ellipse")).toBe(true);
 
     // pointer down on rectangle
     mouse.reset();
     mouse.down(100, 100);
     mouse.up(200, 200);
 
-    expect(isCompositeShapeId(API.getSelectedElement(), "rectangle")).toBe(
-      true,
-    );
+    expect(isShapeWithId(API.getSelectedElement(), "rectangle")).toBe(true);
   });
 
   it("deselects selected element on pointer down when pointer doesn't hit any element", () => {
@@ -908,9 +904,7 @@ describe("regression tests", () => {
     mouse.reset();
     mouse.down();
 
-    expect(isCompositeShapeId(API.getSelectedElement(), "rectangle")).toBe(
-      true,
-    );
+    expect(isShapeWithId(API.getSelectedElement(), "rectangle")).toBe(true);
   });
 
   it("deselects group of selected elements on pointer up when pointer hits common bounding box without hitting any element", () => {
@@ -1004,9 +998,7 @@ describe("regression tests", () => {
       expect(API.getSelectedElements().length).toBe(2);
 
       mouse.up();
-      expect(isCompositeShapeId(API.getSelectedElement(), "ellipse")).toBe(
-        true,
-      );
+      expect(isShapeWithId(API.getSelectedElement(), "ellipse")).toBe(true);
     },
   );
 

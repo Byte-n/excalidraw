@@ -18,7 +18,7 @@ import {
 } from "@excalidraw/common";
 
 import type {
-  ExcalidrawCompositeShapeElement,
+  ExcalidrawShapeElement,
   ExcalidrawTextElement,
   ExcalidrawTextElementWithContainer,
   NonDeletedExcalidrawElement,
@@ -963,7 +963,7 @@ describe("textWysiwyg", () => {
         height: 80,
       });
       API.setElements([cube]);
-      API.updateElement(cube as ExcalidrawCompositeShapeElement, {
+      API.updateElement(cube as ExcalidrawShapeElement, {
         textFitMode: "fixed",
       });
       API.setSelectedElements([cube]);
@@ -1825,7 +1825,7 @@ describe("textWysiwyg", () => {
           strokeColor: "#1f2329",
           strokeStyle: "solid",
           strokeWidth: 2,
-          type: "composite_shape",
+          type: "composite",
           shape: { id: "rectangle", schemaVersion: 1 },
           updated: 1,
           version: 2,

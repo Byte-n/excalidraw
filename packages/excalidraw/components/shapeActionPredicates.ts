@@ -11,7 +11,7 @@ import {
   isLinearElement,
   isTextElement,
   hasStrokeColor,
-  isBaseShapeId,
+  isShapeId,
   toolIsArrow,
 } from "@excalidraw/element";
 
@@ -70,7 +70,7 @@ export const canChangeBackgroundColor = (
 ) => {
   const activeFillTarget =
     appState.activeTool.type === "rectangle" &&
-    isBaseShapeId(appState.preferredGenericShape)
+    isShapeId(appState.preferredGenericShape)
       ? appState.preferredGenericShape
       : appState.activeTool.type;
   return (
@@ -104,8 +104,7 @@ export const getShapeActionPredicates = (
 ) => {
   const activeToolType = appState.activeTool.type;
   const activeFillTarget =
-    activeToolType === "rectangle" &&
-    isBaseShapeId(appState.preferredGenericShape)
+    activeToolType === "rectangle" && isShapeId(appState.preferredGenericShape)
       ? appState.preferredGenericShape
       : activeToolType;
 

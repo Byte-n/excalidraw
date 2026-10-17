@@ -1,19 +1,19 @@
 import {
-  baseShapeData,
+  buildShapeData,
   compositeShapePathToSvg,
   getCompositeShapeGeometry,
   getCompositeShapePoints,
   isCompositeShapeOpen,
 } from "@excalidraw/element/compositeShape";
 
-import type { BaseShapeId } from "@excalidraw/element/types";
+import type { ShapeId } from "@excalidraw/element/types";
 
 import { createIcon } from "./icons";
 
-type ShapeIconId = BaseShapeId;
+type ShapeIconId = ShapeId;
 
 export const getCompositeShapeIcon = (id: ShapeIconId) => {
-  const shape = baseShapeData(id);
+  const shape = buildShapeData(id);
   const width = id === "pill" || id === "round-rect" ? 18 : 16;
   const height = id === "pill" || id === "round-rect" ? 12 : 16;
   const x = (24 - width) / 2;

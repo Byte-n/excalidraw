@@ -1,9 +1,10 @@
-import { getShapeRegistration, hasOnlyKeys, isBaseShapeId } from "./registry";
+import { getShapeRegistration, hasOnlyKeys, isShapeId } from "./registry";
+import { shapeElementType } from "./family";
 
-import type { BaseShapeData } from "../types";
+import type { ShapeData, ShapeElementType } from "../types";
 
 /** Validates persisted shape data at file, library and clipboard boundaries. */
-export const assertBaseShapeData = (shape: unknown): BaseShapeData => {
+export const assertShapeData = (shape: unknown): ShapeData => {
   if (!shape || typeof shape !== "object") {
     throw new Error(
       `Unsupported composite shape data: ${JSON.stringify(shape)}`,
@@ -11,7 +12,7 @@ export const assertBaseShapeData = (shape: unknown): BaseShapeData => {
   }
   const value = shape as Record<string, unknown>;
   const id = value.id;
-  if (!isBaseShapeId(id) || value.schemaVersion !== 1) {
+  if (!isShapeId(id) || value.schemaVersion !== 1) {
     throw new Error(
       `Unsupported composite shape data: ${JSON.stringify(shape)}`,
     );
@@ -29,5 +30,20 @@ export const assertBaseShapeData = (shape: unknown): BaseShapeData => {
       `Unsupported composite shape data: ${JSON.stringify(shape)}`,
     );
   }
-  return shape as BaseShapeData;
+  return shape as ShapeData;
+};
+
+/**
+ * Validates shape data plus the consistency between the element's top-level
+ * `type` and the shape id's family. Use this at every boundary that already
+ * knows the element type (restore, clipboard, `isExcalidrawElement`).
+ */
+export const assertShapeElementType = (
+  type: string,
+  shape: ShapeData,
+): void => {
+  assertShapeData(shape);
+  if (shapeElementType(shape.id) !== (type as ShapeElementType)) {
+    throw new Error(`Shape data does not belong to element type: ${type}`);
+  }
 };

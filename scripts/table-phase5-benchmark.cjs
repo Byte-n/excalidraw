@@ -21,10 +21,10 @@ const createFixture = async (page, size, shapeCount) => {
   await page.mouse.move(330, 530);
   await page.mouse.up();
   await page.waitForFunction(() =>
-    window.h.elements.some((element) => element.type === "composite_shape"),
+    window.h.elements.some((element) => element.type === "composite"),
   );
   const sourceShape = await page.evaluate(() =>
-    window.h.elements.find((element) => element.type === "composite_shape"),
+    window.h.elements.find((element) => element.type === "composite"),
   );
   await page.click('button[title="更多工具"]');
   const [tableButton] = await page.$x('//button[contains(., "Table")]');

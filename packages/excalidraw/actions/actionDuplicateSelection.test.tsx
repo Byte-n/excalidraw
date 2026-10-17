@@ -170,7 +170,7 @@ describe("actionDuplicateSelection", () => {
         },
         { id: frame.id },
         {
-          type: "composite_shape",
+          type: "composite",
           shape: { id: "rectangle", schemaVersion: 1 },
           [ORIG_ID]: `${rectangle.id}`,
         },

@@ -2,7 +2,7 @@ import {
   getActiveTextElement,
   applyShapeOperation,
   applyConnectorOperation,
-  isCompositeShapeElement,
+  isShapeElement,
   getBoundTextElement,
   frameLikeContainerRef,
   isTableCellBackgroundText,
@@ -126,7 +126,7 @@ export const handleTextWysiwyg = (
     // and composite geometry is owned by the shape model).
     if (
       container &&
-      (isCompositeShapeElement(container) || isLinearElement(container)) &&
+      (isShapeElement(container) || isLinearElement(container)) &&
       isDeleted
     ) {
       app.scene.replaceAllElements([
@@ -143,12 +143,12 @@ export const handleTextWysiwyg = (
     }
     if (
       container &&
-      (isCompositeShapeElement(container) || isLinearElement(container)) &&
+      (isShapeElement(container) || isLinearElement(container)) &&
       (nextOriginalText || isDeleted) &&
       (nextOriginalText !== latestTextElement.originalText || isDeleted)
     ) {
       const input = app.scene.getElementsIncludingDeleted();
-      const result = isCompositeShapeElement(container)
+      const result = isShapeElement(container)
         ? applyShapeOperation(input, {
             action: "update",
             target: { elementId: container.id },

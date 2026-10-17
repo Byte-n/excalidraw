@@ -44,7 +44,7 @@ import {
   isInitializedImageElement,
   isLinearElement,
   isMindmapNodeElement,
-  isCompositeShapeElement,
+  isShapeElement,
   isElbowArrow,
   isBindableElement,
   isTextElement,
@@ -1271,7 +1271,7 @@ export const onPointerMoveFromPointerDownHandler = (
     if (pointerDownState.compositeControl.active) {
       const control = pointerDownState.compositeControl.active;
       const element = app.scene.getNonDeletedElement(control.elementId);
-      if (isCompositeShapeElement(element)) {
+      if (isShapeElement(element)) {
         const local = getCompositeControlPointLocal(
           element,
           pointerCoords.x - control.offset.x,

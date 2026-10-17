@@ -51,8 +51,9 @@ import {
   getCompositeShapeCornerRadius,
   getCompositeShapeGeometry,
   getCompositeShapeGlobalPoints,
-  isBaseShapeId,
-  isCompositeShapeId,
+  isShapeElement,
+  isShapeId,
+  isShapeWithId,
   isCompositeShapeOpen,
 } from "./compositeShape";
 import {
@@ -244,7 +245,8 @@ export const generateRoughOptions = (
   };
 
   switch (element.type) {
-    case "composite_shape":
+    case "composite":
+    case "flow":
     case "mindmap-node":
     case "iframe":
     case "embeddable": {
@@ -254,7 +256,7 @@ export const generateRoughOptions = (
           ? undefined
           : applyDarkModeFilter(element.backgroundColor, isDarkMode);
       if (
-        isCompositeShapeId(element, "ellipse") ||
+        isShapeWithId(element, "ellipse") ||
         (element.type === "mindmap-node" &&
           getMindmapShapeId(element) === "ellipse")
       ) {
@@ -973,12 +975,13 @@ const _generateElementShape = (
         getMindmapEdgePath(element),
         generateRoughOptions(element, true, isDarkMode),
       );
-    case "composite_shape":
+    case "composite":
+    case "flow":
     case "iframe":
     case "embeddable": {
-      if (element.type === "composite_shape") {
+      if (isShapeElement(element)) {
         const shapeId = element.shape.id;
-        if (!isBaseShapeId(shapeId)) {
+        if (!isShapeId(shapeId)) {
           throw new Error(
             `generateElementShape(): Unimplemented shape ${String(shapeId)}`,
           );
@@ -1270,7 +1273,8 @@ export const getElementShape = <Point extends GlobalPoint | LocalPoint>(
           element.y + element.height / 2,
         ),
       );
-    case "composite_shape":
+    case "composite":
+    case "flow":
     case "stickynote":
     case "frame":
     case "magicframe":
@@ -1282,8 +1286,8 @@ export const getElementShape = <Point extends GlobalPoint | LocalPoint>(
     case "table":
       // the table body hits as a plain rectangle; per-cell hit-testing lands
       // with cell selection in a later phase
-      if (element.type === "composite_shape") {
-        if (!isBaseShapeId(element.shape.id)) {
+      if (isShapeElement(element)) {
+        if (!isShapeId(element.shape.id)) {
           throw new Error(
             `getElementShape(): Unimplemented shape ${String(
               element.shape.id,

@@ -4,7 +4,7 @@ import { vi } from "vitest";
 
 import { MIME_TYPES, ORIG_ID, VERSIONS } from "@excalidraw/common";
 
-import { getCommonBoundingBox, isCompositeShapeId } from "@excalidraw/element";
+import { getCommonBoundingBox, isShapeWithId } from "@excalidraw/element";
 
 import type {
   ExcalidrawGenericElement,
@@ -130,15 +130,13 @@ describe("library items inserting", () => {
     ]);
 
     await waitFor(() => {
-      const rectangle = h.elements.find((e) =>
-        isCompositeShapeId(e, "rectangle"),
-      )!;
+      const rectangle = h.elements.find((e) => isShapeWithId(e, "rectangle"))!;
       const text = h.elements.find((e) => e.type === "text")!;
       const arrow = h.elements.find((e) => e.type === "arrow")!;
       expect(h.elements).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            type: "composite_shape",
+            type: "composite",
             shape: { id: "rectangle", schemaVersion: 1 },
             id: expect.not.stringMatching("rectangle1"),
             boundElements: expect.arrayContaining([

@@ -43,7 +43,7 @@ import {
   buildMindmapGraphIndex,
   layoutMindmap,
   computeBoundTextPosition,
-  assertBaseShapeData,
+  assertShapeElementType,
   assertMindmapShapeData,
   assertValidTableData,
   assertValidContainerRefs,
@@ -682,8 +682,9 @@ export const restoreElement = (
     }
 
     // generic elements
-    case "composite_shape":
-      assertBaseShapeData(element.shape);
+    case "composite":
+    case "flow":
+      assertShapeElementType(element.type, element.shape);
       return restoreElementWithProperties(element, { shape: element.shape });
     case "table": {
       assertValidTableData(element.table);
@@ -987,8 +988,8 @@ export const restoreElements = <T extends ExcalidrawElement>(
       if (element.type === "selection") {
         return elements;
       }
-      if (element.type === "composite_shape") {
-        assertBaseShapeData(element.shape);
+      if (element.type === "composite" || element.type === "flow") {
+        assertShapeElementType(element.type, element.shape);
       } else if (element.type === "mindmap-node") {
         assertMindmapShapeData(element.shape);
       } else if (element.type === "table") {

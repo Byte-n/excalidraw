@@ -654,7 +654,7 @@ describe("table tool", () => {
 
       // the background text sits between the table and the cell's content
       const types = () => h.elements.map((element) => element.type);
-      expect(types()).toEqual(["table", "text", "composite_shape"]);
+      expect(types()).toEqual(["table", "text", "composite"]);
 
       // an empty cell inserts right after the table
       const second = cellCenter(table, 2, 1);
@@ -668,7 +668,7 @@ describe("table tool", () => {
         "table",
         "text",
         "text",
-        "composite_shape",
+        "composite",
       ]);
       const [firstText, secondText] = elements.filter(
         (element) => element.type === "text",

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ARROWHEAD_VALUES, BASE_SHAPE_IDS } from "@excalidraw/yjs";
+import { ARROWHEAD_VALUES, SHAPE_IDS } from "@excalidraw/yjs";
 
 const finite = z.number().finite();
 const positive = finite.positive();
@@ -115,7 +115,7 @@ const shapeOptions = z.union([
   cubeOptions,
   circularOptions,
 ]);
-const shapeKind = z.enum(BASE_SHAPE_IDS);
+const shapeKind = z.enum(SHAPE_IDS);
 const shapeCreate = z
   .object({
     action: z.literal("create"),

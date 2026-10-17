@@ -25,6 +25,7 @@ import {
   handleBindTextResize,
   isMindmapEdgeElement,
   isMindmapNodeElement,
+  isShapeElement,
   getMindmapSubtreeIds,
   getMindmapEdgeGeometry,
   getMindmapLayoutConfig,
@@ -961,8 +962,7 @@ export class AppMindmap {
     context.globalAlpha = 0.55;
     preview
       .filter(
-        (element) =>
-          isMindmapNodeElement(element) || element.type === "composite_shape",
+        (element) => isMindmapNodeElement(element) || isShapeElement(element),
       )
       .forEach((element) => {
         context.fillStyle = element.backgroundColor;

@@ -69,7 +69,7 @@ import {
   isLinearElement,
   isMindmapEdgeElement,
   isMindmapNodeElement,
-  isCompositeShapeElement,
+  isShapeElement,
   LinearElementEditor,
   selectGroupsForSelectedElements,
 } from "@excalidraw/element";
@@ -447,7 +447,7 @@ export const handleSelectionOnPointerDown = (
 
     if (
       selectedElements.length === 1 &&
-      isCompositeShapeElement(selectedElements[0]) &&
+      isShapeElement(selectedElements[0]) &&
       !selectedElements[0].locked &&
       !app.state.viewModeEnabled &&
       !app.state.editingTextElement &&

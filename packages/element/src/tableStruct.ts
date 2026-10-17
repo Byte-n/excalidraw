@@ -728,7 +728,7 @@ const assertValidCell = (
 
 /**
  * Validates persisted table structure at file, library and clipboard
- * boundaries. Throws on the first violation, mirroring `assertBaseShapeData`.
+ * boundaries. Throws on the first violation, mirroring `assertShapeData`.
  */
 export const assertValidTableData = (table: unknown): TableDataV1 => {
   if (!table || typeof table !== "object") {

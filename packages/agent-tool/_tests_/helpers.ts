@@ -110,7 +110,7 @@ export const sessionFixture = () => {
 };
 export const rectangle = () =>
   createSceneElement({
-    type: "composite_shape",
+    type: "composite",
     x: 0,
     y: 0,
     width: 100,

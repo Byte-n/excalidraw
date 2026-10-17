@@ -35,6 +35,7 @@ import type {
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
   ExcalidrawRectanguloidElement,
+  ExcalidrawShapeElement,
 } from "./types";
 
 export const distanceToElement = (
@@ -81,7 +82,8 @@ export const distanceToElement = (
     case "table":
       // TODO(table): P1 grid-aware distance; the table body is a rectangle
       return distanceToRectanguloidElement(element, elementsMap, p);
-    case "composite_shape":
+    case "composite":
+    case "flow":
       return element.shape.id === "ellipse"
         ? distanceToEllipseElement(
             element as ExcalidrawEllipseElement,
@@ -98,7 +100,7 @@ export const distanceToElement = (
 };
 
 const distanceToCompositeShape = (
-  element: ExcalidrawElement & { type: "composite_shape" },
+  element: ExcalidrawShapeElement,
   p: GlobalPoint,
 ) => {
   const path = getCompositeShapeGlobalPath(element);

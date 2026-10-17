@@ -9,7 +9,7 @@ import type { GenericShapeId } from "./presetCatalog";
 /**
  * 预设图形的**默认填充色与默认尺寸**表（43 行：29 个基础图形 + 14 个流程图图形）。
  *
- * 取值来源是平台样本（Lark 侧 `composite_shape`）——
+ * 取值来源是平台样本（Lark 侧 `composite`）——
  * `docs/lark-exmples/flow-chart/lark-examples-data.json` 与
  * `docs/lark-exmples/composite-shape/lark-examples-data.json`：
  * `fill_color` 逐条映射到本项目色板，尺寸取样本值，**小数一律取整**——与

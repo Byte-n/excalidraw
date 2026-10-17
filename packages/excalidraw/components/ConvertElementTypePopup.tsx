@@ -4,6 +4,7 @@ import {
   bumpVersion,
   getMindmapShapeId,
   getLinearElementSubType,
+  isShapeElement,
   mutateElement,
   updateElbowArrowPoints,
 } from "@excalidraw/element";
@@ -80,7 +81,7 @@ import type {
   FixedSegment,
   NonDeleted,
   NonDeletedExcalidrawElement,
-  BaseShapeId,
+  ShapeId,
 } from "@excalidraw/element/types";
 
 import type { Scene } from "@excalidraw/element";
@@ -112,7 +113,7 @@ type ExcalidrawConvertibleElement =
   | ExcalidrawLinearElement;
 
 // indicates order of switching
-const GENERIC_TYPES: readonly BaseShapeId[] = [
+const GENERIC_TYPES: readonly ShapeId[] = [
   "rectangle",
   "diamond",
   "ellipse",
@@ -181,7 +182,7 @@ const isConvertibleGenericType = (
 const getGenericType = (element: ExcalidrawElement) =>
   element.type === "mindmap-node"
     ? getMindmapShapeId(element)
-    : element.type === "composite_shape"
+    : isShapeElement(element)
     ? element.shape.id
     : null;
 
@@ -740,10 +741,7 @@ export const getConversionTypeFromElements = (
 
   let canBeLinear = false;
   for (const element of elements) {
-    if (
-      element.type === "composite_shape" &&
-      isConvertibleGenericType(element.shape.id)
-    ) {
+    if (isShapeElement(element) && isConvertibleGenericType(element.shape.id)) {
       // generic type conversion have preference
       return "generic";
     }
@@ -779,8 +777,7 @@ const filterGenericConvetibleElements = <T extends ExcalidrawElement>(
 ) =>
   elements.filter(
     (element) =>
-      (element.type === "composite_shape" &&
-        isConvertibleGenericType(element.shape.id)) ||
+      (isShapeElement(element) && isConvertibleGenericType(element.shape.id)) ||
       isMindmapNodeElement(element),
   ) as unknown as Array<
     T extends NonDeletedExcalidrawElement
@@ -941,8 +938,7 @@ const convertElementType = <
   targetType: ConvertibleTypes,
   app: AppClassProperties,
 ): NonDeletedExcalidrawElement => {
-  const sourceType =
-    element.type === "composite_shape" ? element.shape.id : element.type;
+  const sourceType = isShapeElement(element) ? element.shape.id : element.type;
   if (!isValidConversion(sourceType, targetType)) {
     if (!isProdEnv()) {
       throw Error(`Invalid conversion from ${element.type} to ${targetType}.`);

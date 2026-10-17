@@ -38,7 +38,7 @@ describe("convert element type", () => {
     });
 
     expect(h.elements[0]).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "diamond", schemaVersion: 1 },
     });
     expect(h.elements[0].roundness?.type).toBe(ROUNDNESS.PROPORTIONAL_RADIUS);
@@ -51,7 +51,7 @@ describe("convert element type", () => {
     });
 
     expect(h.elements[0]).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "rectangle", schemaVersion: 1 },
     });
     expect(h.elements[0].roundness?.type).toBe(ROUNDNESS.ADAPTIVE_RADIUS);
@@ -113,11 +113,11 @@ describe("convert element type", () => {
       false,
     );
     expect(h.app.scene.getNonDeletedElement("root")).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "rectangle", schemaVersion: 1 },
     });
     expect(h.app.scene.getNonDeletedElement("child")).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "rectangle", schemaVersion: 1 },
     });
     expect(h.app.scene.getNonDeletedElement("edge")?.type).toBe("line");
@@ -190,7 +190,7 @@ describe("convert element type", () => {
     });
 
     expect(h.app.scene.getNonDeletedElement("branch")).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "ellipse", schemaVersion: 1 },
     });
     const promotedLeaf = h.app.scene.getNonDeletedElement("leaf");

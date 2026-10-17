@@ -10,7 +10,7 @@ import {
 } from "@excalidraw/common";
 
 import {
-  assertBaseShapeData,
+  assertShapeElementType,
   assertMindmapShapeData,
   mutateElement,
 } from "@excalidraw/element";
@@ -573,9 +573,9 @@ export const parseClipboard = async (
         return { errorMessage: "Unsupported clipboard format" };
       }
       for (const element of systemClipboardData.elements) {
-        if (element.type === "composite_shape") {
+        if (element.type === "composite" || element.type === "flow") {
           try {
-            assertBaseShapeData(element.shape);
+            assertShapeElementType(element.type, element.shape);
           } catch {
             return { errorMessage: "Unsupported composite shape data" };
           }

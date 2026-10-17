@@ -36,7 +36,8 @@ import {
   getCompositeShapeGeometry,
   getCompositeShapeGlobalPoints,
   isCompositeShapeOpen,
-  isCompositeShapeId,
+  isShapeElement,
+  isShapeWithId,
 } from "./compositeShape";
 import { getMindmapShapeId } from "./mindmap";
 import { ShapeCache } from "./shape";
@@ -65,7 +66,7 @@ import type {
   ElementsMap,
   ElementsMapOrArray,
   ExcalidrawElement,
-  ExcalidrawCompositeShapeElement,
+  ExcalidrawShapeElement,
   ExcalidrawRectangleElement,
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
@@ -183,7 +184,7 @@ export class ElementBounds {
       ];
     } else if (isLinearElement(element)) {
       bounds = getLinearElementRotatedBounds(element, cx, cy, elementsMap);
-    } else if (element.type === "composite_shape") {
+    } else if (isShapeElement(element)) {
       const primitive = getCompositeShapeGeometry(element).primitive;
       if (primitive?.kind === "ellipse") {
         const cos = Math.cos(element.angle);
@@ -333,7 +334,7 @@ export const getElementLineSegments = (
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
 ): LineSegment<GlobalPoint>[] => {
-  if (element.type === "composite_shape") {
+  if (isShapeElement(element)) {
     const points = getCompositeShapeGlobalPoints(element);
     const count = isCompositeShapeOpen(element.shape.id)
       ? points.length - 1
@@ -449,7 +450,7 @@ export const getElementLineSegments = (
 const _isRectanguloidElement = (
   element: ExcalidrawElement,
 ): element is
-  | Exclude<ExcalidrawRectanguloidElement, ExcalidrawCompositeShapeElement>
+  | Exclude<ExcalidrawRectanguloidElement, ExcalidrawShapeElement>
   | ExcalidrawRectangleElement => {
   return (
     element != null &&
@@ -522,7 +523,7 @@ export const getRectangleBoxAbsoluteCoords = (boxSceneCoords: RectangleBox) => {
 };
 
 export const getDiamondPoints = (element: ExcalidrawElement) => {
-  if (isCompositeShapeId(element, "diamond")) {
+  if (isShapeWithId(element, "diamond")) {
     const primitive = getCompositeShapeGeometry(element).primitive;
     if (primitive?.kind !== "diamond") {
       throw new Error("Missing diamond geometry");

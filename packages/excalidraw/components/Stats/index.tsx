@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, memo } from "react";
 import { STATS_PANELS } from "@excalidraw/common";
 import { getCommonBounds } from "@excalidraw/element";
 import { getUncroppedWidthAndHeight } from "@excalidraw/element";
-import { isImageElement } from "@excalidraw/element";
+import { isImageElement, isShapeElement } from "@excalidraw/element";
 
 import { frameAndChildrenSelectedTogether } from "@excalidraw/element";
 
@@ -298,7 +298,7 @@ export const StatsInner = memo(
                           ? t("labels.imageCropping")
                           : t(
                               `element.${
-                                singleElement.type === "composite_shape"
+                                isShapeElement(singleElement)
                                   ? singleElement.shape.id
                                   : singleElement.type
                               }` as any,

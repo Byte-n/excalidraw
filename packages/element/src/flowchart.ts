@@ -30,6 +30,7 @@ import {
   newElement,
   newStickyNoteElement,
 } from "./newElement";
+import { shapeElementType } from "./compositeShape";
 import { aabbForElement } from "./bounds";
 import { elementsAreInFrameBounds, elementOverlapsWithFrame } from "./frame";
 import {
@@ -256,7 +257,7 @@ const cloneFlowchartNode = (
           baseHeight: template.baseHeight,
         })
       : newElement({
-          type: "composite_shape",
+          type: shapeElementType(template.shape.id),
           shape: template.shape,
           ...commonNodeProps,
         });

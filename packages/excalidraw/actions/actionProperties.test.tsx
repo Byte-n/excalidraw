@@ -1,5 +1,5 @@
 import { fireEvent, queryByTestId } from "@testing-library/react";
-import { isCompositeShapeId } from "@excalidraw/element";
+import { isShapeWithId } from "@excalidraw/element";
 
 import {
   COLOR_PALETTE,
@@ -226,7 +226,7 @@ describe("element locking", () => {
 
       const selectedElements = API.getSelectedElements();
       const selectedRect = selectedElements.find((element) =>
-        isCompositeShapeId(element, "rectangle"),
+        isShapeWithId(element, "rectangle"),
       );
       const selectedFreedraw = selectedElements.find(
         (element) => element.type === "freedraw",

@@ -37,7 +37,7 @@ import type {
   ExcalidrawTextElement,
   ExcalidrawTableElement,
   StrokeVariability,
-  BaseShapeId,
+  ShapeId,
   TableDataV1,
 } from "@excalidraw/element/types";
 
@@ -663,7 +663,7 @@ export interface AppState {
     type: "selection" | "lasso";
     initialized: boolean;
   };
-  preferredGenericShape: BaseShapeId;
+  preferredGenericShape: ShapeId;
   /**
    * 表格工具当前选用的预设：工具弹层里选一个，触发按钮回显它，随后的新建
    * 都按它成型。`plain` 是均匀 3×3，泳道预设自带合并标题带、底纹与标签。

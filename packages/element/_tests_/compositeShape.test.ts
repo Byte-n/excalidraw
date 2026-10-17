@@ -14,8 +14,9 @@ import {
   intersectElementWithLineSegment,
 } from "../src/collision";
 import {
-  assertBaseShapeData,
-  baseShapeData,
+  assertShapeData,
+  assertShapeElementType,
+  buildShapeData,
   compositeShapePathToSvg,
   getCompositeShapeControlPoints,
   getCompositeShapeAnchors,
@@ -26,11 +27,15 @@ import {
   getCompositeShapePaddedTextBounds,
   getCompositeShapePoints,
   getCompositeShapeTextBounds,
-  isCompositeShapeElement,
-  isCompositeShapeId,
-  isCompositeShapeIdIn,
+  isShapeElement,
+  isShapeWithId,
+  isShapeWithIdIn,
   isCompositeShapeOpen,
   updateCompositeShapeControlPoint,
+  BASIC_SHAPE_IDS,
+  FLOWCHART_SHAPE_IDS,
+  SHAPE_IDS,
+  shapeElementType,
 } from "../src/compositeShape";
 import { distanceToElement } from "../src/distance";
 import { hasBackground, hasFillStyle } from "../src/comparisons";
@@ -45,7 +50,7 @@ import {
 import { isExcalidrawElement } from "../src/typeChecks";
 import { convertToExcalidrawElements } from "../src/transform";
 
-import type { BaseShapeData, BaseShapeId } from "../src/types";
+import type { BasicShapeData, ShapeData, ShapeId } from "../src/types";
 
 describe("composite shape data", () => {
   it("exposes fill controls only for closed composite shapes", () => {
@@ -122,8 +127,8 @@ describe("composite shape data", () => {
       width: 48,
       height: 36,
     });
-    if (element.type !== "composite_shape") {
-      throw new Error("Expected composite shape");
+    if (!isShapeElement(element)) {
+      throw new Error("Expected shape element");
     }
     const dimensions = getCompositeShapeDimensionsForText(
       {
@@ -166,7 +171,7 @@ describe("composite shape data", () => {
     const bounds = getCompositeShapeTextBounds({
       width,
       height,
-      shape: baseShapeData("step"),
+      shape: buildShapeData("step"),
     });
     const slope = (0.76 * width) / height;
     const rightEdgeAtTop = width * 0.62 + slope * bounds.y;
@@ -192,7 +197,7 @@ describe("composite shape data", () => {
       const bounds = getCompositeShapeTextBounds({
         width,
         height,
-        shape: baseShapeData(type),
+        shape: buildShapeData(type),
       });
       const double = type === "double-arrow";
       const slope = ((double ? 0.44 : 0.76) * width) / height;
@@ -224,7 +229,7 @@ describe("composite shape data", () => {
     const bounds = getCompositeShapeTextBounds({
       width,
       height,
-      shape: baseShapeData("right-pentagon"),
+      shape: buildShapeData("right-pentagon"),
     });
 
     expect(bounds.x).toBe(2);
@@ -245,7 +250,7 @@ describe("composite shape data", () => {
       width,
       height,
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const bounds = getCompositeShapeTextBounds(element);
@@ -284,7 +289,7 @@ describe("composite shape data", () => {
       width,
       height,
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const bounds = getCompositeShapeTextBounds(element);
@@ -320,7 +325,7 @@ describe("composite shape data", () => {
     for (const ratio of [2 / 3, 0.05, 1]) {
       for (const narrowEdge of ["top", "bottom"] as const) {
         const element = newElement({
-          type: "composite_shape",
+          type: "composite",
           shape: {
             id: "trapezoid",
             schemaVersion: 1,
@@ -331,7 +336,7 @@ describe("composite shape data", () => {
           width,
           height,
         });
-        if (element.type !== "composite_shape") {
+        if (element.type !== "composite") {
           throw new Error("Expected composite shape");
         }
         const bounds = getCompositeShapeTextBounds(element);
@@ -380,8 +385,8 @@ describe("composite shape data", () => {
         height,
         backgroundColor: "#eeeeee",
       });
-      if (element.type !== "composite_shape") {
-        throw new Error("Expected composite shape");
+      if (!isShapeElement(element)) {
+        throw new Error("Expected shape element");
       }
       const bounds = getCompositeShapeTextBounds(element);
       const elementsMap = arrayToMap([element]);
@@ -419,8 +424,8 @@ describe("composite shape data", () => {
         width: 120,
         height: 80,
       });
-      if (element.type !== "composite_shape") {
-        throw new Error("Expected composite shape");
+      if (!isShapeElement(element)) {
+        throw new Error("Expected shape element");
       }
       const before = ShapeCache.generateElementShape(element, null);
       const control = getCompositeShapeControlPoints(element)[0];
@@ -452,7 +457,7 @@ describe("composite shape data", () => {
         width: 120,
         height: 80,
       });
-      if (element.type !== "composite_shape") {
+      if (element.type !== "composite") {
         throw new Error("Expected composite shape");
       }
       const outline = getCompositeShapeGeometry(element).outline;
@@ -490,7 +495,7 @@ describe("composite shape data", () => {
       height: 80,
       roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS },
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
 
@@ -560,8 +565,8 @@ describe("composite shape data", () => {
         height,
         backgroundColor: "#eeeeee",
       });
-      if (element.type !== "composite_shape") {
-        throw new Error("Expected composite shape");
+      if (!isShapeElement(element)) {
+        throw new Error("Expected shape element");
       }
       const bounds = getCompositeShapeTextBounds(element);
       expect(bounds.width).toBeGreaterThan(0);
@@ -602,7 +607,7 @@ describe("composite shape data", () => {
       const bounds = getCompositeShapeTextBounds({
         width: 1,
         height: 1,
-        shape: baseShapeData(type),
+        shape: buildShapeData(type),
       });
       expect(bounds.width).toBeGreaterThan(0);
       expect(bounds.height).toBeGreaterThan(0);
@@ -631,15 +636,15 @@ describe("composite shape data", () => {
     },
   ] as const)("keeps edited $id text inside its body: %j", (shape) => {
     const element = newElement({
-      type: "composite_shape",
-      shape: shape as BaseShapeData,
+      type: "composite",
+      shape: shape as ShapeData,
       x: 0,
       y: 0,
       width: 120,
       height: 80,
       backgroundColor: "#eeeeee",
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const bounds = getCompositeShapeTextBounds(element);
@@ -658,9 +663,9 @@ describe("composite shape data", () => {
     }
   });
   it("clamps editable control points without creating empty mutations", () => {
-    const triangle = baseShapeData("triangle");
-    const trapezoid = baseShapeData("trapezoid");
-    const cube = baseShapeData("cube");
+    const triangle = buildShapeData("triangle");
+    const trapezoid = buildShapeData("trapezoid");
+    const cube = buildShapeData("cube");
     expect(
       getCompositeShapeControlPoints({
         width: 120,
@@ -739,14 +744,14 @@ describe("composite shape data", () => {
     "rejects a degenerate cube control coordinate %s",
     (value) => {
       expect(() =>
-        assertBaseShapeData({
+        assertShapeData({
           id: "cube",
           schemaVersion: 1,
           cube: { controlPoint: { x: value, y: 0.22 } },
         }),
       ).toThrow("Unsupported composite shape data");
       expect(() =>
-        assertBaseShapeData({
+        assertShapeData({
           id: "cube",
           schemaVersion: 1,
           cube: { controlPoint: { x: 0.82, y: value } },
@@ -759,8 +764,8 @@ describe("composite shape data", () => {
     "creates a %s with the canonical element type",
     (type) => {
       const element = newElement({ type, x: 12, y: 34 });
-      expect(element.type).toBe("composite_shape");
-      expect(isCompositeShapeId(element, type)).toBe(true);
+      expect(element.type).toBe("composite");
+      expect(isShapeWithId(element, type)).toBe(true);
       expect(element).toMatchObject({
         shape: { id: type, schemaVersion: 1 },
       });
@@ -808,7 +813,7 @@ describe("composite shape data", () => {
     "fc-off-page-connector",
     "fc-circle",
   ] as const)("accepts canonical persisted data for %s", (id) => {
-    expect(assertBaseShapeData(baseShapeData(id))).toEqual(baseShapeData(id));
+    expect(assertShapeData(buildShapeData(id))).toEqual(buildShapeData(id));
   });
 
   it.each([
@@ -852,14 +857,14 @@ describe("composite shape data", () => {
     "fc-off-page-connector",
     "fc-circle",
   ] as const)("rejects invalid schema data for %s", (id) => {
-    expect(() => assertBaseShapeData({ id, schemaVersion: 2 })).toThrow(
+    expect(() => assertShapeData({ id, schemaVersion: 2 })).toThrow(
       "Unsupported composite shape data",
     );
     expect(() =>
-      assertBaseShapeData({ ...baseShapeData(id), unexpected: true }),
+      assertShapeData({ ...buildShapeData(id), unexpected: true }),
     ).toThrow("Unsupported composite shape data");
     if (id === "triangle" || id === "trapezoid" || id === "cube") {
-      expect(() => assertBaseShapeData({ id, schemaVersion: 1 })).toThrow(
+      expect(() => assertShapeData({ id, schemaVersion: 1 })).toThrow(
         "Unsupported composite shape data",
       );
     }
@@ -887,14 +892,14 @@ describe("composite shape data", () => {
             schemaVersion: 1,
             cube: { controlPoint: { x: value, y: 0.5 } },
           };
-    expect(() => assertBaseShapeData(shape)).toThrow(
+    expect(() => assertShapeData(shape)).toThrow(
       "Unsupported composite shape data",
     );
   });
 
   it("rejects invalid trapezoid direction and non-finite triangle data", () => {
     expect(() =>
-      assertBaseShapeData({
+      assertShapeData({
         id: "trapezoid",
         schemaVersion: 1,
         trapezoid: { narrowWidthRatio: 0.5, narrowEdge: "sideways" },
@@ -902,7 +907,7 @@ describe("composite shape data", () => {
     ).toThrow("Unsupported composite shape data");
     for (const apexX of [NaN, Infinity, -Infinity]) {
       expect(() =>
-        assertBaseShapeData({
+        assertShapeData({
           id: "triangle",
           schemaVersion: 1,
           triangle: { apexX },
@@ -915,15 +920,11 @@ describe("composite shape data", () => {
     const rectangle = newElement({ type: "rectangle", x: 0, y: 0 });
     const selection = newElement({ type: "selection", x: 0, y: 0 });
 
-    expect(isCompositeShapeElement(rectangle)).toBe(true);
-    expect(isCompositeShapeIdIn(rectangle, ["rectangle", "diamond"])).toBe(
-      true,
-    );
-    expect(isCompositeShapeIdIn(rectangle, ["diamond", "ellipse"])).toBe(false);
-    expect(isCompositeShapeElement(selection)).toBe(false);
-    expect(isCompositeShapeIdIn(selection, ["rectangle", "diamond"])).toBe(
-      false,
-    );
+    expect(isShapeElement(rectangle)).toBe(true);
+    expect(isShapeWithIdIn(rectangle, ["rectangle", "diamond"])).toBe(true);
+    expect(isShapeWithIdIn(rectangle, ["diamond", "ellipse"])).toBe(false);
+    expect(isShapeElement(selection)).toBe(false);
+    expect(isShapeWithIdIn(selection, ["rectangle", "diamond"])).toBe(false);
   });
 
   it.each([
@@ -932,14 +933,14 @@ describe("composite shape data", () => {
     { id: "diamond", schemaVersion: 2 },
     { id: "ellipse", schemaVersion: 1, ellipse: {} },
   ])("rejects unsupported shape data: %j", (shape) => {
-    expect(() => assertBaseShapeData(shape)).toThrow(
+    expect(() => assertShapeData(shape)).toThrow(
       "Unsupported composite shape data",
     );
   });
 
   it("does not render an unsupported shape as a rectangle", () => {
     const element = newElement({ type: "rectangle", x: 0, y: 0 });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
 
@@ -950,7 +951,7 @@ describe("composite shape data", () => {
           shape: {
             id: "unknown",
             schemaVersion: 1,
-          } as unknown as BaseShapeData,
+          } as unknown as BasicShapeData,
         },
         null,
       ),
@@ -959,26 +960,26 @@ describe("composite shape data", () => {
 
   it("rejects unsupported shapes in geometry and distance calculations", () => {
     const element = newElement({ type: "rectangle", x: 0, y: 0 });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const invalid = {
       ...element,
-      shape: { id: "unknown", schemaVersion: 1 } as unknown as BaseShapeData,
+      shape: { id: "unknown", schemaVersion: 1 } as unknown as BasicShapeData,
     };
 
-    expect(() => baseShapeData("unknown" as BaseShapeId)).toThrow(
-      "Unsupported composite shape",
+    expect(() => buildShapeData("unknown" as ShapeId)).toThrow(
+      "Unsupported shape id: unknown",
     );
-    expect(() => isCompositeShapeOpen("unknown" as BaseShapeId)).toThrow(
-      "Unsupported composite shape",
+    expect(() => isCompositeShapeOpen("unknown" as ShapeId)).toThrow(
+      "Unsupported shape id: unknown",
     );
     expect(() => getCompositeShapePoints(invalid)).toThrow(
-      "Unsupported composite shape",
+      "Unsupported shape id: unknown",
     );
     expect(() =>
       distanceToElement(invalid, arrayToMap([invalid]), pointFrom(0, 0)),
-    ).toThrow("Unsupported composite shape");
+    ).toThrow("Unsupported shape id: unknown");
   });
 
   it("recognizes text without requiring shape data", () => {
@@ -989,11 +990,11 @@ describe("composite shape data", () => {
     expect(() =>
       convertToExcalidrawElements([
         {
-          type: "composite_shape",
+          type: "composite",
           shape: {
             id: "diamond",
             schemaVersion: 2,
-          } as unknown as BaseShapeData,
+          } as unknown as ShapeData,
           x: 0,
           y: 0,
         },
@@ -1050,8 +1051,7 @@ describe("composite shape data", () => {
       },
     ]);
     const container = elements.find(
-      (element) =>
-        element.type === "composite_shape" && element.shape.id === type,
+      (element) => isShapeElement(element) && element.shape.id === type,
     );
     const textId = container?.boundElements?.find(
       (boundElement) => boundElement.type === "text",
@@ -1121,8 +1121,7 @@ describe("composite shape data", () => {
     ]);
     const arrow = elements.find((element) => element.type === "arrow");
     const endpoints = elements.filter(
-      (element) =>
-        element.type === "composite_shape" && element.shape.id === type,
+      (element) => isShapeElement(element) && element.shape.id === type,
     );
 
     if (!arrow || arrow.type !== "arrow") {
@@ -1140,7 +1139,7 @@ describe("composite shape data", () => {
     const element = newElement({ type: "diamond", x: 12, y: 34 });
     const copy = deepCopyElement(element);
 
-    if (element.type !== "composite_shape" || copy.type !== "composite_shape") {
+    if (element.type !== "composite" || copy.type !== "composite") {
       throw new Error("Expected composite shape");
     }
 
@@ -1156,7 +1155,7 @@ describe("composite shape data", () => {
       width: 120,
       height: 80,
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
 
@@ -1176,7 +1175,7 @@ describe("composite shape data", () => {
       width: 100,
       height: 80,
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
 
@@ -1218,7 +1217,7 @@ describe("composite shape data", () => {
       width: 120,
       height: 80,
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
 
@@ -1242,7 +1241,7 @@ describe("composite shape data", () => {
 
   it("draws three independent cube faces before its visible edges", () => {
     const element = newElement({
-      type: "composite_shape",
+      type: "composite",
       shape: {
         id: "cube",
         schemaVersion: 1,
@@ -1255,7 +1254,7 @@ describe("composite shape data", () => {
       backgroundColor: "#eae2fe",
       fillStyle: "solid",
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const geometry = getCompositeShapeGeometry(element);
@@ -1325,7 +1324,7 @@ describe("composite shape data", () => {
       backgroundColor: "#dff5e5",
       fillStyle: "solid",
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
 
@@ -1379,7 +1378,7 @@ describe("composite shape data", () => {
         height: 80,
         backgroundColor: "transparent",
       });
-      if (element.type !== "composite_shape") {
+      if (element.type !== "composite") {
         throw new Error("Expected composite shape");
       }
       const drawables = ShapeCache.generateElementShape(element, null);
@@ -1402,7 +1401,7 @@ describe("composite shape data", () => {
       backgroundColor: "#eae2fe80",
       fillStyle: "solid",
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const drawables = ShapeCache.generateElementShape(element, null);
@@ -1424,7 +1423,7 @@ describe("composite shape data", () => {
       width: 100,
       height: 80,
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const outline = getCompositeShapeGeometry(element).outline;
@@ -1473,10 +1472,7 @@ describe("composite shape data", () => {
       width: 100,
       height: 100,
     });
-    if (
-      brace.type !== "composite_shape" ||
-      reverseBrace.type !== "composite_shape"
-    ) {
+    if (brace.type !== "composite" || reverseBrace.type !== "composite") {
       throw new Error("Expected composite shape");
     }
 
@@ -1512,8 +1508,8 @@ describe("composite shape data", () => {
       height: 100,
     });
     if (
-      wideBrace.type !== "composite_shape" ||
-      wideReverseBrace.type !== "composite_shape"
+      wideBrace.type !== "composite" ||
+      wideReverseBrace.type !== "composite"
     ) {
       throw new Error("Expected composite shape");
     }
@@ -1543,7 +1539,7 @@ describe("composite shape data", () => {
         height: 100,
         roundness: null,
       });
-      if (element.type !== "composite_shape") {
+      if (element.type !== "composite") {
         throw new Error("Expected composite shape");
       }
       const elementsMap = arrayToMap([element]);
@@ -1597,7 +1593,7 @@ describe("composite shape data", () => {
         angle: (Math.PI / 6) as Radians,
         roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
       });
-      if (element.type !== "composite_shape") {
+      if (element.type !== "composite") {
         throw new Error("Expected composite shape");
       }
       const geometry = getCompositeShapeGeometry(element);
@@ -1641,12 +1637,64 @@ describe("composite shape data", () => {
       height: 120,
       angle: 0 as Radians,
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
 
     expect(getCompositeShapeGlobalPath(element)).toEqual(
       getCompositeShapeGeometry(element).outline,
     );
+  });
+
+  it("maps every shape id to its family element type", () => {
+    expect(BASIC_SHAPE_IDS).toHaveLength(29);
+    expect(FLOWCHART_SHAPE_IDS).toHaveLength(14);
+    expect(SHAPE_IDS).toHaveLength(43);
+    expect([...BASIC_SHAPE_IDS, ...FLOWCHART_SHAPE_IDS]).toEqual([
+      ...SHAPE_IDS,
+    ]);
+    for (const id of SHAPE_IDS) {
+      const expected = (BASIC_SHAPE_IDS as readonly string[]).includes(id)
+        ? "composite"
+        : "flow";
+      expect(shapeElementType(id)).toBe(expected);
+    }
+  });
+
+  it("derives the element type from the shape id during creation", () => {
+    const flow = newElement({
+      type: "fc-diamond",
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 80,
+    });
+    expect(flow).toMatchObject({ type: "flow", shape: { id: "fc-diamond" } });
+
+    const basic = newElement({
+      type: "diamond",
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 80,
+    });
+    expect(basic).toMatchObject({
+      type: "composite",
+      shape: { id: "diamond" },
+    });
+  });
+
+  it("rejects type/shape pairs that cross families", () => {
+    const basicShape = buildShapeData("rectangle");
+    const flowShape = buildShapeData("fc-diamond");
+    expect(() => assertShapeElementType("flow", basicShape)).toThrowError(
+      "Shape data does not belong to element type: flow",
+    );
+    expect(() => assertShapeElementType("composite", flowShape)).toThrowError(
+      "Shape data does not belong to element type: composite",
+    );
+    // matching pairs do not throw
+    expect(() => assertShapeElementType("composite", basicShape)).not.toThrow();
+    expect(() => assertShapeElementType("flow", flowShape)).not.toThrow();
   });
 });

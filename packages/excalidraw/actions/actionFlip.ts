@@ -7,7 +7,7 @@ import { deepCopyElement } from "@excalidraw/element";
 import { resizeMultipleElements } from "@excalidraw/element";
 import {
   isArrowElement,
-  isCompositeShapeId,
+  isShapeWithId,
   isElbowArrow,
 } from "@excalidraw/element";
 import { updateFrameMembershipOfSelectedElements } from "@excalidraw/element";
@@ -16,7 +16,7 @@ import { CODES, KEYS, arrayToMap } from "@excalidraw/common";
 import { CaptureUpdateAction } from "@excalidraw/element";
 
 import type {
-  BaseShapeData,
+  ShapeData,
   ExcalidrawArrowElement,
   ExcalidrawElbowArrowElement,
   ExcalidrawElement,
@@ -159,10 +159,7 @@ const flipElements = (
   // `trapezoid` 的窄边分上下，垂直翻转互换；三角形的斜边分左右，横向翻转时
   // `triangle` 镜像 `apexX`，`right-triangle` / `left-triangle` 互换 id。
   for (const element of selectedElements) {
-    if (
-      flipDirection === "vertical" &&
-      isCompositeShapeId(element, "trapezoid")
-    ) {
+    if (flipDirection === "vertical" && isShapeWithId(element, "trapezoid")) {
       const shape = element.shape;
       app.scene.mutateElement(element, {
         shape: {
@@ -176,7 +173,7 @@ const flipElements = (
       updateBoundElements(element, app.scene);
     } else if (
       flipDirection === "horizontal" &&
-      isCompositeShapeId(element, "triangle")
+      isShapeWithId(element, "triangle")
     ) {
       const shape = element.shape;
       app.scene.mutateElement(element, {
@@ -188,13 +185,10 @@ const flipElements = (
       updateBoundElements(element, app.scene);
     } else if (
       flipDirection === "horizontal" &&
-      (isCompositeShapeId(element, "right-triangle") ||
-        isCompositeShapeId(element, "left-triangle"))
+      (isShapeWithId(element, "right-triangle") ||
+        isShapeWithId(element, "left-triangle"))
     ) {
-      const nextShape: BaseShapeData = isCompositeShapeId(
-        element,
-        "right-triangle",
-      )
+      const nextShape: ShapeData = isShapeWithId(element, "right-triangle")
         ? { id: "left-triangle", schemaVersion: 1 }
         : { id: "right-triangle", schemaVersion: 1 };
       app.scene.mutateElement(element, {

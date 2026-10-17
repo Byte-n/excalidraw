@@ -40,10 +40,12 @@ import { wrapText } from "./textWrapping";
 
 import { isLineElement } from "./typeChecks";
 import {
-  assertBaseShapeData,
-  baseShapeData,
+  assertShapeElementType,
+  buildShapeData,
   getCompositeShapeTextFitMode,
+  isBasicShapeId,
   isCompositeShapeOpen,
+  isShapeElement,
 } from "./compositeShape";
 import { DEFAULT_MINDMAP_EDGE_ROUTING, mindmapShapeData } from "./mindmap";
 import {
@@ -83,8 +85,13 @@ import type {
   MindmapNodeShape,
   MindmapLayoutDirection,
   MindmapEdgeRouting,
-  BaseShapeData,
-  ExcalidrawCompositeShapeElement,
+  ShapeData,
+  BasicShapeData,
+  ShapeId,
+  ShapeElementType,
+  ExcalidrawShapeElement,
+  ExcalidrawCompositeElement,
+  ExcalidrawFlowElement,
   ExcalidrawSelectionElement,
   ExcalidrawTableElement,
 } from "./types";
@@ -120,7 +127,7 @@ export type ElementConstructorOpts = MarkOptional<
 type CompositeShapeConstructorOpts = ElementConstructorOpts &
   Partial<
     Pick<
-      ExcalidrawCompositeShapeElement,
+      ExcalidrawShapeElement,
       "textFitMode" | "textFitMinWidth" | "textFitMinHeight"
     >
   >;
@@ -210,41 +217,64 @@ const _newElementBase = <T extends ExcalidrawElement>(
   return element;
 };
 
+/**
+ * Type guard narrowing `ShapeData` to its basic family. Used by `newElement`
+ * to pair the element `type` with the shape's family without a cast.
+ */
+const isBasicShapeData = (shape: ShapeData): shape is BasicShapeData =>
+  isBasicShapeId(shape.id);
+
 export const newElement = (
   opts:
     | (ElementConstructorOpts & { type: "selection" })
-    | (CompositeShapeConstructorOpts &
-        (
-          | { type: BaseShapeData["id"] }
-          | { type: "composite_shape"; shape: BaseShapeData }
-        )),
+    | (CompositeShapeConstructorOpts & { type: ShapeId })
+    | (CompositeShapeConstructorOpts & {
+        type: ShapeElementType;
+        shape: ShapeData;
+      }),
 ): NonDeleted<ExcalidrawGenericElement> => {
   if (opts.type === "selection") {
     return _newElementBase<ExcalidrawSelectionElement>("selection", opts);
   }
   const shape =
-    opts.type === "composite_shape"
-      ? assertBaseShapeData(opts.shape)
-      : baseShapeData(opts.type);
-  return {
-    ..._newElementBase<ExcalidrawCompositeShapeElement>("composite_shape", {
-      ...opts,
-      backgroundColor: isCompositeShapeOpen(shape.id)
-        ? "transparent"
-        : opts.backgroundColor,
-    }),
-    type: "composite_shape",
-    shape,
-    ...(opts.textFitMode === undefined
-      ? {}
-      : { textFitMode: opts.textFitMode }),
-    ...(opts.textFitMinWidth === undefined
-      ? {}
-      : { textFitMinWidth: opts.textFitMinWidth }),
-    ...(opts.textFitMinHeight === undefined
-      ? {}
-      : { textFitMinHeight: opts.textFitMinHeight }),
+    opts.type === "composite" || opts.type === "flow"
+      ? (assertShapeElementType(opts.type, opts.shape), opts.shape)
+      : buildShapeData(opts.type);
+  const baseOpts = {
+    ...opts,
+    backgroundColor: isCompositeShapeOpen(shape.id)
+      ? "transparent"
+      : opts.backgroundColor,
   };
+  const textFit =
+    opts.textFitMode === undefined &&
+    opts.textFitMinWidth === undefined &&
+    opts.textFitMinHeight === undefined
+      ? {}
+      : {
+          ...(opts.textFitMode === undefined
+            ? {}
+            : { textFitMode: opts.textFitMode }),
+          ...(opts.textFitMinWidth === undefined
+            ? {}
+            : { textFitMinWidth: opts.textFitMinWidth }),
+          ...(opts.textFitMinHeight === undefined
+            ? {}
+            : { textFitMinHeight: opts.textFitMinHeight }),
+        };
+  return isBasicShapeData(shape)
+    ? {
+        ..._newElementBase<ExcalidrawCompositeElement>("composite", baseOpts),
+        type: "composite",
+        shape,
+        ...textFit,
+      }
+    : {
+        ..._newElementBase<ExcalidrawFlowElement>("flow", baseOpts),
+        type: "flow",
+        shape,
+        ...textFit,
+      };
 };
 
 /**
@@ -724,7 +754,7 @@ export const refreshTextDimensions = (
       : textElement.width;
     text = wrapText(text, font, maxWidth);
     if (
-      container?.type === "composite_shape" &&
+      isShapeElement(container) &&
       getCompositeShapeTextFitMode(container) === "fixed"
     ) {
       text = truncateTextToBounds(

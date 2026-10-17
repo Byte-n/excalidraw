@@ -71,7 +71,7 @@ describe("Test measureText", () => {
         width,
         height,
       });
-      if (container.type !== "composite_shape") {
+      if (container.type !== "composite") {
         throw new Error("Expected composite shape");
       }
       const bounds = getCompositeShapeTextBounds(container);
@@ -102,7 +102,7 @@ describe("Test measureText", () => {
       height: 80,
       angle: (Math.PI / 2) as Radians,
     });
-    if (container.type !== "composite_shape") {
+    if (container.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const text = API.createElement({

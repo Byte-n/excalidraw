@@ -1,9 +1,10 @@
 import { pointFrom, type GlobalPoint, type Radians } from "@excalidraw/math";
 import {
-  baseShapeData,
+  buildShapeData,
   distanceToElement,
   getBindingGap,
-  type BaseShapeId,
+  shapeElementType,
+  type ShapeId,
   supportsFill,
 } from "@excalidraw/element";
 
@@ -94,7 +95,7 @@ const flowchartPresets = [
 const presets = [...genericPresets, ...flowchartPresets] as const;
 
 const shapeForPreset = (preset: typeof presets[number]) =>
-  baseShapeData(preset as BaseShapeId);
+  buildShapeData(preset as ShapeId);
 
 describe.each([
   { name: "desktop", width: 1200, height: 800, formFactor: "desktop" },
@@ -192,7 +193,7 @@ describe.each([
       mouse.reset();
       mouse.up(x + 80, 160);
       expect(h.elements[h.elements.length - 1]).toMatchObject({
-        type: "composite_shape",
+        type: "composite",
         shape: { id, schemaVersion: 1 },
       });
     }
@@ -239,15 +240,12 @@ describe.each([
 
       const created = h.elements[h.elements.length - 1];
       expect(created).toMatchObject({
-        type: "composite_shape",
+        type: shapeElementType(preset as ShapeId),
         shape: { id: preset, schemaVersion: 1 },
       });
       // 只有参数化的 `triangle` 带 apexX；right-triangle / left-triangle 是
       // 无参的独立 id，形状本身已经决定斜边朝向
-      if (
-        created.type === "composite_shape" &&
-        created.shape.id === "triangle"
-      ) {
+      if (created.type === "composite" && created.shape.id === "triangle") {
         expect(created.shape.triangle.apexX).toBe(0.5);
       }
     }
@@ -262,7 +260,7 @@ describe.each([
       width: 100,
       height: 80,
     });
-    if (triangle.type !== "composite_shape") {
+    if (triangle.type !== "composite") {
       throw new Error("Expected triangle");
     }
     API.setElements([triangle]);
@@ -296,7 +294,7 @@ describe.each([
       width: 120,
       height: 80,
     });
-    if (trapezoid.type !== "composite_shape") {
+    if (trapezoid.type !== "composite") {
       throw new Error("Expected trapezoid");
     }
     API.setElements([trapezoid]);
@@ -311,7 +309,7 @@ describe.each([
       shape: { id: "trapezoid", trapezoid: { narrowEdge: "top" } },
     });
     if (
-      h.elements[0].type === "composite_shape" &&
+      h.elements[0].type === "composite" &&
       h.elements[0].shape.id === "trapezoid"
     ) {
       expect(h.elements[0].shape.trapezoid.narrowWidthRatio).toBeCloseTo(
@@ -338,7 +336,7 @@ describe.each([
 
   it("mirrors a triangle apex with the existing horizontal flip action", () => {
     const triangle = API.createElement({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "triangle", schemaVersion: 1, triangle: { apexX: 0 } },
       x: 150,
       y: 150,
@@ -362,7 +360,7 @@ describe.each([
       width: 100,
       height: 80,
     });
-    if (cube.type !== "composite_shape") {
+    if (cube.type !== "composite") {
       throw new Error("Expected cube");
     }
     API.setElements([cube]);
@@ -374,8 +372,8 @@ describe.each([
     mouse.move(100, 100);
     mouse.up();
     const changed = h.elements[0];
-    expect(changed.type).toBe("composite_shape");
-    if (changed.type === "composite_shape" && changed.shape.id === "cube") {
+    expect(changed.type).toBe("composite");
+    if (changed.type === "composite" && changed.shape.id === "cube") {
       expect(changed.shape.cube.controlPoint.x).toBeLessThan(1);
       expect(changed.shape.cube.controlPoint.y).toBeLessThan(1);
     }
@@ -404,7 +402,7 @@ describe.each([
       height: 80,
       angle: (Math.PI / 2) as Radians,
     });
-    if (triangle.type !== "composite_shape") {
+    if (triangle.type !== "composite") {
       throw new Error("Expected triangle");
     }
     API.setElements([triangle]);
@@ -428,7 +426,7 @@ describe.each([
       width: 100,
       height: 80,
     });
-    if (triangle.type !== "composite_shape") {
+    if (triangle.type !== "composite") {
       throw new Error("Expected triangle");
     }
     API.setElements([triangle]);
@@ -451,7 +449,7 @@ describe.each([
       width: 100,
       height: 80,
     });
-    if (triangle.type !== "composite_shape") {
+    if (triangle.type !== "composite") {
       throw new Error("Expected triangle");
     }
     const text = API.createElement({
@@ -506,7 +504,7 @@ describe.each([
     expect(boundArrow).toMatchObject({
       endBinding: { elementId: triangle.id },
     });
-    if (moved?.type === "composite_shape" && boundArrow?.type === "arrow") {
+    if (moved?.type === "composite" && boundArrow?.type === "arrow") {
       const end = boundArrow.points.at(-1)!;
       const endPoint = pointFrom<GlobalPoint>(
         boundArrow.x + end[0],
@@ -555,7 +553,7 @@ describe("composite shape editing matrix", () => {
     "edits %s through styles, transforms and duplication",
     (preset) => {
       const element = API.createElement({
-        type: "composite_shape",
+        type: shapeElementType(preset as ShapeId),
         shape: shapeForPreset(preset),
         x: 150,
         y: 150,
@@ -600,7 +598,7 @@ describe("composite shape editing matrix", () => {
       const current = h.app.scene.getNonDeletedElements();
       expect(current).toHaveLength(2);
       expect(current[1]).toMatchObject({
-        type: "composite_shape",
+        type: shapeElementType(preset as ShapeId),
         shape: shapeForPreset(preset),
         width: edited?.width,
         height: edited?.height,
@@ -620,7 +618,7 @@ describe("composite shape editing matrix", () => {
     "keeps %s identity through grouping and layer changes",
     (preset) => {
       const shape = API.createElement({
-        type: "composite_shape",
+        type: "composite",
         shape: shapeForPreset(preset),
         x: 150,
         y: 150,
@@ -664,7 +662,7 @@ describe("composite shape editing matrix", () => {
     "pastes %s into the canvas with its shape data",
     async (preset) => {
       const element = API.createElement({
-        type: "composite_shape",
+        type: "composite",
         shape: shapeForPreset(preset),
         x: 150,
         y: 150,
@@ -694,7 +692,7 @@ describe("composite shape editing matrix", () => {
         .getNonDeletedElements()
         .find((candidate) => candidate.id !== element.id);
       expect(pasted).toMatchObject({
-        type: "composite_shape",
+        type: "composite",
         shape: shapeForPreset(preset),
         width: 100,
         height: 80,

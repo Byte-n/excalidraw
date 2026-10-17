@@ -45,7 +45,7 @@ import { getElementsWithinSelection } from "../src/selection";
 import { Scene } from "../src/Scene";
 import { hitElementItself, isPointInElement } from "../src/collision";
 import { ShapeCache } from "../src/shape";
-import { assertBaseShapeData } from "../src/compositeShape";
+import { assertShapeData } from "../src/compositeShape";
 import { getCornerRadius } from "../src/utils";
 import {
   getBoundTextMaxHeight,
@@ -243,7 +243,7 @@ describe("mindmap 正式元素模型", () => {
   it("keeps mindmap pill data independent from ordinary composite shapes", () => {
     const pill = mindmapShapeData("pill");
     expect(assertMindmapShapeData(pill)).toBe(pill);
-    expect(assertBaseShapeData(pill)).toBe(pill);
+    expect(assertShapeData(pill)).toBe(pill);
   });
 
   it("根节点矩形按 roundness 渲染圆角，未设置时保持直角", () => {

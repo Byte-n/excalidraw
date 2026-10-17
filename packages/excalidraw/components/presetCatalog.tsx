@@ -2,9 +2,16 @@ import {
   STICKY_NOTE_PRESETS,
   TABLE_PRESET_IDS,
   supportsFill,
+  BASIC_SHAPE_IDS,
+  FLOWCHART_SHAPE_IDS,
 } from "@excalidraw/element";
 
-import type { StickyNotePreset, TablePresetId } from "@excalidraw/element";
+import type {
+  StickyNotePreset,
+  TablePresetId,
+  BasicShapeId,
+  ShapeId,
+} from "@excalidraw/element";
 import type { MindmapLayoutDirection, Theme } from "@excalidraw/element/types";
 
 import { getCompositeShapeIcon } from "./CompositeShapeIcon";
@@ -66,80 +73,17 @@ export type PresetCatalogGroup = {
 };
 
 /**
- * 基础图形 id（原 `Tools.tsx` 的 `SHAPE_TOOLS`），每一项都是一个元素的
- * `shape.id`。
+ * The family id lists and id-narrowing predicates are declared in exactly one
+ * place — `@excalidraw/element` (`compositeShape/family.ts`). They are
+ * re-exported here so the rest of the app keeps its import paths.
  */
-const BASIC_SHAPE_IDS = [
-  "rectangle",
-  "diamond",
-  "ellipse",
-  "cross",
-  "brace-reverse",
-  "brace",
-  "cloud",
-  "double-arrow",
-  "forward-arrow",
-  "backward-arrow",
-  "octagon",
-  "pentagon",
-  "hexagon",
-  "star",
-  "triangle",
-  "right-triangle",
-  "left-triangle",
-  "round-rect",
-  "rectangle-bubble",
-  "pill",
-  "bubble",
-  "trapezoid",
-  "parallelogram",
-  "right-pentagon",
-  "step",
-  "cube",
-  "cylinder",
-  "pie",
-  "circular-ring",
-] as const;
+export type { BasicShapeId, FlowchartShapeId } from "@excalidraw/element";
+export { isFlowchartShapeId } from "@excalidraw/element";
 
-export type BasicShapeId = typeof BASIC_SHAPE_IDS[number];
+/** The full 43-id shape union (basic + flowchart). */
+export type GenericShapeId = ShapeId;
 
-/** 流程图（Lark）图形 id（原 `FLOWCHART_SHAPE_IDS`） */
-const FLOWCHART_SHAPE_IDS = [
-  "fc-round-rect",
-  "fc-terminator",
-  "fc-diamond",
-  "fc-document",
-  "fc-parallelogram",
-  "fc-cylinder",
-  "fc-horiz-cylinder",
-  "fc-predefined-process",
-  "fc-manual-input",
-  "fc-trapezoid",
-  "fc-delay",
-  "fc-hexagon",
-  "fc-off-page-connector",
-  "fc-circle",
-] as const;
-
-export type FlowchartShapeId = typeof FLOWCHART_SHAPE_IDS[number];
-
-/** 普通图形 popover 认可的全部形状 id（基础 + 流程图） */
-export type GenericShapeId = BasicShapeId | FlowchartShapeId;
-
-const GENERIC_SHAPE_ID_SET: ReadonlySet<string> = new Set([
-  ...BASIC_SHAPE_IDS,
-  ...FLOWCHART_SHAPE_IDS,
-]);
-
-const FLOWCHART_SHAPE_ID_SET: ReadonlySet<string> = new Set(
-  FLOWCHART_SHAPE_IDS,
-);
-
-export const isGenericShapeId = (type: string): type is GenericShapeId =>
-  GENERIC_SHAPE_ID_SET.has(type);
-
-export const isFlowchartShapeId = (type: string): type is FlowchartShapeId =>
-  FLOWCHART_SHAPE_ID_SET.has(type);
+export { isShapeId as isGenericShapeId } from "@excalidraw/element";
 
 /** 基础图形的缩略图：矩形/菱形/椭圆走各自工具图标，其余走复合图形图标 */
 const getBasicShapeIcon = (id: BasicShapeId): ReactNode =>

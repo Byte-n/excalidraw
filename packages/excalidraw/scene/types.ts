@@ -175,7 +175,8 @@ export type ElementShape =
 export type ElementShapes = {
   "mindmap-node": Drawable;
   "mindmap-edge": Drawable;
-  composite_shape: Drawable | Drawable[];
+  composite: Drawable | Drawable[];
+  flow: Drawable | Drawable[];
   iframe: Drawable;
   embeddable: Drawable;
   freedraw: (Drawable | SVGPathString)[];

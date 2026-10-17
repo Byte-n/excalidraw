@@ -1,9 +1,10 @@
 import type { Radians } from "@excalidraw/math";
 
 import {
-  assertBaseShapeData,
-  baseShapeData,
-  isCompositeShapeElement,
+  assertShapeData,
+  buildShapeData,
+  isShapeElement,
+  shapeElementType,
 } from "./compositeShape";
 import { newElement } from "./newElement";
 import { updateBoundElements } from "./binding";
@@ -17,7 +18,7 @@ import {
   updateSceneLabel,
 } from "./sceneOperations";
 
-import type { BaseShapeData, BaseShapeId } from "./types";
+import type { ShapeData, ShapeId } from "./types";
 import type {
   CanvasElementOperationResult,
   NullableStyle,
@@ -46,7 +47,7 @@ export type ShapeOptions =
   | TrapezoidShapeOptions
   | CubeShapeOptions
   | CircularShapeOptions;
-export type ShapeOptionsFor<T extends BaseShapeId> = T extends "triangle"
+export type ShapeOptionsFor<T extends ShapeId> = T extends "triangle"
   ? TriangleShapeOptions
   : T extends "trapezoid"
   ? TrapezoidShapeOptions
@@ -57,7 +58,7 @@ export type ShapeOptionsFor<T extends BaseShapeId> = T extends "triangle"
   : never;
 
 type ShapeCreateOperation = {
-  [K in BaseShapeId]: Readonly<{
+  [K in ShapeId]: Readonly<{
     action: "create";
     kind: K;
     geometry: SceneGeometry;
@@ -66,11 +67,11 @@ type ShapeCreateOperation = {
     textStyle?: SceneTextStyle;
     shapeOptions?: ShapeOptionsFor<K>;
   }>;
-}[BaseShapeId];
+}[ShapeId];
 export type ShapeOperation =
   | Readonly<{
       action: "create";
-      kind: BaseShapeId;
+      kind: ShapeId;
       geometry: SceneGeometry;
       text?: string;
       style?: ShapeStyle;
@@ -99,14 +100,14 @@ const requireKeys = (options: ShapeOptions, keys: readonly string[]) => {
 };
 
 export const applyShapeOptions = (
-  shape: BaseShapeData,
+  shape: ShapeData,
   options: ShapeOptions | undefined,
-): BaseShapeData => {
+): ShapeData => {
   if (!options) {
     return shape;
   }
-  const defaults = baseShapeData(shape.id);
-  let candidate: BaseShapeData;
+  const defaults = buildShapeData(shape.id);
+  let candidate: ShapeData;
   switch (shape.id) {
     case "triangle": {
       requireKeys(options, ["apexX"]);
@@ -222,7 +223,7 @@ export const applyShapeOptions = (
       throw new CanvasSceneError("invalid_input", "当前图形没有可编辑参数");
   }
   try {
-    return assertBaseShapeData(candidate);
+    return assertShapeData(candidate);
   } catch {
     throw new CanvasSceneError("invalid_input", "图形参数超出有效范围");
   }
@@ -236,16 +237,17 @@ export const applyShapeOperation = (
   try {
     let shape;
     if (operation.action === "create") {
+      const shapeData = applyShapeOptions(
+        buildShapeData(operation.kind),
+        operation.shapeOptions,
+      );
       const element = newElement({
-        type: "composite_shape",
-        shape: applyShapeOptions(
-          baseShapeData(operation.kind),
-          operation.shapeOptions,
-        ),
+        type: shapeElementType(shapeData.id),
+        shape: shapeData,
         ...operation.geometry,
         angle: operation.geometry.angle as Radians | undefined,
       });
-      if (!isCompositeShapeElement(element)) {
+      if (!isShapeElement(element)) {
         throw new Error("图形工厂返回非法类型");
       }
       shape = element;
@@ -259,7 +261,7 @@ export const applyShapeOperation = (
       const element = scene
         .getNonDeletedElementsMap()
         .get(operation.target.elementId);
-      if (!element || !isCompositeShapeElement(element)) {
+      if (!element || !isShapeElement(element)) {
         throw new CanvasSceneError("target_not_found", "图形不存在");
       }
       shape = element;

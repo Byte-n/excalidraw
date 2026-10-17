@@ -6,7 +6,7 @@ import { vi } from "vitest";
 import { setDateTimeForTests, reseed } from "@excalidraw/common";
 
 import {
-  isCompositeShapeId,
+  isShapeWithId,
   isInGroup,
   TABLE_PRESET_IDS,
 } from "@excalidraw/element";
@@ -608,9 +608,7 @@ describe("stats for multiple elements", () => {
     API.setElements([...h.elements, frame]);
 
     const text = h.elements.find((el) => el.type === "text");
-    const rectangle = h.elements.find((el) =>
-      isCompositeShapeId(el, "rectangle"),
-    );
+    const rectangle = h.elements.find((el) => isShapeWithId(el, "rectangle"));
 
     API.setAppState({
       selectedElementIds: h.elements.reduce((acc, el) => {
@@ -983,16 +981,14 @@ describe("element type labels", () => {
     expect(elementTypeLabel()).toBe(t("element.table"));
   });
 
-  it.each([
-    "pie",
-    "circular-ring",
-    "right-triangle",
-    "left-triangle",
-  ] as const)("composite shape %s", (type) => {
-    const shape = API.createElement({ type, width: 120 });
-    API.setElements([shape]);
-    API.setSelectedElements([shape]);
+  it.each(["pie", "circular-ring", "right-triangle", "left-triangle"] as const)(
+    "composite shape %s",
+    (type) => {
+      const shape = API.createElement({ type, width: 120 });
+      API.setElements([shape]);
+      API.setSelectedElements([shape]);
 
-    expect(elementTypeLabel()).toBe(t(`element.${type}`));
-  });
+      expect(elementTypeLabel()).toBe(t(`element.${type}`));
+    },
+  );
 });

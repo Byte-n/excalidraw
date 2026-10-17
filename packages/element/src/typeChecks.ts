@@ -6,7 +6,7 @@ import type { ElementOrToolType } from "@excalidraw/excalidraw/types";
 
 import type { MarkNonNullable } from "@excalidraw/common/utility-types";
 
-import { assertBaseShapeData } from "./compositeShape";
+import { assertShapeElementType, isShapeElement } from "./compositeShape";
 import { assertMindmapShapeData } from "./mindmap";
 import { assertValidTableData } from "./tableStruct";
 
@@ -425,7 +425,8 @@ export const isBindableElement = <T extends ExcalidrawElement>(
   return (
     element != null &&
     (!element.locked || includeLocked === true) &&
-    (element.type === "composite_shape" ||
+    (element.type === "composite" ||
+      element.type === "flow" ||
       element.type === "stickynote" ||
       element.type === "mindmap-node" ||
       element.type === "image" ||
@@ -442,7 +443,7 @@ export const isRectanguloidElement = <T extends ExcalidrawElement>(
 ): element is T & ExcalidrawBindableElement => {
   return (
     element != null &&
-    ((element.type === "composite_shape" && element.shape.id !== "ellipse") ||
+    ((isShapeElement(element) && element.shape.id !== "ellipse") ||
       element.type === "stickynote" ||
       element.type === "image" ||
       element.type === "iframe" ||
@@ -460,7 +461,7 @@ export const isRectangularElement = <T extends ExcalidrawElement>(
 ): element is T & ExcalidrawBindableElement => {
   return (
     element != null &&
-    ((element.type === "composite_shape" && element.shape.id === "rectangle") ||
+    ((isShapeElement(element) && element.shape.id === "rectangle") ||
       element.type === "stickynote" ||
       element.type === "image" ||
       element.type === "text" ||
@@ -479,7 +480,8 @@ export const isTextBindableContainer = <T extends ExcalidrawElement>(
   return (
     element != null &&
     (!element.locked || includeLocked === true) &&
-    (element.type === "composite_shape" ||
+    (element.type === "composite" ||
+      element.type === "flow" ||
       element.type === "stickynote" ||
       element.type === "mindmap-node" ||
       isLinearElement(element))
@@ -494,8 +496,9 @@ export const isExcalidrawElement = (
     return false;
   }
   switch (type) {
-    case "composite_shape":
-      assertBaseShapeData(element.shape);
+    case "composite":
+    case "flow":
+      assertShapeElementType(type, element.shape);
       return true;
     case "mindmap-node":
       assertMindmapShapeData(element.shape);
@@ -527,7 +530,11 @@ export const isExcalidrawElement = (
 export const isFlowchartNodeElement = <T extends ExcalidrawElement>(
   element: T,
 ): element is T & ExcalidrawFlowchartNodeElement => {
-  return element.type === "composite_shape" || element.type === "stickynote";
+  return (
+    element.type === "composite" ||
+    element.type === "flow" ||
+    element.type === "stickynote"
+  );
 };
 
 export const hasBoundTextElement = <T extends ExcalidrawElement>(
@@ -568,7 +575,7 @@ export const isUsingProportionalRadius = (type: string) =>
   type === "stickynote";
 
 const getRoundnessShapeType = (element: ExcalidrawElement) =>
-  element.type === "composite_shape" ? element.shape.id : element.type;
+  isShapeElement(element) ? element.shape.id : element.type;
 
 export const canApplyRoundnessTypeToElement = (
   roundnessType: RoundnessType,
@@ -651,7 +658,8 @@ export const canBecomePolygon = (
 
 export const isEligibleFrameChildType = (type: ElementOrToolType) => {
   switch (type) {
-    case "composite_shape":
+    case "composite":
+    case "flow":
     case "rectangle":
     case "stickynote":
     case "diamond":

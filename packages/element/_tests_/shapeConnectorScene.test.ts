@@ -4,7 +4,11 @@ import { pointFrom } from "@excalidraw/math";
 
 import type { LocalPoint } from "@excalidraw/math";
 
-import { BASE_SHAPE_IDS, baseShapeData } from "../src/compositeShape";
+import {
+  SHAPE_IDS,
+  buildShapeData,
+  shapeElementType,
+} from "../src/compositeShape";
 import { ARROWHEAD_VALUES } from "../src/arrowheads";
 import { applyShapeOperation } from "../src/shapeScene";
 import { applyConnectorOperation } from "../src/connectorScene";
@@ -65,7 +69,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("普通图形纯场景操作", () => {
-  it.each(BASE_SHAPE_IDS)("%s 创建真实标签且保留完整既有候选", (kind) => {
+  it.each(SHAPE_IDS)("%s 创建真实标签且保留完整既有候选", (kind) => {
     const input = shape().elements;
     const snapshot = structuredClone(input);
     const created = applyShapeOperation(input, {
@@ -78,8 +82,8 @@ describe("普通图形纯场景操作", () => {
       (element) => element.id === created.createdElementIds[0],
     );
     expect(target).toMatchObject({
-      type: "composite_shape",
-      shape: baseShapeData(kind),
+      type: shapeElementType(kind),
+      shape: buildShapeData(kind),
     });
     const text = created.elements.find(
       (element) =>
@@ -155,7 +159,7 @@ describe("普通图形纯场景操作", () => {
       shapeOptions: clear,
     });
     expect(updated.changedElementIds).toEqual([target.elementId]);
-    expect(reset.elements[0]).toMatchObject({ shape: baseShapeData(kind) });
+    expect(reset.elements[0]).toMatchObject({ shape: buildShapeData(kind) });
     preserveIdentity(created.elements, reset.elements);
   });
 

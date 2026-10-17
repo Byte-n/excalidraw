@@ -191,11 +191,11 @@ export type ExcalidrawSelectionElement = _ExcalidrawElementBase & {
 };
 
 /**
- * Persisted data for a regular composite shape.  The union is deliberately
+ * Persisted data for a basic (non-flowchart) shape. The union is deliberately
  * kept explicit: shape parameters are part of the file contract and must not
  * be accepted as an untyped record.
  */
-export type BaseShapeData =
+export type BasicShapeData =
   | Readonly<{ id: "rectangle"; schemaVersion: 1 }>
   | Readonly<{ id: "diamond"; schemaVersion: 1 }>
   | Readonly<{ id: "ellipse"; schemaVersion: 1 }>
@@ -257,7 +257,12 @@ export type BaseShapeData =
         sectorRatio: number;
         startRadialLineAngle: number;
       }>;
-    }>
+    }>;
+
+/**
+ * Persisted data for a flowchart (Lark) shape; the 14 `fc-*` ids.
+ */
+export type FlowchartShapeData =
   | Readonly<{ id: "fc-round-rect"; schemaVersion: 1 }>
   | Readonly<{ id: "fc-terminator"; schemaVersion: 1 }>
   | Readonly<{ id: "fc-diamond"; schemaVersion: 1 }>
@@ -273,22 +278,45 @@ export type BaseShapeData =
   | Readonly<{ id: "fc-off-page-connector"; schemaVersion: 1 }>
   | Readonly<{ id: "fc-circle"; schemaVersion: 1 }>;
 
-export type BaseShapeId = BaseShapeData["id"];
+export type ShapeData = BasicShapeData | FlowchartShapeData;
 
-export type ExcalidrawCompositeShapeElement = _ExcalidrawElementBase &
+export type BasicShapeId = BasicShapeData["id"];
+export type FlowchartShapeId = FlowchartShapeData["id"];
+export type ShapeId = ShapeData["id"];
+
+/** Top-level element `type` values for the shape families. */
+export type ShapeElementType = "composite" | "flow";
+
+/** Optional text-fit fields shared by every shape element. */
+type ShapeTextFit = Readonly<{
+  /** Text layout policy. Missing values are treated as the adaptive default. */
+  textFitMode?: "auto" | "fixed";
+  /** Minimum dimensions preserved by adaptive text layout. */
+  textFitMinWidth?: number;
+  textFitMinHeight?: number;
+}>;
+
+export type ExcalidrawCompositeElement = _ExcalidrawElementBase &
   Readonly<{
-    type: "composite_shape";
-    shape: BaseShapeData;
-    /** Text layout policy. Missing values are treated as the adaptive default. */
-    textFitMode?: "auto" | "fixed";
-    /** Minimum dimensions preserved by adaptive text layout. */
-    textFitMinWidth?: number;
-    textFitMinHeight?: number;
-  }>;
+    type: "composite";
+    shape: BasicShapeData;
+  }> &
+  ShapeTextFit;
+
+export type ExcalidrawFlowElement = _ExcalidrawElementBase &
+  Readonly<{
+    type: "flow";
+    shape: FlowchartShapeData;
+  }> &
+  ShapeTextFit;
+
+export type ExcalidrawShapeElement =
+  | ExcalidrawCompositeElement
+  | ExcalidrawFlowElement;
 
 export type ExcalidrawRectangleElement = Merge<
-  ExcalidrawCompositeShapeElement,
-  { shape: Extract<BaseShapeData, { id: "rectangle" }> }
+  ExcalidrawCompositeElement,
+  { shape: Extract<BasicShapeData, { id: "rectangle" }> }
 >;
 
 export type ExcalidrawStickyNoteElement = _ExcalidrawElementBase &
@@ -361,13 +389,13 @@ export type ExcalidrawMindmapEdgeElement = _ExcalidrawElementBase &
   }>;
 
 export type ExcalidrawDiamondElement = Merge<
-  ExcalidrawCompositeShapeElement,
-  { shape: Extract<BaseShapeData, { id: "diamond" }> }
+  ExcalidrawCompositeElement,
+  { shape: Extract<BasicShapeData, { id: "diamond" }> }
 >;
 
 export type ExcalidrawEllipseElement = Merge<
-  ExcalidrawCompositeShapeElement,
-  { shape: Extract<BaseShapeData, { id: "ellipse" }> }
+  ExcalidrawCompositeElement,
+  { shape: Extract<BasicShapeData, { id: "ellipse" }> }
 >;
 
 export type ExcalidrawEmbeddableElement = _ExcalidrawElementBase &
@@ -458,16 +486,16 @@ export type ExcalidrawFrameLikeElement =
  */
 export type ExcalidrawGenericElement =
   | ExcalidrawSelectionElement
-  | ExcalidrawCompositeShapeElement;
+  | ExcalidrawShapeElement;
 
 export type ExcalidrawFlowchartNodeElement =
-  | ExcalidrawCompositeShapeElement
+  | ExcalidrawShapeElement
   | ExcalidrawStickyNoteElement;
 
 export type ExcalidrawRectanguloidElement =
   | ExcalidrawMindmapNodeElement
   | ExcalidrawMindmapEdgeElement
-  | ExcalidrawCompositeShapeElement
+  | ExcalidrawShapeElement
   | ExcalidrawStickyNoteElement
   | ExcalidrawImageElement
   | ExcalidrawTextElement
@@ -563,7 +591,7 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
 
 export type ExcalidrawBindableElement =
   | ExcalidrawMindmapNodeElement
-  | ExcalidrawCompositeShapeElement
+  | ExcalidrawShapeElement
   | ExcalidrawStickyNoteElement
   | ExcalidrawTextElement
   | ExcalidrawImageElement
@@ -574,7 +602,7 @@ export type ExcalidrawBindableElement =
 
 export type ExcalidrawTextContainer =
   | ExcalidrawMindmapNodeElement
-  | ExcalidrawCompositeShapeElement
+  | ExcalidrawShapeElement
   | ExcalidrawStickyNoteElement
   | ExcalidrawLinearElement;
 
@@ -756,6 +784,6 @@ export type ExcalidrawLinearElementSubType =
   | "curvedArrow"
   | "elbowArrow";
 
-export type ConvertibleGenericTypes = BaseShapeData["id"];
+export type ConvertibleGenericTypes = ShapeData["id"];
 export type ConvertibleLinearTypes = ExcalidrawLinearElementSubType;
 export type ConvertibleTypes = ConvertibleGenericTypes | ConvertibleLinearTypes;

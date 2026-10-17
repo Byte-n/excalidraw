@@ -8,7 +8,7 @@
       "created": 1,
       "elements": [
         {
-          "type": "composite_shape",
+          "type": "composite",
           "shape": { "id": "rectangle", "schemaVersion": 1 },
           "version": 38,
           "versionNonce": 1046419680,

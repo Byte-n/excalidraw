@@ -35,7 +35,7 @@ import {
   getCompositeShapeControlPoints,
   getCompositeShapeGlobalPath,
   getCompositeShapeOffsetPaths,
-  isCompositeShapeElement,
+  isShapeElement,
   FOCUS_POINT_SIZE,
   getTransformHandles,
   getTransformHandlesFromCoords,
@@ -120,7 +120,7 @@ import type {
 import type {
   ElementsMap,
   ExcalidrawArrowElement,
-  ExcalidrawCompositeShapeElement,
+  ExcalidrawShapeElement,
   ExcalidrawElement,
   ExcalidrawFrameLikeElement,
   ExcalidrawImageElement,
@@ -517,7 +517,7 @@ const renderHoveredLinearTrace = (
 
 const strokeCompositeShapeOutline = (
   context: CanvasRenderingContext2D,
-  element: ExcalidrawCompositeShapeElement,
+  element: ExcalidrawShapeElement,
   offset = 0,
 ) => {
   if (offset > 0) {
@@ -632,7 +632,7 @@ const renderBindingHighlightForBindableElement_simple = (
     default:
       context.save();
 
-      if (isCompositeShapeElement(suggestedBinding.element)) {
+      if (isShapeElement(suggestedBinding.element)) {
         context.lineWidth = 6 / Math.max(0.25, appState.zoom.value);
         context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, ${
           BINDING_GLOW_ALPHA[appState.theme]
@@ -729,7 +729,7 @@ const renderBindingHighlightForBindableElement_simple = (
       const center = elementCenterPoint(suggestedBinding.element, elementsMap);
 
       let midpoints: GlobalPoint[];
-      if (isCompositeShapeElement(suggestedBinding.element)) {
+      if (isShapeElement(suggestedBinding.element)) {
         midpoints = getCompositeShapeAnchors(suggestedBinding.element);
       } else {
         const basePoints = [
@@ -3855,7 +3855,7 @@ const _renderInteractiveScene = ({
         );
         const selected = visibleSelectedElements[0];
         if (
-          selected.type === "composite_shape" &&
+          isShapeElement(selected) &&
           !selected.locked &&
           !isSelectedViaGroup(appState, selected)
         ) {

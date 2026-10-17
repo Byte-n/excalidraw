@@ -11,7 +11,7 @@ import {
   ROUNDNESS,
 } from "@excalidraw/common";
 
-import type { ExcalidrawCompositeShapeElement } from "../types";
+import type { ExcalidrawShapeElement } from "../types";
 
 /**
  * Pure local-coordinate outline geometry for composite shapes: the path types,
@@ -25,7 +25,7 @@ export const clampValue = (value: number, min: number, max: number) =>
 /** Corner radius for rounded outlines, derived from the element roundness. */
 export const getCompositeShapeCornerRadius = (
   size: number,
-  roundness: ExcalidrawCompositeShapeElement["roundness"] | undefined,
+  roundness: ExcalidrawShapeElement["roundness"] | undefined,
 ) => {
   if (
     roundness?.type === ROUNDNESS.PROPORTIONAL_RADIUS ||

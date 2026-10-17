@@ -62,7 +62,7 @@ test.each(["development", "production", "default"])(
           assert.equal(updates, 1);
           assert.equal(binding.document.constructor, Y.Doc);
           assert.ok(label.width > 0);
-          assert.equal(left.type, 'composite_shape');
+          assert.equal(left.type, 'composite');
           doc.destroy();
         `,
       ],

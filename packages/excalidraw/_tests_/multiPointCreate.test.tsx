@@ -59,7 +59,7 @@ describe("a click places the preset instead of nothing", () => {
     // 单击不再「尺寸太小被丢弃」，而是落下 120×120 的预设
     expect(h.elements.length).toEqual(1);
     expect(h.elements[0]).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "rectangle", schemaVersion: 1 },
       width: 120,
       height: 120,
@@ -77,7 +77,7 @@ describe("a click places the preset instead of nothing", () => {
 
     expect(h.elements.length).toEqual(1);
     expect(h.elements[0]).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "ellipse", schemaVersion: 1 },
       width: 80,
       height: 80,
@@ -95,7 +95,7 @@ describe("a click places the preset instead of nothing", () => {
 
     expect(h.elements.length).toEqual(1);
     expect(h.elements[0]).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "diamond", schemaVersion: 1 },
       width: 120,
       height: 120,

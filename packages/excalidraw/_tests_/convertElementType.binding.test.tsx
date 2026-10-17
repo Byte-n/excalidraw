@@ -1,6 +1,11 @@
 import { pointFrom, type GlobalPoint } from "@excalidraw/math";
 
-import { getBindingGap, distanceToElement } from "@excalidraw/element";
+import {
+  getBindingGap,
+  distanceToElement,
+  shapeElementType,
+  type ShapeId,
+} from "@excalidraw/element";
 
 import type {
   ExcalidrawArrowElement,
@@ -67,7 +72,7 @@ describe("convert element type keeps bound arrows attached", () => {
           });
         });
         expect(h.elements[0]).toMatchObject({
-          type: "composite_shape",
+          type: "composite",
           shape: { id: toType, schemaVersion: 1 },
         });
 
@@ -184,7 +189,7 @@ describe("convert element type keeps bound arrows attached", () => {
     const boundArrow = h.app.scene.getNonDeletedElement(arrow.id);
     expect(converted).toMatchObject({
       id: shape.id,
-      type: "composite_shape",
+      type: shapeElementType(target as ShapeId),
       shape: { id: target, schemaVersion: 1 },
       boundElements: expect.arrayContaining([
         { id: text.id, type: "text" },
@@ -193,7 +198,7 @@ describe("convert element type keeps bound arrows attached", () => {
     });
     expect(boundText).toMatchObject({ containerId: shape.id });
     expect(boundArrow).toMatchObject({ endBinding: { elementId: shape.id } });
-    if (converted?.type === "composite_shape") {
+    if (converted?.type === "composite") {
       if (converted.shape.id === "triangle") {
         expect(converted.shape.triangle.apexX).toBe(0.5);
       } else if (converted.shape.id === "trapezoid") {
@@ -259,12 +264,9 @@ describe("convert element type keeps bound arrows attached", () => {
 
       const converted = h.app.scene.getNonDeletedElement(shape.id);
       const boundArrow = h.app.scene.getNonDeletedElement(arrow.id);
-      expect(converted?.type).toBe("composite_shape");
+      expect(converted?.type).toBe("composite");
       expect(boundArrow?.type).toBe("arrow");
-      if (
-        converted?.type === "composite_shape" &&
-        boundArrow?.type === "arrow"
-      ) {
+      if (converted?.type === "composite" && boundArrow?.type === "arrow") {
         const end = boundArrow.points.at(-1)!;
         const globalEnd = pointFrom<GlobalPoint>(
           boundArrow.x + end[0],

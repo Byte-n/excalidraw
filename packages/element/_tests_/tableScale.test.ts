@@ -18,7 +18,7 @@ import { measureText } from "../src/textMeasurements";
 import { isTableElement } from "../src/typeChecks";
 
 import type {
-  ExcalidrawCompositeShapeElement,
+  ExcalidrawShapeElement,
   ExcalidrawElbowArrowElement,
   ExcalidrawElement,
   ExcalidrawTableElement,
@@ -356,10 +356,9 @@ describe("computeTableUniformScale: text modes and dedup", () => {
     )!;
     expect(updateOf(commit, shape.id).textFitMode).toBe("fixed");
 
-    const alreadyFixed = newElementWith(
-      shape as ExcalidrawCompositeShapeElement,
-      { textFitMode: "fixed" },
-    );
+    const alreadyFixed = newElementWith(shape as ExcalidrawShapeElement, {
+      textFitMode: "fixed",
+    });
     const rerun = computeTableUniformScale(
       [table, alreadyFixed, boundText],
       table.id,

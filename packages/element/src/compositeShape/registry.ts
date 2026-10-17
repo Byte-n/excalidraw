@@ -49,60 +49,60 @@ import {
   type CompositeShapeTextBounds,
 } from "./textBounds";
 
+import { SHAPE_IDS } from "./family";
+
 import type { Drawable, Options } from "roughjs/bin/core";
 import type { RoughGenerator } from "roughjs/bin/generator";
 
 import type { CompositeShapeGeometry } from "./geometry";
 import type {
-  BaseShapeData,
-  BaseShapeId,
-  ExcalidrawCompositeShapeElement,
+  ShapeData,
+  ShapeId,
+  ExcalidrawShapeElement,
   ExcalidrawElement,
 } from "../types";
 
 /** Input every registration entry receives: the element box and shape data. */
 export type CompositeShapeGeometryInput = Pick<
-  ExcalidrawCompositeShapeElement,
+  ExcalidrawShapeElement,
   "width" | "height" | "shape"
 > &
-  Partial<Pick<ExcalidrawCompositeShapeElement, "roundness">>;
+  Partial<Pick<ExcalidrawShapeElement, "roundness">>;
 
-type ShapeInput<K extends BaseShapeId> = {
+type ShapeInput<K extends ShapeId> = {
   width: number;
   height: number;
-  shape: Extract<BaseShapeData, { id: K }>;
-  roundness?: ExcalidrawCompositeShapeElement["roundness"];
+  shape: Extract<ShapeData, { id: K }>;
+  roundness?: ExcalidrawShapeElement["roundness"];
 };
 
 type ShapeSizeInput = { width: number; height: number };
 
 /** Persisted parameters of one id, without the id/schemaVersion discriminants. */
-type ShapeParams<K extends BaseShapeId> = Omit<
-  Extract<BaseShapeData, { id: K }>,
+type ShapeParams<K extends ShapeId> = Omit<
+  Extract<ShapeData, { id: K }>,
   "id" | "schemaVersion"
 >;
 
-type ShapePoints<K extends BaseShapeId> = (
-  input: ShapeInput<K>,
-) => ShapePoint[];
-type ShapeTextBoundsFn<K extends BaseShapeId> = (
+type ShapePoints<K extends ShapeId> = (input: ShapeInput<K>) => ShapePoint[];
+type ShapeTextBoundsFn<K extends ShapeId> = (
   input: ShapeInput<K>,
 ) => CompositeShapeTextBounds;
-type ShapeOutlineFn<K extends BaseShapeId> = (
+type ShapeOutlineFn<K extends ShapeId> = (
   input: ShapeInput<K>,
 ) => CompositeShapePath;
-type ShapeDetailsFn<K extends BaseShapeId> = (
+type ShapeDetailsFn<K extends ShapeId> = (
   input: ShapeInput<K>,
 ) => CompositeShapePath[];
 type ShapeFillFace = NonNullable<CompositeShapeGeometry["fillFaces"]>[number];
-type ShapeFillFacesFn<K extends BaseShapeId> = (
+type ShapeFillFacesFn<K extends ShapeId> = (
   input: ShapeInput<K>,
 ) => ShapeFillFace[];
-type ShapeAnchorsFn<K extends BaseShapeId> = (
+type ShapeAnchorsFn<K extends ShapeId> = (
   input: ShapeInput<K>,
 ) => [ShapePoint, ShapePoint, ShapePoint, ShapePoint];
 type ShapePrimitive = NonNullable<CompositeShapeGeometry["primitive"]>;
-type ShapePrimitiveFn<K extends BaseShapeId> = (
+type ShapePrimitiveFn<K extends ShapeId> = (
   input: ShapeInput<K>,
 ) => ShapePrimitive;
 
@@ -118,7 +118,7 @@ export type CompositeShapeControlPoint = {
   y: number;
 };
 
-type ShapeControlPointsFn<K extends BaseShapeId> = (
+type ShapeControlPointsFn<K extends ShapeId> = (
   input: ShapeInput<K>,
 ) => CompositeShapeControlPoint[];
 
@@ -126,14 +126,14 @@ type ShapeControlPointsFn<K extends BaseShapeId> = (
  * Rewrites one draggable control point. Returns the unchanged shape when the
  * value is already in place, and `null` when the kind is not handled here.
  */
-type ShapeControlUpdate<K extends BaseShapeId> = (
+type ShapeControlUpdate<K extends ShapeId> = (
   kind: CompositeShapeControlPoint["kind"],
   localX: number,
   localY: number,
   width: number,
   height: number,
-  shape: Extract<BaseShapeData, { id: K }>,
-) => BaseShapeData | null;
+  shape: Extract<ShapeData, { id: K }>,
+) => ShapeData | null;
 
 /** Persisted-parameter payload validated at file/library/clipboard boundaries. */
 type ShapeParamSpec = {
@@ -144,7 +144,7 @@ type ShapeParamSpec = {
 /** Rough drawing context handed to a registration's `draw` entry. */
 export type ShapeDrawContext = {
   generator: RoughGenerator;
-  element: ExcalidrawCompositeShapeElement;
+  element: ExcalidrawShapeElement;
   geometry: CompositeShapeGeometry;
   /** Rough options for the element; `continuousPath` flags open/curved outlines. */
   options(continuousPath: boolean): Options;
@@ -154,7 +154,7 @@ export type ShapeDrawContext = {
 
 export type ShapeDraw = (context: ShapeDrawContext) => Drawable | Drawable[];
 
-type ShapeRegistration<K extends BaseShapeId> = {
+type ShapeRegistration<K extends ShapeId> = {
   /** Persisted parameters created for this id. */
   defaultParams: ShapeParams<K>;
   /** Local-coordinate vertex table (a polyline view of the outline). */
@@ -186,54 +186,10 @@ type ShapeRegistration<K extends BaseShapeId> = {
 export const CUBE_CONTROL_POINT_MIN = 0.05;
 export const CUBE_CONTROL_POINT_MAX = 0.95;
 
-export const BASE_SHAPE_IDS: readonly BaseShapeId[] = [
-  "rectangle",
-  "diamond",
-  "ellipse",
-  "cross",
-  "brace-reverse",
-  "brace",
-  "cloud",
-  "double-arrow",
-  "forward-arrow",
-  "backward-arrow",
-  "octagon",
-  "pentagon",
-  "hexagon",
-  "star",
-  "triangle",
-  "right-triangle",
-  "left-triangle",
-  "round-rect",
-  "rectangle-bubble",
-  "pill",
-  "bubble",
-  "trapezoid",
-  "parallelogram",
-  "right-pentagon",
-  "step",
-  "cube",
-  "cylinder",
-  "pie",
-  "circular-ring",
-  "fc-round-rect",
-  "fc-terminator",
-  "fc-diamond",
-  "fc-document",
-  "fc-parallelogram",
-  "fc-cylinder",
-  "fc-horiz-cylinder",
-  "fc-predefined-process",
-  "fc-manual-input",
-  "fc-trapezoid",
-  "fc-delay",
-  "fc-hexagon",
-  "fc-off-page-connector",
-  "fc-circle",
-] as const;
+export { SHAPE_IDS };
 
-export const isBaseShapeId = (id: unknown): id is BaseShapeId =>
-  typeof id === "string" && (BASE_SHAPE_IDS as readonly string[]).includes(id);
+export const isShapeId = (id: unknown): id is ShapeId =>
+  typeof id === "string" && (SHAPE_IDS as readonly string[]).includes(id);
 
 const sameControlValue = (a: number, b: number) => Math.abs(a - b) < 1e-12;
 
@@ -610,7 +566,7 @@ const drawRectangleShape: ShapeDraw = ({ generator, geometry, options }) => {
 // Registration builders. Each entry reads as "what this id looks like".
 
 /** The outline is the source of truth; the vertex table is its flattening. */
-const defineShape = <K extends BaseShapeId>(
+const defineShape = <K extends ShapeId>(
   outline: ShapeOutlineFn<K>,
   textBounds: ShapeTextBoundsFn<K>,
   extras: Partial<ShapeRegistration<K>> = {},
@@ -625,7 +581,7 @@ const defineShape = <K extends BaseShapeId>(
 });
 
 /** The vertex table is the source of truth; the outline closes it as a polygon. */
-const polygonShape = <K extends BaseShapeId>(
+const polygonShape = <K extends ShapeId>(
   points: ShapePoints<K>,
   makeTextBounds: (points: ShapePoints<K>) => ShapeTextBoundsFn<K>,
   extras: Partial<ShapeRegistration<K>> = {},
@@ -640,7 +596,7 @@ const polygonShape = <K extends BaseShapeId>(
 });
 
 /** A polygon id whose declared outline builder is its source of truth. */
-const convexPolygonShape = <K extends BaseShapeId>(
+const convexPolygonShape = <K extends ShapeId>(
   outline: ShapeOutlineFn<K>,
 ): ShapeRegistration<K> =>
   defineShape(
@@ -656,11 +612,11 @@ const convexPolygonShape = <K extends BaseShapeId>(
 
 /** Text area computed from the convex hull of the shape's own vertex table. */
 const convexTextBoundsFrom =
-  <K extends BaseShapeId>(points: ShapePoints<K>): ShapeTextBoundsFn<K> =>
+  <K extends ShapeId>(points: ShapePoints<K>): ShapeTextBoundsFn<K> =>
   (input) =>
     getConvexTextBounds(points(input), input.width, input.height);
 
-const ellipseInscribedTextBounds = <K extends BaseShapeId>(
+const ellipseInscribedTextBounds = <K extends ShapeId>(
   input: ShapeInput<K>,
 ): CompositeShapeTextBounds => {
   const { width: w, height: h } = input;
@@ -674,7 +630,7 @@ const ellipseInscribedTextBounds = <K extends BaseShapeId>(
   );
 };
 
-const cylinderTextBounds = <K extends BaseShapeId>(
+const cylinderTextBounds = <K extends ShapeId>(
   input: ShapeInput<K>,
 ): CompositeShapeTextBounds => {
   const { width: w, height: h } = input;
@@ -689,7 +645,7 @@ const roundedBodyTextBounds =
     radiusOf: (width: number, bodyHeight: number) => number,
     bodyHeightOf: (height: number) => number,
   ) =>
-  <K extends BaseShapeId>(input: ShapeInput<K>): CompositeShapeTextBounds => {
+  <K extends ShapeId>(input: ShapeInput<K>): CompositeShapeTextBounds => {
     const { width: w, height: h } = input;
     const bodyHeight = bodyHeightOf(h);
     const radius = radiusOf(w, bodyHeight);
@@ -705,7 +661,7 @@ const roundedBodyTextBounds =
 /** Text area for shapes rounded by a single corner radius. */
 const roundedCornerTextBounds =
   (radiusOf: (width: number, height: number) => number) =>
-  <K extends BaseShapeId>(input: ShapeInput<K>): CompositeShapeTextBounds => {
+  <K extends ShapeId>(input: ShapeInput<K>): CompositeShapeTextBounds => {
     const { width: w, height: h } = input;
     const radius = radiusOf(w, h);
     const corner = Math.max(0, radius - TEXT_GAP) / Math.SQRT2;
@@ -864,7 +820,7 @@ const stepPoints: ShapePoints<"step"> = (input) => {
   ];
 };
 
-export const SHAPES: { [K in BaseShapeId]: ShapeRegistration<K> } = {
+export const SHAPES: { [K in ShapeId]: ShapeRegistration<K> } = {
   rectangle: defineShape(
     rectangleOutline,
     (input) =>
@@ -1555,38 +1511,37 @@ export const SHAPES: { [K in BaseShapeId]: ShapeRegistration<K> } = {
  * `undefined` so callers can choose between skipping and rejecting them.
  */
 const SHAPE_TABLE = SHAPES as unknown as Partial<
-  Record<BaseShapeId, ShapeRegistration<BaseShapeId>>
+  Record<ShapeId, ShapeRegistration<ShapeId>>
 >;
 
 export const getShapeRegistration = (
-  id: BaseShapeId,
-): ShapeRegistration<BaseShapeId> => {
+  id: ShapeId,
+): ShapeRegistration<ShapeId> => {
   const registration = SHAPE_TABLE[id];
   if (!registration) {
-    throw new Error("Unsupported composite shape");
+    throw new Error(`Unsupported shape id: ${id}`);
   }
   return registration;
 };
 
-export const isCompositeShapeElement = <T extends ExcalidrawElement>(
+export const isShapeElement = <T extends ExcalidrawElement>(
   element: T | null | undefined,
-): element is T & ExcalidrawCompositeShapeElement =>
-  element?.type === "composite_shape";
+): element is T & ExcalidrawShapeElement =>
+  element?.type === "composite" || element?.type === "flow";
 
-export const isCompositeShapeId = <K extends BaseShapeId>(
+export const isShapeWithId = <K extends ShapeId>(
   element: ExcalidrawElement | null | undefined,
   id: K,
-): element is ExcalidrawCompositeShapeElement & {
-  shape: Extract<BaseShapeData, { id: K }>;
-} => isCompositeShapeElement(element) && element.shape.id === id;
+): element is ExcalidrawShapeElement & {
+  shape: Extract<ShapeData, { id: K }>;
+} => isShapeElement(element) && element.shape.id === id;
 
-export const isCompositeShapeIdIn = <K extends BaseShapeId>(
+export const isShapeWithIdIn = <K extends ShapeId>(
   element: ExcalidrawElement | null | undefined,
   ids: readonly K[],
-): element is ExcalidrawCompositeShapeElement & {
-  shape: Extract<BaseShapeData, { id: K }>;
-} =>
-  isCompositeShapeElement(element) && ids.some((id) => id === element.shape.id);
+): element is ExcalidrawShapeElement & {
+  shape: Extract<ShapeData, { id: K }>;
+} => isShapeElement(element) && ids.some((id) => id === element.shape.id);
 
 export const getCompositeShapePoints = (
   element: CompositeShapeGeometryInput,
@@ -1596,35 +1551,35 @@ export const getCompositeShapePoints = (
  * A local rectangle that stays inside the visible body, before text padding.
  */
 export const getCompositeShapeTextBounds = (
-  element: Pick<ExcalidrawCompositeShapeElement, "width" | "height" | "shape">,
+  element: Pick<ExcalidrawShapeElement, "width" | "height" | "shape">,
 ): CompositeShapeTextBounds =>
   getShapeRegistration(element.shape.id).textBounds(element);
 
-export const isCompositeShapeOpen = (id: BaseShapeId): boolean =>
+export const isCompositeShapeOpen = (id: ShapeId): boolean =>
   getShapeRegistration(id).open;
 
-export const baseShapeData = (id: BaseShapeId): BaseShapeData => {
+export const buildShapeData = (id: ShapeId): ShapeData => {
   const registration = getShapeRegistration(id);
   return {
     id,
     schemaVersion: 1,
     ...registration.defaultParams,
-  } as BaseShapeData;
+  } as ShapeData;
 };
 
 export const getCompositeShapeControlPoints = (
-  element: Pick<ExcalidrawCompositeShapeElement, "width" | "height" | "shape">,
+  element: Pick<ExcalidrawShapeElement, "width" | "height" | "shape">,
 ): CompositeShapeControlPoint[] =>
   SHAPE_TABLE[element.shape.id]?.controlPoints?.(element) ?? [];
 
 export const updateCompositeShapeControlPoint = (
-  shape: BaseShapeData,
+  shape: ShapeData,
   kind: CompositeShapeControlPoint["kind"],
   localX: number,
   localY: number,
   width: number,
   height: number,
-): BaseShapeData => {
+): ShapeData => {
   if (
     ![localX, localY, width, height].every(Number.isFinite) ||
     width <= 0 ||

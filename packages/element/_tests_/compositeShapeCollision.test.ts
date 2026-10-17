@@ -20,6 +20,7 @@ import {
   getCompositeShapeAnchors,
   getCompositeShapeGeometry,
   getCompositeShapeGlobalPoints,
+  isShapeElement,
 } from "../src/compositeShape";
 import { distanceToElement } from "../src/distance";
 import { newArrowElement, newElement } from "../src/newElement";
@@ -168,8 +169,8 @@ describe("composite shape line intersections", () => {
       height: 80,
       angle: (Math.PI / 7) as Radians,
     });
-    if (element.type !== "composite_shape") {
-      throw new Error("Expected composite shape");
+    if (!isShapeElement(element)) {
+      throw new Error("Expected shape element");
     }
     const elementsMap = arrayToMap([element]);
     for (const anchor of getCompositeShapeAnchors(element)) {
@@ -188,7 +189,7 @@ describe("composite shape line intersections", () => {
       height: 80,
       angle: (Math.PI / 5) as Radians,
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const center = pointFrom<GlobalPoint>(70, 70);
@@ -233,7 +234,7 @@ describe("composite shape line intersections", () => {
       strokeWidth: 2,
     });
     const arrow = newArrowElement({ type: "arrow", x: 140, y: 40 });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const elementsMap = arrayToMap([element, arrow]);
@@ -261,7 +262,7 @@ describe("composite shape line intersections", () => {
       width: 100,
       height: 100,
     });
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const outline = getCompositeShapeGeometry(element).outline;
@@ -394,7 +395,7 @@ describe("composite shape line intersections", () => {
         height: 100,
         angle: (Math.PI / 4) as Radians,
       });
-      if (element.type !== "composite_shape") {
+      if (element.type !== "composite") {
         throw new Error("Expected composite shape");
       }
       const intersections = intersectElementWithLineSegment(
@@ -425,7 +426,7 @@ describe("composite shape line intersections", () => {
         width: 100,
         height: 100,
       });
-      if (brace.type !== "composite_shape") {
+      if (brace.type !== "composite") {
         throw new Error("Expected composite shape");
       }
       const elementsMap = arrayToMap([brace]);

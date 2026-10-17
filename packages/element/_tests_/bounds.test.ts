@@ -7,9 +7,9 @@ import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
 import type { LocalPoint } from "@excalidraw/math";
 
 import {
-  baseShapeData,
+  buildShapeData,
   getCompositeShapeGlobalPoints,
-  type BaseShapeId,
+  type ShapeId,
 } from "../src/compositeShape";
 import {
   elementsOverlappingBBox,
@@ -44,10 +44,10 @@ const _ce = ({
   t?: string;
 }) =>
   ({
-    type: t === "line" ? "line" : "composite_shape",
+    type: t === "line" ? "line" : "composite",
     ...(t === "line"
       ? {}
-      : { shape: baseShapeData((t || "rectangle") as BaseShapeId) }),
+      : { shape: buildShapeData((t || "rectangle") as ShapeId) }),
     strokeColor: "#000",
     backgroundColor: "#000",
     fillStyle: "solid",
@@ -89,7 +89,7 @@ describe("getElementAbsoluteCoords", () => {
 
 describe("getElementBounds", () => {
   const expectBoundsToMatchOutline = (element: ExcalidrawElement) => {
-    if (element.type !== "composite_shape") {
+    if (element.type !== "composite") {
       throw new Error("Expected composite shape");
     }
     const points = getCompositeShapeGlobalPoints(element);

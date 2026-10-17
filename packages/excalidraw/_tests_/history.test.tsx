@@ -3291,7 +3291,7 @@ describe("history", () => {
       } as const;
       const expectedRectProps = {
         ...rectProps,
-        type: "composite_shape",
+        type: "composite",
         shape: { id: "rectangle", schemaVersion: 1 },
       };
 
@@ -3349,7 +3349,7 @@ describe("history", () => {
       } as const;
       const expectedRect3Props = {
         ...rect3Props,
-        type: "composite_shape",
+        type: "composite",
         shape: { id: "rectangle", schemaVersion: 1 },
       };
 
@@ -3444,7 +3444,7 @@ describe("history", () => {
       } as const;
       const expectedRect3Props = {
         ...rect3Props,
-        type: "composite_shape",
+        type: "composite",
         shape: { id: "rectangle", schemaVersion: 1 },
       };
 
@@ -3614,7 +3614,7 @@ describe("history", () => {
       } as const;
       const expectedContainerProps = {
         ...containerProps,
-        type: "composite_shape",
+        type: "composite",
         shape: { id: "rectangle", schemaVersion: 1 },
       };
 

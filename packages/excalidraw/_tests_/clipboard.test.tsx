@@ -242,7 +242,7 @@ describe("paste text as a single element", () => {
 
 describe("Paste bound text container", () => {
   const container = {
-    type: "composite_shape",
+    type: "composite",
     shape: { id: "ellipse", schemaVersion: 1 },
     id: "container-id",
     x: 554.984375,
@@ -678,7 +678,7 @@ describe("clipboard - pasting mermaid definition", () => {
       expect(h.elements).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            type: "composite_shape",
+            type: "composite",
             shape: { id: "rectangle", schemaVersion: 1 },
           }),
           expect.objectContaining({ type: "text", text: "A" }),
@@ -696,7 +696,7 @@ describe("clipboard - pasting mermaid definition", () => {
       expect(h.elements).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            type: "composite_shape",
+            type: "composite",
             shape: { id: "rectangle", schemaVersion: 1 },
           }),
           expect.objectContaining({ type: "text", text: "A" }),

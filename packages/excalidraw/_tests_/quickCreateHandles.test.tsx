@@ -9,11 +9,12 @@ import {
   getQuickCreateHandles,
   hitTestQuickCreateHandle,
   isArrowElement,
-  isCompositeShapeElement,
+  isShapeElement,
   isCurvedArrow,
   isMindmapNodeElement,
   QUICK_CREATE_GHOST_ALPHA,
   QUICK_CREATE_HANDLE_REST_ALPHA,
+  shapeElementType,
   updateBoundElements,
 } from "@excalidraw/element";
 
@@ -26,6 +27,7 @@ import type {
   ExcalidrawSelectionElement,
   NonDeleted,
   NonDeletedExcalidrawElement,
+  ShapeId,
 } from "@excalidraw/element/types";
 
 import {
@@ -89,9 +91,7 @@ const handleFor = (direction: "top" | "right" | "bottom" | "left") =>
   )!;
 
 const newShape = (sourceId: string) =>
-  live().find(
-    (element) => isCompositeShapeElement(element) && element.id !== sourceId,
-  )!;
+  live().find((element) => isShapeElement(element) && element.id !== sourceId)!;
 
 const newArrow = (sourceId: string) => {
   const element = live().find(
@@ -111,8 +111,7 @@ const liveIds = () => live().map((element) => element.id);
  */
 const createdShape = (before: readonly string[]): ExcalidrawElement => {
   const element = live().find(
-    (candidate) =>
-      isCompositeShapeElement(candidate) && !before.includes(candidate.id),
+    (candidate) => isShapeElement(candidate) && !before.includes(candidate.id),
   );
   if (!element) {
     throw new Error("Expected a composite shape");
@@ -570,7 +569,7 @@ describe("quick create handles", () => {
           .filter((element) => !before.includes(element.id))
           .map((element) => element.type)
           .sort(),
-      ).toEqual(["arrow", "composite_shape"]);
+      ).toEqual(["arrow", "composite"]);
     });
 
     /**
@@ -622,7 +621,7 @@ describe("quick create handles", () => {
       mouse.upAt();
       expect(live()).toHaveLength(5);
       expect(live().filter(isArrowElement)).toHaveLength(2);
-      expect(live().filter(isCompositeShapeElement)).toHaveLength(3);
+      expect(live().filter(isShapeElement)).toHaveLength(3);
       expect(newShape(source.id)).toMatchObject({ x: 350, y: 100 });
     });
 
@@ -785,7 +784,7 @@ describe("quick create handles", () => {
 
       const copy = newShape(source.id);
       expect(copy).toMatchObject({
-        type: "composite_shape",
+        type: "composite",
         shape: { id: "rectangle" },
         width: 120,
         height: 80,
@@ -830,7 +829,7 @@ describe("quick create handles", () => {
       clickDirection("right");
 
       expect(newShape(source.id)).toMatchObject({
-        type: "composite_shape",
+        type: "flow",
         shape: { id: "fc-terminator" },
         backgroundColor: "#00ff00",
         strokeColor: "#ff0000",
@@ -1909,7 +1908,7 @@ describe("quick create handles", () => {
       const source = createRectangle();
       frames.clear();
       selectShape(source);
-      if (!isCompositeShapeElement(source)) {
+      if (!isShapeElement(source)) {
         throw new Error("Expected a composite shape");
       }
 
@@ -1996,7 +1995,7 @@ describe("quick create handles", () => {
 
     it("keeps the resting dots translucent and the creation entry fully opaque", () => {
       const shape = createRectangle();
-      if (!isCompositeShapeElement(shape)) {
+      if (!isShapeElement(shape)) {
         throw new Error("Expected a composite shape");
       }
 
@@ -2205,8 +2204,7 @@ describe("quick create handles", () => {
       expect(live()).toHaveLength(before.length + 1);
       expect(
         live().some(
-          (element) =>
-            isCompositeShapeElement(element) && !before.includes(element.id),
+          (element) => isShapeElement(element) && !before.includes(element.id),
         ),
       ).toBe(false);
       const arrow = createdArrow(before);
@@ -2519,7 +2517,7 @@ describe("quick create handles", () => {
           const arrow = createdArrow(before);
           expect(live()).toHaveLength(before.length + 2);
           expect(shape).toMatchObject({
-            type: "composite_shape",
+            type: shapeElementType(itemId as ShapeId),
             shape: { id: itemId },
           });
           expect(arrow.startBinding?.elementId).toBe(source.id);
@@ -2695,7 +2693,7 @@ describe("quick create handles", () => {
         const shape = createdShape(before);
         const cubePreset = SHAPE_PRESET_DEFAULTS.cube;
         expect(shape).toMatchObject({
-          type: "composite_shape",
+          type: "composite",
           shape: { id: "cube" },
         });
         // ① 尺寸 = 所选图形自己的预设，且与源尺寸不同（否则这条不辨真伪）

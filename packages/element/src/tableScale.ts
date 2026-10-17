@@ -14,6 +14,7 @@ import { getIndexedTableChildren } from "./tableChildrenIndex";
 import { measureText } from "./textMeasurements";
 import { getTableHeight, getTableWidth } from "./tableStruct";
 import { isElbowArrow, isMindmapEdgeElement } from "./typeChecks";
+import { isShapeElement } from "./compositeShape";
 
 import type { ElementUpdate } from "./mutateElement";
 import type {
@@ -355,7 +356,7 @@ const getSubtreeMinScales = (
       const floor = getStickyNoteScaleFloor(subtree.boundTexts.get(element.id));
       considerWidth(floor.width / element.width);
       considerHeight(floor.height / element.height);
-    } else if (element.type === "composite_shape") {
+    } else if (isShapeElement(element)) {
       // `getCompositeShapeTextFitMinSize` falls back to the live size, which
       // would freeze every shape against shrinking; only explicit minima count
       if (
@@ -519,7 +520,7 @@ const computeElementScaleUpdate = (
   }
 
   if (
-    element.type === "composite_shape" &&
+    isShapeElement(element) &&
     persistTextModes &&
     // `getCompositeShapeTextFitMode` semantics; shapes without text (pie,
     // circular-ring) carry the mode inertly, which is harmless

@@ -26,6 +26,7 @@ import {
   getCompositeShapePaddedTextBounds,
   getCompositeShapeTextBounds,
   getCompositeShapeTextFitMode,
+  isShapeElement,
 } from "./compositeShape";
 import { LinearElementEditor } from "./linearElementEditor";
 import { getPositionAfterHeightChange } from "./sizeHelpers";
@@ -50,6 +51,7 @@ import type { MaybeTransformHandleType } from "./transformHandles";
 import type {
   ElementsMap,
   ExcalidrawElement,
+  ExcalidrawShapeElement,
   ExcalidrawTextContainer,
   ExcalidrawTextElement,
   ExcalidrawTextElementWithContainer,
@@ -61,16 +63,15 @@ const getTextContainerShape = (container: ExcalidrawElement) =>
     ? getMindmapShapeId(container) === "pill"
       ? "ellipse"
       : getMindmapShapeId(container)
-    : container.type === "composite_shape"
+    : isShapeElement(container)
     ? container.shape.id
     : container.type;
 
-const getCompositePaddedTextBounds = (
-  container: Extract<ExcalidrawElement, { type: "composite_shape" }>,
-) => getCompositeShapePaddedTextBounds(container);
+const getCompositePaddedTextBounds = (container: ExcalidrawShapeElement) =>
+  getCompositeShapePaddedTextBounds(container);
 
 const getCompositeTextDimensions = (
-  container: Extract<ExcalidrawElement, { type: "composite_shape" }>,
+  container: ExcalidrawShapeElement,
   width: number,
   height: number,
 ) => getCompositeShapeDimensionsForText(container, width, height);
@@ -148,11 +149,11 @@ export const redrawTextBoundingBox = (
   // can derive the container size from the text instead of wrapping it into a
   // single narrow column.
   const isAutoSizedComposite =
-    container?.type === "composite_shape" &&
+    isShapeElement(container) &&
     getCompositeShapeTextFitMode(container) === "auto" &&
     (container.width <= 0 || container.height <= 0);
   const shouldMeasureBeforeWrap =
-    container?.type === "composite_shape" &&
+    isShapeElement(container) &&
     getCompositeShapeTextFitMode(container) === "auto" &&
     container.width <= 0;
 
@@ -188,13 +189,13 @@ export const redrawTextBoundingBox = (
     );
     const maxContainerWidth = getBoundTextMaxWidth(container, textElement);
 
-    const isComposite = container.type === "composite_shape";
+    const isShape = isShapeElement(container);
     // a table-scaled mindmap node keeps its frozen geometry (phase-1:113) and
     // follows the same fixed-fit pipeline as a fixed composite shape: the
     // displayed text wraps/truncates to the current bounds while
     // `originalText` keeps every character
     const isFixedFit =
-      (isComposite && getCompositeShapeTextFitMode(container) === "fixed") ||
+      (isShape && getCompositeShapeTextFitMode(container) === "fixed") ||
       (container.type === "mindmap-node" && isMindmapLayoutFrozen(container));
     if (isFixedFit) {
       boundTextUpdates.text = truncateTextToBounds(
@@ -217,7 +218,7 @@ export const redrawTextBoundingBox = (
     const isAdaptive = !isFixedFit;
     let layoutContainer = container;
     if (isAdaptive && !isLinearElement(container)) {
-      const nextDimensions = isComposite
+      const nextDimensions = isShape
         ? getBoundTextContainerDimensions(
             container,
             metrics.width,
@@ -244,9 +245,9 @@ export const redrawTextBoundingBox = (
           container.textFitMinWidth !== undefined ||
           container.textFitMinHeight !== undefined;
         const updates = {
-          ...(isComposite && { width: nextDimensions.width }),
+          ...(isShape && { width: nextDimensions.width }),
           height: nextDimensions.height,
-          ...(isComposite &&
+          ...(isShape &&
             shouldPersistTextFitMinimum && {
               textFitMinWidth:
                 container.textFitMinWidth ??
@@ -340,7 +341,7 @@ export const handleBindTextResize = (
     const isFrozenMindmapNode =
       container.type === "mindmap-node" && isMindmapLayoutFrozen(container);
     if (
-      (container.type === "composite_shape" &&
+      (isShapeElement(container) &&
         getCompositeShapeTextFitMode(container) === "fixed") ||
       isFrozenMindmapNode
     ) {
@@ -360,20 +361,19 @@ export const handleBindTextResize = (
       nextHeight = fixedMetrics.height;
     } else if (
       nextHeight > maxHeight + 1e-6 ||
-      (container.type === "composite_shape" && nextWidth > maxWidth + 1e-6)
+      (isShapeElement(container) && nextWidth > maxWidth + 1e-6)
     ) {
-      const nextDimensions =
-        container.type === "composite_shape"
-          ? getBoundTextContainerDimensions(container, nextWidth, nextHeight)
-          : {
-              width: container.width,
-              height: computeContainerDimensionForBoundText(
-                nextHeight,
-                getTextContainerShape(container) as ExtractSetType<
-                  typeof VALID_CONTAINER_TYPES
-                >,
-              ),
-            };
+      const nextDimensions = isShapeElement(container)
+        ? getBoundTextContainerDimensions(container, nextWidth, nextHeight)
+        : {
+            width: container.width,
+            height: computeContainerDimensionForBoundText(
+              nextHeight,
+              getTextContainerShape(container) as ExtractSetType<
+                typeof VALID_CONTAINER_TYPES
+              >,
+            ),
+          };
       containerHeight = nextDimensions.height;
 
       // Crossing the opposite edge swaps the anchor for text-driven growth.
@@ -383,7 +383,7 @@ export const handleBindTextResize = (
           transformHandleType === "nw") !== flipByY;
 
       scene.mutateElement(container, {
-        ...(container.type === "composite_shape" && {
+        ...(isShapeElement(container) && {
           width: nextDimensions.width,
         }),
         height: containerHeight,
@@ -468,7 +468,7 @@ export const computeBoundTextPosition = (
     // A sticky's footer makes its body asymmetric. The body still rotates
     // about the note's center, rather than about its own (higher) center.
     const contentCenter =
-      isStickyNoteElement(container) || container.type === "composite_shape"
+      isStickyNoteElement(container) || isShapeElement(container)
         ? pointFrom(
             container.x + container.width / 2,
             container.y + container.height / 2,
@@ -548,7 +548,7 @@ export const getContainerCenter = (
   container: ExcalidrawElement,
   elementsMap: ElementsMap,
 ) => {
-  if (container.type === "composite_shape") {
+  if (isShapeElement(container)) {
     const bounds = getCompositeShapeTextBounds(container);
     const center = pointFrom(
       container.x + container.width / 2,
@@ -580,7 +580,7 @@ export const getContainerCenter = (
 };
 
 export const getContainerCoords = (container: ExcalidrawElement) => {
-  if (container.type === "composite_shape") {
+  if (isShapeElement(container)) {
     const bounds = getCompositePaddedTextBounds(container);
     return {
       x: container.x + bounds.x,
@@ -678,7 +678,8 @@ export const suppportsHorizontalAlign = (
 
 const VALID_CONTAINER_TYPES = new Set([
   "mindmap-node",
-  "composite_shape",
+  "composite",
+  "flow",
   "rectangle",
   "stickynote",
   "ellipse",
@@ -716,7 +717,7 @@ export const getBoundTextContainerDimensions = (
   textWidth: number,
   textHeight: number,
 ) => {
-  if (container.type === "composite_shape") {
+  if (isShapeElement(container)) {
     return getCompositeTextDimensions(container, textWidth, textHeight);
   }
   return {
@@ -746,7 +747,7 @@ export const getBoundTextMaxWidth = (
       ARROW_LABEL_FONT_SIZE_TO_MIN_WIDTH_RATIO;
     return Math.max(ARROW_LABEL_WIDTH_FRACTION * width, minWidth);
   }
-  if (container.type === "composite_shape") {
+  if (isShapeElement(container)) {
     return getCompositePaddedTextBounds(container).width;
   }
   if (getTextContainerShape(container) === "ellipse") {
@@ -795,7 +796,7 @@ export const getBoundTextMaxHeight = (
     }
     return height;
   }
-  if (container.type === "composite_shape") {
+  if (isShapeElement(container)) {
     return getCompositePaddedTextBounds(container).height;
   }
   if (getTextContainerShape(container) === "ellipse") {

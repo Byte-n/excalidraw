@@ -1,5 +1,5 @@
 import { DEFAULT_FONT_FAMILY, FONT_FAMILY } from "@excalidraw/common";
-import { isCompositeShapeId } from "@excalidraw/element";
+import { isShapeWithId } from "@excalidraw/element";
 import {
   DEFAULT_CHART_COLOR_INDEX,
   getAllColorsSpecificShade,
@@ -339,7 +339,7 @@ describe("charts", () => {
       const elements = renderSpreadsheet("bar", spreadsheet, 0, 0);
       const bars = elements!.filter(
         (element) =>
-          isCompositeShapeId(element, "rectangle") &&
+          isShapeWithId(element, "rectangle") &&
           element.strokeWidth === 1 &&
           element.opacity === 100 &&
           !element.roundness,
@@ -389,7 +389,7 @@ describe("charts", () => {
 
       const bars = elements!.filter(
         (element) =>
-          isCompositeShapeId(element, "rectangle") &&
+          isShapeWithId(element, "rectangle") &&
           element.strokeWidth === 1 &&
           element.opacity === 100 &&
           !element.roundness,
@@ -437,7 +437,7 @@ describe("charts", () => {
       const elements = renderSpreadsheet("bar", parsedSpreadsheet, 0, 0);
       const bars = elements!.filter(
         (element) =>
-          isCompositeShapeId(element, "rectangle") &&
+          isShapeWithId(element, "rectangle") &&
           element.strokeWidth === 1 &&
           element.opacity === 100 &&
           !element.roundness,
@@ -627,7 +627,7 @@ describe("charts", () => {
       );
       const dots = elements!.filter(
         (element) =>
-          isCompositeShapeId(element, "ellipse") && element.strokeWidth === 2,
+          isShapeWithId(element, "ellipse") && element.strokeWidth === 2,
       );
 
       expect(seriesLines).toHaveLength(spreadsheet.series.length);

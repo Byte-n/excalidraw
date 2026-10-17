@@ -673,7 +673,7 @@ describe("ui={false}", () => {
 
     expect(h.elements.length).toBe(2);
     expect(h.elements[1]).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "rectangle", schemaVersion: 1 },
     });
   });

@@ -26,7 +26,7 @@ export const element = (
   overrides: Partial<ExcalidrawSceneElement> = {},
 ): ExcalidrawSceneElement => ({
   id,
-  type: "composite_shape",
+  type: "composite",
   shape: { id: "rectangle", schemaVersion: 1 },
   x,
   y: 0,

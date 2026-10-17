@@ -36,7 +36,7 @@ import {
 } from "../src/duplicate";
 import { assertValidContainerRefs } from "../src/typeChecks";
 import { newMindmapNodeElement } from "../src/newElement";
-import { isCompositeShapeId } from "../src/compositeShape";
+import { isShapeWithId } from "../src/compositeShape";
 import { mindmapShapeData } from "../src/mindmap";
 
 import type { ExcalidrawLinearElement } from "../src/types";
@@ -273,7 +273,7 @@ describe("duplicating multiple elements", () => {
         type: clonedText1.type,
       }),
     );
-    expect(isCompositeShapeId(clonedRectangle, "rectangle")).toBe(true);
+    expect(isShapeWithId(clonedRectangle, "rectangle")).toBe(true);
 
     clonedArrows.forEach((arrow) => {
       expect(

@@ -219,7 +219,7 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
 });
 
 describe("getPresetShapeId", () => {
-  it("三角形伪 id 原样返回（三角形家族三个预设持久化后同为 triangle）", () => {
+  it("三角形伪 id 原样返回（三角形分类三个预设持久化后同为 triangle）", () => {
     expect(getPresetShapeId("rectangle", "right-triangle")).toBe(
       "right-triangle",
     );

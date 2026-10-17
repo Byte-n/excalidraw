@@ -22,7 +22,7 @@ import {
   type CompositeShapeGeometryInput,
 } from "./registry";
 
-import type { ExcalidrawCompositeShapeElement } from "../types";
+import type { ExcalidrawShapeElement } from "../types";
 
 /**
  * Derived geometry: the local outline a registration declares, plus the global
@@ -78,7 +78,7 @@ export const getCompositeShapeGeometry = (
 };
 
 export const getCompositeShapeGlobalPath = (
-  element: ExcalidrawCompositeShapeElement,
+  element: ExcalidrawShapeElement,
 ): CompositeShapePath => {
   const center = pointFrom<GlobalPoint>(
     element.x + element.width / 2,
@@ -109,7 +109,7 @@ export const getCompositeShapeGlobalPath = (
 // Clipper uses integer coordinates; millipixels retain subpixel geometry.
 const CLIPPER_SCALE = 1000;
 export const getCompositeShapeOffsetPaths = (
-  element: ExcalidrawCompositeShapeElement,
+  element: ExcalidrawShapeElement,
   offset: number,
 ): GlobalPoint[][] => {
   const outline = getCompositeShapeGlobalPath(element);
@@ -141,7 +141,7 @@ export const getCompositeShapeOffsetPaths = (
 };
 /** Cardinal anchors lie on the shape path, including curved and open paths. */
 export const getCompositeShapeAnchors = (
-  element: ExcalidrawCompositeShapeElement,
+  element: ExcalidrawShapeElement,
 ): GlobalPoint[] => {
   const geometry = getCompositeShapeGeometry(element);
   const path = geometry.outline;
@@ -230,7 +230,7 @@ export const getCompositeShapeAnchors = (
   });
 };
 export const getCompositeShapeGlobalPoints = (
-  element: ExcalidrawCompositeShapeElement,
+  element: ExcalidrawShapeElement,
 ): GlobalPoint[] => {
   return flattenCompositeShapePath(getCompositeShapeGlobalPath(element)).map(
     ([x, y]) => pointFrom<GlobalPoint>(x, y),

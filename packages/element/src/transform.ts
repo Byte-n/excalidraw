@@ -66,9 +66,9 @@ import { getCommonBounds } from "./bounds";
 
 import { Scene } from "./Scene";
 
-import { isBaseShapeId } from "./compositeShape";
+import { isShapeId, isShapeElement } from "./compositeShape";
 
-import type { BaseShapeId } from "./compositeShape";
+import type { ShapeId } from "./compositeShape";
 
 import type {
   ExcalidrawArrowElement,
@@ -94,7 +94,8 @@ import type {
   TextAlign,
   VerticalAlign,
   ExcalidrawStickyNoteElement,
-  BaseShapeData,
+  ShapeData,
+  ShapeElementType,
 } from "./types";
 
 /**
@@ -122,12 +123,12 @@ export type ValidLinearElement = {
     | (
         | (
             | {
-                type: BaseShapeId;
+                type: ShapeId;
                 id?: ExcalidrawGenericElement["id"];
               }
             | {
                 id: ExcalidrawGenericElement["id"];
-                type?: BaseShapeId;
+                type?: ShapeId;
               }
           )
         | ((
@@ -148,12 +149,12 @@ export type ValidLinearElement = {
     | (
         | (
             | {
-                type: BaseShapeId;
+                type: ShapeId;
                 id?: ExcalidrawGenericElement["id"];
               }
             | {
                 id: ExcalidrawGenericElement["id"];
-                type?: BaseShapeId;
+                type?: ShapeId;
               }
           )
         | ((
@@ -173,10 +174,7 @@ export type ValidLinearElement = {
 } & Partial<ExcalidrawLinearElement>;
 
 export type ValidContainer =
-  | (
-      | { type: BaseShapeId }
-      | { type: "composite_shape"; shape: BaseShapeData }
-    ) & {
+  | ({ type: ShapeId } | { type: ShapeElementType; shape: ShapeData }) & {
       id?: ExcalidrawGenericElement["id"];
       label?: {
         text: string;
@@ -359,7 +357,7 @@ const bindLinearElementToElement = (
     const startX = start.x || linearElement.x - width;
     const startY = start.y || linearElement.y - height / 2;
     const startType = existingElement
-      ? existingElement.type === "composite_shape"
+      ? isShapeElement(existingElement)
         ? existingElement.shape.id
         : existingElement.type
       : start.type;
@@ -390,7 +388,7 @@ const bindLinearElementToElement = (
           x: start.x || linearElement.x - startBoundElement.width,
           y: start.y || linearElement.y - startBoundElement.height / 2,
         });
-      } else if (isBaseShapeId(startType)) {
+      } else if (isShapeId(startType)) {
         startBoundElement = newElement({
           x: startX,
           y: startY,
@@ -430,7 +428,7 @@ const bindLinearElementToElement = (
     const endX = end.x || linearElement.x + linearElement.width;
     const endY = end.y || linearElement.y - height / 2;
     const endType = existingElement
-      ? existingElement.type === "composite_shape"
+      ? isShapeElement(existingElement)
         ? existingElement.shape.id
         : existingElement.type
       : end.type;
@@ -461,7 +459,7 @@ const bindLinearElementToElement = (
         Object.assign(endBoundElement, {
           y: end.y || linearElement.y - endBoundElement.height / 2,
         });
-      } else if (isBaseShapeId(endType)) {
+      } else if (isShapeId(endType)) {
         endBoundElement = newElement({
           x: endX,
           y: endY,
@@ -682,7 +680,8 @@ export const convertToExcalidrawElements = (
     }
 
     switch (element.type) {
-      case "composite_shape":
+      case "composite":
+      case "flow":
       case "rectangle":
       case "ellipse":
       case "diamond":
@@ -735,10 +734,10 @@ export const convertToExcalidrawElements = (
             ? 0
             : element?.height || DEFAULT_DIMENSION;
         excalidrawElement =
-          element.type === "composite_shape"
+          element.type === "composite" || element.type === "flow"
             ? newElement({
                 ...element,
-                type: "composite_shape",
+                type: element.type,
                 shape: element.shape,
                 width,
                 height,
@@ -1051,7 +1050,8 @@ export const convertToExcalidrawElements = (
     const excalidrawElement = elementStore.getElement(id)!;
 
     switch (element.type) {
-      case "composite_shape":
+      case "composite":
+      case "flow":
       case "rectangle":
       case "ellipse":
       case "diamond":

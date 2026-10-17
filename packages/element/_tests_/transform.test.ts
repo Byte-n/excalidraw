@@ -480,7 +480,7 @@ describe("Test Transform", () => {
       expect(rectangle).toMatchObject({
         x: 155,
         y: 189,
-        type: "composite_shape",
+        type: "composite",
         shape: { id: "rectangle", schemaVersion: 1 },
         boundElements: [
           {
@@ -493,7 +493,7 @@ describe("Test Transform", () => {
       expect(ellipse).toMatchObject({
         x: 355,
         y: 189,
-        type: "composite_shape",
+        type: "composite",
         shape: { id: "ellipse", schemaVersion: 1 },
         boundElements: [
           {
@@ -1237,11 +1237,11 @@ describe("table skeletons", () => {
     return cell;
   };
 
-  /** Base shapes convert to composite_shape elements; find by shape id. */
+  /** Base shapes convert to composite elements; find by shape id. */
   const findShape = (elements: any[], shapeId: string) =>
     elements.find(
       (element) =>
-        element.type === "composite_shape" && element.shape?.id === shapeId,
+        element.type === "composite" && element.shape?.id === shapeId,
     );
 
   it("builds a default 3x3 grid and binds members to their cells", () => {

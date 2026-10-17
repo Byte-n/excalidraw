@@ -36,6 +36,7 @@ import {
   computeBoundTextPosition,
   getBoundTextElement,
   getCompositeShapeTextFitMode,
+  isShapeElement,
 } from "@excalidraw/element";
 import { getTextWidth } from "@excalidraw/element";
 import { getLineHeightInPx } from "@excalidraw/element";
@@ -359,7 +360,7 @@ export const textWysiwyg = ({
             }
           }
 
-          const isComposite = container.type === "composite_shape";
+          const isComposite = isShapeElement(container);
           // a table-scaled mindmap node keeps its frozen geometry
           // (phase-1:113): the editor never grows or shrinks it back
           const isAdaptive =

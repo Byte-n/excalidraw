@@ -27,6 +27,7 @@ import {
   newStickyNoteElement,
   newTableElement,
   newTextElement,
+  shapeElementType,
 } from "@excalidraw/element";
 
 import { isUsingAdaptiveRadius, getSelectedElements } from "@excalidraw/element";
@@ -36,7 +37,7 @@ import { FONT_SIZES } from "@excalidraw/common";
 
 import type {
   ExcalidrawElement,
-  ExcalidrawCompositeShapeElement,
+  ExcalidrawShapeElement,
   ExcalidrawGenericElement,
   ExcalidrawTextElement,
   ExcalidrawLinearElement,
@@ -56,7 +57,7 @@ import type {
   NonDeleted,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
-import type { BaseShapeId } from "@excalidraw/element";
+import type { ShapeId } from "@excalidraw/element";
 
 import type { Mutable } from "@excalidraw/common/utility-types";
 
@@ -172,7 +173,7 @@ export class API {
   }
 
   static createElement = <
-    T extends Exclude<ExcalidrawElementType, "selection"> | BaseShapeId = "rectangle",
+    T extends Exclude<ExcalidrawElementType, "selection"> | ShapeId = "rectangle",
   >({
     // @ts-ignore
     type = "rectangle",
@@ -214,8 +215,8 @@ export class API {
       ? ExcalidrawTextElement["verticalAlign"]
       : never;
     boundElements?: ExcalidrawGenericElement["boundElements"];
-    shape?: T extends "composite_shape" | BaseShapeId
-      ? ExcalidrawCompositeShapeElement["shape"]
+    shape?: T extends "composite" | "flow" | ShapeId
+      ? ExcalidrawShapeElement["shape"]
       : never;
     baseHeight?: T extends "stickynote"
       ? ExcalidrawStickyNoteElement["baseHeight"]
@@ -403,18 +404,25 @@ export class API {
       case "fc-circle":
         element = rest.shape
           ? newElement({
-              type: "composite_shape",
+              type: shapeElementType(rest.shape.id),
               shape: rest.shape,
               ...base,
             })
           : newElement({
-              type: type as BaseShapeId,
+              type: type as ShapeId,
               ...base,
             });
         break;
-      case "composite_shape":
+      case "composite":
         element = newElement({
-          type: "composite_shape",
+          type: "composite",
+          shape: rest.shape!,
+          ...base,
+        });
+        break;
+      case "flow":
+        element = newElement({
+          type: "flow",
           shape: rest.shape!,
           ...base,
         });

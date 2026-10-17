@@ -59,7 +59,7 @@ import {
 
 import { pointFrom, pointDistance } from "@excalidraw/math";
 
-import { isEligibleFrameChildType } from "@excalidraw/element";
+import { isEligibleFrameChildType, isShapeElement } from "@excalidraw/element";
 
 import type { ExcalidrawArrowElement } from "@excalidraw/element/types";
 
@@ -1133,7 +1133,7 @@ export const handleCanvasPointerMove = (
     if (
       (app.state.activeTool.type === "selection" ||
         app.state.activeTool.type === "lasso") &&
-      selected.type === "composite_shape" &&
+      isShapeElement(selected) &&
       !selected.locked &&
       !app.state.viewModeEnabled &&
       !app.state.editingTextElement &&

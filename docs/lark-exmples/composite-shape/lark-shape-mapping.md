@@ -1,6 +1,6 @@
 # 普通图形：Lark 到当前平台的映射
 
-所有目标图形仍是 `type: "composite_shape"`；表中的目标列表示 `shape.id`，不是元素顶层 `type`。目标 ID 的多词名称统一以连字符 `-` 分隔；Lark 类型与样本文字保留原拼写。`rectangle`、`diamond`、`ellipse` 已在第一期实现，需用本期样本验收。
+所有目标图形仍是 `type: "composite"`；表中的目标列表示 `shape.id`，不是元素顶层 `type`。目标 ID 的多词名称统一以连字符 `-` 分隔；Lark 类型与样本文字保留原拼写。`rectangle`、`diamond`、`ellipse` 已在第一期实现，需用本期样本验收。
 
 | Lark `composite_shape.type` | 样本文字 | Excalidraw `shape.id` | 转换与实现要点 | 默认填充（映射后） | 默认尺寸 |
 | --- | --- | --- | --- | --- | --- |

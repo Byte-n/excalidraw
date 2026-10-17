@@ -12,15 +12,15 @@ import type { Bounds } from "@excalidraw/common";
 import type { Mutable } from "@excalidraw/common/utility-types";
 
 import { isMindmapEdgeElement, isMindmapNodeElement } from "./typeChecks";
-import { baseShapeData } from "./compositeShape";
 
 import type {
+  BasicShapeData,
   ExcalidrawElement,
   ExcalidrawMindmapEdgeElement,
   ExcalidrawMindmapNodeElement,
   ExcalidrawTextElement,
   FractionalIndex,
-  ExcalidrawCompositeShapeElement,
+  ExcalidrawShapeElement,
   ElementsMap,
   MindmapLayoutDirection,
   MindmapEdgeRouting,
@@ -194,15 +194,21 @@ export const copyMindmapGraphConfig = (
 /** 仅供几何计算复用，不允许把此临时形状写入 Scene。 */
 export const getMindmapNodeGeometry = (
   node: ExcalidrawMindmapNodeElement,
-): ExcalidrawCompositeShapeElement => {
+): ExcalidrawShapeElement => {
   const shapeId = getMindmapShapeId(node);
+  // "text" 形态用完整包围盒做命中测试与文字度量，下划线仅参与绘制
+  const resolvedId =
+    shapeId === "pill" || shapeId === "text" ? "rectangle" : shapeId;
+  const shape: BasicShapeData =
+    resolvedId === "rectangle"
+      ? { id: "rectangle", schemaVersion: 1 }
+      : resolvedId === "ellipse"
+      ? { id: "ellipse", schemaVersion: 1 }
+      : { id: "diamond", schemaVersion: 1 };
   return {
     ...node,
-    type: "composite_shape",
-    // "text" 形态用完整包围盒做命中测试与文字度量，下划线仅参与绘制
-    shape: baseShapeData(
-      shapeId === "pill" || shapeId === "text" ? "rectangle" : shapeId,
-    ),
+    type: "composite",
+    shape,
   };
 };
 

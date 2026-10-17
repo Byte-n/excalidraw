@@ -452,7 +452,7 @@ test("四个领域查询均校验协议，草稿脚本只产生读取结果", as
     ).toMatchObject({
       ok: true,
       status: "read",
-      result: { type: "composite_shape", width: 10 },
+      result: { type: "composite", width: 10 },
     });
     expect(f.binding.getElements()).toHaveLength(0);
   } finally {

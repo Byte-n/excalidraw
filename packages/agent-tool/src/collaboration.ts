@@ -1,5 +1,5 @@
 import {
-  BASE_SHAPE_IDS,
+  SHAPE_IDS,
   createSceneElement,
   createCanvasSceneCommands,
   createExcalidrawSceneCommands,
@@ -67,7 +67,7 @@ export const ExecuteInputSchema = z.discriminatedUnion("domain", [
 /** 基础形状草稿；复杂领域结构使用 execute 创建。 */
 export const CreateElementInputSchema = z
   .object({
-    kind: z.enum(BASE_SHAPE_IDS),
+    kind: z.enum(SHAPE_IDS),
     x: z.number().finite(),
     y: z.number().finite(),
     width: z.number().finite().positive(),
@@ -318,8 +318,8 @@ export const createCanvasCollaboration = (
           switch (input.domain) {
             case "shape":
               return (
-                element.type === "composite_shape" ||
-                BASE_SHAPE_IDS.some((kind) => kind === element.type)
+                element.type === "composite" ||
+                SHAPE_IDS.some((kind) => kind === element.type)
               );
             case "connector":
               return element.type === "arrow" || element.type === "line";

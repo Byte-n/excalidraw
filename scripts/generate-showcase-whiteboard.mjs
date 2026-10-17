@@ -92,7 +92,7 @@ function text(id, value, x, y, width, height, options = {}) {
 function shape(id, shapeId, label, x, y, width, height, color, options = {}) {
   const labelId = `${id}-text`;
   const element = add({
-    ...base(id, "composite_shape", x, y, width, height, {
+    ...base(id, "composite", x, y, width, height, {
       backgroundColor: color,
       roundness: shapeId === "rectangle" ? { type: 3 } : null,
       boundElements: [{ type: "text", id: labelId }],

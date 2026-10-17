@@ -506,9 +506,7 @@ describe("table copy", () => {
     const tableCopy = copied.find(
       (element) => element.type === "table" && element.id !== nestedCopy.id,
     )!;
-    const memberCopy = copied.find(
-      (element) => element.type === "composite_shape",
-    )!;
+    const memberCopy = copied.find((element) => element.type === "composite")!;
     expect(frameCopy.containerRef?.elementId).toBe(tableCopy.id);
     expect(nestedCopy.containerRef?.elementId).toBe(frameCopy.id);
     expect(memberCopy.containerRef?.elementId).toBe(nestedCopy.id);
@@ -597,7 +595,7 @@ describe("table copy", () => {
       (element) => element.type === "table" && element.containerRef,
     )!;
     const memberCopy = duplicates.find(
-      (element) => element.type === "composite_shape",
+      (element) => element.type === "composite",
     )!;
     expect(frameCopy.containerRef?.elementId).toBe(tableCopy.id);
     expect(nestedCopy.containerRef?.elementId).toBe(frameCopy.id);
@@ -638,7 +636,7 @@ describe("table copy", () => {
     const memberCopy = h.elements.find(
       (element): element is ExcalidrawElement =>
         element.id !== member.id &&
-        element.type === "composite_shape" &&
+        element.type === "composite" &&
         !element.isDeleted,
     )!;
     expect(memberCopy.containerRef?.elementId).toBe(copy.id);
@@ -675,8 +673,7 @@ describe("table copy", () => {
     // the copy's membership is re-judged at its new position, so it does not
     // dangle toward the source table (phase-1.md:69)
     const memberCopy = h.elements.find(
-      (element) =>
-        element.id !== member.id && element.type === "composite_shape",
+      (element) => element.id !== member.id && element.type === "composite",
     )!;
     expect(memberCopy.containerRef).toBeUndefined();
   });

@@ -2,7 +2,7 @@ import {
   CaptureUpdateAction,
   getBoundTextElement,
   getCompositeShapeTextFitMode,
-  isCompositeShapeElement,
+  isShapeElement,
   isValidTextContainer,
   redrawTextBoundingBox,
 } from "@excalidraw/element";
@@ -22,8 +22,7 @@ const getSelectedTextFitShapes = (
   appState: Pick<AppState, "selectedElementIds">,
 ) =>
   getSelectedElements(elements, appState).filter(
-    (element) =>
-      isCompositeShapeElement(element) && isValidTextContainer(element),
+    (element) => isShapeElement(element) && isValidTextContainer(element),
   );
 
 const setTextFitMode = (

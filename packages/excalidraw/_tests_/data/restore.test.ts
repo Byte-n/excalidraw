@@ -180,9 +180,45 @@ describe("restoreElements", () => {
     );
 
     expect(restore.restoreElements(file.elements, null)).toMatchObject([
-      { type: "composite_shape", shape: { id: "right-triangle", schemaVersion: 1 } },
-      { type: "composite_shape", shape: { id: "left-triangle", schemaVersion: 1 } },
+      { type: "composite", shape: { id: "right-triangle", schemaVersion: 1 } },
+      { type: "composite", shape: { id: "left-triangle", schemaVersion: 1 } },
     ]);
+  });
+
+  it("restores a flow element with its shape intact", () => {
+    const flow = API.createElement({
+      type: "fc-diamond",
+      width: 120,
+      height: 80,
+    });
+    expect(flow.type).toBe("flow");
+    const file = JSON.parse(
+      serializeAsJSON([flow], getDefaultAppState(), {}, "local"),
+    );
+    const [restored] = restore.restoreElements(file.elements, null);
+    expect(restored).toMatchObject({
+      type: "flow",
+      shape: { id: "fc-diamond", schemaVersion: 1 },
+    });
+  });
+
+  it("rejects a flow element whose shape belongs to the basic family", () => {
+    const flow = API.createElement({
+      type: "fc-diamond",
+      width: 120,
+      height: 80,
+    });
+    expect(() =>
+      restore.restoreElements(
+        [
+          {
+            ...flow,
+            shape: { id: "rectangle", schemaVersion: 1 },
+          } as unknown as ExcalidrawElement,
+        ],
+        null,
+      ),
+    ).toThrow("Shape data does not belong to element type");
   });
 
   it("rejects parameterless triangle ids carrying a shape parameter", () => {

@@ -37,8 +37,8 @@ import { elementCenterPoint } from "./bounds";
 import {
   getCompositeShapeAnchors,
   getCompositeShapeCornerRadius,
-  isCompositeShapeElement,
-  isCompositeShapeId,
+  isShapeElement,
+  isShapeWithId,
 } from "./compositeShape";
 import { getMindmapShapeId } from "./mindmap";
 
@@ -402,7 +402,7 @@ export const getCornerRadius = (x: number, element: ExcalidrawElement) => {
   ) {
     return Math.min(element.width, element.height) / 2;
   }
-  if (element.type === "composite_shape") {
+  if (isShapeElement(element)) {
     if (element.shape.id === "rectangle") {
       return 0;
     }
@@ -436,7 +436,7 @@ const getDiagonalsForBindableElement = (
 ) => {
   // for rectangles, shrink the diagonals a bit because there's something
   // going on with the focus points around the corners. Ask Mark for details.
-  const OFFSET_PX = isCompositeShapeId(element, "rectangle") ? 15 : 0;
+  const OFFSET_PX = isShapeWithId(element, "rectangle") ? 15 : 0;
   const shrinkSegment = (seg: LineSegment<GlobalPoint>) => {
     const v = vectorNormalize(vectorFromPoint(seg[1], seg[0]));
     const offset = vectorScale(v, OFFSET_PX);
@@ -521,7 +521,7 @@ export const getSnapOutlineMidPoint = (
   zoom: AppState["zoom"],
 ) => {
   const center = elementCenterPoint(element, elementsMap);
-  const sideMidpoints = isCompositeShapeElement(element)
+  const sideMidpoints = isShapeElement(element)
     ? getCompositeShapeAnchors(element)
     : [
         // RIGHT midpoint

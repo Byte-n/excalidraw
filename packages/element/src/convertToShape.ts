@@ -54,7 +54,7 @@ import {
 } from "./typeChecks";
 import { LinearElementEditor } from "./linearElementEditor";
 
-import type { BaseShapeId } from "./compositeShape";
+import type { ShapeId } from "./compositeShape";
 
 declare global {
   interface Window {
@@ -76,7 +76,7 @@ type NonDeletedRecognizedShapeElement = NonDeleted<
   | ExcalidrawFreeDrawElement
 >;
 
-type Shape = BaseShapeId | "arrow" | "line" | "freedraw";
+type Shape = ShapeId | "arrow" | "line" | "freedraw";
 
 interface ShapeRecognitionResult<P extends LocalPoint | GlobalPoint> {
   // The type of the recognized shape, or "freedraw" if no good match was found

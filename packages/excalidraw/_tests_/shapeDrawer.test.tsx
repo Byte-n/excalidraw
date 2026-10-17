@@ -11,7 +11,7 @@ import {
 import {
   STICKY_NOTE_PRESETS,
   getCommonBounds,
-  isCompositeShapeElement,
+  isShapeElement,
   isMindmapNodeElement,
 } from "@excalidraw/element";
 
@@ -292,7 +292,7 @@ describe("图形抽屉的单击放置", () => {
     const created = live();
     expect(created).toHaveLength(1);
     expect(created[0]).toMatchObject({
-      type: "composite_shape",
+      type: "flow",
       shape: { id: "fc-diamond", schemaVersion: 1 },
       width: SHAPE_PRESET_DEFAULTS["fc-diamond"].width,
       height: SHAPE_PRESET_DEFAULTS["fc-diamond"].height,
@@ -317,7 +317,7 @@ describe("图形抽屉的单击放置", () => {
     const created = live();
     expect(created).toHaveLength(1);
     expect(created[0]).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "cube", schemaVersion: 1 },
     });
   });
@@ -326,12 +326,12 @@ describe("图形抽屉的单击放置", () => {
     placeItem("right-triangle");
     placeItem("left-triangle");
 
-    const created = live().filter(isCompositeShapeElement);
+    const created = live().filter(isShapeElement);
     expect(created).toHaveLength(2);
 
     const right = created.find((el) => el.shape.id === "right-triangle")!;
     expect(right).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "right-triangle", schemaVersion: 1 },
       width: 120,
       height: 80,
@@ -339,7 +339,7 @@ describe("图形抽屉的单击放置", () => {
 
     const left = created.find((el) => el.shape.id === "left-triangle")!;
     expect(left).toMatchObject({
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "left-triangle", schemaVersion: 1 },
       width: 120,
       height: 80,
@@ -351,7 +351,7 @@ describe("图形抽屉的单击放置", () => {
     placeItem("fc-cylinder");
     placeItem("cube");
 
-    const composites = live().filter(isCompositeShapeElement);
+    const composites = live().filter(isShapeElement);
     expect(composites).toHaveLength(2);
 
     const cylinder = composites.find(
@@ -570,7 +570,7 @@ describe("图形抽屉的拖入", () => {
     const preview = h.app.toolDrag.previewElements!;
     expect(preview).toHaveLength(1);
     expect(preview[0]).toMatchObject({
-      type: "composite_shape",
+      type: "flow",
       shape: { id: "fc-cylinder" },
       width: SHAPE_PRESET_DEFAULTS["fc-cylinder"].width,
       height: SHAPE_PRESET_DEFAULTS["fc-cylinder"].height,
@@ -590,7 +590,7 @@ describe("图形抽屉的拖入", () => {
     const dropped = live();
     expect(dropped).toHaveLength(1);
     expect(dropped[0]).toMatchObject({
-      type: "composite_shape",
+      type: "flow",
       shape: { id: "fc-cylinder", schemaVersion: 1 },
       width: SHAPE_PRESET_DEFAULTS["fc-cylinder"].width,
       height: SHAPE_PRESET_DEFAULTS["fc-cylinder"].height,

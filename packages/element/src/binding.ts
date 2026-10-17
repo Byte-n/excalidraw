@@ -24,9 +24,9 @@ import type { Bounds } from "@excalidraw/common";
 import { getCenterForBounds } from "./bounds";
 import {
   getCompositeShapeAnchors,
-  isCompositeShapeElement,
-  isCompositeShapeId,
-  isCompositeShapeIdIn,
+  isShapeElement,
+  isShapeWithId,
+  isShapeWithIdIn,
 } from "./compositeShape";
 import {
   getHoveredElementForBinding,
@@ -156,7 +156,7 @@ export const getBindingGap = (
  *   `intersectElementWithLineSegment`，结果写成 `attachPoint`），710-715 行才是副
  *   作用判定（开路径的「是否已贴住」检查）。两处都到不了文本 —— 该函数唯一调用方
  *   `ConvertElementTypePopup.tsx`（556 行）只对 generic 转换后的元素调用，而
- *   `getGenericType` 只认 `composite_shape` 与 `mindmap-node`（文本返回 null），
+ *   `getGenericType` 只认 `composite` 与 `mindmap-node`（文本返回 null），
  *   所以文本不留 gap 的判据不受这两处影响。
  */
 export const getProjectionBindingGap = (
@@ -651,10 +651,7 @@ export const reanchorBindingsToOutline = (
   scene: Scene,
 ) => {
   const elementsMap = scene.getNonDeletedElementsMap();
-  const isBrace = isCompositeShapeIdIn(changedElement, [
-    "brace",
-    "brace-reverse",
-  ]);
+  const isBrace = isShapeWithIdIn(changedElement, ["brace", "brace-reverse"]);
   // Open composite shapes such as braces occupy only one side of their
   // element bounds. Use the element's transform center for the reanchor ray;
   // the visual bounds center may sit outside the open path.
@@ -1314,8 +1311,8 @@ export const snapToMid = (
   }
 
   if (
-    isCompositeShapeElement(bindTarget) &&
-    !isCompositeShapeIdIn(bindTarget, ["rectangle", "diamond", "ellipse"])
+    isShapeElement(bindTarget) &&
+    !isShapeWithIdIn(bindTarget, ["rectangle", "diamond", "ellipse"])
   ) {
     let index: number | undefined;
     if (
@@ -1414,7 +1411,7 @@ export const snapToMid = (
       center,
       angle,
     );
-  } else if (isCompositeShapeId(bindTarget, "diamond")) {
+  } else if (isShapeWithId(bindTarget, "diamond")) {
     const distance = bindingGap;
     const topLeft = pointFrom<GlobalPoint>(
       x + width / 4 - distance,
@@ -1486,8 +1483,7 @@ const snapBoundPointToGrid = (
   // the position-based heading, which can give the wrong axis when the
   // outline point is near a cardinal zone or an angled diamond face.
   const heading =
-    adjacentPoint &&
-    isCompositeShapeIdIn(bindableElement, ["ellipse", "diamond"])
+    adjacentPoint && isShapeWithIdIn(bindableElement, ["ellipse", "diamond"])
       ? vectorToHeading(vectorFromPoint(adjacentPoint, outlinePoint))
       : headingForPointFromElement(bindableElement, aabb, outlinePoint);
 

@@ -1,7 +1,7 @@
 import { getCompositeShapeTextBounds } from "./registry";
 
 import type { CompositeShapeTextBounds } from "./textBounds";
-import type { ExcalidrawCompositeShapeElement } from "../types";
+import type { ExcalidrawShapeElement } from "../types";
 
 /**
  * Text-fit layout: the forward safe-area accessor and the reverse solvers that
@@ -10,12 +10,12 @@ import type { ExcalidrawCompositeShapeElement } from "../types";
 
 export type CompositeShapeTextFitMode = "auto" | "fixed";
 export const getCompositeShapeTextFitMode = (
-  element: Pick<ExcalidrawCompositeShapeElement, "textFitMode">,
+  element: Pick<ExcalidrawShapeElement, "textFitMode">,
 ): CompositeShapeTextFitMode => element.textFitMode ?? "auto";
 
 export const getCompositeShapeTextFitMinSize = (
   element: Pick<
-    ExcalidrawCompositeShapeElement,
+    ExcalidrawShapeElement,
     "width" | "height" | "textFitMinWidth" | "textFitMinHeight"
   >,
 ) => ({
@@ -34,7 +34,7 @@ export const getCompositeShapeTextFitMinSize = (
  * -> shape size) calculations.
  */
 export const getCompositeShapePaddedTextBounds = (
-  element: Pick<ExcalidrawCompositeShapeElement, "width" | "height" | "shape">,
+  element: Pick<ExcalidrawShapeElement, "width" | "height" | "shape">,
 ): CompositeShapeTextBounds => {
   return getCompositeShapeTextBounds(element);
 };
@@ -42,17 +42,17 @@ export const getCompositeShapePaddedTextBounds = (
 type CompositeShapeDimension = "width" | "height";
 
 const getCompositeShapeSizeAt = (
-  element: Pick<ExcalidrawCompositeShapeElement, "width" | "height" | "shape">,
+  element: Pick<ExcalidrawShapeElement, "width" | "height" | "shape">,
   dimension: CompositeShapeDimension,
   value: number,
 ) =>
   getCompositeShapePaddedTextBounds({
     ...element,
     [dimension]: value,
-  } as Pick<ExcalidrawCompositeShapeElement, "width" | "height" | "shape">);
+  } as Pick<ExcalidrawShapeElement, "width" | "height" | "shape">);
 
 const solveCompositeShapeDimension = (
-  element: Pick<ExcalidrawCompositeShapeElement, "width" | "height" | "shape">,
+  element: Pick<ExcalidrawShapeElement, "width" | "height" | "shape">,
   dimension: CompositeShapeDimension,
   required: number,
   minimum: number,
@@ -95,7 +95,7 @@ const solveCompositeShapeDimension = (
  */
 export const getCompositeShapeDimensionsForText = (
   element: Pick<
-    ExcalidrawCompositeShapeElement,
+    ExcalidrawShapeElement,
     "width" | "height" | "shape" | "textFitMinWidth" | "textFitMinHeight"
   >,
   textWidth: number,

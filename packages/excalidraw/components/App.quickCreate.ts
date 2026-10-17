@@ -18,7 +18,7 @@ import {
   getTransformHandles,
   hitTestQuickCreateHandle,
   isBindableElement,
-  isCompositeShapeElement,
+  isShapeElement,
   isCurvedArrow,
   isElbowArrow,
   isFrameLikeElement,
@@ -34,7 +34,7 @@ import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
 import type {
   ElementsMap,
   ExcalidrawBindableElement,
-  ExcalidrawCompositeShapeElement,
+  ExcalidrawShapeElement,
   ExcalidrawLinearElement,
   ElementBinding,
   NonDeleted,
@@ -651,7 +651,7 @@ export class AppQuickCreate {
     handle: QuickCreateHandle,
   ): readonly NonDeletedExcalidrawElement[] => {
     const source = getQuickCreateTargetElement(this.app);
-    if (!source || !isCompositeShapeElement(source)) {
+    if (!source || !isShapeElement(source)) {
       return [];
     }
     const placement = this.resolvePlacementFor(source, handle.direction);
@@ -816,7 +816,7 @@ export class AppQuickCreate {
    *   指针上（不写 `endBinding`）。
    */
   private buildGhostElements = (
-    source: NonDeleted<ExcalidrawCompositeShapeElement>,
+    source: NonDeleted<ExcalidrawShapeElement>,
     placement: QuickCreatePlacement,
     dragging: boolean,
     draggingEnd: QuickCreatePreviewEnd,
@@ -843,7 +843,7 @@ export class AppQuickCreate {
 
   /** 幽灵副本：与 `cloneShape` 同款（清掉分组/绑定/容器归属），只压暗一半 */
   private buildGhostShape = (
-    source: NonDeleted<ExcalidrawCompositeShapeElement>,
+    source: NonDeleted<ExcalidrawShapeElement>,
     target: { x: number; y: number },
   ): NonDeletedExcalidrawElement =>
     ({
@@ -856,7 +856,7 @@ export class AppQuickCreate {
       index: null,
       containerRef: undefined,
       opacity: source.opacity * QUICK_CREATE_GHOST_ALPHA,
-    } as NonDeleted<ExcalidrawCompositeShapeElement>);
+    } as NonDeleted<ExcalidrawShapeElement>);
 
   /**
    * 连线：把几何解出来的路径按**当前线样式**落成箭头的 x/y 与 points
@@ -1143,7 +1143,7 @@ export class AppQuickCreate {
     source: NonDeletedExcalidrawElement,
     centerX: number,
     centerY: number,
-  ): NonDeleted<ExcalidrawCompositeShapeElement> => {
+  ): NonDeleted<ExcalidrawShapeElement> => {
     const copy = duplicateElement(null, new Map(), source, true);
     return {
       ...copy,
@@ -1155,7 +1155,7 @@ export class AppQuickCreate {
       // 画框归属：本 fork 元素没有 frameId 字段，归属走 containerRef
       // （与 frameChildrenIndex 同口径），清掉才不会被画框当成员
       containerRef: undefined,
-    } as NonDeleted<ExcalidrawCompositeShapeElement>;
+    } as NonDeleted<ExcalidrawShapeElement>;
   };
 
   /** 按已建立的绑定把两端落到位；落点口径在共享的 `updateBoundPoint` 里。 */
@@ -1494,7 +1494,7 @@ export class AppQuickCreate {
     pointer: QuickCreatePoint,
     event: PointerEvent,
   ): void => {
-    if (!isCompositeShapeElement(source)) {
+    if (!isShapeElement(source)) {
       return;
     }
     const container = this.app.excalidrawContainerRef.current;
@@ -1536,7 +1536,7 @@ export class AppQuickCreate {
       return [];
     }
     const source = this.app.scene.getNonDeletedElement(pending.sourceId);
-    if (!source || !isCompositeShapeElement(source)) {
+    if (!source || !isShapeElement(source)) {
       return [];
     }
     const key = [
@@ -1577,7 +1577,7 @@ export class AppQuickCreate {
       return;
     }
     const source = this.app.scene.getNonDeletedElement(pending.sourceId);
-    if (!source || !isCompositeShapeElement(source)) {
+    if (!source || !isShapeElement(source)) {
       this.app.repaint.request();
       return;
     }
@@ -1611,7 +1611,7 @@ export class AppQuickCreate {
       return;
     }
     const source = this.app.scene.getNonDeletedElement(pending.sourceId);
-    if (!source || !isCompositeShapeElement(source)) {
+    if (!source || !isShapeElement(source)) {
       this.app.repaint.request();
       return;
     }

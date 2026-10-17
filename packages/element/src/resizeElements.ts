@@ -34,7 +34,7 @@ import {
   getElementBounds,
 } from "./bounds";
 import { LinearElementEditor } from "./linearElementEditor";
-import { getCompositeShapeTextFitMode } from "./compositeShape";
+import { getCompositeShapeTextFitMode, isShapeElement } from "./compositeShape";
 import {
   getBoundTextElement,
   getBoundTextElementId,
@@ -92,7 +92,7 @@ import type {
 } from "./transformHandles";
 import type {
   ExcalidrawLinearElement,
-  ExcalidrawCompositeShapeElement,
+  ExcalidrawShapeElement,
   ExcalidrawTextElement,
   NonDeletedExcalidrawElement,
   NonDeleted,
@@ -1001,7 +1001,7 @@ export const resizeSingleElement = (
       width: Math.abs(nextWidth),
       height: Math.abs(nextHeight),
       ...rescaledPoints,
-      ...(latestElement.type === "composite_shape" &&
+      ...(isShapeElement(latestElement) &&
         isValidTextContainer(latestElement) &&
         getCompositeShapeTextFitMode(latestElement) === "auto" &&
         (Math.abs(nextWidth) !== latestElement.width ||
@@ -1600,7 +1600,7 @@ export const resizeMultipleElements = (
         startBinding?: ExcalidrawElbowArrowElement["startBinding"];
         endBinding?: ExcalidrawElbowArrowElement["endBinding"];
         fixedSegments?: ExcalidrawElbowArrowElement["fixedSegments"];
-        textFitMode?: ExcalidrawCompositeShapeElement["textFitMode"];
+        textFitMode?: ExcalidrawShapeElement["textFitMode"];
       };
     }[] = [];
 
@@ -1665,7 +1665,7 @@ export const resizeMultipleElements = (
         height,
         angle,
         ...rescaledPoints,
-        ...(latest.type === "composite_shape" &&
+        ...(isShapeElement(latest) &&
           isValidTextContainer(latest) &&
           getCompositeShapeTextFitMode(latest) === "auto" &&
           (width !== latest.width || height !== latest.height) && {

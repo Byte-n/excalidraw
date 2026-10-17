@@ -37,6 +37,7 @@ import {
   getCompositeShapeGlobalPoints,
   getCompositeShapeOffsetPaths,
   isCompositeShapeOpen,
+  isShapeElement,
 } from "./compositeShape";
 import {
   getMindmapNodeGeometry,
@@ -87,6 +88,7 @@ import type {
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
   ExcalidrawRectanguloidElement,
+  ExcalidrawShapeElement,
   NonDeleted,
   NonDeletedExcalidrawElement,
   NonDeletedSceneElementsMap,
@@ -101,7 +103,7 @@ export const shouldTestInside = (element: ExcalidrawElement) => {
   // Composite shapes are selectable from their full range regardless of
   // background or bound text. Open shapes use their rectangular text area;
   // closed shapes are further constrained by their actual outline below.
-  if (element.type === "composite_shape") {
+  if (element.type === "composite" || element.type === "flow") {
     return true;
   }
 
@@ -201,7 +203,7 @@ export const hitElementItself = ({
 
   // Hit test against the extended, rotated bounding box of the element first
   const bounds =
-    element.type === "composite_shape" && isCompositeShapeOpen(element.shape.id)
+    isShapeElement(element) && isCompositeShapeOpen(element.shape.id)
       ? ([
           element.x,
           element.y,
@@ -354,10 +356,7 @@ const bindingBorderTest = (
   );
   const distance = distanceToElement(element, elementsMap, p);
 
-  if (
-    element.type === "composite_shape" &&
-    isCompositeShapeOpen(element.shape.id)
-  ) {
+  if (isShapeElement(element) && isCompositeShapeOpen(element.shape.id)) {
     return distance <= t;
   }
 
@@ -545,7 +544,8 @@ export const intersectElementWithLineSegment = (
         offset,
         onlyFirst,
       );
-    case "composite_shape":
+    case "composite":
+    case "flow":
       return element.shape.id === "ellipse"
         ? intersectEllipseWithLineSegment(
             element as ExcalidrawEllipseElement,
@@ -597,7 +597,7 @@ const intersectCompositeShapePathsWithLineSegment = (
 };
 
 const intersectCompositeShapeWithLineSegment = (
-  element: ExcalidrawElement & { type: "composite_shape" },
+  element: ExcalidrawShapeElement,
   segment: LineSegment<GlobalPoint>,
   offset: number,
   onlyFirst = false,
@@ -901,10 +901,7 @@ export const isPointInElement = (
   ) {
     return false;
   }
-  if (
-    element.type === "composite_shape" &&
-    isCompositeShapeOpen(element.shape.id)
-  ) {
+  if (isShapeElement(element) && isCompositeShapeOpen(element.shape.id)) {
     const center = pointFrom<GlobalPoint>(
       element.x + element.width / 2,
       element.y + element.height / 2,
@@ -964,7 +961,7 @@ export const isPointInElement = (
     return false;
   }
 
-  if (element.type === "composite_shape") {
+  if (isShapeElement(element)) {
     const primitive = getCompositeShapeGeometry(element).primitive;
     if (primitive?.kind === "ellipse") {
       const center = pointFrom<GlobalPoint>(

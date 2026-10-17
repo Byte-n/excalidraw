@@ -166,12 +166,12 @@ describe("collaboration", () => {
     const rect2 = API.createElement({ ...rect2Props });
     const expectedRect1 = {
       ...rect1Props,
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "rectangle", schemaVersion: 1 },
     };
     const expectedRect2 = {
       ...rect2Props,
-      type: "composite_shape",
+      type: "composite",
       shape: { id: "rectangle", schemaVersion: 1 },
     };
 

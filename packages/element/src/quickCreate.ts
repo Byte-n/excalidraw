@@ -4,7 +4,7 @@ import { pointFrom, pointRotateRads } from "@excalidraw/math";
 import type { GlobalPoint, Radians } from "@excalidraw/math";
 
 import { getElementAbsoluteCoords } from "./bounds";
-import { isBaseShapeId, isCompositeShapeElement } from "./compositeShape";
+import { isShapeId, isShapeElement } from "./compositeShape";
 import { isMindmapNodeElement } from "./typeChecks";
 
 import type {
@@ -133,8 +133,8 @@ export const isQuickCreateTargetElement = (
   !!element &&
   !element.isDeleted &&
   !element.locked &&
-  isCompositeShapeElement(element) &&
-  isBaseShapeId(element.shape.id);
+  isShapeElement(element) &&
+  isShapeId(element.shape.id);
 
 /**
  * 出口 A：源在**出发方向**上的边缘中点——中心沿旋转后的方向向量走该轴的半尺寸。
@@ -386,7 +386,7 @@ const aabbOverlap = (
 ) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 
 /**
- * 占用判定只认**图形类**元素：普通图形 / 流程图图形（`isCompositeShapeElement`，
+ * 占用判定只认**图形类**元素：普通图形 / 流程图图形（`isShapeElement`，
  * 也就是方向手柄的同类目标）与脑图节点。**含锁定元素**——让位规则里锁定元素
  * 不算「指针压着」，但落点上它仍然占着地方，副本不该叠到它身上。
  *
@@ -403,7 +403,7 @@ const isQuickCreateObstacle = (
   },
 ) =>
   !element.isDeleted &&
-  (isCompositeShapeElement(element) || isMindmapNodeElement(element)) &&
+  (isShapeElement(element) || isMindmapNodeElement(element)) &&
   element.id !== source.id &&
   !source.boundElements?.some((bound) => bound.id === element.id);
 

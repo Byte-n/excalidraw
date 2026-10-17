@@ -63,7 +63,7 @@ export interface CanvasCollaborationApi {
   readonly query: (
     input: CanvasQueryInput,
   ) => CanvasApiResult<CanvasQueryResult>;
-  /** 构造基础形状 canonical JSON 草稿，不提交；kind 使用 BASE_SHAPE_IDS，几何尺寸必须为正数。复杂连接、思维导图与表格使用 execute 创建。 */
+  /** 构造基础形状 canonical JSON 草稿，不提交；kind 使用 SHAPE_IDS，几何尺寸必须为正数。复杂连接、思维导图与表格使用 execute 创建。 */
   readonly createElement?: (
     input: CanvasCreateElementInput,
   ) => CanvasApiResult<ExcalidrawSceneElement>;

@@ -264,7 +264,7 @@ describe("table range clipboard", () => {
     ).toHaveLength(3);
     expect(
       h.elements.filter(
-        (element) => !element.isDeleted && element.type === "composite_shape",
+        (element) => !element.isDeleted && element.type === "composite",
       ),
     ).toHaveLength(2);
   });
@@ -445,7 +445,7 @@ describe("table range clipboard", () => {
     )!;
     const copiedShape = h.elements.find(
       (element) =>
-        element.type === "composite_shape" &&
+        element.type === "composite" &&
         element.id !== shape.id &&
         !element.isDeleted,
     )!;
@@ -880,13 +880,13 @@ describe("table range clipboard", () => {
     );
     const copiedLeft = copies.find(
       (element) =>
-        element.type === "composite_shape" &&
+        element.type === "composite" &&
         element.containerRef?.kind === "tableCell" &&
         element.containerRef.cellId === target.table.cells[0].id,
     )!;
     const copiedRight = copies.find(
       (element) =>
-        element.type === "composite_shape" &&
+        element.type === "composite" &&
         element.containerRef?.kind === "tableCell" &&
         element.containerRef.cellId === target.table.cells[1].id,
     )!;

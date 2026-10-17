@@ -6,10 +6,10 @@ import {
 } from "@excalidraw/math";
 import { getCompositeShapeControlPoints } from "@excalidraw/element";
 
-import type { ExcalidrawCompositeShapeElement } from "@excalidraw/element/types";
+import type { ExcalidrawShapeElement } from "@excalidraw/element/types";
 
 export const getCompositeControlPointGlobal = (
-  element: ExcalidrawCompositeShapeElement,
+  element: ExcalidrawShapeElement,
   point: { x: number; y: number },
 ): GlobalPoint =>
   pointRotateRads(
@@ -22,7 +22,7 @@ export const getCompositeControlPointGlobal = (
   );
 
 export const getCompositeControlPointLocal = (
-  element: ExcalidrawCompositeShapeElement,
+  element: ExcalidrawShapeElement,
   sceneX: number,
   sceneY: number,
 ) => {
@@ -38,7 +38,7 @@ export const getCompositeControlPointLocal = (
 };
 
 export const hitCompositeControlPoint = (
-  element: ExcalidrawCompositeShapeElement,
+  element: ExcalidrawShapeElement,
   sceneX: number,
   sceneY: number,
   zoom: number,

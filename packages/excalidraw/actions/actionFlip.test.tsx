@@ -332,7 +332,9 @@ describe("flipping reflects the triangle family", () => {
     await render(<Excalidraw />);
   });
 
-  const place = <T extends ReturnType<typeof API.createElement>>(element: T) => {
+  const place = <T extends ReturnType<typeof API.createElement>>(
+    element: T,
+  ) => {
     API.setElements([element]);
     API.setSelectedElements([element]);
     return element;

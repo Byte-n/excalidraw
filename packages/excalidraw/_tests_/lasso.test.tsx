@@ -14,7 +14,7 @@
  * - selects group if any group from group is selected
  */
 
-import { baseShapeData, isCompositeShapeId } from "@excalidraw/element";
+import { buildShapeData, isShapeWithId } from "@excalidraw/element";
 
 import {
   type GlobalPoint,
@@ -27,6 +27,7 @@ import {
 import { getElementLineSegments } from "@excalidraw/element";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { ExcalidrawCompositeElement } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
 
@@ -44,11 +45,11 @@ const canonicalizeFixtureElements = (elements: ExcalidrawElement[]) =>
   elements.map((element) => {
     const type = (element as { type: string }).type;
     return type === "rectangle" || type === "diamond" || type === "ellipse"
-      ? {
+      ? ({
           ...element,
-          type: "composite_shape" as const,
-          shape: baseShapeData(type),
-        }
+          type: "composite" as const,
+          shape: buildShapeData(type),
+        } as ExcalidrawCompositeElement)
       : element;
   });
 
@@ -655,7 +656,7 @@ describe("Basic lasso selection tests", () => {
     expect(selectedElements.length).toBe(3);
     expect(selectedElements.filter((e) => e.type === "arrow").length).toBe(1);
     expect(
-      selectedElements.filter((e) => isCompositeShapeId(e, "rectangle")).length,
+      selectedElements.filter((e) => isShapeWithId(e, "rectangle")).length,
     ).toBe(1);
     expect(selectedElements.filter((e) => e.type === "freedraw").length).toBe(
       1,
@@ -878,10 +879,10 @@ describe("Basic lasso selection tests", () => {
     expect(selectedElements.length).toBe(4);
     expect(selectedElements.filter((e) => e.type === "line").length).toBe(1);
     expect(
-      selectedElements.filter((e) => isCompositeShapeId(e, "ellipse")).length,
+      selectedElements.filter((e) => isShapeWithId(e, "ellipse")).length,
     ).toBe(1);
     expect(
-      selectedElements.filter((e) => isCompositeShapeId(e, "diamond")).length,
+      selectedElements.filter((e) => isShapeWithId(e, "diamond")).length,
     ).toBe(1);
     expect(selectedElements.filter((e) => e.type === "freedraw").length).toBe(
       1,

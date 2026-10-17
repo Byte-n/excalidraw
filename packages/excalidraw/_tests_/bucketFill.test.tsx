@@ -3,7 +3,7 @@ import {
   COLOR_PALETTE,
   KEYS,
 } from "@excalidraw/common";
-import { CaptureUpdateAction, isCompositeShapeId } from "@excalidraw/element";
+import { CaptureUpdateAction, isShapeWithId } from "@excalidraw/element";
 import { pointFrom } from "@excalidraw/math";
 
 import type { LocalPoint } from "@excalidraw/math";
@@ -856,7 +856,7 @@ describe("bucket fill tool", () => {
     // the owner rectangle survives
     expect(
       h.elements.filter(
-        (el) => isCompositeShapeId(el, "rectangle") && !el.isDeleted,
+        (el) => isShapeWithId(el, "rectangle") && !el.isDeleted,
       ),
     ).toHaveLength(1);
   });

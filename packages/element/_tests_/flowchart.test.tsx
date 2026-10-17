@@ -3,7 +3,7 @@ import { KEYS, reseed } from "@excalidraw/common";
 import { Excalidraw } from "@excalidraw/excalidraw";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
-import { isCompositeShapeId } from "@excalidraw/element";
+import { isShapeWithId } from "@excalidraw/element";
 import {
   UI,
   Keyboard,
@@ -60,7 +60,7 @@ describe("flow chart creation", () => {
 
     expect(h.elements.length).toBe(5);
     expect(
-      h.elements.filter((el) => isCompositeShapeId(el, "rectangle")).length,
+      h.elements.filter((el) => isShapeWithId(el, "rectangle")).length,
     ).toBe(3);
     expect(h.elements.filter((el) => el.type === "arrow").length).toBe(2);
   });
@@ -82,7 +82,7 @@ describe("flow chart creation", () => {
 
     expect(h.elements.length).toBe(7);
     expect(
-      h.elements.filter((el) => isCompositeShapeId(el, "rectangle")).length,
+      h.elements.filter((el) => isShapeWithId(el, "rectangle")).length,
     ).toBe(4);
     expect(h.elements.filter((el) => el.type === "arrow").length).toBe(3);
   });
@@ -111,12 +111,12 @@ describe("flow chart creation", () => {
 
     expect(h.elements.length).toBe(3);
     expect(
-      h.elements.filter((el) => isCompositeShapeId(el, "rectangle")).length,
+      h.elements.filter((el) => isShapeWithId(el, "rectangle")).length,
     ).toBe(2);
     expect(h.elements.filter((el) => el.type === "arrow").length).toBe(1);
 
     const firstChildNode = h.elements.filter(
-      (el) => isCompositeShapeId(el, "rectangle") && el.id !== initialNode.id,
+      (el) => isShapeWithId(el, "rectangle") && el.id !== initialNode.id,
     )[0];
     expect(firstChildNode).not.toBe(null);
     expect(firstChildNode.id).toBe(Object.keys(h.state.selectedElementIds)[0]);
@@ -130,13 +130,13 @@ describe("flow chart creation", () => {
 
     expect(h.elements.length).toBe(5);
     expect(
-      h.elements.filter((el) => isCompositeShapeId(el, "rectangle")).length,
+      h.elements.filter((el) => isShapeWithId(el, "rectangle")).length,
     ).toBe(3);
     expect(h.elements.filter((el) => el.type === "arrow").length).toBe(2);
 
     const secondChildNode = h.elements.filter(
       (el) =>
-        isCompositeShapeId(el, "rectangle") &&
+        isShapeWithId(el, "rectangle") &&
         el.id !== initialNode.id &&
         el.id !== firstChildNode.id,
     )[0];
@@ -152,13 +152,13 @@ describe("flow chart creation", () => {
 
     expect(h.elements.length).toBe(7);
     expect(
-      h.elements.filter((el) => isCompositeShapeId(el, "rectangle")).length,
+      h.elements.filter((el) => isShapeWithId(el, "rectangle")).length,
     ).toBe(4);
     expect(h.elements.filter((el) => el.type === "arrow").length).toBe(3);
 
     const thirdChildNode = h.elements.filter(
       (el) =>
-        isCompositeShapeId(el, "rectangle") &&
+        isShapeWithId(el, "rectangle") &&
         el.id !== initialNode.id &&
         el.id !== firstChildNode.id &&
         el.id !== secondChildNode.id,
@@ -191,7 +191,7 @@ describe("flow chart creation", () => {
     }
 
     const children = h.elements.filter(
-      (el) => isCompositeShapeId(el, "rectangle") && el.id !== parent.id,
+      (el) => isShapeWithId(el, "rectangle") && el.id !== parent.id,
     );
     expect(children.length).toBe(4);
 
@@ -234,7 +234,7 @@ describe("flow chart creation", () => {
     addBatch(2);
 
     const children = h.elements.filter(
-      (el) => isCompositeShapeId(el, "rectangle") && el.id !== parent.id,
+      (el) => isShapeWithId(el, "rectangle") && el.id !== parent.id,
     );
     expect(children.length).toBe(5);
 
@@ -272,9 +272,7 @@ describe("flow chart creation", () => {
     Keyboard.keyUp(KEYS.CTRL_OR_CMD);
 
     const rightChildren = h.elements
-      .filter(
-        (el) => isCompositeShapeId(el, "rectangle") && el.id !== parent.id,
-      )
+      .filter((el) => isShapeWithId(el, "rectangle") && el.id !== parent.id)
       .sort((a, b) => a.y - b.y);
     expect(rightChildren.length).toBe(2);
     const [upper, lower] = rightChildren;
@@ -289,7 +287,7 @@ describe("flow chart creation", () => {
 
     const newChild = h.elements.filter(
       (el) =>
-        isCompositeShapeId(el, "rectangle") &&
+        isShapeWithId(el, "rectangle") &&
         el.id !== parent.id &&
         el.id !== upper.id &&
         el.id !== lower.id,
@@ -317,12 +315,12 @@ describe("flow chart band-search placement", () => {
 
   const children = (parent: NonDeletedExcalidrawElement) =>
     h.elements.filter(
-      (el) => isCompositeShapeId(el, "rectangle") && el.id !== parent.id,
+      (el) => isShapeWithId(el, "rectangle") && el.id !== parent.id,
     );
 
   const pendingRects = () =>
     (h.app.flowchart.pendingNodes ?? [])
-      .filter((el) => isCompositeShapeId(el, "rectangle"))
+      .filter((el) => isShapeWithId(el, "rectangle"))
       .map((el) => ({ x: el.x, y: el.y }));
 
   it("places the first child exactly one offset away in every direction", () => {
@@ -487,7 +485,7 @@ describe("flow chart navigation", () => {
     Keyboard.keyUp(KEYS.CTRL_OR_CMD);
 
     expect(
-      h.elements.filter((el) => isCompositeShapeId(el, "rectangle")).length,
+      h.elements.filter((el) => isShapeWithId(el, "rectangle")).length,
     ).toBe(5);
     expect(h.elements.filter((el) => el.type === "arrow").length).toBe(4);
 
@@ -504,7 +502,7 @@ describe("flow chart navigation", () => {
     // all the way to the right, gets us to the last node
     const rightMostNode = h.elements[h.elements.length - 2];
     expect(rightMostNode);
-    expect(isCompositeShapeId(rightMostNode, "rectangle")).toBe(true);
+    expect(isShapeWithId(rightMostNode, "rectangle")).toBe(true);
     Keyboard.withModifierKeys({ alt: true }, () => {
       Keyboard.keyPress(KEYS.ARROW_RIGHT);
       Keyboard.keyPress(KEYS.ARROW_RIGHT);
@@ -654,7 +652,7 @@ describe("flow chart navigation", () => {
 
     // last node should be the one that's selected
     const rightMostNode = h.elements[h.elements.length - 2];
-    expect(isCompositeShapeId(rightMostNode, "rectangle")).toBe(true);
+    expect(isShapeWithId(rightMostNode, "rectangle")).toBe(true);
     expect(h.state.selectedElementIds[rightMostNode.id]).toBe(true);
 
     Keyboard.withModifierKeys({ alt: true }, () => {
@@ -670,9 +668,7 @@ describe("flow chart navigation", () => {
 
     // going any direction takes us to the predecessor as well
     const predecessorToRightMostNode = h.elements[h.elements.length - 4];
-    expect(isCompositeShapeId(predecessorToRightMostNode, "rectangle")).toBe(
-      true,
-    );
+    expect(isShapeWithId(predecessorToRightMostNode, "rectangle")).toBe(true);
 
     API.setSelectedElements([rightMostNode] as NonDeletedExcalidrawElement[]);
     Keyboard.withModifierKeys({ alt: true }, () => {
