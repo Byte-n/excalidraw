@@ -459,3 +459,37 @@ test("四个领域查询均校验协议，草稿脚本只产生读取结果", as
     await f.dispose();
   }
 });
+
+test("shape 域覆盖全部图形分类（基础 / 流程图 / 时序图）", async () => {
+  const f = sessionFixture();
+  try {
+    const api = createCanvasCollaboration(f.session, context("write"));
+    const kinds = ["rectangle", "fc-diamond", "sc-lifeline-entity"];
+    for (const [index, kind] of kinds.entries()) {
+      const draft = await api.createElement!({
+        kind,
+        x: index * 200,
+        y: 0,
+        width: 100,
+        height: 200,
+      });
+      await api.mutate!({ mutations: [{ type: "add", element: draft }] });
+    }
+    const result = await api.query({
+      domain: "shape",
+      operation: { action: "list", limit: 10 },
+    });
+    expect(result.total).toBe(3);
+    expect(
+      result.items
+        .map((element) => [element.type, (element.shape as { id: string }).id])
+        .sort(),
+    ).toEqual([
+      ["composite", "rectangle"],
+      ["flow", "fc-diamond"],
+      ["sequence", "sc-lifeline-entity"],
+    ]);
+  } finally {
+    await f.dispose();
+  }
+});

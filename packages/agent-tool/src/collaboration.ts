@@ -3,6 +3,7 @@ import {
   createSceneElement,
   createCanvasSceneCommands,
   createExcalidrawSceneCommands,
+  isShapeElementType,
 } from "@excalidraw/yjs";
 
 import { z } from "zod";
@@ -317,10 +318,9 @@ export const createCanvasCollaboration = (
           }
           switch (input.domain) {
             case "shape":
-              return (
-                element.type === "composite" ||
-                SHAPE_IDS.some((kind) => kind === element.type)
-              );
+              // 图形元素按分类分顶层 type（composite / flow / sequence），所以这里
+              // 必须走分类表派生的判据；按具体 type 字符串列清单会随分类增删而漏。
+              return isShapeElementType(element.type);
             case "connector":
               return element.type === "arrow" || element.type === "line";
             case "mindmap":

@@ -121,7 +121,11 @@ export type {
   CanvasSceneCommandInput,
   CanvasSceneCommands,
 } from "./canvas-scene-commands";
-export { SHAPE_IDS, ARROWHEAD_VALUES } from "@excalidraw/element";
+export {
+  SHAPE_IDS,
+  ARROWHEAD_VALUES,
+  isShapeElementType,
+} from "@excalidraw/element";
 export type { ShapeId } from "@excalidraw/element/types";
 export {
   createSceneElement,

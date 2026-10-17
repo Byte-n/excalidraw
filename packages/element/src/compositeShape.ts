@@ -64,6 +64,7 @@ export {
   isBasicShapeId,
   isFlowchartShapeId,
   isSequenceShapeId,
+  isShapeElementType,
 } from "./compositeShape/family";
 
 export type { ShapeFamily } from "./compositeShape/family";

@@ -36,6 +36,8 @@ import {
   FLOWCHART_SHAPE_IDS,
   SEQUENCE_SHAPE_IDS,
   SHAPE_IDS,
+  ELEMENT_TYPE_BY_FAMILY,
+  isShapeElementType,
   shapeElementType,
 } from "../src/compositeShape";
 import { distanceToElement } from "../src/distance";
@@ -1664,6 +1666,15 @@ describe("composite shape data", () => {
         ? "flow"
         : "sequence";
       expect(shapeElementType(id)).toBe(expected);
+    }
+  });
+
+  it("recognizes exactly the three shape element types at the JSON boundary", () => {
+    for (const type of Object.values(ELEMENT_TYPE_BY_FAMILY)) {
+      expect(isShapeElementType(type)).toBe(true);
+    }
+    for (const type of ["mindmap-node", "table", "arrow", "text", 1, null]) {
+      expect(isShapeElementType(type)).toBe(false);
     }
   });
 

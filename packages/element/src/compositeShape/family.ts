@@ -128,6 +128,16 @@ export const isSequenceShapeId = (id: string): id is SequenceShapeId =>
 export const isShapeId = (id: string): id is ShapeId =>
   (SHAPE_IDS as readonly string[]).includes(id);
 
+/**
+ * Whether a top-level element `type` is one of the shape families'. JSON 边界上
+ * 只能拿到 `type` 串（协作场景的元素类型是宽松结构），所以按分类表判，而不是按
+ * 具体 type 列清单 —— 分类增删时这里自动跟着走。注意不能拿 `shape.id` 判：思维导图
+ * 节点的 `shape.id` 用的就是 `rectangle`/`ellipse` 这些基础图形 id。
+ */
+export const isShapeElementType = (type: unknown): type is ShapeElementType =>
+  typeof type === "string" &&
+  (Object.values(ELEMENT_TYPE_BY_FAMILY) as readonly string[]).includes(type);
+
 type AssertTrue<T extends true> = T;
 
 // Compile-time interlocks. These mirror the `satisfies` guards the plan
