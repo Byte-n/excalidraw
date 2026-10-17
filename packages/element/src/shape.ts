@@ -48,15 +48,18 @@ import type {
 import { elementWithCanvasCache } from "./renderElement";
 import { supportsFill } from "./comparisons";
 import {
-  compositeShapePathToSvg,
   getCompositeShapeCornerRadius,
   getCompositeShapeGeometry,
-  getCompositeShapePoints,
   getCompositeShapeGlobalPoints,
   isBaseShapeId,
   isCompositeShapeId,
   isCompositeShapeOpen,
 } from "./compositeShape";
+import {
+  SHAPES,
+  drawShapeOutlinePath,
+  type ShapeDrawContext,
+} from "./compositeShape/registry";
 import {
   getMindmapEdgePath,
   getMindmapNodeGeometry,
@@ -981,177 +984,16 @@ const _generateElementShape = (
           );
         }
         const geometry = getCompositeShapeGeometry(element);
-        switch (shapeId) {
-          case "ellipse": {
-            if (geometry.primitive?.kind !== "ellipse") {
-              throw new Error("Missing ellipse geometry");
-            }
-            return generator.ellipse(
-              geometry.primitive.center[0],
-              geometry.primitive.center[1],
-              geometry.primitive.radiusX * 2,
-              geometry.primitive.radiusY * 2,
-              generateRoughOptions(element, false, isDarkMode),
-            );
-          }
-          case "diamond": {
-            if (geometry.primitive?.kind !== "diamond") {
-              throw new Error("Missing diamond geometry");
-            }
-            if (element.roundness) {
-              return generator.path(
-                compositeShapePathToSvg(geometry.outline),
-                generateRoughOptions(element, true, isDarkMode),
-              );
-            }
-            return generator.polygon(
-              geometry.primitive.points,
-              generateRoughOptions(element, false, isDarkMode),
-            );
-          }
-          case "rectangle": {
-            if (geometry.primitive?.kind !== "rectangle") {
-              throw new Error("Missing rectangle geometry");
-            }
-            return geometry.primitive.radius
-              ? generator.path(
-                  compositeShapePathToSvg(geometry.outline),
-                  generateRoughOptions(element, true, isDarkMode),
-                )
-              : generator.rectangle(
-                  0,
-                  0,
-                  geometry.primitive.width,
-                  geometry.primitive.height,
-                  generateRoughOptions(element, false, isDarkMode),
-                );
-          }
-          case "cross":
-          case "brace-reverse":
-          case "brace":
-          case "cloud":
-          case "double-arrow":
-          case "forward-arrow":
-          case "backward-arrow":
-          case "octagon":
-          case "pentagon":
-          case "hexagon":
-          case "star":
-          case "triangle":
-          case "round-rect":
-          case "rectangle-bubble":
-          case "pill":
-          case "bubble":
-          case "trapezoid":
-          case "parallelogram":
-          case "right-pentagon":
-          case "step":
-          case "cube":
-          case "cylinder":
-          case "pie":
-          case "circular-ring":
-          case "fc-round-rect":
-          case "fc-terminator":
-          case "fc-diamond":
-          case "fc-document":
-          case "fc-parallelogram":
-          case "fc-cylinder":
-          case "fc-horiz-cylinder":
-          case "fc-predefined-process":
-          case "fc-manual-input":
-          case "fc-trapezoid":
-          case "fc-delay":
-          case "fc-hexagon":
-          case "fc-off-page-connector":
-          case "fc-circle": {
-            const options = generateRoughOptions(
-              element,
-              isCompositeShapeOpen(shapeId),
-              isDarkMode,
-            );
-            if (shapeId === "brace" || shapeId === "brace-reverse") {
-              return generator.path(compositeShapePathToSvg(geometry.outline), {
-                ...options,
-                fill: undefined,
-              });
-            }
-            if (geometry.fillFaces) {
-              const faceOptions = {
-                ...options,
-                preserveVertices: true,
-              };
-              const faces = options.fill
-                ? geometry.fillFaces.map(({ path, tone }, index) =>
-                    generator.path(compositeShapePathToSvg(path), {
-                      ...faceOptions,
-                      fill: shadeCompositeFill(options.fill!, tone),
-                      stroke: "none",
-                      strokeWidth: 0,
-                      seed: element.seed + index + 1,
-                    }),
-                  )
-                : [];
-              const outline = generator.path(
-                compositeShapePathToSvg(geometry.outline),
-                { ...faceOptions, fill: undefined },
-              );
-              const detailSets = geometry.details.flatMap(
-                (path) =>
-                  generator.path(compositeShapePathToSvg(path), {
-                    ...faceOptions,
-                    fill: undefined,
-                  }).sets,
-              );
-              return [
-                ...faces,
-                { ...outline, sets: [...outline.sets, ...detailSets] },
-              ];
-            }
-            if (
-              shapeId === "cloud" ||
-              shapeId === "bubble" ||
-              shapeId === "cross" ||
-              shapeId === "star" ||
-              shapeId === "round-rect" ||
-              shapeId === "pill" ||
-              shapeId === "rectangle-bubble" ||
-              shapeId === "pie" ||
-              shapeId === "circular-ring" ||
-              shapeId === "fc-round-rect" ||
-              shapeId === "fc-terminator" ||
-              shapeId === "fc-document" ||
-              shapeId === "fc-cylinder" ||
-              shapeId === "fc-horiz-cylinder" ||
-              shapeId === "fc-predefined-process" ||
-              shapeId === "fc-delay" ||
-              shapeId === "fc-circle"
-            ) {
-              const pathOptions = { ...options, preserveVertices: true };
-              const outline = generator.path(
-                compositeShapePathToSvg(geometry.outline),
-                pathOptions,
-              );
-              if (!geometry.details.length) {
-                return outline;
-              }
-              return [
-                outline,
-                ...geometry.details.map((path) =>
-                  generator.path(compositeShapePathToSvg(path), {
-                    ...pathOptions,
-                    fill: undefined,
-                  }),
-                ),
-              ];
-            }
-            return generator.polygon(getCompositeShapePoints(element), options);
-          }
-          default:
-            return assertNever(
-              shapeId,
-              `generateElementShape(): Unimplemented shape ${String(shapeId)}`,
-            );
-        }
+        const draw = SHAPES[shapeId].draw ?? drawShapeOutlinePath;
+        const context: ShapeDrawContext = {
+          generator,
+          element,
+          geometry,
+          options: (continuousPath) =>
+            generateRoughOptions(element, continuousPath, isDarkMode),
+          shadeFill: shadeCompositeFill,
+        };
+        return draw(context);
       }
       let shape: ElementShapes[typeof element.type];
       // this is for rendering the stroke/bg of the embeddable, especially
