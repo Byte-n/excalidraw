@@ -1,5 +1,5 @@
 // 手写精简飞书节点子集，每类型 1~2 个节点，依据样例整理字段形状。
-// 仅用于 parse 阶段单测，不复制大样例文件。
+// 仅用于转换层单测，不复制大样例文件。
 
 import type { LarkBoardNode } from "../../src/source.js";
 
@@ -171,16 +171,17 @@ export function connectorNode(
   };
 }
 
-// 纯坐标直线连线（无绑定）。
+// 纯坐标直线连线（无绑定）。节点 x/y/width/height 是两端点的包围盒，与端点
+// 位置同处一个参考系。
 export function straightConnectorNode(
   overrides: Partial<LarkBoardNode> = {},
 ): LarkBoardNode {
   return {
     id: "conn2",
     type: "connector",
-    x: 100,
-    y: 200,
-    width: 200,
+    x: 733,
+    y: 2063,
+    width: 201,
     height: 0,
     angle: 0,
     z_index: 3,
@@ -205,17 +206,18 @@ export function straightConnectorNode(
   };
 }
 
-// 折线连线（polyline + 折点）。
+// 折线连线（polyline + 折点）。节点 x/y/width/height 是两端点与折点的包围盒，
+// 折点相对节点原点。
 export function polylineConnectorNode(
   overrides: Partial<LarkBoardNode> = {},
 ): LarkBoardNode {
   return {
     id: "conn3",
     type: "connector",
-    x: 10,
-    y: 10,
+    x: 0,
+    y: 0,
     width: 100,
-    height: 0,
+    height: 40,
     angle: 0,
     z_index: 4,
     connector: {
@@ -226,6 +228,197 @@ export function polylineConnectorNode(
         { x: 30, y: 40 },
         { x: 70, y: 40 },
       ],
+    },
+    ...overrides,
+  };
+}
+
+// 父偏移非 0 的画框：作为下列连线的父容器，场景原点 (1000, 7000)。
+export function offsetSectionNode(
+  overrides: Partial<LarkBoardNode> = {},
+): LarkBoardNode {
+  return {
+    id: "offsetSec",
+    type: "section",
+    x: 1000,
+    y: 7000,
+    width: 800,
+    height: 600,
+    angle: 0,
+    z_index: 0,
+    section: { title: "偏移画框" },
+    children: [],
+    style: { border_style: "solid" },
+    ...overrides,
+  };
+}
+
+// 多层父容器的外层画框：场景原点 (1000, 7000)。
+export function deepOuterSectionNode(
+  overrides: Partial<LarkBoardNode> = {},
+): LarkBoardNode {
+  return {
+    id: "deepOuter",
+    type: "section",
+    x: 1000,
+    y: 7000,
+    width: 800,
+    height: 600,
+    angle: 0,
+    z_index: 0,
+    section: { title: "外层画框" },
+    children: ["deepInner"],
+    style: { border_style: "solid" },
+    ...overrides,
+  };
+}
+
+// 多层父容器的内层画框：相对外层 (100, 200)，场景原点 (1100, 7200)。
+export function deepInnerSectionNode(
+  overrides: Partial<LarkBoardNode> = {},
+): LarkBoardNode {
+  return {
+    id: "deepInner",
+    type: "section",
+    parent_id: "deepOuter",
+    x: 100,
+    y: 200,
+    width: 500,
+    height: 300,
+    angle: 0,
+    z_index: 0,
+    section: { title: "内层画框" },
+    children: [],
+    style: { border_style: "solid" },
+    ...overrides,
+  };
+}
+
+// 父偏移非 0 的纯坐标直线连线：自身原始原点 (36.5166, 201.9443)，
+// 端点为 (36.5166, 201.9443) / (148.1506, 201.9443)，同处父相对参考系。
+export function nestedStraightConnector(
+  overrides: Partial<LarkBoardNode> = {},
+): LarkBoardNode {
+  return {
+    id: "nestedStraight",
+    type: "connector",
+    parent_id: "offsetSec",
+    x: 36.5166,
+    y: 201.9443,
+    width: 111.634,
+    height: 0,
+    angle: 0,
+    z_index: 1,
+    connector: {
+      shape: "straight",
+      specified_coordinate: true,
+      start: { arrow_style: "none", position: { x: 36.5166, y: 201.9443 } },
+      end: {
+        arrow_style: "line_arrow",
+        position: { x: 148.1506, y: 201.9443 },
+      },
+      turning_points: [],
+      captions: { data: [] },
+    },
+    ...overrides,
+  };
+}
+
+// 父偏移非 0 的折线连线：折点相对节点原点。
+export function nestedPolylineConnector(
+  overrides: Partial<LarkBoardNode> = {},
+): LarkBoardNode {
+  return {
+    id: "nestedPolyline",
+    type: "connector",
+    parent_id: "offsetSec",
+    x: 36.5166,
+    y: 201.9443,
+    width: 111.634,
+    height: 30,
+    angle: 0,
+    z_index: 1,
+    connector: {
+      shape: "polyline",
+      start: { arrow_style: "none", position: { x: 36.5166, y: 201.9443 } },
+      end: {
+        arrow_style: "line_arrow",
+        position: { x: 148.1506, y: 201.9443 },
+      },
+      turning_points: [
+        { x: 50, y: 0 },
+        { x: 90, y: 30 },
+      ],
+      captions: { data: [] },
+    },
+    ...overrides,
+  };
+}
+
+// 父偏移非 0 的曲线连线：带 position=0.5 的标签，标签对齐取左/上以消除
+// 文本度量偏移。
+export function nestedCurveConnector(
+  overrides: Partial<LarkBoardNode> = {},
+): LarkBoardNode {
+  return {
+    id: "nestedCurve",
+    type: "connector",
+    parent_id: "offsetSec",
+    x: 36.5166,
+    y: 201.9443,
+    width: 100,
+    height: 0,
+    angle: 0,
+    z_index: 1,
+    connector: {
+      shape: "curve",
+      caption_position: 0.5,
+      start: { arrow_style: "none", position: { x: 36.5166, y: 201.9443 } },
+      end: {
+        arrow_style: "line_arrow",
+        position: { x: 136.5166, y: 201.9443 },
+      },
+      turning_points: [],
+      captions: {
+        data: [
+          {
+            font_size: 14,
+            horizontal_align: "left",
+            vertical_align: "top",
+            text: "曲线标签",
+            text_color: "#1f2329",
+          },
+        ],
+      },
+    },
+    ...overrides,
+  };
+}
+
+// 跨两层父容器的直线连线：自身原始原点同上，父容器场景原点 (1100, 7200)。
+export function deepNestedConnector(
+  overrides: Partial<LarkBoardNode> = {},
+): LarkBoardNode {
+  return {
+    id: "deepNested",
+    type: "connector",
+    parent_id: "deepInner",
+    x: 36.5166,
+    y: 201.9443,
+    width: 111.634,
+    height: 0,
+    angle: 0,
+    z_index: 1,
+    connector: {
+      shape: "straight",
+      specified_coordinate: true,
+      start: { arrow_style: "none", position: { x: 36.5166, y: 201.9443 } },
+      end: {
+        arrow_style: "line_arrow",
+        position: { x: 148.1506, y: 201.9443 },
+      },
+      turning_points: [],
+      captions: { data: [] },
     },
     ...overrides,
   };
@@ -448,6 +641,24 @@ export function lifelineNode(
     angle: 0,
     z_index: 0,
     lifeline: { type: "boundary", size: 360 },
+    ...overrides,
+  };
+}
+
+// 范围外类型：分组容器。其坐标是「穿透」的，子节点坐标不相对 group。
+export function groupNode(
+  overrides: Partial<LarkBoardNode> = {},
+): LarkBoardNode {
+  return {
+    id: "group1",
+    type: "group",
+    x: 1000,
+    y: 7000,
+    width: 400,
+    height: 300,
+    angle: 0,
+    z_index: 0,
+    children: [],
     ...overrides,
   };
 }

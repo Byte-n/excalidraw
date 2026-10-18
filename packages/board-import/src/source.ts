@@ -5,10 +5,10 @@
 // 管线只消费这两个纯函数式端口。
 
 // 节点 `type` 字段以字符串容纳：样例中已知的类型在 `LARK_KNOWN_NODE_TYPES`
-// 列出，未知类型由 parse 阶段按 unknown 丢弃计数，不在此处收窄。
+// 列出，未知类型由转换层按 unknown 丢弃计数，不在此处收窄。
 export type LarkBoardNodeType = string;
 
-// 已知节点类型枚举，供 T2 分派表参考。
+// 已知节点类型枚举，供转换层分派表参考。
 export const LARK_KNOWN_NODE_TYPES = [
   "composite_shape",
   "text_shape",
@@ -65,7 +65,7 @@ export interface LarkNodeStyle {
 
 // 节点级文本对象：扁平字段（font_size / font_weight / *_align / italic /
 // underline / line_through / text / text_color / text_background_color_type）。
-// rich_text 是可选增强（样例中仅个别节点携带），run 级样式不在本骨架建模。
+// rich_text 是可选增强（样例中仅个别节点携带），run 级样式不在本层建模。
 export interface LarkNodeRichTextStyle {
   font_size?: number;
   font_weight?: string;
@@ -140,7 +140,7 @@ export interface LarkConnectorCaption extends LarkNodeText {}
 
 export interface LarkConnectorPayload {
   // 走向以字符串容纳：已知 straight / polyline / curve / right_angled_polyline，
-  // 未来新增取值由解析原样保留、render 阶段统一降级。
+  // 未来新增取值由解析原样保留、转换层统一降级。
   shape?: string;
   specified_coordinate?: boolean;
   caption_position?: number;
@@ -282,7 +282,7 @@ export interface LarkBoardNode {
   locked?: boolean;
   parent_id?: string;
   // 容器子节点 id 列表。表格等容器样例中可能显式为 null（内容落在
-  // table.cells），故允许 null；parse 阶段据此决定是否产出 childIds。
+  // table.cells），故允许 null；闸门据此校验 childIds 不含自身。
   children?: string[] | null;
   composite_shape?: LarkCompositeShapePayload;
   connector?: LarkConnectorPayload;

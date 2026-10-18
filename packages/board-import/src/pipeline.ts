@@ -1,44 +1,35 @@
-// 画板导入管线编排：parse → render → materializeAssets → project。
+// 画板导入管线编排：convertBoard → materializeAssets → project。
 //
-// 四级纯函数各自独立可测；importBoard 负责翻页拉满、按 token 解析图片字节
-// 与阶段串联。任一阶段抛错即整板失败（调用方负责零残留）。
-
-import { assertBoardSkeleton } from "./skeleton.js";
+// 各阶段为纯函数、各自独立可测；importBoard 负责翻页拉满、按 token 解析图片
+// 字节与阶段串联。任一阶段抛错即整板失败（调用方负责零残留）。
 
 import { materializeAssets } from "./assets.js";
-import { parseBoard as parseFeishuBoard } from "./feishu/parse.js";
+import { convertBoard } from "./feishu/convert.js";
+import { assertLarkBoard } from "./feishu/validate.js";
 import { projectScene } from "./project.js";
-import { renderSkeleton } from "./render.js";
 
-import type {
-  BoardImageResolver,
-  BoardSource,
-  LarkBoardNode,
-} from "./source.js";
-import type { BoardSkeleton } from "./skeleton.js";
-import type { ParseResult } from "./feishu/parse.js";
-import type { BoardAssetRequest, RenderResult } from "./render.js";
 import type { MaterializeResult, ResolvedAssets } from "./assets.js";
 import type { ProjectResult } from "./project.js";
 import type {
+  BoardAssetRequest,
   BoardImportAsset,
+  BoardImportElement,
   BoardImportPolicy,
   BoardImportResult,
   BoardImportStats,
   ScenePolicy,
 } from "./types.js";
+import type {
+  BoardImageResolver,
+  BoardSource,
+  LarkBoardNode,
+} from "./source.js";
 
 // --- 阶段签名 ---
 
-// parse：原始节点 → skeleton IR + parse 级统计。
-export type ParseStage = (nodes: LarkBoardNode[]) => ParseResult;
-
-// render：skeleton → 元素 + 资产请求清单。
-export type RenderStage = (skeleton: BoardSkeleton) => RenderResult;
-
 // materializeAssets：按请求注入调用方解析好的资产引用；放弃者计入 dropped。
 export type MaterializeAssetsStage = <TAsset>(
-  elements: RenderResult["elements"],
+  elements: BoardImportElement[],
   requests: readonly BoardAssetRequest[],
   resolved: ResolvedAssets<TAsset>,
   onDropped: (request: BoardAssetRequest) => void,
@@ -46,7 +37,7 @@ export type MaterializeAssetsStage = <TAsset>(
 
 // project：校验 + 统计收敛，产出最终结果。
 export type ProjectStage = <TAsset>(
-  elements: RenderResult["elements"],
+  elements: BoardImportElement[],
   assets: Record<string, TAsset>,
   stats: BoardImportStats,
   policy: ScenePolicy,
@@ -54,8 +45,7 @@ export type ProjectStage = <TAsset>(
 
 // --- 便携导出：阶段函数 ---
 
-export { materializeAssets, projectScene, renderSkeleton };
-export const parseBoard: ParseStage = (nodes) => parseFeishuBoard(nodes);
+export { materializeAssets, projectScene };
 
 export interface BoardImportInput {
   whiteboardId: string;
@@ -102,8 +92,8 @@ function enforceLimits(
   }
 }
 
-// 管线入口：翻页拉满 → parse → 校验 skeleton → render → 解析图片 → materialize
-// → project。任一阶段抛错即整板失败（调用方负责零残留）。
+// 管线入口：翻页拉满 → convertBoard → 整板闸门 → 解析图片 → materialize →
+// project。任一阶段抛错即整板失败（调用方负责零残留）。
 export async function importBoard(
   input: BoardImportInput,
 ): Promise<BoardImportResult> {
@@ -122,14 +112,16 @@ export async function importBoard(
     }
   }
 
-  const { skeleton, droppedNodes, richTextFlattened } = parseBoard(allNodes);
-  assertBoardSkeleton(skeleton);
-
   const {
     elements: rendered,
     assetRequests,
-    downgraded: renderDowngraded,
-  } = renderSkeleton(skeleton);
+    downgraded: convertDowngraded,
+    mapped,
+    droppedNodes,
+    richTextFlattened,
+  } = convertBoard(allNodes);
+
+  assertLarkBoard(allNodes);
 
   // 同一 token 只解析一次字节，避免重复 IO。
   const resolved = new Map<string, BoardImportAsset>();
@@ -156,11 +148,11 @@ export async function importBoard(
 
   const stats: BoardImportStats = {
     nodes: allNodes.length,
-    mapped: skeleton.nodes.length,
+    mapped,
     droppedNodes,
     droppedAssets: dropped,
-    // render 的替换/回落 + rich_text 按段落压平，均为一次保真度损失。
-    downgraded: renderDowngraded + richTextFlattened,
+    // 转换层回落 + rich_text 按段落压平，均为一次保真度损失。
+    downgraded: convertDowngraded + richTextFlattened,
     elements: elements.length,
     assetRequests: assetRequests.length,
     richTextFlattened,

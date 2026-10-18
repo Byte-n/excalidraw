@@ -6,7 +6,7 @@
 
 import type { ExcalidrawSceneElement } from "@excalidraw/yjs";
 
-import type { BoardAssetRequest } from "./render.js";
+import type { BoardAssetRequest } from "./types.js";
 
 // 解析结果：token → 调用方持有的资产引用（字节或平台句柄）。
 export type ResolvedAssets<TAsset> = ReadonlyMap<string, TAsset>;

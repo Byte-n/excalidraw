@@ -1,9 +1,8 @@
 import {
+  convertBoard,
   importBoard,
   materializeAssets,
-  parseBoard,
   projectScene,
-  renderSkeleton,
 } from "../src/index.js";
 
 import {
@@ -51,8 +50,7 @@ const POLICY: ScenePolicy = {
 };
 
 function render(nodes: LarkBoardNode[]) {
-  const { skeleton } = parseBoard(nodes);
-  return renderSkeleton(skeleton);
+  return convertBoard(nodes);
 }
 
 function find(

@@ -2,7 +2,7 @@
 //
 // fork 的文字元素构造依赖 `@excalidraw/element` 的 canvas 度量；该包提供
 // `setCustomTextMetricsProvider` 作为宿主显式注入口。board-import 只在渲染前
-// 注入一次确定性估算，文本盒尺寸随后按骨架宽高覆盖，客户端会重算，故估算
+// 注入一次确定性估算，文本盒尺寸随后按节点宽高覆盖，客户端会重算，故估算
 // 只保证可构造、不追求像素精度。
 
 import { setCustomTextMetricsProvider } from "@excalidraw/element";
