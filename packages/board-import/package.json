@@ -1,0 +1,40 @@
+{
+  "name": "@excalidraw/board-import",
+  "version": "0.1.0",
+  "description": "Pure transform from Feishu whiteboard node tree to Excalidraw scene",
+  "type": "module",
+  "types": "./dist/types/board-import/src/index.d.ts",
+  "main": "./dist/prod/index.js",
+  "module": "./dist/prod/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/types/board-import/src/index.d.ts",
+      "development": "./dist/dev/index.js",
+      "production": "./dist/prod/index.js",
+      "default": "./dist/prod/index.js"
+    }
+  },
+  "files": [
+    "dist/*"
+  ],
+  "scripts": {
+    "gen:types": "rimraf dist/types && tsc",
+    "build:esm": "rimraf dist && node ../../scripts/buildBase.js && yarn gen:types",
+    "build": "yarn build:esm",
+    "test": "vitest run --root ../.. --project board-import",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false && tsc -p tsconfig.test.json",
+    "lint": "eslint --ext .ts src _tests_ --max-warnings 0"
+  },
+  "dependencies": {
+    "@excalidraw/common": "0.18.0",
+    "@excalidraw/element": "0.18.0",
+    "@excalidraw/fractional-indexing": "3.3.0",
+    "@excalidraw/yjs": "file:../yjs"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
