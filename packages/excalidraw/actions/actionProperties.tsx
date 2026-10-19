@@ -24,6 +24,8 @@ import {
   reduceToCommonValue,
   invariant,
   FONT_SIZES,
+  FREEDRAW_STROKE_WIDTH,
+  FREEDRAW_STROKE_WIDTH_BOUNDS,
   type StrokeWidthKey,
 } from "@excalidraw/common";
 
@@ -797,6 +799,93 @@ export const actionChangeStrokeWidth = register<StrokeWidthKey>({
       </div>
     </fieldset>
   ),
+});
+
+// 自由画笔的像素笔宽控件：滑块（2~48，step 0.5）+ 细/中/粗 三档预设（3/6/12），
+// 二者写同一状态 `currentItemFreedrawStrokeWidth`；预设高亮按"当前值 == 预设值"判定。
+export const actionChangeFreedrawStrokeWidth = register<number>({
+  name: "changeFreedrawStrokeWidth",
+  label: "labels.strokeWidth",
+  trackEvent: false,
+  perform: (elements, appState, value) => {
+    invariant(
+      typeof value === "number",
+      "actionChangeFreedrawStrokeWidth: value must be a number",
+    );
+
+    return {
+      elements: changeProperty(elements, appState, (el) =>
+        el.type === "freedraw"
+          ? newElementWith(el, { strokeWidth: value })
+          : el,
+      ),
+      appState: { ...appState, currentItemFreedrawStrokeWidth: value },
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    };
+  },
+  PanelComponent: ({ elements, appState, updateData, app, data }) => {
+    const value = getFormValue(
+      elements,
+      app,
+      (element) =>
+        element.type === "freedraw" ? element.strokeWidth : undefined,
+      (element) => element.type === "freedraw",
+      (hasSelection) =>
+        hasSelection ? null : appState.currentItemFreedrawStrokeWidth,
+    );
+
+    const current = value ?? appState.currentItemFreedrawStrokeWidth;
+
+    // 预设高亮：仅当当前值恰好等于某档预设时高亮该档。
+    const presetKey: StrokeWidthKey | null =
+      (["thin", "medium", "bold"] as const).find(
+        (key) => FREEDRAW_STROKE_WIDTH[key] === current,
+      ) ?? null;
+
+    return (
+      <fieldset className="tb-group">
+        <legend className="tb-legend">{t("labels.strokeWidth")}</legend>
+        <Range
+          label={t("labels.strokeWidth")}
+          hideLabel
+          value={current}
+          hasCommonValue={value !== null}
+          onChange={updateData}
+          min={FREEDRAW_STROKE_WIDTH_BOUNDS.min}
+          max={FREEDRAW_STROKE_WIDTH_BOUNDS.max}
+          step={FREEDRAW_STROKE_WIDTH_BOUNDS.step}
+          testId="freedrawStrokeWidth"
+        />
+        <div className="buttonList">
+          <RadioSelection<StrokeWidthKey>
+            group="freedraw-stroke-width"
+            options={[
+              {
+                value: "thin",
+                text: t("labels.thin"),
+                icon: StrokeWidthBaseIcon,
+                testId: "freedrawStrokeWidth-thin",
+              },
+              {
+                value: "medium",
+                text: t("labels.medium"),
+                icon: StrokeWidthBoldIcon,
+                testId: "freedrawStrokeWidth-medium",
+              },
+              {
+                value: "bold",
+                text: t("labels.bold"),
+                icon: StrokeWidthExtraBoldIcon,
+                testId: "freedrawStrokeWidth-bold",
+              },
+            ]}
+            value={presetKey}
+            onChange={(key) => updateData(FREEDRAW_STROKE_WIDTH[key])}
+          />
+        </div>
+      </fieldset>
+    );
+  },
 });
 
 export const actionChangeFreedrawMode = register<StrokeVariability>({

@@ -18,6 +18,7 @@ import {
   ROUNDNESS,
   DEFAULT_SIDEBAR,
   DEFAULT_ELEMENT_PROPS,
+  DEFAULT_FREEDRAW_STROKE_WIDTH,
   DEFAULT_GRID_SIZE,
   DEFAULT_GRID_STEP,
   randomId,
@@ -370,7 +371,13 @@ const restoreElementWithProperties = <
     isDeleted: element.isDeleted ?? false,
     id: element.id || randomId(),
     fillStyle: element.fillStyle || DEFAULT_ELEMENT_PROPS.fillStyle,
-    strokeWidth: element.strokeWidth || DEFAULT_ELEMENT_PROPS.strokeWidth,
+    strokeWidth:
+      // 笔宽是物理尺寸，入口处只接受有限正数；非法值回落画笔默认像素笔宽。
+      extra.type === "freedraw" || element.type === "freedraw"
+        ? Number.isFinite(element.strokeWidth) && element.strokeWidth > 0
+          ? element.strokeWidth
+          : DEFAULT_FREEDRAW_STROKE_WIDTH
+        : element.strokeWidth || DEFAULT_ELEMENT_PROPS.strokeWidth,
     strokeStyle: element.strokeStyle ?? DEFAULT_ELEMENT_PROPS.strokeStyle,
     opacity:
       element.opacity == null ? DEFAULT_ELEMENT_PROPS.opacity : element.opacity,
@@ -1336,6 +1343,13 @@ export const restoreAppState = (
       getStrokeWidthKey((appState as any).currentItemStrokeWidth) ??
       defaultAppState.currentItemStrokeWidthKey;
   }
+
+  // 自由画笔笔宽必须是有限正数，否则回落默认像素值。
+  nextAppState.currentItemFreedrawStrokeWidth =
+    isFiniteNumber(nextAppState.currentItemFreedrawStrokeWidth) &&
+    nextAppState.currentItemFreedrawStrokeWidth > 0
+      ? nextAppState.currentItemFreedrawStrokeWidth
+      : defaultAppState.currentItemFreedrawStrokeWidth;
 
   return {
     ...nextAppState,

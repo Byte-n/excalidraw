@@ -280,6 +280,11 @@ test("自由书写：freedraw 点序列与颜色", () => {
   const { elements } = render([paintNode({ id: "paint1" })]);
   const draw = find(elements, (el) => el.type === "freedraw");
   expect(draw.strokeColor).toBe("#32a645");
+  // 飞书笔宽原值直传（paint.width=24），显式等宽。
+  expect(draw.strokeWidth).toBe(24);
+  expect(prop<{ variability: string }>(draw, "strokeOptions").variability).toBe(
+    "constant",
+  );
   const points = prop<ReadonlyArray<[number, number]>>(draw, "points");
   expect(points).toHaveLength(4);
   expect([points[0][0], points[0][1]]).toEqual([0, 88]);

@@ -358,6 +358,12 @@ test("paint 点序列进入元素", () => {
   const draw = find(elements, "p");
   expect(draw.type).toBe("freedraw");
   expect(draw.strokeColor).toBe("#32a645");
+  // 飞书笔宽原值直传（paint.width=24），与像素笔宽同量纲。
+  expect(draw.strokeWidth).toBe(24);
+  // 飞书笔迹无压力信息，显式等宽。
+  expect(prop<{ variability: string }>(draw, "strokeOptions").variability).toBe(
+    "constant",
+  );
   const points = pointsOf(draw);
   expect(points).toHaveLength(4);
   expect([points[0][0], points[0][1]]).toEqual([0, 88]);

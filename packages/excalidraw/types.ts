@@ -684,6 +684,7 @@ export interface AppState {
   currentItemBackgroundColor: string;
   currentItemFillStyle: ExcalidrawElement["fillStyle"];
   currentItemStrokeWidthKey: StrokeWidthKey;
+  currentItemFreedrawStrokeWidth: number;
   currentItemStrokeStyle: ExcalidrawElement["strokeStyle"];
   currentItemStrokeVariability: StrokeVariability;
   currentItemOpacity: number;

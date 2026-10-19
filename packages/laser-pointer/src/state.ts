@@ -89,6 +89,14 @@ export class LaserPointer {
     this.stabilizeTail();
   }
 
+  /**
+   * 与 `getStrokeOutline` 同源的平滑中心线（输入点经 streamline 平滑后的序列）。
+   * 只读访问器：不改变既有行为，仅供等宽几何的派生消费者（如填充中心线）复用。
+   */
+  getCenterPoints(): Array<[number, number]> {
+    return [...this.stablePoints, ...this.tailPoints].map(([x, y]) => [x, y]);
+  }
+
   stabilizeTail() {
     if (this.options.simplify > 0 && this.options.simplifyPhase === "tail") {
       throw new Error("Not implemented yet");

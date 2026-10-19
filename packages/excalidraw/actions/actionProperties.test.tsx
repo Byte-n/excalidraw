@@ -237,7 +237,11 @@ describe("element locking", () => {
     });
 
     it("should create new elements with stroke width by element type", () => {
-      API.setAppState({ currentItemStrokeWidthKey: "bold" });
+      // 形状/箭头读三档键状态；自由画笔读独立的像素笔宽状态，二者互不影响。
+      API.setAppState({
+        currentItemStrokeWidthKey: "bold",
+        currentItemFreedrawStrokeWidth: FREEDRAW_STROKE_WIDTH.bold,
+      });
 
       const rect = API.createElement({ type: "rectangle" });
       const freedraw = API.createElement({ type: "freedraw" });

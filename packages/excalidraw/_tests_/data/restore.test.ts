@@ -5,6 +5,7 @@ import {
   COLOR_PALETTE,
   DEFAULT_FONT_SIZE,
   DEFAULT_SIDEBAR,
+  DEFAULT_FREEDRAW_STROKE_WIDTH,
   FONT_FAMILY,
   ROUNDNESS,
   STICKY_NOTE_MAX_FONT_SIZE,
@@ -518,6 +519,46 @@ describe("restoreElements", () => {
       seed: expect.any(Number),
       versionNonce: expect.any(Number),
     });
+  });
+
+  it.each([
+    ["Infinity", Infinity],
+    ["negative", -3],
+    ["NaN", NaN],
+    ["zero", 0],
+    ["missing", undefined],
+  ])(
+    "should fall back to the default freedraw pixel width when strokeWidth is %s",
+    (_label, badWidth) => {
+      const freedrawElement = API.createElement({
+        type: "freedraw",
+        id: `id-freedraw-${_label}`,
+        points: [pointFrom(0, 0), pointFrom(10, 10)],
+      }) as ExcalidrawFreeDrawElement;
+
+      const restoredFreedraw = restore.restoreElements(
+        [{ ...freedrawElement, strokeWidth: badWidth } as any],
+        null,
+      )[0] as ExcalidrawFreeDrawElement;
+
+      expect(restoredFreedraw.strokeWidth).toBe(DEFAULT_FREEDRAW_STROKE_WIDTH);
+    },
+  );
+
+  it("should keep a valid freedraw pixel width as-is", () => {
+    const freedrawElement = API.createElement({
+      type: "freedraw",
+      id: "id-freedraw-valid-width",
+      points: [pointFrom(0, 0), pointFrom(10, 10)],
+      strokeWidth: 24,
+    });
+
+    const restoredFreedraw = restore.restoreElements(
+      [freedrawElement],
+      null,
+    )[0] as ExcalidrawFreeDrawElement;
+
+    expect(restoredFreedraw.strokeWidth).toBe(24);
   });
 
   it("should restore only valid freedraw points and keep pressures aligned", () => {

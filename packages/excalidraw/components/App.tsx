@@ -2288,6 +2288,10 @@ class App extends React.Component<AppProps, AppState> {
   public getCurrentItemStrokeWidth(
     elementType: ExcalidrawElement["type"] | ToolType,
   ) {
+    // 自由画笔读独立的像素笔宽状态；形状与箭头仍走三档档位键。
+    if (elementType === "freedraw") {
+      return this.state.currentItemFreedrawStrokeWidth;
+    }
     return getStrokeWidthByKey(
       elementType,
       this.state.currentItemStrokeWidthKey,

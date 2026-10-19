@@ -1178,6 +1178,8 @@ const CombinedShapeProperties = ({
                 <>
                   {predicates.fill && renderAction("changeFillStyle")}
                   {predicates.strokeWidth && renderAction("changeStrokeWidth")}
+                  {predicates.freedrawStrokeWidth &&
+                    renderAction("changeFreedrawStrokeWidth")}
                   {
                     /* in compact UI the freedraw pressure setting is rendered as a
                   standalone cycle button in the compact actions list; we render

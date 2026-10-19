@@ -1232,7 +1232,7 @@ export const handleFreeDrawElementOnPointerDown = (
     strokeColor: app.state.currentItemStrokeColor,
     backgroundColor: app.state.currentItemBackgroundColor,
     fillStyle: app.state.currentItemFillStyle,
-    strokeWidth: app.getCurrentItemStrokeWidth("freedraw"),
+    strokeWidth: app.state.currentItemFreedrawStrokeWidth,
     strokeStyle: app.state.currentItemStrokeStyle,
     opacity: app.state.currentItemOpacity,
     roundness: null,

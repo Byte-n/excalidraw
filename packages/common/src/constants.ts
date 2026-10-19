@@ -563,19 +563,27 @@ export const STROKE_WIDTH: Readonly<
   extraBold: 8, // unused (may be introduced in the future)
 };
 
-// freedraw schema 2.0 uses thinner stroke, but to maintain backwards and
-// forwards compatibility, instead of changing the shape renderer, we scale
-// the stroke width by 1/2 (previous, thin was 1, medium 2 etc.)
-//
-// note that in the UI, STROKE_WIDTH.thin == FREEDRAW_STROKE_WIDTH.thin still
+// 自由画笔按像素标定：`strokeWidth` 即墨迹外宽。三档预设为常用像素值，
+// 滑块边界 2~48（step 0.5），默认 3px。`strokeWidth` 不再受任何隐藏渲染系数调制。
 export const FREEDRAW_STROKE_WIDTH: Readonly<
   Record<StrokeWidthKey | "extraBold", ExcalidrawElement["strokeWidth"]>
 > = {
-  thin: 0.5,
-  medium: 1,
-  bold: 2,
-  extraBold: 4, // legacy (may be used again in the future)
+  thin: 3,
+  medium: 6,
+  bold: 12,
+  extraBold: 24, // 预留（未来可能启用）
 };
+
+// 自由画笔笔宽滑块的边界、步长与默认值（像素）。
+export const FREEDRAW_STROKE_WIDTH_BOUNDS = {
+  min: 2,
+  max: 48,
+  step: 0.5,
+  defaultValue: 3,
+} as const;
+
+export const DEFAULT_FREEDRAW_STROKE_WIDTH =
+  FREEDRAW_STROKE_WIDTH_BOUNDS.defaultValue;
 
 export const getStrokeWidthByKey = (
   elementType: ExcalidrawElement["type"] | ToolType,

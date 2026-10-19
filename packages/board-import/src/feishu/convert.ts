@@ -4,7 +4,10 @@
 // 绑定 / 思维导图边 / boundElements / 分数索引。连线统一留到第二遍，等被引用
 // 的目标图元全部就绪，绑定不依赖飞书返回顺序。整板闸门由导入管线在入口调用。
 
-import { STROKE_WIDTH } from "@excalidraw/common";
+import {
+  DEFAULT_FREEDRAW_STROKE_WIDTH,
+  DEFAULT_STROKE_STREAMLINE,
+} from "@excalidraw/common";
 
 import {
   newElement,
@@ -60,6 +63,15 @@ import type { LarkBoardNode, LarkPoint } from "../source.js";
 // 图片 fileId：同一 token 稳定复现，物化阶段作为 assets 键。
 function imageFileId(token: string): string {
   return `lark-image:${token}`;
+}
+
+// 飞书画笔笔宽：板面绝对尺寸，与像素笔宽同量纲，原值直传不换算、不截断
+// （2~48 只是滑动条边界，元素保留来源原值）。非有限或 ≤0 回落画笔默认像素笔宽。
+function resolvePaintStrokeWidth(width: number | undefined): number {
+  if (width !== undefined && Number.isFinite(width) && width > 0) {
+    return width;
+  }
+  return DEFAULT_FREEDRAW_STROKE_WIDTH;
 }
 
 // 场景元素收敛：把 fork 元素的 `index`（可能为 null）归一为非空字符串，
@@ -247,7 +259,14 @@ export function convertBoard(nodes: LarkBoardNode[]): BoardConversion {
           points: points.map((p) => localPoint(p.x, p.y)),
           simulatePressure: false,
           strokeColor: paint?.color ?? "#1f2329",
-          strokeWidth: paint?.width ?? STROKE_WIDTH.thin,
+          // 飞书笔宽与像素笔宽同量纲，原值直传；非有限或 ≤0 已在 helper 内回落。
+          strokeWidth: resolvePaintStrokeWidth(paint?.width),
+          // 飞书笔迹无压力信息，显式声明为等宽色带（中性压力宽度在此路径下恒等于
+          // strokeWidth，不读 simulatePressure）。
+          strokeOptions: {
+            variability: "constant",
+            streamline: DEFAULT_STROKE_STREAMLINE,
+          },
           opacity: paint?.type === "highlight" ? 50 : 100,
           ...identity(node.raw.id, node.angle),
         });

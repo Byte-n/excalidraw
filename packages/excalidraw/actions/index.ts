@@ -21,6 +21,7 @@ export {
   actionChangeStrokeWidth,
   actionChangeFillStyle,
   actionChangeFreedrawMode,
+  actionChangeFreedrawStrokeWidth,
   actionChangeOpacity,
   actionChangeFontSize,
   actionChangeFontFamily,

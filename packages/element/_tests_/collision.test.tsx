@@ -195,17 +195,22 @@ describe("hitElementItself cache", () => {
 });
 
 describe("freedraw collision matches the rendered stroke width", () => {
-  // A straight, horizontal stroke centered on y === 0.
+  // A straight, horizontal stroke centered on y === 0. 像素笔宽标定后两条路径
+  // 在中性压力下墨迹外宽都 == strokeWidth（半径 = strokeWidth / 2 = 5）。
   const points = Array.from({ length: 21 }, (_, i) =>
     pointFrom<LocalPoint>(i * 5, 0),
   );
 
   const createFreeDraw = (variability: "variable" | "constant") =>
-    API.createElement({
+    newFreeDrawElement({
       type: "freedraw",
       x: 0,
       y: 0,
       strokeWidth: 10,
+      // 显式中性压力 + 关闭速度模拟：两档墨迹半径都精确等于 strokeWidth / 2 = 5，
+      // 让命中断言只反映像素笔宽标定，而非 perfect-freehand 的速度浮动。
+      simulatePressure: false,
+      pressures: points.map(() => 0.5),
       points,
       strokeOptions: { variability, streamline: 0.5 },
     });
@@ -227,21 +232,22 @@ describe("freedraw collision matches the rendered stroke width", () => {
   });
 
   it("hits across the body of a thick stroke, not just near the centerline", () => {
-    expect(distanceAt(createFreeDraw("variable"), 50, 20)).toBe(0);
+    // 墨迹半径 = 5，中段内 4px 偏移仍是直接命中。
+    expect(distanceAt(createFreeDraw("variable"), 50, 4)).toBe(0);
   });
 
-  it("uses a wider hit area for variable-width than for constant-width strokes", () => {
-    const offset = 20;
-    const variableDistance = distanceAt(createFreeDraw("variable"), 50, offset);
-    const constantDistance = distanceAt(createFreeDraw("constant"), 50, offset);
-
-    expect(variableDistance).toBe(0);
-    expect(constantDistance).toBeGreaterThan(0);
-    expect(variableDistance).toBeLessThan(constantDistance);
+  it("treats variable and constant modes as equal reach at neutral pressure", () => {
+    // 像素标定后两档中性宽度一致：半径均为 strokeWidth / 2 = 5。
+    expect(distanceAt(createFreeDraw("variable"), 50, 4)).toBe(0);
+    expect(distanceAt(createFreeDraw("constant"), 50, 4)).toBe(0);
+    // 7px 偏移已超出墨迹半径，两档都不命中。
+    expect(distanceAt(createFreeDraw("variable"), 50, 7)).toBeGreaterThan(0);
+    expect(distanceAt(createFreeDraw("constant"), 50, 7)).toBeGreaterThan(0);
   });
 
-  it("does not hit points clearly outside even the widest stroke", () => {
-    expect(distanceAt(createFreeDraw("variable"), 50, 45)).toBeGreaterThan(0);
+  it("does not hit points clearly outside the ink", () => {
+    expect(distanceAt(createFreeDraw("variable"), 50, 12)).toBeGreaterThan(0);
+    expect(distanceAt(createFreeDraw("constant"), 50, 12)).toBeGreaterThan(0);
   });
 
   it("hits thick ink outside the centerline bounds", () => {
@@ -257,22 +263,24 @@ describe("freedraw collision matches the rendered stroke width", () => {
         threshold: 1,
       });
 
-    // The centerline bounds have zero height, far below the ink's reach.
-    expect(hitAt(createFreeDraw("variable"), 50, 20)).toBe(true);
-    expect(hitAt(createFreeDraw("variable"), 50, -20)).toBe(true);
-    expect(hitAt(createFreeDraw("constant"), 50, 10)).toBe(true);
-    expect(hitAt(createFreeDraw("constant"), 50, 20)).toBe(false);
-    expect(hitAt(createFreeDraw("variable"), 50, 45)).toBe(false);
+    // 中心线本身高度为 0，但墨迹半径 5，4px 偏移仍在墨迹内。
+    expect(hitAt(createFreeDraw("variable"), 50, 4)).toBe(true);
+    expect(hitAt(createFreeDraw("variable"), 50, -4)).toBe(true);
+    expect(hitAt(createFreeDraw("constant"), 50, 4)).toBe(true);
+    // 7px 偏移超出墨迹半径，不命中。
+    expect(hitAt(createFreeDraw("constant"), 50, 7)).toBe(false);
+    expect(hitAt(createFreeDraw("variable"), 50, 7)).toBe(false);
   });
 
   it("hits the start cap of a short stroke reaching past its stroke size", () => {
-    // Under 3px long, perfect-freehand draws the start cap around the first
-    // point from the last point's outline, reaching past the stroke size.
+    // 像素标定后可变档 size = strokeWidth / (2 × easing(0.5)) ≈ 0.707 × strokeWidth；
+    // perfect-freehand 的短笔圆帽从最后一个轮廓点画起，触及 sqrt(size² + 3²)，
+    // 仍超出中段墨迹半径。取 strokeWidth = 6 使圆帽延展 ~5.2px，验证 (0.1, 4.9) 命中。
     const element = newFreeDrawElement({
       type: "freedraw",
       x: 0,
       y: 0,
-      strokeWidth: 1,
+      strokeWidth: 6,
       simulatePressure: false,
       pressures: [1, 1, 1],
       points: [

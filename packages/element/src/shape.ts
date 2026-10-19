@@ -1401,25 +1401,29 @@ const getFreeDrawSvgPath = (element: ExcalidrawFreeDrawElement) => {
 };
 
 /**
- * Freedraw stroke geometry tuning constants.
+ * 自由画笔笔宽标定：`strokeWidth` 即墨迹外宽（像素），渲染不再乘任何隐藏系数。
  *
- * These factors are not derived analytically — they were tuned empirically by
- * visually comparing rendered strokes until they matched the desired feel.
- * Treat them as magic numbers backed by visual verification.
+ * 两条渲染路径按同一像素基准标定，使同一 `strokeWidth` 在两档下中性宽度一致：
+ * - 等宽档（激光几何）：半径 = `strokeWidth / 2`，墨迹外宽恒等于 `strokeWidth`，与压力无关；
+ * - 可变档（perfect-freehand）：`size = strokeWidth / (2 × easing(0.5))`，由
+ *   perfect-freehand 的半径公式 `radius = size × easing(0.5 − thinning × (0.5 − pressure))`
+ *   可知，中性压力（0.5）下 `radius = size × easing(0.5) = strokeWidth / 2`，
+ *   故墨迹外宽 == `strokeWidth`；真笔压与速度模拟在该值上下浮动。
  */
+const FREEDRAW_EASING = (t: number) => Math.sin((t * Math.PI) / 2);
+// 中性压力（0.5）下的 easing 值：sin(π/4) = √2/2。
+const FREEDRAW_NEUTRAL_EASING = FREEDRAW_EASING(0.5);
+
+// 可变档的笔压与平滑调参（与 size 基准无关，仅控制粗细随压力/速度的浮动幅度）。
 const VARIABLE_WIDTH_FREEDRAW = {
-  /** Stroke size relative to `strokeWidth` for pressure-sensitive strokes. */
-  SIZE_FACTOR: 4.25,
   THINNING: 0.6,
   SMOOTHING: 0.5,
 } as const;
 
 const CONSTANT_WIDTH_FREEDRAW = {
-  /** Stroke size relative to `strokeWidth` for uniform (laser) strokes. */
-  SIZE_FACTOR: 1.4,
   /**
-   * Max deviation (px) when dropping vertices of the dense laser outline for
-   * collision. Perfect-freehand outlines are already thinned by `smoothing`.
+   * 等宽档密集激光轮廓在碰撞检测抽稀时的最大偏差（px）；perfect-freehand 的轮廓
+   * 已由 `smoothing` 抽稀，这里只做二次简化。
    */
   COLLISION_SIMPLIFY_TOLERANCE: 0.2,
 } as const;
@@ -1427,9 +1431,14 @@ const CONSTANT_WIDTH_FREEDRAW = {
 const getFreedrawStreamline = (element: ExcalidrawFreeDrawElement) =>
   element.strokeOptions?.streamline ?? DEFAULT_STROKE_STREAMLINE;
 
+// 可变档 perfect-freehand 的 size：使中性压力下墨迹外宽 == strokeWidth。
+const getFreedrawVariableSize = (element: ExcalidrawFreeDrawElement) =>
+  element.strokeWidth / (2 * FREEDRAW_NEUTRAL_EASING);
+
 /**
  * Pressure-sensitive (variable width) freedraw outline, rendered with
- * perfect-freehand. This is the original Excalidraw freedraw look.
+ * perfect-freehand. 中性压力（0.5）下墨迹外宽 == `strokeWidth`；真笔压与速度
+ * 模拟在其上浮动。
  */
 const getVariableWidthFreedrawOutline = (
   element: ExcalidrawFreeDrawElement,
@@ -1445,18 +1454,19 @@ const getVariableWidthFreedrawOutline = (
 
   return getStroke(inputPoints as number[][], {
     simulatePressure: element.simulatePressure,
-    size: element.strokeWidth * VARIABLE_WIDTH_FREEDRAW.SIZE_FACTOR,
+    size: getFreedrawVariableSize(element),
     thinning: VARIABLE_WIDTH_FREEDRAW.THINNING,
     smoothing: VARIABLE_WIDTH_FREEDRAW.SMOOTHING,
     streamline: getFreedrawStreamline(element),
-    easing: (t) => Math.sin((t * Math.PI) / 2), // https://easings.net/#easeOutSine
+    easing: FREEDRAW_EASING,
     last: true,
   }) as [number, number][];
 };
 
 const createLaserPointer = (element: ExcalidrawFreeDrawElement) =>
   new LaserPointer({
-    size: element.strokeWidth * CONSTANT_WIDTH_FREEDRAW.SIZE_FACTOR,
+    // 半径 = 半笔宽 ⇒ 墨迹外宽恒等于 strokeWidth，与压力无关。
+    size: element.strokeWidth / 2,
     streamline: getFreedrawStreamline(element),
     simplify: 0,
     sizeMapping: (details) => Math.max(0.1, details.pressure),
@@ -1488,38 +1498,39 @@ export const getFreedrawOutlinePoints = (
 
 /**
  * Upper bound on how far a freedraw stroke's ink reaches past its centerline
- * points. Both stroke generators scale the stroke size by at most 1 (easing
- * or pressure), so the size itself bounds the radius, except for
- * perfect-freehand's short strokes: under 3px long, the start cap is drawn
- * around the first point from an outline point of the last one (reaching
- * sqrt(size² + 3²)), and a single point gets a synthetic neighbor 1px away.
+ * points. 等宽档半径恒为 `strokeWidth / 2`；可变档半径以 `size` 为上界，但
+ * perfect-freehand 的短笔画（< 3px）会把起点圆帽从最后一个轮廓点画起，触及
+ * `sqrt(size² + 3²)`，单点则合成 1px 邻居，故额外保留 3px 余量。
  */
 export const getFreedrawMaxStrokeRadius = (
   element: ExcalidrawFreeDrawElement,
 ) =>
   element.strokeOptions?.variability === "constant"
-    ? element.strokeWidth * CONSTANT_WIDTH_FREEDRAW.SIZE_FACTOR
-    : element.strokeWidth * VARIABLE_WIDTH_FREEDRAW.SIZE_FACTOR + 3;
+    ? element.strokeWidth / 2
+    : getFreedrawVariableSize(element) + 3;
 
 /**
- * The streamline-smoothed centerline the freedraw stroke is rendered
- * around, in element-local coordinates. Boundary-sensitive consumers (e.g.
- * bucket fill) should use this instead of `element.points`: raw input
- * points can sit 20px+ apart and the rendered stroke is smoothed between
- * them, so raw chords visibly deviate from what's on screen.
+ * 与渲染同源的平滑中心线（元素本地坐标）。边界敏感的消费者（如油漆桶填充）
+ * 应以此为准而非 `element.points`：原始输入点可能相距 20px+，渲染会在其间平滑，
+ * 直连弦会明显偏离屏幕所见。
  *
- * Constant-width ("laser geometry") strokes technically smooth via
- * `LaserPointer` instead; the perfect-freehand centerline with the same
- * `streamline` is a close approximation the stroke width hides.
+ * 两档分别取各自渲染器的平滑输入序列：等宽档取 `LaserPointer` 的平滑点；
+ * 可变档取 perfect-freehand `getStrokePoints` 在同一 `size`/`streamline` 下的点。
  */
 export const getFreedrawStrokeCenterPoints = (
   element: ExcalidrawFreeDrawElement,
-): [number, number][] =>
-  getStrokePoints(element.points as unknown as number[][], {
-    size: element.strokeWidth * VARIABLE_WIDTH_FREEDRAW.SIZE_FACTOR,
+): [number, number][] => {
+  if (element.strokeOptions?.variability === "constant") {
+    const laserPointer = createLaserPointer(element);
+    element.points.map(([x, y]) => laserPointer.addPoint([x, y, 1]));
+    return laserPointer.getCenterPoints();
+  }
+  return getStrokePoints(element.points as unknown as number[][], {
+    size: getFreedrawVariableSize(element),
     streamline: getFreedrawStreamline(element),
     last: true,
   }).map((strokePoint) => strokePoint.point as [number, number]);
+};
 
 const med = (A: number[], B: number[]) => {
   return [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];

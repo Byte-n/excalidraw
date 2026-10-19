@@ -314,7 +314,9 @@ export class API {
       fillStyle: rest.fillStyle ?? appState.currentItemFillStyle,
       strokeWidth:
         rest.strokeWidth ??
-        getStrokeWidthByKey(type as any, appState.currentItemStrokeWidthKey),
+        (type === "freedraw"
+          ? appState.currentItemFreedrawStrokeWidth
+          : getStrokeWidthByKey(type as any, appState.currentItemStrokeWidthKey)),
       strokeStyle: rest.strokeStyle ?? appState.currentItemStrokeStyle,
       roundness: (
         rest.roundness === undefined
