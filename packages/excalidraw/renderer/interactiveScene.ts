@@ -101,6 +101,7 @@ import { renderSelectionElement } from "@excalidraw/element";
 import {
   getCommonBounds,
   getElementAbsoluteCoords,
+  getElementSelectionFrameCoords,
   getTransformStatusReadout,
 } from "@excalidraw/element";
 import {
@@ -2534,10 +2535,11 @@ const renderElementsBoxHighlight = (
     // single rotation angle.
     if (elements.length === 1) {
       const [element] = elements;
-      const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(
+      // Hover / press-and-hold feedback follows the same frame as the committed
+      // selection: a lifeline's head, not its head + pole envelope.
+      const [x1, y1, x2, y2, cx, cy] = getElementSelectionFrameCoords(
         element,
         elementsMap,
-        true,
       );
       return {
         angle: element.angle,
@@ -3761,10 +3763,9 @@ const _renderInteractiveScene = ({
           ) {
             continue;
           }
-          const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(
+          const [x1, y1, x2, y2, cx, cy] = getElementSelectionFrameCoords(
             element,
             elementsMap,
-            true,
           );
           selections.push({
             angle: element.angle,
@@ -3977,10 +3978,9 @@ const _renderInteractiveScene = ({
         // 单选用未旋转的本地框中心——元素就是绕它转的，旋转中它不动
         const [x1, y1, x2, y2] =
           visibleSelectedElements.length === 1
-            ? getElementAbsoluteCoords(
+            ? getElementSelectionFrameCoords(
                 visibleSelectedElements[0],
                 elementsMap,
-                true,
               )
             : getCommonBounds(visibleSelectedElements, elementsMap);
         renderTransformStatusLabel(

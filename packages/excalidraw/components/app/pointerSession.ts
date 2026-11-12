@@ -86,6 +86,8 @@ import {
   updateBoundElements,
   updateCompositeShapeControlPoint,
   getBindingGap,
+  clampSequenceLifelineHeight,
+  isSequenceLifelineElement,
 } from "@excalidraw/element";
 
 import { EVENT } from "@excalidraw/common";
@@ -1277,6 +1279,20 @@ export const onPointerMoveFromPointerDownHandler = (
           pointerCoords.x - control.offset.x,
           pointerCoords.y - control.offset.y,
         );
+        if (
+          control.kind === "lifeline-pole-end" &&
+          isSequenceLifelineElement(element)
+        ) {
+          const newHeight = clampSequenceLifelineHeight(
+            element.shape.lifeline.headHeight,
+            local.y,
+          );
+          if (newHeight !== element.height) {
+            app.scene.mutateElement(element, { height: newHeight });
+            control.hasChanged = true;
+          }
+          return;
+        }
         const shape = updateCompositeShapeControlPoint(
           element.shape,
           control.kind,

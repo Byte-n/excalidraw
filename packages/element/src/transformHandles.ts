@@ -13,7 +13,14 @@ import type {
 } from "@excalidraw/excalidraw/types";
 import type { Bounds } from "@excalidraw/common";
 
-import { getElementAbsoluteCoords } from "./bounds";
+import {
+  getElementAbsoluteCoords,
+  getElementSelectionFrameCoords,
+} from "./bounds";
+import {
+  hasCompositeShapeSelectionFrame,
+  isShapeElement,
+} from "./compositeShape";
 import {
   isFrameLikeElement,
   isImageElement,
@@ -366,9 +373,17 @@ export const getTransformHandles = (
       rotation: true,
     };
   }
+  if (isShapeElement(element) && hasCompositeShapeSelectionFrame(element)) {
+    // The head frame is resized through its own gesture; a rotation handle
+    // would rotate the whole pole, which single lifelines do not offer.
+    omitSides = {
+      ...omitSides,
+      rotation: true,
+    };
+  }
   const margin = isImageElement(element) ? 0 : DEFAULT_TRANSFORM_HANDLE_SPACING;
   return getTransformHandlesFromCoords(
-    getElementAbsoluteCoords(element, elementsMap, true),
+    getElementSelectionFrameCoords(element, elementsMap),
     element.angle,
     zoom,
     pointerType,

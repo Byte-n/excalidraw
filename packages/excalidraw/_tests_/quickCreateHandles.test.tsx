@@ -4,6 +4,7 @@ import { getCurvePathOps } from "@excalidraw/utils/shape";
 
 import {
   ShapeCache,
+  buildShapeData,
   getContainingFrame,
   getElementBounds,
   getQuickCreateHandles,
@@ -355,6 +356,19 @@ describe("quick create handles", () => {
       selectShape(element);
       expect(getQuickCreateHandles(h.app)).toHaveLength(0);
     }
+  });
+
+  it("stays hidden for a sequence lifeline", () => {
+    const lifeline = API.createElement({
+      type: "sequence",
+      shape: buildShapeData("sc-lifeline-entity"),
+      x: 100,
+      y: 100,
+      width: 64,
+      height: 428.272,
+    });
+    selectShape(lifeline);
+    expect(getQuickCreateHandles(h.app)).toHaveLength(0);
   });
 
   it("stays hidden for a multi-selection", () => {

@@ -4,7 +4,11 @@ import { pointFrom, pointRotateRads } from "@excalidraw/math";
 import type { GlobalPoint, Radians } from "@excalidraw/math";
 
 import { getElementAbsoluteCoords } from "./bounds";
-import { isShapeId, isShapeElement } from "./compositeShape";
+import {
+  isSequenceLifelineElement,
+  isShapeId,
+  isShapeElement,
+} from "./compositeShape";
 import { isMindmapNodeElement } from "./typeChecks";
 
 import type {
@@ -273,6 +277,11 @@ export const getQuickCreateHandles = (
   }
   const element = getQuickCreateTargetElement(app);
   if (!element) {
+    return [];
+  }
+  // Sequence lifelines have their own bottom control point; direction handles
+  // would collide with it and are not implemented for sequence messages yet.
+  if (isSequenceLifelineElement(element)) {
     return [];
   }
   const zoom = app.state.zoom.value;

@@ -3,6 +3,9 @@ import {
   getLineHeight,
   getVerticalOffset,
 } from "@excalidraw/common";
+import { pointFrom, pointRotateRads } from "@excalidraw/math";
+
+import type { GlobalPoint, Radians } from "@excalidraw/math";
 
 import { getLineHeightInPx } from "../textMeasurements";
 
@@ -23,7 +26,11 @@ import {
 
 import type { Drawable, Options } from "roughjs/bin/core";
 
-import type { SequenceShapeData, SequenceShapeId } from "../types";
+import type {
+  ExcalidrawElement,
+  ExcalidrawSequenceElement,
+  SequenceShapeData,
+} from "../types";
 import type { ShapeDraw } from "./registry";
 
 /**
@@ -38,8 +45,21 @@ import type { ShapeDraw } from "./registry";
  * `draw`, never by the outline path.
  */
 
-/** The dashed lifeline pole length, measured from the head's bottom edge. */
-export const SEQUENCE_POLE_LENGTH = 360;
+/** Default pole length used when a lifeline is created. */
+export const SEQUENCE_DEFAULT_POLE_LENGTH = 360;
+
+/** Minimum pole length enforced when a lifeline is resized or restored. */
+export const SEQUENCE_MIN_POLE_LENGTH = 40;
+
+/** Minimum head dimensions accepted by the custom resize gesture. */
+export const SEQUENCE_MIN_HEAD_WIDTH = 24;
+export const SEQUENCE_MIN_HEAD_HEIGHT = 24;
+
+/**
+ * @deprecated use `SEQUENCE_DEFAULT_POLE_LENGTH`. Kept as an alias for
+ * callers that still refer to the old constant.
+ */
+export const SEQUENCE_POLE_LENGTH = SEQUENCE_DEFAULT_POLE_LENGTH;
 
 /** Persisted head heights, sampled from the Lark sequence sample. */
 export const SEQUENCE_LIFELINE_HEAD_HEIGHTS = {
@@ -55,9 +75,106 @@ export const SEQUENCE_LIFELINE_HEAD_HEIGHTS = {
 
 export type SequenceLifelineId = keyof typeof SEQUENCE_LIFELINE_HEAD_HEIGHTS;
 
+/** Default head widths, sampled from the Lark sequence sample. */
+export const SEQUENCE_LIFELINE_DEFAULT_WIDTHS: Record<
+  SequenceLifelineId,
+  number
+> = {
+  "sc-lifeline-entity": 64,
+  "sc-lifeline-control": 64,
+  "sc-lifeline-boundary": 76,
+  "sc-lifeline-actor": 84,
+  "sc-lifeline-queue": 100,
+  "sc-lifeline-data-base": 68,
+  "sc-lifeline-object": 120,
+  "sc-lifeline-collection": 118,
+};
+
 export const isSequenceLifelineShapeId = (
-  id: SequenceShapeId,
-): id is SequenceLifelineId => id in SEQUENCE_LIFELINE_HEAD_HEIGHTS;
+  id: string,
+): id is SequenceLifelineId =>
+  Object.prototype.hasOwnProperty.call(SEQUENCE_LIFELINE_HEAD_HEIGHTS, id);
+
+/**
+ * Narrowing predicate for a persisted sequence element whose shape is one of
+ * the eight lifelines. Structural so it can be used at JSON boundaries without
+ * importing the registry.
+ */
+export const isSequenceLifelineElement = <T extends ExcalidrawElement>(
+  element: T,
+): element is T &
+  ExcalidrawSequenceElement & {
+    shape: Extract<SequenceShapeData, { id: SequenceLifelineId }>;
+  } => {
+  const shape = (element as Partial<ExcalidrawSequenceElement>).shape;
+  return (
+    element.type === "sequence" &&
+    !!shape &&
+    isSequenceLifelineShapeId(shape.id)
+  );
+};
+
+/**
+ * Enforces the lifeline invariants: `headHeight > 0` (validated at the
+ * persistence boundary) and `height >= headHeight + SEQUENCE_MIN_POLE_LENGTH`.
+ * Only `height` is touched; x/y/width/angle are preserved.
+ */
+export const normalizeSequenceLifelineGeometry = <T extends ExcalidrawElement>(
+  element: T,
+): T => {
+  if (!isSequenceLifelineElement(element)) {
+    return element;
+  }
+  const minHeight =
+    element.shape.lifeline.headHeight + SEQUENCE_MIN_POLE_LENGTH;
+  if (element.height >= minHeight) {
+    return element;
+  }
+  return { ...element, height: minHeight } as T;
+};
+
+/** Default element size for a lifeline: head height plus the default pole. */
+export const getSequenceLifelineDefaultSize = (
+  id: SequenceLifelineId,
+): { width: number; height: number } => ({
+  width: SEQUENCE_LIFELINE_DEFAULT_WIDTHS[id],
+  height: SEQUENCE_LIFELINE_HEAD_HEIGHTS[id] + SEQUENCE_DEFAULT_POLE_LENGTH,
+});
+
+/** Clamps a proposed element height to keep at least the minimum pole. */
+export const clampSequenceLifelineHeight = (
+  headHeight: number,
+  height: number,
+): number => Math.max(headHeight + SEQUENCE_MIN_POLE_LENGTH, height);
+
+/**
+ * Whether a global point falls inside the lifeline's head box. Used to keep
+ * text editing on the head while the pole remains a selection/move affordance.
+ */
+export const isPointInSequenceLifelineHead = (
+  element: ExcalidrawElement,
+  globalX: number,
+  globalY: number,
+): boolean => {
+  if (!isSequenceLifelineElement(element)) {
+    return false;
+  }
+  const center = pointFrom<GlobalPoint>(
+    element.x + element.width / 2,
+    element.y + element.height / 2,
+  );
+  const [x, y] = pointRotateRads(
+    pointFrom<GlobalPoint>(globalX, globalY),
+    center,
+    -element.angle as Radians,
+  );
+  return (
+    x >= element.x &&
+    x <= element.x + element.width &&
+    y >= element.y &&
+    y <= element.y + element.shape.lifeline.headHeight
+  );
+};
 
 /**
  * Bound text is vertically centered inside the shape's text bounds. For a
@@ -111,7 +228,14 @@ export const getSequenceLifelineTextBounds = (
   // The collection label centers on its front box (110 of 118) in the sample.
   const right =
     id === "sc-lifeline-collection" ? (width * 110) / 118 : width - TEXT_GAP;
-  return insetRect(TEXT_GAP, centerY - half, right, centerY + half);
+  // Resizing can shrink the head below the sampled label band; keep the band
+  // inside the head instead of letting text bounds leak past its bottom.
+  const top = Math.min(
+    Math.max(0, centerY - half),
+    Math.max(0, headHeight - 0.01),
+  );
+  const bottom = Math.min(Math.max(top + 0.01, centerY + half), headHeight);
+  return insetRect(TEXT_GAP, top, right, bottom);
 };
 
 // ---------------------------------------------------------------------------
@@ -538,18 +662,64 @@ export const getSequenceLifelineGeometry = (
   }
 };
 
+/**
+ * Pole length derived from the element height. The minimum keeps the pole
+ * itself selectable/draggable even if an invalid element slips through; the
+ * persisted invariant normally guarantees `height >= headHeight + MIN`.
+ */
+export const getSequencePoleLength = (height: number, headHeight: number) =>
+  Math.max(SEQUENCE_MIN_POLE_LENGTH, height - headHeight);
+
 /** The dashed lifeline pole: centered on the element, from the head bottom. */
 export const getSequencePolePath = (
   width: number,
   headHeight: number,
+  height: number,
 ): CompositeShapePath =>
   pathFromPoints(
     [
       [width / 2, headHeight],
-      [width / 2, headHeight + SEQUENCE_POLE_LENGTH],
+      [width / 2, headHeight + getSequencePoleLength(height, headHeight)],
     ],
     false,
   );
+
+/** Half-width of the selectable corridor around the dashed pole. */
+export const SEQUENCE_HIT_HALF_WIDTH = 5;
+
+/**
+ * Interactive geometry of a lifeline: the head rectangle plus a narrow
+ * corridor around the pole. The element box (envelope) stays the outline for
+ * bounds and export; only hit-testing, distance and line intersection use
+ * these paths.
+ */
+export const getSequenceLifelineHitPaths = (
+  width: number,
+  headHeight: number,
+  height: number,
+): CompositeShapePath[] => {
+  const poleEnd = headHeight + getSequencePoleLength(height, headHeight);
+  return [
+    pathFromPoints(
+      [
+        [0, 0],
+        [width, 0],
+        [width, headHeight],
+        [0, headHeight],
+      ],
+      true,
+    ),
+    pathFromPoints(
+      [
+        [width / 2 - SEQUENCE_HIT_HALF_WIDTH, headHeight],
+        [width / 2 + SEQUENCE_HIT_HALF_WIDTH, headHeight],
+        [width / 2 + SEQUENCE_HIT_HALF_WIDTH, poleEnd],
+        [width / 2 - SEQUENCE_HIT_HALF_WIDTH, poleEnd],
+      ],
+      true,
+    ),
+  ];
+};
 
 /** The whole element box; the envelope every lifeline declares as its outline. */
 export const getSequenceElementBox = (
@@ -593,7 +763,9 @@ export const drawSequenceLifeline: ShapeDraw = ({
   }
   drawables.push(
     generator.path(
-      compositeShapePathToSvg(getSequencePolePath(element.width, headHeight)),
+      compositeShapePathToSvg(
+        getSequencePolePath(element.width, headHeight, element.height),
+      ),
       {
         ...strokeOptions,
         strokeLineDash: [4, 4],

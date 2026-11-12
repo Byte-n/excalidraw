@@ -1,25 +1,44 @@
 import { getVerticalOffset } from "@excalidraw/common";
+import { lineSegment, pointFrom } from "@excalidraw/math";
 import { RoughGenerator } from "roughjs/bin/generator";
+
+import type { GlobalPoint } from "@excalidraw/math";
+
+import type { Zoom } from "@excalidraw/excalidraw/types";
 
 import {
   BASIC_SHAPE_IDS,
   FLOWCHART_SHAPE_IDS,
+  SEQUENCE_DEFAULT_POLE_LENGTH,
+  SEQUENCE_HIT_HALF_WIDTH,
+  SEQUENCE_LIFELINE_DEFAULT_WIDTHS,
   SEQUENCE_LIFELINE_HEAD_HEIGHTS,
-  SEQUENCE_POLE_LENGTH,
+  SEQUENCE_MIN_HEAD_HEIGHT,
+  SEQUENCE_MIN_HEAD_WIDTH,
+  SEQUENCE_MIN_POLE_LENGTH,
   SEQUENCE_SHAPE_IDS,
   SHAPE_IDS,
   buildShapeData,
+  clampSequenceLifelineHeight,
   drawSequenceLifeline,
   getCompositeShapeGeometry,
+  getCompositeShapeSelectionFrame,
   getCompositeShapeTextBounds,
+  getCompositeShapeTextFitMode,
   getSequenceElementBox,
   getSequenceFragmentTabPath,
   getSequenceFragmentTextBounds,
+  getSequenceLifelineDefaultSize,
   getSequenceLifelineGeometry,
+  getSequenceLifelineHitPaths,
   getSequenceLifelineTextBounds,
+  getSequencePoleLength,
   getSequencePolePath,
+  hasCompositeShapeSelectionFrame,
+  isPointInSequenceLifelineHead,
   isSequenceShapeId,
   isShapeElement,
+  normalizeSequenceLifelineGeometry,
   shapeElementType,
 } from "../src/compositeShape";
 import {
@@ -28,14 +47,27 @@ import {
   getRoundedRectOutline,
   pathFromPoints,
 } from "../src/compositeShape/outline";
+import {
+  getElementBounds,
+  getElementLineSegments,
+  getElementSelectionFrameCoords,
+} from "../src/bounds";
+import {
+  intersectElementWithLineSegment,
+  isPointInElement,
+} from "../src/collision";
 import { newElement } from "../src/newElement";
 import { getTextVerticalOffset } from "../src/renderElement";
+import { getSequenceLifelineResize } from "../src/resizeElements";
 import { generateRoughOptions } from "../src/shape";
 import { getLineHeightInPx } from "../src/textMeasurements";
+import { getTransformHandles } from "../src/transformHandles";
+import { getTransformStatusReadout } from "../src/transformStatus";
 import { convertToExcalidrawElements } from "../src/transform";
 
 import type { SequenceLifelineId } from "../src/compositeShape";
-import type { ExcalidrawShapeElement } from "../src/types";
+import type { ElementsMap, ExcalidrawShapeElement } from "../src/types";
+import type { NonDeletedExcalidrawElement } from "../src/types";
 
 const LIFELINE_IDS: readonly SequenceLifelineId[] = [
   "sc-lifeline-entity",
@@ -63,7 +95,7 @@ const measuredBaseline = (id: SequenceLifelineId, headHeight: number) =>
 /** Default element size: head height plus the 360 dashed pole. */
 const elementSize = (id: SequenceLifelineId, width: number) => ({
   width,
-  height: SEQUENCE_LIFELINE_HEAD_HEIGHTS[id] + SEQUENCE_POLE_LENGTH,
+  height: SEQUENCE_LIFELINE_HEAD_HEIGHTS[id] + SEQUENCE_DEFAULT_POLE_LENGTH,
 });
 
 const makeElement = (
@@ -100,6 +132,9 @@ const drawShape = (element: ExcalidrawShapeElement) => {
   });
   return Array.isArray(drawables) ? drawables : [drawables];
 };
+
+const elementsMapFor = (...elements: ExcalidrawShapeElement[]): ElementsMap =>
+  new Map(elements.map((element) => [element.id, element])) as ElementsMap;
 
 describe("sequence shape data", () => {
   it("maps every sequence id to the sequence element type", () => {
@@ -193,13 +228,21 @@ describe("sequence outline envelope", () => {
 describe("sequence lifeline pole", () => {
   it.each(LIFELINE_IDS)("%s starts the pole at the head bottom", (id) => {
     const headHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
-    const { width } = elementSize(id, 80);
-    const pole = getSequencePolePath(width, headHeight);
+    const { width, height } = elementSize(id, 80);
+    const pole = getSequencePolePath(width, headHeight, height);
     expect(pole.start).toEqual([width / 2, headHeight]);
-    expect(pole.commands).toEqual([
-      { type: "line", to: [width / 2, headHeight + SEQUENCE_POLE_LENGTH] },
-    ]);
+    expect(pole.commands).toEqual([{ type: "line", to: [width / 2, height] }]);
     expect(pole.closed).toBe(false);
+  });
+
+  it("derives the pole end from the element height", () => {
+    const pole = getSequencePolePath(64, 68.272, 500);
+    expect(pole.commands).toEqual([{ type: "line", to: [32, 500] }]);
+  });
+
+  it("clamps the derived pole length to the minimum", () => {
+    expect(getSequencePoleLength(80, 68.272)).toBe(SEQUENCE_MIN_POLE_LENGTH);
+    expect(getSequencePoleLength(500, 68.272)).toBeCloseTo(431.728);
   });
 
   it.each(LIFELINE_IDS)("%s draws a dashed, centered pole", (id) => {
@@ -217,6 +260,404 @@ describe("sequence lifeline pole", () => {
     const { details } = getCompositeShapeGeometry(element);
     const headHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"];
     expect(details.some((path) => path.start[1] >= headHeight)).toBe(false);
+  });
+});
+
+describe("sequence lifeline geometry invariants", () => {
+  it("raises a too-short element to headHeight + MIN_POLE", () => {
+    const element = makeElement("sc-lifeline-entity", 64, 80);
+    const normalized = normalizeSequenceLifelineGeometry(element);
+    expect(normalized.height).toBeCloseTo(
+      SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"] +
+        SEQUENCE_MIN_POLE_LENGTH,
+    );
+  });
+
+  it("returns the same element when the invariant already holds", () => {
+    const { width, height } = elementSize("sc-lifeline-entity", 64);
+    const element = makeElement("sc-lifeline-entity", width, height);
+    expect(normalizeSequenceLifelineGeometry(element)).toBe(element);
+  });
+
+  it("leaves activation and fragment untouched", () => {
+    const activation = makeElement("sc-activation", 30, 10);
+    const fragment = makeElement("sc-fragment", 400, 10);
+    expect(normalizeSequenceLifelineGeometry(activation)).toBe(activation);
+    expect(normalizeSequenceLifelineGeometry(fragment)).toBe(fragment);
+  });
+
+  it("provides the default size from the sampled constants", () => {
+    for (const id of LIFELINE_IDS) {
+      expect(getSequenceLifelineDefaultSize(id)).toEqual({
+        width: SEQUENCE_LIFELINE_DEFAULT_WIDTHS[id],
+        height:
+          SEQUENCE_LIFELINE_HEAD_HEIGHTS[id] + SEQUENCE_DEFAULT_POLE_LENGTH,
+      });
+    }
+  });
+});
+
+describe("sequence lifeline hit geometry", () => {
+  const { width, height } = elementSize("sc-lifeline-entity", 64);
+  const headHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"];
+  const element = makeElement("sc-lifeline-entity", width, height);
+  const elementsMap = elementsMapFor(element);
+
+  it("declares the head rectangle plus the pole corridor", () => {
+    const paths = getSequenceLifelineHitPaths(width, headHeight, height);
+    expect(paths).toEqual([
+      pathFromPoints(
+        [
+          [0, 0],
+          [width, 0],
+          [width, headHeight],
+          [0, headHeight],
+        ],
+        true,
+      ),
+      pathFromPoints(
+        [
+          [width / 2 - SEQUENCE_HIT_HALF_WIDTH, headHeight],
+          [width / 2 + SEQUENCE_HIT_HALF_WIDTH, headHeight],
+          [width / 2 + SEQUENCE_HIT_HALF_WIDTH, height],
+          [width / 2 - SEQUENCE_HIT_HALF_WIDTH, height],
+        ],
+        true,
+      ),
+    ]);
+    expect(getCompositeShapeGeometry(element).hitPaths).toHaveLength(2);
+  });
+
+  it("keeps the whole element box as the outline and bounds", () => {
+    expect(getCompositeShapeGeometry(element).outline).toEqual(
+      getBaseRectangleOutline(width, height, 0),
+    );
+    expect(getElementBounds(element, elementsMap)).toEqual([
+      0,
+      0,
+      width,
+      height,
+    ]);
+  });
+
+  it("hits the head and the pole but not the empty box", () => {
+    const point = (x: number, y: number) => pointFrom<GlobalPoint>(x, y);
+    expect(isPointInElement(point(width / 2, 30), element, elementsMap)).toBe(
+      true,
+    );
+    expect(isPointInElement(point(width / 2, 200), element, elementsMap)).toBe(
+      true,
+    );
+    expect(isPointInElement(point(5, 200), element, elementsMap)).toBe(false);
+    expect(isPointInElement(point(5, 100), element, elementsMap)).toBe(false);
+    expect(
+      isPointInElement(
+        point(width / 2 + SEQUENCE_HIT_HALF_WIDTH + 2, 200),
+        element,
+        elementsMap,
+      ),
+    ).toBe(false);
+  });
+
+  it("intersects the pole corridor for lasso/eraser segments", () => {
+    const segment = lineSegment(
+      pointFrom<GlobalPoint>(0, 200),
+      pointFrom<GlobalPoint>(100, 200),
+    );
+    const hits = intersectElementWithLineSegment(element, elementsMap, segment);
+    expect(hits).toHaveLength(2);
+    expect(hits.map(([x]) => x).sort((a, b) => a - b)).toEqual([
+      width / 2 - SEQUENCE_HIT_HALF_WIDTH,
+      width / 2 + SEQUENCE_HIT_HALF_WIDTH,
+    ]);
+  });
+
+  it("exposes both hit rectangles as line segments", () => {
+    expect(getElementLineSegments(element, elementsMap)).toHaveLength(8);
+  });
+});
+
+describe("sequence lifeline selection frame", () => {
+  const { width, height } = elementSize("sc-lifeline-entity", 64);
+  const headHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"];
+  const element = makeElement("sc-lifeline-entity", width, height);
+  const elementsMap = elementsMapFor(element);
+
+  it("uses the head box instead of the full element box", () => {
+    expect(getCompositeShapeSelectionFrame(element)).toEqual({
+      x: 0,
+      y: 0,
+      width,
+      height: headHeight,
+    });
+    expect(hasCompositeShapeSelectionFrame(element)).toBe(true);
+    expect(getElementSelectionFrameCoords(element, elementsMap)).toEqual([
+      0,
+      0,
+      width,
+      headHeight,
+      width / 2,
+      height / 2,
+    ]);
+  });
+
+  it("leaves activation and fragment on the full box", () => {
+    const activation = makeElement("sc-activation", 30, 100);
+    const fragment = makeElement("sc-fragment", 400, 240);
+    expect(hasCompositeShapeSelectionFrame(activation)).toBe(false);
+    expect(hasCompositeShapeSelectionFrame(fragment)).toBe(false);
+    expect(getCompositeShapeSelectionFrame(activation)).toEqual({
+      x: 0,
+      y: 0,
+      width: 30,
+      height: 100,
+    });
+  });
+
+  it("puts resize handles on the head and omits rotation", () => {
+    const handles = getTransformHandles(
+      element,
+      { value: 1 } as unknown as Zoom,
+      elementsMap,
+      "mouse",
+      {},
+    );
+    expect(handles.rotation).toBeUndefined();
+    expect(handles.n).toBeDefined();
+    expect(handles.s).toBeDefined();
+    expect(handles.e).toBeDefined();
+    expect(handles.w).toBeDefined();
+    // The south handle sits at the head bottom, not at the pole end.
+    expect(handles.s![1]).toBeGreaterThan(headHeight - 10);
+    expect(handles.s![1]).toBeLessThan(headHeight + 20);
+    expect(handles.s![1]).toBeLessThan(height / 2);
+  });
+
+  it("reports head dimensions in the transform readout", () => {
+    expect(
+      getTransformStatusReadout({
+        gesture: "scale",
+        hoveredHandle: null,
+        selectedElements: [element as NonDeletedExcalidrawElement],
+        elementsMap,
+      }),
+    ).toEqual({ kind: "size", text: "64 × 68" });
+  });
+});
+
+describe("sequence lifeline custom resize", () => {
+  const width = 64;
+  const height =
+    SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"] +
+    SEQUENCE_DEFAULT_POLE_LENGTH;
+  const headHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"];
+
+  const resize = (
+    handle: Parameters<typeof getSequenceLifelineResize>[1],
+    x: number,
+    y: number,
+  ) => {
+    const result = getSequenceLifelineResize(
+      makeElement("sc-lifeline-entity", width, height),
+      handle,
+      x,
+      y,
+    );
+    if (!result) {
+      throw new Error("Expected a sequence lifeline resize result");
+    }
+    return result;
+  };
+
+  it("changes width only from the east handle", () => {
+    const result = resize("e", width + 20, headHeight / 2);
+    expect(result).toMatchObject({
+      x: 0,
+      y: 0,
+      width: width + 20,
+      height,
+      headHeight,
+    });
+    // The pole remains centered on the resized head.
+    const pole = getSequencePolePath(
+      result.width,
+      result.headHeight,
+      result.height,
+    );
+    expect(pole.start[0]).toBeCloseTo(result.width / 2);
+  });
+
+  it("keeps the opposite edge fixed from the west handle", () => {
+    const result = resize("w", -20, headHeight / 2);
+    expect(result).toMatchObject({
+      x: -20,
+      y: 0,
+      width: width + 20,
+      height,
+      headHeight,
+    });
+  });
+
+  it("moves the head top without changing the pole length from n", () => {
+    const result = resize("n", width / 2, 10);
+    expect(result.x).toBe(0);
+    expect(result.y).toBeCloseTo(10);
+    expect(result.width).toBe(width);
+    expect(result.headHeight).toBeCloseTo(headHeight - 10);
+    expect(result.height).toBeCloseTo(height - 10);
+  });
+
+  it("moves the head bottom and shortens the pole from s", () => {
+    const result = resize("s", width / 2, headHeight + 10);
+    expect(result.x).toBe(0);
+    expect(result.y).toBe(0);
+    expect(result.width).toBe(width);
+    expect(result.headHeight).toBeCloseTo(headHeight + 10);
+    expect(result.height).toBe(height);
+  });
+
+  it("clamps the s handle to keep the minimum pole", () => {
+    const result = resize("s", width / 2, 500);
+    expect(result.headHeight).toBeCloseTo(height - SEQUENCE_MIN_POLE_LENGTH);
+    expect(result.height).toBe(height);
+  });
+
+  it("clamps the n handle to the minimum head height", () => {
+    const result = resize("n", width / 2, headHeight + 100);
+    expect(result.headHeight).toBe(SEQUENCE_MIN_HEAD_HEIGHT);
+    expect(result.y).toBeCloseTo(headHeight - SEQUENCE_MIN_HEAD_HEIGHT);
+    expect(result.height).toBeCloseTo(
+      SEQUENCE_MIN_HEAD_HEIGHT + (height - headHeight),
+    );
+  });
+
+  it("clamps the width to the minimum head width", () => {
+    const result = resize("e", -100, headHeight / 2);
+    expect(result.width).toBe(SEQUENCE_MIN_HEAD_WIDTH);
+    expect(result.x).toBe(0);
+  });
+
+  it("combines width and head height on a corner", () => {
+    const result = resize("se", width + 20, headHeight + 10);
+    expect(result).toMatchObject({
+      x: 0,
+      y: 0,
+      width: width + 20,
+      height,
+      headHeight: headHeight + 10,
+    });
+  });
+
+  it("keeps the opposite head anchor fixed under rotation", () => {
+    const angle = Math.PI / 2;
+    const rotated = makeElement("sc-lifeline-entity", width, height, {
+      x: 100,
+      y: 100,
+      angle,
+    });
+    const center = [100 + width / 2, 100 + height / 2];
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const oldRel = [0 - width / 2, headHeight / 2 - height / 2];
+    const oldAnchor = [
+      center[0] + oldRel[0] * cos - oldRel[1] * sin,
+      center[1] + oldRel[0] * sin + oldRel[1] * cos,
+    ];
+    const pointer = [
+      oldAnchor[0] + (width + 20) * cos,
+      oldAnchor[1] + (width + 20) * sin,
+    ];
+    const result = getSequenceLifelineResize(
+      rotated,
+      "e",
+      pointer[0],
+      pointer[1],
+    );
+    if (!result) {
+      throw new Error("Expected a rotated lifeline resize result");
+    }
+    expect(result.width).toBeCloseTo(width + 20);
+    const newCenter = [
+      result.x + result.width / 2,
+      result.y + result.height / 2,
+    ];
+    const newRel = [
+      0 - result.width / 2,
+      result.headHeight / 2 - result.height / 2,
+    ];
+    const newAnchor = [
+      newCenter[0] + newRel[0] * cos - newRel[1] * sin,
+      newCenter[1] + newRel[0] * sin + newRel[1] * cos,
+    ];
+    expect(newAnchor[0]).toBeCloseTo(oldAnchor[0]);
+    expect(newAnchor[1]).toBeCloseTo(oldAnchor[1]);
+  });
+});
+
+describe("sequence lifeline pole control", () => {
+  it("clamps the element height to the minimum pole", () => {
+    expect(
+      clampSequenceLifelineHeight(
+        SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"],
+        10,
+      ),
+    ).toBe(
+      SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"] +
+        SEQUENCE_MIN_POLE_LENGTH,
+    );
+    expect(clampSequenceLifelineHeight(68.272, 500)).toBe(500);
+  });
+
+  it("only opens text editing inside the head", () => {
+    const { width, height } = elementSize("sc-lifeline-entity", 64);
+    const element = makeElement("sc-lifeline-entity", width, height);
+    expect(isPointInSequenceLifelineHead(element, width / 2, 30)).toBe(true);
+    expect(
+      isPointInSequenceLifelineHead(
+        element,
+        width / 2,
+        SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"] + 10,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("sequence lifeline default creation", () => {
+  it("uses the sampled size when dimensions are omitted", () => {
+    const [element] = convertToExcalidrawElements([
+      { type: "sc-lifeline-entity", x: 0, y: 0 },
+    ]);
+    if (element.type !== "sequence") {
+      throw new Error("Expected a sequence element");
+    }
+    expect(element.width).toBe(
+      SEQUENCE_LIFELINE_DEFAULT_WIDTHS["sc-lifeline-entity"],
+    );
+    expect(element.height).toBeCloseTo(
+      SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"] +
+        SEQUENCE_DEFAULT_POLE_LENGTH,
+    );
+  });
+
+  it("does not grow the pole for a long label (fixed text fit)", () => {
+    const [element] = convertToExcalidrawElements([
+      {
+        type: "sc-lifeline-entity",
+        x: 0,
+        y: 0,
+        label: {
+          text: "一个非常非常长的生命线标签，用来验证固定适配不会撑高杆",
+        },
+      },
+    ]);
+    if (!isShapeElement(element)) {
+      throw new Error("Expected a shape element");
+    }
+    expect(getCompositeShapeTextFitMode(element)).toBe("fixed");
+    expect(element.height).toBeCloseTo(
+      SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"] +
+        SEQUENCE_DEFAULT_POLE_LENGTH,
+    );
   });
 });
 
@@ -288,6 +729,22 @@ describe("sequence label text area", () => {
     expect(bounds.y).toBeGreaterThanOrEqual(0);
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(headHeight + 1e-6);
   });
+
+  it.each(LIFELINE_IDS)(
+    "%s keeps its text area inside a shrunken head",
+    (id) => {
+      const bounds = getSequenceLifelineTextBounds(
+        id,
+        64,
+        SEQUENCE_MIN_HEAD_HEIGHT,
+      );
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.y).toBeGreaterThanOrEqual(0);
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(
+        SEQUENCE_MIN_HEAD_HEIGHT + 1e-6,
+      );
+    },
+  );
 
   it.each(LIFELINE_IDS)(
     "%s renders its label baseline on the measured sample line",

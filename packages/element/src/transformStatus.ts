@@ -2,6 +2,10 @@ import { normalizeRadians, radiansToDegrees } from "@excalidraw/math";
 
 import type { Radians } from "@excalidraw/math";
 
+import {
+  getCompositeShapeSelectionFrame,
+  isShapeElement,
+} from "./compositeShape";
 import { getCommonBounds } from "./bounds";
 
 import type { TransformHandleType } from "./transformHandles";
@@ -90,8 +94,12 @@ export const getTransformStatusReadout = (
   const sizeText = () => {
     if (!multi) {
       const element = selectedElements[0];
-      // getElementAbsoluteCoords 给的是**未旋转**的本地框，所以 width/height
-      // 就是图形自身尺寸，不随角度变化
+      // The readout follows the same frame as the selection border: a lifeline
+      // reports its head, not the head + pole envelope.
+      if (isShapeElement(element)) {
+        const frame = getCompositeShapeSelectionFrame(element);
+        return formatSize(frame.width, frame.height);
+      }
       return formatSize(element.width, element.height);
     }
     // 与画布上的选区框同一几何：旋转中也取实时 AABB，框在呼吸数字就跟着呼吸

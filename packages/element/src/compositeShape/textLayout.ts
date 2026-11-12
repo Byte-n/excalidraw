@@ -1,4 +1,5 @@
 import { getCompositeShapeTextBounds } from "./registry";
+import { isSequenceLifelineShapeId } from "./sequenceOutline";
 
 import type { CompositeShapeTextBounds } from "./textBounds";
 import type { ExcalidrawShapeElement } from "../types";
@@ -10,8 +11,13 @@ import type { ExcalidrawShapeElement } from "../types";
 
 export type CompositeShapeTextFitMode = "auto" | "fixed";
 export const getCompositeShapeTextFitMode = (
-  element: Pick<ExcalidrawShapeElement, "textFitMode">,
-): CompositeShapeTextFitMode => element.textFitMode ?? "auto";
+  element: Pick<ExcalidrawShapeElement, "textFitMode" | "shape">,
+): CompositeShapeTextFitMode =>
+  element.textFitMode ??
+  // A lifeline's text bounds depend on width/headHeight, not element.height;
+  // adaptive fitting would grow the pole instead of the header. Fixed fit keeps
+  // the label inside the head and never touches the pole length.
+  (isSequenceLifelineShapeId(element.shape.id) ? "fixed" : "auto");
 
 export const getCompositeShapeTextFitMinSize = (
   element: Pick<

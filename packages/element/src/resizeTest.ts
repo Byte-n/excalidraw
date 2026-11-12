@@ -15,7 +15,7 @@ import type { GlobalPoint, LineSegment, LocalPoint } from "@excalidraw/math";
 import type { AppState, Zoom } from "@excalidraw/excalidraw/types";
 import type { Bounds } from "@excalidraw/common";
 
-import { getElementAbsoluteCoords } from "./bounds";
+import { getElementSelectionFrameCoords } from "./bounds";
 import {
   getTransformHandlesFromCoords,
   getTransformHandles,
@@ -89,7 +89,7 @@ export const resizeTest = <Point extends GlobalPoint | LocalPoint>(
   // gesture), so the frame line itself is the drag affordance.
 
   if (canResizeFromSides(editorInterface)) {
-    const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(
+    const [x1, y1, x2, y2, cx, cy] = getElementSelectionFrameCoords(
       element,
       elementsMap,
     );

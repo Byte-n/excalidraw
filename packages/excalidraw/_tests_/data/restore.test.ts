@@ -14,7 +14,12 @@ import {
   STICKY_NOTE_MIN_FONT_SIZE,
 } from "@excalidraw/common";
 
-import { newElement, newElementWith } from "@excalidraw/element";
+import {
+  SEQUENCE_MIN_POLE_LENGTH,
+  buildShapeData,
+  newElement,
+  newElementWith,
+} from "@excalidraw/element";
 import * as sizeHelpers from "@excalidraw/element";
 
 import { getStickyNoteLayout } from "@excalidraw/element";
@@ -58,6 +63,22 @@ describe("restoreElements", () => {
 
     const restoredElements = restore.restoreElements(elements, null);
     expect(restoredElements.length).toBe(elements.length);
+  });
+
+  it("raises a restored lifeline to the minimum pole length", () => {
+    const element = API.createElement({
+      type: "sequence",
+      shape: buildShapeData("sc-lifeline-entity"),
+      width: 64,
+      height: 10,
+    });
+    const [restored] = restore.restoreElements([element], null);
+    if (restored.type !== "sequence" || !("lifeline" in restored.shape)) {
+      throw new Error("Expected a lifeline shape");
+    }
+    expect(restored.height).toBeCloseTo(
+      restored.shape.lifeline.headHeight + SEQUENCE_MIN_POLE_LENGTH,
+    );
   });
 
   it("clears a reference to a missing frame when repairing bindings", () => {

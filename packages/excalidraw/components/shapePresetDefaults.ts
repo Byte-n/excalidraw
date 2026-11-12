@@ -4,6 +4,8 @@ import {
   STROKE_WIDTH,
 } from "@excalidraw/common";
 
+import { getSequenceLifelineDefaultSize } from "@excalidraw/element";
+
 import type { GenericShapeId } from "./presetCatalog";
 
 /**
@@ -236,43 +238,35 @@ export const SHAPE_PRESET_DEFAULTS: Readonly<
   // 尺寸 = 头部盒宽 ×（头部高 + 360 虚线杆），头部高逐 id 取自样本。
   "sc-lifeline-entity": {
     backgroundColor: COLOR_PALETTE.blue[0],
-    width: 64,
-    height: 428.272,
+    ...getSequenceLifelineDefaultSize("sc-lifeline-entity"),
   },
   "sc-lifeline-control": {
     backgroundColor: COLOR_PALETTE.blue[0],
-    width: 64,
-    height: 434.272,
+    ...getSequenceLifelineDefaultSize("sc-lifeline-control"),
   },
   "sc-lifeline-boundary": {
     backgroundColor: COLOR_PALETTE.blue[0],
-    width: 76,
-    height: 428.272,
+    ...getSequenceLifelineDefaultSize("sc-lifeline-boundary"),
   },
   "sc-lifeline-actor": {
     backgroundColor: COLOR_PALETTE.blue[0],
-    width: 84,
-    height: 478.272,
+    ...getSequenceLifelineDefaultSize("sc-lifeline-actor"),
   },
   "sc-lifeline-queue": {
     backgroundColor: COLOR_PALETTE.blue[0],
-    width: 100,
-    height: 420,
+    ...getSequenceLifelineDefaultSize("sc-lifeline-queue"),
   },
   "sc-lifeline-data-base": {
     backgroundColor: COLOR_PALETTE.blue[0],
-    width: 68,
-    height: 450,
+    ...getSequenceLifelineDefaultSize("sc-lifeline-data-base"),
   },
   "sc-lifeline-object": {
     backgroundColor: COLOR_PALETTE.blue[0],
-    width: 120,
-    height: 420,
+    ...getSequenceLifelineDefaultSize("sc-lifeline-object"),
   },
   "sc-lifeline-collection": {
     backgroundColor: COLOR_PALETTE.blue[0],
-    width: 118,
-    height: 428,
+    ...getSequenceLifelineDefaultSize("sc-lifeline-collection"),
   },
   // 激活条样本填 `#d6dcf3`（蓝系深档，与 fc 的 blue[1] 规则一致）
   "sc-activation": {

@@ -34,7 +34,14 @@ import {
   getElementBounds,
 } from "./bounds";
 import { LinearElementEditor } from "./linearElementEditor";
-import { getCompositeShapeTextFitMode, isShapeElement } from "./compositeShape";
+import {
+  SEQUENCE_MIN_HEAD_HEIGHT,
+  SEQUENCE_MIN_HEAD_WIDTH,
+  SEQUENCE_MIN_POLE_LENGTH,
+  getCompositeShapeTextFitMode,
+  isSequenceLifelineElement,
+  isShapeElement,
+} from "./compositeShape";
 import {
   getBoundTextElement,
   getBoundTextElementId,
@@ -144,6 +151,22 @@ export const transformElements = (
       const origElement = originalElements.get(elementId);
 
       if (latestElement && origElement) {
+        if (
+          isSequenceLifelineElement(latestElement) &&
+          isSequenceLifelineElement(origElement)
+        ) {
+          // P2 keeps the head frame's axes independent; Shift/Alt modifiers are
+          // not applied to lifelines yet.
+          resizeSequenceLifeline(
+            latestElement,
+            origElement,
+            transformHandleType,
+            pointerX,
+            pointerY,
+            scene,
+          );
+          return true;
+        }
         const { nextWidth, nextHeight } =
           getNextSingleWidthAndHeightFromPointer(
             latestElement,
@@ -226,6 +249,179 @@ export const transformElements = (
     }
   }
   return false;
+};
+
+/**
+ * Anchor point on the head frame that must stay fixed while the opposite
+ * handle is dragged. Coordinates are in element-local space (origin at x/y).
+ */
+const getSequenceLifelineResizeAnchor = (
+  handleDirection: TransformHandleDirection,
+  width: number,
+  headHeight: number,
+): [number, number] => {
+  switch (handleDirection) {
+    case "e":
+      return [0, headHeight / 2];
+    case "w":
+      return [width, headHeight / 2];
+    case "n":
+      return [width / 2, headHeight];
+    case "s":
+      return [width / 2, 0];
+    case "ne":
+      return [0, headHeight];
+    case "nw":
+      return [width, headHeight];
+    case "se":
+      return [0, 0];
+    case "sw":
+      return [width, 0];
+  }
+};
+
+export type SequenceLifelineResize = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  headHeight: number;
+};
+
+/**
+ * Pure resize math for a lifeline's head frame.
+ *
+ * - e/w: change width; the pole stays centered on the new width.
+ * - n: move the head top; the head bottom and pole end stay fixed, so the pole
+ *   length is unchanged.
+ * - s: move the head bottom; the element bottom and pole end stay fixed, so
+ *   the pole shortens/lengthens.
+ * - corners combine the horizontal and the matching vertical rule.
+ *
+ * Rotation is handled by keeping the opposite head-frame anchor fixed in
+ * global space; the element rotates around its full-box center.
+ */
+export const getSequenceLifelineResize = (
+  element: ExcalidrawElement,
+  handleDirection: TransformHandleDirection,
+  pointerX: number,
+  pointerY: number,
+): SequenceLifelineResize | null => {
+  if (!isSequenceLifelineElement(element)) {
+    return null;
+  }
+  const headHeight = element.shape.lifeline.headHeight;
+  const center = pointFrom<GlobalPoint>(
+    element.x + element.width / 2,
+    element.y + element.height / 2,
+  );
+  const [localX, localY] = pointRotateRads(
+    pointFrom<GlobalPoint>(pointerX, pointerY),
+    center,
+    -element.angle as Radians,
+  );
+  const headLeft = element.x;
+  const headTop = element.y;
+  const headRight = element.x + element.width;
+  const headBottom = element.y + headHeight;
+
+  let width = element.width;
+  let nextHeadHeight = headHeight;
+  if (handleDirection.includes("e")) {
+    width = localX - headLeft;
+  }
+  if (handleDirection.includes("w")) {
+    width = headRight - localX;
+  }
+  if (handleDirection.includes("n")) {
+    nextHeadHeight = headBottom - localY;
+  }
+  if (handleDirection.includes("s")) {
+    nextHeadHeight = localY - headTop;
+  }
+  width = Math.max(SEQUENCE_MIN_HEAD_WIDTH, width);
+  nextHeadHeight = Math.max(SEQUENCE_MIN_HEAD_HEIGHT, nextHeadHeight);
+  if (handleDirection.includes("s")) {
+    nextHeadHeight = Math.min(
+      nextHeadHeight,
+      element.height - SEQUENCE_MIN_POLE_LENGTH,
+    );
+    nextHeadHeight = Math.max(SEQUENCE_MIN_HEAD_HEIGHT, nextHeadHeight);
+  }
+
+  const poleLength = Math.max(
+    SEQUENCE_MIN_POLE_LENGTH,
+    element.height - headHeight,
+  );
+  const height = handleDirection.includes("n")
+    ? nextHeadHeight + poleLength
+    : element.height;
+
+  const oldAnchor = getSequenceLifelineResizeAnchor(
+    handleDirection,
+    element.width,
+    headHeight,
+  );
+  const newAnchor = getSequenceLifelineResizeAnchor(
+    handleDirection,
+    width,
+    nextHeadHeight,
+  );
+  const rotate = (x: number, y: number): [number, number] => {
+    const cos = Math.cos(element.angle);
+    const sin = Math.sin(element.angle);
+    return [x * cos - y * sin, x * sin + y * cos];
+  };
+  const [oldDx, oldDy] = rotate(
+    oldAnchor[0] - element.width / 2,
+    oldAnchor[1] - element.height / 2,
+  );
+  const oldAnchorGlobalX = center[0] + oldDx;
+  const oldAnchorGlobalY = center[1] + oldDy;
+  const [newDx, newDy] = rotate(
+    newAnchor[0] - width / 2,
+    newAnchor[1] - height / 2,
+  );
+  const newCenterX = oldAnchorGlobalX - newDx;
+  const newCenterY = oldAnchorGlobalY - newDy;
+
+  return {
+    x: newCenterX - width / 2,
+    y: newCenterY - height / 2,
+    width,
+    height,
+    headHeight: nextHeadHeight,
+  };
+};
+
+const resizeSequenceLifeline = (
+  element: NonDeletedExcalidrawElement,
+  originalElement: NonDeletedExcalidrawElement,
+  handleDirection: TransformHandleDirection,
+  pointerX: number,
+  pointerY: number,
+  scene: Scene,
+) => {
+  const next = getSequenceLifelineResize(
+    originalElement,
+    handleDirection,
+    pointerX,
+    pointerY,
+  );
+  if (!next || !isSequenceLifelineElement(element)) {
+    return;
+  }
+  scene.mutateElement(element, {
+    x: next.x,
+    y: next.y,
+    width: next.width,
+    height: next.height,
+    shape: {
+      ...element.shape,
+      lifeline: { headHeight: next.headHeight },
+    },
+  });
+  handleBindTextResize(element, scene, handleDirection);
 };
 
 /**

@@ -25,7 +25,7 @@ import {
 } from "./mindmap";
 import {
   getCompositeShapeGeometry,
-  getCompositeShapeGlobalPath,
+  getCompositeShapeGlobalHitPaths,
 } from "./compositeShape";
 
 import type {
@@ -104,31 +104,32 @@ const distanceToCompositeShape = (
   element: ExcalidrawShapeElement,
   p: GlobalPoint,
 ) => {
-  const path = getCompositeShapeGlobalPath(element);
   let distance = Infinity;
-  let previous = pointFrom<GlobalPoint>(...path.start);
-  const commands = [
-    ...path.commands,
-    ...(path.closed ? [{ type: "line" as const, to: path.start }] : []),
-  ];
-  for (const command of commands) {
-    const end = pointFrom<GlobalPoint>(...command.to);
-    distance = Math.min(
-      distance,
-      command.type === "line"
-        ? distanceToLineSegment(p, lineSegment(previous, end))
-        : curvePointDistance(
-            curve(
-              previous,
-              pointFrom<GlobalPoint>(...command.control1),
-              pointFrom<GlobalPoint>(...command.control2),
-              end,
+  for (const path of getCompositeShapeGlobalHitPaths(element)) {
+    let previous = pointFrom<GlobalPoint>(...path.start);
+    const commands = [
+      ...path.commands,
+      ...(path.closed ? [{ type: "line" as const, to: path.start }] : []),
+    ];
+    for (const command of commands) {
+      const end = pointFrom<GlobalPoint>(...command.to);
+      distance = Math.min(
+        distance,
+        command.type === "line"
+          ? distanceToLineSegment(p, lineSegment(previous, end))
+          : curvePointDistance(
+              curve(
+                previous,
+                pointFrom<GlobalPoint>(...command.control1),
+                pointFrom<GlobalPoint>(...command.control2),
+                end,
+              ),
+              p,
+              1e-6,
             ),
-            p,
-            1e-6,
-          ),
-    );
-    previous = end;
+      );
+      previous = end;
+    }
   }
   return distance;
 };

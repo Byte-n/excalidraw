@@ -55,6 +55,7 @@ import {
   getSequenceFragmentTabPath,
   getSequenceFragmentTextBounds,
   getSequenceLifelineGeometry,
+  getSequenceLifelineHitPaths,
   getSequenceLifelineTextBounds,
   type SequenceLifelineId,
 } from "./sequenceOutline";
@@ -101,6 +102,12 @@ type ShapeTextBoundsFn<K extends ShapeId> = (
 type ShapeOutlineFn<K extends ShapeId> = (
   input: ShapeInput<K>,
 ) => CompositeShapePath;
+type ShapeHitPathsFn<K extends ShapeId> = (
+  input: ShapeInput<K>,
+) => CompositeShapePath[];
+type ShapeSelectionFrameFn<K extends ShapeId> = (
+  input: ShapeInput<K>,
+) => NonNullable<CompositeShapeGeometry["selectionFrame"]>;
 type ShapeDetailsFn<K extends ShapeId> = (
   input: ShapeInput<K>,
 ) => CompositeShapePath[];
@@ -123,7 +130,8 @@ export type CompositeShapeControlPoint = {
     | "cube-depth"
     | "sector-start"
     | "sector-end"
-    | "ring-radius";
+    | "ring-radius"
+    | "lifeline-pole-end";
   x: number;
   y: number;
 };
@@ -175,6 +183,18 @@ type ShapeRegistration<K extends ShapeId> = {
   open: boolean;
   /** Main contour. */
   outline: ShapeOutlineFn<K>;
+  /**
+   * Hit/distance/intersection geometry. Omitted ids use `outline`. Lifelines
+   * declare the head rectangle plus a narrow pole corridor here while keeping
+   * the whole element box as the outline/envelope.
+   */
+  hitPaths?: ShapeHitPathsFn<K>;
+  /**
+   * Single-selection frame and resize handle anchor. Omitted ids use the whole
+   * element box; lifelines use the head box so the pole does not inflate the
+   * selection frame.
+   */
+  selectionFrame?: ShapeSelectionFrameFn<K>;
   /** Extra stroke-only contours. */
   details?: ShapeDetailsFn<K>;
   /** Faces filled with shaded tones. */
@@ -862,6 +882,25 @@ const sequenceLifelineShape = <K extends SequenceLifelineId>(
       getSequenceLifelineTextBounds(id, input.width, headHeightOf(input.shape)),
     open: false,
     outline: (input) => getSequenceElementBox(input.width, input.height),
+    hitPaths: (input) =>
+      getSequenceLifelineHitPaths(
+        input.width,
+        headHeightOf(input.shape),
+        input.height,
+      ),
+    selectionFrame: (input) => ({
+      x: 0,
+      y: 0,
+      width: input.width,
+      height: headHeightOf(input.shape),
+    }),
+    controlPoints: (input) => [
+      {
+        kind: "lifeline-pole-end",
+        x: input.width / 2,
+        y: input.height,
+      },
+    ],
     details: (input) =>
       getSequenceLifelineGeometry(id, input.width, headHeightOf(input.shape))
         .attachments,

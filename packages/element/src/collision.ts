@@ -33,6 +33,8 @@ import type { FrameNameBounds } from "@excalidraw/excalidraw/types";
 import { isPathALoop } from "./utils";
 import {
   getCompositeShapeGeometry,
+  getCompositeShapeGlobalHitPaths,
+  getCompositeShapeGlobalHitPoints,
   getCompositeShapeGlobalPath,
   getCompositeShapeGlobalPoints,
   getCompositeShapeOffsetPaths,
@@ -79,6 +81,8 @@ import { getBindingGap } from "./binding";
 import { hasBackground } from "./comparisons";
 
 import { getFreedrawFillPolygon, getFreedrawMaxStrokeRadius } from "./shape";
+
+import type { CompositeShapePath } from "./compositeShape";
 
 import type {
   ElementsMap,
@@ -601,22 +605,11 @@ const intersectCompositeShapePathsWithLineSegment = (
   return intersections;
 };
 
-const intersectCompositeShapeWithLineSegment = (
-  element: ExcalidrawShapeElement,
+const intersectCompositeShapePathWithLineSegment = (
+  path: CompositeShapePath,
   segment: LineSegment<GlobalPoint>,
-  offset: number,
   onlyFirst = false,
 ): GlobalPoint[] => {
-  if (offset !== 0 && (offset > 0 || !isCompositeShapeOpen(element.shape.id))) {
-    return intersectCompositeShapePathsWithLineSegment(
-      getCompositeShapeOffsetPaths(element, offset),
-      segment,
-      true,
-      onlyFirst,
-    );
-  }
-
-  const path = getCompositeShapeGlobalPath(element);
   const intersections: GlobalPoint[] = [];
   let previous = pointFrom<GlobalPoint>(...path.start);
   const commands = [
@@ -669,6 +662,45 @@ const intersectCompositeShapeWithLineSegment = (
     previous = end;
   }
   return intersections;
+};
+
+const intersectCompositeShapeWithLineSegment = (
+  element: ExcalidrawShapeElement,
+  segment: LineSegment<GlobalPoint>,
+  offset: number,
+  onlyFirst = false,
+): GlobalPoint[] => {
+  if (offset !== 0 && (offset > 0 || !isCompositeShapeOpen(element.shape.id))) {
+    return intersectCompositeShapePathsWithLineSegment(
+      getCompositeShapeOffsetPaths(element, offset),
+      segment,
+      true,
+      onlyFirst,
+    );
+  }
+
+  // Lifelines declare a narrower hit geometry than their outline envelope.
+  // Use it for lasso/eraser/frame segments; the offset branch above keeps the
+  // long-standing outline behavior for binding/fill flows.
+  const geometry = getCompositeShapeGeometry(element);
+  if (geometry.hitPaths.length) {
+    const intersections: GlobalPoint[] = [];
+    for (const path of getCompositeShapeGlobalHitPaths(element)) {
+      intersections.push(
+        ...intersectCompositeShapePathWithLineSegment(path, segment, onlyFirst),
+      );
+      if (onlyFirst && intersections.length) {
+        return intersections;
+      }
+    }
+    return intersections;
+  }
+
+  return intersectCompositeShapePathWithLineSegment(
+    getCompositeShapeGlobalPath(element),
+    segment,
+    onlyFirst,
+  );
 };
 
 const curveIntersections = (
@@ -967,7 +999,13 @@ export const isPointInElement = (
   }
 
   if (isShapeElement(element)) {
-    const primitive = getCompositeShapeGeometry(element).primitive;
+    const geometry = getCompositeShapeGeometry(element);
+    if (geometry.hitPaths.length) {
+      return getCompositeShapeGlobalHitPoints(element).some((points) =>
+        polygonIncludesPoint(point, polygonFromPoints(points)),
+      );
+    }
+    const primitive = geometry.primitive;
     if (primitive?.kind === "ellipse") {
       const center = pointFrom<GlobalPoint>(
         element.x + primitive.center[0],

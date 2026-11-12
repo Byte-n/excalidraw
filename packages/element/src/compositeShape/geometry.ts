@@ -29,9 +29,24 @@ import type { ExcalidrawShapeElement } from "../types";
  * path, cardinal anchors and outline offsets computed from it.
  */
 
+/** Local-coordinate rectangle used for the single-selection frame/handles. */
+export type CompositeShapeSelectionFrame = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export type CompositeShapeGeometry = {
   outline: CompositeShapePath;
   details: CompositeShapePath[];
+  /**
+   * Explicit hit/distance/intersection geometry. Empty means the outline is
+   * also the hit geometry.
+   */
+  hitPaths: CompositeShapePath[];
+  /** Optional single-selection frame; absent means the whole element box. */
+  selectionFrame?: CompositeShapeSelectionFrame;
   fillFaces?: { path: CompositeShapePath; tone: "light" | "base" | "dark" }[];
   anchors?: [ShapePoint, ShapePoint, ShapePoint, ShapePoint];
   primitive?:
@@ -61,12 +76,17 @@ export const getCompositeShapeGeometry = (
   const geometry: CompositeShapeGeometry = {
     outline: registration.outline(element),
     details: registration.details?.(element) ?? [],
+    hitPaths: registration.hitPaths?.(element) ?? [],
   };
   const fillFaces = registration.fillFaces?.(element);
+  const selectionFrame = registration.selectionFrame?.(element);
   const anchors = registration.anchors?.(element);
   const primitive = registration.primitive?.(element);
   if (fillFaces) {
     geometry.fillFaces = fillFaces;
+  }
+  if (selectionFrame) {
+    geometry.selectionFrame = selectionFrame;
   }
   if (anchors) {
     geometry.anchors = anchors;
@@ -77,8 +97,9 @@ export const getCompositeShapeGeometry = (
   return geometry;
 };
 
-export const getCompositeShapeGlobalPath = (
+const transformCompositeShapePathToGlobal = (
   element: ExcalidrawShapeElement,
+  path: CompositeShapePath,
 ): CompositeShapePath => {
   const center = pointFrom<GlobalPoint>(
     element.x + element.width / 2,
@@ -90,7 +111,6 @@ export const getCompositeShapeGlobalPath = (
       center,
       element.angle,
     );
-  const path = getCompositeShapeGeometry(element).outline;
   return {
     start: transform(path.start),
     commands: path.commands.map((command) =>
@@ -106,6 +126,57 @@ export const getCompositeShapeGlobalPath = (
     closed: path.closed,
   };
 };
+
+export const getCompositeShapeGlobalPath = (
+  element: ExcalidrawShapeElement,
+): CompositeShapePath =>
+  transformCompositeShapePathToGlobal(
+    element,
+    getCompositeShapeGeometry(element).outline,
+  );
+
+/**
+ * Global hit geometry. Falls back to the outline when the id does not declare
+ * explicit hit paths.
+ */
+export const getCompositeShapeGlobalHitPaths = (
+  element: ExcalidrawShapeElement,
+): CompositeShapePath[] => {
+  const geometry = getCompositeShapeGeometry(element);
+  const paths = geometry.hitPaths.length
+    ? geometry.hitPaths
+    : [geometry.outline];
+  return paths.map((path) =>
+    transformCompositeShapePathToGlobal(element, path),
+  );
+};
+
+/** Flattened global points for each hit path (for point-in-polygon tests). */
+export const getCompositeShapeGlobalHitPoints = (
+  element: ExcalidrawShapeElement,
+): GlobalPoint[][] =>
+  getCompositeShapeGlobalHitPaths(element).map((path) =>
+    flattenCompositeShapePath(path).map(([x, y]) =>
+      pointFrom<GlobalPoint>(x, y),
+    ),
+  );
+
+/** Local selection frame, falling back to the whole element box. */
+export const getCompositeShapeSelectionFrame = (
+  element: ExcalidrawShapeElement,
+): CompositeShapeSelectionFrame =>
+  getShapeRegistration(element.shape.id).selectionFrame?.(element) ?? {
+    x: 0,
+    y: 0,
+    width: element.width,
+    height: element.height,
+  };
+
+/** Whether the shape declares a narrower selection frame than its element box. */
+export const hasCompositeShapeSelectionFrame = (
+  element: ExcalidrawShapeElement,
+): boolean =>
+  getShapeRegistration(element.shape.id).selectionFrame !== undefined;
 // Clipper uses integer coordinates; millipixels retain subpixel geometry.
 const CLIPPER_SCALE = 1000;
 export const getCompositeShapeOffsetPaths = (

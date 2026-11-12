@@ -66,7 +66,13 @@ import { getCommonBounds } from "./bounds";
 
 import { Scene } from "./Scene";
 
-import { isShapeId, isShapeElement } from "./compositeShape";
+import {
+  getSequenceLifelineDefaultSize,
+  isSequenceLifelineShapeId,
+  isShapeId,
+  isShapeElement,
+  normalizeSequenceLifelineGeometry,
+} from "./compositeShape";
 
 import type { ShapeId } from "./compositeShape";
 
@@ -736,14 +742,25 @@ export const convertToExcalidrawElements = (
       case "sc-lifeline-collection":
       case "sc-activation":
       case "sc-fragment": {
+        const shapeId =
+          element.type === "composite" ||
+          element.type === "flow" ||
+          element.type === "sequence"
+            ? element.shape.id
+            : element.type;
+        const sequenceSize = isSequenceLifelineShapeId(shapeId)
+          ? getSequenceLifelineDefaultSize(shapeId)
+          : undefined;
         const width =
-          element?.label?.text && element.width === undefined
-            ? 0
-            : element?.width || DEFAULT_DIMENSION;
+          element.width === undefined
+            ? sequenceSize?.width ??
+              (element?.label?.text ? 0 : DEFAULT_DIMENSION)
+            : element.width || sequenceSize?.width || DEFAULT_DIMENSION;
         const height =
-          element?.label?.text && element.height === undefined
-            ? 0
-            : element?.height || DEFAULT_DIMENSION;
+          element.height === undefined
+            ? sequenceSize?.height ??
+              (element?.label?.text ? 0 : DEFAULT_DIMENSION)
+            : element.height || sequenceSize?.height || DEFAULT_DIMENSION;
         excalidrawElement =
           element.type === "composite" ||
           element.type === "flow" ||
@@ -761,6 +778,8 @@ export const convertToExcalidrawElements = (
                 width,
                 height,
               });
+        excalidrawElement =
+          normalizeSequenceLifelineGeometry(excalidrawElement);
 
         break;
       }

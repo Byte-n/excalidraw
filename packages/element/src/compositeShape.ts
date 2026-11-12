@@ -39,13 +39,20 @@ export {
   getCompositeShapeTextFitMode,
 } from "./compositeShape/textLayout";
 
-export type { CompositeShapeGeometry } from "./compositeShape/geometry";
+export type {
+  CompositeShapeGeometry,
+  CompositeShapeSelectionFrame,
+} from "./compositeShape/geometry";
 export {
   getCompositeShapeAnchors,
   getCompositeShapeGeometry,
+  getCompositeShapeGlobalHitPaths,
+  getCompositeShapeGlobalHitPoints,
   getCompositeShapeGlobalPath,
   getCompositeShapeGlobalPoints,
   getCompositeShapeOffsetPaths,
+  getCompositeShapeSelectionFrame,
+  hasCompositeShapeSelectionFrame,
 } from "./compositeShape/geometry";
 
 export {
@@ -76,11 +83,24 @@ export type {
 } from "./types";
 
 export {
+  SEQUENCE_DEFAULT_POLE_LENGTH,
+  SEQUENCE_MIN_POLE_LENGTH,
+  SEQUENCE_MIN_HEAD_WIDTH,
+  SEQUENCE_MIN_HEAD_HEIGHT,
+  SEQUENCE_HIT_HALF_WIDTH,
   SEQUENCE_POLE_LENGTH,
   SEQUENCE_LIFELINE_HEAD_HEIGHTS,
+  SEQUENCE_LIFELINE_DEFAULT_WIDTHS,
   isSequenceLifelineShapeId,
+  isSequenceLifelineElement,
+  isPointInSequenceLifelineHead,
+  normalizeSequenceLifelineGeometry,
+  clampSequenceLifelineHeight,
+  getSequenceLifelineDefaultSize,
   getSequenceLifelineGeometry,
+  getSequenceLifelineHitPaths,
   getSequenceLifelineTextBounds,
+  getSequencePoleLength,
   getSequencePolePath,
   getSequenceElementBox,
   getSequenceFragmentTabPath,

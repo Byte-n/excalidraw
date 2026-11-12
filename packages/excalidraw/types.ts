@@ -1588,7 +1588,8 @@ export type PointerDownState = Readonly<{
         | "cube-depth"
         | "sector-start"
         | "sector-end"
-        | "ring-radius";
+        | "ring-radius"
+        | "lifeline-pole-end";
       offset: { x: number; y: number };
       hasChanged: boolean;
     } | null;

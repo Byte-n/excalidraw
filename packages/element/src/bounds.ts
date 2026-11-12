@@ -33,9 +33,12 @@ import {
   getCurvedConnectorPath,
 } from "./curveConnector";
 import {
+  flattenCompositeShapePath,
   getCompositeShapeGeometry,
+  getCompositeShapeGlobalHitPaths,
   getCompositeShapeGlobalPoints,
-  isCompositeShapeOpen,
+  getCompositeShapeSelectionFrame,
+  hasCompositeShapeSelectionFrame,
   isShapeElement,
   isShapeWithId,
 } from "./compositeShape";
@@ -320,6 +323,30 @@ export const getElementAbsoluteCoords = (
   ];
 };
 
+/**
+ * Coordinates of the single-selection frame. Shapes may declare a narrower
+ * frame than their element box (e.g. a lifeline's head); everything else uses
+ * the regular absolute coordinates. The last two values are always the full
+ * element's rotation center.
+ */
+export const getElementSelectionFrameCoords = (
+  element: ExcalidrawElement,
+  elementsMap: ElementsMap,
+): [number, number, number, number, number, number] => {
+  if (isShapeElement(element) && hasCompositeShapeSelectionFrame(element)) {
+    const frame = getCompositeShapeSelectionFrame(element);
+    return [
+      element.x + frame.x,
+      element.y + frame.y,
+      element.x + frame.x + frame.width,
+      element.y + frame.y + frame.height,
+      element.x + element.width / 2,
+      element.y + element.height / 2,
+    ];
+  }
+  return getElementAbsoluteCoords(element, elementsMap, true);
+};
+
 /*
  * for a given element, `getElementLineSegments` returns line segments
  * that can be used for visual collision detection (useful for frames)
@@ -335,13 +362,19 @@ export const getElementLineSegments = (
   elementsMap: ElementsMap,
 ): LineSegment<GlobalPoint>[] => {
   if (isShapeElement(element)) {
-    const points = getCompositeShapeGlobalPoints(element);
-    const count = isCompositeShapeOpen(element.shape.id)
-      ? points.length - 1
-      : points.length;
-    return Array.from({ length: count }, (_, index) =>
-      lineSegment(points[index], points[(index + 1) % points.length]),
-    );
+    const segments: LineSegment<GlobalPoint>[] = [];
+    for (const path of getCompositeShapeGlobalHitPaths(element)) {
+      const points = flattenCompositeShapePath(path).map(([x, y]) =>
+        pointFrom<GlobalPoint>(x, y),
+      );
+      const count = path.closed ? points.length : points.length - 1;
+      for (let index = 0; index < count; index++) {
+        segments.push(
+          lineSegment(points[index], points[(index + 1) % points.length]),
+        );
+      }
+    }
+    return segments;
   }
   const shape = getElementShape(element, elementsMap);
   const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(

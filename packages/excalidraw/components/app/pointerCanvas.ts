@@ -43,6 +43,8 @@ import {
   isSimpleArrow,
   isTableElement,
   isPointInElement,
+  isPointInSequenceLifelineHead,
+  isSequenceLifelineElement,
   maxBindingDistance_simple,
   getSnapOutlineMidPoint,
 } from "@excalidraw/element";
@@ -547,6 +549,16 @@ export const handleCanvasDoubleClick = (
           activeEmbeddable: { element: hitElement, state: "active" },
         });
       }
+      return;
+    }
+
+    // A lifeline's pole selects/moves the element, but only the head opens the
+    // label editor. Double-clicking the pole therefore stops here.
+    if (
+      hitElement &&
+      isSequenceLifelineElement(hitElement) &&
+      !isPointInSequenceLifelineHead(hitElement, sceneX, sceneY)
+    ) {
       return;
     }
 

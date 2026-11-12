@@ -67,6 +67,7 @@ import {
 } from "@excalidraw/element";
 import { getBoundTextElement, getContainerElement } from "@excalidraw/element";
 import { isStickyNoteElement } from "@excalidraw/element";
+import { normalizeSequenceLifelineGeometry } from "@excalidraw/element";
 import { detectLineHeight } from "@excalidraw/element";
 import {
   isArrowBoundToElement,
@@ -693,7 +694,9 @@ export const restoreElement = (
     case "flow":
     case "sequence":
       assertShapeElementType(element.type, element.shape);
-      return restoreElementWithProperties(element, { shape: element.shape });
+      return normalizeSequenceLifelineGeometry(
+        restoreElementWithProperties(element, { shape: element.shape }),
+      );
     case "table": {
       assertValidTableData(element.table);
       // only bounded float drift between the element size and its rows and
