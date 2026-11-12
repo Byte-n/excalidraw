@@ -303,13 +303,20 @@ export function newCreationDraft(
     overrides?.preferredGenericShape ?? state.preferredGenericShape;
   const genericShapeId: ShapeId =
     elementType === "rectangle" ? preferredShape : elementType;
-  // 预设图形的默认样式 + 该图形填色：命中默认值表则覆盖上面的 currentItem*
-  // （描边色/线宽/线型/填充/不透明度/背景色），未命中（理论上不会）保持现状。
+  // 预设图形的默认样式 + 该图形填色/描边色：命中默认值表则覆盖上面的
+  // currentItem*（描边色/线宽/线型/填充/不透明度/背景色），未命中（理论上
+  // 不会）保持现状。描边色按预设可选覆盖（时序图取样本的纯黑）。
   const presetDefaults = getShapePresetDefaults(
     getPresetShapeId(elementType, preferredShape),
   );
   const presetStyle = presetDefaults
-    ? { ...SHAPE_PRESET_STYLE, backgroundColor: presetDefaults.backgroundColor }
+    ? {
+        ...SHAPE_PRESET_STYLE,
+        backgroundColor: presetDefaults.backgroundColor,
+        ...(presetDefaults.strokeColor
+          ? { strokeColor: presetDefaults.strokeColor }
+          : {}),
+      }
     : {};
   return newElement({
     type: genericShapeId,

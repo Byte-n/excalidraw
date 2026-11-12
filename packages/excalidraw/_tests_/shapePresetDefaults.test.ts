@@ -33,18 +33,41 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
     );
   });
 
-  it("每个填色要么透明、要么是色板里的颜色（防错别字 hex）", () => {
+  it("每个填色/描边色要么透明、要么是色板里的颜色（防错别字 hex）", () => {
     // 收集完再断言：失败时 diff 会直接列出越界的 id 与色值（Vitest 的 expect
     // 不接受 Jest 那种「第二参数当消息」的写法）
-    const offPalette = Object.entries(SHAPE_PRESET_DEFAULTS)
-      .filter(
-        ([, preset]) =>
+    const offPalette = Object.entries(SHAPE_PRESET_DEFAULTS).flatMap(
+      ([id, preset]) => {
+        const offenses: string[] = [];
+        if (
           preset.backgroundColor !== COLOR_PALETTE.transparent &&
-          !PALETTE_COLORS.includes(preset.backgroundColor),
-      )
-      .map(([id, preset]) => `${id} = ${preset.backgroundColor}`);
+          !PALETTE_COLORS.includes(preset.backgroundColor)
+        ) {
+          offenses.push(`${id} = ${preset.backgroundColor}`);
+        }
+        if (
+          preset.strokeColor !== undefined &&
+          !PALETTE_COLORS.includes(preset.strokeColor)
+        ) {
+          offenses.push(`${id} stroke = ${preset.strokeColor}`);
+        }
+        return offenses;
+      },
+    );
 
     expect(offPalette).toEqual([]);
+  });
+
+  it("只有 10 个时序图形覆盖描边色（其余沿用规范样式）", () => {
+    const overridden = Object.entries(SHAPE_PRESET_DEFAULTS)
+      .filter(([, preset]) => preset.strokeColor !== undefined)
+      .map(([id, preset]) => [id, preset.strokeColor] as const);
+
+    expect(overridden).toHaveLength(10);
+    expect(overridden.every(([id]) => id.startsWith("sc-"))).toBe(true);
+    expect(new Set(overridden.map(([, color]) => color))).toEqual(
+      new Set([COLOR_PALETTE.black]),
+    );
   });
 
   it("SHAPE_PRESET_STYLE 是那五个规范样式字段", () => {
@@ -64,6 +87,7 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
   const ROWS: {
     id: string;
     backgroundColor: string;
+    strokeColor?: string;
     width: number;
     height: number;
   }[] = [
@@ -200,59 +224,76 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
     { id: "fc-circle", backgroundColor: "#ebfbee", width: 80, height: 80 },
 
     // —— 时序图形（10）——
-    // 生命线填色来自样本 `#f0f4fc` → blue[0]；尺寸 = 头部盒宽 ×（头部高 + 360）
+    // 生命线填色来自样本 `#f0f4fc` → blue[0]；尺寸 = 头部盒宽 ×（头部高 + 360）。
+    // 描边色取样本 `#000000` 的色板最近色 black（#1e1e1e）。
     {
       id: "sc-lifeline-entity",
       backgroundColor: "#e8f0f8",
+      strokeColor: "#1e1e1e",
       width: 64,
       height: 428.272,
     },
     {
       id: "sc-lifeline-control",
       backgroundColor: "#e8f0f8",
+      strokeColor: "#1e1e1e",
       width: 64,
       height: 434.272,
     },
     {
       id: "sc-lifeline-boundary",
       backgroundColor: "#e8f0f8",
+      strokeColor: "#1e1e1e",
       width: 76,
       height: 428.272,
     },
     {
       id: "sc-lifeline-actor",
       backgroundColor: "#e8f0f8",
+      strokeColor: "#1e1e1e",
       width: 84,
       height: 478.272,
     },
     {
       id: "sc-lifeline-queue",
       backgroundColor: "#e8f0f8",
+      strokeColor: "#1e1e1e",
       width: 100,
       height: 420,
     },
     {
       id: "sc-lifeline-data-base",
       backgroundColor: "#e8f0f8",
+      strokeColor: "#1e1e1e",
       width: 68,
       height: 450,
     },
     {
       id: "sc-lifeline-object",
       backgroundColor: "#e8f0f8",
+      strokeColor: "#1e1e1e",
       width: 120,
       height: 420,
     },
     {
       id: "sc-lifeline-collection",
       backgroundColor: "#e8f0f8",
+      strokeColor: "#1e1e1e",
       width: 118,
       height: 428,
     },
-    { id: "sc-activation", backgroundColor: "#c5d7e9", width: 30, height: 100 },
+    {
+      id: "sc-activation",
+      backgroundColor: "#c5d7e9",
+      strokeColor: "#1e1e1e",
+      width: 30,
+      height: 100,
+    },
+    // fragment 只有页签填充（样本 `#f5f5f5` → gray[0]），外框仍只描边
     {
       id: "sc-fragment",
-      backgroundColor: "transparent",
+      backgroundColor: "#f4f4f4",
+      strokeColor: "#1e1e1e",
       width: 400,
       height: 240,
     },
@@ -264,11 +305,16 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
   });
 
   it.each(ROWS)(
-    "$id 的默认填色与尺寸",
-    ({ id, backgroundColor, width, height }) => {
+    "$id 的默认填色、描边色与尺寸",
+    ({ id, backgroundColor, strokeColor, width, height }) => {
       expect(
         SHAPE_PRESET_DEFAULTS[id as keyof typeof SHAPE_PRESET_DEFAULTS],
-      ).toEqual({ backgroundColor, width, height });
+      ).toEqual({
+        backgroundColor,
+        width,
+        height,
+        ...(strokeColor === undefined ? {} : { strokeColor }),
+      });
     },
   );
 

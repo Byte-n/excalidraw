@@ -15,9 +15,11 @@
 | `life_line` | `object_lifeline` | `对象` | `sc-lifeline-object` | 圆角矩形 r=7 铺满头部盒 | `COLOR_PALETTE.blue[0]` `#e8f0f8` | 120 × 420 |
 | `life_line` | `collection` | `集合` | `sc-lifeline-collection` | 两个圆角矩形 r=4 错位 8（后排先画、前排后画） | `COLOR_PALETTE.blue[0]` `#e8f0f8` | 118 × 428 |
 | `activation` | — | — | `sc-activation` | 圆角矩形 r=5 铺满 | `COLOR_PALETTE.blue[1]` `#c5d7e9` | 30 × 100 |
-| `combined_fragment` | — | `Opt / Loop` | `sc-fragment` | 单列行容器：外框与页签 (0,0)→(0,36.272)→(80,36.272)→(92,24.272)→(92,0) 都只描边（无背景色）；首行是 operator 标签，下面是条件行 | `COLOR_PALETTE.transparent` | 400 × 240 |
+| `combined_fragment` | — | `Opt / Loop` | `sc-fragment` | 单列行容器：外框 (0,0)→(400,0)→(400,240)→(0,240) 只描边；页签 (0,0)→(0,36.272)→(80,36.272)→(92,24.272)→(92,0) 填充并描边；首行是 operator 标签，下面是条件行 | `COLOR_PALETTE.gray[0]` `#f4f4f4`（仅页签） | 400 × 240 |
 
-「默认填充（映射后）」是样本 `fill_color` 按**保色相、族内取最近档**映射到的项目色板色；「默认尺寸」是创建预设的尺寸。两者都落在 `packages/excalidraw/components/shapePresetDefaults.ts` 的 `SHAPE_PRESET_DEFAULTS`；描边/文本样式沿用 43 个既有预设共用的 `SHAPE_PRESET_STYLE`（墨色 `#1f2329`、thin、solid）。
+「默认填充（映射后）」是样本 `fill_color`（fragment 以 PDF 实测的页签填充为准）按**保色相、族内取最近档**映射到的项目色板色；「默认尺寸」是创建预设的尺寸。两者都落在 `packages/excalidraw/components/shapePresetDefaults.ts` 的 `SHAPE_PRESET_DEFAULTS`。
+
+描边色也按 PDF 实测取色板最近色：10 个 `sc-*` 的描边是纯黑 `#000000` → `COLOR_PALETTE.black`（`#1e1e1e`），由每个预设的 `strokeColor` 覆盖 `SHAPE_PRESET_STYLE`；线宽/线型/填充方式/不透明度仍沿用规范样式（thin 1、solid、100）。文本色保持规范墨色 `#1f2329`（与 PDF 的 `#1f2329` 一致）。
 
 ## 生命线杆
 

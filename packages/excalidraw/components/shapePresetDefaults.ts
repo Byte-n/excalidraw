@@ -13,8 +13,8 @@ import {
 import type { GenericShapeId } from "./presetCatalog";
 
 /**
- * 预设图形的**默认填充色与默认尺寸**表（53 行：29 个基础图形 + 14 个流程图图形
- * + 10 个时序图形）。
+ * 预设图形的**默认填充色、描边色与默认尺寸**表（53 行：29 个基础图形 + 14 个
+ * 流程图图形 + 10 个时序图形）。
  *
  * 取值来源是平台样本（Lark 侧 `composite`）——
  * `docs/lark-exmples/flow-chart/lark-examples-data.json` 与
@@ -34,6 +34,10 @@ import type { GenericShapeId } from "./presetCatalog";
  * bubble/文档/跨页引用），取 `blue[0]` 会把这两级压成同色；代价是偏离「背景
  * 一律取各族 index 0」的既有约定。
  *
+ * 时序图（10 个 `sc-*`）以 `docs/lark-exmples/sequence/lark-sequence.pdf` 为准：
+ * 描边是纯黑 `#000000` → `black`（`#1e1e1e`）；fragment 只有 operator 页签
+ * 有填充，样本 `#f5f5f5` → `gray[0]`（`#f4f4f4`），外框仍只描边。
+ *
  * 深色主题**不特殊处理**：色板色在渲染期统一过 `applyDarkModeFilter`。
  *
  * 这张表放在 app 包是刻意的、也是结构性的约束——`packages/element` 不允许反向
@@ -48,15 +52,23 @@ export type ShapePresetDefault = {
   backgroundColor: string;
   width: number;
   height: number;
+  /**
+   * 可选的描边色覆盖。缺省时用 `SHAPE_PRESET_STYLE.strokeColor`（项目墨色
+   * `#1f2329`）；时序图的样本描边是纯黑 `#000000`，取色板里最近的 `black`
+   * （`#1e1e1e`），因此 10 个 `sc-*` 预设显式覆盖它。
+   */
+  strokeColor?: string;
 };
 
 /**
- * 全部 53 个预设共用的**规范样式**（除 shape / 填色 / 尺寸外完全一致，
- * 文本为空）。逐项对应样本：`strokeColor` = `DEFAULT_NEW_ELEMENT_STROKE_COLOR`
- * （`#1f2329` 既是 `#000000` 的最近色板色也是项目墨色）、`strokeWidth` =
- * `STROKE_WIDTH.thin`（1，对应样本 `narrow`）、`strokeStyle` = `solid`、
- * `fillStyle` = `solid`、`opacity` = 100（对应样本 `border_opacity`/`fill_opacity`
- * 100）。圆角、字号、文本不动。
+ * 预设共用的**规范样式**（除 shape / 填色 / 尺寸外完全一致，文本为空）。
+ * 逐项对应样本：`strokeColor` = `DEFAULT_NEW_ELEMENT_STROKE_COLOR`
+ * （`#1f2329`，项目墨色）、`strokeWidth` = `STROKE_WIDTH.thin`（1，对应样本
+ * `narrow`）、`strokeStyle` = `solid`、`fillStyle` = `solid`、`opacity` = 100
+ * （对应样本 `border_opacity`/`fill_opacity` 100）。圆角、字号、文本不动。
+ *
+ * 单个预设可用 `ShapePresetDefault.strokeColor` 覆盖描边色；10 个 `sc-*`
+ * 时序图形按样本 `#000000` 取 `COLOR_PALETTE.black`，其余 43 个沿用本表。
  */
 export const SHAPE_PRESET_STYLE = {
   strokeColor: DEFAULT_NEW_ELEMENT_STROKE_COLOR, // #1f2329
@@ -238,50 +250,64 @@ export const SHAPE_PRESET_DEFAULTS: Readonly<
   },
 
   // —— 时序图形（10）——
+  // 描边统一取样本 `#000000` 的色板最近色 `COLOR_PALETTE.black`（`#1e1e1e`）：
+  // 其余 43 个预设沿用 `SHAPE_PRESET_STYLE` 的墨色 `#1f2329`。
+  //
   // 8 个生命线填色来自样本 `#f0f4fc`（蓝系浅档，与 round-rect 同源 → blue[0]）；
   // 尺寸 = 头部盒宽 ×（头部高 + 360 虚线杆），头部高逐 id 取自样本。
   "sc-lifeline-entity": {
     backgroundColor: COLOR_PALETTE.blue[0],
+    strokeColor: COLOR_PALETTE.black,
     ...getSequenceLifelineDefaultSize("sc-lifeline-entity"),
   },
   "sc-lifeline-control": {
     backgroundColor: COLOR_PALETTE.blue[0],
+    strokeColor: COLOR_PALETTE.black,
     ...getSequenceLifelineDefaultSize("sc-lifeline-control"),
   },
   "sc-lifeline-boundary": {
     backgroundColor: COLOR_PALETTE.blue[0],
+    strokeColor: COLOR_PALETTE.black,
     ...getSequenceLifelineDefaultSize("sc-lifeline-boundary"),
   },
   "sc-lifeline-actor": {
     backgroundColor: COLOR_PALETTE.blue[0],
+    strokeColor: COLOR_PALETTE.black,
     ...getSequenceLifelineDefaultSize("sc-lifeline-actor"),
   },
   "sc-lifeline-queue": {
     backgroundColor: COLOR_PALETTE.blue[0],
+    strokeColor: COLOR_PALETTE.black,
     ...getSequenceLifelineDefaultSize("sc-lifeline-queue"),
   },
   "sc-lifeline-data-base": {
     backgroundColor: COLOR_PALETTE.blue[0],
+    strokeColor: COLOR_PALETTE.black,
     ...getSequenceLifelineDefaultSize("sc-lifeline-data-base"),
   },
   "sc-lifeline-object": {
     backgroundColor: COLOR_PALETTE.blue[0],
+    strokeColor: COLOR_PALETTE.black,
     ...getSequenceLifelineDefaultSize("sc-lifeline-object"),
   },
   "sc-lifeline-collection": {
     backgroundColor: COLOR_PALETTE.blue[0],
+    strokeColor: COLOR_PALETTE.black,
     ...getSequenceLifelineDefaultSize("sc-lifeline-collection"),
   },
   // 激活条样本填 `#d6dcf3`（蓝系深档，与 fc 的 blue[1] 规则一致）
   "sc-activation": {
     backgroundColor: COLOR_PALETTE.blue[1],
+    strokeColor: COLOR_PALETTE.black,
     width: SEQUENCE_ACTIVATION_WIDTH,
     height: SEQUENCE_ACTIVATION_HEIGHT,
   },
-  // 组合片段是无背景色的单列表格：外框与页签都只描边（`transparent` 时
-  // `options.fill` 为空，`drawShadedFaces` 不会填页签）。
+  // 组合片段外框无底色，只有 operator 页签有填充：样本页签是 `#f5f5f5`
+  // （取色板最近色 `gray[0]` `#f4f4f4`）。`drawShadedFaces` 只把 fillFaces
+  // （页签）涂成 backgroundColor，外框仍只描边。
   "sc-fragment": {
-    backgroundColor: COLOR_PALETTE.transparent,
+    backgroundColor: COLOR_PALETTE.gray[0],
+    strokeColor: COLOR_PALETTE.black,
     width: 400,
     height: 240,
   },

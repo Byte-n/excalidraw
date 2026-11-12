@@ -355,6 +355,8 @@ describe("图形抽屉的单击放置", () => {
       width: SHAPE_PRESET_DEFAULTS["sc-lifeline-entity"].width,
       height: SHAPE_PRESET_DEFAULTS["sc-lifeline-entity"].height,
       backgroundColor: COLOR_PALETTE.blue[0],
+      // 样本描边是纯黑，取色板最近色 black
+      strokeColor: COLOR_PALETTE.black,
       strokeWidth: 1,
     });
 
@@ -366,7 +368,9 @@ describe("图形抽屉的单击放置", () => {
       shape: { id: "sc-fragment", schemaVersion: 1 },
       width: SHAPE_PRESET_DEFAULTS["sc-fragment"].width,
       height: SHAPE_PRESET_DEFAULTS["sc-fragment"].height,
-      backgroundColor: COLOR_PALETTE.transparent,
+      // 只有页签有底色（样本 `#f5f5f5` → gray[0]），外框由自定义 draw 只描边
+      backgroundColor: COLOR_PALETTE.gray[0],
+      strokeColor: COLOR_PALETTE.black,
       strokeWidth: 1,
     });
     // the first row is seeded with the operator label and an auto-fitted tab
@@ -405,7 +409,8 @@ describe("图形抽屉的单击放置", () => {
       shape: { id: "sc-fragment", schemaVersion: 1 },
       width: SHAPE_PRESET_DEFAULTS["sc-fragment"].width,
       height: SHAPE_PRESET_DEFAULTS["sc-fragment"].height,
-      backgroundColor: COLOR_PALETTE.transparent,
+      backgroundColor: COLOR_PALETTE.gray[0],
+      strokeColor: COLOR_PALETTE.black,
     });
 
     const fragmentShape = fragment!.shape as Extract<
