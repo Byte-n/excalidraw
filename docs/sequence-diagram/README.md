@@ -4,6 +4,7 @@
 >
 > 相关材料：
 >
+> - [验收样例文件](./acceptance.excalidraw)：导入画板后按 P1–P4 各期「验收」清单操作
 > - [Lark 样例 JSON](../lark-exmples/sequence/lark-sequence.json)
 > - [Lark → sc-\* 映射说明](../lark-exmples/sequence/sequence-mapper.md)
 > - 原始实施方案（未入库）：`git show 6c990444:docs/sequence-diagram-plan.md`
@@ -68,7 +69,7 @@
 | **P1** | [01-geometry-and-hit.md](./01-geometry-and-hit.md) | 几何底座 + 命中几何 | 杆长与高度绑定；点空白不选中；API 创建不再裁切 | 无 | 已实现（浏览器验收待做） |
 | **P2** | [02-selection-and-resize.md](./02-selection-and-resize.md) | 选择框 + 缩放 + 杆底控制点 | 差异化选择 UI 与完整缩放语义 | P1 | 已实现（浏览器手势验收待做） |
 | **P3** | [03-messages-and-activation.md](./03-messages-and-activation.md) | 消息与激活条 | 生命线之间能画消息；激活条绑定杆并跟随；拖入杆吸附；悬停杆单击建激活条；激活条只改高度 | P1（P2 可选） | 已实现（浏览器验收待做） |
-| **P4** | [04-fragment.md](./04-fragment.md) | fragment 行结构 | alt/opt/loop 等分区可编辑 | P1 | 未开始 |
+| **P4** | [04-fragment.md](./04-fragment.md) | fragment 行结构 | alt/opt/loop 等分区可编辑 | P1 | P4a 已实现；P4b（行标签）未开始 |
 | **P5** | [05-lark-import.md](./05-lark-import.md) | Lark 导入与工具链 | 飞书样例可导入；Agent 可按语义操作 | P1、P3 | 未开始 |
 
 依赖关系：

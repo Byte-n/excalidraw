@@ -26,6 +26,7 @@ import {
   isEmbeddableElement,
   isFrameLikeElement,
   isMindmapEdgeElement,
+  isSequenceFragmentElement,
   isTableElement,
   getTableCellFillColor,
   getTableCellRange,
@@ -93,6 +94,7 @@ import {
   tableCellSelectIcon,
   tableCellMultiSelectIcon,
   tableCellMergeIcon,
+  sequenceFragmentAddRowIcon,
 } from "./icons";
 
 import { ToolbarGroup } from "./toolbar/ToolbarGroup";
@@ -949,6 +951,7 @@ export const FloatbarShapeActions = ({
       {!editingText && (
         <TableStyleActions app={app} appState={appState} variant="fill" />
       )}
+      {!editingText && <FragmentAddRowAction app={app} />}
 
       {/* 外露色板：描边 / 背景 */}
       {!tableSelected && predicates.strokeColor && (
@@ -1498,6 +1501,29 @@ const LinearEditorAction = ({
   );
 };
 
+/** Floating-toolbar command: append a row to the selected fragment. */
+const FragmentAddRowAction = ({ app }: { app: AppClassProperties }) => {
+  const selectedElements = app.scene.getSelectedElements(app.state);
+  if (
+    selectedElements.length !== 1 ||
+    !isSequenceFragmentElement(selectedElements[0])
+  ) {
+    return null;
+  }
+  return (
+    <div className="compact-action-item">
+      <IconButton
+        type="button"
+        icon={sequenceFragmentAddRowIcon}
+        title={t("labels.sequenceFragmentAddRow")}
+        aria-label={t("labels.sequenceFragmentAddRow")}
+        data-testid="fragment-add-row"
+        onClick={() => app.addSequenceFragmentRow()}
+      />
+    </div>
+  );
+};
+
 const TableCellCompactActions = ({
   app,
   appState,
@@ -2005,6 +2031,7 @@ export const MobileShapeActions = ({
       {!editingText && (
         <TableStyleActions app={app} appState={appState} variant="fill" />
       )}
+      {!editingText && <FragmentAddRowAction app={app} />}
 
       {/* 外露色板：描边 / 背景（24px） */}
       {!tableSelected && predicates.strokeColor && (

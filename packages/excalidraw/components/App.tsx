@@ -25,6 +25,7 @@ import {
 
 import {
   CaptureUpdateAction,
+  appendSequenceFragmentRow,
   getColorUpdate,
   getCommonBounds,
   getFrameChildrenInsertionIndex,
@@ -32,6 +33,7 @@ import {
   isElementCompletelyInViewport,
   isFrameLikeElement,
   isImageElement,
+  isSequenceFragmentElement,
   isTableElement,
   isUsingAdaptiveRadius,
   makeNextSelectedElementIds,
@@ -1884,6 +1886,32 @@ class App extends React.Component<AppProps, AppState> {
 
   public commitTableCellSplit = () =>
     tableController.commitTableCellSplit(this);
+
+  /**
+   * Appends one row to the selected fragment. Kept next to the table commands
+   * because both are structure edits performed from the floating toolbar.
+   */
+  public addSequenceFragmentRow = (): boolean => {
+    const selectedElements = this.scene.getSelectedElements(this.state);
+    if (selectedElements.length !== 1) {
+      return false;
+    }
+    const [element] = selectedElements;
+    if (!isSequenceFragmentElement(element)) {
+      return false;
+    }
+    const next = appendSequenceFragmentRow(element);
+    if (!next) {
+      return false;
+    }
+    this.store.scheduleCapture();
+    this.scene.mutateElement(element, {
+      height: next.height,
+      shape: next.shape,
+    });
+    this.scene.triggerUpdate();
+    return true;
+  };
 
   public clearSelectedTableCells = (
     kind: "content" | "backgroundText" | "style",

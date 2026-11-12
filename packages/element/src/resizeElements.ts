@@ -42,11 +42,14 @@ import {
   SEQUENCE_MIN_POLE_LENGTH,
   clampSequenceActivationLocalY,
   getCompositeShapeTextFitMode,
+  getSequenceFragmentResize,
   getSequenceLifelineActivationCenter,
   getSequenceLifelineActivationLocalY,
   isActivationElement,
+  isSequenceFragmentElement,
   isSequenceLifelineElement,
   isShapeElement,
+  normalizeSequenceFragmentGeometry,
 } from "./compositeShape";
 import {
   getBoundTextElement,
@@ -265,6 +268,19 @@ export const transformElements = (
           originalBoundingBox,
         },
       );
+      // Group resize scales the fragment box without touching its persisted
+      // rows; re-normalize so `sum(rows.height) === element.height` keeps
+      // holding for the next save/restore round-trip.
+      for (const selectedElement of selectedElements) {
+        const latest = scene.getNonDeletedElement(selectedElement.id);
+        if (!latest || !isSequenceFragmentElement(latest)) {
+          continue;
+        }
+        const normalized = normalizeSequenceFragmentGeometry(latest);
+        if (normalized !== latest) {
+          scene.mutateElement(latest, { shape: normalized.shape });
+        }
+      }
 
       return true;
     }
@@ -1389,6 +1405,30 @@ export const resizeSingleElement = (
         shouldResizeFromCenter,
         flipFactorY < 0,
       );
+    }
+
+    // Fragment rows follow the box: the bottom edge changes only the last row
+    // (stopping at MIN_ROW_HEIGHT); other directions scale every row. This
+    // lives here, not in the pointer-only path, so Stats dimension edits go
+    // through the same row invariant.
+    if (
+      isSequenceFragmentElement(latestElement) &&
+      isSequenceFragmentElement(origElement) &&
+      (handleDirection.includes("n") ||
+        handleDirection.includes("s") ||
+        Math.abs(origElement.height - latestElement.height) > 1e-6)
+    ) {
+      const next = getSequenceFragmentResize(
+        origElement,
+        handleDirection,
+        latestElement.height,
+      );
+      if (next) {
+        scene.mutateElement(latestElement, {
+          height: next.height,
+          shape: next.shape,
+        });
+      }
     }
 
     updateBoundElements(latestElement, scene);

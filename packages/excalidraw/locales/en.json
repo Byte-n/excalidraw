@@ -47,6 +47,7 @@
     "tableMoveColumnRight": "Move table column right",
     "tableMergeCells": "Merge cells",
     "tableSplitCells": "Split cells",
+    "sequenceFragmentAddRow": "Add fragment row",
     "tableCellSelection": "Select multiple cells",
     "tableCellSelectionDone": "Done",
     "tableCellSelectionCancel": "Clear selection",

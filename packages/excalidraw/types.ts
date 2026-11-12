@@ -1543,6 +1543,7 @@ export type AppClassProperties = {
   moveSelectedTableRowCol: App["moveSelectedTableRowCol"];
   commitTableCellMerge: App["commitTableCellMerge"];
   commitTableCellSplit: App["commitTableCellSplit"];
+  addSequenceFragmentRow: App["addSequenceFragmentRow"];
   clearSelectedTableCells: App["clearSelectedTableCells"];
   copySelectedTableCellFormat: App["copySelectedTableCellFormat"];
   pasteSelectedTableCellFormat: App["pasteSelectedTableCellFormat"];

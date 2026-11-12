@@ -51,7 +51,9 @@ import {
 import {
   SEQUENCE_LIFELINE_HEAD_HEIGHTS,
   drawSequenceLifeline,
+  getSequenceActivationAnchors,
   getSequenceElementBox,
+  getSequenceFragmentRowPaths,
   getSequenceFragmentTabPath,
   getSequenceFragmentTextBounds,
   getSequenceLifelineGeometry,
@@ -117,7 +119,7 @@ type ShapeFillFacesFn<K extends ShapeId> = (
 ) => ShapeFillFace[];
 type ShapeAnchorsFn<K extends ShapeId> = (
   input: ShapeInput<K>,
-) => [ShapePoint, ShapePoint, ShapePoint, ShapePoint];
+) => readonly ShapePoint[];
 type ShapePrimitive = NonNullable<CompositeShapeGeometry["primitive"]>;
 type ShapePrimitiveFn<K extends ShapeId> = (
   input: ShapeInput<K>,
@@ -347,6 +349,55 @@ const validateActivationLinkParams = (data: unknown) => {
     typeof value.localY === "number" &&
     Number.isFinite(value.localY)
   );
+};
+
+/**
+ * Optional fragment row structure; absent = the legacy single-box fragment.
+ * At least one row is required, row ids are unique, and every height is a
+ * finite positive number (the sum is normalized to the element height outside
+ * the persistence boundary).
+ */
+const validateFragmentParams = (data: unknown) => {
+  if (data === undefined) {
+    return true;
+  }
+  const value = data as Record<string, unknown> | undefined;
+  if (
+    !value ||
+    !(
+      hasOnlyKeys(value, ["rows"]) || hasOnlyKeys(value, ["operator", "rows"])
+    ) ||
+    (value.operator !== undefined && typeof value.operator !== "string")
+  ) {
+    return false;
+  }
+  if (!Array.isArray(value.rows) || value.rows.length === 0) {
+    return false;
+  }
+  const ids = new Set<string>();
+  for (const row of value.rows) {
+    if (!row || typeof row !== "object") {
+      return false;
+    }
+    const entry = row as Record<string, unknown>;
+    const hasExpectedKeys =
+      hasOnlyKeys(entry, ["id", "height"]) ||
+      hasOnlyKeys(entry, ["id", "height", "label"]);
+    if (
+      !hasExpectedKeys ||
+      typeof entry.id !== "string" ||
+      entry.id.length === 0 ||
+      ids.has(entry.id) ||
+      typeof entry.height !== "number" ||
+      !Number.isFinite(entry.height) ||
+      entry.height <= 0 ||
+      (entry.label !== undefined && typeof entry.label !== "string")
+    ) {
+      return false;
+    }
+    ids.add(entry.id);
+  }
+  return true;
 };
 
 type CircularSectorData = {
@@ -1621,15 +1672,22 @@ export const SHAPES: { [K in ShapeId]: ShapeRegistration<K> } = {
   "sc-lifeline-object": sequenceLifelineShape("sc-lifeline-object"),
   "sc-lifeline-collection": sequenceLifelineShape("sc-lifeline-collection"),
   // Activation is the plain rounded rect, drawn by the default outline path.
+  // Its connection anchors are multiple automatic points along the left/right
+  // edges only; top/bottom edges deliberately carry no anchors.
   "sc-activation": defineShape(
     (input) => getRoundedRectOutline(input.width, input.height, 5),
     roundedCornerTextBounds(() => 5),
-    { param: { key: "link", validate: validateActivationLinkParams } },
+    {
+      param: { key: "link", validate: validateActivationLinkParams },
+      anchors: (input) =>
+        getSequenceActivationAnchors(input.width, input.height),
+    },
   ),
   // Fragment: box outline stroked only, the top tab filled via the shaded-face
   // drawing (the tab also lives in `details` as a stroke-only contour).
   "sc-fragment": {
     defaultParams: {} as ShapeParams<"sc-fragment">,
+    param: { key: "fragment", validate: validateFragmentParams },
     points: (input) =>
       flattenCompositeShapePath(
         getSequenceElementBox(input.width, input.height),
@@ -1638,7 +1696,14 @@ export const SHAPES: { [K in ShapeId]: ShapeRegistration<K> } = {
       getSequenceFragmentTextBounds(input.width, input.height),
     open: false,
     outline: (input) => getSequenceElementBox(input.width, input.height),
-    details: (input) => [getSequenceFragmentTabPath(input.width, input.height)],
+    details: (input) => [
+      getSequenceFragmentTabPath(input.width, input.height),
+      ...getSequenceFragmentRowPaths(
+        input.width,
+        input.height,
+        input.shape.fragment,
+      ),
+    ],
     fillFaces: (input) => [
       {
         path: getSequenceFragmentTabPath(input.width, input.height),

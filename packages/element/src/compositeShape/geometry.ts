@@ -48,7 +48,7 @@ export type CompositeShapeGeometry = {
   /** Optional single-selection frame; absent means the whole element box. */
   selectionFrame?: CompositeShapeSelectionFrame;
   fillFaces?: { path: CompositeShapePath; tone: "light" | "base" | "dark" }[];
-  anchors?: [ShapePoint, ShapePoint, ShapePoint, ShapePoint];
+  anchors?: readonly ShapePoint[];
   primitive?:
     | { kind: "rectangle"; width: number; height: number; radius: number }
     | {

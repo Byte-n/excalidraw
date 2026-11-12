@@ -37,6 +37,7 @@
     "tableMoveColumnRight": "右移表格列",
     "tableMergeCells": "合并单元格",
     "tableSplitCells": "拆分单元格",
+    "sequenceFragmentAddRow": "添加片段行",
     "tableCellSelection": "单元格多选",
     "tableCellSelectionDone": "完成",
     "tableCellSelectionCancel": "取消选择",

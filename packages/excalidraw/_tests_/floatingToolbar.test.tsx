@@ -1,7 +1,11 @@
 import React from "react";
 
 import { KEYS } from "@excalidraw/common";
-import { LinearElementEditor } from "@excalidraw/element";
+import {
+  LinearElementEditor,
+  SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT,
+  isSequenceFragmentElement,
+} from "@excalidraw/element";
 import { pointFrom } from "@excalidraw/math";
 
 import type { LocalPoint } from "@excalidraw/math";
@@ -41,6 +45,62 @@ describe("浮动工具栏（T2 容器与定位）", () => {
     expect(bar?.getAttribute("aria-label")).toBe("Selected element properties");
     // T3 之前沿用既有面板内容（选择器保持可用）
     expect(bar!.querySelector(".selected-shape-actions")).not.toBeNull();
+  });
+
+  it("选中 fragment：出现「添加片段行」按钮，点击后追加一行", async () => {
+    await render(<Excalidraw />);
+    const fragment = API.createElement({
+      type: "sequence",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 240,
+      shape: {
+        id: "sc-fragment",
+        schemaVersion: 1,
+        fragment: {
+          rows: [
+            { id: "row-a", height: 120 },
+            { id: "row-b", height: 120 },
+          ],
+        },
+      },
+    });
+    API.setElements([fragment]);
+    act(() => {
+      API.setAppState({ selectedElementIds: { [fragment.id]: true } });
+    });
+
+    const button = document.querySelector<HTMLButtonElement>(
+      '[data-testid="fragment-add-row"]',
+    );
+    expect(button).not.toBeNull();
+
+    act(() => {
+      fireEvent.click(button!);
+    });
+
+    const element = h.app.scene.getNonDeletedElement(fragment.id);
+    expect(element?.height).toBe(240 + SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT);
+    if (!element || !isSequenceFragmentElement(element)) {
+      throw new Error("Expected a fragment element");
+    }
+    expect(element.shape.fragment?.rows).toHaveLength(3);
+    expect(
+      element.shape.fragment?.rows.reduce((sum, row) => sum + row.height, 0),
+    ).toBeCloseTo(240 + SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT);
+  });
+
+  it("非 fragment 单选：不出现「添加片段行」按钮", async () => {
+    await render(<Excalidraw />);
+    const rect = API.createElement({ type: "rectangle", x: 0, y: 0 });
+    API.setElements([rect]);
+    act(() => {
+      API.setAppState({ selectedElementIds: { [rect.id]: true } });
+    });
+    expect(
+      document.querySelector('[data-testid="fragment-add-row"]'),
+    ).toBeNull();
   });
 
   it("无选中·工具配置态：激活绘制工具时固定顶部居中，切回选择工具隐藏", async () => {

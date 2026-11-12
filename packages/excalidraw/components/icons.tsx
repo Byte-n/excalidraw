@@ -111,6 +111,17 @@ export const PlusIcon = createIcon(
   tablerIconProps,
 );
 
+// tabler-icons: row-insert-bottom
+export const sequenceFragmentAddRowIcon = createIcon(
+  <g strokeWidth="1.5">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M20 6v4a1 1 0 0 1 -1 1h-14a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h14a1 1 0 0 1 1 1z" />
+    <line x1="12" y1="15" x2="12" y2="21" />
+    <line x1="9" y1="18" x2="15" y2="18" />
+  </g>,
+  tablerIconProps,
+);
+
 // tabler-icons: sitemap
 export const mindmapIcon = createIcon(
   <g>

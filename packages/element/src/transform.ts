@@ -71,6 +71,7 @@ import {
   isSequenceLifelineShapeId,
   isShapeId,
   isShapeElement,
+  normalizeSequenceFragmentGeometry,
   normalizeSequenceLifelineGeometry,
 } from "./compositeShape";
 
@@ -778,8 +779,9 @@ export const convertToExcalidrawElements = (
                 width,
                 height,
               });
-        excalidrawElement =
-          normalizeSequenceLifelineGeometry(excalidrawElement);
+        excalidrawElement = normalizeSequenceFragmentGeometry(
+          normalizeSequenceLifelineGeometry(excalidrawElement),
+        );
 
         break;
       }

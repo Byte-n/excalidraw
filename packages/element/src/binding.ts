@@ -29,6 +29,7 @@ import {
   isShapeElement,
   isShapeWithId,
   isShapeWithIdIn,
+  snapSequenceActivationLocalY,
 } from "./compositeShape";
 import { updateSequenceActivationsForLifeline } from "./sequenceActivation";
 import {
@@ -1330,14 +1331,16 @@ export const snapToMid = (
   }
 
   // 激活条只有左 / 右两条可连边：上 / 下象限也按指针在中心线哪一侧归到左或右，
-  // 避免时序消息吸到激活条的顶边 / 底边。
+  // 避免时序消息吸到激活条的顶边 / 底边。每条边有多个自动吸附点，取离指针纵向
+  // 最近的那个；中点一定是候选之一。
   if (isActivationElement(bindTarget)) {
     const isRight = nonRotated[0] >= center[0];
     const edgeX = isRight ? x + width : x;
+    const localY = snapSequenceActivationLocalY(height, nonRotated[1] - y);
     return pointRotateRads(
       pointFrom<GlobalPoint>(
         edgeX + (isRight ? bindingGap : -bindingGap),
-        center[1],
+        y + localY,
       ),
       center,
       angle,

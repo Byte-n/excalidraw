@@ -67,7 +67,10 @@ import {
 } from "@excalidraw/element";
 import { getBoundTextElement, getContainerElement } from "@excalidraw/element";
 import { isStickyNoteElement } from "@excalidraw/element";
-import { normalizeSequenceLifelineGeometry } from "@excalidraw/element";
+import {
+  normalizeSequenceFragmentGeometry,
+  normalizeSequenceLifelineGeometry,
+} from "@excalidraw/element";
 import { detectLineHeight } from "@excalidraw/element";
 import {
   isArrowBoundToElement,
@@ -694,8 +697,10 @@ export const restoreElement = (
     case "flow":
     case "sequence":
       assertShapeElementType(element.type, element.shape);
-      return normalizeSequenceLifelineGeometry(
-        restoreElementWithProperties(element, { shape: element.shape }),
+      return normalizeSequenceFragmentGeometry(
+        normalizeSequenceLifelineGeometry(
+          restoreElementWithProperties(element, { shape: element.shape }),
+        ),
       );
     case "table": {
       assertValidTableData(element.table);

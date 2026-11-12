@@ -555,19 +555,30 @@ export const getSnapOutlineMidPoint = (
           element.angle,
         ),
       ];
-  const candidate = sideMidpoints.find(
-    (midpoint) =>
-      pointDistance(point, midpoint) <=
-        maxBindingDistance_simple(zoom) + element.strokeWidth / 2 &&
-      !hitElementItself({
-        point,
-        element,
-        threshold: 0,
-        elementsMap,
-        overrideShouldTestInside: true,
-      }),
-  );
-
+  const threshold = maxBindingDistance_simple(zoom) + element.strokeWidth / 2;
+  if (
+    hitElementItself({
+      point,
+      element,
+      threshold: 0,
+      elementsMap,
+      overrideShouldTestInside: true,
+    })
+  ) {
+    return undefined;
+  }
+  // Multiple anchors per side are allowed (e.g. an activation whose left/right
+  // edge carries several automatic snap points); pick the nearest candidate
+  // instead of the first one that happens to be within the threshold.
+  let candidate: GlobalPoint | undefined;
+  let candidateDistance = threshold;
+  for (const midpoint of sideMidpoints) {
+    const distance = pointDistance(point, midpoint);
+    if (distance <= candidateDistance) {
+      candidate = midpoint;
+      candidateDistance = distance;
+    }
+  }
   return candidate;
 };
 

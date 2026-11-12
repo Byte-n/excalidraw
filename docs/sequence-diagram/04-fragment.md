@@ -1,10 +1,10 @@
 # P4：fragment 行结构
 
-- **状态**：未开始
+- **状态**：P4a 已实现（P4b 未开始）
 - **依赖**：P1
 - **目标**：把 `sc-fragment` 从「一个带页签的矩形」升级为可表达 alt / opt / loop 等分区的组合片段。
 
-## 1. 当前状态
+## 1. 实现前状态（P3 结束时）
 
 - `sc-fragment` 只有外框 + 左上页签；
 - `SequenceShapeData` 对 fragment 没有参数；
@@ -78,7 +78,7 @@ export type SequenceShapeData =
 
 - 页签几何沿用 `getSequenceFragmentTabPath`；
 - operator 文本写入页签的绑定文本；
-- 页签高度与首行高度取 `max(FRAGMENT_TAB_HEIGHT, rows[0].height)` 或固定页签高度，二选一并写入测试。
+- **采用口径**：首行高度 = `max(SEQUENCE_FRAGMENT_TAB_HEIGHT, rows[0].height)`，由 `getSequenceFragmentRowLayout` 派生（测试见 `sequenceShape.test.ts` 的「keeps the tab row at least as tall as the tab」）。这样页签不会与第一条行分隔线相交，同时保留 `rows[0].height` 作为权重的语义。
 
 ### 4.3 行标签
 
@@ -102,17 +102,19 @@ P4a 不画行标签，只保留字段；P4b 再实现。
 
 ### 5.1 加行
 
-- 入口二选一：悬停 fragment 底边出「+」，或选中后在属性面板/工具栏提供「添加行」；
-- 新行插入到末尾，默认高度取 `DEFAULT_ROW_HEIGHT`；
+- **入口（已实现）**：单选 fragment 时，浮动工具栏 / 手机底条出现「添加片段行」按钮（`data-testid="fragment-add-row"`，图标 `row-insert-bottom`）。未采用悬停「+」，避免与 quick-create 手柄体系耦合。
+- 新行插入到末尾，默认高度取 `SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT`（56）；
 - 加行后 `element.height` 增加对应高度；
-- 页签 / 既有行位置不变。
+- 页签 / 既有行位置不变；
+- 首次加行时，没有 `fragment` 参数的元素会把原盒高作为第一行，因此第一次加行等价于把整盒切成两行。
 
 ### 5.2 缩放
 
-- 拖 fragment 底边：只改最后一行高度或按比例分配，需明确；
-- 建议：底边缩放优先改最后一行，且不小于 `MIN_ROW_HEIGHT`；
-- 顶边 / 左右边沿用普通矩形缩放；
-- 行高总和与 `element.height` 始终一致。
+- **已实现**：`getSequenceFragmentResize`
+  - 底边（`s` / `se` / `sw`）：只改最后一行；最后一行触底 `SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT`（24）后，元素底边停止跟随；
+  - 顶边（`n` / `ne` / `nw`）：所有行按比例缩放；左右边（`e` / `w`）只改宽度，行高不变；
+  - 多选缩放：`resizeMultipleElements` 之后统一调用 `normalizeSequenceFragmentGeometry`，按新高度等比归一；
+- 行高总和与 `element.height` 始终一致：持久化边界（restore / `convertToExcalidrawElements`）与每次缩放后都会归一化。
 
 ### 5.3 移动 / 复制 / 删除
 
@@ -121,43 +123,47 @@ P4a 不画行标签，只保留字段；P4b 再实现。
 
 ## 6. 实现清单
 
-- [ ] `types.ts`
-  - [ ] `SequenceShapeData` 的 fragment 参数。
-- [ ] `registry.ts`
-  - [ ] fragment `param` 校验；
-  - [ ] `getSequenceFragmentRowPaths`；
-  - [ ] `details` / `draw` 增加行分隔；
-  - [ ] 行高归一化辅助函数。
-- [ ] `sequenceOutline.ts`
-  - [ ] `getSequenceFragmentRowLayout`；
-  - [ ] 行分隔路径；
-  - [ ] 最小行高常量。
-- [ ] `transform.ts` / `restore.ts`
-  - [ ] fragment 参数校验与归一化。
-- [ ] `excalidraw` 交互层
-  - [ ] 加行入口；
-  - [ ] fragment 底边缩放分支；
-  - [ ] P4b 的 containerRef（如采用）。
-- [ ] 文档
-  - [ ] 更新 `sequence-mapper.md` 的 fragment 行说明。
+- [x] `types.ts`
+  - [x] `SequenceShapeData` 的 fragment 参数（`SequenceFragmentData` / `SequenceFragmentRow`）。
+- [x] `registry.ts`
+  - [x] fragment `param` 校验（至少一行、唯一 id、`height > 0`、可选 `operator` / `label`）；
+  - [x] `getSequenceFragmentRowPaths`；
+  - [x] `details` 增加行分隔（`getSequenceFragmentRowPaths`），不进入 `hitPaths`；
+  - [x] 行高归一化辅助函数（`normalizeSequenceFragmentRows` / `normalizeSequenceFragmentGeometry`）。
+- [x] `sequenceOutline.ts`
+  - [x] `getSequenceFragmentRowLayout`；
+  - [x] 行分隔路径；
+  - [x] 最小行高常量 `SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT`、默认行高 `SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT`。
+- [x] `transform.ts` / `restore.ts`
+  - [x] fragment 参数校验（`assertShapeData`）与归一化。
+- [x] `excalidraw` 交互层
+  - [x] 加行入口（浮动工具栏 / 手机底条按钮）；
+  - [x] fragment 底边缩放分支；
+  - [ ] P4b 的 containerRef（未开始）。
+- [x] 文档
+  - [x] 更新 `sequence-mapper.md` 的 fragment 行说明。
 
 ## 7. 测试
 
-- [ ] fragment 缺省参数 = 当前几何；
-- [ ] 两行 / N 行分隔线位置正确；
-- [ ] 行高之和等于元素高度；
-- [ ] 加行后高度正确、页签不遮挡；
-- [ ] 底边缩放不产生小于 `MIN_ROW_HEIGHT` 的行；
-- [ ] 复制 / 粘贴 / 恢复保留行数据；
-- [ ] P4b：行标签文本编辑、换行、字号、主题色正确。
+- [x] fragment 缺省参数 = 当前几何；
+- [x] 两行 / N 行分隔线位置正确；
+- [x] 行高之和等于元素高度；
+- [x] 加行后高度正确、页签不遮挡；
+- [x] 底边缩放不产生小于 `MIN_ROW_HEIGHT` 的行；
+- [x] 复制 / 粘贴 / 恢复保留行数据；
+- [ ] P4b：行标签文本编辑、换行、字号、主题色正确（未开始）。
+
+单元测试位于 `packages/element/_tests_/sequenceShape.test.ts` 的 `sequence fragment rows` 分组。
 
 ## 8. 验收
 
-- [ ] 能表达 alt / opt / loop 至少三种 operator；
-- [ ] 行分隔清晰，不越界；
-- [ ] 加行后 fragment 仍可整体移动、缩放、导出；
-- [ ] 行数据在保存/恢复/复制后不丢；
-- [ ] 不影响生命线与消息的命中/层级。
+- [x] 能表达 alt / opt / loop 至少三种 operator（页签绑定文本，`fragment.operator` 已持久化）；
+- [x] 行分隔清晰，不越界（分隔线只出现在 `0 < y < height`）；
+- [x] 加行后 fragment 仍可整体移动、缩放、导出（行数据随 shape 派生，不改变包围盒语义）；
+- [x] 行数据在保存/恢复/复制后不丢；
+- [x] 不影响生命线与消息的命中/层级（分隔线只进 `details`，不进 `hitPaths`）。
+
+浏览器手工验收（多行 fragment 的加行、底边缩放、复制粘贴）仍需按上表走一遍。
 
 ## 9. 不做
 

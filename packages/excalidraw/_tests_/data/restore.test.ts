@@ -81,6 +81,33 @@ describe("restoreElements", () => {
     );
   });
 
+  it("normalizes restored fragment rows to the element height", () => {
+    const element = API.createElement({
+      type: "sequence",
+      width: 400,
+      height: 300,
+      shape: {
+        id: "sc-fragment",
+        schemaVersion: 1,
+        fragment: {
+          rows: [
+            { id: "row-a", height: 100 },
+            { id: "row-b", height: 100 },
+          ],
+        },
+      },
+    });
+    const [restored] = restore.restoreElements([element], null);
+    if (restored.type !== "sequence" || restored.shape.id !== "sc-fragment") {
+      throw new Error("Expected a fragment shape");
+    }
+    const rows = restored.shape.fragment?.rows ?? [];
+    expect(rows.reduce((sum, row) => sum + row.height, 0)).toBeCloseTo(300);
+    // the tab row keeps its height; the last row absorbs the difference
+    expect(rows[0].height).toBeCloseTo(100);
+    expect(rows[1].height).toBeCloseTo(200);
+  });
+
   it("clears a reference to a missing frame when repairing bindings", () => {
     const child = API.createElement({
       type: "rectangle",

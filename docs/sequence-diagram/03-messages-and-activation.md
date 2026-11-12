@@ -71,11 +71,13 @@ export const isActivationElement = (element) =>
 
 ### 3.2 连接点
 
-激活条只需要左 / 右两个锚点：
+激活条只需要左 / 右两个方向：
 
 - 左：`(element.x, element.y + element.height / 2)`；
 - 右：`(element.x + element.width, element.y + element.height / 2)`；
 - 旋转后按 `element.angle` 绕中心旋转。
+
+每条边不是一个固定中点，而是一组**自动吸附点**：沿左 / 右边缘按高度自适应分布（包含垂直中点，避开上下角），上下边不提供连接点。拖拽连线端点时吸附到所选边最近的锚点，`attachPoint` 的 y 比例随锚点写入。
 
 实现：
 
@@ -192,6 +194,7 @@ shape: {
 - [x] `element/src/compositeShape/sequenceOutline.ts`
   - [x] `isActivationElement`；
   - [x] 激活条尺寸常量 `SEQUENCE_ACTIVATION_WIDTH/HEIGHT`；
+  - [x] 左右边缘多个自动吸附点（`getSequenceActivationAnchorLocalYs` / `getSequenceActivationAnchors` / `snapSequenceActivationLocalY`）；
   - [x] `isPointOnSequenceLifelinePole`；
   - [x] `getSequenceLifelinePoleActivationPlacement`（夹取 + 旋转）；
   - [x] `getActivationAnchor` / `getActivationAnchorAtSceneY`。

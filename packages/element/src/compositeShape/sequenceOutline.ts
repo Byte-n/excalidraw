@@ -2,6 +2,7 @@ import {
   DEFAULT_FONT_FAMILY,
   getLineHeight,
   getVerticalOffset,
+  randomId,
 } from "@excalidraw/common";
 import { pointFrom, pointRotateRads } from "@excalidraw/math";
 
@@ -30,9 +31,12 @@ import type {
   ExcalidrawElement,
   ExcalidrawSequenceElement,
   ExcalidrawShapeElement,
+  SequenceFragmentData,
+  SequenceFragmentRow,
   SequenceShapeData,
 } from "../types";
 import type { ShapeDraw } from "./registry";
+import type { TransformHandleDirection } from "../transformHandles";
 
 /**
  * Local-coordinate geometry and drawing for the sequence (Lark
@@ -124,6 +128,79 @@ export const SEQUENCE_MIN_ACTIVATION_OFFSET = 8;
 
 /** Minimum height of an activation bar (width is fixed, height is the only axis). */
 export const SEQUENCE_MIN_ACTIVATION_HEIGHT = 20;
+
+/** Inset kept from an activation's corners for automatic connection anchors. */
+export const SEQUENCE_ACTIVATION_ANCHOR_INSET = 8;
+
+/** Preferred spacing between automatic connection anchors along an edge. */
+export const SEQUENCE_ACTIVATION_ANCHOR_SPACING = 24;
+
+/** Upper bound on the number of intervals per edge (anchors per edge + 1). */
+export const SEQUENCE_ACTIVATION_ANCHOR_MAX_INTERVALS = 8;
+
+/**
+ * Local y coordinates of the automatic connection anchors on an activation's
+ * left/right edges. The set is symmetric around the vertical center (so the
+ * midpoint is always an anchor), stays away from the corners, and never
+ * includes the top/bottom edges.
+ */
+export const getSequenceActivationAnchorLocalYs = (
+  height: number,
+): number[] => {
+  if (!(height > 0)) {
+    return [];
+  }
+  const inset = Math.min(SEQUENCE_ACTIVATION_ANCHOR_INSET, height / 2);
+  const usable = height - inset * 2;
+  if (usable <= 0) {
+    return [height / 2];
+  }
+  let intervals = Math.max(
+    2,
+    Math.min(
+      SEQUENCE_ACTIVATION_ANCHOR_MAX_INTERVALS,
+      Math.round(usable / SEQUENCE_ACTIVATION_ANCHOR_SPACING),
+    ),
+  );
+  // Keep an even interval count so the vertical midpoint is always an anchor.
+  if (intervals % 2 !== 0) {
+    intervals += 1;
+  }
+  const step = usable / intervals;
+  return Array.from(
+    { length: intervals + 1 },
+    (_, index) => inset + index * step,
+  );
+};
+
+/** Nearest automatic anchor y on an activation edge (clamped by construction). */
+export const snapSequenceActivationLocalY = (
+  height: number,
+  localY: number,
+): number => {
+  const anchors = getSequenceActivationAnchorLocalYs(height);
+  if (!anchors.length) {
+    return localY;
+  }
+  return anchors.reduce((best, candidate) =>
+    Math.abs(candidate - localY) < Math.abs(best - localY) ? candidate : best,
+  );
+};
+
+/**
+ * Automatic connection anchors for an activation: multiple points along the
+ * left and right edges only (local coordinates, unrotated element box).
+ */
+export const getSequenceActivationAnchors = (
+  width: number,
+  height: number,
+): ShapePoint[] => {
+  const anchors: ShapePoint[] = [];
+  for (const y of getSequenceActivationAnchorLocalYs(height)) {
+    anchors.push([0, y], [width, y]);
+  }
+  return anchors;
+};
 
 /**
  * Narrowing predicate for `sc-activation`. Structural (same reason as
@@ -677,17 +754,26 @@ const dataBaseInnerArc: CompositeShapePath = {
 };
 
 /** Fragment top-row tab metrics, sampled from the Lark fragment. */
-const FRAGMENT_TAB_WIDTH = 92;
-const FRAGMENT_TAB_HEIGHT = 36.272;
-const FRAGMENT_TAB_BEVEL = 12;
+export const SEQUENCE_FRAGMENT_TAB_WIDTH = 92;
+export const SEQUENCE_FRAGMENT_TAB_HEIGHT = 36.272;
+export const SEQUENCE_FRAGMENT_TAB_BEVEL = 12;
 /** Measured baseline of the fragment's tab title (element-local y). */
 const FRAGMENT_TAB_BASELINE = 24.229;
 
+/**
+ * Default height of a row appended by the fragment "add row" action. Chosen so
+ * a new section leaves enough room for a message name and a little padding.
+ */
+export const SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT = 56;
+
+/** Smallest row height the bottom-edge resize keeps for the last row. */
+export const SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT = 24;
+
 /** The fragment's tab clamped to the element box. */
 const fragmentTabMetrics = (width: number, height: number) => {
-  const tabWidth = Math.min(FRAGMENT_TAB_WIDTH, width);
-  const tabHeight = Math.min(FRAGMENT_TAB_HEIGHT, height);
-  const bevel = Math.min(FRAGMENT_TAB_BEVEL, tabWidth / 2, tabHeight);
+  const tabWidth = Math.min(SEQUENCE_FRAGMENT_TAB_WIDTH, width);
+  const tabHeight = Math.min(SEQUENCE_FRAGMENT_TAB_HEIGHT, height);
+  const bevel = Math.min(SEQUENCE_FRAGMENT_TAB_BEVEL, tabWidth / 2, tabHeight);
   return { tabWidth, tabHeight, bevel };
 };
 
@@ -698,8 +784,8 @@ const fragmentTabMetrics = (width: number, height: number) => {
  * default to the sample size for callers that just want the sample tab.
  */
 export const getSequenceFragmentTabPath = (
-  width: number = FRAGMENT_TAB_WIDTH,
-  height: number = FRAGMENT_TAB_HEIGHT,
+  width: number = SEQUENCE_FRAGMENT_TAB_WIDTH,
+  height: number = SEQUENCE_FRAGMENT_TAB_HEIGHT,
 ): CompositeShapePath => {
   const { tabWidth, tabHeight, bevel } = fragmentTabMetrics(width, height);
   return pathFromPoints(
@@ -729,8 +815,307 @@ export const getSequenceFragmentTextBounds = (
   const top = Math.min(Math.max(0, center - half), tabHeight);
   const bottom = Math.min(Math.max(top + 0.01, center + half), tabHeight);
   const right =
-    Math.min(FRAGMENT_TAB_WIDTH - FRAGMENT_TAB_BEVEL, width - bevel) - TEXT_GAP;
+    Math.min(
+      SEQUENCE_FRAGMENT_TAB_WIDTH - SEQUENCE_FRAGMENT_TAB_BEVEL,
+      width - bevel,
+    ) - TEXT_GAP;
   return insetRect(TEXT_GAP, top, Math.max(TEXT_GAP + 0.01, right), bottom);
+};
+
+/**
+ * Narrowing predicate for `sc-fragment`. Structural (same reason as
+ * `isSequenceLifelineElement`) so it can be used at JSON boundaries without
+ * importing the registry.
+ */
+export const isSequenceFragmentElement = <T extends ExcalidrawElement>(
+  element: T | null | undefined,
+): element is T &
+  ExcalidrawSequenceElement & {
+    shape: Extract<SequenceShapeData, { id: "sc-fragment" }>;
+  } => {
+  const shape = (
+    element as Partial<ExcalidrawSequenceElement> | null | undefined
+  )?.shape;
+  return (
+    !!element &&
+    element.type === "sequence" &&
+    !!shape &&
+    shape.id === "sc-fragment"
+  );
+};
+
+export type SequenceFragmentRowLayout = {
+  rows: ReadonlyArray<{
+    id: string;
+    y: number;
+    height: number;
+    label?: string;
+  }>;
+  /** Element-local y of each divider between rows (never 0 or `height`). */
+  separators: number[];
+};
+
+export type SequenceFragmentRowAddition = {
+  height: number;
+  shape: Extract<SequenceShapeData, { id: "sc-fragment" }>;
+};
+
+export type SequenceFragmentResize = {
+  height: number;
+  shape: Extract<SequenceShapeData, { id: "sc-fragment" }>;
+};
+
+const FRAGMENT_HEIGHT_EPSILON = 1e-9;
+
+/**
+ * Derives the rendered row layout from the persisted row weights.
+ *
+ * Persisted heights are scaled to the current element height, so the layout
+ * always sums to `height` even if a resize path has not normalized the shape
+ * yet. The first row (the tab row) is kept at least
+ * `SEQUENCE_FRAGMENT_TAB_HEIGHT` so the operator tab never crosses a divider.
+ */
+export const getSequenceFragmentRowLayout = (
+  height: number,
+  fragment?: SequenceFragmentData,
+): SequenceFragmentRowLayout => {
+  const rows = fragment?.rows;
+  if (!rows?.length || !Number.isFinite(height) || height <= 0) {
+    return { rows: [], separators: [] };
+  }
+  if (rows.length === 1) {
+    return {
+      rows: [{ ...rows[0], y: 0, height }],
+      separators: [],
+    };
+  }
+  const tabHeight = Math.min(SEQUENCE_FRAGMENT_TAB_HEIGHT, height);
+  const firstHeight = Math.min(height, Math.max(rows[0].height, tabHeight));
+  const restRows = rows.slice(1);
+  const restHeight = Math.max(0, height - firstHeight);
+  const restSum = restRows.reduce(
+    (sum, row) => sum + Math.max(0, row.height),
+    0,
+  );
+  const layoutRows: Array<{
+    id: string;
+    y: number;
+    height: number;
+    label?: string;
+  }> = [{ ...rows[0], y: 0, height: firstHeight }];
+  let y = firstHeight;
+  for (let index = 0; index < restRows.length; index++) {
+    const row = restRows[index];
+    const rowHeight =
+      restSum > 0
+        ? (restHeight * Math.max(0, row.height)) / restSum
+        : restHeight / restRows.length;
+    const nextHeight =
+      index === restRows.length - 1
+        ? Math.max(0, height - y)
+        : Math.max(0, rowHeight);
+    layoutRows.push({ ...row, y, height: nextHeight });
+    y += nextHeight;
+  }
+  const separators = layoutRows
+    .slice(0, -1)
+    .map((row) => row.y + row.height)
+    .filter(
+      (separator) =>
+        separator > FRAGMENT_HEIGHT_EPSILON &&
+        separator < height - FRAGMENT_HEIGHT_EPSILON,
+    );
+  return { rows: layoutRows, separators };
+};
+
+/** Stroke-only divider paths for the fragment's rows. */
+export const getSequenceFragmentRowPaths = (
+  width: number,
+  height: number,
+  fragment?: SequenceFragmentData,
+): CompositeShapePath[] => {
+  if (!(width > 0)) {
+    return [];
+  }
+  return getSequenceFragmentRowLayout(height, fragment).separators.map((y) =>
+    pathFromPoints(
+      [
+        [0, y],
+        [width, y],
+      ],
+      false,
+    ),
+  );
+};
+
+/**
+ * Scales persisted row heights to `height`, keeping every row positive and
+ * making the last row absorb float drift so the sum is exact.
+ */
+export const normalizeSequenceFragmentRows = (
+  rows: ReadonlyArray<SequenceFragmentRow>,
+  height: number,
+): SequenceFragmentRow[] => {
+  if (!rows.length || !(height > 0)) {
+    return [...rows];
+  }
+  const sum = rows.reduce((total, row) => total + Math.max(0, row.height), 0);
+  if (sum <= 0) {
+    return [...rows];
+  }
+  const scale = height / sum;
+  const scaled = rows.map((row) => ({
+    ...row,
+    height: Math.max(row.height, Number.EPSILON) * scale,
+  }));
+  const scaledSum = scaled.reduce((total, row) => total + row.height, 0);
+  const lastIndex = scaled.length - 1;
+  scaled[lastIndex] = {
+    ...scaled[lastIndex],
+    height: Math.max(
+      Number.EPSILON,
+      scaled[lastIndex].height + height - scaledSum,
+    ),
+  };
+  return scaled;
+};
+
+/**
+ * Persisted rows that match the rendered layout (first row at least the tab
+ * height, sum exactly `height`), falling back to plain proportional scaling
+ * when the box is too short to keep every row positive.
+ */
+const resolveSequenceFragmentRows = (
+  rows: ReadonlyArray<SequenceFragmentRow>,
+  height: number,
+): SequenceFragmentRow[] => {
+  const layout = getSequenceFragmentRowLayout(height, { rows });
+  if (
+    layout.rows.length === rows.length &&
+    layout.rows.every((row) => row.height > 0)
+  ) {
+    return rows.map((row, index) => ({
+      ...row,
+      height: layout.rows[index].height,
+    }));
+  }
+  return normalizeSequenceFragmentRows(rows, height);
+};
+
+/**
+ * Enforces the fragment invariant `sum(rows.height) === element.height`.
+ * Missing row data keeps the legacy single-box fragment untouched.
+ */
+export const normalizeSequenceFragmentGeometry = <T extends ExcalidrawElement>(
+  element: T,
+): T => {
+  if (!isSequenceFragmentElement(element)) {
+    return element;
+  }
+  const fragment = element.shape.fragment;
+  if (!fragment?.rows?.length || !(element.height > 0)) {
+    return element;
+  }
+  const rows = resolveSequenceFragmentRows(fragment.rows, element.height);
+  const unchanged = rows.every(
+    (row, index) => Math.abs(row.height - fragment.rows[index].height) < 1e-6,
+  );
+  if (unchanged) {
+    return element;
+  }
+  return {
+    ...element,
+    shape: {
+      ...element.shape,
+      fragment: { ...fragment, rows },
+    },
+  } as T;
+};
+
+/**
+ * Appends a row to the bottom of the fragment and grows the element by the
+ * same amount. Returns `null` for non-fragments or uninitialized (0-height)
+ * drafts. When the fragment has no row data yet, the existing box becomes the
+ * first row, so the first "add row" simply splits the box in two.
+ */
+export const appendSequenceFragmentRow = (
+  element: ExcalidrawElement,
+): SequenceFragmentRowAddition | null => {
+  if (!isSequenceFragmentElement(element) || !(element.height > 0)) {
+    return null;
+  }
+  const fragment = element.shape.fragment;
+  const rows: SequenceFragmentRow[] = fragment?.rows?.length
+    ? resolveSequenceFragmentRows(fragment.rows, element.height)
+    : [{ id: randomId(), height: element.height }];
+  const rowHeight = SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT;
+  return {
+    height: element.height + rowHeight,
+    shape: {
+      ...element.shape,
+      fragment: {
+        ...(fragment ?? {}),
+        rows: [...rows, { id: randomId(), height: rowHeight }],
+      },
+    },
+  };
+};
+
+/**
+ * Row-preserving resize math. The bottom edge (s / se / sw) changes only the
+ * last row and stops at `SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT`; every other
+ * direction scales all rows proportionally.
+ */
+export const getSequenceFragmentResize = (
+  element: ExcalidrawElement,
+  handleDirection: TransformHandleDirection,
+  nextHeight: number,
+): SequenceFragmentResize | null => {
+  if (!isSequenceFragmentElement(element)) {
+    return null;
+  }
+  const fragment = element.shape.fragment;
+  if (!fragment?.rows?.length || !(element.height > 0) || !(nextHeight > 0)) {
+    return null;
+  }
+  const rows = resolveSequenceFragmentRows(fragment.rows, element.height);
+  let height = nextHeight;
+  let nextRows: SequenceFragmentRow[];
+  if (handleDirection.includes("s")) {
+    const delta = nextHeight - element.height;
+    const last = rows[rows.length - 1];
+    const lastHeight = last.height + delta;
+    if (lastHeight < SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT) {
+      // The bottom edge stops once the last row reaches its minimum.
+      nextRows = rows.map((row, index) =>
+        index === rows.length - 1
+          ? { ...row, height: SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT }
+          : row,
+      );
+      height = element.height - last.height + SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT;
+    } else {
+      nextRows = rows.map((row, index) =>
+        index === rows.length - 1 ? { ...row, height: lastHeight } : row,
+      );
+    }
+  } else {
+    const scale = nextHeight / element.height;
+    nextRows = rows.map((row) => ({
+      ...row,
+      height: row.height * scale,
+    }));
+  }
+  const sum = nextRows.reduce((total, row) => total + row.height, 0);
+  if (Math.abs(sum - height) > FRAGMENT_HEIGHT_EPSILON) {
+    nextRows = normalizeSequenceFragmentRows(nextRows, height);
+  }
+  return {
+    height,
+    shape: {
+      ...element.shape,
+      fragment: { ...fragment, rows: nextRows },
+    },
+  };
 };
 
 /** Fixed sample extents of the icon-headed glyphs (head + attachments union). */

@@ -334,7 +334,31 @@ export type SequenceShapeData =
        */
       link?: SequenceActivationLink;
     }>
-  | Readonly<{ id: "sc-fragment"; schemaVersion: 1 }>;
+  | Readonly<{
+      id: "sc-fragment";
+      schemaVersion: 1;
+      /**
+       * Row structure of the fragment. Absent means the legacy single-box
+       * fragment (no row dividers). When present, `rows` always has at least
+       * one entry with `height > 0`, and the heights sum to the element height.
+       */
+      fragment?: SequenceFragmentData;
+    }>;
+
+/** One fragment row: persisted height plus an optional future label. */
+export type SequenceFragmentRow = Readonly<{
+  id: string;
+  height: number;
+  /** P4b only; kept in the model so imports can round-trip labels. */
+  label?: string;
+}>;
+
+/** Persisted fragment structure (operator title + rows). */
+export type SequenceFragmentData = Readonly<{
+  /** Tab title (alt / opt / loop / par / …); tab text is bound text today. */
+  operator?: string;
+  rows: ReadonlyArray<SequenceFragmentRow>;
+}>;
 
 /** Activation → lifeline link, persisted with the activation's shape data. */
 export type SequenceActivationLink = Readonly<{

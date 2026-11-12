@@ -17,12 +17,21 @@ import {
   SEQUENCE_MIN_HEAD_WIDTH,
   SEQUENCE_MIN_POLE_LENGTH,
   SEQUENCE_SHAPE_IDS,
+  SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT,
+  SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT,
+  SEQUENCE_FRAGMENT_TAB_HEIGHT,
   SHAPE_IDS,
+  appendSequenceFragmentRow,
+  assertShapeData,
   buildShapeData,
   clampSequenceLifelineHeight,
   drawSequenceLifeline,
   getActivationAnchor,
   getActivationAnchorAtSceneY,
+  getCompositeShapeAnchors,
+  getSequenceActivationAnchorLocalYs,
+  getSequenceActivationAnchors,
+  snapSequenceActivationLocalY,
   getCompositeShapeGeometry,
   getCompositeShapeSelectionFrame,
   getCompositeShapeTextBounds,
@@ -34,6 +43,9 @@ import {
   SEQUENCE_ACTIVATION_HEIGHT,
   SEQUENCE_ACTIVATION_WIDTH,
   SEQUENCE_MIN_ACTIVATION_OFFSET,
+  getSequenceFragmentResize,
+  getSequenceFragmentRowLayout,
+  getSequenceFragmentRowPaths,
   getSequenceFragmentTabPath,
   getSequenceFragmentTextBounds,
   getSequenceLifelineDefaultSize,
@@ -44,8 +56,10 @@ import {
   getSequencePolePath,
   hasCompositeShapeSelectionFrame,
   isPointInSequenceLifelineHead,
+  isSequenceFragmentElement,
   isSequenceShapeId,
   isShapeElement,
+  normalizeSequenceFragmentGeometry,
   normalizeSequenceLifelineGeometry,
   shapeElementType,
 } from "../src/compositeShape";
@@ -60,14 +74,16 @@ import {
   getElementLineSegments,
   getElementSelectionFrameCoords,
 } from "../src/bounds";
-import { updateBoundElements } from "../src/binding";
+import { updateBoundElements, snapToMid } from "../src/binding";
 import {
   intersectElementWithLineSegment,
   isPointInElement,
 } from "../src/collision";
-import { newElement } from "../src/newElement";
+import { duplicateElement } from "../src/duplicate";
+import { newElement, newArrowElement } from "../src/newElement";
 import { Scene } from "../src/Scene";
 import { getSequenceActivationDragPlacement } from "../src/sequenceActivation";
+import { getSnapOutlineMidPoint } from "../src/utils";
 import { getTextVerticalOffset } from "../src/renderElement";
 import {
   getSequenceActivationResize,
@@ -81,7 +97,12 @@ import { getTransformStatusReadout } from "../src/transformStatus";
 import { convertToExcalidrawElements } from "../src/transform";
 
 import type { SequenceLifelineId } from "../src/compositeShape";
-import type { ElementsMap, ExcalidrawShapeElement } from "../src/types";
+import type {
+  ElementsMap,
+  ExcalidrawShapeElement,
+  SequenceFragmentData,
+  SequenceShapeData,
+} from "../src/types";
 import type { NonDeletedExcalidrawElement } from "../src/types";
 
 const LIFELINE_IDS: readonly SequenceLifelineId[] = [
@@ -128,6 +149,31 @@ const makeElement = (
     backgroundColor: "#f0f4fc",
     fillStyle: "solid",
     ...extra,
+  });
+  if (!isShapeElement(element)) {
+    throw new Error("Expected a shape element");
+  }
+  return element;
+};
+
+/** Fragment element with persisted row data (or none for the legacy box). */
+const makeFragmentElement = (
+  width: number,
+  height: number,
+  fragment?: SequenceFragmentData,
+): ExcalidrawShapeElement => {
+  const shape: SequenceShapeData = {
+    id: "sc-fragment",
+    schemaVersion: 1,
+    ...(fragment ? { fragment } : {}),
+  };
+  const element = newElement({
+    type: "sequence",
+    x: 0,
+    y: 0,
+    width,
+    height,
+    shape,
   });
   if (!isShapeElement(element)) {
     throw new Error("Expected a shape element");
@@ -832,6 +878,240 @@ describe("sequence draw pipeline", () => {
   });
 });
 
+describe("sequence fragment rows", () => {
+  const rows = (...heights: number[]) =>
+    heights.map((height, index) => ({ id: `row-${index}`, height }));
+
+  it("keeps the legacy single-box fragment when no rows are persisted", () => {
+    const element = makeElement("sc-fragment", 400, 240);
+    expect(isSequenceFragmentElement(element)).toBe(true);
+    expect(
+      isSequenceFragmentElement(makeElement("sc-activation", 30, 100)),
+    ).toBe(false);
+    expect(getSequenceFragmentRowLayout(240, undefined)).toEqual({
+      rows: [],
+      separators: [],
+    });
+    expect(getSequenceFragmentRowPaths(400, 240, undefined)).toEqual([]);
+    expect(normalizeSequenceFragmentGeometry(element)).toBe(element);
+    expect(appendSequenceFragmentRow(element)).toMatchObject({
+      height: 240 + SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT,
+      shape: {
+        fragment: {
+          rows: [
+            { height: 240 },
+            { height: SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT },
+          ],
+        },
+      },
+    });
+  });
+
+  it("draws one divider between each pair of rows", () => {
+    const fragment: SequenceFragmentData = { rows: rows(60, 60, 60) };
+    const layout = getSequenceFragmentRowLayout(180, fragment);
+    expect(layout.rows.map((row) => row.y)).toEqual([0, 60, 120]);
+    expect(layout.rows.map((row) => row.height)).toEqual([60, 60, 60]);
+    expect(layout.separators).toEqual([60, 120]);
+    expect(getSequenceFragmentRowPaths(400, 180, fragment)).toEqual([
+      pathFromPoints(
+        [
+          [0, 60],
+          [400, 60],
+        ],
+        false,
+      ),
+      pathFromPoints(
+        [
+          [0, 120],
+          [400, 120],
+        ],
+        false,
+      ),
+    ]);
+  });
+
+  it("keeps the tab row at least as tall as the tab", () => {
+    const layout = getSequenceFragmentRowLayout(240, { rows: rows(20, 220) });
+    expect(layout.rows[0].height).toBeCloseTo(SEQUENCE_FRAGMENT_TAB_HEIGHT);
+    expect(layout.separators[0]).toBeCloseTo(SEQUENCE_FRAGMENT_TAB_HEIGHT);
+    expect(layout.rows.reduce((sum, row) => sum + row.height, 0)).toBeCloseTo(
+      240,
+    );
+  });
+
+  it("normalizes persisted row heights to the element height", () => {
+    const element = makeFragmentElement(400, 300, { rows: rows(100, 100) });
+    const normalized = normalizeSequenceFragmentGeometry(element);
+    expect(normalized).not.toBe(element);
+    if (!isSequenceFragmentElement(normalized)) {
+      throw new Error("Expected a fragment");
+    }
+    // the tab row keeps its height; the remaining rows absorb the difference
+    expect(normalized.shape.fragment?.rows.map((row) => row.height)).toEqual([
+      100, 200,
+    ]);
+    expect(normalizeSequenceFragmentGeometry(normalized)).toBe(normalized);
+  });
+
+  it("appends a row and grows the element by the row height", () => {
+    const element = makeFragmentElement(400, 120, { rows: rows(60, 60) });
+    const next = appendSequenceFragmentRow(element);
+    if (!next) {
+      throw new Error("Expected an appended row");
+    }
+    expect(next.height).toBe(120 + SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT);
+    expect(next.shape.fragment?.rows.map((row) => row.height)).toEqual([
+      60,
+      60,
+      SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT,
+    ]);
+    const ids = next.shape.fragment?.rows.map((row) => row.id) ?? [];
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("grows only the last row from the bottom edge", () => {
+    const element = makeFragmentElement(400, 120, { rows: rows(60, 60) });
+    const next = getSequenceFragmentResize(element, "s", 160);
+    if (!next) {
+      throw new Error("Expected a fragment resize");
+    }
+    expect(next.height).toBe(160);
+    expect(next.shape.fragment?.rows.map((row) => row.height)).toEqual([
+      60, 100,
+    ]);
+    expect(
+      next.shape.fragment?.rows.reduce((sum, row) => sum + row.height, 0),
+    ).toBeCloseTo(160);
+  });
+
+  it("stops the bottom edge at the minimum row height", () => {
+    const element = makeFragmentElement(400, 120, { rows: rows(60, 60) });
+    const next = getSequenceFragmentResize(element, "s", 40);
+    if (!next) {
+      throw new Error("Expected a fragment resize");
+    }
+    expect(next.height).toBe(60 + SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT);
+    expect(next.shape.fragment?.rows.map((row) => row.height)).toEqual([
+      60,
+      SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT,
+    ]);
+  });
+
+  it("scales every row for non-bottom handles", () => {
+    const element = makeFragmentElement(400, 120, { rows: rows(60, 60) });
+    const next = getSequenceFragmentResize(element, "n", 240);
+    if (!next) {
+      throw new Error("Expected a fragment resize");
+    }
+    expect(next.height).toBe(240);
+    expect(next.shape.fragment?.rows.map((row) => row.height)).toEqual([
+      120, 120,
+    ]);
+  });
+
+  it("validates persisted fragment data", () => {
+    expect(() =>
+      assertShapeData({ id: "sc-fragment", schemaVersion: 1 }),
+    ).not.toThrow();
+    expect(() =>
+      assertShapeData({
+        id: "sc-fragment",
+        schemaVersion: 1,
+        fragment: { rows: rows(10, 20) },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertShapeData({
+        id: "sc-fragment",
+        schemaVersion: 1,
+        fragment: { operator: "alt", rows: rows(10, 20) },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertShapeData({
+        id: "sc-fragment",
+        schemaVersion: 1,
+        fragment: { rows: [] },
+      }),
+    ).toThrow();
+    expect(() =>
+      assertShapeData({
+        id: "sc-fragment",
+        schemaVersion: 1,
+        fragment: { rows: [{ id: "a", height: 0 }] },
+      }),
+    ).toThrow();
+    expect(() =>
+      assertShapeData({
+        id: "sc-fragment",
+        schemaVersion: 1,
+        fragment: {
+          rows: [
+            { id: "a", height: 10 },
+            { id: "a", height: 20 },
+          ],
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      assertShapeData({
+        id: "sc-fragment",
+        schemaVersion: 1,
+        fragment: { rows: rows(10), extra: true },
+      }),
+    ).toThrow();
+  });
+
+  it("renders row dividers through the shape details", () => {
+    const fragment: SequenceFragmentData = { rows: rows(60, 60, 60) };
+    const element = makeFragmentElement(400, 180, fragment);
+    const { details } = getCompositeShapeGeometry(element);
+    expect(details[0]).toEqual(getSequenceFragmentTabPath(400, 180));
+    expect(details.slice(1)).toEqual(
+      getSequenceFragmentRowPaths(400, 180, fragment),
+    );
+  });
+
+  it("keeps row dividers out of the hit geometry", () => {
+    const fragment: SequenceFragmentData = { rows: rows(60, 60, 60) };
+    const element = makeFragmentElement(400, 180, fragment);
+    const { hitPaths, outline } = getCompositeShapeGeometry(element);
+    expect(hitPaths).toEqual([]);
+    expect(outline).toEqual(getSequenceElementBox(400, 180));
+  });
+
+  it("keeps row data through restore and duplication", () => {
+    const fragment: SequenceFragmentData = {
+      operator: "alt",
+      rows: rows(100, 100),
+    };
+    const [element] = convertToExcalidrawElements([
+      {
+        type: "sequence",
+        x: 0,
+        y: 0,
+        width: 400,
+        height: 300,
+        shape: {
+          id: "sc-fragment",
+          schemaVersion: 1,
+          fragment,
+        },
+      },
+    ]);
+    if (element.type !== "sequence" || !isSequenceFragmentElement(element)) {
+      throw new Error("Expected a fragment element");
+    }
+    expect(element.shape.fragment?.operator).toBe("alt");
+    expect(
+      element.shape.fragment?.rows.reduce((sum, row) => sum + row.height, 0),
+    ).toBeCloseTo(300);
+    const duplicate = duplicateElement(null, new Map(), element);
+    expect(duplicate.shape.fragment).toEqual(element.shape.fragment);
+  });
+});
+
 const ICON_IDS = [
   "sc-lifeline-entity",
   "sc-lifeline-control",
@@ -989,6 +1269,65 @@ describe("sequence activation geometry", () => {
   it("binds arrows to activations but not to lifelines", () => {
     expect(isBindableElement(makeElement("sc-activation", 30, 100))).toBe(true);
     expect(isBindableElement(lifeline)).toBe(false);
+  });
+
+  it("gives an activation multiple automatic anchors on its left/right edges only", () => {
+    const activation = makeElement("sc-activation", 30, 100);
+    const localYs = getSequenceActivationAnchorLocalYs(100);
+
+    expect(localYs.length).toBeGreaterThan(2);
+    // the vertical midpoint is always an anchor
+    expect(localYs).toContain(50);
+    // symmetric, and never on the top/bottom edges
+    expect(localYs[0] + localYs[localYs.length - 1]).toBeCloseTo(100, 6);
+    for (const y of localYs) {
+      expect(y).toBeGreaterThan(0);
+      expect(y).toBeLessThan(100);
+    }
+
+    const anchors = getSequenceActivationAnchors(30, 100);
+    expect(anchors).toHaveLength(localYs.length * 2);
+    for (const [x, y] of anchors) {
+      expect([0, 30]).toContain(x);
+      expect(y).toBeGreaterThan(0);
+      expect(y).toBeLessThan(100);
+    }
+
+    // registry-level anchors (used by the suggested-binding dots) match
+    const globalAnchors = getCompositeShapeAnchors(activation);
+    expect(globalAnchors).toHaveLength(anchors.length);
+    for (const [x, y] of globalAnchors) {
+      expect([0, 30]).toContain(x);
+      expect(y).toBeGreaterThan(0);
+      expect(y).toBeLessThan(100);
+    }
+  });
+
+  it("snaps activation endpoints to the nearest left/right anchor, never top/bottom", () => {
+    const activation = makeElement("sc-activation", 30, 100);
+    const arrow = newArrowElement({ type: "arrow", x: 200, y: 30 });
+    const elementsMap = elementsMapFor(activation);
+    const targetY = getSequenceActivationAnchorLocalYs(100)[1];
+    const pointer = pointFrom<GlobalPoint>(31, targetY + 1);
+
+    expect(snapSequenceActivationLocalY(100, targetY + 1)).toBe(targetY);
+
+    const snapped = snapToMid(
+      activation,
+      elementsMap,
+      pointer,
+      0.05,
+      arrow,
+    )!;
+    expect(snapped[1]).toBeCloseTo(targetY, 6);
+    expect(snapped[1]).toBeGreaterThan(0);
+    expect(snapped[1]).toBeLessThan(100);
+
+    // the non-elbow projection path uses the same multi-anchor set
+    const midPoint = getSnapOutlineMidPoint(pointer, activation, elementsMap, {
+      value: 1,
+    } as any);
+    expect(midPoint?.[1]).toBeCloseTo(targetY, 6);
   });
 
   it("hits the pole corridor but not the head or the blank area", () => {
