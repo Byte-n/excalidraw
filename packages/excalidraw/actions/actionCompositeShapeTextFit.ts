@@ -2,6 +2,7 @@ import {
   CaptureUpdateAction,
   getBoundTextElement,
   getCompositeShapeTextFitMode,
+  isSequenceLifelineElement,
   isShapeElement,
   isValidTextContainer,
   redrawTextBoundingBox,
@@ -41,11 +42,16 @@ const setTextFitMode = (
     }
 
     changed = true;
+    // Lifelines keep a fixed width and fit through the head height, so the
+    // preserved minimum is the head height, not the whole element height.
+    const isLifeline = isSequenceLifelineElement(shape);
     app.scene.mutateElement(shape, {
       textFitMode: mode,
       ...(mode === "auto" && {
         textFitMinWidth: shape.width,
-        textFitMinHeight: shape.height,
+        textFitMinHeight: isLifeline
+          ? shape.shape.lifeline.headHeight
+          : shape.height,
       }),
     });
 

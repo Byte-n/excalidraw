@@ -36,6 +36,8 @@ import {
   computeBoundTextPosition,
   getBoundTextElement,
   getCompositeShapeTextFitMode,
+  getSequenceLifelineTextFitUpdates,
+  isSequenceLifelineElement,
   isShapeElement,
 } from "@excalidraw/element";
 import { getTextWidth } from "@excalidraw/element";
@@ -376,6 +378,30 @@ export const textWysiwyg = ({
           // redraw/restore. Keep the editor positioned against the resized
           // container in the same pass, so it cannot jump to (0, 0).
           if (
+            isAdaptive &&
+            !isLinearElement(container) &&
+            isSequenceLifelineElement(container)
+          ) {
+            // Lifeline fit is fixed-width / head-height-only: call the same
+            // solver redraw uses so live typing and commit agree.
+            const lifelineUpdates = getSequenceLifelineTextFitUpdates(
+              container,
+              height,
+            );
+            if (lifelineUpdates) {
+              app.scene.mutateElement(container, lifelineUpdates);
+              updateBoundElements(container, app.scene);
+              layoutContainer = { ...container, ...lifelineUpdates };
+              maxWidth = getBoundTextMaxWidth(
+                layoutContainer,
+                updatedTextElement,
+              );
+              maxHeight = getBoundTextMaxHeight(
+                layoutContainer,
+                updatedTextElement as ExcalidrawTextElementWithContainer,
+              );
+            }
+          } else if (
             isAdaptive &&
             !isLinearElement(container) &&
             (height > maxHeight + 1e-6 ||

@@ -4,6 +4,9 @@ import { pointFrom } from "@excalidraw/math";
 import {
   getLineHeightInPx,
   getOriginalContainerHeightFromCache,
+  getSequenceLifelineDefaultSize,
+  isSequenceLifelineElement,
+  SEQUENCE_LIFELINE_HEAD_HEIGHTS,
 } from "@excalidraw/element";
 
 import {
@@ -980,6 +983,130 @@ describe("textWysiwyg", () => {
       ) as ExcalidrawTextElementWithContainer;
       expect(boundText.originalText).toBe(originalText);
       expect(boundText.text).toContain("…");
+    });
+
+    it("grows a lifeline head upward for a long label and shrinks it back", async () => {
+      const id = "sc-lifeline-entity";
+      const { width, height } = getSequenceLifelineDefaultSize(id);
+      const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
+      const lifeline = API.createElement({
+        type: id,
+        x: 100,
+        y: 100,
+        width,
+        height,
+      });
+      API.setElements([lifeline]);
+      API.setSelectedElements([lifeline]);
+      API.setAppState({ currentItemFontSize: 14 });
+      Keyboard.keyPress(KEYS.ENTER);
+
+      const editor = await getTextEditor();
+      const longLabel = new Array(12).fill("lifeline label").join(" ");
+      await act(async () => {
+        updateTextEditor(editor, longLabel);
+      });
+
+      const latest = () => {
+        const element = h.elements.find((item) => item.id === lifeline.id)!;
+        if (!isSequenceLifelineElement(element)) {
+          throw new Error("Expected a sequence lifeline");
+        }
+        return element;
+      };
+      const grown = latest();
+      expect(grown.width).toBe(width);
+      expect(grown.shape.lifeline.headHeight).toBeGreaterThan(baseHeadHeight);
+      // The head bottom and the pole length stay fixed.
+      expect(grown.y + grown.shape.lifeline.headHeight).toBeCloseTo(
+        100 + baseHeadHeight,
+        4,
+      );
+      expect(grown.height - grown.shape.lifeline.headHeight).toBeCloseTo(
+        height - baseHeadHeight,
+        4,
+      );
+
+      await act(async () => {
+        updateTextEditor(editor, "Short");
+      });
+      expect(latest().shape.lifeline.headHeight).toBeCloseTo(baseHeadHeight, 4);
+    });
+
+    it("keeps a fixed lifeline head unchanged and truncates the label", async () => {
+      const id = "sc-lifeline-entity";
+      const { width, height } = getSequenceLifelineDefaultSize(id);
+      const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
+      const lifeline = API.createElement({
+        type: id,
+        x: 100,
+        y: 100,
+        width,
+        height,
+      });
+      API.setElements([lifeline]);
+      API.updateElement(lifeline as ExcalidrawShapeElement, {
+        textFitMode: "fixed",
+      });
+      API.setSelectedElements([lifeline]);
+      API.setAppState({ currentItemFontSize: 14 });
+      Keyboard.keyPress(KEYS.ENTER);
+
+      const editor = await getTextEditor();
+      const originalText = new Array(12).fill("lifeline label").join(" ");
+      await act(async () => {
+        updateTextEditor(editor, originalText);
+      });
+
+      const latest = h.elements.find((item) => item.id === lifeline.id)!;
+      if (!isSequenceLifelineElement(latest)) {
+        throw new Error("Expected a sequence lifeline");
+      }
+      expect(latest.y).toBe(100);
+      expect(latest.height).toBe(height);
+      expect(latest.shape.lifeline.headHeight).toBe(baseHeadHeight);
+      const boundText = h.elements.find(
+        (item) => item.type === "text" && item.containerId === latest.id,
+      ) as ExcalidrawTextElementWithContainer;
+      expect(boundText.originalText).toBe(originalText);
+      expect(boundText.text).toContain("…");
+    });
+
+    it("switches a lifeline to fixed fit after a manual head resize", async () => {
+      const id = "sc-lifeline-entity";
+      const { width, height } = getSequenceLifelineDefaultSize(id);
+      const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
+      const lifeline = API.createElement({
+        type: id,
+        x: 100,
+        y: 100,
+        width,
+        height,
+      });
+      API.setElements([lifeline]);
+      API.setSelectedElements([lifeline]);
+      API.setAppState({ currentItemFontSize: 14 });
+      Keyboard.keyPress(KEYS.ENTER);
+
+      const editor = await getTextEditor();
+      await act(async () => {
+        updateTextEditor(editor, "Label");
+      });
+      await act(async () => {
+        Keyboard.exitTextEditor(editor);
+      });
+
+      const latest = () => {
+        const element = h.elements.find((item) => item.id === lifeline.id)!;
+        if (!isSequenceLifelineElement(element)) {
+          throw new Error("Expected a sequence lifeline");
+        }
+        return element;
+      };
+      UI.resize(latest(), "n", [0, -20]);
+      const resized = latest();
+      expect(resized.textFitMode).toBe("fixed");
+      expect(resized.shape.lifeline.headHeight).toBeGreaterThan(baseHeadHeight);
     });
 
     it("should bind text to container when double clicked inside of the transparent container", async () => {

@@ -522,9 +522,11 @@ const BOX_LABEL_BASELINES: Partial<Record<SequenceLifelineId, number>> = {
 /**
  * Text-safe rectangle in local coordinates: a band centered horizontally in
  * the head, vertically placed so the rendered baseline meets the measured
- * sample baseline and the band never reaches the pole.
+ * sample baseline and the band never reaches the pole — unless the adaptive
+ * text fit has grown the head, in which case the band's bottom (globally) stays
+ * put and its top follows the head top upward, giving multi-line labels room.
  */
-export const getSequenceLifelineTextBounds = (
+const getSampleLifelineTextBounds = (
   id: SequenceLifelineId,
   width: number,
   headHeight: number,
@@ -544,6 +546,134 @@ export const getSequenceLifelineTextBounds = (
   );
   const bottom = Math.min(Math.max(top + 0.01, centerY + half), headHeight);
   return insetRect(TEXT_GAP, top, right, bottom);
+};
+
+export const getSequenceLifelineTextBounds = (
+  id: SequenceLifelineId,
+  width: number,
+  headHeight: number,
+): CompositeShapeTextBounds => {
+  const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
+  if (headHeight <= baseHeadHeight) {
+    return getSampleLifelineTextBounds(id, width, headHeight);
+  }
+  // Adaptive growth moves the head top up while the head bottom stays fixed.
+  // In local coordinates that means the sample band grows downward by the same
+  // amount: its top stays where the glyph ends, its bottom tracks the head
+  // bottom anchor (globally fixed).
+  const base = getSampleLifelineTextBounds(id, width, baseHeadHeight);
+  return {
+    ...base,
+    height: base.height + (headHeight - baseHeadHeight),
+  };
+};
+
+/** The band height that exactly fits `lineCount` label lines. */
+const lifelineBandHeightFor = (
+  id: SequenceLifelineId,
+  width: number,
+  headHeight: number,
+) => getSequenceLifelineTextBounds(id, width, headHeight).height;
+
+/**
+ * Smallest head height (>= `minHeadHeight`) whose text band can hold
+ * `textHeight`.
+ *
+ * The sample band is deliberately a little shorter than a 14px line box (the
+ * measured baseline, not the glyph box, defines it), so a single sample line
+ * must not trigger growth. Each further line — or a larger font — grows the
+ * head by the excess, one line box per additional line.
+ */
+export const getSequenceLifelineTextFitHeight = (
+  id: SequenceLifelineId,
+  width: number,
+  textHeight: number,
+  minHeadHeight: number,
+): number => {
+  const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
+  const baseBandHeight = lifelineBandHeightFor(id, width, baseHeadHeight);
+  const requiredBandHeight =
+    textHeight <= LABEL_LINE_HEIGHT_PX ? baseBandHeight : textHeight;
+  const capacity = (headHeight: number) =>
+    lifelineBandHeightFor(id, width, headHeight);
+
+  const minimum = Math.max(SEQUENCE_MIN_HEAD_HEIGHT, minHeadHeight);
+  if (capacity(minimum) >= requiredBandHeight) {
+    return minimum;
+  }
+  let high = Math.max(minimum, baseHeadHeight + requiredBandHeight + 1);
+  while (capacity(high) < requiredBandHeight && high < 1_000_000) {
+    high *= 2;
+  }
+  let low = minimum;
+  for (let i = 0; i < 32; i++) {
+    const middle = (low + high) / 2;
+    if (capacity(middle) >= requiredBandHeight) {
+      high = middle;
+    } else {
+      low = middle;
+    }
+  }
+  return high;
+};
+
+export type SequenceLifelineTextFit = {
+  x: number;
+  y: number;
+  height: number;
+  headHeight: number;
+};
+
+/**
+ * Auto-fit geometry for a lifeline label: width is fixed, the head grows or
+ * shrinks to hold the wrapped text, its bottom-center stays anchored in global
+ * space, and the pole length (the head-bottom → pole-end distance) is
+ * unchanged. Rotation follows the same anchor math as the custom resize.
+ */
+export const getSequenceLifelineTextFit = (
+  element: SequenceLifelineElement,
+  textHeight: number,
+  minHeadHeight: number,
+): SequenceLifelineTextFit | null => {
+  const headHeight = element.shape.lifeline.headHeight;
+  const nextHeadHeight = getSequenceLifelineTextFitHeight(
+    element.shape.id,
+    element.width,
+    textHeight,
+    minHeadHeight,
+  );
+  if (Math.abs(nextHeadHeight - headHeight) < 1e-6) {
+    return null;
+  }
+  const poleLength = Math.max(
+    SEQUENCE_MIN_POLE_LENGTH,
+    element.height - headHeight,
+  );
+  const nextHeight = nextHeadHeight + poleLength;
+  const center = pointFrom<GlobalPoint>(
+    element.x + element.width / 2,
+    element.y + element.height / 2,
+  );
+  const origin = pointFrom<GlobalPoint>(0, 0);
+  const angle = element.angle as Radians;
+  const [oldDx, oldDy] = pointRotateRads(
+    pointFrom<GlobalPoint>(0, headHeight - element.height / 2),
+    origin,
+    angle,
+  );
+  const [newDx, newDy] = pointRotateRads(
+    pointFrom<GlobalPoint>(0, nextHeadHeight - nextHeight / 2),
+    origin,
+    angle,
+  );
+  const nextCenterX = center[0] + oldDx - newDx;
+  const nextCenterY = center[1] + oldDy - newDy;
+  return {
+    x: nextCenterX - element.width / 2,
+    y: nextCenterY - nextHeight / 2,
+    height: nextHeight,
+    headHeight: nextHeadHeight,
+  };
 };
 
 // ---------------------------------------------------------------------------

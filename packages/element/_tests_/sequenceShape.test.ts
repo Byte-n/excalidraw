@@ -1,8 +1,12 @@
-import { DEFAULT_FONT_FAMILY, getVerticalOffset } from "@excalidraw/common";
-import { lineSegment, pointFrom } from "@excalidraw/math";
+import {
+  DEFAULT_FONT_FAMILY,
+  getLineHeight,
+  getVerticalOffset,
+} from "@excalidraw/common";
+import { lineSegment, pointFrom, pointRotateRads } from "@excalidraw/math";
 import { RoughGenerator } from "roughjs/bin/generator";
 
-import type { GlobalPoint } from "@excalidraw/math";
+import type { GlobalPoint, Radians } from "@excalidraw/math";
 
 import type { Zoom } from "@excalidraw/excalidraw/types";
 
@@ -62,11 +66,14 @@ import {
   getSequenceLifelineGeometry,
   getSequenceLifelineHitPaths,
   getSequenceLifelineTextBounds,
+  getSequenceLifelineTextFit,
+  getSequenceLifelineTextFitHeight,
   getSequencePoleLength,
   getSequencePolePath,
   hasCompositeShapeSelectionFrame,
   isPointInSequenceLifelineHead,
   isSequenceFragmentElement,
+  isSequenceLifelineElement,
   isSequenceShapeId,
   isShapeElement,
   normalizeSequenceFragmentGeometry,
@@ -711,24 +718,36 @@ describe("sequence lifeline default creation", () => {
     );
   });
 
-  it("does not grow the pole for a long label (fixed text fit)", () => {
+  it("grows the head upward for a long label while keeping the pole", () => {
     const [element] = convertToExcalidrawElements([
       {
         type: "sc-lifeline-entity",
         x: 0,
         y: 0,
         label: {
-          text: "一个非常非常长的生命线标签，用来验证固定适配不会撑高杆",
+          text: "一个非常非常长的生命线标签，用来验证自动适配只撑高头部而不拉长杆",
         },
       },
     ]);
-    if (!isShapeElement(element)) {
-      throw new Error("Expected a shape element");
+    if (!isSequenceLifelineElement(element)) {
+      throw new Error("Expected a sequence lifeline");
     }
-    expect(getCompositeShapeTextFitMode(element)).toBe("fixed");
-    expect(element.height).toBeCloseTo(
-      SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"] +
-        SEQUENCE_DEFAULT_POLE_LENGTH,
+    const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"];
+    expect(getCompositeShapeTextFitMode(element)).toBe("auto");
+    expect(element.width).toBe(
+      SEQUENCE_LIFELINE_DEFAULT_WIDTHS["sc-lifeline-entity"],
+    );
+    // The head grew...
+    expect(element.shape.lifeline.headHeight).toBeGreaterThan(baseHeadHeight);
+    // ...its bottom stayed where it was (height grew by the same amount)...
+    expect(element.y + element.shape.lifeline.headHeight).toBeCloseTo(
+      baseHeadHeight,
+      6,
+    );
+    // ...and the pole length is unchanged.
+    expect(element.height - element.shape.lifeline.headHeight).toBeCloseTo(
+      SEQUENCE_DEFAULT_POLE_LENGTH,
+      6,
     );
   });
 });
@@ -864,6 +883,137 @@ describe("sequence label text area", () => {
       ),
     );
   });
+});
+
+describe("sequence lifeline adaptive text fit", () => {
+  const sampleLineHeight = getLineHeightInPx(
+    14,
+    getLineHeight(DEFAULT_FONT_FAMILY),
+  );
+
+  it.each(LIFELINE_IDS)(
+    "%s extends the text band upward as the head grows",
+    (id) => {
+      const { width } = elementSize(id, 80);
+      const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
+      const base = getSequenceLifelineTextBounds(id, width, baseHeadHeight);
+      const grown = getSequenceLifelineTextBounds(
+        id,
+        width,
+        baseHeadHeight + 30,
+      );
+      expect(grown.x).toBe(base.x);
+      expect(grown.width).toBe(base.width);
+      expect(grown.y).toBeCloseTo(base.y, 6);
+      expect(grown.height).toBeCloseTo(base.height + 30, 6);
+    },
+  );
+
+  it.each(LIFELINE_IDS)(
+    "%s keeps the sampled head height for a single line",
+    (id) => {
+      const { width } = elementSize(id, 80);
+      const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
+      const base = getSequenceLifelineTextBounds(id, width, baseHeadHeight);
+      expect(
+        getSequenceLifelineTextFitHeight(
+          id,
+          width,
+          sampleLineHeight,
+          baseHeadHeight,
+        ),
+      ).toBeCloseTo(baseHeadHeight, 6);
+      // Two lines add exactly one more line box to the head...
+      const twoLines = getSequenceLifelineTextFitHeight(
+        id,
+        width,
+        sampleLineHeight * 2,
+        baseHeadHeight,
+      );
+      expect(twoLines).toBeCloseTo(
+        baseHeadHeight + sampleLineHeight * 2 - base.height,
+        6,
+      );
+      // ...and the preserved minimum keeps it from shrinking back further.
+      expect(
+        getSequenceLifelineTextFitHeight(id, width, sampleLineHeight, twoLines),
+      ).toBeCloseTo(twoLines, 6);
+    },
+  );
+
+  it.each(LIFELINE_IDS)(
+    "%s grows only the head, keeping the pole and head bottom fixed",
+    (id) => {
+      const { width, height } = elementSize(id, 80);
+      const element = makeElement(id, width, height);
+      if (!isSequenceLifelineElement(element)) {
+        throw new Error("Expected a sequence lifeline");
+      }
+      const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
+      const fit = getSequenceLifelineTextFit(
+        element,
+        sampleLineHeight * 3,
+        baseHeadHeight,
+      );
+      if (!fit) {
+        throw new Error("Expected the label to grow the head");
+      }
+      expect(fit.headHeight).toBeGreaterThan(baseHeadHeight);
+      expect(fit.height - fit.headHeight).toBeCloseTo(
+        SEQUENCE_DEFAULT_POLE_LENGTH,
+        6,
+      );
+      expect(fit.y + fit.headHeight).toBeCloseTo(element.y + baseHeadHeight, 6);
+      expect(fit.x).toBeCloseTo(element.x, 6);
+    },
+  );
+
+  it.each(LIFELINE_IDS)(
+    "%s keeps the head-bottom anchor fixed when rotated",
+    (id) => {
+      const { width, height } = elementSize(id, 80);
+      const angle = 0.7 as Radians;
+      const element = makeElement(id, width, height, { angle });
+      if (!isSequenceLifelineElement(element)) {
+        throw new Error("Expected a sequence lifeline");
+      }
+      const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
+      const fit = getSequenceLifelineTextFit(
+        element,
+        sampleLineHeight * 3,
+        baseHeadHeight,
+      );
+      if (!fit) {
+        throw new Error("Expected the label to grow the head");
+      }
+      const oldCenter = pointFrom<GlobalPoint>(
+        element.x + element.width / 2,
+        element.y + element.height / 2,
+      );
+      const newCenter = pointFrom<GlobalPoint>(
+        fit.x + element.width / 2,
+        fit.y + fit.height / 2,
+      );
+      const oldAnchor = pointRotateRads(
+        pointFrom<GlobalPoint>(
+          element.x + element.width / 2,
+          element.y + baseHeadHeight,
+        ),
+        oldCenter,
+        angle,
+      );
+      const newAnchor = pointRotateRads(
+        pointFrom<GlobalPoint>(
+          fit.x + element.width / 2,
+          fit.y + fit.headHeight,
+        ),
+        newCenter,
+        angle,
+      );
+      expect(newAnchor[0]).toBeCloseTo(oldAnchor[0], 6);
+      expect(newAnchor[1]).toBeCloseTo(oldAnchor[1], 6);
+    },
+  );
 });
 
 describe("sequence draw pipeline", () => {

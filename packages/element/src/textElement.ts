@@ -26,7 +26,10 @@ import {
   getCompositeShapePaddedTextBounds,
   getCompositeShapeTextBounds,
   getCompositeShapeTextFitMode,
+  getSequenceLifelineTextFit,
+  isSequenceLifelineElement,
   isShapeElement,
+  type SequenceLifelineElement,
 } from "./compositeShape";
 import { LinearElementEditor } from "./linearElementEditor";
 import { getPositionAfterHeightChange } from "./sizeHelpers";
@@ -44,6 +47,8 @@ import {
 import { getMindmapShapeId, isMindmapLayoutFrozen } from "./mindmap";
 
 import { isNonDeletedElement } from ".";
+
+import type { ElementUpdate } from "./mutateElement";
 
 import type { Scene } from "./Scene";
 
@@ -105,6 +110,50 @@ export const truncateTextToBounds = (
   }
   visible[visible.length - 1] = `${last}${ellipsis}`;
   return visible.join("\n");
+};
+
+/**
+ * Adaptive text fit for a sequence lifeline: width is fixed, the head grows
+ * (or shrinks) vertically to hold the wrapped label, its bottom stays anchored,
+ * and the pole length is unchanged. Returns `null` when the label already fits
+ * the current head.
+ */
+export const getSequenceLifelineTextFitUpdates = <
+  T extends SequenceLifelineElement,
+>(
+  container: T,
+  textHeight: number,
+): ElementUpdate<T> | null => {
+  const headHeight = container.shape.lifeline.headHeight;
+  // For a lifeline `textFitMinHeight` stores the preserved head height (the
+  // fit dimension), not the element height; `textFitMinWidth` is informational
+  // because the width never changes in auto mode.
+  const minHeadHeight =
+    Number.isFinite(container.textFitMinHeight) &&
+    container.textFitMinHeight! > 0
+      ? container.textFitMinHeight!
+      : headHeight;
+  const fit = getSequenceLifelineTextFit(container, textHeight, minHeadHeight);
+  if (!fit) {
+    return null;
+  }
+  // The spread preserves the shape's `id` discriminant; only `headHeight`
+  // changes, so the narrowed union member stays the same.
+  return {
+    x: fit.x,
+    y: fit.y,
+    height: fit.height,
+    shape: {
+      ...container.shape,
+      lifeline: { ...container.shape.lifeline, headHeight: fit.headHeight },
+    },
+    ...(container.textFitMinWidth === undefined && {
+      textFitMinWidth: container.width,
+    }),
+    ...(container.textFitMinHeight === undefined && {
+      textFitMinHeight: headHeight,
+    }),
+  } as ElementUpdate<T>;
 };
 
 export const redrawTextBoundingBox = (
@@ -218,50 +267,66 @@ export const redrawTextBoundingBox = (
     const isAdaptive = !isFixedFit;
     let layoutContainer = container;
     if (isAdaptive && !isLinearElement(container)) {
-      const nextDimensions = isShape
-        ? getBoundTextContainerDimensions(
-            container,
-            metrics.width,
-            metrics.height,
-          )
-        : {
-            width: container.width,
-            height:
-              metrics.height > maxContainerHeight + 1e-6
-                ? computeContainerDimensionForBoundText(
-                    metrics.height,
-                    getTextContainerShape(container) as ExtractSetType<
-                      typeof VALID_CONTAINER_TYPES
-                    >,
-                  )
-                : container.height,
+      if (isSequenceLifelineElement(container)) {
+        // Lifeline auto-fit is one-dimensional: fixed width, head grows
+        // upward, pole length/anchor unchanged.
+        const lifelineUpdates = getSequenceLifelineTextFitUpdates(
+          container,
+          metrics.height,
+        );
+        if (lifelineUpdates) {
+          scene.mutateElement(container, lifelineUpdates);
+          layoutContainer = { ...container, ...lifelineUpdates };
+          updateOriginalContainerCache(container.id, layoutContainer.height);
+        }
+      } else {
+        const nextDimensions = isShape
+          ? getBoundTextContainerDimensions(
+              container,
+              metrics.width,
+              metrics.height,
+            )
+          : {
+              width: container.width,
+              height:
+                metrics.height > maxContainerHeight + 1e-6
+                  ? computeContainerDimensionForBoundText(
+                      metrics.height,
+                      getTextContainerShape(container) as ExtractSetType<
+                        typeof VALID_CONTAINER_TYPES
+                      >,
+                    )
+                  : container.height,
+            };
+        const shouldResize =
+          nextDimensions.width !== container.width ||
+          nextDimensions.height !== container.height;
+        if (shouldResize) {
+          const shouldPersistTextFitMinimum =
+            !isAutoSizedComposite ||
+            container.textFitMinWidth !== undefined ||
+            container.textFitMinHeight !== undefined;
+          const updates = {
+            ...(isShape && { width: nextDimensions.width }),
+            height: nextDimensions.height,
+            ...(isShape &&
+              shouldPersistTextFitMinimum && {
+                textFitMinWidth:
+                  container.textFitMinWidth ??
+                  (container.width > 0
+                    ? container.width
+                    : nextDimensions.width),
+                textFitMinHeight:
+                  container.textFitMinHeight ??
+                  (container.height > 0
+                    ? container.height
+                    : nextDimensions.height),
+              }),
           };
-      const shouldResize =
-        nextDimensions.width !== container.width ||
-        nextDimensions.height !== container.height;
-      if (shouldResize) {
-        const shouldPersistTextFitMinimum =
-          !isAutoSizedComposite ||
-          container.textFitMinWidth !== undefined ||
-          container.textFitMinHeight !== undefined;
-        const updates = {
-          ...(isShape && { width: nextDimensions.width }),
-          height: nextDimensions.height,
-          ...(isShape &&
-            shouldPersistTextFitMinimum && {
-              textFitMinWidth:
-                container.textFitMinWidth ??
-                (container.width > 0 ? container.width : nextDimensions.width),
-              textFitMinHeight:
-                container.textFitMinHeight ??
-                (container.height > 0
-                  ? container.height
-                  : nextDimensions.height),
-            }),
-        };
-        scene.mutateElement(container, updates);
-        updateOriginalContainerCache(container.id, nextDimensions.height);
-        layoutContainer = { ...container, ...updates };
+          scene.mutateElement(container, updates);
+          updateOriginalContainerCache(container.id, nextDimensions.height);
+          layoutContainer = { ...container, ...updates };
+        }
       }
     }
 
@@ -306,6 +371,15 @@ export const handleBindTextResize = (
   const textElement = getBoundTextElement(container, elementsMap);
   if (textElement && textElement.text) {
     if (!container) {
+      return;
+    }
+    if (
+      isSequenceLifelineElement(container) &&
+      getCompositeShapeTextFitMode(container) === "auto"
+    ) {
+      // Auto fit owns the head geometry: re-derive it from `originalText`
+      // instead of treating the just-applied bounds as a fixed frame.
+      redrawTextBoundingBox(textElement, container, scene);
       return;
     }
 

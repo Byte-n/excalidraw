@@ -143,20 +143,13 @@ export const getSequenceLifelineDefaultSize = (
 
 ### 2.5 文本策略
 
-P1 先采用**固定适配**，避免文本反向求解把杆撑长：
+生命线与普通复合图形一样支持 `auto` / `fixed`，入口与切换时机完全一致；区别只在 `auto` 的求解维度：
 
-- 生命线创建时默认 `textFitMode: "fixed"`；
-- 标签超出头部框时按现有 `truncateTextToBounds` 规则截断；
-- 不根据标签自动修改 `element.height`。
+- **默认 `auto`**：宽度固定，标签在头部宽度内换行；文本超出时只增大 `headHeight`。头部底边、杆长、杆底位置都不动，因此 `element.y` 相应上移、`element.height` 增加同样的量。文本删短后回缩到 `textFitMinHeight`。
+- **`fixed`**：头部几何不变，超出的标签按 `truncateTextToBounds` 截断，`originalText` 保留全文。
+- 手动缩放头部时与普通复合图形一致，自动写入 `textFitMode: "fixed"`；上下文菜单切回 `auto` 时把当前 `headHeight` 记为 `textFitMinHeight`。
 
-如果后续要求「标签自动撑高头部」，在 P2 或 P4 增加专用反向求解：
-
-```ts
-newHeadHeight = max(headHeight, requiredTextHeight);
-newHeight = poleBottom - headY;
-```
-
-并同步文本布局。
+专用求解器 `getSequenceLifelineTextFit` / `getSequenceLifelineTextFitHeight` 只解 `headHeight`（宽度不参与），因此不会像通用求解器那样去撑长 `element.height`（见 §1.4）。`getSequenceLifelineTextBounds` 在 `headHeight` 超过样本高度后，把标签带向上扩展：局部坐标中标签带高度增加 `headHeight - 样本高度`，底边仍锚定在头部底边（全局位置不动）。
 
 ## 3. 实现清单
 
@@ -164,11 +157,12 @@ newHeight = poleBottom - headY;
   - [x] 杆长接收 `element.height`（`getSequencePoleLength` / `getSequencePolePath`）；
   - [x] 新增 `SEQUENCE_DEFAULT_POLE_LENGTH` / `SEQUENCE_MIN_POLE_LENGTH`；
   - [x] 新增 `SEQUENCE_LIFELINE_DEFAULT_WIDTHS` / `getSequenceLifelineDefaultSize`；
-  - [x] 新增 `getSequenceLifelineHitPaths` / `isSequenceLifelineElement` / `normalizeSequenceLifelineGeometry`。
+  - [x] 新增 `getSequenceLifelineHitPaths` / `isSequenceLifelineElement` / `normalizeSequenceLifelineGeometry`；
+  - [x] 新增 `getSequenceLifelineTextFit` / `getSequenceLifelineTextFitHeight`（头部定宽、只撑高 `headHeight`）。
 - [x] `registry.ts`
   - [x] `ShapeRegistration` 增加 `hitPaths`；
   - [x] `sequenceLifelineShape` 提供 `hitPaths`；
-  - [x] 生命线默认 `textFitMode`：由 `getCompositeShapeTextFitMode` 对生命线返回 `"fixed"`，无需写回元素字段。
+  - [x] 生命线默认 `textFitMode`：`getCompositeShapeTextFitMode` 对生命线返回 `"auto"`（仅 `sc-fragment` 固定），无需写回元素字段。
 - [x] `geometry.ts`
   - [x] `CompositeShapeGeometry` 增加 `hitPaths`；
   - [x] 新增 `getCompositeShapeGlobalHitPaths` / `getCompositeShapeGlobalHitPoints`，缺省回退 outline。
@@ -199,7 +193,7 @@ newHeight = poleBottom - headY;
 - [x] 包围盒仍包含整条杆（用 `getElementBounds` 验证）；
 - [x] `convertToExcalidrawElements` 省略尺寸时使用默认高度；
 - [x] 恢复一个 height 小于 `headHeight + MIN_POLE` 的元素后被修正；
-- [x] 标签很长时 `element.height` 不被撑大（固定适配）。
+- [x] 标签很长时只撑高头部、杆长不变（默认 auto；切 fixed 时截断）。
 
 ## 5. 验收
 
@@ -221,7 +215,7 @@ newHeight = poleBottom - headY;
 
 - `getElementLineSegments` 同时服务套索、橡皮擦、frame 裁剪；改成命中几何后要跑这三类回归。
 - `getElementRotatedBounds` 必须保留 outline，否则导出/选择框会缩小。
-- 文本固定适配会改变现有标签行为；如果产品不接受截断，需要提前做专用求解器。
+- 文本自动适配只允许修改 `headHeight` / `element.y` / `element.height`，杆长与头部底边必须保持不变；通用反向求解器不适用于生命线，必须走 `getSequenceLifelineTextFit`。
 
 ## 8. 实施记录
 
@@ -238,4 +232,4 @@ newHeight = poleBottom - headY;
 - 根目录 `yarn test:typecheck` 在 `@excalidraw/yjs` / `yjs-hocuspocus-*` 上失败，原因是这些 workspace 的 `dist` 未构建（环境问题，与本次改动无关）。
 - 浏览器手工验收（导出 PNG/SVG、真实画布点选手感）尚未执行。
 - `getSequencePoleLength` 的最小值在非法元素上会让杆略超出元素盒；持久化边界已做归一化，正常渲染不会出现。
-- 生命线显式设置 `textFitMode: "auto"` 时仍可能触发表格外的反向求解；默认 `undefined` 已按 `"fixed"` 处理。
+- 生命线 `auto` 只解 `headHeight`（宽度固定）；显式 `fixed` 时按头部框截断，`originalText` 保留全文。

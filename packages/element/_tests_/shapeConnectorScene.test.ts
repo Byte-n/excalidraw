@@ -77,6 +77,9 @@ describe("普通图形纯场景操作", () => {
       kind,
       geometry: { x: 200, y: 100, width: 160, height: 120 },
       text: "新图形",
+      // Sample-size label: a lifeline's adaptive fit keeps its default head
+      // for one 14px line, so this case stays focused on candidate identity.
+      textStyle: { fontSize: 14 },
     });
     const target = created.elements.find(
       (element) => element.id === created.createdElementIds[0],

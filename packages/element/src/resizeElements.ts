@@ -567,6 +567,11 @@ const resizeSequenceLifeline = (
       ...element.shape,
       lifeline: { headHeight: next.headHeight },
     },
+    // A manual resize fixes the frame, exactly like resizing any other
+    // composite shape: auto fit stops re-growing it on later text edits.
+    ...(getCompositeShapeTextFitMode(element) === "auto" && {
+      textFitMode: "fixed" as const,
+    }),
   });
   handleBindTextResize(element, scene, handleDirection);
   // Attached activations follow the resized pole.

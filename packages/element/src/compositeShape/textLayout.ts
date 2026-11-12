@@ -1,5 +1,4 @@
 import { getCompositeShapeTextBounds } from "./registry";
-import { isSequenceLifelineShapeId } from "./sequenceOutline";
 
 import type { CompositeShapeTextBounds } from "./textBounds";
 import type { ExcalidrawShapeElement } from "../types";
@@ -14,15 +13,11 @@ export const getCompositeShapeTextFitMode = (
   element: Pick<ExcalidrawShapeElement, "textFitMode" | "shape">,
 ): CompositeShapeTextFitMode =>
   element.textFitMode ??
-  // A lifeline's text bounds depend on width/headHeight, not element.height;
-  // adaptive fitting would grow the pole instead of the header. Fixed fit keeps
-  // the label inside the head and never touches the pole length.
-  (isSequenceLifelineShapeId(element.shape.id) ||
   // The fragment's text is its single-line first-row operator label: editing
-  // it must never resize the row container.
-  element.shape.id === "sc-fragment"
-    ? "fixed"
-    : "auto");
+  // it must never resize the row container. Lifelines default to `auto` like
+  // every other composite shape, but their fit is solved on the head only
+  // (fixed width, head grows upward) — see `getSequenceLifelineTextFit`.
+  (element.shape.id === "sc-fragment" ? "fixed" : "auto");
 
 export const getCompositeShapeTextFitMinSize = (
   element: Pick<
