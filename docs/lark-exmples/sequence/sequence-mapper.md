@@ -15,7 +15,7 @@
 | `life_line` | `object_lifeline` | `对象` | `sc-lifeline-object` | 圆角矩形 r=7 铺满头部盒 | `COLOR_PALETTE.blue[0]` `#e8f0f8` | 120 × 420 |
 | `life_line` | `collection` | `集合` | `sc-lifeline-collection` | 两个圆角矩形 r=4 错位 8（后排先画、前排后画） | `COLOR_PALETTE.blue[0]` `#e8f0f8` | 118 × 428 |
 | `activation` | — | — | `sc-activation` | 圆角矩形 r=5 铺满 | `COLOR_PALETTE.blue[1]` `#c5d7e9` | 30 × 100 |
-| `combined_fragment` | — | `Opt / Loop` | `sc-fragment` | 外框矩形只描边；页签 (0,0)→(0,36.272)→(80,36.272)→(92,24.272)→(92,0) 填充，右下 12×12 斜切 | `COLOR_PALETTE.gray[0]` `#f4f4f4` | 400 × 240 |
+| `combined_fragment` | — | `Opt / Loop` | `sc-fragment` | 单列行容器：外框与页签 (0,0)→(0,36.272)→(80,36.272)→(92,24.272)→(92,0) 都只描边（无背景色）；首行是 operator 标签，下面是条件行 | `COLOR_PALETTE.transparent` | 400 × 240 |
 
 「默认填充（映射后）」是样本 `fill_color` 按**保色相、族内取最近档**映射到的项目色板色；「默认尺寸」是创建预设的尺寸。两者都落在 `packages/excalidraw/components/shapePresetDefaults.ts` 的 `SHAPE_PRESET_DEFAULTS`；描边/文本样式沿用 43 个既有预设共用的 `SHAPE_PRESET_STYLE`（墨色 `#1f2329`、thin、solid）。
 
@@ -43,4 +43,4 @@
 
 ## 交互（本期不做）
 
-消息连线、连接点、fragment 行标签、Lark 回写都留待后续。fragment 的行数据与加行/行分隔已经落地（P4a），但导入样例仍未携带行数据；页签文本沿用绑定文本。
+消息连线、连接点、Lark 回写留待后续。fragment 已按单列表格落地：行数据、行轨选择/排序、插入点加行、分隔线缩放与 Delete 删除；导入样例仍未携带行数据，首行文本沿用绑定文本（创建时默认 `Opt / Loop`）。

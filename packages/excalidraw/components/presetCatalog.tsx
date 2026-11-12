@@ -31,6 +31,13 @@ import type { TranslationKeys } from "../i18n";
 import type { ReactNode } from "react";
 
 /**
+ * 预先铺好的组合片段：`condition` 是单条件行，`condition-else` 在条件行下
+ * 再加一条 Else 行。两者都是同一个 `sc-fragment` 图形，仅**创建时**的初始
+ * 行与默认行文本不同。
+ */
+export type FragmentPreset = "condition" | "condition-else";
+
+/**
  * 一组预设的装配说明。目录只声明「放下的是什么」，具体怎么建元素交给
  * `app/presetPlacement`（见图形抽屉设计）：目录与渲染、放置链路解耦，
  * 新增一组预设只加数据。
@@ -42,6 +49,8 @@ export type CreationSpec =
       tool: "rectangle" | "diamond" | "ellipse";
       /** 元素的 `shape.id`（矩形工具的当前图形，或菱形/椭圆/预设图形各自的 id） */
       shapeId: string;
+      /** 组合片段预设的初始行与默认行文本 */
+      fragmentPreset?: FragmentPreset;
     }
   | { kind: "sticky"; preset: StickyNotePreset }
   | { kind: "frame" }
@@ -131,14 +140,45 @@ const FLOWCHART_ITEMS: readonly PresetCatalogItem[] = FLOWCHART_SHAPE_IDS.map(
   }),
 );
 
-const SEQUENCE_ITEMS: readonly PresetCatalogItem[] = SEQUENCE_SHAPE_IDS.map(
-  (id): PresetCatalogItem => ({
-    id,
-    titleKey: `toolBar.${id}`,
-    fillable: supportsFill(id),
-    getIcon: () => getSequenceShapeIcon(id),
-    creation: { kind: "shape", tool: "rectangle", shapeId: id },
-  }),
+const SEQUENCE_ITEMS: readonly PresetCatalogItem[] = SEQUENCE_SHAPE_IDS.flatMap(
+  (id): PresetCatalogItem[] => {
+    const baseItem = (): PresetCatalogItem => ({
+      id,
+      titleKey: `toolBar.${id}`,
+      fillable: supportsFill(id),
+      getIcon: () => getSequenceShapeIcon(id),
+      creation: { kind: "shape", tool: "rectangle", shapeId: id },
+    });
+    if (id !== "sc-fragment") {
+      return [baseItem()];
+    }
+    // The fragment group shows two presets of the same `sc-fragment` shape:
+    // condition-only, and condition + else. The latter is a creation-time
+    // variant (extra row + default row labels), not a distinct shape id.
+    return [
+      {
+        ...baseItem(),
+        creation: {
+          kind: "shape",
+          tool: "rectangle",
+          shapeId: id,
+          fragmentPreset: "condition",
+        },
+      },
+      {
+        id: "sc-fragment-else",
+        titleKey: "toolBar.sc-fragment-else",
+        fillable: supportsFill(id),
+        getIcon: () => getSequenceShapeIcon(id, { fragmentBodyRows: 2 }),
+        creation: {
+          kind: "shape",
+          tool: "rectangle",
+          shapeId: id,
+          fragmentPreset: "condition-else",
+        },
+      },
+    ];
+  },
 );
 
 const STICKY_ITEMS: readonly PresetCatalogItem[] = STICKY_NOTE_PRESETS.map(

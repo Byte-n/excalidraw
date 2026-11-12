@@ -42,6 +42,7 @@ import {
   SEQUENCE_MIN_POLE_LENGTH,
   clampSequenceActivationLocalY,
   getCompositeShapeTextFitMode,
+  fitSequenceFragmentOperator,
   getSequenceFragmentResize,
   getSequenceLifelineActivationCenter,
   getSequenceLifelineActivationLocalY,
@@ -55,6 +56,7 @@ import {
   getBoundTextElement,
   getBoundTextElementId,
   getContainerElement,
+  redrawTextBoundingBox,
   handleBindTextResize,
   getBoundTextMaxWidth,
   computeBoundTextPosition,
@@ -1428,6 +1430,33 @@ export const resizeSingleElement = (
           height: next.height,
           shape: next.shape,
         });
+      }
+    }
+
+    // A narrower/wider fragment changes the tab's max width: re-fit the
+    // operator label so it wraps (or unwraps) into the new room.
+    const resizedFragment = scene.getNonDeletedElement(latestElement.id);
+    if (
+      resizedFragment &&
+      isSequenceFragmentElement(resizedFragment) &&
+      Math.abs(origElement.width - resizedFragment.width) > 1e-6
+    ) {
+      const label = getBoundTextElement(
+        resizedFragment,
+        scene.getNonDeletedElementsMap(),
+      );
+      const fit = label
+        ? fitSequenceFragmentOperator(resizedFragment, label)
+        : null;
+      if (fit && label) {
+        scene.mutateElement(resizedFragment, {
+          height: fit.height,
+          shape: fit.shape,
+        });
+        const updated = scene.getNonDeletedElement(resizedFragment.id);
+        if (updated) {
+          redrawTextBoundingBox(label, updated, scene);
+        }
       }
     }
 

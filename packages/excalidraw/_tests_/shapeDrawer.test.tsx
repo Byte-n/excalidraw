@@ -13,10 +13,12 @@ import {
   getCommonBounds,
   isShapeElement,
   isMindmapNodeElement,
+  isTextElement,
 } from "@excalidraw/element";
 
 import type {
   ExcalidrawElement,
+  ExcalidrawSequenceElement,
   ExcalidrawStickyNoteElement,
   ExcalidrawTableElement,
   ExcalidrawTextElement,
@@ -272,7 +274,7 @@ describe("图形抽屉的分区折叠", () => {
     ).not.toBeNull();
   });
 
-  it("展开时序图分区后其 10 个 sc-* 格子可见", () => {
+  it("展开时序图分区后其 11 个 sc-* 格子可见（含组合片段两个预设）", () => {
     const toggle = groupToggle("sequence");
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(groupPanel("sequence")).toHaveAttribute("hidden");
@@ -284,7 +286,7 @@ describe("图形抽屉的分区折叠", () => {
     expect(panel).not.toHaveAttribute("hidden");
     expect(
       panel.querySelectorAll('[data-testid^="shape-drawer-item-sc-"]'),
-    ).toHaveLength(10);
+    ).toHaveLength(11);
   });
 });
 
@@ -364,9 +366,68 @@ describe("图形抽屉的单击放置", () => {
       shape: { id: "sc-fragment", schemaVersion: 1 },
       width: SHAPE_PRESET_DEFAULTS["sc-fragment"].width,
       height: SHAPE_PRESET_DEFAULTS["sc-fragment"].height,
-      backgroundColor: COLOR_PALETTE.gray[0],
+      backgroundColor: COLOR_PALETTE.transparent,
       strokeWidth: 1,
     });
+    // the first row is seeded with the operator label and an auto-fitted tab
+    const label = live().find(
+      (element): element is ExcalidrawTextElement =>
+        isTextElement(element) && element.containerId === fragment.id,
+    );
+    expect(label?.text).toBe("Opt / Loop");
+    expect(label?.autoResize).toBe(true);
+    const fragmentShape = fragment.shape as Extract<
+      ExcalidrawSequenceElement["shape"],
+      { id: "sc-fragment" }
+    >;
+    expect(fragmentShape.fragment?.operatorWidth).toBeGreaterThanOrEqual(92);
+    expect(fragmentShape.fragment?.rows[0].height).toBeGreaterThanOrEqual(
+      36.272,
+    );
+    // the condition preset also seeds its default row label
+    expect(
+      live().some(
+        (element) => isTextElement(element) && element.text === "[Condition]",
+      ),
+    ).toBe(true);
+  });
+
+  it("时序图：组合片段 else 预设复用 sc-fragment，多一行并带 [Condition]/[Else] 文本", () => {
+    expandGroup("sequence");
+    placeItem("sc-fragment-else");
+
+    const fragment = live().find(
+      (element): element is ExcalidrawSequenceElement =>
+        isShapeElement(element) && element.shape.id === "sc-fragment",
+    );
+    expect(fragment).toMatchObject({
+      type: "sequence",
+      shape: { id: "sc-fragment", schemaVersion: 1 },
+      width: SHAPE_PRESET_DEFAULTS["sc-fragment"].width,
+      height: SHAPE_PRESET_DEFAULTS["sc-fragment"].height,
+      backgroundColor: COLOR_PALETTE.transparent,
+    });
+
+    const fragmentShape = fragment!.shape as Extract<
+      ExcalidrawSequenceElement["shape"],
+      { id: "sc-fragment" }
+    >;
+    // header + condition + else; the body is split evenly
+    const rows = fragmentShape.fragment?.rows ?? [];
+    expect(rows).toHaveLength(3);
+    expect(rows[0].height).toBeCloseTo(36.272, 6);
+    expect(rows[1].height).toBeCloseTo(rows[2].height, 6);
+
+    const texts = live().filter(isTextElement);
+    expect(texts.map((text) => text.text)).toEqual(
+      expect.arrayContaining(["Opt / Loop", "[Condition]", "[Else]"]),
+    );
+    // row labels are ordinary canvas text, not bound to the fragment
+    const condition = texts.find((text) => text.text === "[Condition]")!;
+    const elseLabel = texts.find((text) => text.text === "[Else]")!;
+    expect(condition.containerId).toBeNull();
+    expect(elseLabel.containerId).toBeNull();
+    expect(condition.y).toBeLessThan(elseLabel.y);
   });
 
   it("基础图形：点 cube → 落一份 cube 复合图形", () => {

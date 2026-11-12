@@ -3,6 +3,9 @@ import {
   applyShapeOperation,
   applyConnectorOperation,
   isShapeElement,
+  isSequenceFragmentElement,
+  fitSequenceFragmentOperator,
+  redrawTextBoundingBox,
   getBoundTextElement,
   frameLikeContainerRef,
   isTableCellBackgroundText,
@@ -106,8 +109,70 @@ export const handleTextWysiwyg = (
 ) => {
   const elementsMap = app.scene.getElementsMapIncludingDeleted();
 
+  /**
+   * The fragment's first row is the operator tab: widen the tab to the label
+   * before wrapping it, and grow the header row (and the element) by the
+   * resulting line count. The bound text is laid out again against the
+   * resized tab so the editor and canvas agree.
+   */
+  const refitFragmentOperator = (
+    fragmentId: string,
+    textId: string,
+    fallbackText: ExcalidrawTextElement,
+    redraw = true,
+  ) => {
+    const fragment = app.scene.getNonDeletedElement(fragmentId);
+    const liveText = app.scene.getNonDeletedElement(textId);
+    const text = liveText ?? fallbackText;
+    if (
+      !fragment ||
+      !isSequenceFragmentElement(fragment) ||
+      !isTextElement(text)
+    ) {
+      return;
+    }
+    if (liveText && isTextElement(liveText) && !liveText.autoResize) {
+      // the operator label has exactly one text mode: container-bound
+      app.scene.mutateElement(liveText, { autoResize: true });
+    }
+    const fit = fitSequenceFragmentOperator(fragment, text);
+    if (!fit) {
+      return;
+    }
+    if (
+      Math.abs(fit.height - fragment.height) > 1e-6 ||
+      fit.shape.fragment?.operatorWidth !==
+        fragment.shape.fragment?.operatorWidth
+    ) {
+      app.scene.mutateElement(fragment, {
+        height: fit.height,
+        shape: fit.shape,
+      });
+    }
+    if (!redraw) {
+      return;
+    }
+    const liveFragment = app.scene.getNonDeletedElement(fragment.id);
+    if (
+      liveFragment &&
+      liveText &&
+      isTextElement(liveText) &&
+      isSequenceFragmentElement(liveFragment)
+    ) {
+      redrawTextBoundingBox(liveText, liveFragment, app.scene);
+    }
+  };
+
   const updateElement = (nextOriginalText: string, isDeleted: boolean) => {
     if (element.containerRef?.kind === "tableTitle") {
+      nextOriginalText = nextOriginalText.replace(/\s*[\r\n]+\s*/g, " ");
+    }
+    // The fragment's first row is an operator label: hard line breaks are
+    // normalized to spaces, automatic wrapping is driven by the tab width.
+    if (
+      element.containerId &&
+      isSequenceFragmentElement(elementsMap.get(element.containerId))
+    ) {
       nextOriginalText = nextOriginalText.replace(/\s*[\r\n]+\s*/g, " ");
     }
     const latestTextElement = app.scene.getElement(
@@ -139,6 +204,14 @@ export const handleTextWysiwyg = (
             : _element,
         ),
       ]);
+      if (isSequenceFragmentElement(container)) {
+        refitFragmentOperator(
+          container.id,
+          latestTextElement.id,
+          { ...latestTextElement, originalText: "" },
+          false,
+        );
+      }
       return;
     }
     if (
@@ -160,6 +233,12 @@ export const handleTextWysiwyg = (
             label: isDeleted ? "" : nextOriginalText,
           });
       commitCanvasElementOperation(app.scene, result);
+      if (isSequenceFragmentElement(container)) {
+        refitFragmentOperator(container.id, latestTextElement.id, {
+          ...latestTextElement,
+          originalText: nextOriginalText,
+        });
+      }
       return;
     }
     const stickyContainer =
@@ -365,11 +444,21 @@ export const getSelectedTextEditingContainerAtPosition = (
 };
 
 export const isHittingTextAutoResizeHandle = (
-  app: Pick<TextApp, "state" | "editorInterface">,
+  app: Pick<TextApp, "state" | "editorInterface" | "scene">,
   selectedElements: NonDeleted<ExcalidrawElement>[],
   point: Readonly<{ x: number; y: number }>,
 ): boolean => {
   const activeTextElement = getActiveTextElement(selectedElements, app.state);
+  // A fragment operator label is fixed to the container-bound mode; its
+  // width is owned by the tab and the reset handle must never appear.
+  if (
+    activeTextElement?.containerId &&
+    isSequenceFragmentElement(
+      app.scene.getNonDeletedElement(activeTextElement.containerId),
+    )
+  ) {
+    return false;
+  }
   return !!(
     activeTextElement &&
     !activeTextElement.isDeleted &&

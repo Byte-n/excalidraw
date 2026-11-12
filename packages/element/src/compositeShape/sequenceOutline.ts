@@ -1,5 +1,6 @@
 import {
   DEFAULT_FONT_FAMILY,
+  getFontString,
   getLineHeight,
   getVerticalOffset,
   randomId,
@@ -8,7 +9,8 @@ import { pointFrom, pointRotateRads } from "@excalidraw/math";
 
 import type { GlobalPoint, Radians } from "@excalidraw/math";
 
-import { getLineHeightInPx } from "../textMeasurements";
+import { getLineHeightInPx, measureText } from "../textMeasurements";
+import { wrapText } from "../textWrapping";
 
 import {
   FC_ARC_K,
@@ -16,6 +18,7 @@ import {
   getBaseRectangleOutline,
   getRoundedRectOutline,
   pathFromPoints,
+  type CompositeShapeDetailPath,
   type CompositeShapePath,
   type ShapePoint,
 } from "./outline";
@@ -31,6 +34,7 @@ import type {
   ExcalidrawElement,
   ExcalidrawSequenceElement,
   ExcalidrawShapeElement,
+  ExcalidrawTextElement,
   SequenceFragmentData,
   SequenceFragmentRow,
   SequenceShapeData,
@@ -757,8 +761,22 @@ const dataBaseInnerArc: CompositeShapePath = {
 export const SEQUENCE_FRAGMENT_TAB_WIDTH = 92;
 export const SEQUENCE_FRAGMENT_TAB_HEIGHT = 36.272;
 export const SEQUENCE_FRAGMENT_TAB_BEVEL = 12;
-/** Measured baseline of the fragment's tab title (element-local y). */
-const FRAGMENT_TAB_BASELINE = 24.229;
+/** Inner padding of the fragment tab's label. */
+export const SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_X = 8;
+/**
+ * Symmetric vertical padding keeps a one-line operator vertically centered in
+ * the sample tab and applies the same inset to every wrapped line.
+ */
+export const SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_Y = Math.max(
+  0,
+  (SEQUENCE_FRAGMENT_TAB_HEIGHT - LABEL_LINE_HEIGHT_PX) / 2,
+);
+
+/**
+ * The operator tab widens with its label first; once it reaches this inset
+ * from the fragment's right edge, the label wraps and the tab grows in height.
+ */
+export const SEQUENCE_FRAGMENT_TAB_MAX_RIGHT_INSET = 24;
 
 /**
  * Default height of a row appended by the fragment "add row" action. Chosen so
@@ -766,13 +784,48 @@ const FRAGMENT_TAB_BASELINE = 24.229;
  */
 export const SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT = 56;
 
-/** Smallest row height the bottom-edge resize keeps for the last row. */
+/** Smallest body-row height a resize can produce. */
 export const SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT = 24;
 
-/** The fragment's tab clamped to the element box. */
-const fragmentTabMetrics = (width: number, height: number) => {
-  const tabWidth = Math.min(SEQUENCE_FRAGMENT_TAB_WIDTH, width);
-  const tabHeight = Math.min(SEQUENCE_FRAGMENT_TAB_HEIGHT, height);
+/**
+ * The first row is the operator tab row (the "Opt / Loop" label). It can never
+ * be shorter than the tab itself, otherwise the tab would cross the divider.
+ */
+export const SEQUENCE_FRAGMENT_HEADER_MIN_HEIGHT = SEQUENCE_FRAGMENT_TAB_HEIGHT;
+
+/** Default operator label of the first row (the tab). */
+export const SEQUENCE_FRAGMENT_DEFAULT_OPERATOR = "Opt / Loop";
+
+/**
+ * The fragment's operator tab. The first row's height is the tab height
+ * (`operatorWidth` is the grown tab width); both default to the sample tab.
+ */
+const fragmentTabMetrics = (
+  width: number,
+  height: number,
+  fragment?: SequenceFragmentData,
+) => {
+  const maxWidth = Math.max(
+    SEQUENCE_FRAGMENT_TAB_WIDTH,
+    width - SEQUENCE_FRAGMENT_TAB_MAX_RIGHT_INSET,
+  );
+  const tabWidth = Math.min(
+    width,
+    Math.min(
+      maxWidth,
+      Math.max(
+        SEQUENCE_FRAGMENT_TAB_WIDTH,
+        fragment?.operatorWidth ?? SEQUENCE_FRAGMENT_TAB_WIDTH,
+      ),
+    ),
+  );
+  const tabHeight = Math.min(
+    height,
+    Math.max(
+      SEQUENCE_FRAGMENT_TAB_HEIGHT,
+      fragment?.rows?.[0]?.height ?? SEQUENCE_FRAGMENT_TAB_HEIGHT,
+    ),
+  );
   const bevel = Math.min(SEQUENCE_FRAGMENT_TAB_BEVEL, tabWidth / 2, tabHeight);
   return { tabWidth, tabHeight, bevel };
 };
@@ -786,8 +839,13 @@ const fragmentTabMetrics = (width: number, height: number) => {
 export const getSequenceFragmentTabPath = (
   width: number = SEQUENCE_FRAGMENT_TAB_WIDTH,
   height: number = SEQUENCE_FRAGMENT_TAB_HEIGHT,
+  fragment?: SequenceFragmentData,
 ): CompositeShapePath => {
-  const { tabWidth, tabHeight, bevel } = fragmentTabMetrics(width, height);
+  const { tabWidth, tabHeight, bevel } = fragmentTabMetrics(
+    width,
+    height,
+    fragment,
+  );
   return pathFromPoints(
     [
       [0, 0],
@@ -801,25 +859,35 @@ export const getSequenceFragmentTabPath = (
 };
 
 /**
- * Text area of the fragment tab, derived the same way as the lifeline label:
- * the measured tab-title baseline (`FRAGMENT_TAB_BASELINE`) drives the band
- * center, and the band is clamped to the (clamped) tab height and width.
+ * Text area of the fragment tab. The tab grows with its label first; the text
+ * wraps once the tab reaches its max width, and the first row (tab) height
+ * follows the wrapped text height. The innermost safe rectangle therefore
+ * shrinks only by the tab's padding and its bottom-right bevel.
  */
 export const getSequenceFragmentTextBounds = (
   width: number,
   height: number,
+  fragment?: SequenceFragmentData,
 ): CompositeShapeTextBounds => {
-  const { tabHeight, bevel } = fragmentTabMetrics(width, height);
-  const center = FRAGMENT_TAB_BASELINE - LABEL_BASELINE_FROM_CENTER;
-  const half = LABEL_BASELINE_FROM_CENTER + ICON_LABEL_BASELINE_GAP;
-  const top = Math.min(Math.max(0, center - half), tabHeight);
-  const bottom = Math.min(Math.max(top + 0.01, center + half), tabHeight);
-  const right =
-    Math.min(
-      SEQUENCE_FRAGMENT_TAB_WIDTH - SEQUENCE_FRAGMENT_TAB_BEVEL,
-      width - bevel,
-    ) - TEXT_GAP;
-  return insetRect(TEXT_GAP, top, Math.max(TEXT_GAP + 0.01, right), bottom);
+  const { tabWidth, tabHeight, bevel } = fragmentTabMetrics(
+    width,
+    height,
+    fragment,
+  );
+  const padX = Math.min(
+    SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_X,
+    Math.max(0, (tabWidth - bevel) / 2),
+  );
+  const padY = Math.min(
+    SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_Y,
+    Math.max(0, tabHeight / 2),
+  );
+  return insetRect(
+    padX,
+    padY,
+    Math.max(padX + 0.01, tabWidth - bevel - padX),
+    Math.max(padY + 0.01, tabHeight - padY),
+  );
 };
 
 /**
@@ -928,24 +996,342 @@ export const getSequenceFragmentRowLayout = (
   return { rows: layoutRows, separators };
 };
 
-/** Stroke-only divider paths for the fragment's rows. */
+/** Dash pattern of the fragment's row dividers (mirrors the lifeline pole). */
+export const SEQUENCE_FRAGMENT_ROW_DIVIDER_DASH = [4, 4];
+
+/**
+ * Stroke-only divider paths for the fragment's rows. The divider between the
+ * header (operator tab) row and the first body row is transparent — the tab
+ * contour already closes that row — while every later divider is dashed.
+ */
 export const getSequenceFragmentRowPaths = (
   width: number,
   height: number,
   fragment?: SequenceFragmentData,
-): CompositeShapePath[] => {
+): CompositeShapeDetailPath[] => {
   if (!(width > 0)) {
     return [];
   }
-  return getSequenceFragmentRowLayout(height, fragment).separators.map((y) =>
-    pathFromPoints(
-      [
-        [0, y],
-        [width, y],
-      ],
-      false,
+  return getSequenceFragmentRowLayout(height, fragment)
+    .separators.slice(1)
+    .map((y) => ({
+      ...pathFromPoints(
+        [
+          [0, y],
+          [width, y],
+        ],
+        false,
+      ),
+      strokeLineDash: SEQUENCE_FRAGMENT_ROW_DIVIDER_DASH,
+    }));
+};
+
+/**
+ * The rows a freshly created fragment starts with: the operator-tab header
+ * row and `bodyRowCount` condition rows filling the rest of the box. The
+ * header never exceeds the box, so a box at (or below) tab height starts
+ * header-only.
+ */
+export const createSequenceFragmentInitialRows = (
+  height: number,
+  bodyRowCount: number = 1,
+): SequenceFragmentRow[] => {
+  if (!(height > 0)) {
+    return [];
+  }
+  const headerHeight = Math.min(height, SEQUENCE_FRAGMENT_TAB_HEIGHT);
+  const rows: SequenceFragmentRow[] = [
+    { id: randomId(), height: headerHeight },
+  ];
+  const bodyHeight = height - headerHeight;
+  if (bodyHeight > FRAGMENT_HEIGHT_EPSILON) {
+    const count = Math.max(1, Math.floor(bodyRowCount));
+    for (let index = 0; index < count; index++) {
+      rows.push({ id: randomId(), height: bodyHeight / count });
+    }
+  }
+  return rows;
+};
+
+/** Row index whose span contains `localY` (clamped to the first/last row). */
+export const getSequenceFragmentRowIndexAt = (
+  height: number,
+  fragment: SequenceFragmentData | undefined,
+  localY: number,
+): number => {
+  const layout = getSequenceFragmentRowLayout(height, fragment);
+  if (!layout.rows.length) {
+    return -1;
+  }
+  if (localY <= 0) {
+    return 0;
+  }
+  let y = 0;
+  for (let index = 0; index < layout.rows.length; index++) {
+    const row = layout.rows[index];
+    y += row.height;
+    if (localY < y || index === layout.rows.length - 1) {
+      return index;
+    }
+  }
+  return layout.rows.length - 1;
+};
+
+/** Element-local y of every separator between two rows. */
+export const getSequenceFragmentRowSeparatorYs = (
+  height: number,
+  fragment?: SequenceFragmentData,
+): number[] => getSequenceFragmentRowLayout(height, fragment).separators;
+
+/**
+ * Element-local y of every place a row can be inserted. Boundaries below the
+ * header only: the header stays the first row, so there is no "insert above
+ * the header" slot.
+ */
+export const getSequenceFragmentInsertionBoundaries = (
+  height: number,
+  fragment?: SequenceFragmentData,
+): Array<{ boundaryIndex: number; y: number }> => {
+  const layout = getSequenceFragmentRowLayout(height, fragment);
+  if (!layout.rows.length) {
+    return [];
+  }
+  let y = 0;
+  const boundaries: Array<{ boundaryIndex: number; y: number }> = [];
+  for (let index = 0; index < layout.rows.length; index++) {
+    y += layout.rows[index].height;
+    boundaries.push({ boundaryIndex: index + 1, y });
+  }
+  return boundaries;
+};
+
+/** Minimum height a row may be resized to (the header clears the tab). */
+export const getSequenceFragmentRowMinHeight = (rowIndex: number): number =>
+  rowIndex === 0
+    ? SEQUENCE_FRAGMENT_HEADER_MIN_HEIGHT
+    : SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT;
+
+export type SequenceFragmentRowsUpdate = {
+  height: number;
+  shape: Extract<SequenceShapeData, { id: "sc-fragment" }>;
+};
+
+/** Current rows of a fragment; a fragment without persisted rows starts from the default header + body split. */
+const getSequenceFragmentRowsForEdit = (
+  element: ExcalidrawElement,
+): { fragment?: SequenceFragmentData; rows: SequenceFragmentRow[] } | null => {
+  if (!isSequenceFragmentElement(element) || !(element.height > 0)) {
+    return null;
+  }
+  const fragment = element.shape.fragment;
+  const rows = fragment?.rows?.length
+    ? resolveSequenceFragmentRows(fragment.rows, element.height)
+    : createSequenceFragmentInitialRows(element.height);
+  return rows.length ? { fragment, rows } : null;
+};
+
+const sequenceFragmentRowsUpdate = (
+  element: ExcalidrawElement,
+  fragment: SequenceFragmentData | undefined,
+  rows: SequenceFragmentRow[],
+  height: number,
+): SequenceFragmentRowsUpdate => ({
+  height,
+  shape: {
+    ...(element as ExcalidrawSequenceElement).shape,
+    fragment: { ...(fragment ?? {}), rows },
+  } as Extract<SequenceShapeData, { id: "sc-fragment" }>,
+});
+
+/**
+ * Operator tab auto-layout for the bound label:
+ *
+ * 1. the tab widens with the single-line text first (up to the fragment's
+ *    max width inset);
+ * 2. only once that width is exhausted does the text wrap, and the header row
+ *    (the tab) grows in height by the wrapped line count.
+ *
+ * The result also resizes the element by the header delta, because
+ * `sum(rows.height) === element.height`. Callers apply it to the fragment and
+ * then re-run the bound text layout (`redrawTextBoundingBox`).
+ */
+export const fitSequenceFragmentOperator = (
+  element: ExcalidrawElement,
+  text: Pick<
+    ExcalidrawTextElement,
+    "originalText" | "fontSize" | "fontFamily" | "lineHeight" | "fontWeight"
+  >,
+): SequenceFragmentRowsUpdate | null => {
+  const current = getSequenceFragmentRowsForEdit(element);
+  if (!current?.rows.length) {
+    return null;
+  }
+  const maxTabWidth = Math.max(
+    SEQUENCE_FRAGMENT_TAB_WIDTH,
+    element.width - SEQUENCE_FRAGMENT_TAB_MAX_RIGHT_INSET,
+  );
+  const font = getFontString({
+    fontSize: text.fontSize,
+    fontFamily: text.fontFamily,
+    fontWeight: text.fontWeight,
+  });
+  // Hard line breaks are normalized to spaces: wrapping is automatic.
+  const singleLine = text.originalText.replace(/\s*[\r\n]+\s*/g, " ");
+  const naturalWidth = measureText(singleLine, font, text.lineHeight).width;
+  const tabWidth = Math.min(
+    maxTabWidth,
+    Math.max(
+      SEQUENCE_FRAGMENT_TAB_WIDTH,
+      naturalWidth +
+        SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_X * 2 +
+        SEQUENCE_FRAGMENT_TAB_BEVEL,
     ),
   );
+  const textWidth = Math.max(
+    1,
+    tabWidth -
+      SEQUENCE_FRAGMENT_TAB_BEVEL -
+      SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_X * 2,
+  );
+  const textHeight = measureText(
+    wrapText(singleLine, font, textWidth),
+    font,
+    text.lineHeight,
+  ).height;
+  const tabHeight = Math.max(
+    SEQUENCE_FRAGMENT_TAB_HEIGHT,
+    textHeight + SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_Y * 2,
+  );
+  const rows = [...current.rows];
+  const headerDelta = tabHeight - rows[0].height;
+  rows[0] = { ...rows[0], height: tabHeight };
+  return {
+    height: Math.max(
+      SEQUENCE_FRAGMENT_TAB_HEIGHT,
+      element.height + headerDelta,
+    ),
+    shape: {
+      ...(element as ExcalidrawSequenceElement).shape,
+      fragment: {
+        ...(current.fragment ?? {}),
+        operatorWidth: tabWidth,
+        rows,
+      },
+    } as Extract<SequenceShapeData, { id: "sc-fragment" }>,
+  };
+};
+
+/**
+ * Inserts one condition row at `boundaryIndex` (1 = below the header, up to
+ * `rows.length` = append at the bottom) and grows the element by the same
+ * height. The header never moves.
+ */
+export const insertSequenceFragmentRow = (
+  element: ExcalidrawElement,
+  boundaryIndex: number,
+): (SequenceFragmentRowsUpdate & { rowId: string; index: number }) | null => {
+  const current = getSequenceFragmentRowsForEdit(element);
+  if (!current) {
+    return null;
+  }
+  const index = Math.max(
+    1,
+    Math.min(Math.round(boundaryIndex), current.rows.length),
+  );
+  const row: SequenceFragmentRow = {
+    id: randomId(),
+    height: SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT,
+  };
+  const rows = [...current.rows];
+  rows.splice(index, 0, row);
+  const height = element.height + row.height;
+  return {
+    ...sequenceFragmentRowsUpdate(element, current.fragment, rows, height),
+    rowId: row.id,
+    index,
+  };
+};
+
+/**
+ * Sets one row's height and moves every row below it (the element height
+ * follows the delta). The row above a separator is the one a drag resizes.
+ */
+export const resizeSequenceFragmentRow = (
+  element: ExcalidrawElement,
+  rowId: string,
+  nextHeight: number,
+): SequenceFragmentRowsUpdate | null => {
+  const current = getSequenceFragmentRowsForEdit(element);
+  if (!current || !Number.isFinite(nextHeight)) {
+    return null;
+  }
+  const index = current.rows.findIndex((row) => row.id === rowId);
+  if (index < 0) {
+    return null;
+  }
+  const min = getSequenceFragmentRowMinHeight(index);
+  const height = Math.max(min, nextHeight);
+  const rows = current.rows.map((row, rowIndex) =>
+    rowIndex === index ? { ...row, height } : row,
+  );
+  return sequenceFragmentRowsUpdate(
+    element,
+    current.fragment,
+    rows,
+    element.height + (height - current.rows[index].height),
+  );
+};
+
+/**
+ * Moves a body row to `targetIndex` in the final row array. The header row
+ * stays first; the element height is unchanged.
+ */
+export const moveSequenceFragmentRow = (
+  element: ExcalidrawElement,
+  rowId: string,
+  targetIndex: number,
+): SequenceFragmentRowsUpdate | null => {
+  const current = getSequenceFragmentRowsForEdit(element);
+  if (!current) {
+    return null;
+  }
+  const index = current.rows.findIndex((row) => row.id === rowId);
+  if (index < 1) {
+    // the header is the operator row and never reorders
+    return null;
+  }
+  const rows = [...current.rows];
+  const [row] = rows.splice(index, 1);
+  const insertAt = Math.max(1, Math.min(Math.round(targetIndex), rows.length));
+  rows.splice(insertAt, 0, row);
+  return sequenceFragmentRowsUpdate(
+    element,
+    current.fragment,
+    rows,
+    element.height,
+  );
+};
+
+/** Removes a body row and shrinks the element by its height. */
+export const deleteSequenceFragmentRow = (
+  element: ExcalidrawElement,
+  rowId: string,
+): SequenceFragmentRowsUpdate | null => {
+  const current = getSequenceFragmentRowsForEdit(element);
+  if (!current) {
+    return null;
+  }
+  const index = current.rows.findIndex((row) => row.id === rowId);
+  if (index < 1) {
+    // the header row is structural
+    return null;
+  }
+  const rows = current.rows.filter((row) => row.id !== rowId);
+  const height = Math.max(
+    SEQUENCE_FRAGMENT_HEADER_MIN_HEIGHT,
+    element.height - current.rows[index].height,
+  );
+  return sequenceFragmentRowsUpdate(element, current.fragment, rows, height);
 };
 
 /**
@@ -1003,31 +1389,46 @@ const resolveSequenceFragmentRows = (
 };
 
 /**
- * Enforces the fragment invariant `sum(rows.height) === element.height`.
- * Missing row data keeps the legacy single-box fragment untouched.
+ * Enforces the fragment invariants:
+ * - rows exist (a fragment starts with a header row plus one body row);
+ * - `sum(rows.height) === element.height`;
+ * - the header row clears the tab;
+ * - the tab label uses the fixed text fit (editing it never resizes the box),
+ *   which is what keeps it single-line.
  */
 export const normalizeSequenceFragmentGeometry = <T extends ExcalidrawElement>(
   element: T,
 ): T => {
-  if (!isSequenceFragmentElement(element)) {
+  if (!isSequenceFragmentElement(element) || !(element.height > 0)) {
     return element;
   }
   const fragment = element.shape.fragment;
-  if (!fragment?.rows?.length || !(element.height > 0)) {
+  const baseRows = fragment?.rows?.length
+    ? fragment.rows
+    : createSequenceFragmentInitialRows(element.height);
+  if (!baseRows.length) {
     return element;
   }
-  const rows = resolveSequenceFragmentRows(fragment.rows, element.height);
-  const unchanged = rows.every(
-    (row, index) => Math.abs(row.height - fragment.rows[index].height) < 1e-6,
-  );
+  const rows = resolveSequenceFragmentRows(baseRows, element.height);
+  const previousRows = fragment?.rows ?? [];
+  const textFitMode = element.textFitMode ?? "fixed";
+  const unchanged =
+    previousRows.length === rows.length &&
+    element.textFitMode === textFitMode &&
+    rows.every(
+      (row, index) =>
+        row.id === previousRows[index].id &&
+        Math.abs(row.height - previousRows[index].height) < 1e-6,
+    );
   if (unchanged) {
     return element;
   }
   return {
     ...element,
+    textFitMode,
     shape: {
       ...element.shape,
-      fragment: { ...fragment, rows },
+      fragment: { ...(fragment ?? {}), rows },
     },
   } as T;
 };
@@ -1041,23 +1442,20 @@ export const normalizeSequenceFragmentGeometry = <T extends ExcalidrawElement>(
 export const appendSequenceFragmentRow = (
   element: ExcalidrawElement,
 ): SequenceFragmentRowAddition | null => {
-  if (!isSequenceFragmentElement(element) || !(element.height > 0)) {
+  const current = getSequenceFragmentRowsForEdit(element);
+  if (!current) {
     return null;
   }
-  const fragment = element.shape.fragment;
-  const rows: SequenceFragmentRow[] = fragment?.rows?.length
-    ? resolveSequenceFragmentRows(fragment.rows, element.height)
-    : [{ id: randomId(), height: element.height }];
   const rowHeight = SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT;
   return {
     height: element.height + rowHeight,
     shape: {
-      ...element.shape,
+      ...(element as ExcalidrawSequenceElement).shape,
       fragment: {
-        ...(fragment ?? {}),
-        rows: [...rows, { id: randomId(), height: rowHeight }],
+        ...(current.fragment ?? {}),
+        rows: [...current.rows, { id: randomId(), height: rowHeight }],
       },
-    },
+    } as Extract<SequenceShapeData, { id: "sc-fragment" }>,
   };
 };
 
@@ -1071,28 +1469,28 @@ export const getSequenceFragmentResize = (
   handleDirection: TransformHandleDirection,
   nextHeight: number,
 ): SequenceFragmentResize | null => {
-  if (!isSequenceFragmentElement(element)) {
+  if (!(nextHeight > 0)) {
     return null;
   }
-  const fragment = element.shape.fragment;
-  if (!fragment?.rows?.length || !(element.height > 0) || !(nextHeight > 0)) {
+  const current = getSequenceFragmentRowsForEdit(element);
+  if (!current) {
     return null;
   }
-  const rows = resolveSequenceFragmentRows(fragment.rows, element.height);
+  const fragment = current.fragment;
+  const rows = current.rows;
   let height = nextHeight;
   let nextRows: SequenceFragmentRow[];
   if (handleDirection.includes("s")) {
     const delta = nextHeight - element.height;
     const last = rows[rows.length - 1];
+    const minHeight = getSequenceFragmentRowMinHeight(rows.length - 1);
     const lastHeight = last.height + delta;
-    if (lastHeight < SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT) {
+    if (lastHeight < minHeight) {
       // The bottom edge stops once the last row reaches its minimum.
       nextRows = rows.map((row, index) =>
-        index === rows.length - 1
-          ? { ...row, height: SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT }
-          : row,
+        index === rows.length - 1 ? { ...row, height: minHeight } : row,
       );
-      height = element.height - last.height + SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT;
+      height = element.height - last.height + minHeight;
     } else {
       nextRows = rows.map((row, index) =>
         index === rows.length - 1 ? { ...row, height: lastHeight } : row,
@@ -1112,9 +1510,9 @@ export const getSequenceFragmentResize = (
   return {
     height,
     shape: {
-      ...element.shape,
+      ...(element as ExcalidrawSequenceElement).shape,
       fragment: { ...fragment, rows: nextRows },
-    },
+    } as Extract<SequenceShapeData, { id: "sc-fragment" }>,
   };
 };
 

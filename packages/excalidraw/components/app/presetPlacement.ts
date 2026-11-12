@@ -2,8 +2,12 @@ import { getGridPoint } from "@excalidraw/common";
 
 import {
   buildMindmapGraphFromTree,
+  createSequenceFragmentInitialRows,
   getCommonBounds,
+  getSequenceFragmentRowLayout,
+  isSequenceFragmentElement,
   isStickyNoteElement,
+  newTextElement,
 } from "@excalidraw/element";
 
 import type {
@@ -13,6 +17,8 @@ import type {
   NonDeleted,
 } from "@excalidraw/element/types";
 
+import { SHAPE_PRESET_STYLE } from "../shapePresetDefaults";
+
 import {
   createTablePresetDrafts,
   getMindmapPresetTree,
@@ -21,9 +27,10 @@ import {
   PRESET_SIZES,
 } from "./createPresets";
 
-import type { CreationDraftOverrides, CreationIdentity } from "./createPresets";
-import type { CreationSpec } from "../presetCatalog";
+import type { CreationSpec, FragmentPreset } from "../presetCatalog";
 import type App from "../App";
+
+import type { CreationDraftOverrides, CreationIdentity } from "./createPresets";
 
 /**
  * 图形抽屉两种取用方式（单击落在「可见区域中心」/ 拖到松手处）共用的装配与
@@ -98,6 +105,73 @@ const deriveIdentity = (
   seed: identity?.seed === undefined ? undefined : identity.seed + index,
 });
 
+/** 条件行默认文本；else 预设多一条 Else 行。 */
+const FRAGMENT_ROW_LABELS: Record<FragmentPreset, readonly string[]> = {
+  condition: ["[Condition]"],
+  "condition-else": ["[Condition]", "[Else]"],
+};
+
+const FRAGMENT_ROW_TEXT_PADDING_X = 8;
+const FRAGMENT_ROW_TEXT_PADDING_Y = 6;
+
+/**
+ * 组合片段预设的装配：按预设铺好初始行，并在每个条件行左上角放一条默认
+ * 文本（`[Condition]` / `[Else]`）。行文本是普通画布文字，不写入行数据——
+ * 与用户后续在行里敲出来的文字完全相同，可以单独移动/编辑/删除。
+ */
+const buildSequenceFragmentPresetElements = (
+  app: App,
+  fragment: NonDeleted<ExcalidrawNonSelectionElement>,
+  preset: FragmentPreset,
+  identity?: CreationIdentity,
+): NonDeleted<ExcalidrawNonSelectionElement>[] => {
+  if (!isSequenceFragmentElement(fragment)) {
+    return [fragment];
+  }
+  const bodyRows = preset === "condition-else" ? 2 : 1;
+  // Fixed identity for previews: row ids must not advance the shared random
+  // sequence either (same reason as the text elements below).
+  const rows = createSequenceFragmentInitialRows(fragment.height, bodyRows).map(
+    (row, index) =>
+      identity?.id === undefined
+        ? row
+        : { ...row, id: `${identity.id}:fragment-row:${index}` },
+  );
+  const seeded = {
+    ...fragment,
+    shape: {
+      ...fragment.shape,
+      fragment: { rows },
+    },
+  };
+  const layout = getSequenceFragmentRowLayout(
+    seeded.height,
+    seeded.shape.fragment,
+  );
+  const labels = FRAGMENT_ROW_LABELS[preset];
+  const texts = layout.rows.slice(1).flatMap((row, index) => {
+    const label = labels[index];
+    if (!label) {
+      return [];
+    }
+    return [
+      newTextElement({
+        x: seeded.x + FRAGMENT_ROW_TEXT_PADDING_X,
+        y: seeded.y + row.y + FRAGMENT_ROW_TEXT_PADDING_Y,
+        text: label,
+        fontSize: 14,
+        fontFamily: app.state.currentItemFontFamily,
+        strokeColor: SHAPE_PRESET_STYLE.strokeColor,
+        textAlign: "left",
+        verticalAlign: "top",
+        autoResize: true,
+        ...deriveIdentity(identity, index + 1),
+      }),
+    ];
+  });
+  return [seeded, ...texts];
+};
+
 /**
  * 按 `CreationSpec` 装配**未定位**的元素，以 `at` 为锚（单元素即左上角/表格
  * 左上角/脑图根节点左上角）。`identity` 供离屏预览传固定身份——预览不入场景，
@@ -128,17 +202,24 @@ export const buildPresetElementsAt = (
       // `spec.shapeId` 就是元素的 `shape.id`（`right-triangle`/`left-triangle`
       // 亦然），尺寸走图形默认值表
       const size = getPresetSize(spec.tool, spec.shapeId, draft);
-      return {
-        elements: [
-          {
-            ...draft,
-            x: at.x,
-            y: at.y,
-            width: size.width,
-            height: size.height,
-          },
-        ],
-      };
+      const element = {
+        ...draft,
+        x: at.x,
+        y: at.y,
+        width: size.width,
+        height: size.height,
+      } as NonDeleted<ExcalidrawNonSelectionElement>;
+      if (spec.fragmentPreset) {
+        return {
+          elements: buildSequenceFragmentPresetElements(
+            app,
+            element,
+            spec.fragmentPreset,
+            identity,
+          ),
+        };
+      }
+      return { elements: [element] };
     }
     case "sticky": {
       const draft = newCreationDraft(

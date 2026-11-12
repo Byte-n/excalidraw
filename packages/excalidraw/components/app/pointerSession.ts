@@ -44,6 +44,7 @@ import {
   isInitializedImageElement,
   isLinearElement,
   isMindmapNodeElement,
+  isSequenceFragmentElement,
   isShapeElement,
   isElbowArrow,
   isBindableElement,
@@ -306,6 +307,24 @@ export type PointerSessionApp = {
   state: AppState;
 };
 
+const suspendHoverForStructureGesture = (app: PointerApp) => {
+  app.interactionState.isTableGestureActive = true;
+  app.mindmap.clearHover();
+  if (
+    app.state.highlightedTableCell ||
+    app.state.tableStructureHover ||
+    app.state.fragmentStructureHover ||
+    Object.keys(app.state.hoveredElementIds).length
+  ) {
+    app.setState({
+      highlightedTableCell: null,
+      tableStructureHover: null,
+      fragmentStructureHover: null,
+      hoveredElementIds: {},
+    });
+  }
+};
+
 const suspendHoverForTableGesture = (
   app: PointerApp,
   pointerDownState: PointerDownState,
@@ -313,19 +332,17 @@ const suspendHoverForTableGesture = (
   if (!pointerDownState.tableGesture.active) {
     return;
   }
-  app.interactionState.isTableGestureActive = true;
-  app.mindmap.clearHover();
-  if (
-    app.state.highlightedTableCell ||
-    app.state.tableStructureHover ||
-    Object.keys(app.state.hoveredElementIds).length
-  ) {
-    app.setState({
-      highlightedTableCell: null,
-      tableStructureHover: null,
-      hoveredElementIds: {},
-    });
+  suspendHoverForStructureGesture(app);
+};
+
+const suspendHoverForFragmentGesture = (
+  app: PointerApp,
+  pointerDownState: PointerDownState,
+) => {
+  if (!pointerDownState.fragmentGesture.active) {
+    return;
   }
+  suspendHoverForStructureGesture(app);
 };
 
 export const handleCanvasPointerDown = (
@@ -655,9 +672,12 @@ export const handleCanvasPointerDown = (
   );
   if (
     interactionTarget.kind !== "containerControl" &&
-    app.state.tableRowColSelection
+    (app.state.tableRowColSelection || app.state.fragmentRowSelection)
   ) {
-    app.setState({ tableRowColSelection: null });
+    app.setState({
+      tableRowColSelection: null,
+      fragmentRowSelection: null,
+    });
   }
   // Unified dispatch (interaction-target-resolution.md §pointer-down): only a
   // container control zone — or the selected table's own body, whose zones
@@ -677,6 +697,23 @@ export const handleCanvasPointerDown = (
     // and element selection (phase-1.md:85); the shared pointer session
     // listeners still attach so move/up/Esc all flow through
     suspendHoverForTableGesture(app, pointerDownState);
+    attachPointerSessionListeners(app, event, pointerDownState);
+    return;
+  }
+
+  // Fragment row controls use the same structure channel: a container-control
+  // target is one of its rails/dots/separators, or the selected fragment's
+  // own body (the arm call resolves the body's actual zones).
+  const targetIsSelectedFragmentBody =
+    interactionTarget.kind === "selectedElement" &&
+    selectedElements.length === 1 &&
+    isSequenceFragmentElement(selectedElements[0]);
+  if (
+    (interactionTarget.kind === "containerControl" ||
+      targetIsSelectedFragmentBody) &&
+    app.armFragmentStructureGestureOnPointerDown(pointerDownState)
+  ) {
+    suspendHoverForFragmentGesture(app, pointerDownState);
     attachPointerSessionListeners(app, event, pointerDownState);
     return;
   }
@@ -1030,6 +1067,7 @@ export const initialPointerDownState = (
       }, new Map() as PointerDownState["originalElements"]),
     compositeControl: { active: null },
     tableGesture: { active: null },
+    fragmentGesture: { active: null },
     resize: {
       handleType: false,
       isResizing: false,
@@ -1081,7 +1119,11 @@ export const onKeyDownFromPointerDownHandler = (
     if (app.quickCreate.handlePointerKeyDown(pointerDownState, event)) {
       return;
     }
-    if (event.key === KEYS.ESCAPE && app.cancelTableGesture(pointerDownState)) {
+    if (
+      event.key === KEYS.ESCAPE &&
+      (app.cancelTableGesture(pointerDownState) ||
+        app.cancelFragmentGesture(pointerDownState))
+    ) {
       app.interactionState.isTableGestureActive = false;
       // Esc tears the gesture down from its arm-time snapshots, tracelessly;
       // consume the key so the App-level deselection does not also fire
@@ -1089,7 +1131,10 @@ export const onKeyDownFromPointerDownHandler = (
       event.stopPropagation();
       return;
     }
-    if (pointerDownState.tableGesture.active) {
+    if (
+      pointerDownState.tableGesture.active ||
+      pointerDownState.fragmentGesture.active
+    ) {
       // a table gesture owns the pointer: modifier keys just shape the next
       // preview frame, they must not start a generic drag/resize
       return;
@@ -1119,7 +1164,10 @@ export const onKeyUpFromPointerDownHandler = (
   return withBatchedUpdates((event: KeyboardEvent) => {
     // Prevents focus from escaping excalidraw tab
     event.key === KEYS.ALT && event.preventDefault();
-    if (pointerDownState.tableGesture.active) {
+    if (
+      pointerDownState.tableGesture.active ||
+      pointerDownState.fragmentGesture.active
+    ) {
       return;
     }
     if (app.maybeHandleResize(pointerDownState, event)) {
@@ -1154,6 +1202,10 @@ export const onPointerMoveFromPointerDownHandler = (
     }
 
     if (app.handleTableGestureMove(pointerDownState, pointerCoords)) {
+      return;
+    }
+
+    if (app.handleFragmentGestureMove(pointerDownState, pointerCoords)) {
       return;
     }
 
@@ -2064,10 +2116,13 @@ export const onPointerUpFromPointerDownHandler = (
       pointerDownState.eventListeners.onMove.flush();
     }
     app.interactionState.isTableGestureActive = false;
+    const gestureAborted =
+      childEvent.type !== "pointerup" ||
+      !isSelectionLikeTool(app.state.activeTool.type);
     const tableGestureCancelled =
-      (childEvent.type !== "pointerup" ||
-        !isSelectionLikeTool(app.state.activeTool.type)) &&
-      app.cancelTableGesture(pointerDownState);
+      gestureAborted && app.cancelTableGesture(pointerDownState);
+    const fragmentGestureCancelled =
+      gestureAborted && app.cancelFragmentGesture(pointerDownState);
 
     // an armed bucket fill commits only on a GENUINE pointer up. The
     // missing-pointer-up cleanup replays app handler with the pointer
@@ -2338,7 +2393,9 @@ export const onPointerUpFromPointerDownHandler = (
 
     if (
       tableGestureCancelled ||
-      app.finalizeTableGestureOnPointerUp(pointerDownState, sceneCoords)
+      fragmentGestureCancelled ||
+      app.finalizeTableGestureOnPointerUp(pointerDownState, sceneCoords) ||
+      app.finalizeFragmentGestureOnPointerUp(pointerDownState)
     ) {
       return;
     }

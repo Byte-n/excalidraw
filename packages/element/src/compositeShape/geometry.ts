@@ -14,6 +14,7 @@ import {
 
 import {
   flattenCompositeShapePath,
+  type CompositeShapeDetailPath,
   type CompositeShapePath,
   type ShapePoint,
 } from "./outline";
@@ -39,7 +40,7 @@ export type CompositeShapeSelectionFrame = {
 
 export type CompositeShapeGeometry = {
   outline: CompositeShapePath;
-  details: CompositeShapePath[];
+  details: CompositeShapeDetailPath[];
   /**
    * Explicit hit/distance/intersection geometry. Empty means the outline is
    * also the hit geometry.

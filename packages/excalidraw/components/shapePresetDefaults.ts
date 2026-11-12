@@ -278,10 +278,10 @@ export const SHAPE_PRESET_DEFAULTS: Readonly<
     width: SEQUENCE_ACTIVATION_WIDTH,
     height: SEQUENCE_ACTIVATION_HEIGHT,
   },
-  // 组合片段外框不填、只填左上页签；页签填 `#f5f5f5` → gray[0]（不填则 options.fill
-  // 为空、页签不填）
+  // 组合片段是无背景色的单列表格：外框与页签都只描边（`transparent` 时
+  // `options.fill` 为空，`drawShadedFaces` 不会填页签）。
   "sc-fragment": {
-    backgroundColor: COLOR_PALETTE.gray[0],
+    backgroundColor: COLOR_PALETTE.transparent,
     width: 400,
     height: 240,
   },

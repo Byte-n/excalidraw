@@ -68,6 +68,7 @@ import {
 import { getBoundTextElement, getContainerElement } from "@excalidraw/element";
 import { isStickyNoteElement } from "@excalidraw/element";
 import {
+  isSequenceFragmentElement,
   normalizeSequenceFragmentGeometry,
   normalizeSequenceLifelineGeometry,
 } from "@excalidraw/element";
@@ -492,7 +493,15 @@ export const restoreElement = (
         verticalAlign: element.verticalAlign || DEFAULT_VERTICAL_ALIGN,
         containerId: element.containerId ?? null,
         originalText: element.originalText || text,
-        autoResize: element.autoResize ?? true,
+        // A fragment's operator label always uses the container-bound
+        // auto-width mode: the tab, not the text element, owns the width.
+        autoResize: isSequenceFragmentElement(
+          element.containerId
+            ? targetElementsMap.get(element.containerId)
+            : undefined,
+        )
+          ? true
+          : element.autoResize ?? true,
         lineHeight,
         labelPosition: isFiniteNumber(element.labelPosition)
           ? clamp(element.labelPosition, 0, 1)

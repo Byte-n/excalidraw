@@ -9,6 +9,8 @@ import {
   assertValidContainerRefs,
   assertValidTableData,
   isTableElement,
+  isSequenceFragmentElement,
+  normalizeSequenceFragmentGeometry,
   normalizeTableDimensions,
   type ApplyToOptions,
   type ElementUpdate,
@@ -176,8 +178,17 @@ export const updateScene = <K extends keyof AppState>(
     }
     assertValidContainerRefs(sceneData.elements);
   }
+  // Programmatic/collab scene updates may carry fragments without row data.
+  // Normalize them here so the row controls always have rows to address.
+  const elements = sceneData.elements?.some(isSequenceFragmentElement)
+    ? sceneData.elements.map((element) =>
+        isSequenceFragmentElement(element)
+          ? normalizeSequenceFragmentGeometry(element)
+          : element,
+      )
+    : sceneData.elements;
   return withBatchedUpdates(() => {
-    const { elements, appState, collaborators, captureUpdate } = sceneData;
+    const { appState, collaborators, captureUpdate } = sceneData;
 
     if (captureUpdate) {
       const nextElements = elements ? elements : undefined;

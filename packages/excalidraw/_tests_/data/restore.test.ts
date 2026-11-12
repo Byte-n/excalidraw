@@ -108,6 +108,30 @@ describe("restoreElements", () => {
     expect(rows[1].height).toBeCloseTo(200);
   });
 
+  it("pins a restored fragment label to the container-bound text mode", () => {
+    const fragment = API.createElement({
+      type: "sequence",
+      width: 400,
+      height: 240,
+      shape: { id: "sc-fragment", schemaVersion: 1 },
+    });
+    const label = API.createElement({
+      type: "text",
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 20,
+      text: "Opt / Loop",
+      autoResize: false,
+      containerId: fragment.id,
+    } as any);
+    const restored = restore.restoreElements([fragment, label], null);
+    const restoredLabel = restored.find(
+      (element) => element.id === label.id,
+    ) as ExcalidrawTextElement | undefined;
+    expect(restoredLabel?.autoResize).toBe(true);
+  });
+
   it("clears a reference to a missing frame when repairing bindings", () => {
     const child = API.createElement({
       type: "rectangle",

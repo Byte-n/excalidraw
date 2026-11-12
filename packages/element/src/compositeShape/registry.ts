@@ -39,6 +39,7 @@ import {
   getStarOutline,
   pathFromPoints,
   regularPolygon,
+  type CompositeShapeDetailPath,
   type CompositeShapePath,
   type ShapePoint,
 } from "./outline";
@@ -352,10 +353,10 @@ const validateActivationLinkParams = (data: unknown) => {
 };
 
 /**
- * Optional fragment row structure; absent = the legacy single-box fragment.
- * At least one row is required, row ids are unique, and every height is a
- * finite positive number (the sum is normalized to the element height outside
- * the persistence boundary).
+ * Optional fragment row structure; absent = the fragment has no persisted
+ * rows yet. At least one row is required, row ids are unique, and every
+ * height is a finite positive number (the sum is normalized to the element
+ * height outside the persistence boundary).
  */
 const validateFragmentParams = (data: unknown) => {
   if (data === undefined) {
@@ -364,10 +365,15 @@ const validateFragmentParams = (data: unknown) => {
   const value = data as Record<string, unknown> | undefined;
   if (
     !value ||
-    !(
-      hasOnlyKeys(value, ["rows"]) || hasOnlyKeys(value, ["operator", "rows"])
+    Object.keys(value).some(
+      (key) => !["operator", "operatorWidth", "rows"].includes(key),
     ) ||
-    (value.operator !== undefined && typeof value.operator !== "string")
+    !("rows" in value) ||
+    (value.operator !== undefined && typeof value.operator !== "string") ||
+    (value.operatorWidth !== undefined &&
+      (typeof value.operatorWidth !== "number" ||
+        !Number.isFinite(value.operatorWidth) ||
+        value.operatorWidth <= 0))
   ) {
     return false;
   }
@@ -553,6 +559,24 @@ const updateRingControlPoint: ShapeControlUpdate<"circular-ring"> = (
 // ---------------------------------------------------------------------------
 // Dedicated rough drawings.
 
+/**
+ * Rough options for one stroke-only detail contour: details share the element
+ * options, but a path may force its own dash pattern (see
+ * `CompositeShapeDetailPath`).
+ */
+const detailPathOptions = (
+  options: Options,
+  path: CompositeShapeDetailPath,
+): Options =>
+  path.strokeLineDash
+    ? {
+        ...options,
+        fill: undefined,
+        strokeLineDash: path.strokeLineDash,
+        disableMultiStroke: true,
+      }
+    : { ...options, fill: undefined };
+
 /** Default drawing: the outline path, followed by any detail paths. */
 export const drawShapeOutlinePath: ShapeDraw = ({
   generator,
@@ -570,10 +594,10 @@ export const drawShapeOutlinePath: ShapeDraw = ({
   return [
     outline,
     ...geometry.details.map((path) =>
-      generator.path(compositeShapePathToSvg(path), {
-        ...pathOptions,
-        fill: undefined,
-      }),
+      generator.path(
+        compositeShapePathToSvg(path),
+        detailPathOptions(pathOptions, path),
+      ),
     ),
   ];
 };
@@ -611,14 +635,26 @@ const drawShadedFaces: ShapeDraw = ({
     ...faceOptions,
     fill: undefined,
   });
-  const detailSets = geometry.details.flatMap(
-    (path) =>
-      generator.path(compositeShapePathToSvg(path), {
-        ...faceOptions,
-        fill: undefined,
-      }).sets,
-  );
-  return [...faces, { ...outline, sets: [...outline.sets, ...detailSets] }];
+  const detailSets: Drawable["sets"] = [];
+  const dashedDetails: Drawable[] = [];
+  for (const path of geometry.details) {
+    const drawable = generator.path(
+      compositeShapePathToSvg(path),
+      detailPathOptions(faceOptions, path),
+    );
+    if (path.strokeLineDash) {
+      // Rough copies the dash from the drawable's options, so a path that
+      // forces its own dash cannot be merged into the solid outline drawable.
+      dashedDetails.push(drawable);
+    } else {
+      detailSets.push(...drawable.sets);
+    }
+  }
+  return [
+    ...faces,
+    { ...outline, sets: [...outline.sets, ...detailSets] },
+    ...dashedDetails,
+  ];
 };
 
 const drawEllipseShape: ShapeDraw = ({ generator, geometry, options }) => {
@@ -1693,11 +1729,19 @@ export const SHAPES: { [K in ShapeId]: ShapeRegistration<K> } = {
         getSequenceElementBox(input.width, input.height),
       ),
     textBounds: (input) =>
-      getSequenceFragmentTextBounds(input.width, input.height),
+      getSequenceFragmentTextBounds(
+        input.width,
+        input.height,
+        input.shape.fragment,
+      ),
     open: false,
     outline: (input) => getSequenceElementBox(input.width, input.height),
     details: (input) => [
-      getSequenceFragmentTabPath(input.width, input.height),
+      getSequenceFragmentTabPath(
+        input.width,
+        input.height,
+        input.shape.fragment,
+      ),
       ...getSequenceFragmentRowPaths(
         input.width,
         input.height,
@@ -1706,7 +1750,11 @@ export const SHAPES: { [K in ShapeId]: ShapeRegistration<K> } = {
     ],
     fillFaces: (input) => [
       {
-        path: getSequenceFragmentTabPath(input.width, input.height),
+        path: getSequenceFragmentTabPath(
+          input.width,
+          input.height,
+          input.shape.fragment,
+        ),
         tone: "base",
       },
     ],

@@ -199,6 +199,20 @@ export const actionDeleteSelected = register({
         };
       }
     }
+    // a selected fragment row claims Delete the same way (the header row is
+    // structural and the command declines it, falling through).
+    if (appState.fragmentRowSelection) {
+      if (app.deleteSelectedFragmentRow()) {
+        return {
+          elements: app.scene.getElementsIncludingDeleted(),
+          appState: {
+            ...appState,
+            fragmentRowSelection: null,
+          },
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        };
+      }
+    }
     if (app.mindmap.hasSelectedMindmapElement()) {
       if (app.mindmap.getSelectedNode()) {
         return app.mindmap.getDeleteActionResult();

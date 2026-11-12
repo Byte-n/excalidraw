@@ -5,7 +5,10 @@
  */
 export type { ShapeId } from "./types";
 
-export type { CompositeShapePath } from "./compositeShape/outline";
+export type {
+  CompositeShapePath,
+  CompositeShapeDetailPath,
+} from "./compositeShape/outline";
 export {
   compositeShapePathToSvg,
   flattenCompositeShapePath,
@@ -106,6 +109,7 @@ export {
   SEQUENCE_FRAGMENT_TAB_BEVEL,
   SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT,
   SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT,
+  SEQUENCE_FRAGMENT_ROW_DIVIDER_DASH,
   isSequenceLifelineShapeId,
   isSequenceLifelineElement,
   isSequenceFragmentElement,
@@ -133,6 +137,21 @@ export {
   getSequenceFragmentTextBounds,
   getSequenceFragmentRowLayout,
   getSequenceFragmentRowPaths,
+  createSequenceFragmentInitialRows,
+  getSequenceFragmentRowIndexAt,
+  getSequenceFragmentRowSeparatorYs,
+  getSequenceFragmentInsertionBoundaries,
+  getSequenceFragmentRowMinHeight,
+  SEQUENCE_FRAGMENT_DEFAULT_OPERATOR,
+  SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_X,
+  SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_Y,
+  SEQUENCE_FRAGMENT_TAB_MAX_RIGHT_INSET,
+  fitSequenceFragmentOperator,
+  insertSequenceFragmentRow,
+  resizeSequenceFragmentRow,
+  moveSequenceFragmentRow,
+  deleteSequenceFragmentRow,
+  SEQUENCE_FRAGMENT_HEADER_MIN_HEIGHT,
   normalizeSequenceFragmentRows,
   normalizeSequenceFragmentGeometry,
   appendSequenceFragmentRow,
@@ -148,4 +167,5 @@ export type {
   SequenceFragmentRowLayout,
   SequenceFragmentRowAddition,
   SequenceFragmentResize,
+  SequenceFragmentRowsUpdate,
 } from "./compositeShape/sequenceOutline";

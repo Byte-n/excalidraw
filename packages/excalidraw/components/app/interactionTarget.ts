@@ -12,13 +12,21 @@ import {
 import type { ExcalidrawElement, NonDeleted } from "@excalidraw/element/types";
 
 import {
+  getFragmentStructureCursor,
+  getFragmentStructureHoverAtSceneCoords,
+  setFragmentStructureHover,
+} from "./fragment";
+import {
   getTableBodyHoverAtSceneCoords,
   getTableStructureCursor,
   getTableStructureHoverAtSceneCoords,
   setTableStructureHover,
 } from "./table";
 
-import type { TableRowColStructureHover } from "../../types";
+import type {
+  FragmentStructureHover,
+  TableRowColStructureHover,
+} from "../../types";
 import type App from "../App";
 
 export type ContainerControl =
@@ -133,6 +141,43 @@ const tableProvider: ContainerInteractionProvider = {
   },
 };
 
+const fragmentProvider: ContainerInteractionProvider = {
+  getInteractionCandidate: (app, point) => {
+    const hover = getFragmentStructureHoverAtSceneCoords(app, point);
+    if (!hover) {
+      return null;
+    }
+    const control: ContainerControl =
+      hover.kind === "rowGrip"
+        ? "reorder"
+        : hover.kind === "rowInsert"
+        ? "insert"
+        : hover.kind === "rowResize"
+        ? "resize"
+        : hover.kind === "rowMove"
+        ? "reorder"
+        : "body";
+    return {
+      containerId: hover.elementId,
+      control,
+      // the body reveal must lose to every zone and element hit
+      priority: control === "body" ? 10 : 100,
+      gesture: hover.kind,
+      data: hover,
+    };
+  },
+  getCursor: (_app, candidate) => {
+    const hover = candidate.data as FragmentStructureHover | undefined;
+    return hover ? getFragmentStructureCursor(hover) : "";
+  },
+  renderHover: (app, candidate) => {
+    setFragmentStructureHover(app, candidate.data as FragmentStructureHover);
+  },
+  clearHover: (app) => {
+    setFragmentStructureHover(app, null);
+  },
+};
+
 const frameProvider: ContainerInteractionProvider = {
   getInteractionCandidate: (app, point) => {
     const frame = app.getTopLayerFrameAtSceneCoords(point);
@@ -156,6 +201,7 @@ const frameProvider: ContainerInteractionProvider = {
 };
 
 registerContainerInteractionProvider(tableProvider);
+registerContainerInteractionProvider(fragmentProvider);
 registerContainerInteractionProvider(frameProvider);
 
 type PointerApp = Pick<App, keyof App> & Record<string, any>;

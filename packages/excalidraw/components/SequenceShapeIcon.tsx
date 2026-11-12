@@ -2,6 +2,7 @@ import {
   compositeShapePathToSvg,
   flattenCompositeShapePath,
   getSequenceElementBox,
+  getSequenceFragmentRowPaths,
   getSequenceFragmentTabPath,
   getSequenceLifelineGeometry,
   isSequenceLifelineShapeId,
@@ -31,8 +32,23 @@ const ICON_SIZE = 24;
 const ICON_PADDING = 2;
 const CONTENT_SIZE = ICON_SIZE - ICON_PADDING * 2;
 
+/** Detail paths may force their own dash (the fragment's row divider). */
+type SequenceIconPath = CompositeShapePath & { strokeLineDash?: number[] };
+
+export type SequenceShapeIconOptions = {
+  /**
+   * Body rows depicted by a fragment icon. `sc-fragment` has two presets in
+   * the drawer: one condition row (default) and condition + else (2), so the
+   * else tile can show its divider.
+   */
+  fragmentBodyRows?: number;
+};
+
 /** 一个 `sc-*` id 在图标里要画的全部路径（元素局部坐标）。 */
-const getSequenceIconPaths = (id: SequenceShapeId): CompositeShapePath[] => {
+const getSequenceIconPaths = (
+  id: SequenceShapeId,
+  options?: SequenceShapeIconOptions,
+): SequenceIconPath[] => {
   const defaults = SHAPE_PRESET_DEFAULTS[id];
   if (isSequenceLifelineShapeId(id)) {
     const { head, attachments } = getSequenceLifelineGeometry(
@@ -43,10 +59,27 @@ const getSequenceIconPaths = (id: SequenceShapeId): CompositeShapePath[] => {
     return [...head, ...attachments];
   }
   if (id === "sc-fragment") {
-    return [
+    const paths: SequenceIconPath[] = [
       getSequenceElementBox(defaults.width, defaults.height),
       getSequenceFragmentTabPath(),
     ];
+    const bodyRows = Math.max(1, Math.floor(options?.fragmentBodyRows ?? 1));
+    if (bodyRows > 1) {
+      // `getSequenceFragmentRowPaths` omits the header/body divider (the tab
+      // closes that row) and keeps only the dashed condition/else divider.
+      paths.push(
+        ...getSequenceFragmentRowPaths(defaults.width, defaults.height, {
+          rows: [
+            { id: "icon-header", height: 1 },
+            ...Array.from({ length: bodyRows }, (_, index) => ({
+              id: `icon-body-${index}`,
+              height: 1,
+            })),
+          ],
+        }),
+      );
+    }
+    return paths;
   }
   return [getSequenceElementBox(defaults.width, defaults.height)];
 };
@@ -67,8 +100,11 @@ const getBounds = (paths: readonly CompositeShapePath[]) => {
   return { minX, minY, maxX, maxY };
 };
 
-export const getSequenceShapeIcon = (id: SequenceShapeId) => {
-  const paths = getSequenceIconPaths(id);
+export const getSequenceShapeIcon = (
+  id: SequenceShapeId,
+  options?: SequenceShapeIconOptions,
+) => {
+  const paths = getSequenceIconPaths(id, options);
   const { minX, minY, maxX, maxY } = getBounds(paths);
   const width = Math.max(maxX - minX, Number.EPSILON);
   const height = Math.max(maxY - minY, Number.EPSILON);
@@ -83,6 +119,7 @@ export const getSequenceShapeIcon = (id: SequenceShapeId) => {
         <path
           key={index}
           d={compositeShapePathToSvg(path)}
+          strokeDasharray={path.strokeLineDash?.join(" ")}
           // 缩放后仍保持 1.5px 线宽，与其余抽屉图标一致
           vectorEffect="non-scaling-stroke"
         />

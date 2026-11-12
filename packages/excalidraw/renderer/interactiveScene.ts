@@ -54,6 +54,9 @@ import {
   isMindmapNodeElement,
   isStickyNoteElement,
   getStickyNoteCornerRadius,
+  getSequenceFragmentInsertionBoundaries,
+  getSequenceFragmentRowLayout,
+  isSequenceFragmentElement,
   isTableElement,
   isTableCellBackgroundText,
   getTableAxisBlockRange,
@@ -154,6 +157,8 @@ import {
   getTextBoxPadding,
 } from "../textAutoResizeHandle";
 
+import { t } from "../i18n";
+
 import {
   bootstrapCanvas,
   fillCircle,
@@ -166,6 +171,8 @@ import {
 import type {
   AppState,
   AppClassProperties,
+  FragmentRowSelection,
+  FragmentStructureHover,
   InteractiveCanvasAppState,
 } from "../types";
 import type {
@@ -2301,6 +2308,162 @@ const renderTableStructureHover = (
 };
 
 /**
+ * Fragment row overlays in the fragment's local frame (rotation-aware). The
+ * fragment is the sequence family's single-column table, so the row rails,
+ * insertion dots and boundary lines are the table's vocabulary minus columns.
+ */
+const withFragmentLocalTransform = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  fragment: NonDeleted<ExcalidrawElement>,
+  draw: () => void,
+) => {
+  context.save();
+  context.translate(appState.scrollX, appState.scrollY);
+  context.translate(fragment.x, fragment.y);
+  if (fragment.angle) {
+    context.translate(fragment.width / 2, fragment.height / 2);
+    context.rotate(fragment.angle);
+    context.translate(-fragment.width / 2, -fragment.height / 2);
+  }
+  draw();
+  context.restore();
+};
+
+const renderFragmentStructureAffordances = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  fragment: NonDeleted<ExcalidrawElement>,
+  hover: FragmentStructureHover | null,
+  selection: FragmentRowSelection | null,
+) => {
+  if (!isSequenceFragmentElement(fragment)) {
+    return;
+  }
+  const zoom = appState.zoom.value;
+  const accent = getThemedColor(TABLE_STRUCTURE_ACCENT, appState.theme);
+  const lineWidth = 2 / zoom;
+  const railOffset = TABLE_STRUCTURE_RAIL_OFFSET / zoom;
+  const insertionOffset = TABLE_STRUCTURE_INSERTION_OFFSET / zoom;
+  const fragmentData = fragment.shape.fragment;
+  const layout = getSequenceFragmentRowLayout(fragment.height, fragmentData);
+  if (!layout.rows.length) {
+    return;
+  }
+  const selectedRowId =
+    selection?.elementId === fragment.id ? selection.rowId : null;
+
+  withFragmentLocalTransform(context, appState, fragment, () => {
+    // Selected row band (its own selection channel, like a table row).
+    if (selectedRowId) {
+      const row = layout.rows.find((entry) => entry.id === selectedRowId);
+      if (row) {
+        context.fillStyle = getThemedColor(
+          TABLE_ROW_COL_SELECTION_FILL,
+          appState.theme,
+        );
+        context.fillRect(0, row.y, fragment.width, row.height);
+        context.strokeStyle = accent;
+        context.lineWidth = 1.5 / zoom;
+        context.strokeRect(0, row.y, fragment.width, row.height);
+      }
+    }
+
+    if (!hover || hover.elementId !== fragment.id) {
+      return;
+    }
+
+    // Hovered row band for the reorder grip.
+    if (hover.kind === "rowGrip") {
+      const row = layout.rows.find((entry) => entry.id === hover.rowId);
+      if (row) {
+        context.fillStyle = getThemedColor(
+          TABLE_CELL_HOVER_FILL,
+          appState.theme,
+        );
+        context.fillRect(0, row.y, fragment.width, row.height);
+      }
+    }
+
+    // Every row gets the outer rail; hover/selection light it up.
+    for (const row of layout.rows) {
+      drawStructureRail(
+        context,
+        appState,
+        -railOffset,
+        row.y,
+        row.height,
+        "row",
+        hover.kind === "rowGrip" && hover.rowId === row.id
+          ? "hover"
+          : selectedRowId === row.id
+          ? "selected"
+          : "idle",
+      );
+    }
+
+    // Insertion dots on the left, one per row boundary below the header.
+    context.fillStyle = getThemedColor(
+      TABLE_STRUCTURE_DOT_FILL,
+      appState.theme,
+    );
+    for (const boundary of getSequenceFragmentInsertionBoundaries(
+      fragment.height,
+      fragmentData,
+    )) {
+      context.beginPath();
+      context.arc(-insertionOffset, boundary.y, 2 / zoom, 0, Math.PI * 2);
+      context.fill();
+    }
+
+    if (hover.kind === "rowResize") {
+      const row = layout.rows.find((entry) => entry.id === hover.rowId);
+      if (row) {
+        const boundaryY = row.y + row.height;
+        context.beginPath();
+        context.moveTo(0, boundaryY);
+        context.lineTo(fragment.width, boundaryY);
+        context.lineWidth = lineWidth;
+        context.strokeStyle = accent;
+        context.stroke();
+      }
+    }
+
+    if (hover.kind === "rowInsert") {
+      const boundary = getSequenceFragmentInsertionBoundaries(
+        fragment.height,
+        fragmentData,
+      ).find((entry) => entry.boundaryIndex === hover.boundaryIndex);
+      if (boundary) {
+        context.beginPath();
+        context.moveTo(0, boundary.y);
+        context.lineTo(fragment.width, boundary.y);
+        context.lineWidth = lineWidth;
+        context.strokeStyle = accent;
+        context.stroke();
+        drawInsertPlusMark(context, appState, -insertionOffset, boundary.y);
+        renderTableResizeSizeLabel(
+          context,
+          appState,
+          t("labels.sequenceFragmentInsertCondition"),
+          { x: -insertionOffset, y: boundary.y },
+          "left",
+        );
+      }
+    }
+
+    if (hover.kind === "rowMove") {
+      context.beginPath();
+      context.moveTo(0, hover.y);
+      context.lineTo(fragment.width, hover.y);
+      context.lineWidth = lineWidth;
+      context.strokeStyle = accent;
+      context.stroke();
+    }
+  });
+};
+
+/**
  * Cross-axis offset of the move ghost card from the table edge (CSS px) —
  * the design keeps the floating card slightly off the faded source band so
  * both stay readable.
@@ -3313,7 +3476,11 @@ const _renderInteractiveScene = ({
   if (
     activeTextElement &&
     !activeTextElement.autoResize &&
-    !isTableCellBackgroundText(activeTextElement)
+    !isTableCellBackgroundText(activeTextElement) &&
+    !(
+      activeTextElement.containerId &&
+      isSequenceFragmentElement(elementsMap.get(activeTextElement.containerId))
+    )
   ) {
     renderResetAutoResizeHandle(
       activeTextElement,
@@ -3672,6 +3839,28 @@ const _renderInteractiveScene = ({
 
   if (tableVisual && !editingTableBackgroundText) {
     renderTableStructureHover(context, appState, tableVisual, elementsMap);
+  }
+
+  // Sequence fragment rows: the same row vocabulary as a table, minus the
+  // columns and cell chrome. The selection band survives without hover.
+  if (appState.fragmentStructureHover || appState.fragmentRowSelection) {
+    const fragmentId =
+      appState.fragmentStructureHover?.elementId ??
+      appState.fragmentRowSelection?.elementId;
+    const fragment = fragmentId ? elementsMap.get(fragmentId) : undefined;
+    if (
+      fragment &&
+      !fragment.isDeleted &&
+      isSequenceFragmentElement(fragment)
+    ) {
+      renderFragmentStructureAffordances(
+        context,
+        appState,
+        fragment,
+        appState.fragmentStructureHover,
+        appState.fragmentRowSelection,
+      );
+    }
   }
 
   // Paint selected elements

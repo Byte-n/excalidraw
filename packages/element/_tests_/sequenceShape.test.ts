@@ -1,4 +1,4 @@
-import { getVerticalOffset } from "@excalidraw/common";
+import { DEFAULT_FONT_FAMILY, getVerticalOffset } from "@excalidraw/common";
 import { lineSegment, pointFrom } from "@excalidraw/math";
 import { RoughGenerator } from "roughjs/bin/generator";
 
@@ -18,8 +18,18 @@ import {
   SEQUENCE_MIN_POLE_LENGTH,
   SEQUENCE_SHAPE_IDS,
   SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT,
+  SEQUENCE_FRAGMENT_HEADER_MIN_HEIGHT,
   SEQUENCE_FRAGMENT_MIN_ROW_HEIGHT,
+  SEQUENCE_FRAGMENT_ROW_DIVIDER_DASH,
   SEQUENCE_FRAGMENT_TAB_HEIGHT,
+  SEQUENCE_FRAGMENT_TAB_WIDTH,
+  SEQUENCE_FRAGMENT_TAB_MAX_RIGHT_INSET,
+  createSequenceFragmentInitialRows,
+  deleteSequenceFragmentRow,
+  fitSequenceFragmentOperator,
+  insertSequenceFragmentRow,
+  moveSequenceFragmentRow,
+  resizeSequenceFragmentRow,
   SHAPE_IDS,
   appendSequenceFragmentRow,
   assertShapeData,
@@ -80,7 +90,7 @@ import {
   isPointInElement,
 } from "../src/collision";
 import { duplicateElement } from "../src/duplicate";
-import { newElement, newArrowElement } from "../src/newElement";
+import { newElement, newArrowElement, newTextElement } from "../src/newElement";
 import { Scene } from "../src/Scene";
 import { getSequenceActivationDragPlacement } from "../src/sequenceActivation";
 import { getSnapOutlineMidPoint } from "../src/utils";
@@ -90,6 +100,7 @@ import {
   getSequenceLifelineResize,
 } from "../src/resizeElements";
 import { generateRoughOptions } from "../src/shape";
+import { isQuickCreateTargetElement } from "../src/quickCreate";
 import { getLineHeightInPx } from "../src/textMeasurements";
 import { isBindableElement } from "../src/typeChecks";
 import { getTransformHandles } from "../src/transformHandles";
@@ -881,8 +892,12 @@ describe("sequence draw pipeline", () => {
 describe("sequence fragment rows", () => {
   const rows = (...heights: number[]) =>
     heights.map((height, index) => ({ id: `row-${index}`, height }));
+  const normalizeFragment = (element: ExcalidrawShapeElement) =>
+    normalizeSequenceFragmentGeometry(element) as ExcalidrawShapeElement & {
+      shape: Extract<SequenceShapeData, { id: "sc-fragment" }>;
+    };
 
-  it("keeps the legacy single-box fragment when no rows are persisted", () => {
+  it("initializes a label-less fragment with a header row and one body row", () => {
     const element = makeElement("sc-fragment", 400, 240);
     expect(isSequenceFragmentElement(element)).toBe(true);
     expect(
@@ -893,42 +908,236 @@ describe("sequence fragment rows", () => {
       separators: [],
     });
     expect(getSequenceFragmentRowPaths(400, 240, undefined)).toEqual([]);
-    expect(normalizeSequenceFragmentGeometry(element)).toBe(element);
-    expect(appendSequenceFragmentRow(element)).toMatchObject({
+    const normalized = normalizeFragment(element);
+    expect(normalized).not.toBe(element);
+    expect(normalized.textFitMode).toBe("fixed");
+    expect(normalized.shape.fragment?.rows.map((row) => row.height)).toEqual([
+      SEQUENCE_FRAGMENT_TAB_HEIGHT,
+      240 - SEQUENCE_FRAGMENT_TAB_HEIGHT,
+    ]);
+    expect(
+      normalized.shape.fragment?.rows.reduce((sum, row) => sum + row.height, 0),
+    ).toBeCloseTo(240, 6);
+    const appended = appendSequenceFragmentRow(element);
+    expect(appended).toMatchObject({
       height: 240 + SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT,
-      shape: {
-        fragment: {
-          rows: [
-            { height: 240 },
-            { height: SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT },
-          ],
-        },
-      },
     });
+    expect(appended?.shape.fragment?.rows.map((row) => row.height)).toEqual([
+      SEQUENCE_FRAGMENT_TAB_HEIGHT,
+      240 - SEQUENCE_FRAGMENT_TAB_HEIGHT,
+      SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT,
+    ]);
   });
 
-  it("draws one divider between each pair of rows", () => {
+  it("seeds two body rows for the else preset", () => {
+    const rows = createSequenceFragmentInitialRows(240, 2);
+    expect(rows).toHaveLength(3);
+    expect(rows[0].height).toBe(SEQUENCE_FRAGMENT_TAB_HEIGHT);
+    const body = 240 - SEQUENCE_FRAGMENT_TAB_HEIGHT;
+    expect(rows[1].height).toBeCloseTo(body / 2, 6);
+    expect(rows[2].height).toBeCloseTo(body / 2, 6);
+    expect(rows.reduce((sum, row) => sum + row.height, 0)).toBeCloseTo(240, 6);
+  });
+
+  it("inserts a condition row at a boundary with the header staying first", () => {
+    const element = normalizeFragment(makeElement("sc-fragment", 400, 240));
+    const before = element.shape.fragment?.rows ?? [];
+    const update = insertSequenceFragmentRow(element, 1);
+    if (!update) {
+      throw new Error("Expected a fragment row insertion");
+    }
+    const rows = update.shape.fragment?.rows ?? [];
+    expect(rows).toHaveLength(3);
+    expect(rows[0].id).toBe(before[0].id);
+    expect(rows[1].id).toBe(update.rowId);
+    expect(rows[2].id).toBe(before[1].id);
+    expect(rows[1].height).toBe(SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT);
+    expect(update.height).toBe(240 + SEQUENCE_FRAGMENT_DEFAULT_ROW_HEIGHT);
+    expect(rows.reduce((sum, row) => sum + row.height, 0)).toBeCloseTo(
+      update.height,
+      6,
+    );
+  });
+
+  it("resizes a row and moves the fragment bottom with it", () => {
+    const element = normalizeFragment(makeElement("sc-fragment", 400, 240));
+    const body = element.shape.fragment?.rows[1];
+    if (!body) {
+      throw new Error("Expected a body row");
+    }
+    const update = resizeSequenceFragmentRow(
+      element,
+      body.id,
+      body.height + 40,
+    );
+    if (!update) {
+      throw new Error("Expected a fragment row resize");
+    }
+    expect(update.shape.fragment?.rows[1].height).toBeCloseTo(
+      body.height + 40,
+      6,
+    );
+    expect(update.height).toBeCloseTo(280, 6);
+  });
+
+  it("never resizes the header below the tab height", () => {
+    const element = normalizeFragment(makeElement("sc-fragment", 400, 240));
+    const header = element.shape.fragment?.rows[0];
+    if (!header) {
+      throw new Error("Expected a header row");
+    }
+    const update = resizeSequenceFragmentRow(element, header.id, 1);
+    if (!update) {
+      throw new Error("Expected a fragment row resize");
+    }
+    expect(update.shape.fragment?.rows[0].height).toBe(
+      SEQUENCE_FRAGMENT_HEADER_MIN_HEIGHT,
+    );
+    expect(update.height).toBeCloseTo(
+      240 - header.height + SEQUENCE_FRAGMENT_HEADER_MIN_HEIGHT,
+      6,
+    );
+  });
+
+  it("reorders body rows but never the header", () => {
+    const element = normalizeFragment(makeElement("sc-fragment", 400, 240));
+    const first = insertSequenceFragmentRow(element, 1);
+    if (!first) {
+      throw new Error("Expected a fragment row insertion");
+    }
+    const nextElement = {
+      ...element,
+      height: first.height,
+      shape: first.shape,
+    } as ExcalidrawShapeElement & {
+      shape: Extract<SequenceShapeData, { id: "sc-fragment" }>;
+    };
+    const second = insertSequenceFragmentRow(nextElement, 2);
+    if (!second) {
+      throw new Error("Expected a second fragment row insertion");
+    }
+    const withTwo = {
+      ...nextElement,
+      height: second.height,
+      shape: second.shape,
+    } as ExcalidrawShapeElement & {
+      shape: Extract<SequenceShapeData, { id: "sc-fragment" }>;
+    };
+    const rows = withTwo.shape.fragment?.rows ?? [];
+    const moved = moveSequenceFragmentRow(withTwo, rows[rows.length - 1].id, 1);
+    if (!moved) {
+      throw new Error("Expected a fragment row move");
+    }
+    expect(moved.shape.fragment?.rows[0].id).toBe(rows[0].id);
+    expect(moved.shape.fragment?.rows[1].id).toBe(rows[rows.length - 1].id);
+    expect(moved.height).toBe(withTwo.height);
+    expect(moveSequenceFragmentRow(withTwo, rows[0].id, 1)).toBeNull();
+  });
+
+  it("deletes body rows but not the header", () => {
+    const element = normalizeFragment(makeElement("sc-fragment", 400, 240));
+    const rows = element.shape.fragment?.rows ?? [];
+    const update = deleteSequenceFragmentRow(element, rows[1].id);
+    if (!update) {
+      throw new Error("Expected a fragment row deletion");
+    }
+    expect(update.shape.fragment?.rows).toHaveLength(1);
+    expect(update.height).toBeCloseTo(rows[0].height, 6);
+    expect(deleteSequenceFragmentRow(element, rows[0].id)).toBeNull();
+  });
+
+  it("does not offer quick-create handles on a fragment", () => {
+    expect(
+      isQuickCreateTargetElement(makeElement("sc-fragment", 400, 240)),
+    ).toBe(false);
+    expect(
+      isQuickCreateTargetElement(makeElement("sc-activation", 30, 100)),
+    ).toBe(true);
+  });
+
+  it("keeps the tab label to one line", () => {
+    const bounds = getSequenceFragmentTextBounds(400, 240);
+    // a 14px default-font line is ~17.5px; the band must not fit two lines
+    expect(bounds.height).toBeLessThan(2 * 17.5);
+  });
+
+  it("grows the operator tab width before wrapping", () => {
+    const fragment = normalizeFragment(makeElement("sc-fragment", 400, 240));
+    const text = newTextElement({
+      x: 0,
+      y: 0,
+      text: "Opt / Loop",
+      fontSize: 14,
+      fontFamily: DEFAULT_FONT_FAMILY,
+    });
+    const fit = fitSequenceFragmentOperator(fragment, text);
+    if (!fit) {
+      throw new Error("Expected an operator fit");
+    }
+    expect(fit.shape.fragment?.operatorWidth).toBeGreaterThanOrEqual(
+      SEQUENCE_FRAGMENT_TAB_WIDTH,
+    );
+    // a short label stays on one line and keeps the sample tab height
+    expect(fit.shape.fragment?.rows[0].height).toBeCloseTo(
+      SEQUENCE_FRAGMENT_TAB_HEIGHT,
+      6,
+    );
+    expect(fit.height).toBeCloseTo(240, 6);
+  });
+
+  it("wraps the operator once the tab reaches its max width", () => {
+    const fragment = normalizeFragment(makeElement("sc-fragment", 400, 240));
+    const text = newTextElement({
+      x: 0,
+      y: 0,
+      text: "Opt / Loop".repeat(30),
+      fontSize: 14,
+      fontFamily: DEFAULT_FONT_FAMILY,
+    });
+    const fit = fitSequenceFragmentOperator(fragment, text);
+    if (!fit) {
+      throw new Error("Expected an operator fit");
+    }
+    const rows = fit.shape.fragment?.rows ?? [];
+    expect(fit.shape.fragment?.operatorWidth).toBeCloseTo(
+      400 - SEQUENCE_FRAGMENT_TAB_MAX_RIGHT_INSET,
+      6,
+    );
+    expect(rows[0].height).toBeGreaterThan(SEQUENCE_FRAGMENT_TAB_HEIGHT + 10);
+    expect(fit.height).toBeCloseTo(
+      240 + rows[0].height - SEQUENCE_FRAGMENT_TAB_HEIGHT,
+      6,
+    );
+  });
+
+  it("hides the header divider and dashes the body dividers", () => {
     const fragment: SequenceFragmentData = { rows: rows(60, 60, 60) };
     const layout = getSequenceFragmentRowLayout(180, fragment);
     expect(layout.rows.map((row) => row.y)).toEqual([0, 60, 120]);
     expect(layout.rows.map((row) => row.height)).toEqual([60, 60, 60]);
     expect(layout.separators).toEqual([60, 120]);
+    // The divider between the header (tab) row and the first body row is
+    // transparent; later dividers are dashed.
     expect(getSequenceFragmentRowPaths(400, 180, fragment)).toEqual([
-      pathFromPoints(
-        [
-          [0, 60],
-          [400, 60],
-        ],
-        false,
-      ),
-      pathFromPoints(
-        [
-          [0, 120],
-          [400, 120],
-        ],
-        false,
-      ),
+      {
+        ...pathFromPoints(
+          [
+            [0, 120],
+            [400, 120],
+          ],
+          false,
+        ),
+        strokeLineDash: SEQUENCE_FRAGMENT_ROW_DIVIDER_DASH,
+      },
     ]);
+  });
+
+  it("draws no divider for a two-row fragment", () => {
+    const fragment: SequenceFragmentData = { rows: rows(60, 60) };
+    expect(getSequenceFragmentRowLayout(120, fragment).separators).toEqual([
+      60,
+    ]);
+    expect(getSequenceFragmentRowPaths(400, 120, fragment)).toEqual([]);
   });
 
   it("keeps the tab row at least as tall as the tab", () => {
@@ -942,7 +1151,7 @@ describe("sequence fragment rows", () => {
 
   it("normalizes persisted row heights to the element height", () => {
     const element = makeFragmentElement(400, 300, { rows: rows(100, 100) });
-    const normalized = normalizeSequenceFragmentGeometry(element);
+    const normalized = normalizeFragment(element);
     expect(normalized).not.toBe(element);
     if (!isSequenceFragmentElement(normalized)) {
       throw new Error("Expected a fragment");
@@ -1067,7 +1276,7 @@ describe("sequence fragment rows", () => {
     const fragment: SequenceFragmentData = { rows: rows(60, 60, 60) };
     const element = makeFragmentElement(400, 180, fragment);
     const { details } = getCompositeShapeGeometry(element);
-    expect(details[0]).toEqual(getSequenceFragmentTabPath(400, 180));
+    expect(details[0]).toEqual(getSequenceFragmentTabPath(400, 180, fragment));
     expect(details.slice(1)).toEqual(
       getSequenceFragmentRowPaths(400, 180, fragment),
     );
@@ -1220,7 +1429,11 @@ describe("sequence clamping to the element box", () => {
       element.y +
       getTextVerticalOffset(text.verticalAlign, text.height, 1, lineHeightPx) +
       getVerticalOffset(text.fontFamily, text.fontSize, lineHeightPx);
-    expect(Math.abs(baseline - 24.229)).toBeLessThan(1);
+    // the single line is vertically centered in the sample tab
+    const expectedBaseline =
+      (SEQUENCE_FRAGMENT_TAB_HEIGHT - lineHeightPx) / 2 +
+      getVerticalOffset(text.fontFamily, text.fontSize, lineHeightPx);
+    expect(Math.abs(baseline - expectedBaseline)).toBeLessThan(0.5);
   });
 
   it.each(ICON_IDS)("%s keeps s === 1 at the default size", (id) => {
@@ -1312,13 +1525,7 @@ describe("sequence activation geometry", () => {
 
     expect(snapSequenceActivationLocalY(100, targetY + 1)).toBe(targetY);
 
-    const snapped = snapToMid(
-      activation,
-      elementsMap,
-      pointer,
-      0.05,
-      arrow,
-    )!;
+    const snapped = snapToMid(activation, elementsMap, pointer, 0.05, arrow)!;
     expect(snapped[1]).toBeCloseTo(targetY, 6);
     expect(snapped[1]).toBeGreaterThan(0);
     expect(snapped[1]).toBeLessThan(100);

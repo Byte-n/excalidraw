@@ -72,6 +72,8 @@ import {
   isShapeId,
   isShapeElement,
   normalizeSequenceFragmentGeometry,
+  fitSequenceFragmentOperator,
+  isSequenceFragmentElement,
   normalizeSequenceLifelineGeometry,
 } from "./compositeShape";
 
@@ -1150,6 +1152,19 @@ export const convertToExcalidrawElements = (
           );
           elementStore.add(container);
           elementStore.add(text);
+
+          if (isSequenceFragmentElement(container) && isTextElement(text)) {
+            // The operator tab grows with its label before wrapping; persist
+            // the fitted tab width and header height on the restored fragment.
+            const fit = fitSequenceFragmentOperator(container, text);
+            if (fit) {
+              Object.assign(container, {
+                height: fit.height,
+                shape: fit.shape,
+              });
+              redrawTextBoundingBox(text, container, scene);
+            }
+          }
 
           if (isLinearElement(container)) {
             const originalStart =

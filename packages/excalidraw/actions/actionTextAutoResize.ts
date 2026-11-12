@@ -4,6 +4,7 @@ import {
   getTextAnchorRatios,
   isExcalidrawElement,
   isNonDeletedElement,
+  isSequenceFragmentElement,
   newElementWith,
   updateBoundElements,
 } from "@excalidraw/element";
@@ -26,10 +27,20 @@ export const actionTextAutoResize = register({
   trackEvent: { category: "element" },
   predicate: (elements, appState, _: unknown) => {
     const selectedElements = getSelectedElements(elements, appState);
+    if (selectedElements.length !== 1) {
+      return false;
+    }
+    const selected = selectedElements[0];
+    const container =
+      isTextElement(selected) && selected.containerId
+        ? elements.find((element) => element.id === selected.containerId)
+        : null;
     return (
-      selectedElements.length === 1 &&
-      isTextElement(selectedElements[0]) &&
-      !selectedElements[0].autoResize
+      isTextElement(selected) &&
+      !selected.autoResize &&
+      // the fragment operator label is container-bound; its width belongs to
+      // the tab and the text mode must not switch
+      !isSequenceFragmentElement(container)
     );
   },
   perform: (elements, appState, targetElement, app) => {

@@ -17,15 +17,19 @@ const PALETTE_COLORS = Object.values(COLOR_PALETTE).flatMap((value) =>
 );
 
 describe("SHAPE_PRESET_DEFAULTS", () => {
-  it("键集合 == 目录 basic + flowchart + sequence 的预设 id 集合（加预设忘配默认值会红）", () => {
-    const catalogIds = [
+  it("键集合 == 目录 basic + flowchart + sequence 的图形 id 集合（加预设忘配默认值会红）", () => {
+    // 同一图形可以有多个抽屉预设（组合片段的 condition / condition-else），
+    // 它们共用同一份默认值，所以按 `creation.shapeId` 去重后比对。
+    const catalogShapeIds = [
       ...getCatalogGroup("basic").items,
       ...getCatalogGroup("flowchart").items,
       ...getCatalogGroup("sequence").items,
-    ].map((item) => item.id);
+    ].flatMap((item) =>
+      item.creation.kind === "shape" ? [item.creation.shapeId] : [],
+    );
 
     expect(Object.keys(SHAPE_PRESET_DEFAULTS).sort()).toEqual(
-      [...catalogIds].sort(),
+      [...new Set(catalogShapeIds)].sort(),
     );
   });
 
@@ -246,7 +250,12 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
       height: 428,
     },
     { id: "sc-activation", backgroundColor: "#c5d7e9", width: 30, height: 100 },
-    { id: "sc-fragment", backgroundColor: "#f4f4f4", width: 400, height: 240 },
+    {
+      id: "sc-fragment",
+      backgroundColor: "transparent",
+      width: 400,
+      height: 240,
+    },
   ];
 
   it("恰好 53 行（29 基础 + 14 流程图 + 10 时序），与表本身逐条对照", () => {

@@ -338,9 +338,11 @@ export type SequenceShapeData =
       id: "sc-fragment";
       schemaVersion: 1;
       /**
-       * Row structure of the fragment. Absent means the legacy single-box
-       * fragment (no row dividers). When present, `rows` always has at least
-       * one entry with `height > 0`, and the heights sum to the element height.
+       * Row structure of the fragment. Absent means the fragment has not been
+       * normalized yet: it renders as a single box until
+       * `normalizeSequenceFragmentGeometry` gives it a header row and body
+       * rows. When present, `rows` has at least one entry with `height > 0`,
+       * and the heights sum to the element height.
        */
       fragment?: SequenceFragmentData;
     }>;
@@ -357,6 +359,12 @@ export type SequenceFragmentRow = Readonly<{
 export type SequenceFragmentData = Readonly<{
   /** Tab title (alt / opt / loop / par / …); tab text is bound text today. */
   operator?: string;
+  /**
+   * Rendered width of the operator tab. The tab grows with its label before
+   * the label wraps (see `fitSequenceFragmentOperator`); the first row's
+   * height is the tab height, so a wrapped label grows that row too.
+   */
+  operatorWidth?: number;
   rows: ReadonlyArray<SequenceFragmentRow>;
 }>;
 

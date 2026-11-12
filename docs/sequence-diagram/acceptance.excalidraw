@@ -83,9 +83,9 @@
       "id": "ll-actor",
       "type": "sequence",
       "x": 40,
-      "y": 120,
+      "y": 140,
       "width": 84,
-      "height": 840,
+      "height": 1260,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -125,10 +125,10 @@
     {
       "id": "ll-boundary",
       "type": "sequence",
-      "x": 230,
-      "y": 120,
+      "x": 264,
+      "y": 140,
       "width": 76,
-      "height": 840,
+      "height": 1260,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -168,10 +168,10 @@
     {
       "id": "ll-control",
       "type": "sequence",
-      "x": 420,
-      "y": 120,
+      "x": 472,
+      "y": 140,
       "width": 100,
-      "height": 840,
+      "height": 1260,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -211,10 +211,10 @@
     {
       "id": "ll-entity",
       "type": "sequence",
-      "x": 610,
-      "y": 120,
+      "x": 710,
+      "y": 140,
       "width": 64,
-      "height": 840,
+      "height": 1260,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -254,10 +254,10 @@
     {
       "id": "ll-queue",
       "type": "sequence",
-      "x": 990,
-      "y": 120,
+      "x": 1132,
+      "y": 140,
       "width": 100,
-      "height": 840,
+      "height": 1260,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -297,10 +297,10 @@
     {
       "id": "ll-db",
       "type": "sequence",
-      "x": 800,
-      "y": 120,
+      "x": 928,
+      "y": 140,
       "width": 68,
-      "height": 840,
+      "height": 1260,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -341,7 +341,7 @@
       "id": "act-actor",
       "type": "sequence",
       "x": 67,
-      "y": 290,
+      "y": 330,
       "width": 30,
       "height": 100,
       "angle": 0,
@@ -373,17 +373,17 @@
         "schemaVersion": 1,
         "link": {
           "lifelineId": "ll-actor",
-          "localY": 220
+          "localY": 240
         }
       }
     },
     {
       "id": "act-boundary",
       "type": "sequence",
-      "x": 253,
-      "y": 330,
+      "x": 287,
+      "y": 340,
       "width": 30,
-      "height": 200,
+      "height": 340,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -421,17 +421,17 @@
         "schemaVersion": 1,
         "link": {
           "lifelineId": "ll-boundary",
-          "localY": 310
+          "localY": 370
         }
       }
     },
     {
       "id": "act-control",
       "type": "sequence",
-      "x": 455,
-      "y": 420,
+      "x": 507,
+      "y": 460,
       "width": 30,
-      "height": 510,
+      "height": 860,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -481,17 +481,17 @@
         "schemaVersion": 1,
         "link": {
           "lifelineId": "ll-control",
-          "localY": 555
+          "localY": 750
         }
       }
     },
     {
       "id": "act-entity",
       "type": "sequence",
-      "x": 627,
-      "y": 645,
+      "x": 727,
+      "y": 810,
       "width": 30,
-      "height": 100,
+      "height": 160,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -525,15 +525,15 @@
         "schemaVersion": 1,
         "link": {
           "lifelineId": "ll-entity",
-          "localY": 575
+          "localY": 750
         }
       }
     },
     {
       "id": "act-queue",
       "type": "sequence",
-      "x": 1025,
-      "y": 790,
+      "x": 1167,
+      "y": 1110,
       "width": 30,
       "height": 100,
       "angle": 0,
@@ -565,15 +565,15 @@
         "schemaVersion": 1,
         "link": {
           "lifelineId": "ll-queue",
-          "localY": 720
+          "localY": 1020
         }
       }
     },
     {
       "id": "act-db",
       "type": "sequence",
-      "x": 819,
-      "y": 850,
+      "x": 947,
+      "y": 1210,
       "width": 30,
       "height": 100,
       "angle": 0,
@@ -605,17 +605,17 @@
         "schemaVersion": 1,
         "link": {
           "lifelineId": "ll-db",
-          "localY": 780
+          "localY": 1120
         }
       }
     },
     {
       "id": "frag-alt",
       "type": "sequence",
-      "x": 245,
-      "y": 370,
-      "width": 250,
-      "height": 220,
+      "x": 256,
+      "y": 420,
+      "width": 320,
+      "height": 280,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -648,11 +648,11 @@
           "rows": [
             {
               "id": "frag-alt-row-1",
-              "height": 40
+              "height": 48
             },
             {
               "id": "frag-alt-row-2",
-              "height": 180
+              "height": 232
             }
           ]
         }
@@ -662,10 +662,10 @@
     {
       "id": "frag-loop",
       "type": "sequence",
-      "x": 450,
-      "y": 595,
-      "width": 215,
-      "height": 155,
+      "x": 478,
+      "y": 740,
+      "width": 320,
+      "height": 280,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -698,11 +698,11 @@
           "rows": [
             {
               "id": "frag-loop-row-1",
-              "height": 40
+              "height": 48
             },
             {
               "id": "frag-loop-row-2",
-              "height": 115
+              "height": 232
             }
           ]
         }
@@ -712,10 +712,10 @@
     {
       "id": "frag-opt",
       "type": "sequence",
-      "x": 450,
-      "y": 760,
-      "width": 620,
-      "height": 200,
+      "x": 478,
+      "y": 1060,
+      "width": 760,
+      "height": 280,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -748,11 +748,11 @@
           "rows": [
             {
               "id": "frag-opt-row-1",
-              "height": 40
+              "height": 48
             },
             {
               "id": "frag-opt-row-2",
-              "height": 160
+              "height": 232
             }
           ]
         }
@@ -763,8 +763,8 @@
       "id": "msg-0",
       "type": "arrow",
       "x": 103,
-      "y": 340,
-      "width": 144,
+      "y": 380,
+      "width": 178,
       "height": 0,
       "angle": 0,
       "strokeColor": "#646a73",
@@ -796,7 +796,7 @@
           0
         ],
         [
-          144,
+          178,
           0
         ]
       ],
@@ -804,14 +804,14 @@
         "elementId": "act-actor",
         "attachPoint": [
           1.2,
-          0.5001
+          0.5
         ]
       },
       "endBinding": {
         "elementId": "act-boundary",
         "attachPoint": [
           -0.2,
-          0.05
+          0.11764705882352941
         ]
       },
       "startArrowhead": null,
@@ -821,9 +821,9 @@
     {
       "id": "msg-1",
       "type": "arrow",
-      "x": 289,
-      "y": 450,
-      "width": 160,
+      "x": 323,
+      "y": 520,
+      "width": 178,
       "height": 0,
       "angle": 0,
       "strokeColor": "#646a73",
@@ -855,7 +855,7 @@
           0
         ],
         [
-          160,
+          178,
           0
         ]
       ],
@@ -863,14 +863,14 @@
         "elementId": "act-boundary",
         "attachPoint": [
           1.2,
-          0.6
+          0.5294117647058824
         ]
       },
       "endBinding": {
         "elementId": "act-control",
         "attachPoint": [
           -0.2,
-          0.058823529411764705
+          0.06976744186046512
         ]
       },
       "startArrowhead": null,
@@ -880,9 +880,9 @@
     {
       "id": "msg-2",
       "type": "arrow",
-      "x": 491,
-      "y": 520,
-      "width": 244,
+      "x": 543,
+      "y": 620,
+      "width": 262,
       "height": 0,
       "angle": 0,
       "strokeColor": "#646a73",
@@ -914,7 +914,7 @@
           0
         ],
         [
-          -244,
+          -262,
           0
         ]
       ],
@@ -922,14 +922,14 @@
         "elementId": "act-control",
         "attachPoint": [
           1.2,
-          0.19607843137254902
+          0.18604651162790697
         ]
       },
       "endBinding": {
         "elementId": "act-boundary",
         "attachPoint": [
           -0.2,
-          0.95
+          0.8235294117647058
         ]
       },
       "startArrowhead": null,
@@ -939,9 +939,9 @@
     {
       "id": "msg-3",
       "type": "arrow",
-      "x": 491,
-      "y": 670,
-      "width": 130,
+      "x": 543,
+      "y": 840,
+      "width": 178,
       "height": 0,
       "angle": 0,
       "strokeColor": "#646a73",
@@ -973,7 +973,7 @@
           0
         ],
         [
-          130,
+          178,
           0
         ]
       ],
@@ -981,14 +981,14 @@
         "elementId": "act-control",
         "attachPoint": [
           1.2,
-          0.49019607843137253
+          0.4418604651162791
         ]
       },
       "endBinding": {
         "elementId": "act-entity",
         "attachPoint": [
           -0.2,
-          0.25
+          0.1875
         ]
       },
       "startArrowhead": null,
@@ -998,9 +998,9 @@
     {
       "id": "msg-4",
       "type": "arrow",
-      "x": 663,
-      "y": 720,
-      "width": 214,
+      "x": 763,
+      "y": 940,
+      "width": 262,
       "height": 0,
       "angle": 0,
       "strokeColor": "#646a73",
@@ -1032,7 +1032,7 @@
           0
         ],
         [
-          -214,
+          -262,
           0
         ]
       ],
@@ -1040,14 +1040,14 @@
         "elementId": "act-entity",
         "attachPoint": [
           1.2,
-          0.75
+          0.8125
         ]
       },
       "endBinding": {
         "elementId": "act-control",
         "attachPoint": [
           -0.2,
-          0.5882352941176471
+          0.5581395348837209
         ]
       },
       "startArrowhead": null,
@@ -1057,9 +1057,9 @@
     {
       "id": "msg-5",
       "type": "arrow",
-      "x": 491,
-      "y": 840,
-      "width": 528,
+      "x": 543,
+      "y": 1160,
+      "width": 618,
       "height": 0,
       "angle": 0,
       "strokeColor": "#646a73",
@@ -1091,7 +1091,7 @@
           0
         ],
         [
-          528,
+          618,
           0
         ]
       ],
@@ -1099,14 +1099,14 @@
         "elementId": "act-control",
         "attachPoint": [
           1.2,
-          0.8235294117647058
+          0.813953488372093
         ]
       },
       "endBinding": {
         "elementId": "act-queue",
         "attachPoint": [
           -0.2,
-          0.5001
+          0.5
         ]
       },
       "startArrowhead": null,
@@ -1116,9 +1116,9 @@
     {
       "id": "msg-6",
       "type": "arrow",
-      "x": 491,
-      "y": 900,
-      "width": 322,
+      "x": 543,
+      "y": 1260,
+      "width": 398,
       "height": 0,
       "angle": 0,
       "strokeColor": "#646a73",
@@ -1150,7 +1150,7 @@
           0
         ],
         [
-          322,
+          398,
           0
         ]
       ],
@@ -1158,14 +1158,14 @@
         "elementId": "act-control",
         "attachPoint": [
           1.2,
-          0.9411764705882353
+          0.9302325581395349
         ]
       },
       "endBinding": {
         "elementId": "act-db",
         "attachPoint": [
           -0.2,
-          0.5001
+          0.5
         ]
       },
       "startArrowhead": null,
@@ -1176,7 +1176,7 @@
       "id": "geo-title",
       "type": "text",
       "x": 40,
-      "y": 990,
+      "y": 1450,
       "width": 240,
       "height": 25,
       "angle": 0,
@@ -1214,7 +1214,7 @@
       "id": "ll-object",
       "type": "sequence",
       "x": 40,
-      "y": 1040,
+      "y": 1500,
       "width": 120,
       "height": 260,
       "angle": 0,
@@ -1253,7 +1253,7 @@
       "id": "ll-collection",
       "type": "sequence",
       "x": 400,
-      "y": 1040,
+      "y": 1500,
       "width": 118,
       "height": 588,
       "angle": 0,
@@ -1292,7 +1292,7 @@
       "id": "geo-note",
       "type": "text",
       "x": 640,
-      "y": 1080,
+      "y": 1540,
       "width": 290,
       "height": 60,
       "angle": 0,
@@ -1330,7 +1330,7 @@
       "id": "id0",
       "type": "text",
       "x": 72,
-      "y": 217.125,
+      "y": 237.125,
       "width": 20,
       "height": 25,
       "angle": 0,
@@ -1367,8 +1367,8 @@
     {
       "id": "id1",
       "type": "text",
-      "x": 258,
-      "y": 167.125,
+      "x": 292,
+      "y": 187.125,
       "width": 20,
       "height": 25,
       "angle": 0,
@@ -1405,8 +1405,8 @@
     {
       "id": "id2",
       "type": "text",
-      "x": 450,
-      "y": 173.125,
+      "x": 502,
+      "y": 193.125,
       "width": 40,
       "height": 25,
       "angle": 0,
@@ -1443,8 +1443,8 @@
     {
       "id": "id3",
       "type": "text",
-      "x": 622,
-      "y": 167.125,
+      "x": 722,
+      "y": 187.125,
       "width": 40,
       "height": 25,
       "angle": 0,
@@ -1481,8 +1481,8 @@
     {
       "id": "id4",
       "type": "text",
-      "x": 1020,
-      "y": 138.98899999999998,
+      "x": 1162,
+      "y": 158.98899999999998,
       "width": 40,
       "height": 25,
       "angle": 0,
@@ -1519,8 +1519,8 @@
     {
       "id": "id5",
       "type": "text",
-      "x": 819,
-      "y": 164.98899999999998,
+      "x": 947,
+      "y": 184.98899999999998,
       "width": 30,
       "height": 25,
       "angle": 0,
@@ -1557,8 +1557,8 @@
     {
       "id": "id6",
       "type": "text",
-      "x": 270,
-      "y": 380.873,
+      "x": 281,
+      "y": 434.873,
       "width": 30,
       "height": 17.5,
       "angle": 0,
@@ -1595,8 +1595,8 @@
     {
       "id": "id7",
       "type": "text",
-      "x": 470,
-      "y": 605.873,
+      "x": 498,
+      "y": 754.873,
       "width": 40,
       "height": 17.5,
       "angle": 0,
@@ -1633,8 +1633,8 @@
     {
       "id": "id8",
       "type": "text",
-      "x": 475,
-      "y": 770.873,
+      "x": 503,
+      "y": 1074.873,
       "width": 30,
       "height": 17.5,
       "angle": 0,
@@ -1671,8 +1671,8 @@
     {
       "id": "id9",
       "type": "text",
-      "x": 140,
-      "y": 327.5,
+      "x": 157,
+      "y": 367.5,
       "width": 70,
       "height": 25,
       "angle": 0,
@@ -1709,8 +1709,8 @@
     {
       "id": "id10",
       "type": "text",
-      "x": 294,
-      "y": 437.5,
+      "x": 337,
+      "y": 507.5,
       "width": 150,
       "height": 25,
       "angle": 0,
@@ -1747,8 +1747,8 @@
     {
       "id": "id11",
       "type": "text",
-      "x": 319,
-      "y": 507.5,
+      "x": 362,
+      "y": 607.5,
       "width": 100,
       "height": 25,
       "angle": 0,
@@ -1785,8 +1785,8 @@
     {
       "id": "id12",
       "type": "text",
-      "x": 521,
-      "y": 657.5,
+      "x": 597,
+      "y": 827.5,
       "width": 70,
       "height": 25,
       "angle": 0,
@@ -1823,8 +1823,8 @@
     {
       "id": "id13",
       "type": "text",
-      "x": 546,
-      "y": 707.5,
+      "x": 622,
+      "y": 927.5,
       "width": 20,
       "height": 25,
       "angle": 0,
@@ -1861,8 +1861,8 @@
     {
       "id": "id14",
       "type": "text",
-      "x": 710,
-      "y": 827.5,
+      "x": 807,
+      "y": 1147.5,
       "width": 90,
       "height": 25,
       "angle": 0,
@@ -1899,8 +1899,8 @@
     {
       "id": "id15",
       "type": "text",
-      "x": 617,
-      "y": 887.5,
+      "x": 707,
+      "y": 1247.5,
       "width": 70,
       "height": 25,
       "angle": 0,
@@ -1938,7 +1938,7 @@
       "id": "id16",
       "type": "text",
       "x": 80,
-      "y": 1058.989,
+      "y": 1518.989,
       "width": 40,
       "height": 25,
       "angle": 0,
@@ -1976,7 +1976,7 @@
       "id": "id17",
       "type": "text",
       "x": 436,
-      "y": 1066.989,
+      "y": 1526.989,
       "width": 40,
       "height": 25,
       "angle": 0,

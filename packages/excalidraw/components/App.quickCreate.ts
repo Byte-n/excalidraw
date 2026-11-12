@@ -2250,6 +2250,11 @@ export class AppQuickCreate {
     };
     const built = buildPresetElementsCentered(this.app, spec, target);
     const shape = this.applySourceStyle(source, built.elements[0]);
+    // Some presets assemble more than the shape itself (the fragment's default
+    // row labels); insert them together so the fast path matches the drawer.
+    const presetElements = built.elements.map((element, index) =>
+      index === 0 ? shape : element,
+    );
     // **落地必须沿用预演这条连线，不能重算**：预演的入口是「出口 → 松手点」这条
     // 射线与轮廓的交点（`getQuickCreateDragPlacement`），而 `getQuickCreateConnector`
     // 取的是图形**轴向中线**（左右手柄取水平中线）与轮廓的交点——两者不是同一个点，
@@ -2262,7 +2267,7 @@ export class AppQuickCreate {
     });
     // 与老路径同序：连线在下、图形压在上面。**插入的是盖过样式的那一份**——
     // `applySourceStyle` 返回新对象，插装配原件等于「样式跟随源」没生效。
-    this.app.insertNewElements([arrow, shape]);
+    this.app.insertNewElements([arrow, ...presetElements]);
     // 绑定照旧：锚点仍取几何解出来的出口 / 入口，与预演那条逐位一致
     bindBindingElement(
       arrow,

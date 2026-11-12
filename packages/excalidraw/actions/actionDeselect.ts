@@ -111,6 +111,8 @@ export const actionDeselect = register({
           tableStructureHover: null,
           containerGestureVisual: null,
           tableStructurePreview: null,
+          fragmentRowSelection: null,
+          fragmentStructureHover: null,
         },
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       };
@@ -135,6 +137,8 @@ export const actionDeselect = register({
         tableStructureHover: null,
         containerGestureVisual: null,
         tableStructurePreview: null,
+        fragmentRowSelection: null,
+        fragmentStructureHover: null,
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
@@ -162,6 +166,7 @@ export const actionDeselect = register({
         // a selected table row/column is its own selection channel — Esc
         // leaves it first (phase-1.md:85)
         !!appState.tableRowColSelection ||
+        !!appState.fragmentRowSelection ||
         isSomeElementSelected(app.scene.getNonDeletedElements(), appState))
     );
   },

@@ -36,6 +36,7 @@ import type {
   ExcalidrawNonSelectionElement,
   ExcalidrawTextElement,
   ExcalidrawTableElement,
+  ExcalidrawSequenceElement,
   StrokeVariability,
   ShapeId,
   TableDataV1,
@@ -252,6 +253,8 @@ export type InteractiveCanvasAppState = Readonly<
     tableStructureHover: AppState["tableStructureHover"];
     containerGestureVisual: AppState["containerGestureVisual"];
     tableStructurePreview: AppState["tableStructurePreview"];
+    fragmentStructureHover: AppState["fragmentStructureHover"];
+    fragmentRowSelection: AppState["fragmentRowSelection"];
     // Collaborators
     collaborators: AppState["collaborators"];
     // SnapLines
@@ -371,6 +374,68 @@ export type TableResizeGestureVisual = {
 };
 
 export type ContainerGestureVisual = TableResizeGestureVisual;
+
+/**
+ * Structure affordance under the pointer on a sequence fragment. A fragment
+ * is the sequence family's single-column table: the header row carries the
+ * operator label, the rows below are conditions. Row controls deliberately
+ * mirror the table's row axis — outer rail grip, insertion dot at a row
+ * boundary, separator resize — minus columns and cell semantics.
+ */
+export type FragmentStructureHover =
+  | { elementId: string; kind: "body" }
+  | { elementId: string; kind: "rowGrip"; rowId: string }
+  | { elementId: string; kind: "rowResize"; rowId: string; edge: "end" }
+  | { elementId: string; kind: "rowInsert"; boundaryIndex: number }
+  | {
+      elementId: string;
+      kind: "rowMove";
+      /** final row index the dragged row would land at */
+      boundaryIndex: number;
+      /** element-local y of the drop line */
+      y: number;
+    };
+
+/** The selected fragment row (highlight + rail; not an element selection). */
+export type FragmentRowSelection = {
+  elementId: string;
+  rowId: string;
+};
+
+/**
+ * One in-flight fragment row gesture. Judged against the arm-time snapshot so
+ * previews never accumulate drift and Esc restores the scene verbatim.
+ */
+export type FragmentPointerGesture =
+  | {
+      kind: "insertRow";
+      elementId: string;
+      startShape: Extract<
+        ExcalidrawSequenceElement["shape"],
+        { id: "sc-fragment" }
+      >;
+      startHeight: number;
+    }
+  | {
+      kind: "resizeRow";
+      elementId: string;
+      rowId: string;
+      startShape: Extract<
+        ExcalidrawSequenceElement["shape"],
+        { id: "sc-fragment" }
+      >;
+      startHeight: number;
+      /** pointer y in the fragment's unrotated local frame */
+      startLocalY: number;
+      hasChanged: boolean;
+    }
+  | {
+      kind: "moveRow";
+      elementId: string;
+      rowId: string;
+      startIndex: number;
+      targetIndex: number | null;
+    };
 
 /**
  * One in-flight table structure gesture (phase-1.md:80-83, :91-97, :99-119),
@@ -612,6 +677,13 @@ export interface AppState {
    */
   tableStructureHover: TableRowColStructureHover | null;
   containerGestureVisual: ContainerGestureVisual | null;
+  /** Hovered fragment row control (see `FragmentStructureHover`). */
+  fragmentStructureHover: FragmentStructureHover | null;
+  /**
+   * Selected fragment row. Like `tableRowColSelection`, this is its own
+   * channel: Delete reaches the row command instead of the whole fragment.
+   */
+  fragmentRowSelection: FragmentRowSelection | null;
   /**
    * The blue insertion/move-target boundary line plus its plus mark
    * (phase-1.md:82): shown while hovering an insertion zone and while a
@@ -1544,6 +1616,7 @@ export type AppClassProperties = {
   commitTableCellMerge: App["commitTableCellMerge"];
   commitTableCellSplit: App["commitTableCellSplit"];
   addSequenceFragmentRow: App["addSequenceFragmentRow"];
+  deleteSelectedFragmentRow: App["deleteSelectedFragmentRow"];
   clearSelectedTableCells: App["clearSelectedTableCells"];
   copySelectedTableCellFormat: App["copySelectedTableCellFormat"];
   pasteSelectedTableCellFormat: App["pasteSelectedTableCellFormat"];
@@ -1602,6 +1675,8 @@ export type PointerDownState = Readonly<{
    * readonly).
    */
   tableGesture: { active: TablePointerGesture | null };
+  /** The in-flight sequence-fragment row gesture, if any. */
+  fragmentGesture: { active: FragmentPointerGesture | null };
   resize: {
     // Handle when resizing, might change during the pointer interaction
     handleType: MaybeTransformHandleType;

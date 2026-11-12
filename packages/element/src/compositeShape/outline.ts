@@ -77,6 +77,14 @@ export type CompositeShapePath = {
   commands: ShapePathCommand[];
   closed: boolean;
 };
+/**
+ * A stroke-only detail contour. Details are painted with the element's stroke
+ * options, so a path may force its own rough dash pattern (e.g. the fragment's
+ * dashed row dividers) independently of the element's `strokeStyle`.
+ */
+export type CompositeShapeDetailPath = CompositeShapePath & {
+  strokeLineDash?: number[];
+};
 export const pathFromPoints = (
   points: ShapePoint[],
   closed: boolean,

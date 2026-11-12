@@ -273,6 +273,8 @@ const getRelevantAppStateProps = (
   tableStructureHover: appState.tableStructureHover,
   containerGestureVisual: appState.containerGestureVisual,
   tableStructurePreview: appState.tableStructurePreview,
+  fragmentStructureHover: appState.fragmentStructureHover,
+  fragmentRowSelection: appState.fragmentRowSelection,
   collaborators: appState.collaborators, // Necessary for collab. sessions
   activeEmbeddable: appState.activeEmbeddable,
   snapLines: appState.snapLines,

@@ -35,9 +35,16 @@ import {
   isImageElement,
   isSequenceFragmentElement,
   isTableElement,
+  isTextElement,
   isUsingAdaptiveRadius,
   makeNextSelectedElementIds,
   newElementWith,
+  newTextElement,
+  normalizeSequenceFragmentGeometry,
+  redrawTextBoundingBox,
+  getSequenceFragmentTextBounds,
+  fitSequenceFragmentOperator,
+  SEQUENCE_FRAGMENT_DEFAULT_OPERATOR,
   resolveElementRenderState,
   Scene,
   Store,
@@ -152,6 +159,7 @@ import {
   resetContextMenuTimer,
   type InteractionState,
 } from "./app/pointerSession";
+import * as fragmentController from "./app/fragment";
 import { AppView } from "./app/render";
 import * as sceneController from "./app/scene";
 import * as tableController from "./app/table";
@@ -1979,6 +1987,53 @@ class App extends React.Component<AppProps, AppState> {
     );
   };
 
+  /**
+   * Pointer down on a fragment row rail/dot/separator: arms the row gesture
+   * (insert / reorder / resize) and reports whether the gesture was consumed.
+   */
+  public armFragmentStructureGestureOnPointerDown = (
+    pointerDownState: PointerDownState,
+  ): boolean => {
+    return fragmentController.armFragmentStructureGestureOnPointerDown(
+      this,
+      pointerDownState,
+    );
+  };
+
+  /** Per-frame progress of an armed fragment row gesture. */
+  public handleFragmentGestureMove = (
+    pointerDownState: PointerDownState,
+    pointerCoords: { x: number; y: number },
+  ): boolean => {
+    return fragmentController.handleFragmentGestureMove(
+      this,
+      pointerDownState,
+      pointerCoords,
+    );
+  };
+
+  /** Esc during an armed fragment row gesture: restore the arm-time rows. */
+  public cancelFragmentGesture = (
+    pointerDownState: PointerDownState,
+  ): boolean => {
+    return fragmentController.cancelFragmentGesture(this, pointerDownState);
+  };
+
+  /** Pointer up of an armed fragment row gesture: commit what was previewed. */
+  public finalizeFragmentGestureOnPointerUp = (
+    pointerDownState: PointerDownState,
+  ): boolean => {
+    return fragmentController.finalizeFragmentGestureOnPointerUp(
+      this,
+      pointerDownState,
+    );
+  };
+
+  /** Delete key on a selected fragment row (the header row is structural). */
+  public deleteSelectedFragmentRow = (): boolean => {
+    return fragmentController.deleteSelectedFragmentRow(this);
+  };
+
   public deleteSelectedTableRowCol = (): boolean => {
     return tableController.deleteSelectedTableRowCol(this);
   };
@@ -2014,14 +2069,114 @@ class App extends React.Component<AppProps, AppState> {
     return true;
   };
 
+  /**
+   * The first row of a fragment is the operator tab row. A fragment that
+   * enters the scene without a label gets the sample "Opt / Loop" bound text,
+   * so the row reads as a label from the start and can be edited in place.
+   */
+  private createSequenceFragmentOperatorText = (
+    fragment: ExcalidrawElement,
+  ): ExcalidrawTextElement => {
+    const bounds = getSequenceFragmentTextBounds(
+      fragment.width,
+      fragment.height,
+    );
+    const text = newTextElement({
+      x: fragment.x + bounds.x,
+      y: fragment.y + bounds.y,
+      text: SEQUENCE_FRAGMENT_DEFAULT_OPERATOR,
+      fontSize: 14,
+      fontFamily: this.state.currentItemFontFamily,
+      strokeColor: fragment.strokeColor,
+      textAlign: "left",
+      verticalAlign: "top",
+      containerId: fragment.id,
+      // Bound text stays in auto-width mode; the tab owns the box width and
+      // the label wraps against its fitted content width.
+      autoResize: true,
+    });
+    redrawTextBoundingBox(text, fragment, this.scene);
+    return text;
+  };
+
   public insertNewElements = (elements: readonly ExcalidrawElement[]) => {
     if (!elements.length) {
       return;
     }
 
+    const incomingLabelContainers = new Set(
+      elements
+        .filter(
+          (element): element is ExcalidrawTextElement =>
+            isTextElement(element) &&
+            !element.isDeleted &&
+            !!element.containerId,
+        )
+        .map((element) => element.containerId as string),
+    );
+    const createdFragmentLabels: ExcalidrawTextElement[] = [];
+    // Normalize fragments (row data + fixed single-line tab text) and give a
+    // label-less fragment its default operator label. Labels are inserted
+    // right after their fragment below, not through the chunking path.
+    const preparedElements = elements.map((element) => {
+      if (!isSequenceFragmentElement(element)) {
+        return element;
+      }
+      const fragment = normalizeSequenceFragmentGeometry(element);
+      const hasLabel =
+        incomingLabelContainers.has(fragment.id) ||
+        (fragment.boundElements ?? []).some((bound) => bound.type === "text");
+      if (hasLabel) {
+        // A pasted/imported fragment carries its label; re-fit the tab so a
+        // fragment without a persisted `operatorWidth` still sizes to its text.
+        const label = elements.find(
+          (candidate): candidate is ExcalidrawTextElement =>
+            isTextElement(candidate) &&
+            !candidate.isDeleted &&
+            candidate.containerId === fragment.id,
+        );
+        if (label && !label.autoResize) {
+          // the operator label has exactly one text mode: container-bound
+          Object.assign(label, { autoResize: true });
+        }
+        const fitted = label
+          ? fitSequenceFragmentOperator(fragment, label)
+          : null;
+        if (!fitted) {
+          return fragment;
+        }
+        const sized = newElementWith(fragment, {
+          height: fitted.height,
+          shape: fitted.shape,
+        });
+        if (label) {
+          redrawTextBoundingBox(label, sized, this.scene);
+        }
+        return sized;
+      }
+      const text = this.createSequenceFragmentOperatorText(fragment);
+      createdFragmentLabels.push(text);
+      const fitted = fitSequenceFragmentOperator(fragment, text);
+      const sized = fitted
+        ? newElementWith(fragment, {
+            height: fitted.height,
+            shape: fitted.shape,
+          })
+        : fragment;
+      if (fitted) {
+        redrawTextBoundingBox(text, sized, this.scene);
+      }
+      return newElementWith(sized, {
+        boundElements: [
+          ...(sized.boundElements ?? []),
+          { type: "text", id: text.id },
+        ],
+      });
+    });
+
     const chunkedElements: ExcalidrawElement[][] = [];
 
-    for (const element of elements) {
+    for (const element of preparedElements) {
       const currentChunk = chunkedElements[chunkedElements.length - 1];
 
       if (
@@ -2053,6 +2208,14 @@ class App extends React.Component<AppProps, AppState> {
             )
           : null;
       this.scene.insertElementsAtIndex(chunk, insertionIndex);
+    }
+
+    for (const text of createdFragmentLabels) {
+      const fragmentIndex = this.scene.getElementIndex(text.containerId!);
+      this.scene.insertElementsAtIndex(
+        [text],
+        fragmentIndex < 0 ? null : fragmentIndex + 1,
+      );
     }
   };
 

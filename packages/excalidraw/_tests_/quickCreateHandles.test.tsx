@@ -375,6 +375,19 @@ describe("quick create handles", () => {
     expect(getQuickCreateHandles(h.app)).toHaveLength(0);
   });
 
+  it("stays hidden for a sequence fragment (row container, not a box)", () => {
+    const fragment = API.createElement({
+      type: "sequence",
+      shape: buildShapeData("sc-fragment"),
+      x: 100,
+      y: 100,
+      width: 400,
+      height: 240,
+    });
+    selectShape(fragment);
+    expect(getQuickCreateHandles(h.app)).toHaveLength(0);
+  });
+
   it("stays hidden for a multi-selection", () => {
     const a = createRectangle();
     const b = createRectangle({ x: 400, y: 100 });

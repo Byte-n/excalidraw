@@ -6,6 +6,7 @@ import type { GlobalPoint, Radians } from "@excalidraw/math";
 import { getElementAbsoluteCoords } from "./bounds";
 import {
   isActivationElement,
+  isSequenceFragmentElement,
   isSequenceLifelineElement,
   isShapeId,
   isShapeElement,
@@ -149,7 +150,11 @@ export const isQuickCreateTargetElement = (
   !element.isDeleted &&
   !element.locked &&
   isShapeElement(element) &&
-  isShapeId(element.shape.id);
+  isShapeId(element.shape.id) &&
+  // A sequence fragment is a single-column row container, not a box that
+  // spawns neighbouring shapes: its direction handles would sit on top of the
+  // row rails/insertion dots. It gets table-style row controls instead.
+  !isSequenceFragmentElement(element);
 
 /**
  * 出口 A：源在**出发方向**上的边缘中点——中心沿旋转后的方向向量走该轴的半尺寸。

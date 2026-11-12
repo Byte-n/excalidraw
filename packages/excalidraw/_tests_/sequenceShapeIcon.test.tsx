@@ -18,4 +18,14 @@ describe("SequenceShapeIcon", () => {
       expect(path.getAttribute("d")?.length ?? 0).toBeGreaterThan(0);
     }
   });
+
+  it("组合片段 else 预设图标画出虚线行分隔", () => {
+    const { container } = render(
+      <>{getSequenceShapeIcon("sc-fragment", { fragmentBodyRows: 2 })}</>,
+    );
+    const paths = Array.from(container.querySelectorAll("path"));
+    expect(
+      paths.filter((path) => path.getAttribute("stroke-dasharray")),
+    ).toHaveLength(1);
+  });
 });
