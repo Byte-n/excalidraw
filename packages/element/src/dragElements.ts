@@ -18,6 +18,18 @@ import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 import { unbindBindingElement, updateBoundElements } from "./binding";
 import { getCommonBounds } from "./bounds";
 import { getIndexedFrameChildren } from "./frameChildrenIndex";
+import {
+  detachSequenceActivation,
+  getSequenceActivationLink,
+  getSequenceActivationDragPlacement,
+  syncLifelineBoundActivation,
+  updateSequenceActivationsForLifeline,
+} from "./sequenceActivation";
+import {
+  isActivationElement,
+  isSequenceLifelineElement,
+} from "./compositeShape";
+
 import { getPerfectElementSize } from "./sizeHelpers";
 import { getBoundTextElement } from "./textElement";
 import { getMinTextElementWidth } from "./textMeasurements";
@@ -29,6 +41,8 @@ import {
   isTableElement,
   isTextElement,
 } from "./typeChecks";
+
+import type { SequenceActivationElement } from "./sequenceActivation";
 
 import type { Scene } from "./Scene";
 
@@ -148,7 +162,13 @@ export const dragSelectedElements = (
         : false);
 
     if (!isArrowElement(element)) {
-      updateElementCoords(pointerDownState, element, scene, adjustedOffset);
+      updateElementCoords(
+        pointerDownState,
+        element,
+        scene,
+        adjustedOffset,
+        elementsToUpdateIds,
+      );
 
       // skip arrow labels since we calculate its position during render
       const textElement = getBoundTextElement(
@@ -161,6 +181,7 @@ export const dragSelectedElements = (
           textElement,
           scene,
           adjustedOffset,
+          elementsToUpdateIds,
         );
       }
       updateBoundElements(element, scene, {
@@ -176,7 +197,13 @@ export const dragSelectedElements = (
         DRAGGING_THRESHOLD ||
       (!element.startBinding && !element.endBinding)
     ) {
-      updateElementCoords(pointerDownState, element, scene, adjustedOffset);
+      updateElementCoords(
+        pointerDownState,
+        element,
+        scene,
+        adjustedOffset,
+        elementsToUpdateIds,
+      );
 
       const shouldUnbindStart =
         element.startBinding && !isStartBoundElementSelected;
@@ -193,6 +220,15 @@ export const dragSelectedElements = (
           unbindBindingElement(element, "end", scene);
         }
       }
+    }
+  });
+
+  // 收尾 pass：生命线与激活条同时被拖时，等所有元素都落位后统一重排一次，
+  // 结果与「只拖生命线」完全一致（不受 Set 迭代顺序影响）。
+  elementsToUpdate.forEach((element) => {
+    const latest = scene.getNonDeletedElement(element.id);
+    if (latest && isSequenceLifelineElement(latest)) {
+      updateSequenceActivationsForLifeline(latest, scene);
     }
   });
 };
@@ -233,12 +269,56 @@ const updateElementCoords = (
   element: ExcalidrawElement,
   scene: Scene,
   dragOffset: { x: number; y: number },
+  simultaneouslyUpdatedElementIds?: ReadonlySet<string>,
 ) => {
   const originalElement =
     pointerDownState.originalElements.get(element.id) ?? element;
 
   const nextX = originalElement.x + dragOffset.x;
   const nextY = originalElement.y + dragOffset.y;
+
+  // 激活条：靠近生命线杆时横向吸附到杆中心并建立 / 更新绑定；拖离阈值则解绑。
+  if (isActivationElement(originalElement) && isActivationElement(element)) {
+    const link = getSequenceActivationLink(originalElement);
+    // 生命线与激活条同时被拖：让生命线的收尾 pass 统一重排，避免逐个更新时
+    // 读到一半新一半旧的坐标。
+    if (link && simultaneouslyUpdatedElementIds?.has(link.lifelineId)) {
+      return;
+    }
+    const placement = getSequenceActivationDragPlacement(
+      scene.getNonDeletedElementsMap(),
+      nextX + element.width / 2,
+      nextY + element.height / 2,
+      element.height,
+    );
+    if (placement.snap) {
+      const lifeline = placement.snap.lifeline;
+      scene.mutateElement(element, {
+        x: placement.center.x - element.width / 2,
+        y: placement.center.y - element.height / 2,
+        angle: placement.snap.angle,
+        shape: {
+          ...element.shape,
+          link: {
+            lifelineId: lifeline.id,
+            localY: placement.snap.localY,
+          },
+        },
+      });
+      syncLifelineBoundActivation(
+        element.id,
+        lifeline,
+        link?.lifelineId,
+        scene,
+      );
+    } else {
+      if (link) {
+        detachSequenceActivation(element as SequenceActivationElement, scene);
+      }
+      scene.mutateElement(element, { x: nextX, y: nextY });
+    }
+    return;
+  }
 
   scene.mutateElement(element, {
     x: nextX,

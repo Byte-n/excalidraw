@@ -34,11 +34,17 @@ import {
   getElementBounds,
 } from "./bounds";
 import { LinearElementEditor } from "./linearElementEditor";
+import { getSequenceActivationLink } from "./sequenceActivation";
 import {
+  SEQUENCE_MIN_ACTIVATION_HEIGHT,
   SEQUENCE_MIN_HEAD_HEIGHT,
   SEQUENCE_MIN_HEAD_WIDTH,
   SEQUENCE_MIN_POLE_LENGTH,
+  clampSequenceActivationLocalY,
   getCompositeShapeTextFitMode,
+  getSequenceLifelineActivationCenter,
+  getSequenceLifelineActivationLocalY,
+  isActivationElement,
   isSequenceLifelineElement,
   isShapeElement,
 } from "./compositeShape";
@@ -151,6 +157,21 @@ export const transformElements = (
       const origElement = originalElements.get(elementId);
 
       if (latestElement && origElement) {
+        if (
+          isActivationElement(latestElement) &&
+          isActivationElement(origElement)
+        ) {
+          // 激活条宽度锁定：只有 n / s（及带 n / s 的角点）改高度
+          resizeSequenceActivation(
+            latestElement,
+            origElement,
+            transformHandleType,
+            pointerX,
+            pointerY,
+            scene,
+          );
+          return true;
+        }
         if (
           isSequenceLifelineElement(latestElement) &&
           isSequenceLifelineElement(origElement)
@@ -394,6 +415,114 @@ export const getSequenceLifelineResize = (
   };
 };
 
+/**
+ * Activation resize: **width is immutable**, only the height follows the
+ * pointer. `n` moves the top edge (bottom fixed), `s` moves the bottom edge
+ * (top fixed); `e` / `w` alone are ignored.
+ */
+export const getSequenceActivationResize = (
+  element: ExcalidrawElement,
+  handleDirection: TransformHandleDirection,
+  pointerX: number,
+  pointerY: number,
+): { x: number; y: number; height: number } | null => {
+  if (!isActivationElement(element)) {
+    return null;
+  }
+  const growsFromTop = handleDirection.includes("n");
+  const growsFromBottom = handleDirection.includes("s");
+  if (!growsFromTop && !growsFromBottom) {
+    return null;
+  }
+  const center = pointFrom<GlobalPoint>(
+    element.x + element.width / 2,
+    element.y + element.height / 2,
+  );
+  const [, localY] = pointRotateRads(
+    pointFrom<GlobalPoint>(pointerX, pointerY),
+    center,
+    -element.angle as Radians,
+  );
+  const top = element.y;
+  const bottom = element.y + element.height;
+  const height = Math.max(
+    SEQUENCE_MIN_ACTIVATION_HEIGHT,
+    growsFromTop ? bottom - localY : localY - top,
+  );
+  // Keep the opposite edge's center fixed in the scene (works rotated too).
+  const anchorLocalY = growsFromTop ? bottom : top;
+  const anchorGlobal = pointRotateRads(
+    pointFrom<GlobalPoint>(element.x + element.width / 2, anchorLocalY),
+    center,
+    element.angle,
+  );
+  const anchorOffsetY = growsFromTop ? height / 2 : -height / 2;
+  const cos = Math.cos(element.angle);
+  const sin = Math.sin(element.angle);
+  const centerX = anchorGlobal[0] - -anchorOffsetY * sin;
+  const centerY = anchorGlobal[1] - anchorOffsetY * cos;
+  return {
+    x: centerX - element.width / 2,
+    y: centerY - height / 2,
+    height,
+  };
+};
+
+const resizeSequenceActivation = (
+  element: NonDeletedExcalidrawElement,
+  originalElement: NonDeletedExcalidrawElement,
+  handleDirection: TransformHandleDirection,
+  pointerX: number,
+  pointerY: number,
+  scene: Scene,
+) => {
+  const next = getSequenceActivationResize(
+    originalElement,
+    handleDirection,
+    pointerX,
+    pointerY,
+  );
+  if (!next || !isActivationElement(element)) {
+    return;
+  }
+  let shape = element.shape;
+  const link = getSequenceActivationLink(element);
+  if (link) {
+    const lifeline = scene.getNonDeletedElement(link.lifelineId);
+    if (lifeline && isSequenceLifelineElement(lifeline)) {
+      const localY = clampSequenceActivationLocalY(
+        lifeline,
+        getSequenceLifelineActivationLocalY(
+          lifeline,
+          next.x + element.width / 2,
+          next.y + next.height / 2,
+        ),
+        next.height,
+      );
+      const placed = getSequenceLifelineActivationCenter(
+        lifeline,
+        localY,
+        next.height,
+      );
+      next.x = placed.center.x - element.width / 2;
+      next.y = placed.center.y - next.height / 2;
+      shape = {
+        ...element.shape,
+        link: { ...link, localY: placed.localY },
+      } as typeof element.shape;
+    }
+  }
+  scene.mutateElement(element, {
+    x: next.x,
+    y: next.y,
+    height: next.height,
+    shape,
+  });
+  handleBindTextResize(element, scene, handleDirection);
+  // 绑在激活条上的消息跟着端点走
+  updateBoundElements(element, scene);
+};
+
 const resizeSequenceLifeline = (
   element: NonDeletedExcalidrawElement,
   originalElement: NonDeletedExcalidrawElement,
@@ -422,6 +551,8 @@ const resizeSequenceLifeline = (
     },
   });
   handleBindTextResize(element, scene, handleDirection);
+  // Attached activations follow the resized pole.
+  updateBoundElements(element, scene);
 };
 
 /**

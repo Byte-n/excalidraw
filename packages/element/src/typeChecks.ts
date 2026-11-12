@@ -6,7 +6,11 @@ import type { ElementOrToolType } from "@excalidraw/excalidraw/types";
 
 import type { MarkNonNullable } from "@excalidraw/common/utility-types";
 
-import { assertShapeElementType, isShapeElement } from "./compositeShape";
+import {
+  assertShapeElementType,
+  isActivationElement,
+  isShapeElement,
+} from "./compositeShape";
 import { assertMindmapShapeData } from "./mindmap";
 import { assertValidTableData } from "./tableStruct";
 
@@ -425,10 +429,11 @@ export const isBindableElement = <T extends ExcalidrawElement>(
   return (
     element != null &&
     (!element.locked || includeLocked === true) &&
-    // 时序图形（`sc-*`）刻意不在此列：把箭头/消息绑到生命线与激活条属尚未实现的
-    // 交互，将来也只按「只有激活条可连、生命线不直连」的口径补。
+    // 时序图形里只有激活条可被箭头绑定；8 个生命线仍不可绑（消息端点落在激活条上，
+    // 生命线只作为「落点参考」）。
     (element.type === "composite" ||
       element.type === "flow" ||
+      (element.type === "sequence" && isActivationElement(element)) ||
       element.type === "stickynote" ||
       element.type === "mindmap-node" ||
       element.type === "image" ||

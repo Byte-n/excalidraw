@@ -24,10 +24,13 @@ import type { Bounds } from "@excalidraw/common";
 import { getCenterForBounds } from "./bounds";
 import {
   getCompositeShapeAnchors,
+  isActivationElement,
+  isSequenceLifelineElement,
   isShapeElement,
   isShapeWithId,
   isShapeWithIdIn,
 } from "./compositeShape";
+import { updateSequenceActivationsForLifeline } from "./sequenceActivation";
 import {
   getHoveredElementForBinding,
   hitElementItself,
@@ -771,14 +774,30 @@ export const updateBoundElements = (
     changedElements?: Map<string, ExcalidrawElement>;
   },
 ) => {
-  if (!isBindableElement(changedElement)) {
-    return;
-  }
-
   const { simultaneouslyUpdated } = options ?? {};
   const simultaneouslyUpdatedElementIds =
     options?.simultaneouslyUpdatedElementIds ??
     getSimultaneouslyUpdatedElementIds(simultaneouslyUpdated);
+
+  // Lifelines are not bindable (arrows never attach to the pole), but the
+  // activations attached to the pole must follow every geometry change.
+  if (isSequenceLifelineElement(changedElement)) {
+    const movedActivations = updateSequenceActivationsForLifeline(
+      changedElement,
+      scene,
+      simultaneouslyUpdatedElementIds,
+    );
+    // Messages bound to the moved activations must follow them too.
+    for (const activation of movedActivations) {
+      updateBoundElements(activation, scene, {
+        simultaneouslyUpdatedElementIds,
+      });
+    }
+  }
+
+  if (!isBindableElement(changedElement)) {
+    return;
+  }
 
   let elementsMap: ElementsMap = scene.getNonDeletedElementsMap();
   if (options?.changedElements) {
@@ -1308,6 +1327,21 @@ export const snapToMid = (
   // Too close to the center makes it hard to resolve direction precisely
   if (pointDistance(center, nonRotated) < bindingGap) {
     return undefined;
+  }
+
+  // 激活条只有左 / 右两条可连边：上 / 下象限也按指针在中心线哪一侧归到左或右，
+  // 避免时序消息吸到激活条的顶边 / 底边。
+  if (isActivationElement(bindTarget)) {
+    const isRight = nonRotated[0] >= center[0];
+    const edgeX = isRight ? x + width : x;
+    return pointRotateRads(
+      pointFrom<GlobalPoint>(
+        edgeX + (isRight ? bindingGap : -bindingGap),
+        center[1],
+      ),
+      center,
+      angle,
+    );
   }
 
   if (
@@ -2042,6 +2076,26 @@ export const fixDuplicatedBindingsAfterDuplication = (
           [],
         ),
       });
+    }
+
+    // 激活条 → 生命线的链接：连着复制时重映射；只复制激活条时解除链接，
+    // 免得副本叠到原生命线上。
+    if (isActivationElement(duplicateElement)) {
+      const link = duplicateElement.shape.link;
+      if (link) {
+        const newLifelineId = origIdToDuplicateId.get(link.lifelineId);
+        if (newLifelineId) {
+          Object.assign(duplicateElement, {
+            shape: {
+              ...duplicateElement.shape,
+              link: { ...link, lifelineId: newLifelineId },
+            },
+          });
+        } else {
+          const { link: _link, ...shape } = duplicateElement.shape;
+          Object.assign(duplicateElement, { shape });
+        }
+      }
     }
 
     if ("containerId" in duplicateElement && duplicateElement.containerId) {

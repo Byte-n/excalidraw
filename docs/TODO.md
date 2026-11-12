@@ -1,3 +1,15 @@
+# TODO
+
+## 高优先级重构
+
+- [ ] **统一指针 affordance 解析（手势事件 + 渲染状态）** —— 设计见 [pointer-affordance-unification.md](pointer-affordance-unification.md)
+  - [ ] **背景**：`resolveInteractionTarget` 只覆盖容器控件；quick-create 手柄、杆上激活条预演、复合控制点、mindmap「+」等仍各自命中、各自维护 hover、各自写 `cursor`，互斥靠调用顺序。同类「hover 目标 ≠ pointerdown 目标 / 两套交互同帧出现」的问题会随时序图交互增多而反复出现。
+  - [ ] **核心不变量**：可见即命中（I1）、可见即可创建（I2）、严格最上层命中（I3）。
+  - [ ] **阶段 0（已止血）**：杆预演/点击/拖放共用严格命中 + 合法落位 + 互斥，回归测试在 `packages/excalidraw/_tests_/quickCreateHandles.test.tsx`。
+  - [ ] **阶段 1（建议随 P3 做）**：把 `quickCreateHandle`、`poleActivation`、 `activationBody`、`compositeControl` 并入 `resolveInteractionTarget`， hover 与 pointerdown 共用解析结果；预计 6–8 个文件、约 0.8–1.5k 行。
+  - [ ] **阶段 2**：mindmap、文本/线段/变换手柄收口，`cursor` 只在 dispatch 阶段设置。
+  - [ ] **阶段 3**：`App.quickCreate` / `App.mindmap` 的平行 hover 字段收敛为单一 `PointerAffordanceState`，渲染完全派生。
+
 ## 后续计划
 
 - [ ] mindmap node 可以夸 mindmap 移动，不再限制必须是同一个 `graphId`

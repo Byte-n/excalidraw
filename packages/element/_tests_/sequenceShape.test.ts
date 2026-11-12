@@ -21,11 +21,19 @@ import {
   buildShapeData,
   clampSequenceLifelineHeight,
   drawSequenceLifeline,
+  getActivationAnchor,
+  getActivationAnchorAtSceneY,
   getCompositeShapeGeometry,
   getCompositeShapeSelectionFrame,
   getCompositeShapeTextBounds,
   getCompositeShapeTextFitMode,
   getSequenceElementBox,
+  getSequenceLifelinePoleActivationPlacement,
+  isActivationElement,
+  isPointOnSequenceLifelinePole,
+  SEQUENCE_ACTIVATION_HEIGHT,
+  SEQUENCE_ACTIVATION_WIDTH,
+  SEQUENCE_MIN_ACTIVATION_OFFSET,
   getSequenceFragmentTabPath,
   getSequenceFragmentTextBounds,
   getSequenceLifelineDefaultSize,
@@ -52,15 +60,22 @@ import {
   getElementLineSegments,
   getElementSelectionFrameCoords,
 } from "../src/bounds";
+import { updateBoundElements } from "../src/binding";
 import {
   intersectElementWithLineSegment,
   isPointInElement,
 } from "../src/collision";
 import { newElement } from "../src/newElement";
+import { Scene } from "../src/Scene";
+import { getSequenceActivationDragPlacement } from "../src/sequenceActivation";
 import { getTextVerticalOffset } from "../src/renderElement";
-import { getSequenceLifelineResize } from "../src/resizeElements";
+import {
+  getSequenceActivationResize,
+  getSequenceLifelineResize,
+} from "../src/resizeElements";
 import { generateRoughOptions } from "../src/shape";
 import { getLineHeightInPx } from "../src/textMeasurements";
+import { isBindableElement } from "../src/typeChecks";
 import { getTransformHandles } from "../src/transformHandles";
 import { getTransformStatusReadout } from "../src/transformStatus";
 import { convertToExcalidrawElements } from "../src/transform";
@@ -951,4 +966,262 @@ describe("sequence clamping to the element box", () => {
       }
     },
   );
+});
+
+describe("sequence activation geometry", () => {
+  const headHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"];
+  const poleEnd = headHeight + SEQUENCE_DEFAULT_POLE_LENGTH;
+  const makeLifeline = (extra: Record<string, unknown> = {}) =>
+    makeElement("sc-lifeline-entity", 64, poleEnd, extra);
+  const lifeline = makeLifeline();
+  const poleX = lifeline.width / 2;
+
+  it("recognizes only sc-activation as an activation", () => {
+    expect(isActivationElement(makeElement("sc-activation", 30, 100))).toBe(
+      true,
+    );
+    expect(isActivationElement(lifeline)).toBe(false);
+    expect(isActivationElement(makeElement("sc-fragment", 400, 240))).toBe(
+      false,
+    );
+  });
+
+  it("binds arrows to activations but not to lifelines", () => {
+    expect(isBindableElement(makeElement("sc-activation", 30, 100))).toBe(true);
+    expect(isBindableElement(lifeline)).toBe(false);
+  });
+
+  it("hits the pole corridor but not the head or the blank area", () => {
+    expect(
+      isPointOnSequenceLifelinePole(lifeline, poleX, headHeight + 10),
+    ).toBe(true);
+    // 头部
+    expect(isPointOnSequenceLifelinePole(lifeline, poleX, 10)).toBe(false);
+    // 杆两侧空白
+    expect(
+      isPointOnSequenceLifelinePole(
+        lifeline,
+        poleX + SEQUENCE_HIT_HALF_WIDTH + 1,
+        headHeight + 10,
+      ),
+    ).toBe(false);
+    // 杆末端之下
+    expect(isPointOnSequenceLifelinePole(lifeline, poleX, poleEnd + 1)).toBe(
+      false,
+    );
+  });
+
+  it("puts the pole activation's top at the pointer and clamps its center", () => {
+    const middle = getSequenceLifelinePoleActivationPlacement(
+      lifeline,
+      poleX,
+      headHeight + 150,
+    )!;
+    expect(middle.center.x).toBeCloseTo(poleX, 6);
+    // 顶部落在指针处，激活条向下展开：中心 = 指针 y + 高度 / 2
+    expect(middle.center.y).toBeCloseTo(
+      headHeight + 150 + SEQUENCE_ACTIVATION_HEIGHT / 2,
+      6,
+    );
+    expect(middle.angle).toBe(lifeline.angle);
+
+    const top = getSequenceLifelinePoleActivationPlacement(
+      lifeline,
+      poleX,
+      headHeight + 1,
+    )!;
+    expect(top.center.y).toBeCloseTo(
+      headHeight +
+        SEQUENCE_MIN_ACTIVATION_OFFSET +
+        SEQUENCE_ACTIVATION_HEIGHT / 2,
+      6,
+    );
+
+    const bottom = getSequenceLifelinePoleActivationPlacement(
+      lifeline,
+      poleX,
+      poleEnd - 1,
+    )!;
+    expect(bottom.center.y).toBeCloseTo(
+      poleEnd - SEQUENCE_MIN_ACTIVATION_OFFSET - SEQUENCE_ACTIVATION_HEIGHT / 2,
+      6,
+    );
+
+    // 头部 / 杆外不给落点
+    expect(
+      getSequenceLifelinePoleActivationPlacement(lifeline, poleX, 10),
+    ).toBeNull();
+    expect(
+      getSequenceLifelinePoleActivationPlacement(lifeline, poleX + 20, 200),
+    ).toBeNull();
+  });
+
+  it("keeps the placement centered when the pole is shorter than the bar", () => {
+    const short = makeElement("sc-lifeline-entity", 64, headHeight + 60);
+    const placement = getSequenceLifelinePoleActivationPlacement(
+      short,
+      poleX,
+      headHeight + 30,
+    )!;
+    expect(placement.center.y).toBeCloseTo(headHeight + 30, 6);
+  });
+
+  it("anchors messages on the left / right edge and clamps the scene y", () => {
+    const activation = makeElement(
+      "sc-activation",
+      SEQUENCE_ACTIVATION_WIDTH,
+      SEQUENCE_ACTIVATION_HEIGHT,
+      {
+        x: 100,
+        y: 50,
+      },
+    );
+    expect(getActivationAnchor(activation, "left")).toEqual([100, 100]);
+    expect(getActivationAnchor(activation, "right")).toEqual([130, 100]);
+    expect(getActivationAnchorAtSceneY(activation, "right", 60)).toEqual([
+      130, 60,
+    ]);
+    // 夹进竖向范围（留 1px 余量）
+    expect(getActivationAnchorAtSceneY(activation, "right", 10)).toEqual([
+      130, 51,
+    ]);
+    expect(getActivationAnchorAtSceneY(activation, "left", 500)).toEqual([
+      100, 149,
+    ]);
+  });
+});
+
+describe("activation lifeline binding", () => {
+  const headHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"];
+  const poleLength = SEQUENCE_DEFAULT_POLE_LENGTH;
+
+  const makeLifelineWith = (
+    boundElements: ExcalidrawShapeElement["boundElements"],
+  ) =>
+    makeElement("sc-lifeline-entity", 64, headHeight + poleLength, {
+      x: 100,
+      y: 0,
+      boundElements,
+    });
+
+  const makeLinkedActivation = (
+    lifelineId: string,
+    localY: number,
+    extra: Record<string, unknown> = {},
+  ) => {
+    const element = makeElement("sc-activation", 30, 100, {
+      x: 117,
+      y: 150,
+      ...extra,
+    });
+    return {
+      ...element,
+      shape: {
+        id: "sc-activation" as const,
+        schemaVersion: 1 as const,
+        link: { lifelineId, localY },
+      },
+    } as ExcalidrawShapeElement;
+  };
+
+  it("moves attached activations when the lifeline moves", () => {
+    const base = makeLifelineWith(null);
+    const activation = makeLinkedActivation(base.id, 200);
+    const lifeline = {
+      ...base,
+      boundElements: [{ id: activation.id, type: "activation" as const }],
+    } as ExcalidrawShapeElement;
+    const scene = new Scene([lifeline, activation], { skipValidation: true });
+
+    const latest = scene.getNonDeletedElement(lifeline.id)!;
+    scene.mutateElement(latest, { x: 200, y: 50 });
+    updateBoundElements(scene.getNonDeletedElement(lifeline.id)!, scene);
+
+    const moved = scene.getNonDeletedElement(activation.id)!;
+    // 中心 = 生命线本地 (width/2, localY) → 全球中心 (232, 250)
+    expect(moved.x + moved.width / 2).toBeCloseTo(232, 6);
+    expect(moved.y + moved.height / 2).toBeCloseTo(250, 6);
+  });
+
+  it("clamps attached activations when the pole shrinks", () => {
+    const base = makeLifelineWith(null);
+    const activation = makeLinkedActivation(base.id, 400);
+    const lifeline = {
+      ...base,
+      boundElements: [{ id: activation.id, type: "activation" as const }],
+    } as ExcalidrawShapeElement;
+    const scene = new Scene([lifeline, activation], { skipValidation: true });
+
+    // 杆缩到 130：400 的本地 y 已超出杆底，应被夹回
+    scene.mutateElement(scene.getNonDeletedElement(lifeline.id)!, {
+      height: headHeight + 130,
+    });
+    updateBoundElements(scene.getNonDeletedElement(lifeline.id)!, scene);
+
+    const moved = scene.getNonDeletedElement(activation.id)!;
+    const poleEnd = headHeight + 130;
+    expect(moved.y + moved.height / 2).toBeCloseTo(
+      poleEnd - SEQUENCE_MIN_ACTIVATION_OFFSET - 50,
+      6,
+    );
+    const latest = scene.getNonDeletedElement(activation.id)!;
+    expect(
+      isActivationElement(latest) && latest.shape.link?.localY,
+    ).toBeCloseTo(poleEnd - SEQUENCE_MIN_ACTIVATION_OFFSET - 50, 6);
+  });
+
+  it("snaps a dragged activation to the nearest pole", () => {
+    const lifeline = makeLifelineWith(null);
+    const elementsMap = elementsMapFor(lifeline);
+
+    // 杆中心 x = 100 + 64 / 2 = 132
+    const near = getSequenceActivationDragPlacement(elementsMap, 140, 200, 100);
+    expect(near.snap?.lifeline.id).toBe(lifeline.id);
+    expect(near.center.x).toBeCloseTo(132, 6);
+    expect(near.center.y).toBeCloseTo(200, 6);
+
+    const far = getSequenceActivationDragPlacement(elementsMap, 300, 200, 100);
+    expect(far.snap).toBeNull();
+    expect(far.center).toEqual({ x: 300, y: 200 });
+  });
+
+  it("resizes height only and never the width", () => {
+    const activation = makeElement("sc-activation", 30, 100, {
+      x: 100,
+      y: 100,
+    });
+
+    const fromTop = getSequenceActivationResize(activation, "n", 100, 150);
+    expect(fromTop).toEqual({ x: 100, y: 150, height: 50 });
+
+    const fromBottom = getSequenceActivationResize(activation, "s", 100, 250);
+    expect(fromBottom).toEqual({ x: 100, y: 100, height: 150 });
+
+    // 角点只取 n / s 分量，宽度仍然不变
+    const corner = getSequenceActivationResize(activation, "se", 100, 260);
+    expect(corner).toEqual({ x: 100, y: 100, height: 160 });
+
+    // 纯 e / w 不产生任何变化
+    expect(getSequenceActivationResize(activation, "e", 400, 150)).toBeNull();
+    expect(getSequenceActivationResize(activation, "w", -400, 150)).toBeNull();
+  });
+
+  it("offers only vertical (and corner) resize handles", () => {
+    const activation = makeElement("sc-activation", 30, 100, {
+      x: 100,
+      y: 100,
+    });
+    const handles = getTransformHandles(
+      activation,
+      { value: 1 } as Zoom,
+      elementsMapFor(activation),
+      "mouse",
+      {},
+    );
+    expect(handles.n).toBeTruthy();
+    expect(handles.s).toBeTruthy();
+    expect(handles.e).toBeUndefined();
+    expect(handles.w).toBeUndefined();
+    expect(handles.rotation).toBeUndefined();
+  });
 });

@@ -22,6 +22,11 @@ export const assertShapeData = (shape: unknown): ShapeData => {
     value,
     param ? ["id", "schemaVersion", param.key] : ["id", "schemaVersion"],
   );
+  // 参数可以是可选的（如 activation 的 link）——缺省时只允许基础键；
+  // 必选参数的校验函数会对 undefined 返回 false，所以这里不会误放行。
+  if (!valid && param) {
+    valid = hasOnlyKeys(value, ["id", "schemaVersion"]);
+  }
   if (param) {
     valid = valid && param.validate(value[param.key]);
   }

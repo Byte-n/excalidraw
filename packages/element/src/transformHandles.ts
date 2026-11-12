@@ -19,6 +19,7 @@ import {
 } from "./bounds";
 import {
   hasCompositeShapeSelectionFrame,
+  isActivationElement,
   isShapeElement,
 } from "./compositeShape";
 import {
@@ -145,6 +146,12 @@ export const getTransformHandlesFromCoords = (
   omitSides: { [T in TransformHandleType]?: boolean } = {},
   margin = 4,
   spacing = DEFAULT_TRANSFORM_HANDLE_SPACING,
+  /**
+   * Overrides the minimum size for the n / s side handles. Activations are
+   * deliberately narrow (30px), yet height is their only resizable axis, so
+   * they must still get the n / s handles.
+   */
+  minimumSizeForSideHandles?: number,
 ): TransformHandles => {
   const size = transformHandleSizes[pointerType];
   const handleWidth = size / zoom.value;
@@ -242,7 +249,7 @@ export const getTransformHandlesFromCoords = (
   // We only want to show height handles (all cardinal directions)  above a certain size
   // Note: we render using "mouse" size so we should also use "mouse" size for this check
   const minimumSizeForEightHandles =
-    (5 * transformHandleSizes.mouse) / zoom.value;
+    minimumSizeForSideHandles ?? (5 * transformHandleSizes.mouse) / zoom.value;
   if (Math.abs(width) > minimumSizeForEightHandles) {
     if (!omitSides.n) {
       transformHandles.n = generateTransformHandle(
@@ -381,6 +388,16 @@ export const getTransformHandles = (
       rotation: true,
     };
   }
+  // 激活条宽度锁定：不给 e / w 与旋转手柄，只留 n / s（及角点改高度）
+  const activation = isActivationElement(element);
+  if (activation) {
+    omitSides = {
+      ...omitSides,
+      e: true,
+      w: true,
+      rotation: true,
+    };
+  }
   const margin = isImageElement(element) ? 0 : DEFAULT_TRANSFORM_HANDLE_SPACING;
   return getTransformHandlesFromCoords(
     getElementSelectionFrameCoords(element, elementsMap),
@@ -390,6 +407,8 @@ export const getTransformHandles = (
     omitSides,
     margin,
     isImageElement(element) ? 0 : undefined,
+    // 窄条也强制生成 n / s：否则 30px 宽永远低于默认阈值
+    activation ? 0 : undefined,
   );
 };
 

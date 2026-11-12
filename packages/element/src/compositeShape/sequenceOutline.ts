@@ -29,6 +29,7 @@ import type { Drawable, Options } from "roughjs/bin/core";
 import type {
   ExcalidrawElement,
   ExcalidrawSequenceElement,
+  ExcalidrawShapeElement,
   SequenceShapeData,
 } from "../types";
 import type { ShapeDraw } from "./registry";
@@ -112,6 +113,232 @@ export const isSequenceLifelineElement = <T extends ExcalidrawElement>(
     !!shape &&
     isSequenceLifelineShapeId(shape.id)
   );
+};
+
+/** Default activation bar size, shared by preset defaults and pole placement. */
+export const SEQUENCE_ACTIVATION_WIDTH = 30;
+export const SEQUENCE_ACTIVATION_HEIGHT = 100;
+
+/** Clearance kept between an auto-created activation and the pole ends. */
+export const SEQUENCE_MIN_ACTIVATION_OFFSET = 8;
+
+/** Minimum height of an activation bar (width is fixed, height is the only axis). */
+export const SEQUENCE_MIN_ACTIVATION_HEIGHT = 20;
+
+/**
+ * Narrowing predicate for `sc-activation`. Structural (same reason as
+ * `isSequenceLifelineElement`) so it can be used at JSON boundaries without
+ * importing the registry.
+ */
+export const isActivationElement = <T extends ExcalidrawElement>(
+  element: T | null | undefined,
+): element is T &
+  ExcalidrawSequenceElement & {
+    shape: Extract<SequenceShapeData, { id: "sc-activation" }>;
+  } => {
+  const shape = (
+    element as Partial<ExcalidrawSequenceElement> | null | undefined
+  )?.shape;
+  return (
+    !!element &&
+    element.type === "sequence" &&
+    !!shape &&
+    shape.id === "sc-activation"
+  );
+};
+
+/** A sequence element narrowed to one of the eight lifelines. */
+export type SequenceLifelineElement = ExcalidrawSequenceElement & {
+  shape: Extract<SequenceShapeData, { id: SequenceLifelineId }>;
+};
+
+export type SequenceLifelineLocalPoint = { x: number; y: number };
+
+/** Scene point → the lifeline's element-local frame (origin at element.x/y). */
+export const getSequenceLifelineLocalPoint = (
+  element: ExcalidrawSequenceElement,
+  globalX: number,
+  globalY: number,
+): SequenceLifelineLocalPoint => {
+  const center = pointFrom<GlobalPoint>(
+    element.x + element.width / 2,
+    element.y + element.height / 2,
+  );
+  const [x, y] = pointRotateRads(
+    pointFrom<GlobalPoint>(globalX, globalY),
+    center,
+    -element.angle as Radians,
+  );
+  return { x: x - element.x, y: y - element.y };
+};
+
+/** Element-local point → scene point, rotating about the element center. */
+export const getSequenceLifelineGlobalPoint = (
+  element: ExcalidrawSequenceElement,
+  localX: number,
+  localY: number,
+): GlobalPoint => {
+  const center = pointFrom<GlobalPoint>(
+    element.x + element.width / 2,
+    element.y + element.height / 2,
+  );
+  return pointRotateRads(
+    pointFrom<GlobalPoint>(element.x + localX, element.y + localY),
+    center,
+    element.angle,
+  );
+};
+
+/**
+ * Whether a scene point falls on the dashed pole (not the head) within
+ * `slop` scene units of the pole center line.
+ */
+export const isPointOnSequenceLifelinePole = (
+  element: ExcalidrawElement,
+  globalX: number,
+  globalY: number,
+  slop: number = SEQUENCE_HIT_HALF_WIDTH,
+): boolean => {
+  if (!isSequenceLifelineElement(element)) {
+    return false;
+  }
+  const local = getSequenceLifelineLocalPoint(element, globalX, globalY);
+  const headHeight = element.shape.lifeline.headHeight;
+  const poleEnd =
+    headHeight + getSequencePoleLength(element.height, headHeight);
+  return (
+    local.y >= headHeight &&
+    local.y <= poleEnd &&
+    Math.abs(local.x - element.width / 2) <= slop
+  );
+};
+
+/**
+ * Activation-center local y clamped to stay inside the pole: keeps
+ * `SEQUENCE_MIN_ACTIVATION_OFFSET` clearance at both ends; a pole shorter than
+ * the bar centers the bar on the pole.
+ */
+export const clampSequenceActivationLocalY = (
+  lifeline: SequenceLifelineElement,
+  localY: number,
+  activationHeight: number = SEQUENCE_ACTIVATION_HEIGHT,
+): number => {
+  const headHeight = lifeline.shape.lifeline.headHeight;
+  const poleEnd =
+    headHeight + getSequencePoleLength(lifeline.height, headHeight);
+  const half = activationHeight / 2;
+  const lower = headHeight + SEQUENCE_MIN_ACTIVATION_OFFSET + half;
+  const upper = poleEnd - SEQUENCE_MIN_ACTIVATION_OFFSET - half;
+  return lower <= upper
+    ? Math.min(Math.max(localY, lower), upper)
+    : (headHeight + poleEnd) / 2;
+};
+
+/**
+ * Scene center + angle for an activation attached to the pole at `localY`.
+ * `localY` is clamped so the bar never leaves the pole.
+ */
+export const getSequenceLifelineActivationCenter = (
+  lifeline: SequenceLifelineElement,
+  localY: number,
+  activationHeight: number = SEQUENCE_ACTIVATION_HEIGHT,
+): { center: { x: number; y: number }; angle: Radians; localY: number } => {
+  const clamped = clampSequenceActivationLocalY(
+    lifeline,
+    localY,
+    activationHeight,
+  );
+  const [x, y] = getSequenceLifelineGlobalPoint(
+    lifeline,
+    lifeline.width / 2,
+    clamped,
+  );
+  return { center: { x, y }, angle: lifeline.angle, localY: clamped };
+};
+
+/** Unclamped local y of a scene point in the lifeline's frame. */
+export const getSequenceLifelineActivationLocalY = (
+  lifeline: SequenceLifelineElement,
+  globalX: number,
+  globalY: number,
+): number => getSequenceLifelineLocalPoint(lifeline, globalX, globalY).y;
+
+/**
+ * Placement of an activation created by clicking the pole: horizontally
+ * centered on the pole, with the **pointer y as the activation's top edge**
+ * (the bar grows downward). The resulting center is clamped inside the pole
+ * with `SEQUENCE_MIN_ACTIVATION_OFFSET` clearance, so near the pole ends the
+ * bar shifts up to stay inside. Returns the rotated scene center, the
+ * lifeline angle and the (clamped) center local y persisted by the link.
+ */
+export const getSequenceLifelinePoleActivationPlacement = (
+  element: ExcalidrawElement,
+  globalX: number,
+  globalY: number,
+): {
+  center: { x: number; y: number };
+  angle: Radians;
+  localY: number;
+} | null => {
+  if (
+    !isPointOnSequenceLifelinePole(element, globalX, globalY) ||
+    !isSequenceLifelineElement(element)
+  ) {
+    return null;
+  }
+  const local = getSequenceLifelineLocalPoint(element, globalX, globalY);
+  const { center, angle, localY } = getSequenceLifelineActivationCenter(
+    element,
+    local.y + SEQUENCE_ACTIVATION_HEIGHT / 2,
+  );
+  return { center, angle, localY };
+};
+
+/**
+ * Global point on an activation's left / right edge at `localY` of the
+ * activation's local frame (default: vertical center), rotated by `angle`.
+ */
+export const getActivationAnchor = (
+  element: ExcalidrawShapeElement,
+  side: "left" | "right",
+  localY: number = element.height / 2,
+): GlobalPoint => {
+  const center = pointFrom<GlobalPoint>(
+    element.x + element.width / 2,
+    element.y + element.height / 2,
+  );
+  const localX = side === "right" ? element.width : 0;
+  return pointRotateRads(
+    pointFrom<GlobalPoint>(element.x + localX, element.y + localY),
+    center,
+    element.angle,
+  );
+};
+
+/**
+ * Same as `getActivationAnchor`, but takes a scene-space y and clamps it into
+ * the activation's vertical span first — horizontal messages keep the exit
+ * y while still landing on the target bar.
+ */
+export const getActivationAnchorAtSceneY = (
+  element: ExcalidrawShapeElement,
+  side: "left" | "right",
+  sceneY: number,
+): GlobalPoint => {
+  const center = pointFrom<GlobalPoint>(
+    element.x + element.width / 2,
+    element.y + element.height / 2,
+  );
+  const [, rotatedY] = pointRotateRads(
+    pointFrom<GlobalPoint>(center[0], sceneY),
+    center,
+    -element.angle as Radians,
+  );
+  const localY = Math.min(
+    Math.max(rotatedY - element.y, 1),
+    element.height - 1,
+  );
+  return getActivationAnchor(element, side, localY);
 };
 
 /**

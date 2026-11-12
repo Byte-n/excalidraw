@@ -1289,6 +1289,11 @@ export const onPointerMoveFromPointerDownHandler = (
           );
           if (newHeight !== element.height) {
             app.scene.mutateElement(element, { height: newHeight });
+            const updated = app.scene.getNonDeletedElement(element.id);
+            if (updated) {
+              // 杆底控制点只改高度：挂在杆上的激活条要跟着重新夹取
+              updateBoundElements(updated, app.scene);
+            }
             control.hasChanged = true;
           }
           return;

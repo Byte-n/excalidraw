@@ -4,7 +4,11 @@ import {
   STROKE_WIDTH,
 } from "@excalidraw/common";
 
-import { getSequenceLifelineDefaultSize } from "@excalidraw/element";
+import {
+  SEQUENCE_ACTIVATION_HEIGHT,
+  SEQUENCE_ACTIVATION_WIDTH,
+  getSequenceLifelineDefaultSize,
+} from "@excalidraw/element";
 
 import type { GenericShapeId } from "./presetCatalog";
 
@@ -271,8 +275,8 @@ export const SHAPE_PRESET_DEFAULTS: Readonly<
   // 激活条样本填 `#d6dcf3`（蓝系深档，与 fc 的 blue[1] 规则一致）
   "sc-activation": {
     backgroundColor: COLOR_PALETTE.blue[1],
-    width: 30,
-    height: 100,
+    width: SEQUENCE_ACTIVATION_WIDTH,
+    height: SEQUENCE_ACTIVATION_HEIGHT,
   },
   // 组合片段外框不填、只填左上页签；页签填 `#f5f5f5` → gray[0]（不填则 options.fill
   // 为空、页签不填）

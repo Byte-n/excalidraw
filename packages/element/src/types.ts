@@ -33,8 +33,8 @@ export type VerticalAlign = typeof VERTICAL_ALIGN[VerticalAlignKeys];
 export type FractionalIndex = string & { _brand: "franctionalIndex" };
 
 export type BoundElement = Readonly<{
-  id: ExcalidrawLinearElement["id"];
-  type: "arrow" | "text";
+  id: string;
+  type: "arrow" | "text" | "activation";
 }>;
 
 type _ExcalidrawElementBase = Readonly<{
@@ -325,8 +325,23 @@ export type SequenceShapeData =
       schemaVersion: 1;
       lifeline: Readonly<{ headHeight: number }>;
     }>
-  | Readonly<{ id: "sc-activation"; schemaVersion: 1 }>
+  | Readonly<{
+      id: "sc-activation";
+      schemaVersion: 1;
+      /**
+       * The lifeline pole this activation is attached to. Activations with a
+       * link follow the lifeline and can only move vertically along the pole.
+       */
+      link?: SequenceActivationLink;
+    }>
   | Readonly<{ id: "sc-fragment"; schemaVersion: 1 }>;
+
+/** Activation → lifeline link, persisted with the activation's shape data. */
+export type SequenceActivationLink = Readonly<{
+  lifelineId: string;
+  /** Activation center y in the lifeline's local coordinate frame. */
+  localY: number;
+}>;
 
 export type ShapeData = BasicShapeData | FlowchartShapeData | SequenceShapeData;
 

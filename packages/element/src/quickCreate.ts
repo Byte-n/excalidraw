@@ -5,6 +5,7 @@ import type { GlobalPoint, Radians } from "@excalidraw/math";
 
 import { getElementAbsoluteCoords } from "./bounds";
 import {
+  isActivationElement,
   isSequenceLifelineElement,
   isShapeId,
   isShapeElement,
@@ -25,6 +26,16 @@ export const QUICK_CREATE_DIRECTIONS: readonly QuickCreateDirection[] = [
   "bottom",
   "left",
 ];
+
+/**
+ * 激活条只暴露左 / 右两个连接点：时序消息是水平的，上 / 下手柄既没有语义，
+ * 也会和生命线杆底控制点抢空间。
+ */
+export const QUICK_CREATE_ACTIVATION_DIRECTIONS: readonly QuickCreateDirection[] =
+  ["right", "left"];
+
+/** 激活条连接点圆心外移距离（屏幕 px）；激活条很窄，不能沿用基础图形的 22 */
+export const QUICK_CREATE_ACTIVATION_OFFSET = 14;
 
 /**
  * 常态与悬停**共用**的圆心外移距离（屏幕 px）：两种状态圆心必须重合，
@@ -266,17 +277,22 @@ const getHandleCenters = (
 /**
  * 渲染与命中共用：全部手柄（场景坐标）。没有目标、或按住修饰键（`suppressed`）
  * 时返回空数组，保证「看到的」与「点得到的」一致——这是整组不渲染的唯一入口。
+ *
+ * `target` 用于「悬停激活条」这条无选中路径：缺省（`undefined`）仍按单选目标
+ * 解析，显式传 `null` 表示没有目标。
  */
 export const getQuickCreateHandles = (
   app: QuickCreateApp,
   pointerType: string = "mouse",
   suppressed: boolean = false,
+  target?: NonDeletedExcalidrawElement | null,
 ): QuickCreateHandle[] => {
   if (suppressed) {
     return [];
   }
-  const element = getQuickCreateTargetElement(app);
-  if (!element) {
+  const element =
+    target === undefined ? getQuickCreateTargetElement(app) : target;
+  if (!element || !isQuickCreateTargetElement(element)) {
     return [];
   }
   // Sequence lifelines have their own bottom control point; direction handles
@@ -284,23 +300,33 @@ export const getQuickCreateHandles = (
   if (isSequenceLifelineElement(element)) {
     return [];
   }
+  const activation = isActivationElement(element);
+  const directions = activation
+    ? QUICK_CREATE_ACTIVATION_DIRECTIONS
+    : QUICK_CREATE_DIRECTIONS;
   const zoom = app.state.zoom.value;
   const bounds = getElementAbsoluteCoords(
     element,
     app.scene.getNonDeletedElementsMap(),
   );
-  // 紧凑档按**屏幕**尺寸判定，小图形与低缩放走同一条规则
+  // 紧凑档按**屏幕**尺寸判定，小图形与低缩放走同一条规则；激活条固定走常规档，
+  // 否则 30px 宽的条永远落在紧凑档，连接点会缩得看不清。
   const compact =
+    !activation &&
     Math.min(element.width, element.height) * zoom <
-    QUICK_CREATE_COMPACT_THRESHOLD;
+      QUICK_CREATE_COMPACT_THRESHOLD;
   const offset =
-    (compact ? QUICK_CREATE_OFFSET_COMPACT : QUICK_CREATE_HANDLE_OFFSET) / zoom;
+    (activation
+      ? QUICK_CREATE_ACTIVATION_OFFSET
+      : compact
+      ? QUICK_CREATE_OFFSET_COMPACT
+      : QUICK_CREATE_HANDLE_OFFSET) / zoom;
   const centers = getHandleCenters(bounds, element.angle, offset);
   const hitSize =
     (pointerType === "touch"
       ? QUICK_CREATE_HIT_SIZE_TOUCH
       : QUICK_CREATE_HIT_SIZE) / zoom;
-  return QUICK_CREATE_DIRECTIONS.map((direction) => ({
+  return directions.map((direction) => ({
     direction,
     elementId: element.id,
     center: centers[direction],
@@ -319,15 +345,17 @@ export const hitTestQuickCreateHandle = (
   sceneY: number,
   pointerType: string = "mouse",
   suppressed: boolean = false,
+  target?: NonDeletedExcalidrawElement | null,
 ): { direction: QuickCreateDirection; elementId: string } | null => {
   if (suppressed) {
     return null;
   }
-  const element = getQuickCreateTargetElement(app);
+  const element =
+    target === undefined ? getQuickCreateTargetElement(app) : target;
   if (!element) {
     return null;
   }
-  const handles = getQuickCreateHandles(app, pointerType, suppressed);
+  const handles = getQuickCreateHandles(app, pointerType, suppressed, element);
   let hit: QuickCreateDirection | null = null;
   let hitDistance = Infinity;
   for (const handle of handles) {

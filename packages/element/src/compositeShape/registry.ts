@@ -333,6 +333,22 @@ const validateLifelineParams = (data: unknown) => {
   );
 };
 
+/** Optional activation→lifeline link; absent = a free-standing activation. */
+const validateActivationLinkParams = (data: unknown) => {
+  if (data === undefined) {
+    return true;
+  }
+  const value = data as Record<string, unknown> | undefined;
+  return (
+    !!value &&
+    hasOnlyKeys(value, ["lifelineId", "localY"]) &&
+    typeof value.lifelineId === "string" &&
+    value.lifelineId.length > 0 &&
+    typeof value.localY === "number" &&
+    Number.isFinite(value.localY)
+  );
+};
+
 type CircularSectorData = {
   centralAngle: number;
   radius: number;
@@ -1608,6 +1624,7 @@ export const SHAPES: { [K in ShapeId]: ShapeRegistration<K> } = {
   "sc-activation": defineShape(
     (input) => getRoundedRectOutline(input.width, input.height, 5),
     roundedCornerTextBounds(() => 5),
+    { param: { key: "link", validate: validateActivationLinkParams } },
   ),
   // Fragment: box outline stroked only, the top tab filled via the shaded-face
   // drawing (the tab also lives in `details` as a stroke-only contour).
