@@ -54,6 +54,28 @@ const { h } = window;
 
 const mouse = new Pointer("mouse");
 
+/** PR4b: hover/gesture state lives on the pointer frame only. */
+const hoveredHandle = () => {
+  const frame = h.app.pointer.getFrame();
+  return frame?.target.kind === "quickCreateHandle"
+    ? {
+        elementId: frame.target.elementId,
+        direction: frame.target.direction,
+      }
+    : null;
+};
+
+const sequenceHover = () => {
+  const frame = h.app.pointer.getFrame();
+  return frame?.target.kind === "activationEdge"
+    ? {
+        elementId: frame.target.elementId,
+        side: frame.target.side,
+        point: { x: frame.target.point[0], y: frame.target.point[1] },
+      }
+    : null;
+};
+
 /** 视图坐标为 0 偏移、zoom=1 时，场景坐标与视图坐标重合 */
 const live = () => h.elements.filter((element) => !element.isDeleted);
 
@@ -501,7 +523,7 @@ describe("quick create handles", () => {
     expect(hit()).toBeNull();
     // 悬停也不会残留加号形态
     mouse.moveTo(center.x, center.y);
-    expect(h.app.quickCreate.getHovered()).toBeNull();
+    expect(hoveredHandle()).toBeNull();
 
     // 长按重复触发 keydown 不会卡住状态
     fireEvent.keyDown(h.app.ownerDocument, { key: "Shift", shiftKey: true });
@@ -541,7 +563,7 @@ describe("quick create handles", () => {
       expect(getQuickCreateHandles(h.app)).toHaveLength(4);
 
       mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
-      expect(h.app.quickCreate.getHovered()).toBeNull();
+      expect(hoveredHandle()).toBeNull();
 
       mouse.downAt(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
       mouse.upAt();
@@ -575,7 +597,7 @@ describe("quick create handles", () => {
       ).toBeNull();
 
       mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
-      expect(h.app.quickCreate.getHovered()).toEqual({
+      expect(hoveredHandle()).toEqual({
         direction: "right",
         elementId: source.id,
       });
@@ -624,7 +646,7 @@ describe("quick create handles", () => {
       ).toBe(arrow.id);
 
       mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
-      expect(h.app.quickCreate.getHovered()).toEqual({
+      expect(hoveredHandle()).toEqual({
         direction: "right",
         elementId: source.id,
       });
@@ -657,7 +679,7 @@ describe("quick create handles", () => {
       expect(h.app.getElementAtPosition(back.x, back.y)?.id).toBe(arrow.id);
 
       mouse.moveTo(back.x, back.y);
-      expect(h.app.quickCreate.getHovered()).toEqual({
+      expect(hoveredHandle()).toEqual({
         direction: "left",
         elementId: copy.id,
       });
@@ -693,7 +715,7 @@ describe("quick create handles", () => {
       expect(h.app.getElementAtPosition(right.x, right.y)?.id).toBe(frame.id);
 
       mouse.moveTo(right.x, right.y);
-      expect(h.app.quickCreate.getHovered()).toEqual({
+      expect(hoveredHandle()).toEqual({
         direction: "right",
         elementId: source.id,
       });
@@ -2067,19 +2089,19 @@ describe("quick create handles", () => {
       selectShape(shape);
 
       mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
-      expect(h.app.quickCreate.getHovered()).toEqual({
+      expect(hoveredHandle()).toEqual({
         direction: "right",
         elementId: shape.id,
       });
 
       mouse.moveTo(HANDLE_CENTERS.left.x, HANDLE_CENTERS.left.y);
-      expect(h.app.quickCreate.getHovered()).toEqual({
+      expect(hoveredHandle()).toEqual({
         direction: "left",
         elementId: shape.id,
       });
 
       mouse.moveTo(1000, 1000);
-      expect(h.app.quickCreate.getHovered()).toBeNull();
+      expect(hoveredHandle()).toBeNull();
     });
 
     it("redraws a frame when a modifier key hides the whole set", () => {
@@ -2108,7 +2130,7 @@ describe("quick create handles", () => {
       const handles = getQuickCreateHandles(h.app);
       expect(handles).toHaveLength(0);
       mouse.moveTo(HANDLE_CENTERS.right.x, HANDLE_CENTERS.right.y);
-      expect(h.app.quickCreate.getHovered()).toBeNull();
+      expect(hoveredHandle()).toBeNull();
     });
   });
 
@@ -2261,7 +2283,7 @@ describe("quick create handles", () => {
       mouse.upAt(400, 200);
 
       expect(liveIds()).toEqual(before);
-      expect(h.app.quickCreate.getDrag()).toBeNull();
+      expect(h.app.pointer.getFrame()).toBeNull();
     });
 
     it("previews the very same connector it will land", () => {
@@ -3065,7 +3087,7 @@ describe("quick create handles", () => {
 
       // 右边缘 x=416；指针在条外 5px
       mouse.moveTo(421, 250);
-      let hover = h.app.quickCreate.getSequenceConnectionHover();
+      let hover = sequenceHover();
       expect(hover).toEqual(
         expect.objectContaining({ elementId: activation.id, side: "right" }),
       );
@@ -3074,13 +3096,13 @@ describe("quick create handles", () => {
 
       // 点跟着指针沿边移动，不是固定锚点
       mouse.moveTo(421, 275);
-      hover = h.app.quickCreate.getSequenceConnectionHover();
+      hover = sequenceHover();
       expect(hover!.point.x).toBeCloseTo(416, 6);
       expect(hover!.point.y).toBeCloseTo(275, 6);
 
       // 左边缘
       mouse.moveTo(395, 230);
-      hover = h.app.quickCreate.getSequenceConnectionHover();
+      hover = sequenceHover();
       expect(hover!.side).toBe("left");
       expect(hover!.point.x).toBeCloseTo(400, 6);
       expect(hover!.point.y).toBeCloseTo(230, 6);
@@ -3092,7 +3114,7 @@ describe("quick create handles", () => {
       mouse.reset();
 
       mouse.moveTo(408, 250);
-      expect(h.app.quickCreate.getSequenceConnectionHover()).toBeNull();
+      expect(sequenceHover()).toBeNull();
     });
 
     it("connects two activations with a horizontal straight arrow", () => {
@@ -3161,7 +3183,7 @@ describe("quick create handles", () => {
 
       // 右边缘外 5px：选中框的贴边热区不能再把它判成 e 缩放
       mouse.moveTo(421, 250);
-      const hover = h.app.quickCreate.getSequenceConnectionHover();
+      const hover = sequenceHover();
       expect(hover).toEqual(
         expect.objectContaining({ elementId: activation.id, side: "right" }),
       );
@@ -3200,7 +3222,7 @@ describe("quick create handles", () => {
 
       // 压在连接点圆点的内半圈（边缘内 3px）
       mouse.moveTo(413, 250);
-      expect(h.app.quickCreate.getSequenceConnectionHover()).not.toBeNull();
+      expect(sequenceHover()).not.toBeNull();
 
       mouse.downAt(413, 250);
       mouse.moveTo(600, 250);

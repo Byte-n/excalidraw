@@ -53,12 +53,23 @@ export const applyPointerFrame = (
   // 1. clear the previous frame's container hover
   clearContainerInteractionHover(app);
 
-  // 2. store the frame first: mirror sync / repaint below read `getFrame()`.
+  // 2. store the frame first: the renderer reads `getFrame()`.
   app.pointer.setFrame(frame, { repaint: false });
+  const isSequenceTarget = (target: PointerFrame["target"] | undefined) =>
+    target?.kind === "quickCreateHandle" ||
+    target?.kind === "activationEdge" ||
+    target?.kind === "poleActivation";
+  // sequence hover visuals are component-external state: repaint on enter / move
+  // / leave (same repaint budget as the old hover handler).
+  if (
+    isSequenceTarget(frame.target) ||
+    isSequenceTarget(existingFrame?.target)
+  ) {
+    app.repaint.request();
+  }
 
-  // 3. sequence-affordance hover mirrors are derived from the frame (PR4a).
-  //    Gesture owners write their own fields; sync only mirrors hover/armed.
-  app.quickCreate?.syncHoverFromFrame?.(frame);
+  // 3. sequence-affordance visuals read the frame + ghost caches directly
+  //    (PR4b): no hover mirrors to write here.
   switch (frame.target.kind) {
     case "quickCreateHandle":
     case "activationEdge":

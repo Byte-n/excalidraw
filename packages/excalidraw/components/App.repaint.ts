@@ -8,8 +8,8 @@
  *
  * 推论：`app.setState({})` **画不出任何东西**——所有值浅相等，memo 判定为相等，
  * 组件连 effect（刷新 rendererParams 并画一帧）都不会跑。悬停高亮这类只改
- * 「组件外部状态」（`app.quickCreate.getHovered()`、`app.mindmap` 的悬停等）的
- * 即时反馈必须走这个入口。
+ * 「组件外部状态」（`app.pointer.getFrame()` 驱动的时序 affordance、`app.mindmap`
+ * 的悬停等）的即时反馈必须走这个入口。
  */
 export class AppRepaint {
   private renderer: (() => void) | null = null;

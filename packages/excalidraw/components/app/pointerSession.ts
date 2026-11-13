@@ -128,6 +128,7 @@ import {
 } from "./fragment";
 import {
   currentPointerMode,
+  hasFrameMoved,
   resolvePointerFrame,
   resolvePointerType,
 } from "./pointerFrame";
@@ -1312,9 +1313,9 @@ export const onPointerMoveFromPointerDownHandler = (
       if (
         gestureFrame.phase === "armed" &&
         gestureFrame.target.kind === "poleActivation" &&
-        !app.quickCreate.hasPointerGesture()
+        hasFrameMoved(nextFrame, app.state.zoom.value)
       ) {
-        // arm dropped
+        // arm dropped by AppQuickCreate
       } else {
         app.pointer.setFrame(nextFrame, { repaint: false });
       }

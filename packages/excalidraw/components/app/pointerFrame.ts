@@ -451,26 +451,10 @@ export const compareFrameWithLegacy = (
     return;
   }
   switch (frame.target.kind) {
-    case "quickCreateHandle": {
-      const legacy = app.quickCreate?.getHovered?.() ?? null;
-      if (
-        legacy?.elementId !== frame.target.elementId ||
-        legacy?.direction !== frame.target.direction
-      ) {
-        warnShadowMismatch(frame, legacy, app);
-      }
+    case "quickCreateHandle":
+    case "activationEdge":
+      // PR4b removed the legacy hover mirrors; the frame is the only source.
       break;
-    }
-    case "activationEdge": {
-      const legacy = app.quickCreate?.getSequenceConnectionHover?.() ?? null;
-      if (
-        legacy?.elementId !== frame.target.elementId ||
-        legacy?.side !== frame.target.side
-      ) {
-        warnShadowMismatch(frame, legacy, app);
-      }
-      break;
-    }
     case "poleActivation": {
       // PR4 adds `getPoleActivationHover()`; until then only presence is known
       const hasPoleActivation = (app.quickCreate as any)?.hasPoleActivation;

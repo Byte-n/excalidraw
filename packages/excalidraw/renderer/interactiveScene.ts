@@ -1467,8 +1467,10 @@ const renderSequenceConnection = (
   selectionColor: string,
 ) => {
   const frame = app.pointer.getFrame();
-  const drag = app.quickCreate.getSequenceConnectionDrag();
-  const elements = app.quickCreate.getSequenceConnectionGhostElements();
+  const messageGesture =
+    frame?.owner === "sequenceMessage" &&
+    frame.target.kind === "activationEdge";
+  const elements = app.quickCreate.getSequenceConnectionGhostElements(frame);
   if (elements.length) {
     context.save();
     context.setLineDash([]);
@@ -1491,18 +1493,13 @@ const renderSequenceConnection = (
   }
   const activationHover =
     frame?.target.kind === "activationEdge" ? frame.target : null;
-  const point =
-    drag?.exit ??
-    (activationHover
-      ? {
-          x: activationHover.point[0],
-          y: activationHover.point[1],
-        }
-      : null);
+  const point = activationHover
+    ? { x: activationHover.point[0], y: activationHover.point[1] }
+    : null;
   if (!point) {
     return;
   }
-  const sceneRadius = (drag ? 5 : 4) / appState.zoom.value;
+  const sceneRadius = (messageGesture ? 5 : 4) / appState.zoom.value;
   renderSequenceActivationDot(
     context,
     point.x,
@@ -1513,7 +1510,7 @@ const renderSequenceConnection = (
   );
   // 终点吸附到（或回到）激活条上时，在落点画同款圆点——起点与终点
   // 用同一个标记，拖拽中始终能看到消息会落在哪里。
-  const dropPoint = app.quickCreate.getSequenceConnectionDropPoint();
+  const dropPoint = app.quickCreate.getSequenceConnectionDropPoint(frame);
   if (dropPoint) {
     renderSequenceActivationDot(
       context,
