@@ -33,6 +33,11 @@ import {
 } from "./compositeShape";
 import { updateSequenceActivationsForLifeline } from "./sequenceActivation";
 import {
+  constrainSequenceMessagePoint,
+  findSequenceMessageTarget,
+  getSequenceMessageAxis,
+} from "./sequenceMessage";
+import {
   getHoveredElementForBinding,
   hitElementItself,
   intersectElementWithLineSegment,
@@ -480,6 +485,35 @@ const getBindingStrategyForDraggingBindingElementEndpoints_simple = (
   // 重算另一端的落点，那是为了在旧锚点语义下维持它「贴在哪条边」；端点现在在建连
   // 那一刻就定死，拖这一端没有任何理由改写另一端。
   const keep: BindingStrategy = { element: undefined };
+
+  // 时序消息端点：另一端绑在激活条上时，这一端由消息策略决定，不走通用的
+  // 「指针附近有什么就绑什么」——水平、朝外、只吸附激活条，三条创建 / 编辑
+  // 路径共用同一份判定（见 `sequenceMessage.ts`）。
+  // 按住 Shift（角度锁）或网格模式时让位给既有行为；Alt 仍是「不绑定」。
+  if (!opts?.angleLocked && !appState.gridModeEnabled && !opts?.altKey) {
+    const axis = getSequenceMessageAxis(
+      arrow,
+      startDragged ? "start" : "end",
+      elementsMap,
+    );
+    if (axis) {
+      const target = findSequenceMessageTarget(
+        axis,
+        globalPoint,
+        elements,
+        elementsMap,
+        appState.zoom.value,
+      );
+      const sequencePoint = constrainSequenceMessagePoint(axis, globalPoint);
+      const current: BindingStrategy = target
+        ? { element: target, focusPoint: sequencePoint }
+        : { element: null };
+      return {
+        start: startDragged ? current : keep,
+        end: endDragged ? current : keep,
+      };
+    }
+  }
 
   const current: BindingStrategy = hit
     ? {

@@ -3324,5 +3324,290 @@ describe("quick create handles", () => {
 
       expect(live().filter(isArrowElement)).toHaveLength(0);
     });
+
+    describe("dropping on a bare lifeline pole", () => {
+      const LIFELINE_WIDTH = 64;
+      const HEAD_HEIGHT = 68.272;
+      const POLE_LENGTH = 360;
+
+      const createLifeline = (x: number) =>
+        API.createElement({
+          type: "sequence",
+          shape: buildShapeData("sc-lifeline-entity"),
+          x,
+          y: 0,
+          width: LIFELINE_WIDTH,
+          height: HEAD_HEIGHT + POLE_LENGTH,
+        });
+
+      it("previews a new activation, then creates it bound to the message", () => {
+        const source = createActivation(400, 200);
+        const lifeline = createLifeline(600);
+        API.setElements([source, lifeline]);
+        // 基准历史：让随后的拖拽建条单独成为一步可撤销
+        act(() => {
+          h.app.store.scheduleCapture();
+          h.app.scene.triggerUpdate();
+        });
+        const undoStepsBefore = API.getUndoStack().length;
+        mouse.reset();
+
+        // 源右边缘 y=250 拖到生命线杆（杆中心 x=632）
+        mouse.moveTo(421, 250);
+        mouse.downAt(421, 250);
+        mouse.moveTo(632, 250);
+
+        const ghosts = h.app.quickCreate.getSequenceConnectionGhostElements();
+        expect(ghosts).toHaveLength(2);
+        const ghostBar = ghosts[0];
+        expect(isShapeElement(ghostBar) && ghostBar.shape.id).toBe(
+          "sc-activation",
+        );
+        // 顶边对齐消息线、水平居中于杆
+        expect(ghostBar.x + ghostBar.width / 2).toBeCloseTo(632, 6);
+        expect(ghostBar.y).toBeCloseTo(250, 6);
+        expect(ghostBar.height).toBe(ACTIVATION_HEIGHT);
+        expect(ghostBar.opacity).toBeLessThan(100);
+        const ghostArrow = ghosts[1] as ExcalidrawLinearElement;
+        expect(ghostArrow.type).toBe("arrow");
+        expect(ghostArrow.points).toHaveLength(2);
+        // 落点指示在新条的左边缘（y 与起端齐平，夹进条内 1px）
+        expect(h.app.quickCreate.getSequenceConnectionDropPoint()).toEqual({
+          x: 624,
+          y: 251,
+        });
+
+        mouse.upAt(632, 250);
+
+        const activation = live()
+          .filter(isActivationElement)
+          .find((element) => element.id !== source.id);
+        expect(activation).toBeDefined();
+        expect(activation!.x + activation!.width / 2).toBeCloseTo(632, 6);
+        expect(activation!.y).toBeCloseTo(250, 6);
+        // 新条建立杆绑定，并登记到生命线
+        expect(activation!.shape.link).toEqual({
+          lifelineId: lifeline.id,
+          localY: 300,
+        });
+        expect(
+          h.app.scene
+            .getNonDeletedElement(lifeline.id)!
+            .boundElements?.some(
+              (bound) =>
+                bound.id === activation!.id && bound.type === "activation",
+            ),
+        ).toBe(true);
+
+        const arrow = lastArrow();
+        expect(arrow.startBinding?.elementId).toBe(source.id);
+        expect(arrow.endBinding?.elementId).toBe(activation!.id);
+
+        // 激活条与消息同属一步撤销
+        expect(API.getUndoStack()).toHaveLength(undoStepsBefore + 1);
+        Keyboard.undo();
+        expect(live().filter(isActivationElement)).toHaveLength(1);
+        expect(live().filter(isArrowElement)).toHaveLength(0);
+      });
+
+      it("connects to an existing activation instead of creating a new one", () => {
+        const source = createActivation(400, 200);
+        const lifeline = createLifeline(600);
+        const existing = createActivation(624, 200);
+        API.setElements([source, lifeline, existing]);
+        mouse.reset();
+
+        mouse.moveTo(421, 250);
+        mouse.downAt(421, 250);
+        mouse.moveTo(628, 250);
+
+        const ghosts = h.app.quickCreate.getSequenceConnectionGhostElements();
+        expect(ghosts).toHaveLength(1);
+        expect(ghosts[0].type).toBe("arrow");
+        expect(h.app.quickCreate.getSequenceConnectionDropPoint()).toEqual({
+          x: 624,
+          y: 250,
+        });
+
+        mouse.upAt(628, 250);
+        expect(live().filter(isActivationElement)).toHaveLength(2);
+        expect(lastArrow().endBinding?.elementId).toBe(existing.id);
+      });
+
+      it("does not create one where it would overlap an existing activation", () => {
+        const source = createActivation(400, 300);
+        const lifeline = createLifeline(600);
+        // 已有条占 [300, 400]；候选条顶边在 350，会压住它
+        const existing = createActivation(624, 300);
+        API.setElements([source, lifeline, existing]);
+        mouse.reset();
+
+        mouse.moveTo(421, 350);
+        mouse.downAt(421, 350);
+        mouse.moveTo(632, 250);
+
+        const ghosts = h.app.quickCreate.getSequenceConnectionGhostElements();
+        expect(ghosts).toHaveLength(1);
+        expect(ghosts[0].type).toBe("arrow");
+        expect(h.app.quickCreate.getSequenceConnectionDropPoint()).toBeNull();
+
+        mouse.upAt(632, 250);
+        expect(live().filter(isActivationElement)).toHaveLength(2);
+        expect(lastArrow().endBinding).toBeNull();
+      });
+    });
+
+    describe("other creation paths use the same message policy", () => {
+      const LIFELINE_WIDTH = 64;
+      const HEAD_HEIGHT = 68.272;
+      const POLE_LENGTH = 360;
+
+      const createLifeline = (x: number) =>
+        API.createElement({
+          type: "sequence",
+          shape: buildShapeData("sc-lifeline-entity"),
+          x,
+          y: 0,
+          width: LIFELINE_WIDTH,
+          height: HEAD_HEIGHT + POLE_LENGTH,
+        });
+
+      /** 用箭头工具画一条从激活条右边缘出发的线，起端应绑到该条 */
+      const drawArrowFromActivation = (
+        source: NonDeletedExcalidrawElement,
+      ): ExcalidrawLinearElement => {
+        UI.clickTool("arrow");
+        mouse.reset();
+        mouse.downAt(source.x + source.width + 5, 250);
+        mouse.moveTo(500, 250);
+        mouse.upAt(500, 250);
+        const arrow = lastArrow();
+        expect(arrow.startBinding?.elementId).toBe(source.id);
+        return arrow;
+      };
+
+      it("arrow tool: connects two activations with a horizontal bound line", () => {
+        const source = createActivation(400, 200);
+        const target = createActivation(600, 200);
+        API.setElements([source, target]);
+        mouse.reset();
+
+        UI.clickTool("arrow");
+        mouse.reset();
+        mouse.downAt(421, 250);
+        // 指针明显偏离起端 y：消息仍应保持水平
+        mouse.moveTo(608, 280);
+        mouse.upAt(608, 280);
+
+        const arrow = lastArrow();
+        expect(arrow.startBinding?.elementId).toBe(source.id);
+        expect(arrow.endBinding?.elementId).toBe(target.id);
+        expect(arrowPoint(arrow, 0).y).toBeCloseTo(250, 1);
+        expect(arrowPoint(arrow, 1).y).toBeCloseTo(250, 1);
+      });
+
+      it("arrow tool: creates and binds an activation on a bare pole", () => {
+        const source = createActivation(400, 200);
+        const lifeline = createLifeline(600);
+        API.setElements([source, lifeline]);
+        act(() => {
+          h.app.store.scheduleCapture();
+          h.app.scene.triggerUpdate();
+        });
+        const undoStepsBefore = API.getUndoStack().length;
+        mouse.reset();
+
+        UI.clickTool("arrow");
+        mouse.reset();
+        mouse.downAt(421, 250);
+        mouse.moveTo(632, 250);
+
+        expect(h.app.quickCreate.hasSequenceEndpointPreview()).toBe(true);
+        const ghosts = h.app.quickCreate.getSequenceEndpointGhostElements();
+        expect(ghosts).toHaveLength(1);
+        expect(isShapeElement(ghosts[0]) && ghosts[0].shape.id).toBe(
+          "sc-activation",
+        );
+        expect(h.app.quickCreate.getSequenceEndpointDropPoint()).toEqual({
+          x: 624,
+          y: 251,
+        });
+
+        mouse.upAt(632, 250);
+
+        const created = live()
+          .filter(isActivationElement)
+          .find((element) => element.id !== source.id);
+        expect(created).toBeDefined();
+        expect(created!.x + created!.width / 2).toBeCloseTo(632, 6);
+        // 顶边对齐消息线，而不是指针 y
+        expect(created!.y).toBeCloseTo(250, 1);
+        expect(created!.shape.link?.lifelineId).toBe(lifeline.id);
+        expect(created!.shape.link?.localY).toBeCloseTo(300, 1);
+        expect(lastArrow().endBinding?.elementId).toBe(created!.id);
+
+        // 箭头与新建的激活条同属一步 undo
+        expect(API.getUndoStack()).toHaveLength(undoStepsBefore + 1);
+        Keyboard.undo();
+        expect(live().filter(isActivationElement)).toHaveLength(1);
+        expect(live().filter(isArrowElement)).toHaveLength(0);
+      });
+
+      it("dragging an existing endpoint snaps to another activation horizontally", () => {
+        const source = createActivation(400, 200);
+        const target = createActivation(600, 200);
+        API.setElements([source, target]);
+        mouse.reset();
+
+        drawArrowFromActivation(source);
+        // 端点手柄仍在：拖到目标条上，y 偏离起端
+        mouse.reset();
+        mouse.downAt(500, 250);
+        mouse.moveTo(608, 280);
+        mouse.upAt(608, 280);
+
+        const arrow = lastArrow();
+        expect(arrow.endBinding?.elementId).toBe(target.id);
+        expect(arrowPoint(arrow, 0).y).toBeCloseTo(250, 1);
+        expect(arrowPoint(arrow, 1).y).toBeCloseTo(250, 1);
+      });
+
+      it("dragging an existing endpoint onto a bare pole creates an activation", () => {
+        const source = createActivation(400, 200);
+        const lifeline = createLifeline(600);
+        API.setElements([source, lifeline]);
+        mouse.reset();
+
+        drawArrowFromActivation(source);
+        act(() => {
+          h.app.store.scheduleCapture();
+          h.app.scene.triggerUpdate();
+        });
+        const undoStepsBefore = API.getUndoStack().length;
+        mouse.reset();
+        mouse.downAt(500, 250);
+        mouse.moveTo(632, 300);
+
+        expect(h.app.quickCreate.hasSequenceEndpointPreview()).toBe(true);
+
+        mouse.upAt(632, 300);
+
+        const created = live()
+          .filter(isActivationElement)
+          .find((element) => element.id !== source.id);
+        expect(created).toBeDefined();
+        expect(created!.x + created!.width / 2).toBeCloseTo(632, 6);
+        expect(created!.y).toBeCloseTo(250, 1);
+        expect(created!.shape.link?.lifelineId).toBe(lifeline.id);
+        expect(created!.shape.link?.localY).toBeCloseTo(300, 1);
+        expect(lastArrow().endBinding?.elementId).toBe(created!.id);
+
+        // 新建激活条与端点绑定同属一步 undo；箭头本身仍保留
+        expect(API.getUndoStack()).toHaveLength(undoStepsBefore + 1);
+        Keyboard.undo();
+        expect(live().filter(isActivationElement)).toHaveLength(1);
+        expect(live().filter(isArrowElement)).toHaveLength(1);
+      });
+    });
   });
 });

@@ -1,6 +1,11 @@
 import { pointFrom } from "@excalidraw/math";
 
-import { bindOrUnbindBindingElement } from "@excalidraw/element/binding";
+import {
+  bindBindingElement,
+  bindOrUnbindBindingElement,
+  unbindBindingElement,
+  updateBoundPoint,
+} from "@excalidraw/element/binding";
 import {
   isValidPolygon,
   LinearElementEditor,
@@ -27,7 +32,8 @@ import { isInvisiblySmallElement } from "@excalidraw/element";
 
 import { CaptureUpdateAction } from "@excalidraw/element";
 
-import type { LocalPoint } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
+
 import type {
   ExcalidrawElement,
   ExcalidrawLinearElement,
@@ -135,6 +141,75 @@ export const actionFinalize = register<FormData>({
             gridSize: app.getEffectiveGridSize(),
           },
         );
+
+        // 时序消息：落点在没有可连激活条的杆上时，先建激活条再把端点绑过去。
+        // 与连接点拖拽共用 `finalizeSequenceMessageEndpoint`（轴 / 目标 / 杆上
+        // 落位同源），并和端点拖拽同属这一次 ACTION 的 undo。
+        if (
+          !angleLocked &&
+          !event.altKey &&
+          !appState.gridModeEnabled &&
+          selectedPointsIndices.length === 1 &&
+          (selectedPointsIndices[0] === 0 ||
+            selectedPointsIndices[0] === element.points.length - 1)
+        ) {
+          const startOrEnd = selectedPointsIndices.includes(0)
+            ? "start"
+            : "end";
+          const sequenceTarget =
+            app.quickCreate.finalizeSequenceMessageEndpoint(
+              element,
+              startOrEnd,
+              {
+                x: sceneCoords.x - linearElementEditor.pointerOffset.x,
+                y: sceneCoords.y - linearElementEditor.pointerOffset.y,
+              },
+            );
+          if (sequenceTarget) {
+            const currentBinding =
+              element[startOrEnd === "start" ? "startBinding" : "endBinding"];
+            if (
+              currentBinding &&
+              currentBinding.elementId !== sequenceTarget.activation.id
+            ) {
+              unbindBindingElement(element, startOrEnd, scene);
+            }
+            bindBindingElement(
+              element,
+              sequenceTarget.activation,
+              startOrEnd,
+              scene,
+              pointFrom<GlobalPoint>(
+                sequenceTarget.edge.x,
+                sequenceTarget.edge.y,
+              ),
+            );
+            const binding =
+              element[startOrEnd === "start" ? "startBinding" : "endBinding"];
+            const boundPoint = binding
+              ? updateBoundPoint(
+                  element,
+                  binding,
+                  sequenceTarget.activation,
+                  scene.getNonDeletedElementsMap(),
+                )
+              : null;
+            if (boundPoint) {
+              LinearElementEditor.movePoints(
+                element,
+                scene,
+                new Map([
+                  [
+                    sequenceTarget.index,
+                    { point: boundPoint, isDragging: true },
+                  ],
+                ]),
+              );
+            }
+            // 新激活条由 quick-create 插进了场景，re-read 才能一起提交
+            newElements = scene.getElementsIncludingDeleted();
+          }
+        }
       } else if (isLineElement(element)) {
         if (
           appState.selectedLinearElement?.isEditing &&

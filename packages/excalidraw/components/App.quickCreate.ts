@@ -17,15 +17,23 @@ import {
   getQuickCreateHandles,
   getQuickCreateResolvedTargetCenter,
   getQuickCreateTargetElement,
+  getSequenceLifelineActivationCenter,
+  getSequenceLifelineGlobalPoint,
   getSequenceLifelineLocalPoint,
   getSequenceLifelinePoleActivationPlacement,
+  getSequenceMessageAxis,
+  getSequenceMessageAxisFromAnchor,
+  constrainSequenceMessagePoint,
+  findSequenceMessageTarget,
   getTransformHandles,
   SEQUENCE_ACTIVATION_HEIGHT,
+  SEQUENCE_ACTIVATION_WIDTH,
   SEQUENCE_HIT_HALF_WIDTH,
   SEQUENCE_MIN_ACTIVATION_OFFSET,
   hitTestQuickCreateHandle,
   isActivationElement,
   isBindableElement,
+  isPointOnSequenceLifelinePole,
   isSequenceLifelineElement,
   isShapeElement,
   isCurvedArrow,
@@ -53,7 +61,11 @@ import type {
   PointerType,
   PointsPositionUpdates,
 } from "@excalidraw/element/types";
-import type { SequenceActivationElement } from "@excalidraw/element";
+import type {
+  SequenceActivationElement,
+  SequenceLifelineElement,
+  SequenceMessageAxis,
+} from "@excalidraw/element";
 
 import type {
   QuickCreateConnector,
@@ -98,7 +110,7 @@ export const QUICK_CREATE_POLE_GHOST_ID =
   "preview:quick-create:pole-activation";
 
 /** 激活条装配说明：与图形抽屉里的 `sc-activation` 同一个预设 */
-const ACTIVATION_CREATION_SPEC: CreationSpec = {
+const ACTIVATION_CREATION_SPEC: Extract<CreationSpec, { kind: "shape" }> = {
   kind: "shape",
   tool: "rectangle",
   shapeId: "sc-activation",
@@ -153,13 +165,41 @@ type SequenceConnectionDrag = {
 };
 
 /**
+ * 消息落在一根没有可连激活条的杆上：要新建的激活条 + 新条朝向消息源的竖边。
+ * 三条创建 / 编辑路径共用这一份落位（`edge` 是不含 binding gap 的边点，
+ * `entry` 是箭头端点应落的位置）。
+ */
+type SequencePoleDrop = {
+  lifelineId: string;
+  /** 新条中心在生命线本地坐标里的 y */
+  localY: number;
+  center: QuickCreatePoint;
+  angle: Radians;
+  /** 新条朝向源的竖边（场景坐标） */
+  edge: QuickCreatePoint;
+  /** 箭头端点（`edge` 再让出一个 binding gap） */
+  entry: QuickCreatePoint;
+  /** 该竖边朝外的世界方向 */
+  outward: { x: number; y: number };
+};
+
+/** 既有箭头端点拖拽时，杆上建条的预演 */
+type SequenceEndpointPreview = {
+  key: string;
+  elements: readonly NonDeletedExcalidrawElement[];
+  dropPoint: QuickCreatePoint | null;
+};
+
+/**
  * 连接线的一次落位解：锚点是**激活条边缘上**的原始点（绑定时当焦点用），
  * `points` 是已经让出 binding gap、可直接画出来的折线点。
  */
 type SequenceMessagePlacement = {
-  kind: "self" | "activation" | "free";
+  kind: "self" | "activation" | "pole-activation" | "free";
   /** `activation` 档的目标激活条 id */
   targetElementId?: string;
+  /** `pole-activation` 档：落点在杆上，松手时要先新建的激活条 */
+  poleActivation?: SequencePoleDrop;
   anchors: { start: QuickCreatePoint; end: QuickCreatePoint };
   points: QuickCreatePoint[];
 };
@@ -306,6 +346,12 @@ export class AppQuickCreate {
     elements: readonly NonDeletedExcalidrawElement[];
   } | null = null;
 
+  /**
+   * 既有箭头端点拖拽 / 箭头工具建线时的杆上建条预演。与连接点拖拽共用同一份
+   * 消息策略（轴、目标、杆上落位），只是入口不同。
+   */
+  private sequenceEndpointPreview: SequenceEndpointPreview | null = null;
+
   /** 进行中的手势；为 null 时手柄按悬停/点击路径走 */
   private drag: QuickCreateDrag | null = null;
 
@@ -395,6 +441,7 @@ export class AppQuickCreate {
       if (!placement) {
         return [];
       }
+      const poleTarget = placement.poleActivation;
       const key = [
         drag.elementId,
         source.version,
@@ -406,20 +453,288 @@ export class AppQuickCreate {
         this.getArrowStyleFingerprint(),
         placement.kind,
         placement.targetElementId ?? "",
+        poleTarget
+          ? [
+              poleTarget.lifelineId,
+              poleTarget.center.x,
+              poleTarget.center.y,
+              poleTarget.angle,
+            ].join(":")
+          : "",
       ].join("|");
       if (this.sequenceConnectionGhost?.key !== key) {
+        const arrow = this.buildSequenceMessageArrow(placement, {
+          opacityScale: QUICK_CREATE_GHOST_ALPHA,
+          identity: GHOST_ARROW_IDENTITY,
+        });
         this.sequenceConnectionGhost = {
           key,
-          elements: [
-            this.buildSequenceMessageArrow(placement, {
-              opacityScale: QUICK_CREATE_GHOST_ALPHA,
-              identity: GHOST_ARROW_IDENTITY,
-            }),
-          ],
+          elements:
+            placement.kind === "pole-activation" && poleTarget
+              ? [this.buildPoleActivationGhost(poleTarget), arrow]
+              : [arrow],
         };
       }
       return this.sequenceConnectionGhost.elements;
     };
+
+  /**
+   * 时序消息端点的统一策略入口（既有箭头端点拖拽 / 箭头工具建线）。
+   *
+   * 返回调整后的场景指针：另一端绑在激活条上时，端点被投到消息轴上并按
+   * 「只能朝外」夹取；指针落在没有可连激活条的杆上时，再吸附到「预演新条」
+   * 朝源的竖边，并更新半透明预演。没有消息轴（另一端不是激活条、折线箭头、
+   * 多点自消息）时返回 null，调用方保持通用行为。
+   */
+  constrainSequenceMessageEndpoint = (
+    element: ExcalidrawLinearElement,
+    index: number,
+    sceneX: number,
+    sceneY: number,
+  ): QuickCreatePoint | null => {
+    const side =
+      index === 0
+        ? "start"
+        : index === element.points.length - 1
+        ? "end"
+        : null;
+    if (!side) {
+      this.clearSequenceEndpointPreview();
+      return null;
+    }
+    const elementsMap = this.app.scene.getNonDeletedElementsMap();
+    const axis = getSequenceMessageAxis(element, side, elementsMap);
+    if (!axis) {
+      this.clearSequenceEndpointPreview();
+      return null;
+    }
+    const pointer = pointFrom<GlobalPoint>(sceneX, sceneY);
+    const constrained = constrainSequenceMessagePoint(axis, pointer);
+    const constrainedPoint = { x: constrained[0], y: constrained[1] };
+    // 有现成激活条可连：交给通用绑定（预演由 suggestedBinding 画），这里只
+    // 负责把指针拉回消息轴。
+    const target = findSequenceMessageTarget(
+      axis,
+      pointer,
+      this.app.scene.getNonDeletedElements(),
+      elementsMap,
+      this.app.state.zoom.value,
+    );
+    if (target) {
+      this.clearSequenceEndpointPreview();
+      return constrainedPoint;
+    }
+    const pole = this.resolveSequencePoleDrop(
+      axis,
+      pointer,
+      new Set([element.id]),
+    );
+    if (!pole) {
+      this.clearSequenceEndpointPreview();
+      return constrainedPoint;
+    }
+    const key = [
+      element.id,
+      element.version,
+      pole.lifelineId,
+      pole.center.x,
+      pole.center.y,
+      pole.angle,
+    ].join("|");
+    if (this.sequenceEndpointPreview?.key !== key) {
+      this.sequenceEndpointPreview = {
+        key,
+        elements: [this.buildPoleActivationGhost(pole)],
+        dropPoint: pole.edge,
+      };
+      this.app.repaint.request();
+    }
+    return pole.entry;
+  };
+
+  /** 端点拖拽的杆上建条预演（渲染层每帧来取） */
+  getSequenceEndpointGhostElements =
+    (): readonly NonDeletedExcalidrawElement[] =>
+      this.sequenceEndpointPreview?.elements ?? [];
+
+  getSequenceEndpointDropPoint = (): QuickCreatePoint | null =>
+    this.sequenceEndpointPreview?.dropPoint ?? null;
+
+  hasSequenceEndpointPreview = (): boolean =>
+    this.sequenceEndpointPreview !== null;
+
+  /**
+   * 端点拖拽收尾：指针落在没有可连激活条的杆上时，先建激活条（与连接点拖拽
+   * 同一套装配 / 绑定登记），再由调用方把端点绑过去。返回 null 表示这次落点
+   * 不需要新建（已经绑到既有激活条、或落在空白）。
+   *
+   * 只建元素、不 `scheduleCapture`：调用方（`actionFinalize`）会把这次创建与
+   * 端点绑定收进同一条 undo。
+   */
+  finalizeSequenceMessageEndpoint = (
+    element: NonDeleted<ExcalidrawLinearElement>,
+    startOrEnd: "start" | "end",
+    scenePoint: QuickCreatePoint,
+  ): {
+    activation: SequenceActivationElement;
+    edge: QuickCreatePoint;
+    index: number;
+  } | null => {
+    const elementsMap = this.app.scene.getNonDeletedElementsMap();
+    const axis = getSequenceMessageAxis(element, startOrEnd, elementsMap);
+    if (!axis) {
+      this.clearSequenceEndpointPreview();
+      return null;
+    }
+    const pointer = pointFrom<GlobalPoint>(scenePoint.x, scenePoint.y);
+    const target = findSequenceMessageTarget(
+      axis,
+      pointer,
+      this.app.scene.getNonDeletedElements(),
+      elementsMap,
+      this.app.state.zoom.value,
+    );
+    if (target) {
+      this.clearSequenceEndpointPreview();
+      return null;
+    }
+    const pole = this.resolveSequencePoleDrop(
+      axis,
+      pointer,
+      new Set([element.id]),
+    );
+    if (!pole) {
+      this.clearSequenceEndpointPreview();
+      return null;
+    }
+    const activation = this.insertPoleActivation(pole, element.id);
+    this.clearSequenceEndpointPreview();
+    return {
+      activation,
+      edge: pole.edge,
+      index: startOrEnd === "start" ? 0 : element.points.length - 1,
+    };
+  };
+
+  private clearSequenceEndpointPreview = (): void => {
+    if (!this.sequenceEndpointPreview) {
+      return;
+    }
+    this.sequenceEndpointPreview = null;
+    this.app.repaint.request();
+  };
+
+  /** 建一条挂在杆上的激活条并登记生命线绑定；`beforeId` 用于压在消息下面 */
+  private insertPoleActivation = (
+    pole: SequencePoleDrop,
+    beforeId?: string,
+  ): SequenceActivationElement => {
+    const activation = this.buildActivationElement(
+      pole.center,
+      pole.angle,
+      undefined,
+      { lifelineId: pole.lifelineId, localY: pole.localY },
+    ) as SequenceActivationElement;
+    const index = beforeId ? this.app.scene.getElementIndex(beforeId) : -1;
+    if (index >= 0) {
+      this.app.scene.insertElementsAtIndex([activation], index);
+    } else {
+      this.app.insertNewElements([activation]);
+    }
+    const lifeline = this.app.scene.getNonDeletedElement(pole.lifelineId);
+    if (lifeline) {
+      syncLifelineBoundActivation(
+        activation.id,
+        lifeline,
+        undefined,
+        this.app.scene,
+      );
+    }
+    return activation;
+  };
+
+  /**
+   * 「消息落在杆上、且该处没有可连的激活条」的唯一落位：新条**顶边对齐
+   * 消息线**、水平居中于杆、随生命线旋转，入口取新条朝向源的那条竖边。
+   * 连接点拖拽与既有端点拖拽都走这里。
+   */
+  private resolveSequencePoleDrop = (
+    axis: SequenceMessageAxis,
+    pointer: GlobalPoint,
+    ignoreIds?: ReadonlySet<string>,
+  ): SequencePoleDrop | null => {
+    const lifeline = this.resolvePoleActivationLifeline(
+      pointer[0],
+      pointer[1],
+      ignoreIds,
+    );
+    if (!lifeline) {
+      return null;
+    }
+    const anchorLocal = getSequenceLifelineLocalPoint(
+      lifeline,
+      axis.anchor[0],
+      axis.anchor[1],
+    );
+    // 顶边 = 消息线：中心取「消息线 + 半高」，再按杆两端夹取
+    const placed = getSequenceLifelineActivationCenter(
+      lifeline,
+      anchorLocal.y + SEQUENCE_ACTIVATION_HEIGHT / 2,
+    );
+    const top = placed.localY - SEQUENCE_ACTIVATION_HEIGHT / 2;
+    const bottom = placed.localY + SEQUENCE_ACTIVATION_HEIGHT / 2;
+    if (
+      anchorLocal.y < top ||
+      anchorLocal.y > bottom ||
+      this.poleActivationOverlapsExisting(lifeline, placed.localY)
+    ) {
+      return null;
+    }
+    const side: SequenceConnectionSide =
+      anchorLocal.x <= lifeline.width / 2 ? "left" : "right";
+    const entryLocalY = Math.min(Math.max(anchorLocal.y, top + 1), bottom - 1);
+    const entryLocalX =
+      lifeline.width / 2 +
+      (side === "left"
+        ? -SEQUENCE_ACTIVATION_WIDTH
+        : SEQUENCE_ACTIVATION_WIDTH) /
+        2;
+    const [edgeX, edgeY] = getSequenceLifelineGlobalPoint(
+      lifeline,
+      entryLocalX,
+      entryLocalY,
+    );
+    // 与已有激活条的目标判定同口径：目标必须在出发边前方
+    if (
+      (edgeX - axis.anchor[0]) * axis.outward.x +
+        (edgeY - axis.anchor[1]) * axis.outward.y <=
+      0
+    ) {
+      return null;
+    }
+    // 新条按预设装配，描边宽度与真实创建同源（`ACTIVATION_CREATION_SPEC`）
+    const entryGap = getBindingGap(
+      {
+        strokeWidth: this.app.getCurrentItemStrokeWidth(
+          ACTIVATION_CREATION_SPEC.tool,
+        ),
+      },
+      { elbowed: false },
+    );
+    const outward = this.getSequenceSideOutward(side, placed.angle);
+    return {
+      lifelineId: lifeline.id,
+      localY: placed.localY,
+      center: placed.center,
+      angle: placed.angle,
+      edge: { x: edgeX, y: edgeY },
+      entry: {
+        x: edgeX + outward.x * entryGap,
+        y: edgeY + outward.y * entryGap,
+      },
+      outward,
+    };
+  };
 
   /** 方向手柄的源元素：单选的 quick-create 目标（时序图形已被排除） */
   getHandleTargetElement = (): NonDeletedExcalidrawElement | null =>
@@ -439,19 +754,9 @@ export class AppQuickCreate {
         hover.angle,
       ].join("|");
       if (this.poleActivationGhost?.key !== key) {
-        const element = this.buildActivationElement(
-          hover.center,
-          hover.angle,
-          POLE_GHOST_IDENTITY,
-        );
         this.poleActivationGhost = {
           key,
-          elements: [
-            {
-              ...element,
-              opacity: element.opacity * QUICK_CREATE_GHOST_ALPHA,
-            },
-          ],
+          elements: [this.buildPoleActivationGhost(hover)],
         };
       }
       return this.poleActivationGhost.elements;
@@ -506,7 +811,10 @@ export class AppQuickCreate {
     // （重建一次不算贵，而且只在指针重新落到某个手柄上时才会发生）
     this.ghost = null;
     const hadHover =
-      !!this.hovered || !!this.poleActivation || !!this.sequenceConnection;
+      !!this.hovered ||
+      !!this.poleActivation ||
+      !!this.sequenceConnection ||
+      !!this.sequenceEndpointPreview;
     this.hovered = null;
     this.clearHoverAffordances();
     if (hadHover) {
@@ -520,6 +828,7 @@ export class AppQuickCreate {
     this.poleActivationGhost = null;
     this.sequenceConnection = null;
     this.sequenceConnectionGhost = null;
+    this.sequenceEndpointPreview = null;
   };
 
   hitTest = (sceneX: number, sceneY: number, pointerType = "mouse") => {
@@ -546,7 +855,11 @@ export class AppQuickCreate {
     }
     // 手势进行中：悬停判定整组让位（预演改由拖拽态驱动）。这里必须早退而不是
     // 走下面的 reset 分支——reset 会把拖拽预演一起丢掉。
-    if (this.drag || this.sequenceConnectionDrag) {
+    if (
+      this.drag ||
+      this.sequenceConnectionDrag ||
+      this.sequenceEndpointPreview
+    ) {
       return;
     }
     // 修饰键按住时手柄整组不渲染也不命中，悬停态一并清掉。
@@ -644,12 +957,18 @@ export class AppQuickCreate {
   private getStrictTopmostElementAt = (
     sceneX: number,
     sceneY: number,
+    ignoreIds?: ReadonlySet<string>,
   ): NonDeletedExcalidrawElement | null => {
     // 锁定元素也参与遮挡判定：锁定条压在杆上时同样不该冒出创建预演
     const hits = this.app.getElementsAtPosition(sceneX, sceneY, {
       includeLockedElements: true,
     });
-    return hits.length ? hits[hits.length - 1] : null;
+    for (let index = hits.length - 1; index >= 0; index--) {
+      if (!ignoreIds?.has(hits[index].id)) {
+        return hits[index];
+      }
+    }
+    return null;
   };
 
   /**
@@ -751,6 +1070,24 @@ export class AppQuickCreate {
   };
 
   /**
+   * 指针下可用于建条的生命线：严格最上层命中必须落在杆走廊上（不含头部）。
+   * 悬停建条与消息拖拽落点共用这一个判定，两条路径的「能建」口径因此一致。
+   */
+  private resolvePoleActivationLifeline = (
+    sceneX: number,
+    sceneY: number,
+    ignoreIds?: ReadonlySet<string>,
+  ): NonDeleted<SequenceLifelineElement> | null => {
+    const topmost = this.getStrictTopmostElementAt(sceneX, sceneY, ignoreIds);
+    if (!topmost || topmost.locked || !isSequenceLifelineElement(topmost)) {
+      return null;
+    }
+    return isPointOnSequenceLifelinePole(topmost, sceneX, sceneY)
+      ? topmost
+      : null;
+  };
+
+  /**
    * 杆上激活条的合法落点：最上层命中必须是（未锁定的）生命线，且候选激活条
    * 不能与同一条杆上已有的激活条相交。不合法就返回 null——预演与单击落点共用
    * 本函数，所以「预演可见」与「可以创建」不会分叉。
@@ -759,23 +1096,23 @@ export class AppQuickCreate {
     sceneX: number,
     sceneY: number,
   ): PoleActivationTarget | null => {
-    const topmost = this.getStrictTopmostElementAt(sceneX, sceneY);
-    if (!topmost || topmost.locked || !isSequenceLifelineElement(topmost)) {
+    const lifeline = this.resolvePoleActivationLifeline(sceneX, sceneY);
+    if (!lifeline) {
       return null;
     }
     const placement = getSequenceLifelinePoleActivationPlacement(
-      topmost,
+      lifeline,
       sceneX,
       sceneY,
     );
     if (
       !placement ||
-      this.poleActivationOverlapsExisting(topmost, placement.localY)
+      this.poleActivationOverlapsExisting(lifeline, placement.localY)
     ) {
       return null;
     }
     return {
-      lifeline: topmost,
+      lifeline,
       localY: placement.localY,
       center: placement.center,
       angle: placement.angle,
@@ -961,10 +1298,17 @@ export class AppQuickCreate {
     drag: SequenceConnectionDrag,
     source: SequenceActivationElement,
   ): SequenceMessagePlacement | null => {
-    const outward = this.getSequenceSideOutward(drag.side, source.angle);
-    const gap = getBindingGap(source, { elbowed: false });
     const exit = drag.exit;
+    // 三条创建 / 编辑路径共用同一份消息策略：轴、目标、杆上落位都从这里来。
+    const axis = getSequenceMessageAxisFromAnchor(
+      source,
+      drag.side,
+      pointFrom<GlobalPoint>(exit.x, exit.y),
+    );
+    const outward = axis.outward;
+    const gap = getBindingGap(source, { elbowed: false });
     const zoom = this.app.state.zoom.value;
+    const pointer = pointFrom<GlobalPoint>(drag.pointer.x, drag.pointer.y);
 
     // 自消息：指针还在起点这条激活条上，且纵向离开起点足够远
     const sourceLocal = getSequenceLifelineLocalPoint(
@@ -1018,36 +1362,38 @@ export class AppQuickCreate {
         };
       }
       // 落在死区里：不吸附，按自由端处理（指针还在条内，水平线会被夹到起点）
-      return this.getSequenceFreePlacement(drag, outward, gap);
+      return this.getSequenceFreePlacement(drag, axis, gap);
     }
 
     // 其它激活条：指针压在条上，且起端 y 落在目标的纵向范围内才水平连过去
-    const target = this.findSequenceMessageTarget(drag, source, outward);
+    const target = findSequenceMessageTarget(
+      axis,
+      pointer,
+      this.app.scene.getNonDeletedElements(),
+      this.app.scene.getNonDeletedElementsMap(),
+      zoom,
+    );
     if (target) {
-      const targetLocal = getSequenceLifelineLocalPoint(
-        target.element,
-        exit.x,
-        exit.y,
-      );
+      const targetLocal = getSequenceLifelineLocalPoint(target, exit.x, exit.y);
       const targetLocalY = Math.min(
         Math.max(targetLocal.y, 1),
-        target.element.height - 1,
+        target.height - 1,
       );
       const targetSide: SequenceConnectionSide =
-        targetLocal.x <= target.element.width / 2 ? "left" : "right";
+        targetLocal.x <= target.width / 2 ? "left" : "right";
       const entry = this.getSequenceActivationEdgePoint(
-        target.element,
+        target,
         targetSide,
         targetLocalY,
       );
       const entryOutward = this.getSequenceSideOutward(
         targetSide,
-        target.element.angle,
+        target.angle,
       );
-      const entryGap = getBindingGap(target.element, { elbowed: false });
+      const entryGap = getBindingGap(target, { elbowed: false });
       return {
         kind: "activation",
-        targetElementId: target.element.id,
+        targetElementId: target.id,
         anchors: { start: exit, end: entry },
         points: [
           {
@@ -1062,7 +1408,24 @@ export class AppQuickCreate {
       };
     }
 
-    return this.getSequenceFreePlacement(drag, outward, gap);
+    // 杆上没有可连的激活条：预演在杆上新建一条，顶边对齐消息线
+    const pole = this.resolveSequencePoleDrop(axis, pointer);
+    if (pole) {
+      return {
+        kind: "pole-activation",
+        poleActivation: pole,
+        anchors: { start: exit, end: pole.edge },
+        points: [
+          {
+            x: exit.x + outward.x * gap,
+            y: exit.y + outward.y * gap,
+          },
+          pole.entry,
+        ],
+      };
+    }
+
+    return this.getSequenceFreePlacement(drag, axis, gap);
   };
 
   /**
@@ -1070,104 +1433,34 @@ export class AppQuickCreate {
    */
   private getSequenceFreePlacement = (
     drag: SequenceConnectionDrag,
-    outward: { x: number; y: number },
+    axis: SequenceMessageAxis,
     gap: number,
   ): SequenceMessagePlacement => {
-    const exit = drag.exit;
+    const exit = { x: axis.anchor[0], y: axis.anchor[1] };
+    const outward = axis.outward;
     // 只朝出发边的前方延伸：把指针位移投影到这条边的外法线上，负值夹到 0
     const forward = Math.max(
       0,
       (drag.pointer.x - exit.x) * outward.x +
         (drag.pointer.y - exit.y) * outward.y,
     );
-    const end = {
-      x: exit.x + outward.x * forward,
-      y: exit.y + outward.y * forward,
-    };
+    const end = constrainSequenceMessagePoint(
+      axis,
+      pointFrom<GlobalPoint>(drag.pointer.x, drag.pointer.y),
+    );
     // 起点让出 binding gap；还没拖出 gap 时收成一点，避免画出一条反向的线
     const startOffset = Math.min(gap, forward);
     return {
       kind: "free",
-      anchors: { start: exit, end },
+      anchors: { start: exit, end: { x: end[0], y: end[1] } },
       points: [
         {
           x: exit.x + outward.x * startOffset,
           y: exit.y + outward.y * startOffset,
         },
-        end,
+        { x: end[0], y: end[1] },
       ],
     };
-  };
-
-  /**
-   * 指针下的目标激活条（排除起点那条）。要求目标在出发边的前方，且起端 y
-   * 落在目标的纵向范围内——这样连过去才是一条水平线。
-   */
-  private findSequenceMessageTarget = (
-    drag: SequenceConnectionDrag,
-    source: SequenceActivationElement,
-    outward: { x: number; y: number },
-  ): { element: SequenceActivationElement } | null => {
-    const zoom = this.app.state.zoom.value;
-    const snap = SEQUENCE_CONNECTION_SNAP_DISTANCE / zoom;
-    const exit = drag.exit;
-    const pointer = drag.pointer;
-    let best: {
-      element: SequenceActivationElement;
-      distance: number;
-    } | null = null;
-    for (const element of this.app.scene.getNonDeletedElementsMap().values()) {
-      if (
-        element.id === source.id ||
-        !isActivationElement(element) ||
-        element.locked
-      ) {
-        continue;
-      }
-      const centerX = element.x + element.width / 2;
-      const centerY = element.y + element.height / 2;
-      if (
-        (centerX - exit.x) * outward.x + (centerY - exit.y) * outward.y <=
-        0
-      ) {
-        continue;
-      }
-      // 起端 y 必须落在目标的纵向范围内，水平线才真的接得上
-      const exitLocal = getSequenceLifelineLocalPoint(element, exit.x, exit.y);
-      if (exitLocal.y < 0 || exitLocal.y > element.height) {
-        continue;
-      }
-      const pointerLocal = getSequenceLifelineLocalPoint(
-        element,
-        pointer.x,
-        pointer.y,
-      );
-      if (
-        pointerLocal.x < -snap ||
-        pointerLocal.x > element.width + snap ||
-        pointerLocal.y < -snap ||
-        pointerLocal.y > element.height + snap
-      ) {
-        continue;
-      }
-      const dx =
-        pointerLocal.x < 0
-          ? -pointerLocal.x
-          : pointerLocal.x > element.width
-          ? pointerLocal.x - element.width
-          : 0;
-      const dy =
-        pointerLocal.y < 0
-          ? -pointerLocal.y
-          : pointerLocal.y > element.height
-          ? pointerLocal.y - element.height
-          : 0;
-      const distance = Math.hypot(dx, dy);
-      if (!best || distance < best.distance) {
-        best = { element, distance };
-      }
-    }
-    return best;
   };
 
   /** 激活条一条竖边上、指定本地 y 的场景点 */
@@ -1413,6 +1706,8 @@ export class AppQuickCreate {
       this.cancelledPointerDown = null;
       return true;
     }
+    // 端点拖拽的杆上预演随本次手势结束；真正落地由 actionFinalize 重新解析
+    this.clearSequenceEndpointPreview();
     // 激活条连接线：结束时按松手点解落位；没越过阈值（只是点了下连接点）
     // 或起端已被删除就不落地。
     const sequenceDrag = this.sequenceConnectionDrag;
@@ -1492,6 +1787,11 @@ export class AppQuickCreate {
     event: KeyboardEvent,
   ): boolean => {
     // 激活条连接线：Esc 取消本次手势，抬起时由 cancelledPointerDown 吞掉收尾
+    if (event.key === KEYS.ESCAPE && this.sequenceEndpointPreview) {
+      this.clearSequenceEndpointPreview();
+      // 不吞键：让通用路径照常取消正在进行的端点拖拽 / 建线
+      return false;
+    }
     if (event.key === KEYS.ESCAPE && this.sequenceConnectionDrag) {
       this.cancelledPointerDown = pointerDownState;
       this.sequenceConnectionDrag = null;
@@ -1705,6 +2005,22 @@ export class AppQuickCreate {
     } as NonDeleted<ExcalidrawShapeElement>;
   };
 
+  /** 激活条预演：与真实创建同一套装配，固定身份、只压暗一半 */
+  private buildPoleActivationGhost = (target: {
+    center: QuickCreatePoint;
+    angle: Radians;
+  }): NonDeletedExcalidrawElement => {
+    const element = this.buildActivationElement(
+      target.center,
+      target.angle,
+      POLE_GHOST_IDENTITY,
+    );
+    return {
+      ...element,
+      opacity: element.opacity * QUICK_CREATE_GHOST_ALPHA,
+    };
+  };
+
   /** 杆上单击：在预演位置创建一条激活条并选中它 */
   private createPoleActivation = (click: PoleActivationClick): void => {
     const activation = this.buildActivationElement(
@@ -1772,9 +2088,9 @@ export class AppQuickCreate {
   };
 
   /**
-   * 从连接点拖出消息：按预演同源的几何落地。终点吸附到激活条时两端绑定
-   * （自消息两端都绑起点那条），未吸附则只绑起端、末端自由落在此处；
-   * 整条消息与绑定同属一步撤销。
+   * 从连接点拖出消息：按预演同源的几何落地。终点吸附到已有激活条时两端绑定
+   * （自消息两端都绑起点那条）；落在杆上时先建一条激活条再绑定；未吸附则只绑
+   * 起端、末端自由落在此处。整条消息、新建的激活条与绑定同属一步撤销。
    */
   private createSequenceMessage = (
     source: SequenceActivationElement,
@@ -1800,6 +2116,12 @@ export class AppQuickCreate {
       }
     }
     const arrow = this.buildSequenceMessageArrow(placement);
+    // 落点在杆上：先按预演位置建激活条并登记到生命线，再把它当终点绑定
+    const poleTarget = placement.poleActivation;
+    const newActivation =
+      placement.kind === "pole-activation" && poleTarget
+        ? this.insertPoleActivation(poleTarget)
+        : null;
     this.app.insertNewElements([arrow]);
     bindBindingElement(
       arrow,
@@ -1811,22 +2133,22 @@ export class AppQuickCreate {
         placement.anchors.start.y,
       ),
     );
-    if (placement.kind !== "free" && placement.targetElementId) {
-      const target = this.app.scene.getNonDeletedElement(
-        placement.targetElementId,
+    const target =
+      newActivation ??
+      (placement.kind !== "free" && placement.targetElementId
+        ? this.app.scene.getNonDeletedElement(placement.targetElementId)
+        : null);
+    if (target && isActivationElement(target) && isBindableElement(target)) {
+      bindBindingElement(
+        arrow,
+        target,
+        "end",
+        this.app.scene,
+        pointFrom<GlobalPoint>(
+          placement.anchors.end.x,
+          placement.anchors.end.y,
+        ),
       );
-      if (target && isActivationElement(target) && isBindableElement(target)) {
-        bindBindingElement(
-          arrow,
-          target,
-          "end",
-          this.app.scene,
-          pointFrom<GlobalPoint>(
-            placement.anchors.end.x,
-            placement.anchors.end.y,
-          ),
-        );
-      }
     }
     // 两点消息按 orbit 绑定把两端落到位；自消息的四个点已经按几何落好
     if (arrow.points.length === 2) {

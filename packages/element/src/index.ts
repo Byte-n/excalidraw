@@ -99,6 +99,7 @@ export * from "./resizeTest";
 export * from "./Scene";
 export * from "./selection";
 export * from "./sequenceActivation";
+export * from "./sequenceMessage";
 export * from "./shape";
 export * from "./showSelectedShapeActions";
 export * from "./sizeHelpers";

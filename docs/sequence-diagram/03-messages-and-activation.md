@@ -8,6 +8,16 @@
 > **修订（2026-11-13）**：时序图的所有图形（8 个生命线、`sc-activation`、 `sc-fragment`）**不再提供 quick create 方向手柄**。已移除：激活条左 / 右方向手柄、拖到空白弹「插入图形」面板、拖到生命线杆上自动建条。唯一保留的特例是**生命线杆悬停 / 单击创建激活条**（§4.4）：预演与单击落地都不变。激活条也可由图形抽屉创建。
 >
 > **连接点（2026-11-13 重新实现）**：指针靠近激活条左 / 右竖边时（屏幕 12px 内，含略压进条内 4px）显示一个**跟随指针 y 的动态连接点**，不再是固定的几个锚点；按住该点拖拽即创建消息并全程预演。落点规则：终点吸附到**起点所在的激活条** → 折线（自消息），起点附近 12px 内不吸附；吸附到**其它激活条** → 水平直线；未吸附 → 沿出发边前方水平延伸，松手后按预演现状落地。消息线型由落点决定，不跟随当前箭头样式。**连接线工具**同样只显示指针所在的一个动态落点，不再绘制整组固定锚点；折线 / 非折线绑定的吸附 y 都取指针位置。
+>
+> **拖到裸杆建条（2026-11-13）**：从连接点拖消息时，指针落在**杆上没有激活条**的生命线上，预演一条半透明激活条（新条**顶边对齐消息线**、水平居中于杆、随生命线角度旋转），松手同时创建激活条与消息：新条写入 `shape.link` 并登记到生命线的 `boundElements`，消息终点绑定到新条，整次操作同属一条 undo 记录。杆端夹取后消息线不在条的竖向范围内（靠近生命线头部 / 杆太短）或候选条与已有激活条重叠时不预演，退回自由端。
+>
+> **消息策略归一化（2026-11-13）**：激活条上的连接线不再按「创建方式」决定能力。以下三条路径共用同一份策略（`packages/element/src/sequenceMessage.ts` + `AppQuickCreate.resolveSequencePoleDrop`）：
+>
+> 1. 选择工具从激活条动态连接点拖出消息；
+> 2. 拖动已有点的端点（起端或终点）；
+> 3. 连接线（箭头）工具从激活条 A 画到激活条 B。
+>
+> 三条路径在「另一端固定在激活条上」时一律：保持消息轴（激活条本地 x 方向的水平线，随旋转）；端点只能落在出发边前方；只吸附其它激活条（且消息线必须落在目标竖向范围内）；落在没有可连激活条的杆上时预演并创建激活条。折线箭头、多点自消息、按住 Shift / Alt、网格模式与拖动整条线仍走各自原有行为。
 
 ## 1. 实施前状态
 
@@ -94,6 +104,7 @@ export const isActivationElement = (element) =>
 - 消息落点由 `AppQuickCreate.resolveSequenceMessagePlacement` 统一解析（预演与落地同源）：
   - 指针在起点那条激活条内、且离起点超过 `SEQUENCE_CONNECTION_MIN_SELF_GAP`（屏幕 12px）→ 自消息（四点折线，向外绕 `SEQUENCE_SELF_MESSAGE_OFFSET`）；
   - 指针压在其它激活条上、且起端 y 落在目标竖向范围内 → 水平直线，终点取目标朝向源的边；
+  - 指针落在**没有可连激活条的杆**上 → 预演新建激活条（顶边对齐消息线、夹在杆内），终点取新条朝向源的边；杆端夹取后线不在条内或与已有条重叠时退回自由端；
   - 其余 → 水平自由端，只沿出发边外法线前方延伸。
 
 ### 3.3 消息箭头
@@ -127,6 +138,23 @@ shape: {
 | 复制 / 粘贴 | 连续复制时重映射 `lifelineId`；只复制激活条时丢弃 `link`（避免副本叠在原生命线上） |
 
 **宽度锁定**：激活条只有高度可改。`getTransformHandles` 隐藏 `e` / `w`、四个角点与旋转手柄（角点是比例缩放，会同时暗示改宽），并强制生成 `n` / `s`；`resizeTest` 的贴边兜底热区同样跳过 `e` / `w`，避免悬停左 / 右边缘时出现水平缩放光标；`getSequenceActivationResize` 只取 `n` / `s` 分量， `x` 与 `width` 始终取原值（旋转时以对边中点为锚保持位置）。动态连接点的按下手势优先于移动：命中连接点（含圆点压进条内的内半圈）时不会拖动激活条。
+
+### 3.5 消息端点策略（三条路径共用）
+
+`packages/element/src/sequenceMessage.ts` 只做几何 / 目标判定，不碰场景与元素创建：
+
+| 导出 | 作用 |
+| --- | --- |
+| `getSequenceMessageAxis(arrow, startOrEnd, elementsMap)` | 从**固定端**的绑定反推出消息轴：激活条、贴左 / 右、锚点、外法线。仅对两点直线箭头生效；折线箭头、多点自消息返回 null。 |
+| `constrainSequenceMessagePoint(axis, point)` | 把指针投到消息轴（轴上的 y 固定），并把 x 夹在锚点**前方**。 |
+| `findSequenceMessageTarget(axis, pointer, elements, map, zoom)` | 唯一的目标规则：排除源激活条；目标中心必须在出发边前方；消息线 y 必须落在目标竖向范围内；指针距目标在 `SEQUENCE_MESSAGE_SNAP_DISTANCE`（屏幕 12px）内。其它可绑定图形一律不吸附。 |
+
+接入点：
+
+- **端点拖拽 / 箭头工具建线**（`LinearElementEditor.handlePointDragging` / `handlePointerMove`）：先把指针交给 `AppQuickCreate.constrainSequenceMessageEndpoint` 调整，再算 delta。哈希 / 折线 / 多点自消息、Shift、Alt、网格模式保持原行为。
+- **绑定策略**（`binding.ts` 的 `getBindingStrategyForDraggingBindingElementEndpoints_simple`）：同一轴存在时，目标只可能是 `findSequenceMessageTarget` 返回的激活条；没有目标就解绑成自由端，不再回退到「指针附近的任意可绑定图形」。
+- **杆上建条**（`AppQuickCreate.resolveSequencePoleDrop`）：连接点拖拽、端点拖拽、箭头工具共用同一份落位（新条顶边对齐消息线、夹在杆内、重叠校验、入口边朝源）。端点拖拽中预演半透明激活条与落点圆点（`getSequenceEndpointGhostElements` / `getSequenceEndpointDropPoint`）；松手时 `actionFinalize` 调 `finalizeSequenceMessageEndpoint` 建条并显式绑定端点，与端点拖拽同属一条 undo。
+- **方向限制**：`constrainSequenceMessagePoint` 把指针夹在锚点前方；`findSequenceMessageTarget` / `resolveSequencePoleDrop` 都要求目标中心或入口边在出发边前方，所以三条路径都不会画出「回头」的消息。
 
 ## 4. P3b：创建交互
 
@@ -214,7 +242,12 @@ shape: {
   - [x] `snapToMid` 的 activation 分支只吸附左 / 右边缘，y 取指针位置（动态）；
   - [x] 消息箭头端点由显式 `focusPoint` 投影，落点与预演同源；
   - [x] 生命线作为「落点参考」但不进入 `isBindableElement`；
-  - [x] 生命线几何变化时调用 `updateSequenceActivationsForLifeline`，再更新绑在激活条上的箭头。
+  - [x] 生命线几何变化时调用 `updateSequenceActivationsForLifeline`，再更新绑在激活条上的箭头；
+  - [x] 固定端绑在激活条上时，拖拽端点只认 `findSequenceMessageTarget` 的激活条目标（不再吸附任意图形）。
+- [x] `element/src/sequenceMessage.ts`（新增）
+  - [x] `getSequenceMessageAxis`（固定端 → 轴）；
+  - [x] `constrainSequenceMessagePoint`（水平 + 方向夹取）；
+  - [x] `findSequenceMessageTarget`（唯一目标规则，三条路径共用）。
 - [x] `element/src/sequenceActivation.ts`（新增）
   - [x] 激活条 `link` 的读写与生命线 `boundElements` 登记 / 解除；
   - [x] 生命线跟随重排（夹取 localY、随 angle 旋转）；
@@ -238,7 +271,9 @@ shape: {
   - [x] `handlePointerUp` 三分支（激活条 / 杆 / 取消）；
   - [x] 预演 ghosts（激活条 + 箭头），与落地共用 `resolveActivationDrop`；
   - [x] 杆上创建的激活条写入 `link` 并登记到生命线 `boundElements`；
-  - [x] 单条 undo 记录。
+  - [x] 单条 undo 记录；
+  - [x] `constrainSequenceMessageEndpoint`（既有端点拖拽 / 箭头工具的指针调整 + 杆上预演）；
+  - [x] `finalizeSequenceMessageEndpoint`（收尾建条 + 显式绑定，供 `actionFinalize` 调用）。
 - [x] `excalidraw/renderer/interactiveScene.ts`
   - [x] 未选中激活条的悬停手柄；
   - [x] 杆上的半透明激活条预演。
@@ -276,10 +311,17 @@ shape: {
 - [x] 指针靠近激活条左 / 右竖边时出现跟随指针 y 的动态连接点（条身中心不出点）；
 - [x] 从连接点拖到另一条激活条生成水平直线消息，两端绑定；拖拽中终点落在目标激活条上时显示与起点同款的落点圆点；
 - [x] 拖回起点所在的激活条生成折线自消息（两端绑定同一条）；
+- [x] 拖到没有激活条的杆上：预演半透明激活条（顶边对齐消息线）与消息，松手创建两者并互相绑定、登记杆绑定、同一步撤销；
+- [x] 杆上已有可连的激活条时优先连接，不新建；
+- [x] 候选条与已有激活条重叠 / 消息线不在条的竖向范围内时不预演，按自由端落地；
 - [x] 起点附近 12px 纵向死区内不吸附成自消息终点；
 - [x] 未吸附到任何激活条时保持水平延伸，松手按预演现状落地（只绑起端）；
 - [x] 拖拽箭头端点 / 新建箭头落到激活条上时，只显示一个跟随指针 y 的落点指示器，且与最终绑定位置一致；
 - [x] 消息端点落在激活条左右边缘；
+- [x] 连接线工具从激活条画到另一激活条：两端绑定且保持水平（指针 y 偏离也拉回消息轴）；
+- [x] 连接线工具落到裸杆：预演并创建激活条，端点绑定到新条；
+- [x] 拖动既有消息端点落到另一激活条：水平吸附并绑定；
+- [x] 拖动既有消息端点落到裸杆：预演并创建激活条，端点绑定到新条；
 - [x] 悬停杆、单击生成激活条；
 - [x] 激活条跟随生命线移动 / 缩放；
 - [x] 拖入杆时吸附并建立绑定；
@@ -326,7 +368,7 @@ shape: {
 
 - 删除生命线不会级联删除 / 解绑其激活条；旧的 `link` 在跟随更新时被跳过。
 - 键盘位移 / 外部 API 改激活条几何不会重新吸附（吸附只在指针拖拽路径生效）。
-- 自消息只留了「右边缘上下两个 y 偏移」的几何入口，交互尚未实现。
+- 自消息目前只能从连接点拖拽创建；拖动既有消息端点回到起点所在的激活条时按自由端处理（不会转成折线自消息）。
 - 消息箭头沿用仓库的 binding gap：端点停在激活条边缘外约 5–6px，而不是零间隙贴边。
 - 悬停档手柄的优先级低于任何选中态：有选中项时不在别的激活条上出悬停手柄。
 - 浏览器手工验收（悬停手感、触屏、缩放、真实 z-order）尚未执行。

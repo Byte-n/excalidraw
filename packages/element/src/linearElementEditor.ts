@@ -60,6 +60,10 @@ import {
   updateBoundPoint,
 } from "./binding";
 import {
+  constrainSequenceMessagePoint,
+  getSequenceMessageAxis,
+} from "./sequenceMessage";
+import {
   getElementAbsoluteCoords,
   getElementPointsCoords,
   getMinMaxXYFromCurvePathOps,
@@ -144,6 +148,58 @@ const BoundTextPositionCache = new WeakMap<
     geometryKey: readonly unknown[];
   }
 >();
+
+/**
+ * 时序消息端点跟着策略走：另一端绑在激活条上时，把指针投到消息轴上并按
+ * 「只能朝外」夹取。杆上建条的预演 / 吸附由 `AppQuickCreate` 一并处理（它
+ * 需要场景命中与建元素权限）；缺少 quick-create 的环境退回到纯几何约束，
+ * 两条路径的轴与夹取口径相同。
+ */
+const adjustSequenceMessageEndpointPointer = (
+  app: AppClassProperties,
+  element: ExcalidrawLinearElement,
+  index: number,
+  scenePointerX: number,
+  scenePointerY: number,
+  pointerOffset: Readonly<{ x: number; y: number }>,
+  suppress: boolean,
+): { x: number; y: number } => {
+  if (
+    suppress ||
+    app.state.gridModeEnabled ||
+    (index !== 0 && index !== element.points.length - 1)
+  ) {
+    return { x: scenePointerX, y: scenePointerY };
+  }
+  // 策略约束的是**被拖的点**，不是指针本身：抓握偏移要显式扣掉再补回。
+  const pointX = scenePointerX - pointerOffset.x;
+  const pointY = scenePointerY - pointerOffset.y;
+  const adjusted = app.quickCreate?.constrainSequenceMessageEndpoint?.(
+    element,
+    index,
+    pointX,
+    pointY,
+  );
+  if (adjusted) {
+    return {
+      x: adjusted.x + pointerOffset.x,
+      y: adjusted.y + pointerOffset.y,
+    };
+  }
+  const axis = getSequenceMessageAxis(
+    element,
+    index === 0 ? "start" : "end",
+    app.scene.getNonDeletedElementsMap(),
+  );
+  if (!axis) {
+    return { x: scenePointerX, y: scenePointerY };
+  }
+  const point = constrainSequenceMessagePoint(
+    axis,
+    pointFrom<GlobalPoint>(pointX, pointY),
+  );
+  return { x: point[0] + pointerOffset.x, y: point[1] + pointerOffset.y };
+};
 
 export class LinearElementEditor {
   public readonly elementId: ExcalidrawElement["id"] & {
@@ -324,6 +380,19 @@ export class LinearElementEditor {
     invariant(element.points.length > 1, "Element must have at least 2 points");
 
     const idx = element.points.length - 1;
+    {
+      const adjusted = adjustSequenceMessageEndpointPointer(
+        app,
+        element,
+        idx,
+        scenePointerX,
+        scenePointerY,
+        linearElementEditor.pointerOffset,
+        shouldRotateWithDiscreteAngle(event) || event.altKey,
+      );
+      scenePointerX = adjusted.x;
+      scenePointerY = adjusted.y;
+    }
     const point = element.points[idx];
     const pivotPoint = element.points[idx - 1];
     const customLineAngle =
@@ -493,6 +562,19 @@ export class LinearElementEditor {
     }
 
     // point that's being dragged (out of all selected points)
+    if (selectedPointsIndices.length === 1) {
+      const adjusted = adjustSequenceMessageEndpointPointer(
+        app,
+        element,
+        lastClickedPoint,
+        scenePointerX,
+        scenePointerY,
+        linearElementEditor.pointerOffset,
+        shouldRotateWithDiscreteAngle(event) || event.altKey,
+      );
+      scenePointerX = adjusted.x;
+      scenePointerY = adjusted.y;
+    }
     const draggingPoint = element.points[lastClickedPoint];
     // The adjacent point to the one dragged point
     const pivotPoint =

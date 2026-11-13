@@ -1612,6 +1612,20 @@ const renderSequenceConnection = (
     renderQuickCreateGhost(context, app, appState, elements, allElementsMap);
     context.restore();
   }
+  // 既有箭头端点拖拽 / 箭头工具建线：杆上建条的同一份预演
+  const endpointElements = app.quickCreate.getSequenceEndpointGhostElements();
+  if (endpointElements.length) {
+    context.save();
+    context.setLineDash([]);
+    renderQuickCreateGhost(
+      context,
+      app,
+      appState,
+      endpointElements,
+      allElementsMap,
+    );
+    context.restore();
+  }
   const point =
     drag?.exit ?? app.quickCreate.getSequenceConnectionHover()?.point;
   if (!point) {
@@ -1634,6 +1648,17 @@ const renderSequenceConnection = (
       context,
       dropPoint.x,
       dropPoint.y,
+      sceneRadius,
+      selectionColor,
+      appState,
+    );
+  }
+  const endpointDropPoint = app.quickCreate.getSequenceEndpointDropPoint();
+  if (endpointDropPoint) {
+    renderSequenceActivationDot(
+      context,
+      endpointDropPoint.x,
+      endpointDropPoint.y,
       sceneRadius,
       selectionColor,
       appState,
@@ -4359,9 +4384,9 @@ const _renderInteractiveScene = ({
     // 生命线杆上的激活条预演与选中状态无关，单独画；修饰键按住 / 面板待决时
     // 与 quick-create 手柄同一口径收起。激活条动态连接点同批绘制；手势一旦开始
     // 就不受修饰键影响（同 quick-create 的拖拽预演）。
-    const sequenceDragging = Boolean(
-      app.quickCreate.getSequenceConnectionDrag(),
-    );
+    const sequenceDragging =
+      Boolean(app.quickCreate.getSequenceConnectionDrag()) ||
+      app.quickCreate.hasSequenceEndpointPreview();
     const hoverSuppressed =
       app.quickCreate.isSuppressed() && !app.quickCreate.getDrag();
     if (!hoverSuppressed || sequenceDragging) {
