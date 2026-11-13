@@ -1,5 +1,5 @@
 import { CURSOR_TYPE, DRAGGING_THRESHOLD, KEYS } from "@excalidraw/common";
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom, pointRotateRads } from "@excalidraw/math";
 
 import {
   LinearElementEditor,
@@ -7,6 +7,8 @@ import {
   calculateAttachPointForElbowArrowBinding,
   resolveAttachPointForNonElbowBinding,
   duplicateElement,
+  getActivationAnchor,
+  getBindingGap,
   getContainingFrame,
   getElementAbsoluteCoords,
   getElementWithTransformHandleType,
@@ -51,6 +53,7 @@ import type {
   PointerType,
   PointsPositionUpdates,
 } from "@excalidraw/element/types";
+import type { SequenceActivationElement } from "@excalidraw/element";
 
 import type {
   QuickCreateConnector,
@@ -104,6 +107,61 @@ const ACTIVATION_CREATION_SPEC: CreationSpec = {
 const POLE_GHOST_IDENTITY: CreationIdentity = {
   id: QUICK_CREATE_POLE_GHOST_ID,
   seed: 1,
+};
+
+/**
+ * 激活条左右两侧的「动态连接点」：
+ *
+ * - 指针靠近（屏幕 px）左 / 右边缘就出点，点始终贴在边上、y 跟指针走；
+ * - 按住连接点拖拽即建消息，拖拽全程有预演；
+ * - 终点落在**起点所在的激活条**上时画折线（自消息），落在其它激活条上是水平
+ *   直线，没落在任何激活条上时保持水平延伸、按预演落地。
+ */
+/** 指针离边缘多近（屏幕 px）就显示连接点 */
+export const SEQUENCE_CONNECTION_SNAP_DISTANCE = 12;
+/** 允许指针略微压进条内（屏幕 px），避免来回跨过边缘时连接点闪烁 */
+export const SEQUENCE_CONNECTION_INSIDE_TOLERANCE = 2;
+/** 起点所在激活条的纵向死区（屏幕 px）：太靠近起点时不判定为自消息终点 */
+export const SEQUENCE_CONNECTION_MIN_SELF_GAP = 12;
+/** 自消息向外绕出的横向距离（场景 px） */
+export const SEQUENCE_SELF_MESSAGE_OFFSET = 24;
+
+type SequenceConnectionSide = "left" | "right";
+
+/** 悬停态的动态连接点：贴在某条激活条的一条竖边上，y 取指针位置 */
+type SequenceConnectionHover = {
+  elementId: string;
+  side: SequenceConnectionSide;
+  /** 场景坐标，落在激活条边缘上 */
+  point: QuickCreatePoint;
+};
+
+/** 一次进行中的连接线拖拽 */
+type SequenceConnectionDrag = {
+  elementId: string;
+  side: SequenceConnectionSide;
+  /** 起端（场景坐标，落在激活条边缘上） */
+  exit: QuickCreatePoint;
+  /** 起端在激活条本地坐标里的 y，自消息的纵向死区用它 */
+  startLocalY: number;
+  /** 按下点（场景坐标），判拖拽阈值用 */
+  origin: QuickCreatePoint;
+  /** 当前指针（场景坐标） */
+  pointer: QuickCreatePoint;
+  /** 是否已越过拖拽阈值（屏幕 px） */
+  moved: boolean;
+};
+
+/**
+ * 连接线的一次落位解：锚点是**激活条边缘上**的原始点（绑定时当焦点用），
+ * `points` 是已经让出 binding gap、可直接画出来的折线点。
+ */
+type SequenceMessagePlacement = {
+  kind: "self" | "activation" | "free";
+  /** `activation` 档的目标激活条 id */
+  targetElementId?: string;
+  anchors: { start: QuickCreatePoint; end: QuickCreatePoint };
+  points: QuickCreatePoint[];
 };
 
 /**
@@ -236,6 +294,18 @@ export class AppQuickCreate {
   /** 压在杆上、尚未判定是点击还是拖拽的那次按下 */
   private poleActivationClick: PoleActivationClick | null = null;
 
+  /** 指针悬停中的激活条动态连接点 */
+  private sequenceConnection: SequenceConnectionHover | null = null;
+
+  /** 进行中的激活条连接线拖拽 */
+  private sequenceConnectionDrag: SequenceConnectionDrag | null = null;
+
+  /** 连接线预演的缓存，口径同 `ghost` */
+  private sequenceConnectionGhost: {
+    key: string;
+    elements: readonly NonDeletedExcalidrawElement[];
+  } | null = null;
+
   /** 进行中的手势；为 null 时手柄按悬停/点击路径走 */
   private drag: QuickCreateDrag | null = null;
 
@@ -284,6 +354,53 @@ export class AppQuickCreate {
 
   /** 进行中的手势（渲染层读它画「按下档」手柄与跟随指针的预演） */
   getDrag = () => this.drag;
+
+  /** 悬停中的激活条连接点（渲染层画圆点） */
+  getSequenceConnectionHover = () => this.sequenceConnection;
+
+  /** 进行中的连接线拖拽（渲染层读它画预演） */
+  getSequenceConnectionDrag = () => this.sequenceConnectionDrag;
+
+  /** 连接线预演的元素（渲染层每帧来取；空数组表示不画） */
+  getSequenceConnectionGhostElements =
+    (): readonly NonDeletedExcalidrawElement[] => {
+      const drag = this.sequenceConnectionDrag;
+      if (!drag?.moved) {
+        return [];
+      }
+      const source = this.app.scene.getNonDeletedElement(drag.elementId);
+      if (!source || !isActivationElement(source)) {
+        return [];
+      }
+      const placement = this.resolveSequenceMessagePlacement(drag, source);
+      if (!placement) {
+        return [];
+      }
+      const key = [
+        drag.elementId,
+        source.version,
+        drag.side,
+        drag.exit.x,
+        drag.exit.y,
+        drag.pointer.x,
+        drag.pointer.y,
+        this.getArrowStyleFingerprint(),
+        placement.kind,
+        placement.targetElementId ?? "",
+      ].join("|");
+      if (this.sequenceConnectionGhost?.key !== key) {
+        this.sequenceConnectionGhost = {
+          key,
+          elements: [
+            this.buildSequenceMessageArrow(placement, {
+              opacityScale: QUICK_CREATE_GHOST_ALPHA,
+              identity: GHOST_ARROW_IDENTITY,
+            }),
+          ],
+        };
+      }
+      return this.sequenceConnectionGhost.elements;
+    };
 
   /** 方向手柄的源元素：单选的 quick-create 目标（时序图形已被排除） */
   getHandleTargetElement = (): NonDeletedExcalidrawElement | null =>
@@ -369,7 +486,8 @@ export class AppQuickCreate {
     // 预演缓存连同悬停一起丢：它带着离屏位图，没悬停就没必要留着占内存
     // （重建一次不算贵，而且只在指针重新落到某个手柄上时才会发生）
     this.ghost = null;
-    const hadHover = !!this.hovered || !!this.poleActivation;
+    const hadHover =
+      !!this.hovered || !!this.poleActivation || !!this.sequenceConnection;
     this.hovered = null;
     this.clearHoverAffordances();
     if (hadHover) {
@@ -381,6 +499,8 @@ export class AppQuickCreate {
   private clearHoverAffordances = () => {
     this.poleActivation = null;
     this.poleActivationGhost = null;
+    this.sequenceConnection = null;
+    this.sequenceConnectionGhost = null;
   };
 
   hitTest = (sceneX: number, sceneY: number, pointerType = "mouse") => {
@@ -407,7 +527,7 @@ export class AppQuickCreate {
     }
     // 手势进行中：悬停判定整组让位（预演改由拖拽态驱动）。这里必须早退而不是
     // 走下面的 reset 分支——reset 会把拖拽预演一起丢掉。
-    if (this.drag) {
+    if (this.drag || this.sequenceConnectionDrag) {
       return;
     }
     // 修饰键按住时手柄整组不渲染也不命中，悬停态一并清掉。
@@ -470,10 +590,16 @@ export class AppQuickCreate {
     // 杆上激活条预演：指针已被方向手柄 / 变换手柄 / 复合图形控制点占用时不再
     // 解析；落点还会排除与已有激活条重叠的位置（见 `resolvePoleActivationTarget`）。
     // 于是「看到预演」与「点下去能创建」始终是同一个判定。
-    this.updatePoleActivation(sceneX, sceneY, Boolean(effectiveHit));
+    // 激活条动态连接点优先：指针贴近某条激活条的竖边时，不再预演「杆上建条」。
+    this.updateSequenceConnection(sceneX, sceneY, Boolean(effectiveHit));
+    this.updatePoleActivation(
+      sceneX,
+      sceneY,
+      Boolean(effectiveHit) || Boolean(this.sequenceConnection),
+    );
     // 在 pointerCanvas 的工具光标之后运行，命中时不被覆盖
     if (
-      (effectiveHit || this.poleActivation) &&
+      (effectiveHit || this.poleActivation || this.sequenceConnection) &&
       !this.app.state.viewModeEnabled &&
       this.app.isInteractionEnabled()
     ) {
@@ -675,6 +801,380 @@ export class AppQuickCreate {
   };
 
   /**
+   * 更新激活条动态连接点。指针压在手柄 / 变换手柄 / 复合控制点上时不解析，
+   * 与杆上预演同一套让位规则。
+   */
+  private updateSequenceConnection = (
+    sceneX: number,
+    sceneY: number,
+    suppressed = false,
+  ) => {
+    let next: SequenceConnectionHover | null = null;
+    if (
+      !suppressed &&
+      this.canHoverAffordances() &&
+      !this.isHigherPriorityAffordanceHovered(sceneX, sceneY)
+    ) {
+      next = this.resolveSequenceConnection(sceneX, sceneY);
+    }
+    const changed =
+      next?.elementId !== this.sequenceConnection?.elementId ||
+      next?.side !== this.sequenceConnection?.side ||
+      next?.point.x !== this.sequenceConnection?.point.x ||
+      next?.point.y !== this.sequenceConnection?.point.y;
+    if (changed) {
+      this.sequenceConnection = next;
+      this.sequenceConnectionGhost = null;
+      this.app.repaint.request();
+    }
+  };
+
+  /**
+   * 指针附近的激活条竖边：只认左 / 右两条边，`y` 跟指针走（不再是固定锚点）。
+   *
+   * 指针必须落在条的纵向范围内，横向允许在边外 `SNAP_DISTANCE` 内、或压进条内
+   * `INSIDE_TOLERANCE`（后者只是为了跨边缘时不闪烁）。条中心不触发——按住
+   * 条身仍然是在选择 / 拖动它。
+   */
+  private resolveSequenceConnection = (
+    sceneX: number,
+    sceneY: number,
+  ): SequenceConnectionHover | null => {
+    const zoom = this.app.state.zoom.value;
+    const snap = SEQUENCE_CONNECTION_SNAP_DISTANCE / zoom;
+    const inside = SEQUENCE_CONNECTION_INSIDE_TOLERANCE / zoom;
+    let best: {
+      element: SequenceActivationElement;
+      side: SequenceConnectionSide;
+      distance: number;
+      localY: number;
+    } | null = null;
+    for (const element of this.app.scene.getNonDeletedElementsMap().values()) {
+      if (!isActivationElement(element) || element.locked) {
+        continue;
+      }
+      const local = getSequenceLifelineLocalPoint(element, sceneX, sceneY);
+      if (local.y < 0 || local.y > element.height) {
+        continue;
+      }
+      const sides: readonly [SequenceConnectionSide, number][] = [
+        ["left", local.x],
+        ["right", element.width - local.x],
+      ];
+      for (const [side, insideDepth] of sides) {
+        // insideDepth > 0：指针压进条内；< 0：在条外，绝对值就是离边的距离
+        if (insideDepth > inside || insideDepth < -snap) {
+          continue;
+        }
+        const distance = Math.abs(insideDepth);
+        if (!best || distance < best.distance) {
+          best = { element, side, distance, localY: local.y };
+        }
+      }
+    }
+    if (!best) {
+      return null;
+    }
+    const localY = Math.min(Math.max(best.localY, 1), best.element.height - 1);
+    const [x, y] = getActivationAnchor(best.element, best.side, localY);
+    return {
+      elementId: best.element.id,
+      side: best.side,
+      point: { x, y },
+    };
+  };
+
+  /**
+   * 按下时接管一次「从连接点拖出消息」。返回 true 时调用方须提前 return：
+   * 这次手势归连接线所有，不再走选择 / 杆上建条。
+   */
+  private startSequenceConnectionDrag = (
+    origin: QuickCreatePoint,
+    pointerType: PointerType,
+    pointerDownState: PointerDownState,
+  ): boolean => {
+    if (
+      !this.canHoverAffordances() ||
+      this.isHigherPriorityAffordanceHovered(origin.x, origin.y, pointerType)
+    ) {
+      return false;
+    }
+    const hover = this.resolveSequenceConnection(origin.x, origin.y);
+    if (!hover) {
+      return false;
+    }
+    const source = this.app.scene.getNonDeletedElement(hover.elementId);
+    if (!source || !isActivationElement(source)) {
+      return false;
+    }
+    const local = getSequenceLifelineLocalPoint(source, origin.x, origin.y);
+    pointerDownState.drag.blockDragging = true;
+    pointerDownState.resize.handleType = false;
+    pointerDownState.resize.isResizing = false;
+    this.sequenceConnection = null;
+    this.sequenceConnectionGhost = null;
+    this.poleActivation = null;
+    this.poleActivationGhost = null;
+    this.poleActivationClick = null;
+    this.hovered = null;
+    this.ghost = null;
+    this.sequenceConnectionDrag = {
+      elementId: source.id,
+      side: hover.side,
+      exit: hover.point,
+      startLocalY: Math.min(Math.max(local.y, 1), source.height - 1),
+      origin: { x: origin.x, y: origin.y },
+      pointer: { x: origin.x, y: origin.y },
+      moved: false,
+    };
+    this.app.repaint.request();
+    return true;
+  };
+
+  /**
+   * 拖拽落位：终点先看指针是否压在激活条上。
+   *
+   * - 压在**起点那条**上 → 自消息（折线），起点附近的死区不吸附；
+   * - 压在**其它**激活条上 → 水平直线，终点取目标朝向源的那条边、y 与起端齐平；
+   * - 都没压到 → 水平自由延伸，只朝出发边的前方走。
+   */
+  private resolveSequenceMessagePlacement = (
+    drag: SequenceConnectionDrag,
+    source: SequenceActivationElement,
+  ): SequenceMessagePlacement | null => {
+    const outward = this.getSequenceSideOutward(drag.side, source.angle);
+    const gap = getBindingGap(source, { elbowed: false });
+    const exit = drag.exit;
+    const zoom = this.app.state.zoom.value;
+
+    // 自消息：指针还在起点这条激活条上，且纵向离开起点足够远
+    const sourceLocal = getSequenceLifelineLocalPoint(
+      source,
+      drag.pointer.x,
+      drag.pointer.y,
+    );
+    if (
+      sourceLocal.x >= 0 &&
+      sourceLocal.x <= source.width &&
+      sourceLocal.y >= 0 &&
+      sourceLocal.y <= source.height
+    ) {
+      const targetLocalY = Math.min(
+        Math.max(sourceLocal.y, 1),
+        source.height - 1,
+      );
+      if (
+        Math.abs(targetLocalY - drag.startLocalY) * zoom >=
+        SEQUENCE_CONNECTION_MIN_SELF_GAP
+      ) {
+        const end = this.getSequenceActivationEdgePoint(
+          source,
+          drag.side,
+          targetLocalY,
+        );
+        const loopStart = {
+          x: exit.x + outward.x * SEQUENCE_SELF_MESSAGE_OFFSET,
+          y: exit.y + outward.y * SEQUENCE_SELF_MESSAGE_OFFSET,
+        };
+        const loopEnd = {
+          x: end.x + outward.x * SEQUENCE_SELF_MESSAGE_OFFSET,
+          y: end.y + outward.y * SEQUENCE_SELF_MESSAGE_OFFSET,
+        };
+        return {
+          kind: "self",
+          targetElementId: source.id,
+          anchors: { start: exit, end },
+          points: [
+            {
+              x: exit.x + outward.x * gap,
+              y: exit.y + outward.y * gap,
+            },
+            loopStart,
+            loopEnd,
+            {
+              x: end.x + outward.x * gap,
+              y: end.y + outward.y * gap,
+            },
+          ],
+        };
+      }
+      // 落在死区里：不吸附，按自由端处理（指针还在条内，水平线会被夹到起点）
+      return this.getSequenceFreePlacement(drag, outward, gap);
+    }
+
+    // 其它激活条：指针压在条上，且起端 y 落在目标的纵向范围内才水平连过去
+    const target = this.findSequenceMessageTarget(drag, source, outward);
+    if (target) {
+      const targetLocal = getSequenceLifelineLocalPoint(
+        target.element,
+        exit.x,
+        exit.y,
+      );
+      const targetLocalY = Math.min(
+        Math.max(targetLocal.y, 1),
+        target.element.height - 1,
+      );
+      const targetSide: SequenceConnectionSide =
+        targetLocal.x <= target.element.width / 2 ? "left" : "right";
+      const entry = this.getSequenceActivationEdgePoint(
+        target.element,
+        targetSide,
+        targetLocalY,
+      );
+      const entryOutward = this.getSequenceSideOutward(
+        targetSide,
+        target.element.angle,
+      );
+      const entryGap = getBindingGap(target.element, { elbowed: false });
+      return {
+        kind: "activation",
+        targetElementId: target.element.id,
+        anchors: { start: exit, end: entry },
+        points: [
+          {
+            x: exit.x + outward.x * gap,
+            y: exit.y + outward.y * gap,
+          },
+          {
+            x: entry.x + entryOutward.x * entryGap,
+            y: entry.y + entryOutward.y * entryGap,
+          },
+        ],
+      };
+    }
+
+    return this.getSequenceFreePlacement(drag, outward, gap);
+  };
+
+  /**
+   * 自由端：只朝出发边的前方水平延伸，y 与起端齐平。终点不绑定，所以不留 gap。
+   */
+  private getSequenceFreePlacement = (
+    drag: SequenceConnectionDrag,
+    outward: { x: number; y: number },
+    gap: number,
+  ): SequenceMessagePlacement => {
+    const exit = drag.exit;
+    // 只朝出发边的前方延伸：把指针位移投影到这条边的外法线上，负值夹到 0
+    const forward = Math.max(
+      0,
+      (drag.pointer.x - exit.x) * outward.x +
+        (drag.pointer.y - exit.y) * outward.y,
+    );
+    const end = {
+      x: exit.x + outward.x * forward,
+      y: exit.y + outward.y * forward,
+    };
+    // 起点让出 binding gap；还没拖出 gap 时收成一点，避免画出一条反向的线
+    const startOffset = Math.min(gap, forward);
+    return {
+      kind: "free",
+      anchors: { start: exit, end },
+      points: [
+        {
+          x: exit.x + outward.x * startOffset,
+          y: exit.y + outward.y * startOffset,
+        },
+        end,
+      ],
+    };
+  };
+
+  /**
+   * 指针下的目标激活条（排除起点那条）。要求目标在出发边的前方，且起端 y
+   * 落在目标的纵向范围内——这样连过去才是一条水平线。
+   */
+  private findSequenceMessageTarget = (
+    drag: SequenceConnectionDrag,
+    source: SequenceActivationElement,
+    outward: { x: number; y: number },
+  ): { element: SequenceActivationElement } | null => {
+    const zoom = this.app.state.zoom.value;
+    const snap = SEQUENCE_CONNECTION_SNAP_DISTANCE / zoom;
+    const exit = drag.exit;
+    const pointer = drag.pointer;
+    let best: {
+      element: SequenceActivationElement;
+      distance: number;
+    } | null = null;
+    for (const element of this.app.scene.getNonDeletedElementsMap().values()) {
+      if (
+        element.id === source.id ||
+        !isActivationElement(element) ||
+        element.locked
+      ) {
+        continue;
+      }
+      const centerX = element.x + element.width / 2;
+      const centerY = element.y + element.height / 2;
+      if (
+        (centerX - exit.x) * outward.x + (centerY - exit.y) * outward.y <=
+        0
+      ) {
+        continue;
+      }
+      // 起端 y 必须落在目标的纵向范围内，水平线才真的接得上
+      const exitLocal = getSequenceLifelineLocalPoint(element, exit.x, exit.y);
+      if (exitLocal.y < 0 || exitLocal.y > element.height) {
+        continue;
+      }
+      const pointerLocal = getSequenceLifelineLocalPoint(
+        element,
+        pointer.x,
+        pointer.y,
+      );
+      if (
+        pointerLocal.x < -snap ||
+        pointerLocal.x > element.width + snap ||
+        pointerLocal.y < -snap ||
+        pointerLocal.y > element.height + snap
+      ) {
+        continue;
+      }
+      const dx =
+        pointerLocal.x < 0
+          ? -pointerLocal.x
+          : pointerLocal.x > element.width
+          ? pointerLocal.x - element.width
+          : 0;
+      const dy =
+        pointerLocal.y < 0
+          ? -pointerLocal.y
+          : pointerLocal.y > element.height
+          ? pointerLocal.y - element.height
+          : 0;
+      const distance = Math.hypot(dx, dy);
+      if (!best || distance < best.distance) {
+        best = { element, distance };
+      }
+    }
+    return best;
+  };
+
+  /** 激活条一条竖边上、指定本地 y 的场景点 */
+  private getSequenceActivationEdgePoint = (
+    element: ExcalidrawShapeElement,
+    side: SequenceConnectionSide,
+    localY: number,
+  ): QuickCreatePoint => {
+    const [x, y] = getActivationAnchor(element, side, localY);
+    return { x, y };
+  };
+
+  /** 某条边朝外的世界方向（随元素 angle 旋转） */
+  private getSequenceSideOutward = (
+    side: SequenceConnectionSide,
+    angle: Radians,
+  ): { x: number; y: number } => {
+    const [x, y] = pointRotateRads<GlobalPoint>(
+      pointFrom<GlobalPoint>(side === "right" ? 1 : -1, 0),
+      pointFrom<GlobalPoint>(0, 0),
+      angle,
+    );
+    return { x, y };
+  };
+
+  /**
    * 按下时臂化「杆上点击」：这里**不创建**，也不吞手势——拖拽时仍交给通用选择
    * 路径移动生命线；是点击还是拖拽由 `handlePointerUp` 按距离判定。
    */
@@ -758,6 +1258,16 @@ export class AppQuickCreate {
       : null;
     const source = hit && this.app.scene.getNonDeletedElement(hit.elementId);
     if (!hit || !source) {
+      // 激活条动态连接点：按住连接点拖出消息（优先于杆上建条）
+      if (
+        this.startSequenceConnectionDrag(
+          origin,
+          resolvedPointerType,
+          pointerDownState,
+        )
+      ) {
+        return true;
+      }
       // 没有命中手柄：如果按在杆上，臂化「单击建激活条」；其余情况照常让给选择
       this.armPoleActivationClick(origin, resolvedPointerType);
       return false;
@@ -811,6 +1321,8 @@ export class AppQuickCreate {
     this.poleActivation = null;
     this.poleActivationGhost = null;
     this.poleActivationClick = null;
+    this.sequenceConnection = null;
+    this.sequenceConnectionGhost = null;
     this.drag = {
       direction: hit.direction,
       elementId: source.id,
@@ -832,6 +1344,21 @@ export class AppQuickCreate {
     pointerDownState: PointerDownState,
     scenePoint: QuickCreatePoint,
   ): boolean => {
+    const sequenceDrag = this.sequenceConnectionDrag;
+    if (sequenceDrag) {
+      sequenceDrag.pointer = { x: scenePoint.x, y: scenePoint.y };
+      if (!sequenceDrag.moved) {
+        const distance = Math.hypot(
+          scenePoint.x - sequenceDrag.origin.x,
+          scenePoint.y - sequenceDrag.origin.y,
+        );
+        sequenceDrag.moved =
+          distance * this.app.state.zoom.value >= DRAGGING_THRESHOLD;
+      }
+      // 预演跟手：几何每帧都变，只能显式重绘
+      this.app.repaint.request();
+      return true;
+    }
     const drag = this.drag;
     if (!drag) {
       return false;
@@ -865,6 +1392,28 @@ export class AppQuickCreate {
   ): boolean => {
     if (this.cancelledPointerDown === pointerDownState) {
       this.cancelledPointerDown = null;
+      return true;
+    }
+    // 激活条连接线：结束时按松手点解落位；没越过阈值（只是点了下连接点）
+    // 或起端已被删除就不落地。
+    const sequenceDrag = this.sequenceConnectionDrag;
+    if (sequenceDrag) {
+      this.sequenceConnectionDrag = null;
+      this.sequenceConnectionGhost = null;
+      sequenceDrag.pointer = { x: scenePoint.x, y: scenePoint.y };
+      const source = this.app.scene.getNonDeletedElement(
+        sequenceDrag.elementId,
+      );
+      if (
+        event.type === "pointerup" &&
+        sequenceDrag.moved &&
+        source &&
+        isActivationElement(source)
+      ) {
+        this.createSequenceMessage(source, sequenceDrag);
+      }
+      pointerDownState.drag.hasOccurred = true;
+      this.app.repaint.request();
       return true;
     }
     // 杆上单击：按下时只臂化，这里按拖动距离判定。越过阈值说明用户是在拖生命线
@@ -923,6 +1472,16 @@ export class AppQuickCreate {
     pointerDownState: PointerDownState,
     event: KeyboardEvent,
   ): boolean => {
+    // 激活条连接线：Esc 取消本次手势，抬起时由 cancelledPointerDown 吞掉收尾
+    if (event.key === KEYS.ESCAPE && this.sequenceConnectionDrag) {
+      this.cancelledPointerDown = pointerDownState;
+      this.sequenceConnectionDrag = null;
+      this.sequenceConnectionGhost = null;
+      this.app.repaint.request();
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
     // 杆上待决的单击：Esc 只撤销这次「待创建」，不吞键——通用路径仍要照常
     // 取消可能正在进行的生命线拖拽
     if (event.key === KEYS.ESCAPE && this.poleActivationClick) {
@@ -1148,6 +1707,114 @@ export class AppQuickCreate {
     }
     this.app.setState({
       selectedElementIds: { [activation.id]: true },
+      selectedGroupIds: {},
+      selectedLinearElement: null,
+      hoveredElementIds: {},
+      editingGroupId: null,
+    });
+    this.app.store.scheduleCapture();
+  };
+
+  // ---------------------------------------------------------------------------
+  // 激活条动态连接点与消息
+  // ---------------------------------------------------------------------------
+
+  /**
+   * 按几何点装配消息箭头。消息的线型只由落点决定（不跟当前箭头样式走）：
+   * 两点 → 水平/直连，四点的自消息 → 折线；一律直角，不继承圆角。
+   */
+  private buildSequenceMessageArrow = (
+    placement: SequenceMessagePlacement,
+    options: {
+      opacityScale?: number;
+      identity?: CreationIdentity;
+    } = {},
+  ): NonDeleted<ExcalidrawLinearElement> => {
+    const arrowProps = getCurrentItemArrowProps(this.app);
+    const [first] = placement.points;
+    const created = newArrowElement({
+      type: "arrow",
+      x: first.x,
+      y: first.y,
+      ...arrowProps,
+      // 消息线型由落点决定：自消息固定折线，其余固定直线
+      elbowed: false,
+      roundness: null,
+      fixedSegments: null,
+      points: placement.points.map((point) =>
+        pointFrom<LocalPoint>(point.x - first.x, point.y - first.y),
+      ),
+      ...(options.opacityScale === undefined
+        ? {}
+        : { opacity: arrowProps.opacity * options.opacityScale }),
+      ...options.identity,
+    });
+    return created;
+  };
+
+  /**
+   * 从连接点拖出消息：按预演同源的几何落地。终点吸附到激活条时两端绑定
+   * （自消息两端都绑起点那条），未吸附则只绑起端、末端自由落在此处；
+   * 整条消息与绑定同属一步撤销。
+   */
+  private createSequenceMessage = (
+    source: SequenceActivationElement,
+    drag: SequenceConnectionDrag,
+  ): void => {
+    const placement = this.resolveSequenceMessagePlacement(drag, source);
+    if (!placement) {
+      return;
+    }
+    // 自由端与起端重合（还没拖出条外）时不落地空箭头；自由端还要至少拖出
+    // 一个 binding gap，否则绑定的起端会把箭头拉成反向的一小截。
+    if (placement.kind !== "self") {
+      const length = Math.hypot(
+        placement.anchors.end.x - placement.anchors.start.x,
+        placement.anchors.end.y - placement.anchors.start.y,
+      );
+      const minLength =
+        placement.kind === "free"
+          ? getBindingGap(source, { elbowed: false })
+          : 1;
+      if (length < minLength) {
+        return;
+      }
+    }
+    const arrow = this.buildSequenceMessageArrow(placement);
+    this.app.insertNewElements([arrow]);
+    bindBindingElement(
+      arrow,
+      source as NonDeleted<ExcalidrawBindableElement>,
+      "start",
+      this.app.scene,
+      pointFrom<GlobalPoint>(
+        placement.anchors.start.x,
+        placement.anchors.start.y,
+      ),
+    );
+    if (placement.kind !== "free" && placement.targetElementId) {
+      const target = this.app.scene.getNonDeletedElement(
+        placement.targetElementId,
+      );
+      if (target && isActivationElement(target) && isBindableElement(target)) {
+        bindBindingElement(
+          arrow,
+          target,
+          "end",
+          this.app.scene,
+          pointFrom<GlobalPoint>(
+            placement.anchors.end.x,
+            placement.anchors.end.y,
+          ),
+        );
+      }
+    }
+    // 两点消息按 orbit 绑定把两端落到位；自消息的四个点已经按几何落好
+    if (arrow.points.length === 2) {
+      this.projectArrowEndpoints(arrow);
+    }
+    this.app.setState({
+      selectedElementIds: { [arrow.id]: true },
       selectedGroupIds: {},
       selectedLinearElement: null,
       hoveredElementIds: {},

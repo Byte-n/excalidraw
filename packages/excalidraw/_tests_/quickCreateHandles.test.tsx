@@ -3019,4 +3019,194 @@ describe("quick create handles", () => {
       expect(live().filter(isActivationElement)).toHaveLength(0);
     });
   });
+
+  describe("sequence activation connection points", () => {
+    const ACTIVATION_WIDTH = 16;
+    const ACTIVATION_HEIGHT = 100;
+
+    const createActivation = (
+      x: number,
+      y: number,
+      overrides: Record<string, unknown> = {},
+    ) =>
+      API.createElement({
+        type: "sequence",
+        shape: buildShapeData("sc-activation"),
+        x,
+        y,
+        width: ACTIVATION_WIDTH,
+        height: ACTIVATION_HEIGHT,
+        ...overrides,
+      });
+
+    /** 场景里除了源之外的第一条箭头 */
+    const lastArrow = () => {
+      const arrow = live().find((element) => isArrowElement(element));
+      if (!arrow || !isArrowElement(arrow)) {
+        throw new Error("Expected an arrow");
+      }
+      return arrow as ExcalidrawLinearElement;
+    };
+
+    /** 箭头第 index 个点的场景坐标（测试里 angle 恒为 0） */
+    const arrowPoint = (
+      arrow: ExcalidrawLinearElement,
+      index: number,
+    ): { x: number; y: number } => ({
+      x: arrow.x + arrow.points[index][0],
+      y: arrow.y + arrow.points[index][1],
+    });
+
+    it("reveals a dynamic connection point near a left / right edge", () => {
+      const activation = createActivation(400, 200);
+      API.setElements([activation]);
+      mouse.reset();
+
+      // 右边缘 x=416；指针在条外 5px
+      mouse.moveTo(421, 250);
+      let hover = h.app.quickCreate.getSequenceConnectionHover();
+      expect(hover).toEqual(
+        expect.objectContaining({ elementId: activation.id, side: "right" }),
+      );
+      expect(hover!.point.x).toBeCloseTo(416, 6);
+      expect(hover!.point.y).toBeCloseTo(250, 6);
+
+      // 点跟着指针沿边移动，不是固定锚点
+      mouse.moveTo(421, 275);
+      hover = h.app.quickCreate.getSequenceConnectionHover();
+      expect(hover!.point.x).toBeCloseTo(416, 6);
+      expect(hover!.point.y).toBeCloseTo(275, 6);
+
+      // 左边缘
+      mouse.moveTo(395, 230);
+      hover = h.app.quickCreate.getSequenceConnectionHover();
+      expect(hover!.side).toBe("left");
+      expect(hover!.point.x).toBeCloseTo(400, 6);
+      expect(hover!.point.y).toBeCloseTo(230, 6);
+    });
+
+    it("does not reveal a connection point on the bar body", () => {
+      const activation = createActivation(400, 200);
+      API.setElements([activation]);
+      mouse.reset();
+
+      mouse.moveTo(408, 250);
+      expect(h.app.quickCreate.getSequenceConnectionHover()).toBeNull();
+    });
+
+    it("connects two activations with a horizontal straight arrow", () => {
+      const source = createActivation(400, 200);
+      const target = createActivation(600, 200);
+      API.setElements([source, target]);
+      mouse.reset();
+
+      mouse.moveTo(421, 250);
+      mouse.downAt(421, 250);
+      mouse.moveTo(608, 265);
+      mouse.upAt(608, 265);
+
+      const arrow = lastArrow();
+      expect(arrow.points).toHaveLength(2);
+      expect(arrow.startBinding?.elementId).toBe(source.id);
+      expect(arrow.endBinding?.elementId).toBe(target.id);
+      // 消息保持水平：起端 y 固定为按下时的 250
+      expect(arrowPoint(arrow, 0).y).toBeCloseTo(250, 1);
+      expect(arrowPoint(arrow, 1).y).toBeCloseTo(250, 1);
+      expect(arrowPoint(arrow, 0).x).toBeLessThan(arrowPoint(arrow, 1).x);
+    });
+
+    it("turns into a polyline when the end lands back on the source bar", () => {
+      const source = createActivation(400, 200);
+      API.setElements([source]);
+      mouse.reset();
+
+      mouse.moveTo(421, 250);
+      mouse.downAt(421, 250);
+      mouse.moveTo(410, 290);
+      mouse.upAt(410, 290);
+
+      const arrow = lastArrow();
+      expect(arrow.points).toHaveLength(4);
+      expect(arrow.startBinding?.elementId).toBe(source.id);
+      expect(arrow.endBinding?.elementId).toBe(source.id);
+      // 右出去、竖着走、再左回来：四点的 y 只有两档
+      expect(arrowPoint(arrow, 0).y).toBeCloseTo(250, 6);
+      expect(arrowPoint(arrow, 1).y).toBeCloseTo(250, 6);
+      expect(arrowPoint(arrow, 2).y).toBeCloseTo(290, 6);
+      expect(arrowPoint(arrow, 3).y).toBeCloseTo(290, 6);
+      expect(arrowPoint(arrow, 0).x).toBeCloseTo(arrowPoint(arrow, 3).x, 6);
+      expect(arrowPoint(arrow, 1).x).toBeCloseTo(arrowPoint(arrow, 2).x, 6);
+      expect(arrowPoint(arrow, 1).x).toBeGreaterThan(arrowPoint(arrow, 0).x);
+    });
+
+    it("does not snap to the source bar right next to the start point", () => {
+      const source = createActivation(400, 200);
+      API.setElements([source]);
+      mouse.reset();
+
+      mouse.moveTo(421, 250);
+      mouse.downAt(421, 250);
+      mouse.moveTo(410, 256);
+      mouse.upAt(410, 256);
+
+      expect(live().filter(isArrowElement)).toHaveLength(0);
+    });
+
+    it("previews a straight line, then a polyline when the end returns to the source", () => {
+      const source = createActivation(400, 200);
+      API.setElements([source]);
+      mouse.reset();
+
+      mouse.moveTo(421, 250);
+      mouse.downAt(421, 250);
+      mouse.moveTo(500, 300);
+
+      let ghosts = h.app.quickCreate.getSequenceConnectionGhostElements();
+      expect(ghosts).toHaveLength(1);
+      expect(ghosts[0].type).toBe("arrow");
+      expect((ghosts[0] as ExcalidrawLinearElement).points).toHaveLength(2);
+      expect(ghosts[0].opacity).toBeLessThan(100);
+
+      mouse.moveTo(410, 290);
+      ghosts = h.app.quickCreate.getSequenceConnectionGhostElements();
+      expect(ghosts).toHaveLength(1);
+      expect((ghosts[0] as ExcalidrawLinearElement).points).toHaveLength(4);
+
+      mouse.upAt(410, 290);
+    });
+
+    it("keeps a free end horizontal and creates the previewed line", () => {
+      const source = createActivation(400, 200);
+      API.setElements([source]);
+      mouse.reset();
+
+      mouse.moveTo(421, 250);
+      mouse.downAt(421, 250);
+      mouse.moveTo(500, 320);
+      mouse.upAt(500, 320);
+
+      const arrow = lastArrow();
+      expect(arrow.points).toHaveLength(2);
+      expect(arrow.startBinding?.elementId).toBe(source.id);
+      expect(arrow.endBinding).toBeNull();
+      // 只能朝这一面的前方水平延伸：终点 y 仍是 250，x 取指针 x
+      expect(arrowPoint(arrow, 0).y).toBeCloseTo(250, 1);
+      expect(arrowPoint(arrow, 1).y).toBeCloseTo(250, 1);
+      expect(arrowPoint(arrow, 1).x).toBeCloseTo(500, 6);
+    });
+
+    it("cancels the drag on Escape", () => {
+      const source = createActivation(400, 200);
+      API.setElements([source]);
+      mouse.reset();
+
+      mouse.moveTo(421, 250);
+      mouse.downAt(421, 250);
+      mouse.moveTo(500, 250);
+      Keyboard.keyPress(KEYS.ESCAPE);
+      mouse.upAt(500, 250);
+
+      expect(live().filter(isArrowElement)).toHaveLength(0);
+    });
+  });
 });

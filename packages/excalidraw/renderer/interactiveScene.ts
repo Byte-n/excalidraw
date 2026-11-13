@@ -1529,6 +1529,45 @@ const renderPoleActivationGhost = (
 };
 
 /**
+ * 激活条左右两侧的动态连接点：悬停时画一个贴边的圆点，按住拖动时画消息预演
+ * （终点落在起点的激活条上 → 折线，落在其它激活条 → 水平直线，空白 → 水平
+ * 自由延伸）。点与预演都由 `AppQuickCreate` 给出，这里只负责画。
+ */
+const renderSequenceConnection = (
+  context: CanvasRenderingContext2D,
+  app: AppClassProperties,
+  appState: InteractiveCanvasAppState,
+  allElementsMap: NonDeletedSceneElementsMap,
+  selectionColor: string,
+) => {
+  const drag = app.quickCreate.getSequenceConnectionDrag();
+  const elements = app.quickCreate.getSequenceConnectionGhostElements();
+  if (elements.length) {
+    context.save();
+    context.setLineDash([]);
+    renderQuickCreateGhost(context, app, appState, elements, allElementsMap);
+    context.restore();
+  }
+  const point =
+    drag?.exit ?? app.quickCreate.getSequenceConnectionHover()?.point;
+  if (!point) {
+    return;
+  }
+  const zoom = appState.zoom.value;
+  const radius = (drag ? 5 : 4) / zoom;
+  context.save();
+  context.setLineDash([]);
+  context.beginPath();
+  context.arc(point.x, point.y, radius, 0, Math.PI * 2);
+  context.fillStyle = selectionColor;
+  context.fill();
+  context.lineWidth = 1.5 / zoom;
+  context.strokeStyle = getThemedColor("#fff", appState.theme);
+  context.stroke();
+  context.restore();
+};
+
+/**
  * The frame's own rounded border reused as interaction feedback (hover ring,
  * drop-target highlight): strokes the border path in place, optionally with a
  * translucent fill washed over the board.
@@ -2350,11 +2389,7 @@ const renderFragmentEditingIndicator = (
     return;
   }
   const fragment = elementsMap.get(ref.elementId);
-  if (
-    !fragment ||
-    fragment.isDeleted ||
-    !isSequenceFragmentElement(fragment)
-  ) {
+  if (!fragment || fragment.isDeleted || !isSequenceFragmentElement(fragment)) {
     return;
   }
   const liveFragment = fragment as NonDeleted<ExcalidrawElement>;
@@ -4247,13 +4282,26 @@ const _renderInteractiveScene = ({
     context.restore();
 
     // 生命线杆上的激活条预演与选中状态无关，单独画；修饰键按住 / 面板待决时
-    // 与 quick-create 手柄同一口径收起。
+    // 与 quick-create 手柄同一口径收起。激活条动态连接点同批绘制；手势一旦开始
+    // 就不受修饰键影响（同 quick-create 的拖拽预演）。
+    const sequenceDragging = Boolean(
+      app.quickCreate.getSequenceConnectionDrag(),
+    );
     const hoverSuppressed =
       app.quickCreate.isSuppressed() && !app.quickCreate.getDrag();
-    if (!hoverSuppressed) {
+    if (!hoverSuppressed || sequenceDragging) {
       context.save();
       context.translate(appState.scrollX, appState.scrollY);
-      renderPoleActivationGhost(context, app, appState, allElementsMap);
+      if (!hoverSuppressed) {
+        renderPoleActivationGhost(context, app, appState, allElementsMap);
+      }
+      renderSequenceConnection(
+        context,
+        app,
+        appState,
+        allElementsMap,
+        selectionColor,
+      );
       context.restore();
     }
 
