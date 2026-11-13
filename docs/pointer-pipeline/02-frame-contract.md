@@ -494,3 +494,11 @@ export const isPointerPipelineShadowEnabled = () =>
 - 不改 `pointerSelection.ts`、`App.quickCreate.ts`、`App.mindmap.ts`。
 - 不改渲染器。
 - 不删除 `suggestedBinding`。
+
+## 实施记录（2026-11-14）
+
+- 实际改动：新增 `pointerFrame.ts`（target/phase/owner/mode、provider 注册表、
+  `resolvePointerFrame`、字段级比较）、`pointerState.ts`（`AppPointerState`）、
+  `pointerDispatch.ts`（`applyPointerFrame`）；容器交互改为 provider + 统一分派。
+- 与计划的偏差：`setFrame` 默认不请求重绘（临时影子期），后续 PR 按消费者逐步开启。
+- 测试：`pointer-frame.test.ts`（18 项）+ 容器分派扩展。

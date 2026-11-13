@@ -29,12 +29,8 @@ import {
 
 import { getCenterForBounds } from "./bounds";
 import {
-  getActivationBindingPoint,
-  getCompositeShapeAnchors,
   isActivationElement,
   isSequenceLifelineElement,
-  isShapeElement,
-  isShapeWithId,
   isShapeWithIdIn,
 } from "./compositeShape";
 import { updateSequenceActivationsForLifeline } from "./sequenceActivation";
@@ -1072,9 +1068,9 @@ export type ElbowLandingOpts = {
 
 /**
  * ③-tier elbow landing: the axis ray (horizontal / vertical two-pass
- * intersection) with `avoidRectangularCorner` applied first. `snapToMid` is
- * gone — tiers ①/② are handled by `resolveConnectionHit`; this is only the
- * fallback when the point is outside both bands (or angle-locked).
+ * intersection) with `avoidRectangularCorner` applied first. Tiers ①/② are
+ * handled by `resolveConnectionHit`; this is only the fallback when the point
+ * is outside both bands (or angle-locked).
  */
 export const projectElbowAxisRay = ({
   element,
@@ -1102,8 +1098,8 @@ export const projectElbowAxisRay = ({
   const isHorizontal = headingIsHorizontal(
     headingForPointFromElement(element, aabb, point),
   );
-  // `snapToMid` used to move the resolved point; the unified landing no longer
-  // does that here (see 03-connection-integration.md §4.4.1).
+  // The unified landing already moved the resolved point; this tier does not
+  // (see 03-connection-integration.md §4.4.1).
   const resolved = point;
   const otherPoint = pointFrom<GlobalPoint>(
     isHorizontal ? bindableCenter[0] : resolved[0],
@@ -1403,204 +1399,6 @@ export const avoidRectangularCorner = (
   }
 
   return p;
-};
-
-export const snapToMid = (
-  bindTarget: ExcalidrawBindableElement,
-  elementsMap: ElementsMap,
-  p: GlobalPoint,
-  tolerance: number = 0.05,
-  arrowElement?: ExcalidrawLinearElement,
-): GlobalPoint | undefined => {
-  const { x, y, width, height, angle } = bindTarget;
-  const center = elementCenterPoint(bindTarget, elementsMap, -0.1, -0.1);
-  const nonRotated = pointRotateRads(p, center, -angle as Radians);
-
-  const bindingGap = arrowElement ? getBindingGap(bindTarget, arrowElement) : 0;
-
-  // snap-to-center point is adaptive to element size, but we don't want to go
-  // above and below certain px distance
-  const verticalThreshold = clamp(tolerance * height, 5, 80);
-  const horizontalThreshold = clamp(tolerance * width, 5, 80);
-
-  // 激活条只有左 / 右两条可连边：上 / 下象限也按指针在中心线哪一侧归到左或右，
-  // 避免时序消息吸到激活条的顶边 / 底边。y 直接取指针位置（夹在条内），不再吸附
-  // 到固定的自动锚点——连接点本身就是动态的（见 App.quickCreate）。
-  // 放在「离中心太近就放弃」的守卫之前：窄条的中心几乎总在指针附近，
-  // 那条守卫在这里只会让折线端点退回条中心。
-  if (isActivationElement(bindTarget)) {
-    // 端点该贴左还是右，取箭头**另一端**的方向；指针压在窄条中心时
-    // 靠指针自己的 x 分不出左右，取错了会横穿激活条。
-    let referencePoint: GlobalPoint | undefined;
-    if (arrowElement && arrowElement.points.length >= 2) {
-      const start = LinearElementEditor.getPointAtIndexGlobalCoordinates(
-        arrowElement,
-        0,
-        elementsMap,
-      );
-      const end = LinearElementEditor.getPointAtIndexGlobalCoordinates(
-        arrowElement,
-        -1,
-        elementsMap,
-      );
-      referencePoint =
-        pointDistance(p, start) <= pointDistance(p, end) ? end : start;
-    }
-    return getActivationBindingPoint(bindTarget, p, referencePoint, bindingGap);
-  }
-
-  // Too close to the center makes it hard to resolve direction precisely
-  if (pointDistance(center, nonRotated) < bindingGap) {
-    return undefined;
-  }
-
-  if (
-    isShapeElement(bindTarget) &&
-    !isShapeWithIdIn(bindTarget, ["rectangle", "diamond", "ellipse"])
-  ) {
-    let index: number | undefined;
-    if (
-      nonRotated[0] <= x + width / 2 &&
-      Math.abs(nonRotated[1] - center[1]) < verticalThreshold
-    ) {
-      index = 2;
-    } else if (
-      nonRotated[1] <= y + height / 2 &&
-      Math.abs(nonRotated[0] - center[0]) < horizontalThreshold
-    ) {
-      index = 3;
-    } else if (
-      nonRotated[0] >= x + width / 2 &&
-      Math.abs(nonRotated[1] - center[1]) < verticalThreshold
-    ) {
-      index = 0;
-    } else if (
-      nonRotated[1] >= y + height / 2 &&
-      Math.abs(nonRotated[0] - center[0]) < horizontalThreshold
-    ) {
-      index = 1;
-    }
-    if (index === undefined) {
-      return undefined;
-    }
-    const anchor = getCompositeShapeAnchors(bindTarget)[index];
-    if (bindingGap === 0) {
-      return anchor;
-    }
-    const dx = anchor[0] - center[0];
-    const dy = anchor[1] - center[1];
-    const length = Math.hypot(dx, dy);
-    if (length === 0) {
-      return anchor;
-    }
-    const extent = Math.max(width, height) + bindingGap * 2;
-    const outside = pointFrom<GlobalPoint>(
-      anchor[0] + (dx / length) * extent,
-      anchor[1] + (dy / length) * extent,
-    );
-    const hits = intersectElementWithLineSegment(
-      bindTarget,
-      elementsMap,
-      lineSegment(center, outside),
-      bindingGap,
-    );
-    return (
-      hits.sort(
-        (a, b) => pointDistanceSq(a, anchor) - pointDistanceSq(b, anchor),
-      )[0] ?? anchor
-    );
-  }
-
-  if (
-    nonRotated[0] <= x + width / 2 &&
-    nonRotated[1] > center[1] - verticalThreshold &&
-    nonRotated[1] < center[1] + verticalThreshold
-  ) {
-    // LEFT
-    return pointRotateRads(
-      pointFrom<GlobalPoint>(x - bindingGap, center[1]),
-      center,
-      angle,
-    );
-  } else if (
-    nonRotated[1] <= y + height / 2 &&
-    nonRotated[0] > center[0] - horizontalThreshold &&
-    nonRotated[0] < center[0] + horizontalThreshold
-  ) {
-    // TOP
-    return pointRotateRads(
-      pointFrom<GlobalPoint>(center[0], y - bindingGap),
-      center,
-      angle,
-    );
-  } else if (
-    nonRotated[0] >= x + width / 2 &&
-    nonRotated[1] > center[1] - verticalThreshold &&
-    nonRotated[1] < center[1] + verticalThreshold
-  ) {
-    // RIGHT
-    return pointRotateRads(
-      pointFrom<GlobalPoint>(x + width + bindingGap, center[1]),
-      center,
-      angle,
-    );
-  } else if (
-    nonRotated[1] >= y + height / 2 &&
-    nonRotated[0] > center[0] - horizontalThreshold &&
-    nonRotated[0] < center[0] + horizontalThreshold
-  ) {
-    // DOWN
-    return pointRotateRads(
-      pointFrom<GlobalPoint>(center[0], y + height + bindingGap),
-      center,
-      angle,
-    );
-  } else if (isShapeWithId(bindTarget, "diamond")) {
-    const distance = bindingGap;
-    const topLeft = pointFrom<GlobalPoint>(
-      x + width / 4 - distance,
-      y + height / 4 - distance,
-    );
-    const topRight = pointFrom<GlobalPoint>(
-      x + (3 * width) / 4 + distance,
-      y + height / 4 - distance,
-    );
-    const bottomLeft = pointFrom<GlobalPoint>(
-      x + width / 4 - distance,
-      y + (3 * height) / 4 + distance,
-    );
-    const bottomRight = pointFrom<GlobalPoint>(
-      x + (3 * width) / 4 + distance,
-      y + (3 * height) / 4 + distance,
-    );
-
-    if (
-      pointDistance(topLeft, nonRotated) <
-      Math.max(horizontalThreshold, verticalThreshold)
-    ) {
-      return pointRotateRads(topLeft, center, angle);
-    }
-    if (
-      pointDistance(topRight, nonRotated) <
-      Math.max(horizontalThreshold, verticalThreshold)
-    ) {
-      return pointRotateRads(topRight, center, angle);
-    }
-    if (
-      pointDistance(bottomLeft, nonRotated) <
-      Math.max(horizontalThreshold, verticalThreshold)
-    ) {
-      return pointRotateRads(bottomLeft, center, angle);
-    }
-    if (
-      pointDistance(bottomRight, nonRotated) <
-      Math.max(horizontalThreshold, verticalThreshold)
-    ) {
-      return pointRotateRads(bottomRight, center, angle);
-    }
-  }
-
-  return undefined;
 };
 
 /**

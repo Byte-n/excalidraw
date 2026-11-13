@@ -96,7 +96,10 @@ import {
   getElementLineSegments,
   getElementSelectionFrameCoords,
 } from "../src/bounds";
-import { updateBoundElements, snapToMid } from "../src/binding";
+import {
+  resolveConnectionHitForArrowEndpoint,
+  updateBoundElements,
+} from "../src/binding";
 import {
   intersectElementWithLineSegment,
   isPointInElement,
@@ -105,7 +108,6 @@ import { duplicateElement } from "../src/duplicate";
 import { newElement, newArrowElement, newTextElement } from "../src/newElement";
 import { Scene } from "../src/Scene";
 import { getSequenceActivationDragPlacement } from "../src/sequenceActivation";
-import { getSnapOutlineMidPoint } from "../src/utils";
 import { getTextVerticalOffset } from "../src/renderElement";
 import {
   getSequenceActivationResize,
@@ -122,11 +124,12 @@ import { convertToExcalidrawElements } from "../src/transform";
 import type { SequenceLifelineId } from "../src/compositeShape";
 import type {
   ElementsMap,
+  ExcalidrawBindableElement,
   ExcalidrawShapeElement,
   SequenceFragmentData,
   SequenceShapeData,
 } from "../src/types";
-import type { NonDeletedExcalidrawElement } from "../src/types";
+import type { NonDeleted, NonDeletedExcalidrawElement } from "../src/types";
 
 const LIFELINE_IDS: readonly SequenceLifelineId[] = [
   "sc-lifeline-entity",
@@ -1677,58 +1680,52 @@ describe("sequence activation geometry", () => {
 
   it("snaps activation endpoints to the pointer y on a left/right edge, never top/bottom", () => {
     const activation = makeElement("sc-activation", 30, 100);
+    const activationTarget =
+      activation as unknown as NonDeleted<ExcalidrawBindableElement>;
     const arrow = newArrowElement({ type: "arrow", x: 200, y: 30 });
     const elementsMap = elementsMapFor(activation);
+    const resolveEnd = (point: GlobalPoint, isMidpointSnappingEnabled = true) =>
+      resolveConnectionHitForArrowEndpoint(
+        arrow,
+        activationTarget,
+        "end",
+        point,
+        elementsMap,
+        { zoom: 1, isMidpointSnappingEnabled, angleLocked: false },
+      )!;
 
     // 动态连接点：y 取指针位置，不再吸到固定锚点
     const pointer = pointFrom<GlobalPoint>(31, 30);
-    const snapped = snapToMid(activation, elementsMap, pointer, 0.05, arrow)!;
-    expect(snapped[0]).toBeGreaterThan(30);
-    expect(snapped[1]).toBeCloseTo(30, 6);
+    const snapped = resolveEnd(pointer);
+    expect(snapped).not.toBeNull();
+    expect(snapped.point[0]).toBeGreaterThan(30);
+    expect(snapped.point[1]).toBeCloseTo(30, 6);
 
-    // 上 / 下象限同样归到左 / 右竖边，y 夹进条内
-    const nearTop = snapToMid(
-      activation,
-      elementsMap,
-      pointFrom<GlobalPoint>(31, -50),
-      0.05,
-      arrow,
-    )!;
-    expect(nearTop[0]).toBeGreaterThan(30);
-    expect(nearTop[1]).toBeCloseTo(1, 6);
-    const nearBottom = snapToMid(
-      activation,
-      elementsMap,
-      pointFrom<GlobalPoint>(31, 500),
-      0.05,
-      arrow,
-    )!;
-    expect(nearBottom[0]).toBeGreaterThan(30);
-    expect(nearBottom[1]).toBeCloseTo(99, 6);
-    const fromLeft = snapToMid(
-      activation,
-      elementsMap,
-      pointFrom<GlobalPoint>(-10, 40),
-      0.05,
-      arrow,
-    )!;
-    expect(fromLeft[0]).toBeLessThan(0);
-    expect(fromLeft[1]).toBeCloseTo(40, 6);
+    // 激活条没有固定中点锚点：关掉中点吸附落到同一个动态点
+    const withoutMidpointSnapping = resolveEnd(pointer, false);
+    expect(withoutMidpointSnapping).not.toBeNull();
+    expect(withoutMidpointSnapping.point[0]).toBeCloseTo(snapped.point[0], 6);
+    expect(withoutMidpointSnapping.point[1]).toBeCloseTo(snapped.point[1], 6);
 
-    // 非折线路径的 suggested midpoint 用同一个动态点
-    const midPoint = getSnapOutlineMidPoint(pointer, activation, elementsMap, {
-      value: 1,
-    } as any);
-    expect(midPoint?.[0]).toBeCloseTo(30, 6);
-    expect(midPoint?.[1]).toBeCloseTo(30, 6);
+    // 上 / 下象限同样归到左 / 右竖边，y 夹进可连接的边内
+    const nearTop = resolveEnd(pointFrom<GlobalPoint>(31, -50));
+    expect(nearTop.point[0]).toBeGreaterThan(30);
+    expect(nearTop.point[1]).toBeCloseTo(5, 6);
+    const nearBottom = resolveEnd(pointFrom<GlobalPoint>(31, 500));
+    expect(nearBottom.point[0]).toBeGreaterThan(30);
+    expect(nearBottom.point[1]).toBeCloseTo(95, 6);
+    const fromLeft = resolveEnd(pointFrom<GlobalPoint>(-10, 40));
+    expect(fromLeft.point[0]).toBeLessThan(0);
+    expect(fromLeft.point[1]).toBeCloseTo(40, 6);
   });
 
   it("picks the activation edge facing the arrow's other end", () => {
     const activation = makeElement("sc-activation", 30, 100);
+    const activationTarget =
+      activation as unknown as NonDeleted<ExcalidrawBindableElement>;
     const elementsMap = elementsMapFor(activation);
     // 指针压在条的正中心：自己的 x 分不出左右
     const pointer = pointFrom<GlobalPoint>(15, 50);
-    const zoom = { value: 1 } as any;
 
     const arrowToRight = newArrowElement({
       type: "arrow",
@@ -1736,51 +1733,40 @@ describe("sequence activation geometry", () => {
       y: 50,
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(185, 0)],
     });
-    const right = snapToMid(
-      activation,
-      elementsMap,
-      pointer,
-      undefined,
-      arrowToRight,
-    )!;
-    expect(right[0]).toBeGreaterThan(30);
-    expect(right[1]).toBeCloseTo(50, 6);
-
     const arrowToLeft = newArrowElement({
       type: "arrow",
       x: 15,
       y: 50,
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(-185, 0)],
     });
-    const left = snapToMid(
-      activation,
-      elementsMap,
-      pointer,
-      undefined,
-      arrowToLeft,
-    )!;
-    expect(left[0]).toBeLessThan(0);
-    expect(left[1]).toBeCloseTo(50, 6);
 
-    // suggested midpoint 用同一个参考点
-    expect(
-      getSnapOutlineMidPoint(
+    const resolveEnd = (
+      arrow: Parameters<typeof resolveConnectionHitForArrowEndpoint>[0],
+      reference: GlobalPoint,
+    ) =>
+      resolveConnectionHitForArrowEndpoint(
+        arrow,
+        activationTarget,
+        "end",
         pointer,
-        activation,
         elementsMap,
-        zoom,
-        pointFrom<GlobalPoint>(200, 50),
-      )?.[0],
-    ).toBeCloseTo(30, 6);
-    expect(
-      getSnapOutlineMidPoint(
-        pointer,
-        activation,
-        elementsMap,
-        zoom,
-        pointFrom<GlobalPoint>(-200, 50),
-      )?.[0],
-    ).toBeCloseTo(0, 6);
+        {
+          zoom: 1,
+          isMidpointSnappingEnabled: true,
+          angleLocked: false,
+          reference,
+        },
+      )!;
+
+    const right = resolveEnd(arrowToRight, pointFrom<GlobalPoint>(200, 50));
+    expect(right).not.toBeNull();
+    expect(right.point[0]).toBeGreaterThan(30);
+    expect(right.point[1]).toBeCloseTo(50, 6);
+
+    const left = resolveEnd(arrowToLeft, pointFrom<GlobalPoint>(-200, 50));
+    expect(left).not.toBeNull();
+    expect(left.point[0]).toBeLessThan(0);
+    expect(left.point[1]).toBeCloseTo(50, 6);
   });
 
   it("hits the pole corridor but not the head or the blank area", () => {

@@ -49,12 +49,8 @@ export const getBindingGap = (
  * 牵动**非文本**的既有行为，或只是延续上游的常量口径：
  * - 吸附阈值：`hitElementItself` 的命中判定、`pointerSession` 与 `elbowArrow` 的悬停
  *   容差；
- * - 落点载体（非文本）：`snapToMid` 的返回值本身就是射线方向上的落点（gap 直接进
- *   坐标），「离中心太近就放弃吸附」只是它的另一半用途 —— 实测同一点只切
- *   `isMidpointSnappingEnabled`，24 个场景里 15 个落点不同；把它的 gap 换成投影 gap
- *   则有 6 条文本场景落点变化，最大约 60px。`snapBoundPointToGrid` 的网格吸附同样
- *   决定落点（网格档 27 条文本场景里 10 条会变，最大
- *   `[160.012,125] → [220,103.125]`；矩形档 0 条）；
+ * - `snapBoundPointToGrid` 的网格吸附同样决定落点（网格档 27 条文本场景里 10 条会
+ *   变，最大 `[160.012,125] → [220,103.125]`；矩形档 0 条）；
  * - 除数下限：`calculateAttachPointFor*Binding` 的 `sizeFloor`（防小目标把比例炸掉，
  *   上面另有 `MIN_BINDABLE_SIZE` 兜着）；
  * - `reanchorBindingsToOutline`：721 行是**投影**（gap 传进

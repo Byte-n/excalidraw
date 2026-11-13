@@ -548,3 +548,14 @@ PR3 可删除（确认无其他调用方）：
 - 不改 yjs / 方向键 / 重锚的纯换算路径。
 - 不开放表格 / fragment 绑定。
 - 不加 ②/③ 迟滞。
+
+## 实施记录（2026-11-14）
+
+- 实际改动：新增 `pointerConnection.ts` provider 与 `connection/query.ts`；非折线 /
+  折线箭头端点统一走 `resolveConnectionHitForArrowEndpoint`；预览与落点共用
+  `ConnectionHit`；`suggestedBinding` 改为镜像（PR6 已删除）。
+- 与计划的偏差：`snapToMid` 在 3b 后无生产消费者（6b 删除）；折线保留
+  `avoidRectangularCorner`；多点箭头 landing 使用相邻点（start→1 / end→-2）。
+- 基线变化：非折线 286 条落点（①27 / ②184 / ③75），折线 155 条（①13 / ②123 / ③19），
+  未分类 0。
+- 测试：`connectionQuery`、`connectionPreview`、`elbowConnection`、落点基线。

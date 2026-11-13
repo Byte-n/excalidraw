@@ -328,7 +328,8 @@ describe("activation bar connection outline", () => {
     expect(right.inflated).toHaveLength(1);
     for (const point of samplePath(right.inflated[0])) {
       expect(point[0]).toBeCloseTo(element.x + element.width + gap, 6);
-      // local y clamped to [1, height - 1], matching getActivationBindingPoint
+      // local y clamped inside the activation's connectable span
+      // (see `buildActivationPaths`)
       expect(point[1]).toBeGreaterThanOrEqual(element.y + 1 - 1e-9);
       expect(point[1]).toBeLessThanOrEqual(
         element.y + element.height - 1 + 1e-9,

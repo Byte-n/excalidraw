@@ -1,7 +1,6 @@
 import {
   DEFAULT_ADAPTIVE_RADIUS,
   DEFAULT_PROPORTIONAL_RADIUS,
-  invariant,
   LINE_CONFIRM_THRESHOLD,
   ROUNDNESS,
 } from "@excalidraw/common";
@@ -11,55 +10,30 @@ import {
   curveCatmullRomCubicApproxPoints,
   curveOffsetPoints,
   lineSegment,
-  lineSegmentIntersectionPoints,
   pointDistance,
   pointFrom,
   pointFromArray,
-  pointFromVector,
-  pointRotateRads,
-  pointTranslate,
   rectangle,
-  vectorFromPoint,
-  vectorNormalize,
-  vectorScale,
   type GlobalPoint,
 } from "@excalidraw/math";
 
 import type { Curve, LineSegment, LocalPoint } from "@excalidraw/math";
 
-import type {
-  AppState,
-  NormalizedZoomValue,
-  Zoom,
-} from "@excalidraw/excalidraw/types";
+import type { NormalizedZoomValue, Zoom } from "@excalidraw/excalidraw/types";
 
-import { elementCenterPoint } from "./bounds";
 import {
-  getActivationBindingPoint,
-  getCompositeShapeAnchors,
   getCompositeShapeCornerRadius,
-  isActivationElement,
   isShapeElement,
-  isShapeWithId,
 } from "./compositeShape";
 import { getMindmapShapeId } from "./mindmap";
 
 import { generateLinearCollisionShape } from "./shape";
 
-import { hitElementItself, isPointInElement } from "./collision";
-import { LinearElementEditor } from "./linearElementEditor";
-import { isElbowArrow, isRectangularElement } from "./typeChecks";
-import { maxBindingDistance_simple } from "./binding";
-
-import {
-  getGlobalAttachPointForBindableElement,
-  normalizeAttachPoint,
-} from "./binding";
+import { isElbowArrow } from "./typeChecks";
 import { getStickyNoteCornerRadius } from "./stickyNote";
 
 import type {
   ElementsMap,
-  ExcalidrawBindableElement,
   ExcalidrawElement,
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
@@ -430,264 +404,4 @@ export const getCornerRadius = (x: number, element: ExcalidrawElement) => {
   }
 
   return 0;
-};
-
-const getDiagonalsForBindableElement = (
-  element: ExcalidrawElement,
-  elementsMap: ElementsMap,
-) => {
-  // for rectangles, shrink the diagonals a bit because there's something
-  // going on with the focus points around the corners. Ask Mark for details.
-  const OFFSET_PX = isShapeWithId(element, "rectangle") ? 15 : 0;
-  const shrinkSegment = (seg: LineSegment<GlobalPoint>) => {
-    const v = vectorNormalize(vectorFromPoint(seg[1], seg[0]));
-    const offset = vectorScale(v, OFFSET_PX);
-    return lineSegment<GlobalPoint>(
-      pointTranslate(seg[0], offset),
-      pointTranslate(seg[1], vectorScale(offset, -1)),
-    );
-  };
-
-  const center = elementCenterPoint(element, elementsMap);
-  const diagonalOne = shrinkSegment(
-    isRectangularElement(element)
-      ? lineSegment<GlobalPoint>(
-          pointRotateRads(
-            pointFrom<GlobalPoint>(element.x, element.y),
-            center,
-            element.angle,
-          ),
-          pointRotateRads(
-            pointFrom<GlobalPoint>(
-              element.x + element.width,
-              element.y + element.height,
-            ),
-            center,
-            element.angle,
-          ),
-        )
-      : lineSegment<GlobalPoint>(
-          pointRotateRads(
-            pointFrom<GlobalPoint>(element.x + element.width / 2, element.y),
-            center,
-            element.angle,
-          ),
-          pointRotateRads(
-            pointFrom<GlobalPoint>(
-              element.x + element.width / 2,
-              element.y + element.height,
-            ),
-            center,
-            element.angle,
-          ),
-        ),
-  );
-  const diagonalTwo = shrinkSegment(
-    isRectangularElement(element)
-      ? lineSegment<GlobalPoint>(
-          pointRotateRads(
-            pointFrom<GlobalPoint>(element.x + element.width, element.y),
-            center,
-            element.angle,
-          ),
-          pointRotateRads(
-            pointFrom<GlobalPoint>(element.x, element.y + element.height),
-            center,
-            element.angle,
-          ),
-        )
-      : lineSegment<GlobalPoint>(
-          pointRotateRads(
-            pointFrom<GlobalPoint>(element.x, element.y + element.height / 2),
-            center,
-            element.angle,
-          ),
-          pointRotateRads(
-            pointFrom<GlobalPoint>(
-              element.x + element.width,
-              element.y + element.height / 2,
-            ),
-            center,
-            element.angle,
-          ),
-        ),
-  );
-
-  return [diagonalOne, diagonalTwo];
-};
-
-export const getSnapOutlineMidPoint = (
-  point: GlobalPoint,
-  element: ExcalidrawBindableElement,
-  elementsMap: ElementsMap,
-  zoom: AppState["zoom"],
-  /**
-   * 箭头另一端的位置。激活条只有左 / 右两条边，贴哪一边由这个参考点决定；
-   * 缺省时退回指针自身所在的一侧（用于还没有箭头的悬停预判）。
-   */
-  referencePoint?: GlobalPoint,
-) => {
-  // 激活条只有左 / 右两条边，且连接点是**动态**的：y 直接取指针在条内的位置，
-  // 不再从一组固定锚点里挑最近的那个。
-  if (isActivationElement(element)) {
-    return getActivationBindingPoint(element, point, referencePoint, 0);
-  }
-  const center = elementCenterPoint(element, elementsMap);
-  const sideMidpoints = isShapeElement(element)
-    ? getCompositeShapeAnchors(element)
-    : [
-        // RIGHT midpoint
-        pointRotateRads(
-          pointFrom<GlobalPoint>(
-            element.x + element.width,
-            element.y + element.height / 2,
-          ),
-          center,
-          element.angle,
-        ),
-        // BOTTOM midpoint
-        pointRotateRads(
-          pointFrom<GlobalPoint>(
-            element.x + element.width / 2,
-            element.y + element.height,
-          ),
-          center,
-          element.angle,
-        ),
-        // LEFT midpoint
-        pointRotateRads(
-          pointFrom<GlobalPoint>(element.x, element.y + element.height / 2),
-          center,
-          element.angle,
-        ),
-        // TOP midpoint
-        pointRotateRads(
-          pointFrom<GlobalPoint>(element.x + element.width / 2, element.y),
-          center,
-          element.angle,
-        ),
-      ];
-  const threshold = maxBindingDistance_simple(zoom) + element.strokeWidth / 2;
-  if (
-    hitElementItself({
-      point,
-      element,
-      threshold: 0,
-      elementsMap,
-      overrideShouldTestInside: true,
-    })
-  ) {
-    return undefined;
-  }
-  // Multiple anchors per side are allowed (e.g. an activation whose left/right
-  // edge carries several automatic snap points); pick the nearest candidate
-  // instead of the first one that happens to be within the threshold.
-  let candidate: GlobalPoint | undefined;
-  let candidateDistance = threshold;
-  for (const midpoint of sideMidpoints) {
-    const distance = pointDistance(point, midpoint);
-    if (distance <= candidateDistance) {
-      candidate = midpoint;
-      candidateDistance = distance;
-    }
-  }
-  return candidate;
-};
-
-export const projectAttachPointOntoDiagonal = (
-  arrow: ExcalidrawLinearElement,
-  point: GlobalPoint,
-  element: ExcalidrawBindableElement,
-  startOrEnd: "start" | "end",
-  elementsMap: ElementsMap,
-  zoom: AppState["zoom"],
-  isMidpointSnappingEnabled: boolean = true,
-): GlobalPoint | null => {
-  invariant(arrow.points.length >= 2, "Arrow must have at least two points");
-  if (arrow.width < 3 && arrow.height < 3) {
-    return null;
-  }
-
-  if (isMidpointSnappingEnabled) {
-    const sideMidPoint = getSnapOutlineMidPoint(
-      point,
-      element,
-      elementsMap,
-      zoom,
-      LinearElementEditor.getPointAtIndexGlobalCoordinates(
-        arrow,
-        startOrEnd === "start" ? -1 : 0,
-        elementsMap,
-      ),
-    );
-    if (sideMidPoint) {
-      return sideMidPoint;
-    }
-  }
-
-  // Do the projection onto the diagonals (or center lines
-  // for non-rectangular shapes)
-  const [diagonalOne, diagonalTwo] = getDiagonalsForBindableElement(
-    element,
-    elementsMap,
-  );
-
-  // To avoid working with stale arrow state, we use the opposite focus point
-  // of the current endpoint, which will always be unchanged during moving of
-  // the endpoint. This is only needed when the arrow has only two points.
-  let a = LinearElementEditor.getPointAtIndexGlobalCoordinates(
-    arrow,
-    startOrEnd === "start" ? 1 : arrow.points.length - 2,
-    elementsMap,
-  );
-  if (arrow.points.length === 2) {
-    const otherBinding =
-      startOrEnd === "start" ? arrow.endBinding : arrow.startBinding;
-    const otherBindable =
-      otherBinding &&
-      (elementsMap.get(otherBinding.elementId) as
-        | ExcalidrawBindableElement
-        | undefined);
-    const otherFocusPoint =
-      otherBinding &&
-      otherBindable &&
-      getGlobalAttachPointForBindableElement(
-        normalizeAttachPoint(otherBinding.attachPoint),
-        otherBindable,
-        elementsMap,
-      );
-    if (otherFocusPoint) {
-      a = otherFocusPoint;
-    }
-  }
-
-  const b = pointFromVector<GlobalPoint>(
-    vectorScale(
-      vectorFromPoint(point, a),
-      2 * pointDistance(a, point) +
-        Math.max(
-          pointDistance(diagonalOne[0], diagonalOne[1]),
-          pointDistance(diagonalTwo[0], diagonalTwo[1]),
-        ),
-    ),
-    a,
-  );
-  const intersector = lineSegment<GlobalPoint>(b, a);
-  const p1 = lineSegmentIntersectionPoints(diagonalOne, intersector);
-  const p2 = lineSegmentIntersectionPoints(diagonalTwo, intersector);
-  const d1 = p1 && pointDistance(a, p1);
-  const d2 = p2 && pointDistance(a, p2);
-
-  let projection = null;
-  if (d1 != null && d2 != null) {
-    projection = d1 < d2 ? p1 : p2;
-  } else {
-    projection = p1 || p2 || null;
-  }
-
-  if (projection && isPointInElement(projection, element, elementsMap)) {
-    return projection;
-  }
-
-  return null;
 };

@@ -450,3 +450,13 @@ PR3 会改变落点（任意点、推荐点半径、内部档位）。没有 PR1
 - 不修改 `binding.ts` / `utils.ts` / `interactiveScene.ts`。
 - 不合并时序阈值。
 - 不处理表格 / fragment。
+
+## 实施记录（2026-11-14）
+
+- 实际改动：新增 `element/src/bindingGap.ts`（纯搬迁）；新增 `connection/` 几何模块
+  （thresholds / types / spec / specs / outline / resolve / query）。三档解析统一为
+  anchor → outline → interior，`ConnectionHit` 同时驱动预览与落点。
+- 与计划的偏差：`nearestPointOnOutline` 改为线段精确投影 + 贝塞尔采样；激活条可连段
+  取 `[5, h-5]`（圆角内），而非字面的 `[1, h-1]`。
+- 测试：`connectionGeometry.test.ts`（23 项）、`connectionResolve.test.ts`（14 项，
+  含 8 家族 × 3 箭头 × 3 zoom 幂等性）；连接落点基线快照（1364 条）。

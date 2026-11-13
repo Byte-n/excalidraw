@@ -230,3 +230,24 @@ rg "cursor\.set" packages/excalidraw/components/app/pointerCanvas.ts packages/ex
 - grep：生产/测试/快照无 `suggestedBinding`（CHANGELOG 历史文案与无关的
   `suggestedBindings` 复数导出除外）。
 - 遗留问题：6b 删除旧落点函数与渲染器重算，并跑最终验收。
+
+## 实施记录（2026-11-14，6b：旧几何清理与终验）
+
+- 实际改动：删除 `utils.ts` 的 `getDiagonalsForBindableElement` / `getSnapOutlineMidPoint`
+  / `projectAttachPointOntoDiagonal`，删除 `binding.ts` 的 `snapToMid`（含激活条分支），
+  删除 `sequenceOutline.ts` 的 `getActivationBindingPoint` 与 `compositeShape.ts` 的
+  re-export；`getActivationAnchor` 仍被 `App.quickCreate` / `pointerSequence` 使用，保留。
+  `renderSequenceActivationDot` 重命名为 `renderLandingDot`（唯一实现，供悬停点 / 连接
+  落点 / 端点落点复用），渲染器不再有任何落点几何重算。
+- 与计划的偏差：`bindingGap.ts` 仅删除提到 `snapToMid` 的注释；`pointerCanvas.ts:194` 的
+  link hover cursor 只存在于 `!isInteractionEnabled()` 的 interactive-content 分支，
+  该分支不产生 frame，不构成第二写者。
+- 基线变化：无快照变化。`sequenceShape` 的激活条 y 夹取期望从 `[1,h-1]` 调整为
+  可连接段 `[5,h-5]`（与 PR1 的 `buildActivationPaths` 一致）。
+- 测试迁移：`compositeShapeCollision` / `sequenceShape` 改用
+  `resolveConnectionHitForArrowEndpoint`；`arrowBinding` 删除已废弃的对角线中点吸附用例。
+- 最终验收：element 1841 passed；excalidraw 2426 passed、仅 3 个既有 animation 失败；
+  yjs / math / common / utils 全绿；element / excalidraw / yjs / board-import typecheck
+  通过；改动文件 eslint 0 warning；`yarn test:code` 0 error、22 个既有 prettier 警告
+  （不在改动文件）。§5.3 三条 grep：`suggestedBinding` 无生产引用；旧落点符号 0；
+  `cursor.set` 仅剩非 frame 路径。

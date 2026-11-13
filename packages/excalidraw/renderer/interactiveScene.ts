@@ -567,11 +567,11 @@ const strokeCompositeShapeOutline = (
 };
 
 /**
- * 激活条上的连接圆点：连接点的悬停 / 拖拽起点与箭头落点共用同一套画法，
+ * 连接落点圆点：连接点的悬停 / 拖拽起点与箭头落点共用同一套画法，
  * 「拖出消息的起点」和「连接线落点」看起来才是同一个标记。坐标是场景坐标，
  * 半径同样是场景单位（调用方按屏幕像素除以 zoom 后传入）。
  */
-const renderSequenceActivationDot = (
+const renderLandingDot = (
   context: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -1502,7 +1502,7 @@ const renderSequenceConnection = (
     return;
   }
   const sceneRadius = (messageGesture ? 5 : 4) / appState.zoom.value;
-  renderSequenceActivationDot(
+  renderLandingDot(
     context,
     point.x,
     point.y,
@@ -1514,7 +1514,7 @@ const renderSequenceConnection = (
   // 用同一个标记，拖拽中始终能看到消息会落在哪里。
   const dropPoint = app.quickCreate.getSequenceConnectionDropPoint(frame);
   if (dropPoint) {
-    renderSequenceActivationDot(
+    renderLandingDot(
       context,
       dropPoint.x,
       dropPoint.y,
@@ -1525,7 +1525,7 @@ const renderSequenceConnection = (
   }
   const endpointDropPoint = app.quickCreate.getSequenceEndpointDropPoint();
   if (endpointDropPoint) {
-    renderSequenceActivationDot(
+    renderLandingDot(
       context,
       endpointDropPoint.x,
       endpointDropPoint.y,

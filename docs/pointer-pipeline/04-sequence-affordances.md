@@ -337,3 +337,12 @@ if (frame?.owner && app.quickCreate.ownsGesture(frame)) {
 - 不删除 `suggestedBinding`（PR6）。
 - 不改消息线型、自消息折点、杆端夹取算法。
 - 不改激活条拖动吸附到杆（`findSequenceActivationSnap`）。
+
+## 实施记录（2026-11-14）
+
+- 实际改动：新增 `pointerQuickCreate.ts`（quickCreateHandle provider）与
+  `pointerSequence.ts`（activationEdge / poleActivation provider）：严格最上层校验、
+  杆激活重叠检查、快照抑制门控；pointerdown/move/up 按 owner 分派；渲染读 frame。
+- 与计划的偏差：删除 HEAD 的「圆点比变换手柄更近时圆点优先」特例，固定
+  `transformHandle > quickCreateHandle`（计划优先级表）。
+- 测试：`pointer-sequence.test.tsx`（8 项）；`quickCreateHandles.test.tsx` 改读 frame。

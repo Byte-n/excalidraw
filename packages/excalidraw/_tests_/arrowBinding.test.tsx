@@ -1,17 +1,13 @@
 import { reseed } from "@excalidraw/common";
-import {
-  isElbowArrow,
-  projectAttachPointOntoDiagonal,
-} from "@excalidraw/element";
+import { isElbowArrow } from "@excalidraw/element";
 
 import { pointFrom } from "@excalidraw/math";
 
-import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
+import type { GlobalPoint } from "@excalidraw/math";
 
 import type {
   ExcalidrawArrowElement,
   ExcalidrawBindableElement,
-  ExcalidrawElement,
 } from "@excalidraw/element/types";
 
 import { actionToggleArrowBinding } from "../actions/actionToggleArrowBinding";
@@ -330,52 +326,6 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
   // Arrow does snap to midpoint when isMidpointSnappingEnabled is true
   // -------------------------------------------------------------------------
   describe("Midpoint snapping", () => {
-    it("does not snap to midpoint when midpoint snapping is turned off", () => {
-      const rect = API.createElement({
-        type: "rectangle",
-        id: "rectNoMidSnap",
-        x: 100,
-        y: 100,
-        width: 400,
-        height: 200,
-      }) as ExcalidrawBindableElement;
-      const arrow = API.createElement({
-        type: "arrow",
-        x: 0,
-        y: 250,
-        width: 502,
-        height: -48,
-        points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(502, -48)],
-      }) as ExcalidrawArrowElement;
-      const elementsMap = new Map<string, ExcalidrawElement>([
-        [rect.id, rect],
-        [arrow.id, arrow],
-      ]);
-      const point = pointFrom<GlobalPoint>(502, 202);
-
-      const snappedWithMidpoint = projectAttachPointOntoDiagonal(
-        arrow,
-        point,
-        rect,
-        "end",
-        elementsMap,
-        h.state.zoom,
-        true,
-      );
-      const snappedWithoutMidpoint = projectAttachPointOntoDiagonal(
-        arrow,
-        point,
-        rect,
-        "end",
-        elementsMap,
-        h.state.zoom,
-        false,
-      );
-
-      expect(snappedWithMidpoint).toEqual([500, 200]);
-      expect(snappedWithoutMidpoint).not.toEqual([500, 200]);
-    });
-
     it("does not snap an angle-locked elbow binding to midpoint on finalize", async () => {
       const rect = API.createElement({
         type: "rectangle",

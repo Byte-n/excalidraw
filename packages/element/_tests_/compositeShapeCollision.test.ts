@@ -10,7 +10,10 @@ import {
   type Radians,
 } from "@excalidraw/math";
 
-import { getBindingGap, snapToMid } from "../src/binding";
+import {
+  getBindingGap,
+  resolveConnectionHitForArrowEndpoint,
+} from "../src/binding";
 import {
   getHoveredElementForBinding,
   intersectElementWithLineSegment,
@@ -239,16 +242,17 @@ describe("composite shape line intersections", () => {
     }
     const elementsMap = arrayToMap([element, arrow]);
     const anchor = getCompositeShapeAnchors(element)[0];
-    const snapped = snapToMid(
-      element,
-      elementsMap,
-      pointFrom<GlobalPoint>(93, 40),
-      0.05,
+    const hit = resolveConnectionHitForArrowEndpoint(
       arrow,
+      element,
+      "end",
+      pointFrom<GlobalPoint>(93, 40),
+      elementsMap,
+      { zoom: 1, isMidpointSnappingEnabled: true, angleLocked: false },
     );
-    expect(snapped).toBeDefined();
-    expect(snapped![0]).toBeGreaterThan(anchor[0]);
-    expect(distanceToElement(element, elementsMap, snapped!)).toBeCloseTo(
+    expect(hit).not.toBeNull();
+    expect(hit!.point[0]).toBeGreaterThan(anchor[0]);
+    expect(distanceToElement(element, elementsMap, hit!.point)).toBeCloseTo(
       getBindingGap(element, arrow),
       1,
     );
