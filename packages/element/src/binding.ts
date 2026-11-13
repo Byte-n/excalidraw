@@ -1,4 +1,4 @@
-import { arrayToMap, getGridPoint, invariant } from "@excalidraw/common";
+import { arrayToMap, invariant } from "@excalidraw/common";
 
 import {
   PRECISION,
@@ -48,8 +48,12 @@ import {
   getHoveredElementForBinding,
   hitElementItself,
   intersectElementWithLineSegment,
-  isPointInElement,
 } from "./collision";
+import { buildConnectionQuery } from "./connection/query";
+import {
+  pickConnectionTargetForPoint,
+  resolveConnectionHit,
+} from "./connection/resolve";
 import { distanceToElement } from "./distance";
 import {
   headingForPointFromElement,
@@ -65,21 +69,21 @@ import {
   isLinearElement,
   isBindableElement,
   isBoundToContainer,
-  isCurvedArrow,
   isElbowArrow,
   isRectanguloidElement,
   isTextElement,
 } from "./typeChecks";
 
-import { normalFromAttachPoint, type CurveNormal } from "./curveConnector";
+import { type CurveNormal } from "./curveConnector";
 
 import { aabbForElement, elementCenterPoint } from "./bounds";
 import { updateElbowArrowPoints } from "./elbowArrow";
-import { projectAttachPointOntoDiagonal } from "./utils";
 
 import { isNonDeletedElement } from ".";
 
 import type { Scene } from "./Scene";
+import type { ConnectionHit } from "./connection/types";
+import type { RayProjector } from "./connection/resolve";
 
 import type { ElementUpdate } from "./mutateElement";
 import type {
@@ -168,6 +172,15 @@ export const bindOrUnbindBindingElement = (
     !opts?.angleLocked &&
     !appState.gridModeEnabled;
 
+  // 用户指针路径：落定与预览用同一组视图参数（网格 / 角度锁 / 中点吸附）。
+  const landingOpts = {
+    zoom: appState.zoom.value,
+    angleLocked: Boolean(opts?.angleLocked),
+    gridSize: appState.gridModeEnabled
+      ? (appState.gridSize as NullableGridSize)
+      : undefined,
+  };
+
   bindOrUnbindBindingElementEdge(
     arrow,
     start,
@@ -175,6 +188,7 @@ export const bindOrUnbindBindingElement = (
     scene,
     appState.isBindingEnabled,
     isMidpointSnappingEnabled,
+    landingOpts,
   );
   bindOrUnbindBindingElementEdge(
     arrow,
@@ -183,6 +197,7 @@ export const bindOrUnbindBindingElement = (
     scene,
     appState.isBindingEnabled,
     isMidpointSnappingEnabled,
+    landingOpts,
   );
   if (start.element || end.element) {
     // 策略要求这一端落到某个点上：按刚写下的绑定把端点解出来
@@ -225,6 +240,7 @@ const bindOrUnbindBindingElementEdge = (
   scene: Scene,
   shouldSnapToOutline = true,
   isMidpointSnappingEnabled = true,
+  opts?: { zoom?: number; angleLocked?: boolean; gridSize?: NullableGridSize },
 ): void => {
   if (strategy.element === null) {
     unbindBindingElement(arrow, startOrEnd, scene);
@@ -237,6 +253,7 @@ const bindOrUnbindBindingElementEdge = (
       strategy.focusPoint,
       shouldSnapToOutline,
       isMidpointSnappingEnabled,
+      opts,
     );
   }
 };
@@ -399,23 +416,6 @@ const getBindingStrategyForDraggingBindingElementEndpoints_simple = (
     localPoint,
     elementsMap,
   );
-  const hit = getHoveredElementForBinding(
-    opts?.angleLocked || appState.gridModeEnabled
-      ? pointFrom<GlobalPoint>(scenePointerX, scenePointerY)
-      : globalPoint,
-    elements,
-    elementsMap,
-    maxBindingDistance_simple(appState.zoom),
-  );
-  const pointInElement =
-    hit &&
-    (opts?.angleLocked
-      ? isPointInElement(
-          pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
-          hit,
-          elementsMap,
-        )
-      : isPointInElement(globalPoint, hit, elementsMap));
   // 另一端一律不动。原先这里用三条分支（旧的 `mode === "inside"`、
   // `initialState` 里那个「对角投影出来的备用焦点」、angleLocked 的对角投影）去
   // 重算另一端的落点，那是为了在旧锚点语义下维持它「贴在哪条边」；端点现在在建连
@@ -440,10 +440,27 @@ const getBindingStrategyForDraggingBindingElementEndpoints_simple = (
         elementsMap,
         appState.zoom.value,
       );
-      const sequencePoint = constrainSequenceMessagePoint(axis, globalPoint);
-      const current: BindingStrategy = target
-        ? { element: target, focusPoint: sequencePoint }
-        : { element: null };
+      const constrained = constrainSequenceMessagePoint(axis, globalPoint);
+      const sequenceHit =
+        target &&
+        resolveConnectionHit(
+          buildConnectionQuery({
+            element: target,
+            point: constrained,
+            reference: axis.anchor,
+            arrow,
+            zoom: appState.zoom.value,
+            isMidpointSnappingEnabled: true,
+            elementsMap,
+          }),
+          // Activation spec resolves inside points as "nearest"; the ray is
+          // never consulted.
+          () => null,
+        );
+      const current: BindingStrategy =
+        target && sequenceHit
+          ? { element: target, focusPoint: sequenceHit.point }
+          : { element: null };
       return {
         start: startDragged ? current : keep,
         end: endDragged ? current : keep,
@@ -451,38 +468,42 @@ const getBindingStrategyForDraggingBindingElementEndpoints_simple = (
     }
   }
 
-  const current: BindingStrategy = hit
+  const startOrEnd = startDragged ? "start" : "end";
+  const otherEndPoint = LinearElementEditor.getPointAtIndexGlobalCoordinates(
+    arrow,
+    startDragged ? 1 : -2,
+    elementsMap,
+  );
+  // Grid mode snaps the pointer itself; angle lock (Shift) keeps the locked
+  // endpoint (`globalPoint`) so the ray stays on the locked direction.
+  const candidatePoint = appState.gridModeEnabled
+    ? pointFrom<GlobalPoint>(scenePointerX, scenePointerY)
+    : globalPoint;
+  const picked = opts?.altKey
+    ? null
+    : pickConnectionTargetForPoint(
+        candidatePoint,
+        elements,
+        {
+          reference: otherEndPoint,
+          arrow,
+          zoom: appState.zoom.value,
+          isMidpointSnappingEnabled: appState.isMidpointSnappingEnabled,
+          gridSize: appState.gridModeEnabled
+            ? (appState.gridSize as NullableGridSize)
+            : undefined,
+          angleLocked: opts?.angleLocked,
+          elementsMap,
+          adjacentPoint: otherEndPoint,
+          startOrEnd,
+        },
+        makeConnectionRayProjector(arrow, startOrEnd),
+      );
+
+  const current: BindingStrategy = picked
     ? {
-        element: hit,
-        focusPoint:
-          pointInElement || opts?.altKey
-            ? globalPoint
-            : projectAttachPointOntoDiagonal(
-                arrow,
-                opts?.angleLocked
-                  ? globalPoint
-                  : appState.gridModeEnabled
-                  ? snapBoundPointToGrid(
-                      pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
-                      hit,
-                      elementsMap,
-                      appState.gridSize as NullableGridSize,
-                      arrow,
-                      LinearElementEditor.getPointAtIndexGlobalCoordinates(
-                        arrow,
-                        startDragged ? 1 : -2,
-                        elementsMap,
-                      ),
-                    )
-                  : globalPoint,
-                hit,
-                startDragged ? "start" : "end",
-                elementsMap,
-                appState.zoom,
-                appState.isMidpointSnappingEnabled &&
-                  !opts?.angleLocked &&
-                  !appState.gridModeEnabled,
-              ) || globalPoint,
+        element: picked.element as NonDeleted<ExcalidrawBindableElement>,
+        focusPoint: picked.hit.point,
       }
     : { element: null };
 
@@ -543,6 +564,7 @@ export const bindBindingElement = (
   focusPoint?: GlobalPoint,
   shouldSnapToOutline = true,
   isMidpointSnappingEnabled = true,
+  opts?: Partial<Omit<NonElbowLandingOpts, "zoom">> & { zoom?: number },
 ): void => {
   const elementsMap = scene.getNonDeletedElementsMap();
 
@@ -571,6 +593,21 @@ export const bindBindingElement = (
         elementsMap,
         focusPoint,
         shouldSnapToOutline,
+        {
+          zoom: opts?.zoom ?? 1,
+          isMidpointSnappingEnabled:
+            opts?.isMidpointSnappingEnabled ?? isMidpointSnappingEnabled,
+          angleLocked: opts?.angleLocked ?? false,
+          reference:
+            opts?.reference ??
+            LinearElementEditor.getPointAtIndexGlobalCoordinates(
+              arrow,
+              startOrEnd === "start" ? 1 : -2,
+              elementsMap,
+            ),
+          gridSize: opts?.gridSize,
+          adjacentPoint: opts?.adjacentPoint,
+        },
       ),
     };
   }
@@ -1476,85 +1513,6 @@ export const snapToMid = (
 };
 
 /**
- * Snaps a bound arrow endpoint to the grid on the axis parallel to the
- * bindable element's side, while preserving the binding gap distance on the
- * perpendicular axis. In other words, the grid axis closest to the side's
- * perpendicular (normal) is used as the snap axis and the other axis is kept at
- * the binding gap distance.
- */
-const snapBoundPointToGrid = (
-  outlinePoint: GlobalPoint,
-  bindableElement: ExcalidrawBindableElement,
-  elementsMap: ElementsMap,
-  gridSize: NullableGridSize,
-  arrowElement: ExcalidrawLinearElement,
-  adjacentPoint?: GlobalPoint,
-): GlobalPoint => {
-  if (!gridSize) {
-    return outlinePoint;
-  }
-
-  const aabb = aabbForElement(bindableElement, elementsMap);
-  // For ellipses and diamonds use the arrow's incoming direction instead of
-  // the position-based heading, which can give the wrong axis when the
-  // outline point is near a cardinal zone or an angled diamond face.
-  const heading =
-    adjacentPoint && isShapeWithIdIn(bindableElement, ["ellipse", "diamond"])
-      ? vectorToHeading(vectorFromPoint(adjacentPoint, outlinePoint))
-      : headingForPointFromElement(bindableElement, aabb, outlinePoint);
-
-  const bindingGap = getBindingGap(bindableElement, arrowElement);
-  const extent =
-    Math.max(bindableElement.width, bindableElement.height) + bindingGap * 2;
-  const center = getCenterForBounds(aabb);
-
-  // Both heading strategies above return global-axis directions.
-  const absNX = Math.abs(heading[0]);
-  const absNY = Math.abs(heading[1]);
-  if (absNX >= absNY) {
-    // Global X is closest to the perpendicular so snap Y, intersect horizontal line
-    const [, snappedY] = getGridPoint(
-      outlinePoint[0],
-      outlinePoint[1],
-      gridSize,
-    );
-    const intersector = lineSegment<GlobalPoint>(
-      pointFrom<GlobalPoint>(center[0] - extent, snappedY),
-      pointFrom<GlobalPoint>(center[0] + extent, snappedY),
-    );
-    const intersection = intersectElementWithLineSegment(
-      bindableElement,
-      elementsMap,
-      intersector,
-      bindingGap,
-    ).sort(
-      (a, b) =>
-        pointDistanceSq(a, outlinePoint) - pointDistanceSq(b, outlinePoint),
-    )[0];
-
-    return intersection ?? pointFrom<GlobalPoint>(outlinePoint[0], snappedY);
-  }
-
-  // Global Y is closest to the perpendicular so snap X, intersect vertical line
-  const [snappedX] = getGridPoint(outlinePoint[0], outlinePoint[1], gridSize);
-  const intersector = lineSegment<GlobalPoint>(
-    pointFrom<GlobalPoint>(snappedX, center[1] - extent),
-    pointFrom<GlobalPoint>(snappedX, center[1] + extent),
-  );
-  const intersection = intersectElementWithLineSegment(
-    bindableElement,
-    elementsMap,
-    intersector,
-    bindingGap,
-  ).sort(
-    (a, b) =>
-      pointDistanceSq(a, outlinePoint) - pointDistanceSq(b, outlinePoint),
-  )[0];
-
-  return intersection ?? pointFrom<GlobalPoint>(snappedX, outlinePoint[1]);
-};
-
-/**
  * 落点最近的那条**外扩边**：把落点搬进**未旋转的局部坐标系**，比较它到四条
  * 「外扩一个 gap 的边」的垂直距离（带符号，落在图形外为负），取最近的那条。
  *
@@ -1700,9 +1658,9 @@ const projectFocusPointOntoInflatedOutline = (
  * 把「用户落点」（焦点）投到该元素**外扩一个 binding gap 的轮廓**上。端点在建连
  * 那一刻的落点就是它，之后只随图形做刚性变换 —— 重投影只发生在这一处、这一时。
  *
- * 射线取「焦点 → 另一端」（另一端优先由它自己的绑定解出；多段箭头取相邻点）；
- * 曲线档（`isCurvedArrow`）优先按**所依附边的外法线**落，那条法线与
- * `curveConnector.ts` 取端切线用的法线同源（都由比例判边），端点与端切线因此自洽。
+ * 射线取「焦点 → 另一端」（另一端优先由它自己的绑定解出；多段箭头取相邻点）。
+ * 激活条 / 曲线所依附边的外法线特例已由连接几何（`resolveConnectionHit`）接管，
+ * 这里只保留退化档（就近吸附）与通用射线求交。
  *
  * 射线给不出可用方向的两种情形（两端重合、整条射线错过轮廓 / 交点就是另一端自己）
  * 一律交给 `projectFocusPointOntoInflatedOutline` 就近吸附 —— **这条路径不会原样
@@ -1710,12 +1668,13 @@ const projectFocusPointOntoInflatedOutline = (
  *
  * 目标是文本元素时 gap 为 0（见 `getProjectionBindingGap`），端点落在文本绑定边上。
  */
-const projectPointOntoBoundElementOutline = (
+export const projectPointOntoBoundElementOutline = (
   arrow: NonDeleted<ExcalidrawLinearElement>,
   startOrEnd: "startBinding" | "endBinding",
   bindableElement: NonDeleted<ExcalidrawBindableElement>,
   focusPoint: GlobalPoint,
   elementsMap: ElementsMap,
+  referencePoint?: GlobalPoint,
 ): GlobalPoint => {
   const otherBinding =
     startOrEnd === "startBinding" ? arrow.endBinding : arrow.startBinding;
@@ -1738,21 +1697,10 @@ const projectPointOntoBoundElementOutline = (
     elementsMap,
   );
   const otherPoint =
-    arrow.points.length === 2
+    referencePoint ??
+    (arrow.points.length === 2
       ? otherFocusPoint || otherArrowPoint
-      : otherArrowPoint;
-  // 激活条只有左 / 右两条可连边，连接点是**动态**的：落点直接取焦点所在 y
-  // 对应的贴边点（夹在条内），不按「焦点 → 另一端」的射线求交。射线在指针
-  // 已经压进窄条内部时会把落点斜推到下 / 上边缘，与显示的落点指示器不一致。
-  // 贴左还是右由箭头另一端决定（指针在条中心时分不出左右）。
-  if (isActivationElement(bindableElement)) {
-    return getActivationBindingPoint(
-      bindableElement,
-      focusPoint,
-      otherPoint,
-      getProjectionBindingGap(bindableElement, arrow),
-    );
-  }
+      : otherArrowPoint);
   // 另一端与落点重合时（新建箭头在 pointerdown 那一刻两端还叠在一起）射线退化成
   // 一点，求交无从谈起。这时**没有**可用的方向，改按「就近吸附到最近的那条外扩
   // 边」定方向 —— 见 projectFocusPointOntoInflatedOutline。落点在这里被永久冻结
@@ -1765,46 +1713,6 @@ const projectPointOntoBoundElementOutline = (
       focusPoint,
       elementsMap,
     );
-  }
-
-  // 曲线档：锚点贴在该元素某条边上、且该边外法线朝向另一端时，沿法线外移一个 gap
-  if (isCurvedArrow(arrow)) {
-    const { attachPoint: focusRatio } =
-      calculateAttachPointForNonElbowArrowBinding(
-        arrow,
-        bindableElement,
-        startOrEnd === "startBinding" ? "start" : "end",
-        elementsMap,
-        focusPoint,
-      );
-    const normal = normalFromAttachPoint(normalizeAttachPoint(focusRatio));
-    const gap = getProjectionBindingGap(bindableElement, arrow);
-    if (
-      normal &&
-      hitElementItself({
-        element: bindableElement,
-        point: focusPoint,
-        elementsMap,
-        threshold: gap,
-        overrideShouldTestInside: true,
-      })
-    ) {
-      const [normalX, normalY] = pointRotateRads<GlobalPoint>(
-        pointFrom<GlobalPoint>(normal.x, normal.y),
-        pointFrom<GlobalPoint>(0, 0),
-        bindableElement.angle,
-      );
-      if (
-        normalX * (otherPoint[0] - focusPoint[0]) +
-          normalY * (otherPoint[1] - focusPoint[1]) >
-        0
-      ) {
-        return pointFrom<GlobalPoint>(
-          focusPoint[0] + normalX * gap,
-          focusPoint[1] + normalY * gap,
-        );
-      }
-    }
   }
 
   // 通用：焦点与另一端的斜射线 ∩ 外扩 gap 的轮廓，取离另一端最近的交点
@@ -1856,6 +1764,67 @@ const projectPointOntoBoundElementOutline = (
 };
 
 /**
+ * Adapts `projectPointOntoBoundElementOutline` to the `RayProjector` contract
+ * consumed by `resolveConnectionHit`. The projector ignores the query's own
+ * arrow (it may only be `{ elbowed }` while hovering a new arrow) and uses the
+ * real arrow for the "other end" direction.
+ */
+export const makeConnectionRayProjector =
+  (
+    arrow: NonDeleted<ExcalidrawLinearElement>,
+    fallbackStartOrEnd: "start" | "end",
+  ): RayProjector =>
+  (args) =>
+    projectPointOntoBoundElementOutline(
+      arrow,
+      (args.startOrEnd ?? fallbackStartOrEnd) === "start"
+        ? "startBinding"
+        : "endBinding",
+      args.element as NonDeleted<ExcalidrawBindableElement>,
+      args.point,
+      args.elementsMap,
+      args.reference,
+    );
+
+export type NonElbowLandingOpts = {
+  zoom: number;
+  isMidpointSnappingEnabled: boolean;
+  angleLocked: boolean;
+  reference?: GlobalPoint;
+  gridSize?: NullableGridSize;
+  adjacentPoint?: GlobalPoint;
+};
+
+/**
+ * Single landing resolver shared by previews and landings: builds the query and
+ * returns the hit whose `point` is the final endpoint on Γ.
+ */
+export const resolveConnectionHitForArrowEndpoint = (
+  arrow: NonDeleted<ExcalidrawLinearElement>,
+  hoveredElement: NonDeleted<ExcalidrawBindableElement>,
+  startOrEnd: "start" | "end",
+  endpoint: GlobalPoint,
+  elementsMap: ElementsMap,
+  opts: NonElbowLandingOpts,
+): ConnectionHit | null =>
+  resolveConnectionHit(
+    buildConnectionQuery({
+      element: hoveredElement,
+      point: endpoint,
+      reference: opts.reference,
+      arrow,
+      zoom: opts.zoom,
+      isMidpointSnappingEnabled: opts.isMidpointSnappingEnabled,
+      gridSize: opts.gridSize,
+      angleLocked: opts.angleLocked,
+      elementsMap,
+      adjacentPoint: opts.adjacentPoint,
+      startOrEnd,
+    }),
+    makeConnectionRayProjector(arrow, startOrEnd),
+  );
+
+/**
  * 建连时该端的 `attachPoint`：把落点投到「外扩一个 binding gap 的轮廓」上再取比例，
  * 于是存下来的比例就是端点本身。`bindBindingElement` 与快速创建的预演
  * （`App.quickCreate`）共用它 —— 预演与落地必须逐位一致，口径不能有第二份。
@@ -1867,6 +1836,7 @@ export const resolveAttachPointForNonElbowBinding = (
   elementsMap: ElementsMap,
   focusPoint?: GlobalPoint,
   shouldSnapToOutline = true,
+  opts?: NonElbowLandingOpts,
 ): { attachPoint: AttachPoint } => {
   const endpoint =
     focusPoint ??
@@ -1876,21 +1846,32 @@ export const resolveAttachPointForNonElbowBinding = (
       elementsMap,
     );
 
-  return calculateAttachPointForNonElbowArrowBinding(
+  const hit = shouldSnapToOutline
+    ? resolveConnectionHitForArrowEndpoint(
+        arrow,
+        hoveredElement,
+        startOrEnd,
+        endpoint,
+        elementsMap,
+        {
+          zoom: opts?.zoom ?? 1,
+          isMidpointSnappingEnabled: opts?.isMidpointSnappingEnabled ?? true,
+          angleLocked: opts?.angleLocked ?? false,
+          reference: opts?.reference,
+          gridSize: opts?.gridSize,
+          adjacentPoint: opts?.adjacentPoint,
+        },
+      )
+    : null;
+
+  const result = calculateAttachPointForNonElbowArrowBinding(
     arrow,
     hoveredElement,
     startOrEnd,
     elementsMap,
-    shouldSnapToOutline
-      ? projectPointOntoBoundElementOutline(
-          arrow,
-          startOrEnd === "start" ? "startBinding" : "endBinding",
-          hoveredElement,
-          endpoint,
-          elementsMap,
-        )
-      : endpoint,
+    hit?.point ?? endpoint,
   );
+  return result;
 };
 
 /**

@@ -1598,9 +1598,10 @@ describe("multiple selection", () => {
     expect(boundArrow.y).toBeCloseTo(240 * scaleY);
     // 端点贴在目标轮廓外一个 binding gap 处，gap = BASE_BINDING_GAP(5) +
     // 目标 strokeWidth/2（binding.ts 的 getBindingGap）；预设图形默认 strokeWidth
-    // 现在是 thin(1)（旧 medium(2)），gap 6 → 5.5，端点随之移动约 0.5px
-    expect(boundArrow.points[1][0]).toBeCloseTo(63.76421562141153);
-    expect(boundArrow.points[1][1]).toBeCloseTo(-85.01895416188147);
+    // 现在是 thin(1)（旧 medium(2)）。PR3 起缩放后的重投影与指针落点共用
+    // `resolveConnectionHit`（Γ 上最近点 / 推荐点），端点因此与旧射线交点略有偏移。
+    expect(boundArrow.points[1][0]).toBeCloseTo(62.92895733671111, 6);
+    expect(boundArrow.points[1][1]).toBeCloseTo(-86.46566327389695, 6);
 
     expect(arrowLabelPos.x + arrowLabel.width / 2).toBeCloseTo(
       boundArrow.x + boundArrow.points[1][0] / 2,

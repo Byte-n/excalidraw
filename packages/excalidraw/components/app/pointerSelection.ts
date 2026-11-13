@@ -12,7 +12,6 @@ import {
   invariant,
 } from "@excalidraw/common";
 import {
-  getHoveredElementForBinding,
   isBindingEnabled,
   newFreeDrawElement,
   newArrowElement,
@@ -21,7 +20,7 @@ import {
   isPathALoop,
   bindOrUnbindBindingElement,
   isPointInElement,
-  getSnapOutlineMidPoint,
+  pickConnectionTargetForPoint,
   getBindingStrategyForDraggingBindingElementEndpoints,
   getRotationCursor,
 } from "@excalidraw/element";
@@ -80,6 +79,7 @@ import type {
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
   ExcalidrawTableElement,
+  ExcalidrawBindableElement,
   NonDeleted,
   ExcalidrawTextContainer,
 } from "@excalidraw/element/types";
@@ -1359,20 +1359,26 @@ export const handleLinearElementOnPointerDown = (
         : { end: { element: undefined } };
 
     const elementsMap = app.scene.getNonDeletedElementsMap();
+    // The landing point itself always sits on Γ (outside the element), so
+    // "inside vs outline" must be read from the pointer, not from focusPoint.
+    const pointerPoint = pointFrom<GlobalPoint>(
+      pointerDownState.origin.x,
+      pointerDownState.origin.y,
+    );
     // Auto-confirm when both ends bind to the SAME element and the end point
     // lands on the outline rather than inside it
     const endOutsideSameElement = !!(
       multiElement.startBinding &&
       end.element &&
       multiElement.startBinding.elementId === end.element.id &&
-      !isPointInElement(end.focusPoint, end.element, elementsMap)
+      !isPointInElement(pointerPoint, end.element, elementsMap)
     );
     // 端点贴在起点之外另一个元素的**轮廓外**（而不是落在它内部）→ 立刻确认。
-    // 原先这条写作 `end.mode === "orbit"`；没有档位之分后，等价的判据是「端点不在
+    // 原先这条写作 `end.mode === "orbit"`；没有档位之分后，等价的判据是「指针不在
     // 该元素内部」—— 落进另一个图形内部仍算意图不明，要再点一次才确认。
     const boundOutsideFromElsewhere = !!(
       end.element &&
-      !isPointInElement(end.focusPoint, end.element, elementsMap) &&
+      !isPointInElement(pointerPoint, end.element, elementsMap) &&
       multiElement.startBinding?.elementId !== end.element.id
     );
     const lastCommittedPointIsInsideCommitZone =
@@ -1453,13 +1459,44 @@ export const handleLinearElementOnPointerDown = (
       pointerDownState.origin.y,
     );
     const elementsMap = app.scene.getNonDeletedElementsMap();
-    const boundElement = isBindingEnabled(app.state)
-      ? getHoveredElementForBinding(
-          point,
-          app.scene.getNonDeletedElements(),
+    // The armed frame already resolved the same point (same provider as hover):
+    // reuse its hit so the initial binding cannot drift from the preview.
+    let picked: ReturnType<typeof pickConnectionTargetForPoint> = null;
+    const armedFrame = app.pointer.getFrame();
+    if (
+      armedFrame?.phase === "armed" &&
+      armedFrame.target.kind === "connection"
+    ) {
+      const element = app.scene.getNonDeletedElement(
+        armedFrame.target.elementId,
+      ) as NonDeleted<ExcalidrawBindableElement> | null;
+      if (element) {
+        picked = { element, hit: armedFrame.target.hit };
+      }
+    }
+    if (!picked && isBindingEnabled(app.state)) {
+      picked = pickConnectionTargetForPoint(
+        point,
+        app.scene.getNonDeletedElements(),
+        {
+          arrow: {
+            elbowed: app.state.currentItemArrowType === "elbow",
+          },
+          zoom: app.state.zoom.value,
+          isMidpointSnappingEnabled: app.state.isMidpointSnappingEnabled,
+          gridSize: app.state.gridModeEnabled
+            ? app.getEffectiveGridSize()
+            : undefined,
+          angleLocked: shouldRotateWithDiscreteAngle(event.nativeEvent),
           elementsMap,
-        )
-      : null;
+          startOrEnd: "end",
+        },
+        () => null,
+      );
+    }
+    const boundElement = (picked?.element ??
+      null) as NonDeleted<ExcalidrawBindableElement> | null;
+    const boundHit = picked?.hit ?? null;
 
     app.scene.mutateElement(element, {
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(0, 0)],
@@ -1529,16 +1566,8 @@ export const handleLinearElementOnPointerDown = (
           ...prevState,
           newElement: element,
           suggestedBinding:
-            boundElement && isBindingElement(element)
-              ? {
-                  element: boundElement,
-                  midPoint: getSnapOutlineMidPoint(
-                    point,
-                    boundElement,
-                    elementsMap,
-                    app.state.zoom,
-                  ),
-                }
+            boundElement && boundHit && isBindingElement(element)
+              ? { element: boundElement, hit: boundHit }
               : null,
           selectedElementIds: nextSelectedElementIds,
           selectedLinearElement: linearElementEditor,

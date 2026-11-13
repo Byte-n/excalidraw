@@ -10,6 +10,7 @@ import {
   nearestPointOnOutline,
   pointInsideConnectableElement,
 } from "./outline";
+import { buildConnectionQuery } from "./query";
 import { getConnectionSpec } from "./spec";
 import { getAnchorRadius, getInsideBand, getOutsideBand } from "./thresholds";
 
@@ -21,6 +22,7 @@ import type {
   NonDeletedSceneElementsMap,
   Ordered,
 } from "../types";
+import type { BuildConnectionQueryArgs } from "./query";
 import type { ConnectionCtx, ConnectionHit, ConnectionQuery } from "./types";
 
 /**
@@ -197,13 +199,55 @@ export const pickConnectionTarget = (
 ): { element: ExcalidrawBindableElement; hit: ConnectionHit } | null => {
   const elementsMap =
     query.elementsMap as unknown as NonDeletedSceneElementsMap;
-  const candidates = getAllHoveredElementAtPoint(point, elements, elementsMap)
+  const candidates = getAllHoveredElementAtPoint(
+    point,
+    elements,
+    elementsMap,
+    getOutsideBand(query.zoom, 0),
+  )
     .slice()
     .sort(
       (a, b) => a.width ** 2 + a.height ** 2 - (b.width ** 2 + b.height ** 2),
     );
   for (const element of candidates) {
     const hit = resolveConnectionHit({ ...query, element, point }, rayProject);
+    if (hit) {
+      return { element, hit };
+    }
+  }
+  return null;
+};
+
+/**
+ * `pickConnectionTarget` for per-element queries built by
+ * `buildConnectionQuery` (grid snapping needs the candidate element, so the
+ * query cannot be built once for every candidate).
+ *
+ * The exported `pickConnectionTarget` above keeps its documented signature for
+ * callers that already own a fully-built query.
+ */
+export const pickConnectionTargetForPoint = (
+  point: GlobalPoint,
+  elements: readonly Ordered<NonDeletedExcalidrawElement>[],
+  args: Omit<BuildConnectionQueryArgs, "element" | "point">,
+  rayProject: RayProjector,
+): { element: ExcalidrawBindableElement; hit: ConnectionHit } | null => {
+  const elementsMap = args.elementsMap as unknown as NonDeletedSceneElementsMap;
+  const candidates = getAllHoveredElementAtPoint(
+    point,
+    elements,
+    elementsMap,
+    getOutsideBand(args.zoom, 0),
+  )
+    .slice()
+    .sort(
+      (a, b) => a.width ** 2 + a.height ** 2 - (b.width ** 2 + b.height ** 2),
+    );
+  for (const element of candidates) {
+    const hit = resolveConnectionHit(
+      buildConnectionQuery({ ...args, element, point }),
+      rayProject,
+    );
     if (hit) {
       return { element, hit };
     }

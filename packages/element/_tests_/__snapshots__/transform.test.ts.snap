@@ -98,8 +98,8 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to existing s
   "endArrowhead": "arrow",
   "endBinding": {
     "attachPoint": [
-      -0.01831451381244354,
-      0.4581662245145092,
+      -0.02,
+      0.5001,
     ],
     "elementId": "ellipse-1",
   },
@@ -128,7 +128,7 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to existing s
   "startBinding": {
     "attachPoint": [
       1.02,
-      0.5017721518987341,
+      0.5001,
     ],
     "elementId": "id49",
   },
@@ -157,8 +157,8 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to existing s
   "endArrowhead": "arrow",
   "endBinding": {
     "attachPoint": [
-      -0.017257745855714195,
-      0.446666855031177,
+      -0.017179759550900828,
+      0.4459158403503549,
     ],
     "elementId": "ellipse-1",
   },
@@ -186,8 +186,8 @@ exports[`Test Transform > Test arrow bindings > should bind arrows to existing s
   "startArrowhead": null,
   "startBinding": {
     "attachPoint": [
-      1.0406910505430242,
-      0.5001,
+      1.0158089688931808,
+      0.45175145476772627,
     ],
     "elementId": "diamond-1",
   },
@@ -1571,7 +1571,7 @@ exports[`Test Transform > should transform the elements correctly when linear el
   "endArrowhead": "arrow",
   "endBinding": {
     "attachPoint": [
-      -0.1608165443629084,
+      -0.08538848120969499,
       0.5001,
     ],
     "elementId": "Alice",
@@ -1638,7 +1638,7 @@ exports[`Test Transform > should transform the elements correctly when linear el
   "endBinding": {
     "attachPoint": [
       -0.03613777526821005,
-      0.48466257668711654,
+      0.5001,
     ],
     "elementId": "B",
   },
@@ -1664,7 +1664,7 @@ exports[`Test Transform > should transform the elements correctly when linear el
   "startArrowhead": null,
   "startBinding": {
     "attachPoint": [
-      0.39381496335223337,
+      0.5001,
       1.1363636363636365,
     ],
     "elementId": "Bob",

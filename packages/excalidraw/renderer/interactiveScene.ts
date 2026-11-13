@@ -4,8 +4,6 @@ import {
   type GlobalPoint,
   type LocalPoint,
   type Radians,
-  pointRotateRads,
-  pointDistance,
 } from "@excalidraw/math";
 
 import {
@@ -31,19 +29,15 @@ import {
 import {
   deconstructRectanguloidElement,
   elementCenterPoint,
-  getActivationBindingPoint,
-  getCompositeShapeAnchors,
   getCompositeShapeControlPoints,
   getCompositeShapeGlobalPath,
   getCompositeShapeOffsetPaths,
-  isActivationElement,
   isShapeElement,
   FOCUS_POINT_SIZE,
   getTransformHandles,
   getTransformHandlesFromCoords,
   canHaveSelectionFrame,
   hasBoundingBox,
-  hitElementItself,
   isArrowElement,
   isBindableElement,
   isCurvedArrow,
@@ -72,7 +66,6 @@ import {
   getTextVerticalOffset,
   resolveTableBackgroundTextFontWeight,
   resolveTableColor,
-  maxBindingDistance_simple,
   isTextElement,
   getContainingFrame,
   LinearElementEditor,
@@ -601,8 +594,6 @@ const renderBindingHighlightForBindableElement_simple = (
   suggestedBinding: NonNullable<AppState["suggestedBinding"]>,
   elementsMap: ElementsMap,
   appState: InteractiveCanvasAppState,
-  pointerCoords: GlobalPoint | null,
-  selectionColor: string,
   angleLocked = false,
 ) => {
   // resolved through the parent chain, so cell members of a table inside a
@@ -734,165 +725,37 @@ const renderBindingHighlightForBindableElement_simple = (
       break;
   }
 
-  if (isActivationElement(suggestedBinding.element)) {
-    // 激活条很窄，指针通常落在条内；它的落点固定在左右竖边上，且是**动态**的
-    // 单点，不走下面的通用吸附锚点，也不受「吸附到中点」开关影响。
-    // 优先用绑定逻辑解出的 suggestedBinding.midPoint —— 它已经按箭头另一端
-    // 选好了左 / 右边缘；指针压在条中心时不能靠指针的 x 判断左右。
-    const rawPoint = suggestedBinding.midPoint ?? pointerCoords ?? undefined;
-    if (rawPoint) {
-      const [x, y] = getActivationBindingPoint(
-        suggestedBinding.element,
-        rawPoint,
-        undefined,
-        0,
-      );
-      // 与连接点圆点同一口径：拖拽中半径略大，悬停预判小一号
-      const dragging =
-        Boolean(appState.newElement) ||
-        Boolean(appState.selectedLinearElement?.selectedPointsIndices);
-      renderSequenceActivationDot(
-        context,
-        x,
-        y,
-        (dragging ? 5 : 4) / appState.zoom.value,
-        selectionColor,
-        appState,
-      );
-    }
-    return;
-  }
-
-  if (
+  // The landing point / anchors come straight from the connection hit; the
+  // renderer never re-derives midpoints or activation points.
+  const { hit } = suggestedBinding;
+  const showAnchors =
     appState.isMidpointSnappingEnabled &&
     !appState.gridModeEnabled &&
-    !angleLocked &&
-    (isFrameLikeElement(suggestedBinding.element) ||
-      isBindableElement(suggestedBinding.element))
-  ) {
-    // Draw midpoint indicators
-    const linearElement = appState.selectedLinearElement;
-    const arrow =
-      linearElement?.elementId &&
-      LinearElementEditor.getElement(linearElement?.elementId, elementsMap);
-    const cursorIsInsideBindable =
-      pointerCoords &&
-      hitElementItself({
-        point: pointerCoords,
-        element: suggestedBinding.element,
-        elementsMap,
-        threshold: 0,
-        overrideShouldTestInside: true,
-      });
+    !angleLocked;
 
-    const isElbow =
-      (arrow && isElbowArrow(arrow)) ||
-      (appState.activeTool.type === "arrow" &&
-        appState.currentItemArrowType === "elbow");
-
-    if (!cursorIsInsideBindable || isElbow) {
-      context.save();
-
-      const center = elementCenterPoint(suggestedBinding.element, elementsMap);
-
-      let midpoints: GlobalPoint[];
-      if (isShapeElement(suggestedBinding.element)) {
-        midpoints = getCompositeShapeAnchors(suggestedBinding.element);
-      } else {
-        const basePoints = [
-          {
-            x: suggestedBinding.element.width,
-            y: suggestedBinding.element.height / 2,
-          }, // RIGHT
-          {
-            x: suggestedBinding.element.width / 2,
-            y: suggestedBinding.element.height,
-          }, // BOTTOM
-          { x: 0, y: suggestedBinding.element.height / 2 }, // LEFT
-          { x: suggestedBinding.element.width / 2, y: 0 }, // TOP
-        ];
-        midpoints = basePoints.map((point) => {
-          const globalPoint = pointFrom<GlobalPoint>(
-            point.x + suggestedBinding.element.x,
-            point.y + suggestedBinding.element.y,
-          );
-          const rotatedPoint = pointRotateRads(
-            globalPoint,
-            center,
-            suggestedBinding.element.angle,
-          );
-          return pointFrom<GlobalPoint>(rotatedPoint[0], rotatedPoint[1]);
-        });
-      }
-
-      const hoveredMidpoint =
-        pointerCoords &&
-        midpoints.reduce(
-          (
-            closestIdx: {
-              idx: number;
-              distance: number;
-            },
-            point,
-            idx,
-          ) => {
-            const distance = pointDistance(point, pointerCoords);
-            if (idx === -1 || distance < closestIdx.distance) {
-              return { idx, distance };
-            }
-            return closestIdx;
-          },
-          {
-            idx: -1,
-            distance: Infinity,
-          },
-        );
-
-      const hitRadius = 9 / appState.zoom.value;
-      const anchorRadius = 6 / appState.zoom.value;
-      const highlightThreshold =
-        maxBindingDistance_simple(appState.zoom) +
-        suggestedBinding.element.strokeWidth / 2;
-
-      context.lineWidth = 1.5 / appState.zoom.value;
-
-      midpoints.forEach((midpoint, idx) => {
-        const isHighlighted =
-          (!cursorIsInsideBindable || isElbow) &&
-          hoveredMidpoint?.idx === idx &&
-          hoveredMidpoint.distance <= highlightThreshold;
-
-        // also render midpoint if cursor close but not highlighted
-        // (for elbows, always show all points)
-        const isShown =
-          !isHighlighted &&
-          (isElbow ||
-            (idx === hoveredMidpoint?.idx &&
-              hoveredMidpoint.distance <= highlightThreshold * 2));
-
-        if (isHighlighted) {
-          // HIT anchor: solid primary filled
-          context.fillStyle = `rgba(${
-            BINDING_HIGHLIGHT_RGB[appState.theme]
-          }, 1)`;
-          fillCircle(context, midpoint[0], midpoint[1], hitRadius, false, true);
-        } else if (isShown) {
-          // non-hit: hollow primary ring
-          context.strokeStyle = BINDING_MIDPOINT_COLOR[appState.theme];
-          fillCircle(
-            context,
-            midpoint[0],
-            midpoint[1],
-            anchorRadius,
-            true,
-            false,
-          );
-        }
-      });
-
-      context.restore();
-    }
+  context.save();
+  context.lineWidth = 1.5 / appState.zoom.value;
+  if (showAnchors) {
+    context.strokeStyle = BINDING_MIDPOINT_COLOR[appState.theme];
+    hit.anchors.forEach((anchor) => {
+      fillCircle(
+        context,
+        anchor[0],
+        anchor[1],
+        6 / appState.zoom.value,
+        true,
+        false,
+      );
+    });
   }
+
+  context.fillStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, 1)`;
+  const dotRadius =
+    hit.tier === "anchor" && showAnchors
+      ? 9 / appState.zoom.value
+      : 4 / appState.zoom.value;
+  fillCircle(context, hit.point[0], hit.point[1], dotRadius, false, true);
+  context.restore();
 };
 
 const renderBindingHighlightForBindableElement = (
@@ -901,7 +764,6 @@ const renderBindingHighlightForBindableElement = (
   suggestedBinding: AppState["suggestedBinding"],
   allElementsMap: NonDeletedSceneElementsMap,
   appState: InteractiveCanvasAppState,
-  selectionColor: string,
 ) => {
   if (suggestedBinding === null) {
     return;
@@ -909,17 +771,6 @@ const renderBindingHighlightForBindableElement = (
 
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
-  // 指针用 viewport.lastPosition：它挂在 ownerDocument 的 pointermove 上，
-  // 拖拽端点时也逐帧更新；`lastPointerMoveCoords` 只在画布上的 hover 移动里
-  // 更新，拖拽中会停在按下点，动态落点就不会跟手。
-  const scenePointer = viewportCoordsToSceneCoords(
-    {
-      clientX: app.viewport.lastPosition.x,
-      clientY: app.viewport.lastPosition.y,
-    },
-    appState,
-  );
-  const pointerCoords = pointFrom<GlobalPoint>(scenePointer.x, scenePointer.y);
   const angleLocked =
     !!app.lastPointerMoveEvent &&
     shouldRotateWithDiscreteAngle(app.lastPointerMoveEvent);
@@ -928,8 +779,6 @@ const renderBindingHighlightForBindableElement = (
     suggestedBinding,
     allElementsMap,
     appState,
-    pointerCoords,
-    selectionColor,
     angleLocked,
   );
   context.restore();
@@ -3730,7 +3579,6 @@ const _renderInteractiveScene = ({
       appState.suggestedBinding,
       allElementsMap,
       appState,
-      renderConfig.selectionColor || getSelectionColor(app.interactiveCanvas),
     );
   }
 

@@ -114,8 +114,13 @@ describe("move element", () => {
     // select the second rectangle
     new Pointer("mouse").clickOn(rectB);
 
+    // `UI.createElement("arrow")` leaves the arrow tool active, so `clickOn`
+    // hovers rectB with the arrow tool. PR3a replaces the legacy hover branch
+    // with the `connection` frame target, which writes the `suggestedBinding`
+    // mirror (one extra interactive repaint: 18 → 19). This is the intended new
+    // preview channel, not a duplicate state update.
     expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-      `18`,
+      `19`,
     );
     expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`17`);
     expect(h.state.selectionElement).toBeNull();
@@ -130,8 +135,10 @@ describe("move element", () => {
       [[rectA.x + rectA.width + bindingGap, 50.01]],
       0,
     );
+    // PR3a: 端点 (193,138) 落在 rectB 左边中点推荐点 (200,150) 的半径内，
+    // 统一落点因此吸到该推荐点的 Γ 上（y=150.02），不再走旧的射线交点 (143.6)。
     expect([[arrow.width, arrow.height]]).toCloselyEqualPoints(
-      [[rectB.x - bindingGap - arrow.x, 93.60765957446813]],
+      [[rectB.x - bindingGap - arrow.x, 100.02]],
       0,
     );
 
@@ -156,7 +163,7 @@ describe("move element", () => {
       0,
     );
     expect([[arrow.width, arrow.height]]).toCloselyEqualPoints(
-      [[rectB.x - bindingGap - arrow.x, 95.60765957446813]],
+      [[rectB.x - bindingGap - arrow.x, 102.02]],
       0,
     );
 

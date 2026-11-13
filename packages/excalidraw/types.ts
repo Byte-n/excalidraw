@@ -7,7 +7,7 @@ import type {
   StrokeWidthKey,
 } from "@excalidraw/common";
 
-import type { LinearElementEditor } from "@excalidraw/element";
+import type { ConnectionHit, LinearElementEditor } from "@excalidraw/element";
 
 import type { MaybeTransformHandleType } from "@excalidraw/element";
 import type { PreparedTableUniformScale } from "@excalidraw/element";
@@ -56,7 +56,6 @@ import type {
   OnDuplicateData,
   TablePresetId,
 } from "@excalidraw/element";
-import type { GlobalPoint } from "@excalidraw/math";
 
 import type { Action } from "./actions/types";
 import type { Spreadsheet } from "./charts";
@@ -632,10 +631,14 @@ export interface AppState {
   /**
    * The bindable element the UI highlights for the user when an arrow is
    * dragged or otherwise its endpoint being close to said element.
+   *
+   * Derived mirror of the pointer frame's `connection` target: only
+   * `applyPointerFrame` and gesture owners write it (03-connection-integration
+   * §4.6). PR6 removes it.
    */
   suggestedBinding: {
     element: NonDeleted<ExcalidrawBindableElement>;
-    midPoint?: GlobalPoint;
+    hit: ConnectionHit;
   } | null;
   /**
    * Where on a hovered arrow the text tool would attach text if clicked —

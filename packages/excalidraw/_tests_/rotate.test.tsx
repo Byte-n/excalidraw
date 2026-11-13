@@ -102,9 +102,10 @@ test("unselected bound arrows update when rotating their target elements", async
   expect(textArrow.y).toEqual(300);
   expect(textArrow.points[0]).toEqual([0, 0]);
   // 文本目标不留 binding gap（见 binding.ts 的 getProjectionBindingGap）：端点正落在
-  // 文本的绑定边上，而不是再往外一个 gap —— 所以比带 gap 的旧值更贴近文本
-  expect(textArrow.points[1][0]).toBeCloseTo(-152.469, 1);
-  expect(textArrow.points[1][1]).toBeCloseTo(-36.674, 1);
+  // 文本的绑定边上，而不是再往外一个 gap。PR3 起落点统一由 `resolveConnectionHit`
+  // 求出，端点沿文本边落到 Γ 的最近点，与旧射线交点略有偏移。
+  expect(textArrow.points[1][0]).toBeCloseTo(-162.4436681552105, 4);
+  expect(textArrow.points[1][1]).toBeCloseTo(-44.52341530542077, 4);
   // ... 而「落在边上」是可验的几何事实，不只是两个凑出来的数
   expect(
     distanceToElement(

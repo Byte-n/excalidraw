@@ -97,6 +97,9 @@ export type PointerFrameInput = {
   mode: PointerMode;
   pointerType: "mouse" | "touch" | "pen";
   event?: { pointerType?: string };
+  /** Modifier state at the same event (connection preview / angle lock). */
+  shiftKey?: boolean;
+  altKey?: boolean;
 };
 
 export type PointerFrame = {

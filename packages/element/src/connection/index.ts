@@ -8,6 +8,9 @@ export type {
 export {
   ANCHOR_RADIUS_PX,
   OUTLINE_INSIDE_BAND_PX,
+  SEQUENCE_CONNECTION_INSIDE_TOLERANCE,
+  SEQUENCE_CONNECTION_SNAP_DISTANCE,
+  SEQUENCE_MESSAGE_SNAP_DISTANCE,
   getAnchorRadius,
   getInsideBand,
   getOutsideBand,
@@ -23,5 +26,18 @@ export {
   nearestPointOnOutline,
 } from "./outline";
 
+export type { BuildConnectionQueryArgs } from "./query";
+export { buildConnectionQuery, snapBoundPointToGrid } from "./query";
+
 export type { RayProjector } from "./resolve";
-export { pickConnectionTarget, resolveConnectionHit } from "./resolve";
+export {
+  pickConnectionTarget,
+  pickConnectionTargetForPoint,
+  resolveConnectionHit,
+} from "./resolve";
+
+export {
+  getSuggestedBindingAnchors,
+  isSameSuggestedBinding,
+  suggestedBindingForElbow,
+} from "./suggestedBinding";

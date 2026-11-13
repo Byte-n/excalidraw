@@ -47,6 +47,7 @@ import {
   isSequenceLifelineElement,
   maxBindingDistance_simple,
   getSnapOutlineMidPoint,
+  suggestedBindingForElbow,
 } from "@excalidraw/element";
 
 import {
@@ -90,6 +91,7 @@ import {
 import { isPointHittingLink } from "../hyperlink/helpers";
 
 import { hitCompositeControlPoint } from "./compositeShapeControls";
+import "./pointerConnection";
 import { applyPointerFrame } from "./pointerDispatch";
 import {
   currentPointerMode,
@@ -847,6 +849,8 @@ export const handleCanvasPointerMove = (
       mode: currentPointerMode(app),
       pointerType: resolvePointerType(event.pointerType),
       event,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
     });
     applyPointerFrame(app, frame);
     if (
@@ -942,7 +946,13 @@ export const handleCanvasPointerMove = (
     }
   }
 
-  if (isBindingElementType(app.state.activeTool.type)) {
+  // Elbow arrows keep the legacy hover path until PR3b switches them to the
+  // connection provider too.
+  const isElbowArrowTool =
+    app.state.activeTool.type === "arrow" &&
+    app.state.currentItemArrowType === "elbow";
+
+  if (isElbowArrowTool && isBindingElementType(app.state.activeTool.type)) {
     // Hovering with a selected tool or creating new linear element via click
     // and point
     const { newElement } = app.state;
@@ -957,15 +967,17 @@ export const handleCanvasPointerMove = (
       );
       if (hoveredElement) {
         app.setState({
-          suggestedBinding: {
-            element: hoveredElement,
-            midPoint: getSnapOutlineMidPoint(
+          suggestedBinding: suggestedBindingForElbow(
+            hoveredElement,
+            globalPoint,
+            getSnapOutlineMidPoint(
               globalPoint,
               hoveredElement,
               elementsMap,
               app.state.zoom,
             ),
-          },
+            elementsMap,
+          ),
         });
       } else if (app.state.suggestedBinding) {
         app.setState({
@@ -1088,9 +1100,13 @@ export const handleCanvasPointerMove = (
     return;
   }
 
-  // Set suggested binding if we're hovering with an arrow tool
-  // and not dragging out a new element
-  if (app.state.activeTool.type === "arrow" && !app.state.newElement) {
+  // Legacy elbow arrow hover. Non-elbow arrows are resolved by the connection
+  // provider below (single writer, preview == landing).
+  if (
+    isElbowArrowTool &&
+    app.state.activeTool.type === "arrow" &&
+    !app.state.newElement
+  ) {
     const scenePointer = pointFrom<GlobalPoint>(scenePointerX, scenePointerY);
     const hit = getHoveredElementForBinding(
       scenePointer,
@@ -1101,16 +1117,55 @@ export const handleCanvasPointerMove = (
     const elementsMap = app.scene.getNonDeletedElementsMap();
     if (hit && !isPointInElement(scenePointer, hit, elementsMap)) {
       app.setState({
-        suggestedBinding: {
-          element: hit,
-          midPoint: getSnapOutlineMidPoint(
+        suggestedBinding: suggestedBindingForElbow(
+          hit,
+          scenePointer,
+          getSnapOutlineMidPoint(
             scenePointer,
             hit,
             elementsMap,
             app.state.zoom,
           ),
-        },
+          elementsMap,
+        ),
       });
+    }
+  }
+
+  // Non-elbow arrow hover: the frame's `connection` target drives the
+  // `suggestedBinding` mirror and clears it on every non-connection frame.
+  const isArrowHoverEligible =
+    !isElbowArrowTool &&
+    (app.state.activeTool.type === "arrow" ||
+      app.state.activeTool.type === "line") &&
+    !event.buttons &&
+    !isOverScrollBar &&
+    !app.state.viewModeEnabled &&
+    !app.state.editingTextElement &&
+    !app.state.newElement &&
+    !app.state.multiElement &&
+    !app.state.selectionElement &&
+    !app.state.selectedElementsAreBeingDragged;
+
+  if (isArrowHoverEligible) {
+    applyPointerFrame(
+      app,
+      resolvePointerFrame(app, {
+        point: pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
+        phase: "hover",
+        mode: "arrow",
+        pointerType: resolvePointerType(event.pointerType),
+        event,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+      }),
+    );
+  } else if (app.pointer.getFrame()?.target.kind === "connection") {
+    // The hover no longer applies (pressed / dragging / scrollbar): drop the
+    // derived mirror so it cannot go stale.
+    app.pointer.clear();
+    if (app.state.suggestedBinding) {
+      app.setState({ suggestedBinding: null });
     }
   }
 

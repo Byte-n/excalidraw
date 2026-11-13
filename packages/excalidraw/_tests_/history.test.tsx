@@ -4645,7 +4645,7 @@ describe("history", () => {
         expect(
           (h.elements[2] as ExcalidrawElbowArrowElement).startBinding
             ?.attachPoint,
-        ).toEqual([1.06, 0.5281999999999999]);
+        ).toEqual([1.06, 0.5001]);
         expect(
           (h.elements[2] as ExcalidrawElbowArrowElement).endBinding,
         ).not.toEqual([1, 0.5001]);
@@ -4667,11 +4667,11 @@ describe("history", () => {
               // 宽 100。y 是指针 y 经折线路由的中点吸附后的落点比例。
               startBinding: expect.objectContaining({
                 elementId: rect1.id,
-                attachPoint: [1.06, 0.5281999999999999],
+                attachPoint: [1.06, 0.5001],
               }),
               endBinding: expect.objectContaining({
                 elementId: rect2.id,
-                attachPoint: [-0.06, 0.5298851063829787],
+                attachPoint: [-0.06, 0.5001],
               }),
             }),
           ]),
@@ -4734,11 +4734,11 @@ describe("history", () => {
                 id: arrowId,
                 startBinding: expect.objectContaining({
                   elementId: rect1.id,
-                  attachPoint: [1.06, 0.5281999999999999],
+                  attachPoint: [1.06, 0.5001],
                 }),
                 endBinding: expect.objectContaining({
                   elementId: rect2.id,
-                  attachPoint: [-0.06, 0.5298851063829787],
+                  attachPoint: [-0.06, 0.5001],
                 }),
               }),
             ]),
@@ -4800,11 +4800,11 @@ describe("history", () => {
               // 宽 100。y 是指针 y 经折线路由的中点吸附后的落点比例。
               startBinding: expect.objectContaining({
                 elementId: rect1.id,
-                attachPoint: [1.06, 0.5281999999999999],
+                attachPoint: [1.06, 0.5001],
               }),
               endBinding: expect.objectContaining({
                 elementId: rect2.id,
-                attachPoint: [-0.06, 0.5298851063829787],
+                attachPoint: [-0.06, 0.5001],
               }),
             }),
           ]),
@@ -4869,12 +4869,12 @@ describe("history", () => {
                 id: arrowId,
                 startBinding: expect.objectContaining({
                   elementId: rect1.id,
-                  attachPoint: [1.06, 0.5281999999999999],
+                  attachPoint: [1.06, 0.5001],
                 }),
                 // rebound with previous rectangle
                 endBinding: expect.objectContaining({
                   elementId: rect2.id,
-                  attachPoint: [-0.06, 0.5298851063829787],
+                  attachPoint: [-0.06, 0.5001],
                 }),
               }),
               expect.objectContaining({

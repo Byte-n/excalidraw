@@ -7,6 +7,7 @@ import {
   isActivationElement,
 } from "./compositeShape/sequenceOutline";
 import { isArrowElement, isElbowArrow } from "./typeChecks";
+import { SEQUENCE_MESSAGE_SNAP_DISTANCE } from "./connection/thresholds";
 
 import type { SequenceActivationElement } from "./sequenceActivation";
 import type {
@@ -59,7 +60,7 @@ export type SequenceMessageAxis = {
 };
 
 /** Screen distance (at zoom 1) within which a bar counts as a drop target. */
-export const SEQUENCE_MESSAGE_SNAP_DISTANCE = 12;
+export { SEQUENCE_MESSAGE_SNAP_DISTANCE };
 
 const getSideOutward = (
   activation: SequenceActivationElement,

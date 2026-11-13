@@ -1244,9 +1244,9 @@ describe("quick create handles", () => {
       expect(outlineRatio(copy, entry)).toBeLessThan(1.2);
       // 几何上仍在副本中心的绝对水平线上，投影沿射线外推一个 gap 后会略偏
       expect(Math.abs(entry.y - center.y)).toBeLessThan(10);
-      // 锚点钉在副本**本体**的左边缘**外侧**（存的是端点本身，悬空一个 gap；
-      // 副本转了 30°，gap 沿旋转后的轴算，实测 -0.045265）：按包围盒算会落在边缘之内
-      expect(arrow.endBinding?.attachPoint[0]).toBeCloseTo(-0.045265, 6);
+      // 锚点钉在副本**本体**的左边缘**外侧**（存的是端点本身，悬空一个 gap）。
+      // PR3 起落点统一在 Γ 上：旋转后仍是「本体左边再外移一个 gap」，实测 -0.05。
+      expect(arrow.endBinding?.attachPoint[0]).toBeCloseTo(-0.05, 5);
     });
 
     it("falls back to the base spot when all ten candidates are taken", () => {
@@ -3300,8 +3300,9 @@ describe("quick create handles", () => {
       await waitFor(() => {
         const suggested = h.app.state.suggestedBinding;
         expect(suggested?.element.id).toBe(activation.id);
-        expect(suggested?.midPoint?.[0]).toBeCloseTo(416, 6);
-        expect(suggested?.midPoint?.[1]).toBeCloseTo(260, 6);
+        // 预览与落点同源：均落在激活条右边缘的 Γ 上（边缘 416 再外移一个 gap）
+        expect(suggested?.hit.point[0]).toBeCloseTo(422, 6);
+        expect(suggested?.hit.point[1]).toBeCloseTo(260, 6);
       });
 
       mouse.upAt(408, 260);

@@ -28,6 +28,8 @@ import {
   getTransformHandles,
   SEQUENCE_ACTIVATION_HEIGHT,
   SEQUENCE_ACTIVATION_WIDTH,
+  SEQUENCE_CONNECTION_INSIDE_TOLERANCE,
+  SEQUENCE_CONNECTION_SNAP_DISTANCE,
   SEQUENCE_HIT_HALF_WIDTH,
   SEQUENCE_MIN_ACTIVATION_OFFSET,
   hitTestQuickCreateHandle,
@@ -65,6 +67,7 @@ import type {
   SequenceActivationElement,
   SequenceLifelineElement,
   SequenceMessageAxis,
+  NonElbowLandingOpts,
 } from "@excalidraw/element";
 
 import type {
@@ -88,7 +91,7 @@ import type {
   PresetCatalogItem,
 } from "./presetCatalog";
 
-import type { PointerDownState } from "../types";
+import type { NullableGridSize, PointerDownState } from "../types";
 
 import type React from "react";
 
@@ -129,10 +132,6 @@ const POLE_GHOST_IDENTITY: CreationIdentity = {
  * - 终点落在**起点所在的激活条**上时画折线（自消息），落在其它激活条上是水平
  *   直线，没落在任何激活条上时保持水平延伸、按预演落地。
  */
-/** 指针离边缘多近（屏幕 px）就显示连接点 */
-export const SEQUENCE_CONNECTION_SNAP_DISTANCE = 12;
-/** 允许指针略微压进条内（屏幕 px），覆盖连接点圆点的内半圈，避免点圆点时落到移动手势 */
-export const SEQUENCE_CONNECTION_INSIDE_TOLERANCE = 4;
 /** 起点所在激活条的纵向死区（屏幕 px）：太靠近起点时不判定为自消息终点 */
 export const SEQUENCE_CONNECTION_MIN_SELF_GAP = 12;
 /** 自消息向外绕出的横向距离（场景 px） */
@@ -2132,6 +2131,14 @@ export class AppQuickCreate {
         placement.anchors.start.x,
         placement.anchors.start.y,
       ),
+      true,
+      true,
+      this.getNonElbowLandingOpts(
+        pointFrom<GlobalPoint>(
+          placement.anchors.end.x,
+          placement.anchors.end.y,
+        ),
+      ),
     );
     const target =
       newActivation ??
@@ -2147,6 +2154,14 @@ export class AppQuickCreate {
         pointFrom<GlobalPoint>(
           placement.anchors.end.x,
           placement.anchors.end.y,
+        ),
+        true,
+        true,
+        this.getNonElbowLandingOpts(
+          pointFrom<GlobalPoint>(
+            placement.anchors.start.x,
+            placement.anchors.start.y,
+          ),
         ),
       );
     }
@@ -2471,6 +2486,24 @@ export class AppQuickCreate {
   };
 
   /**
+   * Landing parameters shared by the preview and the actual binding: both must
+   * run `resolveConnectionHit` with the same viewport flags for bit-identical
+   * endpoints.
+   */
+  private getNonElbowLandingOpts = (reference?: GlobalPoint) =>
+    ({
+      zoom: this.app.state.zoom.value,
+      isMidpointSnappingEnabled:
+        this.app.state.isMidpointSnappingEnabled &&
+        !this.app.state.gridModeEnabled,
+      angleLocked: false,
+      gridSize: this.app.state.gridModeEnabled
+        ? (this.app.state.gridSize as NullableGridSize)
+        : undefined,
+      reference,
+    } as NonElbowLandingOpts);
+
+  /**
    * 预演连线的等效绑定：附着点的归一化盒坐标。用与落地 `bindBindingElement` 内部
    * **同一个**函数算，两边因此逐位一致——注意落地是按 `isElbowArrow` 分叉的
    * （`binding.ts:1158`），折线档走它自己那一支：不照做的话两端会差一个 binding gap。
@@ -2514,6 +2547,12 @@ export class AppQuickCreate {
             startOrEnd,
             elementsMap,
             pointFrom<GlobalPoint>(focusPoint.x, focusPoint.y),
+            true,
+            this.getNonElbowLandingOpts(
+              startOrEnd === "start"
+                ? pointFrom<GlobalPoint>(connector.entry.x, connector.entry.y)
+                : pointFrom<GlobalPoint>(connector.exit.x, connector.exit.y),
+            ),
           );
     return {
       startBinding:
@@ -2570,6 +2609,14 @@ export class AppQuickCreate {
         placement.connector.exit.x,
         placement.connector.exit.y,
       ),
+      true,
+      true,
+      this.getNonElbowLandingOpts(
+        pointFrom<GlobalPoint>(
+          placement.connector.entry.x,
+          placement.connector.entry.y,
+        ),
+      ),
     );
     bindBindingElement(
       arrow,
@@ -2579,6 +2626,14 @@ export class AppQuickCreate {
       pointFrom<GlobalPoint>(
         placement.connector.entry.x,
         placement.connector.entry.y,
+      ),
+      true,
+      true,
+      this.getNonElbowLandingOpts(
+        pointFrom<GlobalPoint>(
+          placement.connector.exit.x,
+          placement.connector.exit.y,
+        ),
       ),
     );
     // 两点连线（直线、圆角连接线，以及交给内置正交路由的折线箭头）按 orbit 绑定
@@ -2705,6 +2760,14 @@ export class AppQuickCreate {
         placement.connector.exit.x,
         placement.connector.exit.y,
       ),
+      true,
+      true,
+      this.getNonElbowLandingOpts(
+        pointFrom<GlobalPoint>(
+          placement.connector.entry.x,
+          placement.connector.entry.y,
+        ),
+      ),
     );
     if (target) {
       bindBindingElement(
@@ -2715,6 +2778,14 @@ export class AppQuickCreate {
         pointFrom<GlobalPoint>(
           placement.connector.entry.x,
           placement.connector.entry.y,
+        ),
+        true,
+        true,
+        this.getNonElbowLandingOpts(
+          pointFrom<GlobalPoint>(
+            placement.connector.exit.x,
+            placement.connector.exit.y,
+          ),
         ),
       );
     }
@@ -2896,6 +2967,14 @@ export class AppQuickCreate {
         placement.connector.exit.x,
         placement.connector.exit.y,
       ),
+      true,
+      true,
+      this.getNonElbowLandingOpts(
+        pointFrom<GlobalPoint>(
+          placement.connector.entry.x,
+          placement.connector.entry.y,
+        ),
+      ),
     );
     bindBindingElement(
       arrow,
@@ -2908,6 +2987,14 @@ export class AppQuickCreate {
         // 拖拽落位的 `connector.entry` 本就等于松手点。
         curved ? pointer.x + delta.x : pointer.x,
         curved ? pointer.y + delta.y : pointer.y,
+      ),
+      true,
+      true,
+      this.getNonElbowLandingOpts(
+        pointFrom<GlobalPoint>(
+          placement.connector.exit.x,
+          placement.connector.exit.y,
+        ),
       ),
     );
     // 两端照旧投影（与 `createConnectedShape` 同口径）：末端带 binding gap 是仓库

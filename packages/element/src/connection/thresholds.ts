@@ -9,6 +9,13 @@ import { maxBindingDistance_simple } from "../bindingGap";
 export const ANCHOR_RADIUS_PX = 14;
 export const OUTLINE_INSIDE_BAND_PX = 10;
 
+/** Screen distance (at zoom 1) within which a bar counts as a drop target. */
+export const SEQUENCE_MESSAGE_SNAP_DISTANCE = 12;
+
+/** Activation-connection snap / inside tolerance (screen px). */
+export const SEQUENCE_CONNECTION_SNAP_DISTANCE = 12;
+export const SEQUENCE_CONNECTION_INSIDE_TOLERANCE = 4;
+
 const normalizeZoom = (zoom: number): number => (zoom > 0 ? zoom : 1);
 
 /**

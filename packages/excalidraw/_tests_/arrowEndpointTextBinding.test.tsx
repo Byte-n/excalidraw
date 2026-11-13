@@ -503,10 +503,12 @@ describe("binding text to an arrow endpoint", () => {
         arrow.y + arrow.points[arrow.points.length - 1][1],
       );
       expect(distanceToElement(text, elementsMap, endpoint)).toBeCloseTo(0, 1);
-      // ... 而且就是文本左边那条绑定边：x 落在 text.x 上，y 在文本高度范围内
-      expect(endpoint[0]).toBeCloseTo(text.x, 1);
-      expect(endpoint[1]).toBeGreaterThan(text.y);
-      expect(endpoint[1]).toBeLessThan(text.y + text.height);
+      // ... 端点落在文本的四条绑定边之一上。PR3 起落点由 `resolveConnectionHit`
+      // 统一求出：指针在内部更深处时按射线投影，可能落到另一条边（允许的行为变化 3）
+      expect(endpoint[0]).toBeGreaterThanOrEqual(text.x - 0.01);
+      expect(endpoint[0]).toBeLessThanOrEqual(text.x + text.width + 0.01);
+      expect(endpoint[1]).toBeGreaterThanOrEqual(text.y - 0.01);
+      expect(endpoint[1]).toBeLessThanOrEqual(text.y + text.height + 0.01);
 
       // 绑定的比例解出来的就是端点本身
       expect(

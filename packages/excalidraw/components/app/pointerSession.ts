@@ -682,6 +682,8 @@ export const handleCanvasPointerDown = (
     mode: currentPointerMode(app),
     pointerType: resolvePointerType(event.pointerType),
     event: event.nativeEvent,
+    shiftKey: event.shiftKey,
+    altKey: event.altKey,
   });
   // PR2 has no frame consumer yet: store the frame without an extra repaint
   app.pointer.setFrame(frame, { repaint: false });

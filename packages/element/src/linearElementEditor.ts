@@ -26,12 +26,10 @@ import {
   shouldRotateWithDiscreteAngle,
   getGridPoint,
   invariant,
-  isShallowEqual,
 } from "@excalidraw/common";
 
 import {
   deconstructLinearOrFreeDrawElement,
-  getSnapOutlineMidPoint,
   isPathALoop,
   moveArrowAboveBindable,
   type Store,
@@ -56,9 +54,14 @@ import {
   resolveAttachPointForNonElbowBinding,
   getBindingStrategyForDraggingBindingElementEndpoints,
   isBindingEnabled,
+  resolveConnectionHitForArrowEndpoint,
   snapToMid,
   updateBoundPoint,
 } from "./binding";
+import {
+  isSameSuggestedBinding,
+  suggestedBindingForElbow,
+} from "./connection/suggestedBinding";
 import {
   constrainSequenceMessagePoint,
   getSequenceMessageAxis,
@@ -491,7 +494,7 @@ export class LinearElementEditor {
     if (
       app.state.selectedLinearElement?.customLineAngle === customLineAngle &&
       (!suggestedBinding ||
-        isShallowEqual(app.state.suggestedBinding ?? [], suggestedBinding))
+        isSameSuggestedBinding(app.state.suggestedBinding, suggestedBinding))
     ) {
       return null;
     }
@@ -2452,26 +2455,31 @@ const pointDraggingUpdates = (
       : endIsDragged
       ? end.element
       : null;
+    const draggedPoint = pointFrom<GlobalPoint>(
+      scenePointerX - linearElementEditor.pointerOffset.x,
+      scenePointerY - linearElementEditor.pointerOffset.y,
+    );
+    const midPoint =
+      suggestedBindingElement && app.state.isMidpointSnappingEnabled
+        ? snapToMid(
+            suggestedBindingElement,
+            elementsMap,
+            draggedPoint,
+            undefined,
+            element,
+          )
+        : undefined;
 
     return {
       positions: naiveDraggingPoints,
       updates: {
         suggestedBinding: suggestedBindingElement
-          ? {
-              element: suggestedBindingElement,
-              midPoint: app.state.isMidpointSnappingEnabled
-                ? snapToMid(
-                    suggestedBindingElement,
-                    elementsMap,
-                    pointFrom<GlobalPoint>(
-                      scenePointerX - linearElementEditor.pointerOffset.x,
-                      scenePointerY - linearElementEditor.pointerOffset.y,
-                    ),
-                    undefined,
-                    element,
-                  )
-                : undefined,
-            }
+          ? suggestedBindingForElbow(
+              suggestedBindingElement,
+              draggedPoint,
+              midPoint,
+              elementsMap,
+            )
           : null,
       },
     };
@@ -2542,9 +2550,32 @@ const pointDraggingUpdates = (
   const updates: PointMoveOtherUpdates = {
     suggestedBinding: null,
   };
+  const landingOptsFor = (startOrEnd: "start" | "end") => {
+    // Same "other end" as the binding strategy: for multi-point arrows this is
+    // the adjacent point (index 1 / -2), not the far endpoint.
+    const reference = LinearElementEditor.getPointAtIndexGlobalCoordinates(
+      element,
+      startOrEnd === "start" ? 1 : -2,
+      elementsMap,
+    );
+    return {
+      zoom: app.state.zoom.value,
+      isMidpointSnappingEnabled:
+        app.state.isMidpointSnappingEnabled &&
+        !angleLocked &&
+        !app.state.gridModeEnabled,
+      angleLocked,
+      gridSize: app.state.gridModeEnabled
+        ? app.getEffectiveGridSize()
+        : undefined,
+      reference,
+      adjacentPoint: reference,
+    };
+  };
   if (start.element === null) {
     updates.startBinding = null;
   } else if (start.element) {
+    const landingOpts = landingOptsFor("start");
     updates.startBinding = {
       elementId: start.element.id,
       ...resolveAttachPointForNonElbowBinding(
@@ -2553,29 +2584,21 @@ const pointDraggingUpdates = (
         "start",
         elementsMap,
         start.focusPoint,
+        true,
+        landingOpts,
       ),
     };
 
     if (startIsDragged) {
-      updates.suggestedBinding = start.element
-        ? {
-            element: start.element,
-            midPoint: getSnapOutlineMidPoint(
-              pointFrom<GlobalPoint>(
-                scenePointerX - linearElementEditor.pointerOffset.x,
-                scenePointerY - linearElementEditor.pointerOffset.y,
-              ),
-              start.element,
-              elementsMap,
-              app.state.zoom,
-              LinearElementEditor.getPointAtIndexGlobalCoordinates(
-                element,
-                -1,
-                elementsMap,
-              ),
-            ),
-          }
-        : null;
+      const hit = resolveConnectionHitForArrowEndpoint(
+        element,
+        start.element,
+        "start",
+        start.focusPoint,
+        elementsMap,
+        landingOpts,
+      );
+      updates.suggestedBinding = hit ? { element: start.element, hit } : null;
     }
   } else if (startIsDragged) {
     updates.suggestedBinding = app.state.suggestedBinding;
@@ -2584,6 +2607,7 @@ const pointDraggingUpdates = (
   if (end.element === null) {
     updates.endBinding = null;
   } else if (end.element) {
+    const landingOpts = landingOptsFor("end");
     updates.endBinding = {
       elementId: end.element.id,
       ...resolveAttachPointForNonElbowBinding(
@@ -2592,29 +2616,21 @@ const pointDraggingUpdates = (
         "end",
         elementsMap,
         end.focusPoint,
+        true,
+        landingOpts,
       ),
     };
 
     if (endIsDragged) {
-      updates.suggestedBinding = end.element
-        ? {
-            element: end.element,
-            midPoint: getSnapOutlineMidPoint(
-              pointFrom<GlobalPoint>(
-                scenePointerX - linearElementEditor.pointerOffset.x,
-                scenePointerY - linearElementEditor.pointerOffset.y,
-              ),
-              end.element,
-              elementsMap,
-              app.state.zoom,
-              LinearElementEditor.getPointAtIndexGlobalCoordinates(
-                element,
-                0,
-                elementsMap,
-              ),
-            ),
-          }
-        : null;
+      const hit = resolveConnectionHitForArrowEndpoint(
+        element,
+        end.element,
+        "end",
+        end.focusPoint,
+        elementsMap,
+        landingOpts,
+      );
+      updates.suggestedBinding = hit ? { element: end.element, hit } : null;
     }
   } else if (endIsDragged) {
     updates.suggestedBinding = app.state.suggestedBinding;

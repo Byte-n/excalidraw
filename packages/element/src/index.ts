@@ -132,8 +132,19 @@ export * from "./tableSceneGeometry";
 export * from "./mindmapScene";
 
 export type {
+  BuildConnectionQueryArgs,
   ConnectionHit,
   ConnectionQuery,
   RayProjector,
 } from "./connection";
-export { pickConnectionTarget, resolveConnectionHit } from "./connection";
+export {
+  SEQUENCE_CONNECTION_INSIDE_TOLERANCE,
+  SEQUENCE_CONNECTION_SNAP_DISTANCE,
+  SEQUENCE_MESSAGE_SNAP_DISTANCE,
+  buildConnectionQuery,
+  isSameSuggestedBinding,
+  pickConnectionTarget,
+  pickConnectionTargetForPoint,
+  resolveConnectionHit,
+  suggestedBindingForElbow,
+} from "./connection";
