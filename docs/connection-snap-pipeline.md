@@ -2,6 +2,8 @@
 
 > 关联：[pointer-affordance-unification.md](pointer-affordance-unification.md)（指针归属，二期接入）、
 > 根目录 `TODO.md`「统一规划所有图形/图元的连接点与吸附策略」。
+> **执行入口**：[pointer-pipeline/README.md](pointer-pipeline/README.md)。本文档的几何设计由 PR1（`01-connection-geometry.md`）实现，
+> 由 PR3（`03-connection-integration.md`）接入；指针消费的统一由 PR2 / PR4 / PR5 承接。
 
 ## 0. 一期目标
 

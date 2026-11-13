@@ -1,6 +1,7 @@
 # 指针 affordance 统一：手势事件与渲染状态组织
 
 > **优先级：高**。本文是重构目标与迁移计划；阶段 0（止血）已按文中三条不变量落地，见「阶段 0」一节。
+> **执行入口**：[pointer-pipeline/README.md](pointer-pipeline/README.md)。阶段 1–3 分别由 PR2（帧契约）、PR4（时序 affordance）、PR5（通用 hover）承接。
 
 ## 1. 背景
 

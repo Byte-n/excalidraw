@@ -1,5 +1,7 @@
 # 统一画布交互目标解析方案
 
+> **执行入口**：[pointer-pipeline/README.md](pointer-pipeline/README.md)。本文的容器 provider 与 `resolveInteractionTarget` 由 PR2 并入帧契约，其余 target 在 PR5 收口。
+
 ## 背景
 
 画布中的普通图形和容器图形目前分别处理命中、hover、鼠标样式和 pointer-down。表格轨道、插入点、画框边界等容器控件可能在普通图形命中之后继续覆盖 hover 状态或 cursor，导致以下状态不一致：
