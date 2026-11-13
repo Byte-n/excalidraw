@@ -9,6 +9,7 @@ import {
   getElementBounds,
   getQuickCreateHandles,
   hitTestQuickCreateHandle,
+  isActivationElement,
   isArrowElement,
   isShapeElement,
   isCurvedArrow,
@@ -2853,6 +2854,169 @@ describe("quick create handles", () => {
       expect(ops[ops.length - 1].data[3]).toBeCloseTo(D.y, 2);
       // 而曲线明显鼓出弦外（斜向的两点箭头在旧模型下是直线）
       expect(Math.abs(ops[1].data[1] - D.y)).toBeGreaterThan(1);
+    });
+  });
+
+  describe("sequence lifeline pole activation", () => {
+    const ACTIVATION_WIDTH = 16;
+    const ACTIVATION_HEIGHT = 100;
+    const HEAD_HEIGHT = 68.272;
+    const POLE_LENGTH = 360;
+    const LIFELINE_WIDTH = 64;
+
+    const createLifeline = (
+      x: number,
+      overrides: Record<string, unknown> = {},
+    ) =>
+      API.createElement({
+        type: "sequence",
+        shape: buildShapeData("sc-lifeline-entity"),
+        x,
+        y: 0,
+        width: LIFELINE_WIDTH,
+        height: HEAD_HEIGHT + POLE_LENGTH,
+        ...overrides,
+      });
+
+    it("previews a translucent activation while hovering the pole", () => {
+      const lifeline = createLifeline(400);
+      API.setElements([lifeline]);
+      mouse.reset();
+
+      mouse.moveTo(432, 200);
+      const ghosts = h.app.quickCreate.getPoleActivationGhostElements();
+      expect(ghosts).toHaveLength(1);
+      const ghost = ghosts[0];
+      expect(isShapeElement(ghost) && ghost.shape.id).toBe("sc-activation");
+      expect(ghost.x + ghost.width / 2).toBeCloseTo(432, 6);
+      // 顶部贴着指针，向下展开
+      expect(ghost.y).toBeCloseTo(200, 6);
+      expect(ghost.y + ghost.height / 2).toBeCloseTo(250, 6);
+      expect(ghost.width).toBe(ACTIVATION_WIDTH);
+      expect(ghost.height).toBe(ACTIVATION_HEIGHT);
+      expect(ghost.opacity).toBeLessThan(100);
+
+      mouse.moveTo(432, 250);
+      const moved = h.app.quickCreate.getPoleActivationGhostElements()[0];
+      expect(moved.y).toBeCloseTo(250, 6);
+      expect(moved.y + moved.height / 2).toBeCloseTo(300, 6);
+    });
+
+    it("does not preview an activation on a selected activation's resize handle", () => {
+      const lifeline = createLifeline(400);
+      API.setElements([lifeline]);
+      mouse.reset();
+
+      // 点出一条激活条（顶部 200、底边 300），创建后是选中态
+      mouse.moveTo(432, 200);
+      mouse.clickAt(432, 200);
+      const activation = live().find(isActivationElement)!;
+      expect(activation.y + activation.height).toBeCloseTo(300, 6);
+
+      // 底边外 3px：仍在缩放手柄热区里。严格最上层命中是激活条（选中包围盒），
+      // 不能回退成下面被压着的生命线。
+      mouse.moveTo(432, 303);
+      expect(h.app.quickCreate.getPoleActivationGhostElements()).toHaveLength(
+        0,
+      );
+    });
+
+    it("does not preview where the new activation would overlap an existing one", () => {
+      const lifeline = createLifeline(400);
+      API.setElements([lifeline]);
+      mouse.reset();
+
+      mouse.moveTo(432, 200);
+      mouse.clickAt(432, 200);
+
+      // 已有条占 [200, 300]。顶部贴在 150 时候选条占 [150, 250]，
+      // 会压住已有条 → 不展示、也不允许创建
+      mouse.moveTo(432, 150);
+      expect(h.app.quickCreate.getPoleActivationGhostElements()).toHaveLength(
+        0,
+      );
+
+      // 85：候选条 [85, 185] 与已有条不再相交 → 正常预演，顶部仍贴着指针
+      mouse.moveTo(432, 85);
+      const ghosts = h.app.quickCreate.getPoleActivationGhostElements();
+      expect(ghosts).toHaveLength(1);
+      expect(ghosts[0].y).toBeCloseTo(85, 6);
+      expect(ghosts[0].y + ghosts[0].height / 2).toBeCloseTo(135, 6);
+    });
+
+    it("does not create an activation from a click on the resize handle", () => {
+      const lifeline = createLifeline(400);
+      API.setElements([lifeline]);
+      mouse.reset();
+
+      mouse.moveTo(432, 200);
+      mouse.clickAt(432, 200);
+      expect(live().filter(isActivationElement)).toHaveLength(1);
+
+      // 不拖动，直接在底边缩放手柄热区上点一下：不能顺手再建一条
+      mouse.moveTo(432, 303);
+      mouse.downAt(432, 303);
+      mouse.upAt(432, 303);
+      expect(live().filter(isActivationElement)).toHaveLength(1);
+    });
+
+    it("creates an activation on a click over the pole", () => {
+      const lifeline = createLifeline(400);
+      API.setElements([lifeline]);
+      mouse.reset();
+
+      mouse.moveTo(432, 200);
+      mouse.downAt(432, 200);
+      mouse.upAt(432, 200);
+
+      const activation = live().find(isActivationElement);
+      expect(activation).toBeDefined();
+      expect(activation!.x + activation!.width / 2).toBeCloseTo(432, 6);
+      // 顶部在单击位置，中心 = 单击 y + 高度 / 2
+      expect(activation!.y).toBeCloseTo(200, 6);
+      expect(activation!.y + activation!.height / 2).toBeCloseTo(250, 6);
+      expect(h.app.scene.getSelectedElements(h.app.state)).toEqual([
+        activation,
+      ]);
+      // 建立绑定：激活条带 link，生命线的 boundElements 里也有它
+      expect(activation!.shape.link).toEqual({
+        lifelineId: lifeline.id,
+        localY: 250,
+      });
+      expect(
+        h.app.scene
+          .getNonDeletedElement(lifeline.id)!
+          .boundElements?.some(
+            (bound) =>
+              bound.id === activation!.id && bound.type === "activation",
+          ),
+      ).toBe(true);
+    });
+
+    it("does not create an activation when the pole press turns into a drag", () => {
+      const lifeline = createLifeline(400);
+      API.setElements([lifeline]);
+      mouse.reset();
+
+      mouse.moveTo(432, 200);
+      mouse.downAt(432, 200);
+      mouse.moveTo(432, 260);
+      mouse.upAt(432, 260);
+
+      expect(live().filter(isActivationElement)).toHaveLength(0);
+    });
+
+    it("cancels the pole click on Escape", () => {
+      const lifeline = createLifeline(400);
+      API.setElements([lifeline]);
+      mouse.reset();
+
+      mouse.moveTo(432, 200);
+      mouse.downAt(432, 200);
+      Keyboard.keyPress(KEYS.ESCAPE);
+      mouse.upAt(432, 200);
+
+      expect(live().filter(isActivationElement)).toHaveLength(0);
     });
   });
 });

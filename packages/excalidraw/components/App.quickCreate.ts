@@ -15,21 +15,29 @@ import {
   getQuickCreateHandles,
   getQuickCreateResolvedTargetCenter,
   getQuickCreateTargetElement,
+  getSequenceLifelineLocalPoint,
+  getSequenceLifelinePoleActivationPlacement,
   getTransformHandles,
+  SEQUENCE_ACTIVATION_HEIGHT,
+  SEQUENCE_HIT_HALF_WIDTH,
+  SEQUENCE_MIN_ACTIVATION_OFFSET,
   hitTestQuickCreateHandle,
+  isActivationElement,
   isBindableElement,
+  isSequenceLifelineElement,
   isShapeElement,
   isCurvedArrow,
   isElbowArrow,
   isFrameLikeElement,
   isLinearElement,
   newArrowElement,
+  syncLifelineBoundActivation,
   updateBoundPoint,
   updateElbowArrowPoints,
   QUICK_CREATE_GHOST_ALPHA,
 } from "@excalidraw/element";
 
-import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
 
 import type {
   ElementsMap,
@@ -53,6 +61,7 @@ import type {
 } from "@excalidraw/element";
 
 import { getCurrentItemArrowProps } from "./app/arrowCreation";
+import { hitCompositeControlPoint } from "./app/compositeShapeControls";
 import { getPresetSize } from "./app/createPresets";
 import { buildPresetElementsCentered } from "./app/presetPlacement";
 import { getCatalogItem, isFlowchartShapeId } from "./presetCatalog";
@@ -81,6 +90,22 @@ const isModifierKey = (key: string) => MODIFIER_KEYS.has(key);
  */
 export const QUICK_CREATE_GHOST_SHAPE_ID = "preview:quick-create";
 export const QUICK_CREATE_GHOST_ARROW_ID = "preview:quick-create:arrow";
+/** 生命线杆上悬停预演的激活条身份，口径同上（不推进共享 id / 随机序列） */
+export const QUICK_CREATE_POLE_GHOST_ID =
+  "preview:quick-create:pole-activation";
+
+/** 激活条装配说明：与图形抽屉里的 `sc-activation` 同一个预设 */
+const ACTIVATION_CREATION_SPEC: CreationSpec = {
+  kind: "shape",
+  tool: "rectangle",
+  shapeId: "sc-activation",
+};
+
+const POLE_GHOST_IDENTITY: CreationIdentity = {
+  id: QUICK_CREATE_POLE_GHOST_ID,
+  seed: 1,
+};
+
 /**
  * 连线的身份要按对象展开传给构造函数：`ElementConstructorOpts` 的类型不收 `id`
  * （字面量写 `id` 会被多属性检查拦下，展开则不会），运行时是认的。
@@ -160,6 +185,34 @@ type QuickCreatePending = {
   groupId: PresetCatalogGroupId;
 };
 
+/** 生命线杆上的激活条预演：中心已按杆夹取、并随生命线旋转 */
+type PoleActivationHover = {
+  lifelineId: string;
+  /** Activation center y in the lifeline's local frame (clamped to the pole) */
+  localY: number;
+  center: QuickCreatePoint;
+  angle: Radians;
+};
+
+/**
+ * 杆上的一次待决点击。按下时只臂化、不创建：越过拖拽阈值就说明用户是在拖
+ * 生命线（P2 语义），抬起时按距离判定。
+ */
+type PoleActivationClick = PoleActivationHover & {
+  origin: QuickCreatePoint;
+};
+
+/**
+ * 一次合法的杆上落点：最上层命中是生命线，且候选位置不与已有激活条相交。
+ * 预演与单击都从这里取值，保证「看到预演」=「点下去能创建」。
+ */
+type PoleActivationTarget = {
+  lifeline: NonDeletedExcalidrawElement;
+  localY: number;
+  center: QuickCreatePoint;
+  angle: Radians;
+};
+
 /**
  * 方向手柄：单选图形时在指示框四边外侧显示圆点，悬停换加号，**按下后拖拽**在
  * 指针处生成同款副本并用当前连接线样式连一条线（不拖直接松手则是老行为：建在
@@ -170,6 +223,18 @@ export class AppQuickCreate {
     direction: QuickCreateDirection;
     elementId: string;
   } | null = null;
+
+  /** 指针悬停中的生命线杆激活条预演 */
+  private poleActivation: PoleActivationHover | null = null;
+
+  /** 杆预演的缓存，口径同 `ghost`（渲染层每帧来取） */
+  private poleActivationGhost: {
+    key: string;
+    elements: readonly NonDeletedExcalidrawElement[];
+  } | null = null;
+
+  /** 压在杆上、尚未判定是点击还是拖拽的那次按下 */
+  private poleActivationClick: PoleActivationClick | null = null;
 
   /** 进行中的手势；为 null 时手柄按悬停/点击路径走 */
   private drag: QuickCreateDrag | null = null;
@@ -224,6 +289,38 @@ export class AppQuickCreate {
   getHandleTargetElement = (): NonDeletedExcalidrawElement | null =>
     getQuickCreateTargetElement(this.app);
 
+  /** 杆上激活条预演的元素（渲染层每帧来取；空数组表示不画） */
+  getPoleActivationGhostElements =
+    (): readonly NonDeletedExcalidrawElement[] => {
+      const hover = this.poleActivation;
+      if (!hover) {
+        return [];
+      }
+      const key = [
+        hover.lifelineId,
+        hover.center.x,
+        hover.center.y,
+        hover.angle,
+      ].join("|");
+      if (this.poleActivationGhost?.key !== key) {
+        const element = this.buildActivationElement(
+          hover.center,
+          hover.angle,
+          POLE_GHOST_IDENTITY,
+        );
+        this.poleActivationGhost = {
+          key,
+          elements: [
+            {
+              ...element,
+              opacity: element.opacity * QUICK_CREATE_GHOST_ALPHA,
+            },
+          ],
+        };
+      }
+      return this.poleActivationGhost.elements;
+    };
+
   /** 面板是否待决：渲染层据此把手柄整组收起、只画那条待决连线。 */
   hasPendingInsert = (): boolean => this.pendingInsert !== null;
 
@@ -242,6 +339,7 @@ export class AppQuickCreate {
     this.modifierHeld = held;
     this.hovered = null;
     this.ghost = null;
+    this.clearHoverAffordances();
     this.app.repaint.request();
   };
 
@@ -271,11 +369,18 @@ export class AppQuickCreate {
     // 预演缓存连同悬停一起丢：它带着离屏位图，没悬停就没必要留着占内存
     // （重建一次不算贵，而且只在指针重新落到某个手柄上时才会发生）
     this.ghost = null;
-    const hadHover = !!this.hovered;
+    const hadHover = !!this.hovered || !!this.poleActivation;
     this.hovered = null;
+    this.clearHoverAffordances();
     if (hadHover) {
       this.app.repaint.request();
     }
+  };
+
+  /** 清掉悬停档的判断结果与预演缓存（不改 drag / 待决态） */
+  private clearHoverAffordances = () => {
+    this.poleActivation = null;
+    this.poleActivationGhost = null;
   };
 
   hitTest = (sceneX: number, sceneY: number, pointerType = "mouse") => {
@@ -362,14 +467,240 @@ export class AppQuickCreate {
       // 交互层重渲染（InteractiveCanvas 是 memo），必须显式重绘一帧
       this.app.repaint.request();
     }
+    // 杆上激活条预演：指针已被方向手柄 / 变换手柄 / 复合图形控制点占用时不再
+    // 解析；落点还会排除与已有激活条重叠的位置（见 `resolvePoleActivationTarget`）。
+    // 于是「看到预演」与「点下去能创建」始终是同一个判定。
+    this.updatePoleActivation(sceneX, sceneY, Boolean(effectiveHit));
     // 在 pointerCanvas 的工具光标之后运行，命中时不被覆盖
     if (
-      effectiveHit &&
+      (effectiveHit || this.poleActivation) &&
       !this.app.state.viewModeEnabled &&
       this.app.isInteractionEnabled()
     ) {
       this.app.cursor.set(CURSOR_TYPE.POINTER);
     }
+  };
+
+  /** 悬停档只在选择工具、非只读、非编辑文本时生效 */
+  private canHoverAffordances = (): boolean =>
+    this.app.state.activeTool.type === "selection" &&
+    !this.app.state.viewModeEnabled &&
+    !this.app.state.editingTextElement &&
+    this.app.isInteractionEnabled();
+
+  /**
+   * 严格取指针下的最上层元素。
+   *
+   * 不能换成 `getElementAtPosition`：后者把选中元素的包围盒（含命中容差）也算作
+   * 命中，严格重测失败时再回退到**下面那个**元素。激活条压在杆上时，指针落在
+   * 条边缘的缩放手柄热区里，就会返回被压着的生命线——「杆上创建激活条」的预演
+   * 与激活条自己的交互于是同时出现，预演还叠在条上。
+   */
+  private getStrictTopmostElementAt = (
+    sceneX: number,
+    sceneY: number,
+  ): NonDeletedExcalidrawElement | null => {
+    // 锁定元素也参与遮挡判定：锁定条压在杆上时同样不该冒出创建预演
+    const hits = this.app.getElementsAtPosition(sceneX, sceneY, {
+      includeLockedElements: true,
+    });
+    return hits.length ? hits[hits.length - 1] : null;
+  };
+
+  /**
+   * 候选激活条是否会与同一根杆上已有的激活条相交。在生命线本地坐标系里比较：
+   * 生命线旋转时两者一起转，区间仍然成立；两侧都留
+   * `SEQUENCE_MIN_ACTIVATION_OFFSET` 的间隙，避免边界相切。
+   */
+  private poleActivationOverlapsExisting = (
+    lifeline: NonDeletedExcalidrawElement,
+    localY: number,
+  ): boolean => {
+    if (!isSequenceLifelineElement(lifeline)) {
+      return false;
+    }
+    const candidateStart =
+      localY - SEQUENCE_ACTIVATION_HEIGHT / 2 - SEQUENCE_MIN_ACTIVATION_OFFSET;
+    const candidateEnd =
+      localY + SEQUENCE_ACTIVATION_HEIGHT / 2 + SEQUENCE_MIN_ACTIVATION_OFFSET;
+    const poleX = lifeline.width / 2;
+    const corners = [
+      [-0.5, -0.5],
+      [0.5, -0.5],
+      [0.5, 0.5],
+      [-0.5, 0.5],
+    ] as const;
+    for (const element of this.app.scene.getNonDeletedElements()) {
+      if (element.id === lifeline.id || !isActivationElement(element)) {
+        continue;
+      }
+      const cos = Math.cos(element.angle);
+      const sin = Math.sin(element.angle);
+      const cx = element.x + element.width / 2;
+      const cy = element.y + element.height / 2;
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      for (const [ux, uy] of corners) {
+        const local = getSequenceLifelineLocalPoint(
+          lifeline,
+          cx + ux * element.width * cos - uy * element.height * sin,
+          cy + ux * element.width * sin + uy * element.height * cos,
+        );
+        minX = Math.min(minX, local.x);
+        maxX = Math.max(maxX, local.x);
+        minY = Math.min(minY, local.y);
+        maxY = Math.max(maxY, local.y);
+      }
+      // 只避让「压在这根杆上」的条：横向 AABB 必须覆盖杆中心（含杆走廊）
+      if (
+        minX > poleX + SEQUENCE_HIT_HALF_WIDTH ||
+        maxX < poleX - SEQUENCE_HIT_HALF_WIDTH
+      ) {
+        continue;
+      }
+      if (candidateStart < maxY && candidateEnd > minY) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  /**
+   * 指针是否已被优先级更高的 affordance 占用（变换手柄 / 复合图形控制点）。
+   * 杆预演与它们不该同帧出现：在这些热区上按下是缩放，不能同时臂化建条。
+   */
+  private isHigherPriorityAffordanceHovered = (
+    sceneX: number,
+    sceneY: number,
+    pointerType: PointerType = "mouse",
+  ): boolean => {
+    const selected = this.app.scene.getSelectedElements(this.app.state);
+    if (!selected.length) {
+      return false;
+    }
+    if (
+      getElementWithTransformHandleType(
+        selected,
+        this.app.state,
+        sceneX,
+        sceneY,
+        this.app.state.zoom,
+        pointerType,
+        this.app.scene.getNonDeletedElementsMap(),
+        this.app.editorInterface,
+      )?.transformHandleType
+    ) {
+      return true;
+    }
+    const zoom = this.app.state.zoom.value;
+    return selected.some(
+      (element) =>
+        isShapeElement(element) &&
+        !element.locked &&
+        Boolean(
+          hitCompositeControlPoint(element, sceneX, sceneY, zoom, pointerType),
+        ),
+    );
+  };
+
+  /**
+   * 杆上激活条的合法落点：最上层命中必须是（未锁定的）生命线，且候选激活条
+   * 不能与同一条杆上已有的激活条相交。不合法就返回 null——预演与单击落点共用
+   * 本函数，所以「预演可见」与「可以创建」不会分叉。
+   */
+  private resolvePoleActivationTarget = (
+    sceneX: number,
+    sceneY: number,
+  ): PoleActivationTarget | null => {
+    const topmost = this.getStrictTopmostElementAt(sceneX, sceneY);
+    if (!topmost || topmost.locked || !isSequenceLifelineElement(topmost)) {
+      return null;
+    }
+    const placement = getSequenceLifelinePoleActivationPlacement(
+      topmost,
+      sceneX,
+      sceneY,
+    );
+    if (
+      !placement ||
+      this.poleActivationOverlapsExisting(topmost, placement.localY)
+    ) {
+      return null;
+    }
+    return {
+      lifeline: topmost,
+      localY: placement.localY,
+      center: placement.center,
+      angle: placement.angle,
+    };
+  };
+
+  /**
+   * 更新杆上激活条预演。`quickCreateHandleHovered` 为真时指针已归方向手柄，
+   * 变换手柄 / 复合控制点同理；预演位置只取 `resolvePoleActivationTarget`
+   * 判定为合法的落点。
+   */
+  private updatePoleActivation = (
+    sceneX: number,
+    sceneY: number,
+    quickCreateHandleHovered = false,
+  ) => {
+    let next: PoleActivationHover | null = null;
+    if (
+      !quickCreateHandleHovered &&
+      this.canHoverAffordances() &&
+      !this.isHigherPriorityAffordanceHovered(sceneX, sceneY)
+    ) {
+      const target = this.resolvePoleActivationTarget(sceneX, sceneY);
+      if (target) {
+        next = {
+          lifelineId: target.lifeline.id,
+          localY: target.localY,
+          center: target.center,
+          angle: target.angle,
+        };
+      }
+    }
+    const changed =
+      next?.lifelineId !== this.poleActivation?.lifelineId ||
+      next?.center.x !== this.poleActivation?.center.x ||
+      next?.center.y !== this.poleActivation?.center.y;
+    if (changed) {
+      this.poleActivation = next;
+      this.poleActivationGhost = null;
+      this.app.repaint.request();
+    }
+  };
+
+  /**
+   * 按下时臂化「杆上点击」：这里**不创建**，也不吞手势——拖拽时仍交给通用选择
+   * 路径移动生命线；是点击还是拖拽由 `handlePointerUp` 按距离判定。
+   */
+  private armPoleActivationClick = (
+    point: QuickCreatePoint,
+    pointerType: PointerType = "mouse",
+  ): boolean => {
+    if (
+      !this.canHoverAffordances() ||
+      // 变换手柄 / 复合控制点优先：在这些热区上按下是缩放，不能同时臂化建条
+      this.isHigherPriorityAffordanceHovered(point.x, point.y, pointerType)
+    ) {
+      return false;
+    }
+    const target = this.resolvePoleActivationTarget(point.x, point.y);
+    if (!target) {
+      return false;
+    }
+    this.poleActivationClick = {
+      lifelineId: target.lifeline.id,
+      localY: target.localY,
+      center: target.center,
+      angle: target.angle,
+      origin: point,
+    };
+    return true;
   };
 
   /**
@@ -427,6 +758,8 @@ export class AppQuickCreate {
       : null;
     const source = hit && this.app.scene.getNonDeletedElement(hit.elementId);
     if (!hit || !source) {
+      // 没有命中手柄：如果按在杆上，臂化「单击建激活条」；其余情况照常让给选择
+      this.armPoleActivationClick(origin, resolvedPointerType);
       return false;
     }
     // 让位规则（与 handlePointerMove 共用同一个判定，否则会出现「高亮着却点不动」）：
@@ -475,6 +808,9 @@ export class AppQuickCreate {
     pointerDownState.resize.isResizing = false;
     this.hovered = null;
     this.ghost = null;
+    this.poleActivation = null;
+    this.poleActivationGhost = null;
+    this.poleActivationClick = null;
     this.drag = {
       direction: hit.direction,
       elementId: source.id,
@@ -531,6 +867,25 @@ export class AppQuickCreate {
       this.cancelledPointerDown = null;
       return true;
     }
+    // 杆上单击：按下时只臂化，这里按拖动距离判定。越过阈值说明用户是在拖生命线
+    // （P2 语义），交给通用选择路径，不创建激活条。
+    const poleClick = this.poleActivationClick;
+    this.poleActivationClick = null;
+    if (poleClick) {
+      const moved =
+        Math.hypot(
+          scenePoint.x - poleClick.origin.x,
+          scenePoint.y - poleClick.origin.y,
+        ) *
+          this.app.state.zoom.value >=
+        DRAGGING_THRESHOLD;
+      if (event.type === "pointerup" && !moved) {
+        this.createPoleActivation(poleClick);
+        pointerDownState.drag.hasOccurred = true;
+        this.app.repaint.request();
+        return true;
+      }
+    }
     const drag = this.drag;
     if (!drag) {
       return false;
@@ -568,6 +923,15 @@ export class AppQuickCreate {
     pointerDownState: PointerDownState,
     event: KeyboardEvent,
   ): boolean => {
+    // 杆上待决的单击：Esc 只撤销这次「待创建」，不吞键——通用路径仍要照常
+    // 取消可能正在进行的生命线拖拽
+    if (event.key === KEYS.ESCAPE && this.poleActivationClick) {
+      this.poleActivationClick = null;
+      this.poleActivation = null;
+      this.poleActivationGhost = null;
+      this.app.repaint.request();
+      return false;
+    }
     if (!this.drag || event.key !== KEYS.ESCAPE) {
       return false;
     }
@@ -736,6 +1100,60 @@ export class AppQuickCreate {
       };
     }
     return this.ghost.elements;
+  };
+
+  // ---------------------------------------------------------------------------
+  // 生命线杆上的激活条
+  // ---------------------------------------------------------------------------
+
+  /** 按预设装配一条激活条（真实创建与预演共用），中心与角度由落点给出 */
+  private buildActivationElement = (
+    center: QuickCreatePoint,
+    angle: Radians,
+    identity?: CreationIdentity,
+    link?: { lifelineId: string; localY: number },
+  ): NonDeleted<ExcalidrawShapeElement> => {
+    const built = buildPresetElementsCentered(
+      this.app,
+      ACTIVATION_CREATION_SPEC,
+      center,
+      identity,
+    );
+    const element = built.elements[0] as NonDeleted<ExcalidrawShapeElement>;
+    return {
+      ...element,
+      angle,
+      shape: link ? { ...element.shape, link } : element.shape,
+    } as NonDeleted<ExcalidrawShapeElement>;
+  };
+
+  /** 杆上单击：在预演位置创建一条激活条并选中它 */
+  private createPoleActivation = (click: PoleActivationClick): void => {
+    const activation = this.buildActivationElement(
+      click.center,
+      click.angle,
+      undefined,
+      { lifelineId: click.lifelineId, localY: click.localY },
+    );
+    this.app.insertNewElements([activation]);
+    // 生命线侧登记绑定：之后移动 / 缩放生命线时激活条跟随
+    const lifeline = this.app.scene.getNonDeletedElement(click.lifelineId);
+    if (lifeline) {
+      syncLifelineBoundActivation(
+        activation.id,
+        lifeline,
+        undefined,
+        this.app.scene,
+      );
+    }
+    this.app.setState({
+      selectedElementIds: { [activation.id]: true },
+      selectedGroupIds: {},
+      selectedLinearElement: null,
+      hoveredElementIds: {},
+      editingGroupId: null,
+    });
+    this.app.store.scheduleCapture();
   };
 
   /** 当前拖拽是否正是这个源的这个方向（预演与落位判定共用，避免两处口径分叉） */

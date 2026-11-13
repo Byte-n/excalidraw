@@ -1505,6 +1505,30 @@ const renderQuickCreateHandles = (
 };
 
 /**
+ * 生命线杆上的激活条预演：指针悬停杆时画一条半透明激活条，单击即在该位置
+ * 落地。元素由 `AppQuickCreate.getPoleActivationGhostElements` 提供（固定身份、
+ * 带缓存），这里只负责画——与 quick-create 的预演同一套渲染。
+ *
+ * 与 `renderQuickCreateHandles` 一样，调用点在已按 scrollX/scrollY 平移过的
+ * 上下文里（`renderQuickCreateGhost` 会把 scroll 归零抵消外层平移）。
+ */
+const renderPoleActivationGhost = (
+  context: CanvasRenderingContext2D,
+  app: AppClassProperties,
+  appState: InteractiveCanvasAppState,
+  allElementsMap: NonDeletedSceneElementsMap,
+) => {
+  const elements = app.quickCreate.getPoleActivationGhostElements();
+  if (!elements.length) {
+    return;
+  }
+  context.save();
+  context.setLineDash([]);
+  renderQuickCreateGhost(context, app, appState, elements, allElementsMap);
+  context.restore();
+};
+
+/**
  * The frame's own rounded border reused as interaction feedback (hover ring,
  * drop-target highlight): strokes the border path in place, optionally with a
  * translucent fill washed over the board.
@@ -4221,6 +4245,17 @@ const _renderInteractiveScene = ({
       }
     }
     context.restore();
+
+    // 生命线杆上的激活条预演与选中状态无关，单独画；修饰键按住 / 面板待决时
+    // 与 quick-create 手柄同一口径收起。
+    const hoverSuppressed =
+      app.quickCreate.isSuppressed() && !app.quickCreate.getDrag();
+    if (!hoverSuppressed) {
+      context.save();
+      context.translate(appState.scrollX, appState.scrollY);
+      renderPoleActivationGhost(context, app, appState, allElementsMap);
+      context.restore();
+    }
 
     // 变换读数：单选与多选共用一条出口，放在上面两个长度分支之外——它的显
     // 隐条件与手柄并不重合，抄进分支里会立刻漂移。口径是「有手柄可指才有读
