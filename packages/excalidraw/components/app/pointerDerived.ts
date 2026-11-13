@@ -3,7 +3,7 @@
  * (docs/pointer-pipeline/05-general-hover.md §4.5).
  *
  * These remain legacy mirrors in PR5; only the frame dispatcher writes them.
- * Mindmap hover (`hoveredElementIds`) is still owned by App.mindmap until PR5b.
+ * Mindmap hover (`hoveredElementIds`) is derived from the frame since PR5b.
  */
 import {
   isEligibleFrameChildType,
@@ -11,6 +11,8 @@ import {
   selectGroupsForSelectedElements,
 } from "@excalidraw/element";
 import { updateStable } from "@excalidraw/common";
+
+import { getMindmapNodeIdFromPointerTarget } from "../App.mindmap";
 
 import { updateIframeLikeElementHover } from "./embeds";
 import { clearContainerInteractionHover } from "./interactionTarget";
@@ -105,7 +107,28 @@ export const updateDerivedPointerState = (
     }
   }
 
-  // link-selector hover mirror (kept; mindmap owns this field in PR5a)
+  // mindmap node hover (PR5b): the frame target is the only source. Bound
+  // text maps to its container node. The link selector keeps its own mirror.
+  if (app.state?.openDialog?.name !== "elementLinkSelector") {
+    const mindmapNodeId = getMindmapNodeIdFromPointerTarget(
+      app as any,
+      frame.target,
+    );
+    const nextHovered: Record<string, true> = mindmapNodeId
+      ? { [mindmapNodeId]: true }
+      : {};
+    app.setState((prevState) => {
+      const hoveredElementIds = updateStable(
+        prevState.hoveredElementIds,
+        nextHovered,
+      );
+      return hoveredElementIds === prevState.hoveredElementIds
+        ? null
+        : { hoveredElementIds };
+    });
+  }
+
+  // link-selector hover mirror (kept; PR5b keeps this exception)
   if (app.state?.openDialog?.name === "elementLinkSelector") {
     if (hitElement) {
       app.setState((prevState) => ({

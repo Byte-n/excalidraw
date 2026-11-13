@@ -60,7 +60,7 @@ export const applyPointerFrame = (
 
   // 2. store the frame first: renderer / cursor helpers read `getFrame()`
   const previousHoverPoint = app.pointer.getLastHoverPoint?.() ?? null;
-  app.pointer.setFrame(frame, { repaint: false });
+  const frameChanged = app.pointer.setFrame(frame, { repaint: false });
 
   // 3. transform-handle readout: exactly one write per frame (set OR clear),
   //    so hovering a handle does not clear + re-set on every pointermove.
@@ -122,10 +122,23 @@ export const applyPointerFrame = (
       break;
   }
 
-  // sequence hover visuals are component-external state
+  // sequence / mindmap add-button hover visuals are component-external state.
+  // The add button only repaints when its hover state changes: moving inside
+  // the same button must not repaint (the frame point still differs there).
+  const previousTarget = existingFrame?.target;
+  const nextTarget = frame.target;
+  const mindmapAddButtonChanged =
+    frameChanged &&
+    ((previousTarget?.kind === "mindmapAddButton") !==
+      (nextTarget.kind === "mindmapAddButton") ||
+      (previousTarget?.kind === "mindmapAddButton" &&
+        nextTarget.kind === "mindmapAddButton" &&
+        (previousTarget.elementId !== nextTarget.elementId ||
+          previousTarget.button !== nextTarget.button)));
   if (
     isSequenceTarget(frame.target) ||
-    isSequenceTarget(existingFrame?.target)
+    isSequenceTarget(existingFrame?.target) ||
+    mindmapAddButtonChanged
   ) {
     app.repaint.request();
   }

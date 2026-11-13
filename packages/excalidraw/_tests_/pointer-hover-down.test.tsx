@@ -1,8 +1,13 @@
+import { CURSOR_TYPE } from "@excalidraw/common";
 import { pointFrom } from "@excalidraw/math";
 
 import {
+  buildMindmapGraphFromTree,
   buildShapeData,
   getCompositeShapeControlPoints,
+  getMindmapAddButtonAffordances,
+  getMindmapLayoutConfig,
+  isMindmapNodeElement,
   LinearElementEditor,
 } from "@excalidraw/element";
 import { setTableSceneTitle } from "@excalidraw/element/tableScene";
@@ -16,6 +21,7 @@ import type {
 
 import { getCompositeControlPointGlobal } from "../components/app/compositeShapeControls";
 import { getTableTitleBar } from "../components/app/tableTitle";
+import { restoreElements } from "../data/restore";
 import { getTextAutoResizeHandle } from "../textAutoResizeHandle";
 
 import { Excalidraw } from "../index";
@@ -182,5 +188,90 @@ describe("hover = pointerdown target (PR5a-2)", () => {
     const gripX = bar.grip.x + bar.grip.width / 2;
     const gripY = bar.grip.y + bar.grip.height / 2;
     await expectHoverDownKind(gripX, gripY, "containerControl");
+  });
+
+  const mindmapFixture = () =>
+    restoreElements(
+      buildMindmapGraphFromTree(
+        { text: "root", children: [{ text: "child", children: [] }] },
+        { x: 300, y: 260 },
+      ).elements,
+      null,
+      { repairBindings: true },
+    );
+
+  it("mindmapAddButton", async () => {
+    API.setElements(mindmapFixture());
+    const root = h.app.scene
+      .getNonDeletedElements()
+      .find(isMindmapNodeElement)!;
+    API.setSelectedElements([root]);
+    const { child } = getMindmapAddButtonAffordances(
+      root,
+      getMindmapLayoutConfig(root).direction,
+      "minus",
+    );
+    await expectHoverDownKind(
+      child.center[0],
+      child.center[1],
+      "mindmapAddButton",
+    );
+  });
+
+  it("repaints when the add-button hover state changes", async () => {
+    API.setElements(mindmapFixture());
+    const root = h.app.scene
+      .getNonDeletedElements()
+      .find(isMindmapNodeElement)!;
+    API.setSelectedElements([root]);
+    const { child } = getMindmapAddButtonAffordances(
+      root,
+      getMindmapLayoutConfig(root).direction,
+      "minus",
+    );
+    const request = vi.spyOn(h.app.repaint, "request");
+
+    // entering the button repaints once
+    await act(() => {
+      mouse.moveTo(child.center[0], child.center[1]);
+    });
+    await waitFor(() => {
+      expect(h.app.pointer.getFrame()?.target.kind).toBe("mindmapAddButton");
+    });
+    expect(request.mock.calls.length).toBeGreaterThan(0);
+
+    // moving inside the same button does not repaint
+    request.mockClear();
+    await act(() => {
+      mouse.moveTo(child.center[0] + 1, child.center[1] + 1);
+    });
+    expect(h.app.pointer.getFrame()?.target.kind).toBe("mindmapAddButton");
+    expect(request).not.toHaveBeenCalled();
+
+    // leaving the button repaints once
+    request.mockClear();
+    await act(() => {
+      mouse.moveTo(700, 700);
+    });
+    await waitFor(() => {
+      expect(h.app.pointer.getFrame()?.target.kind).toBe("canvas");
+    });
+    expect(request.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("mindmap tool keeps the tool cursor on node hover", async () => {
+    API.setElements(mindmapFixture());
+    const root = h.app.scene
+      .getNonDeletedElements()
+      .find(isMindmapNodeElement)!;
+    act(() => h.app.setActiveTool({ type: "mindmap" }));
+    const spy = vi.spyOn(h.app.cursor, "set");
+    await act(() => {
+      mouse.moveTo(root.x + root.width / 2, root.y + root.height / 2);
+    });
+    await waitFor(() => {
+      expect(h.app.pointer.getFrame()?.target.kind).toBe("element");
+    });
+    expect(spy).toHaveBeenLastCalledWith(CURSOR_TYPE.CROSSHAIR);
   });
 });

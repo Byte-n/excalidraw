@@ -30,6 +30,31 @@ const isCommonBoundingBox = (app: PointerApp, point: GlobalPoint) =>
     app.scene.getSelectedElements(app.state),
   );
 
+const isMindmapTool = (app: PointerApp) =>
+  app.state.activeTool?.type === "mindmap";
+
+/**
+ * Collapse affordance (badge / minus) is not a target: it overlaps the frame's
+ * element or canvas. Kept inside the single cursor writer so no module writes
+ * the cursor after dispatch.
+ */
+const getCollapseAffordanceCursor = (
+  app: PointerApp,
+  frame: PointerFrame,
+): string | null => {
+  if (
+    typeof app.mindmap?.hitTestCollapseAffordance !== "function" ||
+    app.state.viewModeEnabled ||
+    (typeof app.isInteractionEnabled === "function" &&
+      !app.isInteractionEnabled())
+  ) {
+    return null;
+  }
+  return app.mindmap.hitTestCollapseAffordance(frame.point[0], frame.point[1])
+    ? CURSOR_TYPE.POINTER
+    : null;
+};
+
 /**
  * Element-hover cursor priority (05 §4.4): link/embed → text tool / arrow text
  * anchor → mindmap edge → ctrl/bbox → view mode → link selector → draggable
@@ -175,9 +200,21 @@ export const getCursorForPointerTarget = (
     case "compositeControl":
       return CURSOR_TYPE.MOVE;
     case "selectedElement":
-      return CURSOR_TYPE.MOVE;
+      // mindmap tool keeps the tool cursor on nodes (HEAD behavior); the
+      // collapse affordance is the only pointer affordance there
+      return isMindmapTool(app)
+        ? getCollapseAffordanceCursor(app, frame) ?? getToolCursor(app)
+        : getCollapseAffordanceCursor(app, frame) ?? CURSOR_TYPE.MOVE;
     case "element":
-      return getElementHoverCursor(app, target.elementId, frame.point);
+      if (isMindmapTool(app)) {
+        return getCollapseAffordanceCursor(app, frame) ?? getToolCursor(app);
+      }
+      return (
+        getCollapseAffordanceCursor(app, frame) ??
+        getElementHoverCursor(app, target.elementId, frame.point)
+      );
+    case "mindmapAddButton":
+      return CURSOR_TYPE.POINTER;
     case "containerControl":
       return (
         getContainerProviderCursor(app, target.candidate) || getToolCursor(app)
@@ -192,6 +229,6 @@ export const getCursorForPointerTarget = (
       return CURSOR_TYPE.POINTER;
     case "canvas":
     default:
-      return getToolCursor(app);
+      return getCollapseAffordanceCursor(app, frame) ?? getToolCursor(app);
   }
 };

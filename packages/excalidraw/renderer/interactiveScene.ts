@@ -138,6 +138,7 @@ import type {
 } from "@excalidraw/element/types";
 
 import { getTableTitle, getTableTitleBar } from "../components/app/tableTitle";
+import { getMindmapNodeIdFromPointerTarget } from "../components/App.mindmap";
 import { renderSnaps } from "../renderer/renderSnaps";
 import { getCompositeControlPointGlobal } from "../components/app/compositeShapeControls";
 import { roundRect } from "../renderer/roundRect";
@@ -1007,7 +1008,11 @@ const renderMindmapCollapseAffordances = (
       }
     }
   }
-  const hoveredNodeId = app.mindmap.getHoveredNodeId();
+  // 悬停节点来自当前指针帧（05-general-hover.md §4.8）
+  const hoveredNodeId = getMindmapNodeIdFromPointerTarget(
+    app,
+    app.pointer.getFrame()?.target,
+  );
   const singleSelectedNodeId =
     selectedElements.length === 1 && isMindmapNodeElement(selectedElements[0])
       ? selectedElements[0].id
@@ -1134,7 +1139,9 @@ const renderMindmapAddButtons = (
     direction,
     childSideAffordance,
   );
-  const hovered = app.mindmap.getHoveredAddButton();
+  const frameTarget = app.pointer.getFrame()?.target;
+  const hovered =
+    frameTarget?.kind === "mindmapAddButton" ? frameTarget.button : null;
   const isDark = appState.theme === THEME.DARK;
   const branchColor = applyDarkModeFilter(node.strokeColor, isDark);
   const fillColor = applyDarkModeFilter("#ffffff", isDark);

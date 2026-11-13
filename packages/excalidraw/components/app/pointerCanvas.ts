@@ -779,6 +779,20 @@ export const handleCanvasPointerMove = (
     event.clientY - app.state.offsetTop,
   );
   const isOverScrollBar = isPointerOverScrollBars.isOverEither;
+  const isMindmapTool = app.state.activeTool.type === "mindmap";
+  // Selection-like frames and the mindmap tool both resolve a pointer frame;
+  // the dispatcher is the only cursor writer for those frames.
+  const canDispatchInteraction =
+    !event.buttons &&
+    !isOverScrollBar &&
+    !app.state.viewModeEnabled &&
+    !app.state.editingTextElement &&
+    !app.state.newElement &&
+    !app.state.selectionElement &&
+    !app.state.multiElement &&
+    !app.state.selectedElementsAreBeingDragged &&
+    (isSelectionLikeTool(app.state.activeTool.type) || isMindmapTool);
+
   if (
     !app.state.newElement &&
     !app.state.selectionElement &&
@@ -787,14 +801,14 @@ export const handleCanvasPointerMove = (
   ) {
     if (isOverScrollBar) {
       app.cursor.set(CURSOR_TYPE.AUTO);
-    } else if (!isSelectionLikeTool(app.state.activeTool.type)) {
-      // selection-mode frames compute the cursor in applyPointerFrame
+    } else if (
+      !isSelectionLikeTool(app.state.activeTool.type) &&
+      !(isMindmapTool && canDispatchInteraction)
+    ) {
+      // dispatched frames compute the cursor in applyPointerFrame
       app.cursor.applyForTool();
     }
   }
-
-  // 在工具光标落定之后运行：思维导图折叠 affordance 的悬停指针不被覆盖
-  app.mindmap.handlePointerMove(scenePointerX, scenePointerY);
 
   // 创建工具的预设预览：悬停时跟随光标的那半个透明图形。指针未按下、也不在
   // 任何会话里时才有意义——按下之后由真正的 newElement 接管。
@@ -813,17 +827,6 @@ export const handleCanvasPointerMove = (
   } else {
     app.createPreview.clear();
   }
-
-  const canDispatchInteraction =
-    !event.buttons &&
-    !isOverScrollBar &&
-    !app.state.viewModeEnabled &&
-    !app.state.editingTextElement &&
-    !app.state.newElement &&
-    !app.state.selectionElement &&
-    !app.state.multiElement &&
-    !app.state.selectedElementsAreBeingDragged &&
-    isSelectionLikeTool(app.state.activeTool.type);
 
   if (canDispatchInteraction) {
     // Unified pointer frame (05-general-hover.md): resolve once, dispatch once,

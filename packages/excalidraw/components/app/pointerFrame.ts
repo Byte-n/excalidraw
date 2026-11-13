@@ -15,6 +15,7 @@ import { isShapeElement } from "@excalidraw/element";
 import type {
   CompositeShapeControlPoint,
   ConnectionHit,
+  MindmapAddButtonKind,
   QuickCreateDirection,
 } from "@excalidraw/element";
 import type { GlobalPoint, Radians } from "@excalidraw/math";
@@ -72,6 +73,11 @@ export type PointerTarget =
       kind: "compositeControl";
       elementId: string;
       control: CompositeControlPoint;
+    }
+  | {
+      kind: "mindmapAddButton";
+      elementId: string;
+      button: MindmapAddButtonKind;
     };
 
 export type PointerPhase = "hover" | "armed" | "gesture" | "pending";
@@ -88,6 +94,7 @@ export type GestureOwner =
 export type PointerMode =
   | "selection" // selection / lasso: handles, containers and elements all participate
   | "arrow" // arrow / line: connection targets only, selection handles degrade
+  | "mindmap" // mindmap tool: node / add-button hover only, no selection handles
   | "shape" // rectangle & co: preset preview only, no target resolution
   | "other"; // text / eraser / hand / laser
 
@@ -151,6 +158,8 @@ export type { ProviderFor };
  */
 export const PROVIDER_ORDER = [
   "compositeControl",
+  // after transformHandle (handled before this loop), before quickCreateHandle
+  "mindmapAddButton",
   "quickCreateHandle",
   "connection",
   "activationEdge",
@@ -216,6 +225,9 @@ export const currentPointerMode = (app: {
   if (type === "arrow" || type === "line") {
     return "arrow";
   }
+  if (type === "mindmap") {
+    return "mindmap";
+  }
   if (SHAPE_LIKE_TOOLS.includes(type as ToolType)) {
     return "shape";
   }
@@ -256,6 +268,29 @@ const toSceneCoord = (point: GlobalPoint) => ({
   y: point[1],
 });
 
+/**
+ * Mindmap tool base target: nodes keep element / selectedElement hover so the
+ * collapse affordance and node highlight follow the frame, while selection
+ * handles degrade to the node (HEAD showed the tool cursor, not resize).
+ */
+const resolveMindmapBase = (
+  app: PointerApp,
+  input: PointerFrameInput,
+): InteractionTarget | { kind: "canvas" } => {
+  if (typeof app.getElementAtPosition !== "function") {
+    return { kind: "canvas" };
+  }
+  const hit = app.getElementAtPosition(input.point[0], input.point[1], {
+    includeBoundTextElement: true,
+  });
+  if (!hit || hit.locked) {
+    return { kind: "canvas" };
+  }
+  return app.state.selectedElementIds?.[hit.id]
+    ? { kind: "selectedElement", elementId: hit.id }
+    : { kind: "element", elementId: hit.id };
+};
+
 export const resolvePointerFrame = (
   app: PointerApp,
   input: PointerFrameInput,
@@ -267,6 +302,11 @@ export const resolvePointerFrame = (
 
   if (input.mode === "shape" || input.mode === "other") {
     return frame(base, input);
+  }
+
+  if (input.mode === "mindmap") {
+    const addButton = runProvider("mindmapAddButton", app, input);
+    return frame(addButton ?? resolveMindmapBase(app, input), input);
   }
 
   if (input.mode === "arrow") {
@@ -391,6 +431,11 @@ export const isSamePointerFrame = (
       return (
         a.elementId === (b as typeof a).elementId &&
         sameControl(a.control, (b as typeof a).control)
+      );
+    case "mindmapAddButton":
+      return (
+        a.elementId === (b as typeof a).elementId &&
+        a.button === (b as typeof a).button
       );
     case "textHandle":
     case "linearHandle":
@@ -519,3 +564,41 @@ const compositeControlProvider: ProviderFor<"compositeControl"> = {
 };
 
 registerPointerTargetProvider(compositeControlProvider);
+
+/**
+ * Mindmap node add button (05-general-hover.md §4.8, PR5b). Gate mirrors the
+ * legacy pointermove hover gate; the provider is a pure read (hit testing
+ * only) and never writes hover, cursor or repaint.
+ */
+const mindmapAddButtonProvider: ProviderFor<"mindmapAddButton"> = {
+  kind: "mindmapAddButton",
+  resolve: (app, input) => {
+    if (input.mode !== "selection" && input.mode !== "mindmap") {
+      return null;
+    }
+    const tool = app.state.activeTool?.type;
+    if (tool !== "mindmap" && tool !== "selection") {
+      return null;
+    }
+    if (
+      app.state.openDialog?.name === "elementLinkSelector" ||
+      app.state.viewModeEnabled ||
+      typeof app.mindmap?.hitTestAddButton !== "function" ||
+      (typeof app.isInteractionEnabled === "function" &&
+        !app.isInteractionEnabled()) ||
+      app.mindmap.getDragPreview?.()
+    ) {
+      return null;
+    }
+    const node = app.mindmap.getAddButtonTargetNode();
+    if (!node) {
+      return null;
+    }
+    const button = app.mindmap.hitTestAddButton(input.point[0], input.point[1]);
+    return button
+      ? { kind: "mindmapAddButton", elementId: node.id, button }
+      : null;
+  },
+};
+
+registerPointerTargetProvider(mindmapAddButtonProvider);

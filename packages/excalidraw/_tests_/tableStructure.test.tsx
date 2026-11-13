@@ -259,7 +259,6 @@ describe("table row/column structure", () => {
 
     expect(h.state.containerGestureVisual).toBeNull();
     expect(h.app.interactionState.isTableGestureActive).toBe(true);
-    const mindmapHover = vi.spyOn(h.app.mindmap, "handlePointerMove");
     const cellHover = vi.spyOn(
       h.app,
       "maybeUpdateTableCellHighlightOnPointerMove",
@@ -269,14 +268,12 @@ describe("table row/column structure", () => {
       "maybeUpdateTableStructureHoverOnPointerMove",
     );
     mouseMove(grip.x, grip.y + 20);
-    expect(mindmapHover).not.toHaveBeenCalled();
     expect(cellHover).not.toHaveBeenCalled();
     expect(structureHover).not.toHaveBeenCalled();
 
     mouseUp(grip.x, grip.y + 20);
     expect(h.app.interactionState.isTableGestureActive).toBe(false);
     mouseMove(grip.x, grip.y);
-    expect(mindmapHover).toHaveBeenCalled();
     expect(cellHover).toHaveBeenCalled();
     // the unified dispatch derives the structure hover again (through the
     // table provider rather than the legacy channel)

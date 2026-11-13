@@ -1,6 +1,5 @@
 import {
   DRAGGING_THRESHOLD,
-  CURSOR_TYPE,
   getFontString,
   getGridPoint,
   KEYS,
@@ -70,6 +69,7 @@ import { getMindmapPresetTree } from "./app/createPresets";
 import type { MindmapTextNode } from "../data/mindmapText";
 
 import type App from "./App";
+import type { PointerTarget } from "./app/pointerFrame";
 import type { PointerDownState } from "../types";
 import type { ActionName, ActionResult } from "../actions/types";
 
@@ -165,14 +165,40 @@ const relayoutAfterStyleActions = new Set<ActionName>([
 ]);
 
 /**
+ * The mindmap node a pointer frame target points at (a bound text maps to its
+ * container). Pure read shared by the renderer / hover derivation so the frame
+ * is the only hover source (05-general-hover.md §4.8).
+ */
+export const getMindmapNodeIdFromPointerTarget = (
+  app: Pick<App, "scene">,
+  target: PointerTarget | undefined,
+): string | null => {
+  if (
+    !target ||
+    (target.kind !== "element" &&
+      target.kind !== "selectedElement" &&
+      target.kind !== "mindmapAddButton")
+  ) {
+    return null;
+  }
+  const element = app.scene.getNonDeletedElement(target.elementId);
+  if (!element) {
+    return null;
+  }
+  const node =
+    element.type === "text" && element.containerId
+      ? app.scene.getNonDeletedElement(element.containerId)
+      : element;
+  return node && isMindmapNodeElement(node) ? node.id : null;
+};
+
+/**
  * Owns the first phase of mindmap interaction. Structural writes go through
  * the existing Scene/Store path; the controller only keeps transient typing
  * state for nodes that have not received their first label yet.
  */
 export class AppMindmap {
   private readonly pendingTextNodeIds = new Set<string>();
-  private hoveredNodeId: string | null = null;
-  private hoveredAddButton: MindmapAddButtonKind | null = null;
   private consumedSpace = false;
   private dragSession: MindmapDragSession | null = null;
   private dragOpacityApplied = false;
@@ -187,17 +213,7 @@ export class AppMindmap {
     this.consumedSpace = false;
     this.blockedTouchPointerDown = null;
     this.cancelDrag();
-    this.clearHover();
   };
-
-  clearHover = () => {
-    this.hoveredNodeId = null;
-    this.hoveredAddButton = null;
-  };
-
-  getHoveredNodeId = () => this.hoveredNodeId;
-
-  getHoveredAddButton = () => this.hoveredAddButton;
 
   /**
    * 当前应挂「+」按钮的节点：单选、可编辑、无遮挡 UI。渲染与命中共用此判定，
@@ -282,8 +298,9 @@ export class AppMindmap {
   };
 
   /** 「+」按钮点击：立即建节点并吞掉本次手势。 */
-  private handleAddButtonPointerDown = (
+  handleAddButtonPointerDown = (
     pointerDownState: PointerDownState,
+    target: { elementId: string; button: MindmapAddButtonKind },
   ): boolean => {
     if (
       !this.app.isInteractionEnabled() ||
@@ -292,12 +309,8 @@ export class AppMindmap {
     ) {
       return false;
     }
-    const button = this.hitTestAddButton(
-      pointerDownState.origin.x,
-      pointerDownState.origin.y,
-    );
-    const node = button ? this.getAddButtonTargetNode() : null;
-    if (!button || !node) {
+    const node = this.app.scene.getNonDeletedElement(target.elementId);
+    if (!node || !isMindmapNodeElement(node) || !this.canEditNode(node.id)) {
       return false;
     }
     this.cancelledPointerDown = pointerDownState;
@@ -307,12 +320,40 @@ export class AppMindmap {
     if (this.app.state.resizingElement || this.app.state.isResizing) {
       this.app.setState({ resizingElement: null, isResizing: false });
     }
-    if (button === "child") {
+    if (target.button === "child") {
       this.createChild(node.id);
     } else {
       this.createSibling(node.id);
     }
     return true;
+  };
+
+  /**
+   * 悬停节点：hover 帧直接读 target；pointerdown 的 armed 帧已覆盖 hover 帧，
+   * 此时回落到上一次 hover 位置的命中（旧字段在 pointerdown 前持久保留）。
+   */
+  private resolveHoveredNodeId = (): string | null => {
+    const frame = this.app.pointer.getFrame();
+    const fromFrame = getMindmapNodeIdFromPointerTarget(
+      this.app,
+      frame?.target,
+    );
+    if (fromFrame || frame?.phase === "hover") {
+      return fromFrame;
+    }
+    const hoverPoint = this.app.pointer.getLastHoverPoint();
+    if (!hoverPoint) {
+      return null;
+    }
+    const hit = this.app.getElementAtPosition(hoverPoint[0], hoverPoint[1], {
+      includeBoundTextElement: true,
+    });
+    return hit
+      ? getMindmapNodeIdFromPointerTarget(this.app, {
+          kind: "element",
+          elementId: hit.id,
+        })
+      : null;
   };
 
   /**
@@ -326,12 +367,10 @@ export class AppMindmap {
     const collapsedCounts = this.app.scene.getMindmapCollapsedCounts();
     const selectedIds = Object.keys(this.app.state.selectedElementIds);
     const singleSelectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+    // 悬停节点来自当前指针帧（README：帧是唯一 hover 来源）
+    const hoveredNodeId = this.resolveHoveredNodeId();
     // 快路径：没有徽标、也没有悬停/单选节点时不可能命中
-    if (
-      collapsedCounts.size === 0 &&
-      !this.hoveredNodeId &&
-      !singleSelectedId
-    ) {
+    if (!collapsedCounts.size && !hoveredNodeId && !singleSelectedId) {
       return null;
     }
     const elements = this.app.scene.getNonDeletedElements();
@@ -361,7 +400,7 @@ export class AppMindmap {
         !element.collapsed &&
         !this.app.state.viewModeEnabled &&
         hasChildren.has(element.id) &&
-        (this.hoveredNodeId === element.id || singleSelectedId === element.id);
+        (hoveredNodeId === element.id || singleSelectedId === element.id);
       if (!showBadge && !showMinus) {
         continue;
       }
@@ -409,67 +448,6 @@ export class AppMindmap {
     }
     this.executeTreeCommand({ type: "toggleCollapse" }, nodeId);
     return true;
-  };
-
-  handlePointerMove = (sceneX: number, sceneY: number) => {
-    if (this.dragSession) {
-      if (this.hoveredAddButton) {
-        this.hoveredAddButton = null;
-        this.app.repaint.request();
-      }
-      return;
-    }
-    if (
-      !["mindmap", "selection"].includes(this.app.state.activeTool.type) ||
-      this.app.state.openDialog?.name === "elementLinkSelector"
-    ) {
-      if (this.hoveredNodeId) {
-        this.hoveredNodeId = null;
-        this.app.setState({ hoveredElementIds: {} });
-      }
-      if (this.hoveredAddButton) {
-        this.hoveredAddButton = null;
-        this.app.repaint.request();
-      }
-      return;
-    }
-
-    const hit = this.app.getElementAtPosition(sceneX, sceneY, {
-      includeBoundTextElement: true,
-    });
-    const node =
-      hit?.type === "text" && hit.containerId
-        ? this.app.scene.getNonDeletedElement(hit.containerId)
-        : hit;
-    const hoveredNode = node && isMindmapNodeElement(node) ? node : null;
-    const hoveredNodeId = hoveredNode?.id ?? null;
-    if (
-      hoveredNodeId !== this.hoveredNodeId ||
-      (hoveredNode && !this.app.state.hoveredElementIds[hoveredNode.id])
-    ) {
-      this.hoveredNodeId = hoveredNodeId;
-      this.app.setState({
-        hoveredElementIds: hoveredNode ? { [hoveredNode.id]: true } : {},
-      });
-    }
-
-    // 「+」按钮悬停态（驱动画布反色重绘）
-    const hoveredAddButton = this.hitTestAddButton(sceneX, sceneY);
-    if (hoveredAddButton !== this.hoveredAddButton) {
-      this.hoveredAddButton = hoveredAddButton;
-      // 「+」的悬停形态只存在组件字段里，不进 appState：setState({}) 不会
-      // 让交互层重渲染（memo 判定相等），必须显式重绘一帧
-      this.app.repaint.request();
-    }
-
-    // 折叠 affordance/「+」悬停指针（在 pointerCanvas 的工具光标之后运行，不被覆盖）
-    if (
-      (hoveredAddButton || this.hitTestCollapseAffordance(sceneX, sceneY)) &&
-      !this.app.state.viewModeEnabled &&
-      this.app.isInteractionEnabled()
-    ) {
-      this.app.cursor.set(CURSOR_TYPE.POINTER);
-    }
   };
 
   handlePointerDown = (pointerDownState: PointerDownState) => {
@@ -1117,10 +1095,6 @@ export class AppMindmap {
   ) => {
     // 折叠 affordance（徽标/「−」）优先于节点选择与拖拽手势
     if (this.handleCollapseAffordancePointerDown(pointerDownState)) {
-      return;
-    }
-    // 「+」新增节点按钮同理：命中即建节点，不进入选择/拖拽
-    if (this.handleAddButtonPointerDown(pointerDownState)) {
       return;
     }
     const hit = this.getMindmapNodeFromPointerDown(pointerDownState);

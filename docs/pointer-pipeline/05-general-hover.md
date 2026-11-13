@@ -477,3 +477,22 @@ expect(spy).toHaveBeenCalledTimes(1);
   `interaction-target.test.ts` 补 §5.2 矩阵；`tableStructure.test.tsx` 的
   「scale 手势绕过选择入口」用例改为断言 transformHandle 分派。
 - 遗留问题：5b 思维导图 hover 仍由 `App.mindmap` 持有。
+
+## 实施记录（2026-11-14，5b）
+
+- 实际改动：`PointerTarget` 新增 `mindmapAddButton`（elementId + button），provider 纯读
+  命中 `App.mindmap.hitTestAddButton`，优先级在 transformHandle 之后、quickCreateHandle
+  之前；新增 `PointerMode = "mindmap"`，mindmap 工具只解析 element / selectedElement /
+  add-button，不走选择手柄。删除 `hoveredNodeId` / `hoveredAddButton` / `getHoveredNodeId`
+  / `getHoveredAddButton` / `handlePointerMove` 及 pointerCanvas 调用；渲染器改读 frame。
+  `hoveredElementIds` 的节点镜像由 `updateDerivedPointerState` 写；「+」按钮点击由
+  pointerdown target switch 调用 `handleAddButtonPointerDown(target)`。cursor：add-button
+  与折叠 affordance → POINTER，mindmap 工具节点保持工具光标。
+- 与计划的偏差：折叠 affordance 不是 target（不在 §4.1 列表），其命中在 cursor 写者内
+  查询 `hitTestCollapseAffordance`；pointerdown 时 armed 帧覆盖 hover 帧，命中回落到
+  `getLastHoverPoint()`，保持「悬停后不移动直接点击」的旧行为。view-mode 下 frame dispatch
+  被门控，思维导图节点悬停高亮不再显示（旧字段路径移除后的既有边界）。
+- 基线变化：无快照差异；补了 add-button 悬停进入/离开各一次交互重绘（同一按钮内移动不重绘）。
+- 新增/调整测试：`pointer-hover-down.test.tsx` 增加 mindmapAddButton hover = down、
+  add-button 重绘回归、mindmap 工具节点光标；mindmapCreation 等既有用例改读 frame。
+- 遗留问题：PR6 清理旧字段与旧几何函数。

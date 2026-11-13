@@ -324,7 +324,6 @@ export type PointerSessionApp = {
 
 const suspendHoverForStructureGesture = (app: PointerApp) => {
   app.interactionState.isTableGestureActive = true;
-  app.mindmap.clearHover();
   if (
     app.state.highlightedTableCell ||
     app.state.tableStructureHover ||
@@ -747,6 +746,18 @@ export const handleCanvasPointerDown = (
       skipSelectionDispatch = true;
       break;
     }
+    case "mindmapAddButton":
+      // 命中「+」即建节点并吞掉手势，不进入选择/拖拽（旧 preparePointerDown 语义）
+      if (
+        app.mindmap.handleAddButtonPointerDown(
+          pointerDownState,
+          interactionTarget,
+        )
+      ) {
+        attachPointerSessionListeners(app, event, pointerDownState);
+        return;
+      }
+      break;
     default:
       break;
   }
