@@ -1,0 +1,120 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`arrow type switch baseline (§5.2) > sharp → round → elbow → sharp keeps the attachPoint chain stable 1`] = `
+{
+  "elbow": {
+    "elbowed": true,
+    "endBinding": {
+      "attachPoint": [
+        "1.03000",
+        "0.25000",
+      ],
+      "elementId": "type-rect",
+    },
+    "endGlobal": [
+      306,
+      130,
+    ],
+    "fixedSegments": null,
+    "points": [
+      [
+        0,
+        0,
+      ],
+      [
+        -94,
+        0,
+      ],
+    ],
+    "roundness": null,
+    "x": 400,
+    "y": 130,
+  },
+  "initial": {
+    "elbowed": false,
+    "endBinding": {
+      "attachPoint": [
+        1,
+        "0.25000",
+      ],
+      "elementId": "type-rect",
+    },
+    "endGlobal": [
+      300,
+      130,
+    ],
+    "fixedSegments": undefined,
+    "points": [
+      [
+        0,
+        0,
+      ],
+      [
+        -100,
+        0,
+      ],
+    ],
+    "roundness": null,
+    "x": 400,
+    "y": 130,
+  },
+  "round": {
+    "elbowed": false,
+    "endBinding": {
+      "attachPoint": [
+        "1.03000",
+        "0.25000",
+      ],
+      "elementId": "type-rect",
+    },
+    "endGlobal": [
+      300,
+      130,
+    ],
+    "fixedSegments": undefined,
+    "points": [
+      [
+        0,
+        0,
+      ],
+      [
+        -100,
+        0,
+      ],
+    ],
+    "roundness": {
+      "type": 2,
+    },
+    "x": 400,
+    "y": 130,
+  },
+  "sharpAgain": {
+    "elbowed": false,
+    "endBinding": {
+      "attachPoint": [
+        "1.03000",
+        "0.25000",
+      ],
+      "elementId": "type-rect",
+    },
+    "endGlobal": [
+      306,
+      130,
+    ],
+    "fixedSegments": null,
+    "points": [
+      [
+        0,
+        0,
+      ],
+      [
+        -94,
+        0,
+      ],
+    ],
+    "roundness": null,
+    "x": 400,
+    "y": 130,
+  },
+}
+`;

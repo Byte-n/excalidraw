@@ -1,0 +1,61 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`type-conversion reanchor baseline (§5.2) > keeps the arrow when the attach point already hugs an open path 1`] = `
+{
+  "attachPoint": [
+    0.1123,
+    0.7423,
+  ],
+  "elementId": "reanchor-brace-hugging",
+  "endpoint": [
+    300,
+    180,
+  ],
+  "endpointUnchanged": true,
+}
+`;
+
+exports[`type-conversion reanchor baseline (§5.2) > reanchors a bound arrow to the 'composite open path (brace)' outline 1`] = `
+{
+  "attachPoint": [
+    0.1123,
+    0.7423,
+  ],
+  "elementId": "reanchor-brace",
+  "endpoint": [
+    300,
+    180,
+  ],
+  "endpointUnchanged": true,
+}
+`;
+
+exports[`type-conversion reanchor baseline (§5.2) > reanchors a bound arrow to the 'composite star' outline 1`] = `
+{
+  "attachPoint": [
+    0.8153,
+    0.3037,
+  ],
+  "elementId": "reanchor-star",
+  "endpoint": [
+    300,
+    180,
+  ],
+  "endpointUnchanged": true,
+}
+`;
+
+exports[`type-conversion reanchor baseline (§5.2) > reanchors a bound arrow to the 'mindmap node' outline 1`] = `
+{
+  "attachPoint": [
+    1.03,
+    0.1688,
+  ],
+  "elementId": "reanchor-node",
+  "endpoint": [
+    300,
+    180,
+  ],
+  "endpointUnchanged": true,
+}
+`;
