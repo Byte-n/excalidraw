@@ -358,20 +358,32 @@ const providerByCandidate = new WeakMap<
   ContainerInteractionProvider
 >();
 
+/** Dispatch-phase hover only (no cursor): the cursor is computed once by the
+ * frame dispatcher (05-general-hover.md §4.4). */
+export const renderContainerInteractionHover = (
+  app: PointerApp,
+  candidate: ContainerInteractionCandidate,
+): void => {
+  providerByCandidate.get(candidate)?.renderHover(app, candidate);
+};
+
+/** Cursor contributed by the container provider; "" leaves it to the tool cursor. */
+export const getContainerProviderCursor = (
+  app: PointerApp,
+  candidate: ContainerInteractionCandidate,
+): string =>
+  providerByCandidate.get(candidate)?.getCursor(app, candidate) ?? "";
+
 /**
- * Dispatch-phase hover + cursor application for a resolved container target.
- * The provider owns its hover state; the global cursor is set only here.
+ * Legacy wrapper (container pointerdown / tests): hover + cursor in one call.
+ * Frame-based hovering goes through the two functions above instead.
  */
 export const dispatchContainerInteraction = (
   app: PointerApp,
   candidate: ContainerInteractionCandidate,
 ): void => {
-  const provider = providerByCandidate.get(candidate);
-  if (!provider) {
-    return;
-  }
-  provider.renderHover(app, candidate);
-  const cursor = provider.getCursor(app, candidate);
+  renderContainerInteractionHover(app, candidate);
+  const cursor = getContainerProviderCursor(app, candidate);
   if (cursor) {
     app.cursor.set(cursor);
   }

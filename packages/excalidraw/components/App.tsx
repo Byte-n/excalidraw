@@ -2314,12 +2314,14 @@ class App extends React.Component<AppProps, AppState> {
     linearElementEditor: LinearElementEditor,
     scenePointerX: number,
     scenePointerY: number,
+    opts?: { setCursor?: boolean },
   ) {
     return pointerCanvasController.handleHoverSelectedLinearElement(
       this,
       linearElementEditor,
       scenePointerX,
       scenePointerY,
+      opts,
     );
   }
 

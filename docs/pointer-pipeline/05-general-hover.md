@@ -437,3 +437,23 @@ expect(spy).toHaveBeenCalledTimes(1);
 - 不改 `interaction-target-resolution.md` 的容器 provider 语义。
 - 不删除旧镜像字段（PR6）。
 - 不把预设预览 / 对齐线做成 target。
+
+## 实施记录（2026-11-14）
+
+- 实际改动（5a-1）：新增 `pointerCursor.ts`（`getToolCursor` / `getElementHoverCursor` /
+  `getCursorForPointerTarget`）与 `pointerDerived.ts`（`clearPointerHover` /
+  `updateDerivedPointerState`）；`applyPointerFrame` 成为唯一 cursor 写者，并接管
+  `transformStatus`（每帧 set 或 clear 一次）。`pointerCanvas` 的选择态 hover 走帧分派后
+  提前返回；`hoveredElementId` 保留在 legacy 块原位置（frame-title DOM 桥，O4）。
+- 与计划的偏差：`transformStatus.setHoveredHandle` 改为返回 `boolean`；手柄不变但指针
+  移动时由 dispatch 补一次 repaint（读数气泡跟随指针）。`AppPointerState` 增加
+  `getLastHoverPoint()` 用于区分“指针真的动了”与 pointerdown/up 存的 armed 帧。
+  `embeds.tsx` 拆出只写状态的 `updateIframeLikeElementHover`；容器 handler 拆出
+  `renderContainerInteractionHover` / `getContainerProviderCursor`。
+- 基线变化：连接落点基线 0 变化。`selection` / `move` / `dragCreate` 的交互重绘计数
+  +1～+4：`refreshHover` 合成的 pointermove 无 `pointerType`，HEAD 因此漏判变换手柄；
+  帧分派规范化为 `mouse` 后能正确命中并绘制读数。元素快照无变化。
+- 新增/调整测试：`pointer-cursor.test.tsx`（8 项，cursor 优先级矩阵）；
+  `interaction-target.test.ts` 增加“非容器 target 也只写一次 cursor”断言。
+- 遗留问题：5a-2 的 pointerdown target switch / composite / transform 分支删除、表格
+  标题 grip 迁移仍未做；5b 思维导图 hover 仍由 `App.mindmap` 持有。

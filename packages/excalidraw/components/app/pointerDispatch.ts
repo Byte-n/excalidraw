@@ -1,12 +1,9 @@
 /**
  * The only writer for a resolved pointer frame
- * (docs/pointer-pipeline/02-frame-contract.md §4.7).
+ * (docs/pointer-pipeline/02-frame-contract.md §4.7, 05-general-hover.md §4.3).
  *
- * PR3a scope: the `connection` target is mirrored into `suggestedBinding`; every
- * other target clears the mirror. Container control / body targets keep their
- * existing dispatch.
+ * PR5a-1: one cursor writer per frame; hover mirrors derived here.
  */
-import { CURSOR_TYPE } from "@excalidraw/common";
 import { isSameSuggestedBinding } from "@excalidraw/element";
 
 import type {
@@ -14,10 +11,9 @@ import type {
   NonDeleted,
 } from "@excalidraw/element/types";
 
-import {
-  clearContainerInteractionHover,
-  dispatchContainerInteraction,
-} from "./interactionTarget";
+import { clearPointerHover, updateDerivedPointerState } from "./pointerDerived";
+import { getCursorForPointerTarget } from "./pointerCursor";
+import { renderContainerInteractionHover } from "./interactionTarget";
 
 import type { PointerFrame } from "./pointerFrame";
 import type App from "../App";
@@ -30,13 +26,16 @@ const clearSuggestedBinding = (app: PointerApp) => {
   }
 };
 
+const isSequenceTarget = (target: PointerFrame["target"] | undefined) =>
+  target?.kind === "quickCreateHandle" ||
+  target?.kind === "activationEdge" ||
+  target?.kind === "poleActivation";
+
 export const applyPointerFrame = (
   app: PointerApp,
   frame: PointerFrame,
 ): void => {
-  // A hover frame must never displace a sequence-affordance gesture frame:
-  // those owners keep the frame until pointerup (synthetic moves may report no
-  // buttons). Selection / table / mindmap sessions keep the old behavior.
+  // A hover frame must never displace a sequence-affordance gesture frame.
   const existingFrame =
     typeof app.pointer?.getFrame === "function" ? app.pointer.getFrame() : null;
   const sequenceOwnedFrame =
@@ -50,50 +49,58 @@ export const applyPointerFrame = (
     return;
   }
 
-  // 1. clear the previous frame's container hover
-  clearContainerInteractionHover(app);
-
-  // 2. store the frame first: the renderer reads `getFrame()`.
-  app.pointer.setFrame(frame, { repaint: false });
-  const isSequenceTarget = (target: PointerFrame["target"] | undefined) =>
-    target?.kind === "quickCreateHandle" ||
-    target?.kind === "activationEdge" ||
-    target?.kind === "poleActivation";
-  // sequence hover visuals are component-external state: repaint on enter / move
-  // / leave (same repaint budget as the old hover handler).
+  // 1. full hover cleanup (container providers + derived mirrors)
+  clearPointerHover(app);
   if (
-    isSequenceTarget(frame.target) ||
-    isSequenceTarget(existingFrame?.target)
+    isSequenceTarget(existingFrame?.target) &&
+    !isSequenceTarget(frame.target)
   ) {
-    app.repaint.request();
+    app.quickCreate.reset();
   }
 
-  // 3. sequence-affordance visuals read the frame + ghost caches directly
-  //    (PR4b): no hover mirrors to write here.
+  // 2. store the frame first: renderer / cursor helpers read `getFrame()`
+  const previousHoverPoint = app.pointer.getLastHoverPoint?.() ?? null;
+  app.pointer.setFrame(frame, { repaint: false });
+
+  // 3. transform-handle readout: exactly one write per frame (set OR clear),
+  //    so hovering a handle does not clear + re-set on every pointermove.
+  //    The readout follows the pointer, so a move over the same handle still
+  //    needs one interactive frame (HEAD got this from clear + set).
+  if (frame.target.kind === "transformHandle") {
+    const changed = app.transformStatus?.setHoveredHandle(frame.target.handle);
+    if (
+      !changed &&
+      previousHoverPoint &&
+      (previousHoverPoint[0] !== frame.point[0] ||
+        previousHoverPoint[1] !== frame.point[1])
+    ) {
+      // unchanged handle but the pointer moved: the readout follows the
+      // pointer, so this move still needs one interactive frame
+      app.repaint?.request();
+    }
+  } else {
+    app.transformStatus?.clearHovered();
+  }
+
+  // 4. target dispatch (hover state only; never the cursor)
   switch (frame.target.kind) {
-    case "quickCreateHandle":
-    case "activationEdge":
-    case "poleActivation":
-      if (
-        frame.phase === "hover" &&
-        !app.state.viewModeEnabled &&
-        app.isInteractionEnabled()
-      ) {
-        app.cursor.set(CURSOR_TYPE.POINTER);
+    case "linearHandle": {
+      const editor = app.state.selectedLinearElement;
+      if (editor && editor.elementId === frame.target.elementId) {
+        app.handleHoverSelectedLinearElement(
+          editor,
+          frame.point[0],
+          frame.point[1],
+          { setCursor: false },
+        );
       }
       break;
-    default:
-      break;
-  }
-
-  // 3. dispatch by target kind
-  switch (frame.target.kind) {
+    }
     case "containerControl":
     case "containerBody":
-      dispatchContainerInteraction(app, frame.target.candidate);
+      renderContainerInteractionHover(app, frame.target.candidate);
       clearSuggestedBinding(app);
       break;
-
     case "connection": {
       const element = app.scene.getNonDeletedElement(
         frame.target.elementId,
@@ -110,20 +117,22 @@ export const applyPointerFrame = (
       );
       break;
     }
-
-    // every other kind is not a connection affordance
-    case "textHandle":
-    case "linearHandle":
-    case "transformHandle":
-    case "selectedElement":
-    case "element":
-    case "canvas":
-    case "activationEdge":
-    case "poleActivation":
-    case "quickCreateHandle":
-    case "compositeControl":
     default:
       clearSuggestedBinding(app);
       break;
   }
+
+  // sequence hover visuals are component-external state
+  if (
+    isSequenceTarget(frame.target) ||
+    isSequenceTarget(existingFrame?.target)
+  ) {
+    app.repaint.request();
+  }
+
+  // 4. derived hover (frame highlight, table cell, hovered ids, link/embed)
+  updateDerivedPointerState(app, frame);
+
+  // 5. the single cursor write for this frame
+  app.cursor.set(getCursorForPointerTarget(app, frame));
 };

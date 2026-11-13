@@ -13,9 +13,14 @@ import type App from "../App";
 export class AppPointerState {
   private frame: PointerFrame | null = null;
 
+  /** Point of the last stored hover frame (armed/gesture frames excluded). */
+  private lastHoverPoint: PointerFrame["point"] | null = null;
+
   constructor(private readonly app: App) {}
 
   getFrame = (): PointerFrame | null => this.frame;
+
+  getLastHoverPoint = (): PointerFrame["point"] | null => this.lastHoverPoint;
 
   /**
    * Returns whether the frame changed; a change requests a repaint.
@@ -36,6 +41,9 @@ export class AppPointerState {
       return false;
     }
     this.frame = frame;
+    if (frame?.phase === "hover") {
+      this.lastHoverPoint = frame.point;
+    }
     if (repaint) {
       this.app.repaint.request();
     }

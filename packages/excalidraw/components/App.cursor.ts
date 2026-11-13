@@ -35,6 +35,103 @@ const createBucketFillCursorDataURL = (color: string) => {
   )}`;
 };
 
+let eraserCanvasCache:
+  | (HTMLCanvasElement & { theme?: AppState["theme"] })
+  | null = null;
+let eraserPreviewDataURL: DataURL | null = null;
+
+/** Eraser cursor (cached by theme); no side effects on the live cursor. */
+const getEraserCursor = (app: Pick<App, "state">): string => {
+  const cursorImageSizePx = 20;
+  const theme = app.state.theme;
+
+  if (!eraserCanvasCache || eraserCanvasCache.theme !== theme) {
+    const isDarkTheme = theme === THEME.DARK;
+    eraserCanvasCache = document.createElement("canvas");
+    eraserCanvasCache.theme = theme;
+    eraserCanvasCache.height = cursorImageSizePx;
+    eraserCanvasCache.width = cursorImageSizePx;
+    const context = eraserCanvasCache.getContext("2d")!;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.arc(
+      eraserCanvasCache.width / 2,
+      eraserCanvasCache.height / 2,
+      5,
+      0,
+      2 * Math.PI,
+    );
+    context.fillStyle = isDarkTheme ? "#000" : "#fff";
+    context.fill();
+    context.strokeStyle = isDarkTheme ? "#fff" : "#000";
+    context.stroke();
+    eraserPreviewDataURL = eraserCanvasCache.toDataURL(
+      MIME_TYPES.svg,
+    ) as DataURL;
+  }
+
+  return `url(${eraserPreviewDataURL}) ${cursorImageSizePx / 2} ${
+    cursorImageSizePx / 2
+  }, auto`;
+};
+
+/**
+ * Resting tool cursor as a pure value ("" = environment default). Extracted
+ * from `applyForTool` so the frame dispatcher can be the single cursor writer
+ * (05-general-hover.md §4.4).
+ */
+export const getToolCursor = (
+  app: Pick<App, "state" | "bucketFill">,
+  activeTool: AppState["activeTool"] | undefined = app.state.activeTool,
+): string => {
+  if (!activeTool) {
+    return "";
+  }
+  const theme =
+    activeTool.type === "eraser" ||
+    activeTool.type === "laser" ||
+    activeTool.type === "bucketfill"
+      ? app.state.theme
+      : undefined;
+
+  if (activeTool.type === "selection") {
+    return "";
+  }
+  if (isHandToolActive({ activeTool })) {
+    return CURSOR_TYPE.GRAB;
+  }
+  if (isEraserActive({ activeTool })) {
+    return getEraserCursor(app as App);
+  }
+  if (activeTool.type === "autoshape") {
+    return CURSOR_TYPE.CROSSHAIR;
+  }
+  if (activeTool.type === "text") {
+    return CURSOR_TYPE.TEXT;
+  }
+  if (activeTool.type === "bucketfill") {
+    const bucketFillColor = app.bucketFill.getBucketFillBackgroundColor(
+      app.state.currentItemBackgroundColor,
+      theme,
+    );
+    return `url(${createBucketFillCursorDataURL(bucketFillColor)}) 5 18, auto`;
+  }
+  if (activeTool.type === "laser") {
+    const url =
+      app.state.theme === THEME.LIGHT
+        ? laserPointerCursorDataURL_lightMode
+        : laserPointerCursorDataURL_darkMode;
+    return `url(${url}), auto`;
+  }
+  if (!["image", "custom"].includes(activeTool.type)) {
+    return CURSOR_TYPE.CROSSHAIR;
+  }
+  if (activeTool.type !== "image") {
+    return CURSOR_TYPE.AUTO;
+  }
+  return "";
+};
+
 /**
  * Captures all cursor management for the interactive canvas.
  *
@@ -50,11 +147,6 @@ export class AppCursor {
     bucketFillColor?: string;
     theme?: AppState["theme"];
   } | null = null;
-
-  private eraserCanvasCache:
-    | (HTMLCanvasElement & { theme?: AppState["theme"] })
-    | null = null;
-  private eraserPreviewDataURL: DataURL | null = null;
 
   constructor(private app: App) {}
 
@@ -124,37 +216,7 @@ export class AppCursor {
       return;
     }
 
-    if (activeTool.type === "selection") {
-      this.clear();
-    } else if (isHandToolActive({ activeTool })) {
-      this.set(CURSOR_TYPE.GRAB);
-    } else if (isEraserActive({ activeTool })) {
-      this.applyEraser();
-    } else if (activeTool.type === "autoshape") {
-      this.set(CURSOR_TYPE.CROSSHAIR);
-    } else if (activeTool.type === "text") {
-      // the text tool inserts text where you click, so it shows the text
-      // caret rather than the crosshair every other creating tool uses
-      this.set(CURSOR_TYPE.TEXT);
-    } else if (activeTool.type === "bucketfill") {
-      // The hotspot is the center of the paint droplet in the icon.
-      this.set(
-        `url(${createBucketFillCursorDataURL(bucketFillColor!)}) 5 18, auto`,
-      );
-    } else if (activeTool.type === "laser") {
-      const url =
-        this.app.state.theme === THEME.LIGHT
-          ? laserPointerCursorDataURL_lightMode
-          : laserPointerCursorDataURL_darkMode;
-      this.set(`url(${url}), auto`);
-    } else if (!["image", "custom"].includes(activeTool.type)) {
-      this.set(CURSOR_TYPE.CROSSHAIR);
-      // do nothing if image tool is selected which suggests there's
-      // an image-preview set as the cursor
-      // Ignore custom type as well and let host decide
-    } else if (activeTool.type !== "image") {
-      this.set(CURSOR_TYPE.AUTO);
-    }
+    this.set(getToolCursor(this.app, activeTool));
 
     this.toolCursorMemo = {
       canvas,
@@ -202,41 +264,5 @@ export class AppCursor {
   /** clears the inline cursor so the environment default (CSS) applies */
   private clear = () => {
     this.set("");
-  };
-
-  private applyEraser = () => {
-    const cursorImageSizePx = 20;
-    const theme = this.app.state.theme;
-
-    if (!this.eraserCanvasCache || this.eraserCanvasCache.theme !== theme) {
-      const isDarkTheme = theme === THEME.DARK;
-      this.eraserCanvasCache = document.createElement("canvas");
-      this.eraserCanvasCache.theme = theme;
-      this.eraserCanvasCache.height = cursorImageSizePx;
-      this.eraserCanvasCache.width = cursorImageSizePx;
-      const context = this.eraserCanvasCache.getContext("2d")!;
-      context.lineWidth = 1;
-      context.beginPath();
-      context.arc(
-        this.eraserCanvasCache.width / 2,
-        this.eraserCanvasCache.height / 2,
-        5,
-        0,
-        2 * Math.PI,
-      );
-      context.fillStyle = isDarkTheme ? "#000" : "#fff";
-      context.fill();
-      context.strokeStyle = isDarkTheme ? "#fff" : "#000";
-      context.stroke();
-      this.eraserPreviewDataURL = this.eraserCanvasCache.toDataURL(
-        MIME_TYPES.svg,
-      ) as DataURL;
-    }
-
-    this.set(
-      `url(${this.eraserPreviewDataURL}) ${cursorImageSizePx / 2} ${
-        cursorImageSizePx / 2
-      }, auto`,
-    );
   };
 }

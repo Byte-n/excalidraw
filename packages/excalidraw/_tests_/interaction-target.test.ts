@@ -506,7 +506,7 @@ describe("container interaction dispatch", () => {
     applyPointerFrame(app, nextFrame);
 
     expect(app.setState).toHaveBeenCalledWith({ tableStructureHover: null });
-    // a non-container target writes no cursor by itself
-    expect(app.cursor.set).not.toHaveBeenCalled();
+    // PR5: the frame dispatcher is the single cursor writer (one write / frame)
+    expect(app.cursor.set).toHaveBeenCalledTimes(1);
   });
 });

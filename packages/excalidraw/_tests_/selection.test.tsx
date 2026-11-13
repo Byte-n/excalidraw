@@ -1163,7 +1163,10 @@ describe("select single element on the scene", () => {
     fireEvent.pointerDown(canvas, { clientX: 45, clientY: 20 });
     fireEvent.pointerUp(canvas);
 
-    expect(renderInteractiveScene).toHaveBeenCalledTimes(10);
+    // +1 vs pre-PR5a: `refreshHover` synthesizes a pointermove without
+    // `pointerType`; the frame normalizes it to "mouse", so the resize handle
+    // under the pointer now sets the transform readout (one repaint).
+    expect(renderInteractiveScene).toHaveBeenCalledTimes(11);
     expect(renderStaticScene).toHaveBeenCalledTimes(8);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(1);
@@ -1193,7 +1196,7 @@ describe("select single element on the scene", () => {
     fireEvent.pointerDown(canvas, { clientX: 45, clientY: 20 });
     fireEvent.pointerUp(canvas);
 
-    expect(renderInteractiveScene).toHaveBeenCalledTimes(11);
+    expect(renderInteractiveScene).toHaveBeenCalledTimes(12);
     expect(renderStaticScene).toHaveBeenCalledTimes(8);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(1);
@@ -1223,7 +1226,7 @@ describe("select single element on the scene", () => {
     fireEvent.pointerDown(canvas, { clientX: 45, clientY: 20 });
     fireEvent.pointerUp(canvas);
 
-    expect(renderInteractiveScene).toHaveBeenCalledTimes(11);
+    expect(renderInteractiveScene).toHaveBeenCalledTimes(12);
     expect(renderStaticScene).toHaveBeenCalledTimes(8);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(1);

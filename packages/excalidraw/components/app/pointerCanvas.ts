@@ -84,6 +84,7 @@ import {
 import { isPointHittingLink } from "../hyperlink/helpers";
 
 import { hitCompositeControlPoint } from "./compositeShapeControls";
+import { updateIframeLikeElementHover } from "./embeds";
 import "./pointerConnection";
 import "./pointerQuickCreate";
 import "./pointerSequence";
@@ -170,12 +171,11 @@ export const getElementLinkAtPosition = (
   return undefined;
 };
 
-export const applyElementLinkHoverAffordance = (app: PointerApp): boolean => {
+export const updateElementLinkHoverAffordance = (app: PointerApp): boolean => {
   if (
     app.hitLinkElement &&
     !app.state.selectedElementIds[app.hitLinkElement.id]
   ) {
-    app.cursor.set(CURSOR_TYPE.POINTER);
     showHyperlinkTooltip(
       app.hitLinkElement,
       app.state,
@@ -185,6 +185,15 @@ export const applyElementLinkHoverAffordance = (app: PointerApp): boolean => {
   }
   hideHyperlinkToolip();
   return false;
+};
+
+/** Legacy wrapper: affordance + cursor (frame dispatch computes the cursor). */
+export const applyElementLinkHoverAffordance = (app: PointerApp): boolean => {
+  const hit = updateElementLinkHoverAffordance(app);
+  if (hit) {
+    app.cursor.set(CURSOR_TYPE.POINTER);
+  }
+  return hit;
 };
 
 export const updateFrameToHighlight = (
@@ -745,13 +754,12 @@ export const handleCanvasPointerMove = (
     y: scenePointerY,
   };
 
-  // 变换读数的悬停态每帧先清空，由下面把手柄判定的那两处按同一次判定写回。
-  // 放在所有提前 return 之前，平移/空格/手型工具/滚动条这些路径才能一起清掉。
-  app.transformStatus.clearHovered();
-
+  // 变换读数的悬停态：帧分派路径每帧只写一次（applyPointerFrame），
+  // 其余路径（表格手势、平移、非选择工具）在各分支自己清。
   app.updateMultiTouchGesture(event);
 
   if (app.interactionState.isTableGestureActive) {
+    app.transformStatus.clearHovered();
     return;
   }
 
@@ -761,6 +769,7 @@ export const handleCanvasPointerMove = (
     app.interactionState.isDraggingScrollBar ||
     isHandToolActive(app.state)
   ) {
+    app.transformStatus.clearHovered();
     return;
   }
 
@@ -778,7 +787,8 @@ export const handleCanvasPointerMove = (
   ) {
     if (isOverScrollBar) {
       app.cursor.set(CURSOR_TYPE.AUTO);
-    } else {
+    } else if (!isSelectionLikeTool(app.state.activeTool.type)) {
+      // selection-mode frames compute the cursor in applyPointerFrame
       app.cursor.applyForTool();
     }
   }
@@ -804,22 +814,6 @@ export const handleCanvasPointerMove = (
     app.createPreview.clear();
   }
 
-  app.maybeUpdateFrameToHighlightOnPointerMove(
-    {
-      x: scenePointerX,
-      y: scenePointerY,
-    },
-    isOverScrollBar,
-  );
-
-  app.maybeUpdateTableCellHighlightOnPointerMove(
-    {
-      x: scenePointerX,
-      y: scenePointerY,
-    },
-    isOverScrollBar,
-  );
-
   const canDispatchInteraction =
     !event.buttons &&
     !isOverScrollBar &&
@@ -832,9 +826,8 @@ export const handleCanvasPointerMove = (
     isSelectionLikeTool(app.state.activeTool.type);
 
   if (canDispatchInteraction) {
-    // Unified pointer frame (02-frame-contract.md): container providers own
-    // their hover state and cursor; every other target keeps the generic flow
-    // below. Frame resolution is a pure read; only the dispatch writes.
+    // Unified pointer frame (05-general-hover.md): resolve once, dispatch once,
+    // single cursor write. Legacy hover entries below are skipped entirely.
     const frame = resolvePointerFrame(app, {
       point: pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
       phase: "hover",
@@ -845,15 +838,22 @@ export const handleCanvasPointerMove = (
       altKey: event.altKey,
     });
     applyPointerFrame(app, frame);
-    if (
-      frame.target.kind === "containerControl" ||
-      frame.target.kind === "containerBody"
-    ) {
-      return;
-    }
-  } else {
-    // dispatch ineligible (dragging, creating, gesturing): the legacy
-    // structure-hover channel keeps its behavior for those flows
+  }
+
+  // dispatch ineligible (dragging, creating, view mode, gestures): the legacy
+  // structure/derived channels keep their behavior for those flows
+  if (!canDispatchInteraction) {
+    // no frame owns the transform readout on this path (HEAD parity: clear
+    // once, then the legacy handle branch below may set it again)
+    app.transformStatus.clearHovered();
+    app.maybeUpdateFrameToHighlightOnPointerMove(
+      { x: scenePointerX, y: scenePointerY },
+      isOverScrollBar,
+    );
+    app.maybeUpdateTableCellHighlightOnPointerMove(
+      { x: scenePointerX, y: scenePointerY },
+      isOverScrollBar,
+    );
     app.maybeUpdateTableStructureHoverOnPointerMove(
       {
         x: scenePointerX,
@@ -1081,8 +1081,9 @@ export const handleCanvasPointerMove = (
     );
   } else if (app.pointer.getFrame()?.target.kind === "connection") {
     // The hover no longer applies (pressed / dragging / scrollbar): drop the
-    // derived mirror so it cannot go stale.
-    app.pointer.clear();
+    // derived mirror so it cannot go stale. The frame itself draws nothing for
+    // this target, so no extra interactive repaint is needed.
+    app.pointer.setFrame(null, { repaint: false });
     if (app.state.suggestedBinding) {
       app.setState({ suggestedBinding: null });
     }
@@ -1108,7 +1109,9 @@ export const handleCanvasPointerMove = (
   const selectedElements = app.scene.getSelectedElements(app.state);
 
   if (app.isHittingTextAutoResizeHandle(selectedElements, scenePointer)) {
-    app.cursor.set(CURSOR_TYPE.POINTER);
+    if (!canDispatchInteraction) {
+      app.cursor.set(CURSOR_TYPE.POINTER);
+    }
     return;
   }
 
@@ -1134,7 +1137,9 @@ export const handleCanvasPointerMove = (
         event.pointerType,
       )
     ) {
-      app.cursor.set(CURSOR_TYPE.MOVE);
+      if (!canDispatchInteraction) {
+        app.cursor.set(CURSOR_TYPE.MOVE);
+      }
       return;
     }
     // for linear elements, we'd like to prioritize point dragging over edge resizing
@@ -1144,6 +1149,7 @@ export const handleCanvasPointerMove = (
         app.state.selectedLinearElement,
         scenePointerX,
         scenePointerY,
+        { setCursor: !canDispatchInteraction },
       );
     }
 
@@ -1174,9 +1180,11 @@ export const handleCanvasPointerMove = (
         elementWithTransformHandleType &&
         elementWithTransformHandleType.transformHandleType
       ) {
-        app.cursor.set(
-          getCursorForResizingElement(elementWithTransformHandleType),
-        );
+        if (!canDispatchInteraction) {
+          app.cursor.set(
+            getCursorForResizingElement(elementWithTransformHandleType),
+          );
+        }
         // 与光标同一个判定：光标切成变换操作态，读数就出现
         app.transformStatus.setHoveredHandle(
           elementWithTransformHandleType.transformHandleType,
@@ -1213,11 +1221,13 @@ export const handleCanvasPointerMove = (
         )
       )
     ) {
-      app.cursor.set(
-        getCursorForResizingElement({
-          transformHandleType,
-        }),
-      );
+      if (!canDispatchInteraction) {
+        app.cursor.set(
+          getCursorForResizingElement({
+            transformHandleType,
+          }),
+        );
+      }
       app.transformStatus.setHoveredHandle(transformHandleType);
       return;
     }
@@ -1227,6 +1237,8 @@ export const handleCanvasPointerMove = (
     return;
   }
 
+  // frame-title DOM bridge (05 §3.3 / O4): pointer-derived and kept at its
+  // original position so the hover value matches HEAD exactly.
   const hitElementMightBeLocked = app.getElementAtPosition(
     scenePointerX,
     scenePointerY,
@@ -1235,6 +1247,17 @@ export const handleCanvasPointerMove = (
       includeLockedElements: true,
     },
   );
+  const hoveredElementId = hitElementMightBeLocked?.id ?? null;
+  if (app.state.hoveredElementId !== hoveredElementId) {
+    app.setState({ hoveredElementId });
+  }
+
+  // Selection-mode hover was already resolved and dispatched through the frame:
+  // only the DOM bridge above still runs; the rest is the legacy channel for
+  // non-frame flows (drags, other tools).
+  if (canDispatchInteraction) {
+    return;
+  }
 
   let hitElement: NonDeleted<ExcalidrawElement> | null = null;
   if (hitElementMightBeLocked && hitElementMightBeLocked.locked) {
@@ -1243,20 +1266,21 @@ export const handleCanvasPointerMove = (
     hitElement = hitElementMightBeLocked;
   }
 
-  const hoveredElementId = hitElementMightBeLocked?.id ?? null;
-  if (app.state.hoveredElementId !== hoveredElementId) {
-    app.setState({ hoveredElementId });
-  }
-
   const hoveredArrowTextAnchor =
     app.arrowText.updateHoveredAnchor(scenePointer);
 
   if (
-    !app.handleIframeLikeElementHover({
-      hitElement,
-      scenePointer,
-      moveEvent: event,
-    })
+    !(canDispatchInteraction
+      ? updateIframeLikeElementHover(app as any, {
+          hitElement,
+          scenePointer,
+          moveEvent: event,
+        })
+      : app.handleIframeLikeElementHover({
+          hitElement,
+          scenePointer,
+          moveEvent: event,
+        }))
   ) {
     app.hitLinkElement = app.getElementLinkAtPosition(
       scenePointer,
@@ -1264,90 +1288,96 @@ export const handleCanvasPointerMove = (
     );
   }
 
-  if (!app.applyElementLinkHoverAffordance()) {
-    if (isLaserTool) {
-      return;
-    }
-    if (
-      hitElement &&
-      (hitElement.link || isEmbeddableElement(hitElement)) &&
-      // 编辑态悬停已选中元素：仅手机端自动弹出（桌面/平板改为点击
-      // 浮动栏「链接」按钮弹出，避免弹层随选中/悬停一直展示）
-      ((app.editorInterface.formFactor === "phone" &&
-        app.state.selectedElementIds[hitElement.id]) ||
-        // 只读/查看模式：悬停带链接元素弹出访问态（设计稿「链接弹层与
-        // 联动态」）；可嵌入元素在查看模式下可直接交互，不弹
-        (app.state.viewModeEnabled &&
-          !!hitElement.link &&
-          !isEmbeddableElement(hitElement))) &&
-      !app.state.contextMenu &&
-      !app.state.showHyperlinkPopup
-    ) {
-      app.setState({ showHyperlinkPopup: "info" });
-    } else if (app.state.activeTool.type === "text") {
-      // 文本工具整体就是「输入」光标：空画布、已有文字、可挂标签的图形，
-      // 点下去都是写字，只有箭头的文字锚点例外（那边是点选锚点）
-      app.cursor.set(
-        hoveredArrowTextAnchor ? CURSOR_TYPE.POINTER : CURSOR_TYPE.TEXT,
-      );
-    } else if (
-      hitElement &&
-      isMindmapEdgeElement(hitElement) &&
-      !app.mindmap.isCompleteMindmapSelection()
-    ) {
-      app.cursor.set(CURSOR_TYPE.POINTER);
-    } else if (
-      !event[KEYS.CTRL_OR_CMD] &&
-      app.isHittingCommonBoundingBoxOfSelectedElements(
-        scenePointer,
-        selectedElements,
-      )
-    ) {
-      app.cursor.set(CURSOR_TYPE.MOVE);
-    } else if (app.state.viewModeEnabled) {
-      app.cursor.set(CURSOR_TYPE.GRAB);
-    } else if (app.state.openDialog?.name === "elementLinkSelector") {
-      app.cursor.set(CURSOR_TYPE.AUTO);
-    } else if (isOverScrollBar) {
-      app.cursor.set(CURSOR_TYPE.AUTO);
-    } else if (
-      // if using cmd/ctrl, we're not dragging
-      !event[KEYS.CTRL_OR_CMD] &&
-      // editing text -> don't show move cursor when hovering over its bbox
-      hitElement?.id !== app.state.editingTextElement?.id
-    ) {
+  if (
+    !(canDispatchInteraction
+      ? updateElementLinkHoverAffordance(app)
+      : app.applyElementLinkHoverAffordance())
+  ) {
+    if (!canDispatchInteraction) {
+      if (isLaserTool) {
+        return;
+      }
       if (
-        (hitElement ||
-          app.isHittingCommonBoundingBoxOfSelectedElements(
-            scenePointer,
-            selectedElements,
-          )) &&
-        !hitElement?.locked
+        hitElement &&
+        (hitElement.link || isEmbeddableElement(hitElement)) &&
+        // 编辑态悬停已选中元素：仅手机端自动弹出（桌面/平板改为点击
+        // 浮动栏「链接」按钮弹出，避免弹层随选中/悬停一直展示）
+        ((app.editorInterface.formFactor === "phone" &&
+          app.state.selectedElementIds[hitElement.id]) ||
+          // 只读/查看模式：悬停带链接元素弹出访问态（设计稿「链接弹层与
+          // 联动态」）；可嵌入元素在查看模式下可直接交互，不弹
+          (app.state.viewModeEnabled &&
+            !!hitElement.link &&
+            !isEmbeddableElement(hitElement))) &&
+        !app.state.contextMenu &&
+        !app.state.showHyperlinkPopup
+      ) {
+        app.setState({ showHyperlinkPopup: "info" });
+      } else if (app.state.activeTool.type === "text") {
+        // 文本工具整体就是「输入」光标：空画布、已有文字、可挂标签的图形，
+        // 点下去都是写字，只有箭头的文字锚点例外（那边是点选锚点）
+        app.cursor.set(
+          hoveredArrowTextAnchor ? CURSOR_TYPE.POINTER : CURSOR_TYPE.TEXT,
+        );
+      } else if (
+        hitElement &&
+        isMindmapEdgeElement(hitElement) &&
+        !app.mindmap.isCompleteMindmapSelection()
+      ) {
+        app.cursor.set(CURSOR_TYPE.POINTER);
+      } else if (
+        !event[KEYS.CTRL_OR_CMD] &&
+        app.isHittingCommonBoundingBoxOfSelectedElements(
+          scenePointer,
+          selectedElements,
+        )
+      ) {
+        app.cursor.set(CURSOR_TYPE.MOVE);
+      } else if (app.state.viewModeEnabled) {
+        app.cursor.set(CURSOR_TYPE.GRAB);
+      } else if (app.state.openDialog?.name === "elementLinkSelector") {
+        app.cursor.set(CURSOR_TYPE.AUTO);
+      } else if (isOverScrollBar) {
+        app.cursor.set(CURSOR_TYPE.AUTO);
+      } else if (
+        // if using cmd/ctrl, we're not dragging
+        !event[KEYS.CTRL_OR_CMD] &&
+        // editing text -> don't show move cursor when hovering over its bbox
+        hitElement?.id !== app.state.editingTextElement?.id
       ) {
         if (
-          !hitElement ||
-          // Elbow arrows can only be moved when unconnected
-          !isElbowArrow(hitElement) ||
-          !(hitElement.startBinding || hitElement.endBinding)
+          (hitElement ||
+            app.isHittingCommonBoundingBoxOfSelectedElements(
+              scenePointer,
+              selectedElements,
+            )) &&
+          !hitElement?.locked
         ) {
           if (
-            app.state.activeTool.type !== "lasso" ||
-            selectedElements.length > 0
+            !hitElement ||
+            // Elbow arrows can only be moved when unconnected
+            !isElbowArrow(hitElement) ||
+            !(hitElement.startBinding || hitElement.endBinding)
           ) {
-            app.cursor.set(CURSOR_TYPE.MOVE);
+            if (
+              app.state.activeTool.type !== "lasso" ||
+              selectedElements.length > 0
+            ) {
+              app.cursor.set(CURSOR_TYPE.MOVE);
+            }
           }
         }
+      } else {
+        app.cursor.set(CURSOR_TYPE.AUTO);
       }
-    } else {
-      app.cursor.set(CURSOR_TYPE.AUTO);
-    }
 
-    if (app.state.selectedLinearElement) {
-      app.handleHoverSelectedLinearElement(
-        app.state.selectedLinearElement,
-        scenePointerX,
-        scenePointerY,
-      );
+      if (app.state.selectedLinearElement) {
+        app.handleHoverSelectedLinearElement(
+          app.state.selectedLinearElement,
+          scenePointerX,
+          scenePointerY,
+        );
+      }
     }
   }
 
@@ -1375,6 +1405,23 @@ export const handleCanvasPointerMove = (
     app.setState((prevState) => ({
       hoveredElementIds: updateStable(prevState.hoveredElementIds, {}),
     }));
+  }
+};
+
+export const updateHoveredElementIdOnPointerMove = (
+  app: PointerApp,
+  scenePointerX: number,
+  scenePointerY: number,
+) => {
+  // frame-title DOM bridge (05 §3.3, O4): pointer-derived, never frame.target
+  const hitElementMightBeLocked = app.getElementAtPosition(
+    scenePointerX,
+    scenePointerY,
+    { preferSelected: true, includeLockedElements: true },
+  );
+  const hoveredElementId = hitElementMightBeLocked?.id ?? null;
+  if (app.state.hoveredElementId !== hoveredElementId) {
+    app.setState({ hoveredElementId });
   }
 };
 
@@ -1473,7 +1520,9 @@ export const handleHoverSelectedLinearElement = (
   linearElementEditor: LinearElementEditor,
   scenePointerX: number,
   scenePointerY: number,
+  opts?: { setCursor?: boolean },
 ) => {
+  const setCursor = opts?.setCursor ?? true;
   const elementsMap = app.scene.getNonDeletedElementsMap();
 
   const element = LinearElementEditor.getElement(
@@ -1511,7 +1560,9 @@ export const handleHoverSelectedLinearElement = (
         );
 
     if (isHoveringAPointHandle || segmentMidPointHoveredCoords) {
-      app.cursor.set(CURSOR_TYPE.POINTER);
+      if (setCursor) {
+        app.cursor.set(CURSOR_TYPE.POINTER);
+      }
     } else if (
       // an arrow's bound text is draggable along the arrow. The handles
       // and the midpoint knob sitting under the label keep precedence so a
@@ -1520,7 +1571,9 @@ export const handleHoverSelectedLinearElement = (
       // hit area.
       app.arrowText.isBoundTextGrabbable(element, scenePointerX, scenePointerY)
     ) {
-      app.cursor.set(CURSOR_TYPE.GRAB);
+      if (setCursor) {
+        app.cursor.set(CURSOR_TYPE.GRAB);
+      }
     } else if (
       app.hitElement(scenePointerX, scenePointerY, element) &&
       // Elbow arrows can only be moved when unconnected
@@ -1529,7 +1582,9 @@ export const handleHoverSelectedLinearElement = (
       (app.state.activeTool.type !== "lasso" ||
         Object.keys(app.state.selectedElementIds).length > 0)
     ) {
-      app.cursor.set(CURSOR_TYPE.MOVE);
+      if (setCursor) {
+        app.cursor.set(CURSOR_TYPE.MOVE);
+      }
     }
 
     if (app.state.selectedLinearElement.hoverPointIndex !== hoverPointIndex) {
@@ -1583,9 +1638,11 @@ export const handleHoverSelectedLinearElement = (
 
     // Set cursor to pointer when hovering over a focus point
     if (hoveredFocusPointBinding) {
-      app.cursor.set(CURSOR_TYPE.POINTER);
+      if (setCursor) {
+        app.cursor.set(CURSOR_TYPE.POINTER);
+      }
     }
-  } else {
+  } else if (setCursor) {
     app.cursor.set(CURSOR_TYPE.AUTO);
   }
 };

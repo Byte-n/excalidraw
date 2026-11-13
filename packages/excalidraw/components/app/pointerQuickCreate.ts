@@ -31,7 +31,7 @@ export const resolvePointerType = (
 
 /** Shared gate: sequence affordances only apply to the selection tool. */
 export const canHoverSequenceAffordances = (app: PointerApp): boolean =>
-  app.state.activeTool.type === "selection" &&
+  app.state.activeTool?.type === "selection" &&
   !app.state.viewModeEnabled &&
   !app.state.editingTextElement &&
   app.isInteractionEnabled();

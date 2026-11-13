@@ -496,7 +496,8 @@ export const isIframeLikeInteractive = (
   return true;
 };
 
-export const handleIframeLikeElementHover = (
+/** Embed hover state only (no cursor): frame dispatch owns the cursor. */
+export const updateIframeLikeElementHover = (
   app: App,
   {
     hitElement,
@@ -521,7 +522,6 @@ export const handleIframeLikeElementHover = (
         scenePointer.y,
       ))
   ) {
-    app.cursor.set(CURSOR_TYPE.POINTER);
     app.setState({
       activeEmbeddable: { element: hitElement, state: "hover" },
     });
@@ -530,6 +530,29 @@ export const handleIframeLikeElementHover = (
     app.setState({ activeEmbeddable: null });
   }
   return false;
+};
+
+export const handleIframeLikeElementHover = (
+  app: App,
+  {
+    hitElement,
+    scenePointer,
+    moveEvent,
+  }: {
+    hitElement: NonDeleted<ExcalidrawElement> | null;
+    scenePointer: { x: number; y: number };
+    moveEvent: React.PointerEvent<HTMLCanvasElement>;
+  },
+) => {
+  const hovered = updateIframeLikeElementHover(app, {
+    hitElement,
+    scenePointer,
+    moveEvent,
+  });
+  if (hovered) {
+    app.cursor.set(CURSOR_TYPE.POINTER);
+  }
+  return hovered;
 };
 
 export const handleIframeLikeCenterClick = (app: App) => {

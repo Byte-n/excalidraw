@@ -62,7 +62,7 @@ describe("move element", () => {
       fireEvent.pointerUp(canvas);
 
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `6`,
+        `7`,
       );
       expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`6`);
       expect(h.state.selectionElement).toBeNull();
@@ -78,7 +78,7 @@ describe("move element", () => {
     fireEvent.pointerMove(canvas, { clientX: 20, clientY: 40 });
     fireEvent.pointerUp(canvas);
 
-    expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`4`);
+    expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`5`);
     expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`3`);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(1);
@@ -115,12 +115,13 @@ describe("move element", () => {
     new Pointer("mouse").clickOn(rectB);
 
     // `UI.createElement("arrow")` leaves the arrow tool active, so `clickOn`
-    // hovers rectB with the arrow tool. PR3a replaces the legacy hover branch
+    // hovers rectB with the arrow tool. PR3a replaced the legacy hover branch
     // with the `connection` frame target, which writes the `suggestedBinding`
-    // mirror (one extra interactive repaint: 18 → 19). This is the intended new
-    // preview channel, not a duplicate state update.
+    // mirror (18 → 19). PR5a adds one repaint per synthetic `refreshHover`
+    // pointermove that now resolves a transform handle (the synthesized event
+    // has no `pointerType`; the frame normalizes it to "mouse"), hence 23.
     expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-      `19`,
+      `23`,
     );
     expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`17`);
     expect(h.state.selectionElement).toBeNull();
@@ -185,7 +186,7 @@ describe("duplicate element on move when ALT is clicked", () => {
       fireEvent.pointerUp(canvas);
 
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `6`,
+        `7`,
       );
       expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`6`);
       expect(h.state.selectionElement).toBeNull();
@@ -206,7 +207,7 @@ describe("duplicate element on move when ALT is clicked", () => {
     fireEvent.pointerMove(canvas, { clientX: 10, clientY: 60 });
     fireEvent.pointerUp(canvas);
 
-    expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`5`);
+    expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(`6`);
     expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`4`);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(2);

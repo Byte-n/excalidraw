@@ -46,16 +46,18 @@ export class AppTransformStatus {
     return this.hovered.handle;
   };
 
-  setHoveredHandle = (handle: TransformHandleType): void => {
+  /** Returns whether the hover changed (and a repaint was requested). */
+  setHoveredHandle = (handle: TransformHandleType): boolean => {
     const selectionKey = this.selectionKey();
     if (
       this.hovered?.handle === handle &&
       this.hovered.selectionKey === selectionKey
     ) {
-      return;
+      return false;
     }
     this.hovered = { handle, selectionKey };
     this.app.repaint.request();
+    return true;
   };
 
   clearHovered = (): void => {
