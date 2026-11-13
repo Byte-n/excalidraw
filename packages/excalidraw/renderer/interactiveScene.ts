@@ -1324,7 +1324,8 @@ const renderQuickCreateHandles = (
   }
   // 修饰键状态由 App.quickCreate 维护（keydown / keyup / blur）：按住时整组不渲染。
   // **手势一旦开始就不受修饰键影响**——拖到一半把预演整组抽掉，等于中途失去反馈
-  const dragging = app.quickCreate.getDrag();
+  const frame = app.pointer.getFrame();
+  const dragging = frame?.owner === "quickCreate" && frame.phase === "gesture";
   const suppressed = app.quickCreate.isSuppressed() && !dragging;
   // 手柄源由 AppQuickCreate 统一解析：只有单选的 basic / flowchart 图形
   const handles = getQuickCreateHandles(
@@ -1336,7 +1337,11 @@ const renderQuickCreateHandles = (
   if (!handles.length) {
     return;
   }
-  const hovered = app.quickCreate.getHovered();
+  const hovered =
+    frame?.target.kind === "quickCreateHandle" &&
+    (frame.phase === "hover" || frame.phase === "gesture")
+      ? frame.target
+      : null;
   const zoom = appState.zoom.value;
   const handleSurface = getThemedColor("#fff", appState.theme);
   // 相机层拿不到当前指针类型（同 getTransformHandles 调用点的注释）：用「上一次
@@ -1358,8 +1363,8 @@ const renderQuickCreateHandles = (
   const activeHandle = dragging
     ? handles.find(
         (handle) =>
-          handle.elementId === dragging.elementId &&
-          handle.direction === dragging.direction,
+          handle.elementId === hovered?.elementId &&
+          handle.direction === hovered?.direction,
       )
     : hoveredHandle;
   // 预演先画，创建入口随后压在上面：预演是「点下去会得到什么」，而入口
@@ -1431,6 +1436,14 @@ const renderPoleActivationGhost = (
   appState: InteractiveCanvasAppState,
   allElementsMap: NonDeletedSceneElementsMap,
 ) => {
+  // 只按 frame 的 poleActivation target 绘制；元素来自 ghost 缓存
+  const frame = app.pointer.getFrame();
+  if (
+    frame?.target.kind !== "poleActivation" ||
+    (frame.phase !== "hover" && frame.phase !== "armed")
+  ) {
+    return;
+  }
   const elements = app.quickCreate.getPoleActivationGhostElements();
   if (!elements.length) {
     return;
@@ -1453,6 +1466,7 @@ const renderSequenceConnection = (
   allElementsMap: NonDeletedSceneElementsMap,
   selectionColor: string,
 ) => {
+  const frame = app.pointer.getFrame();
   const drag = app.quickCreate.getSequenceConnectionDrag();
   const elements = app.quickCreate.getSequenceConnectionGhostElements();
   if (elements.length) {
@@ -1475,8 +1489,16 @@ const renderSequenceConnection = (
     );
     context.restore();
   }
+  const activationHover =
+    frame?.target.kind === "activationEdge" ? frame.target : null;
   const point =
-    drag?.exit ?? app.quickCreate.getSequenceConnectionHover()?.point;
+    drag?.exit ??
+    (activationHover
+      ? {
+          x: activationHover.point[0],
+          y: activationHover.point[1],
+        }
+      : null);
   if (!point) {
     return;
   }
@@ -4232,11 +4254,14 @@ const _renderInteractiveScene = ({
     // 生命线杆上的激活条预演与选中状态无关，单独画；修饰键按住 / 面板待决时
     // 与 quick-create 手柄同一口径收起。激活条动态连接点同批绘制；手势一旦开始
     // 就不受修饰键影响（同 quick-create 的拖拽预演）。
+    const paintFrame = app.pointer.getFrame();
     const sequenceDragging =
-      Boolean(app.quickCreate.getSequenceConnectionDrag()) ||
+      paintFrame?.owner === "sequenceMessage" ||
       app.quickCreate.hasSequenceEndpointPreview();
     const hoverSuppressed =
-      app.quickCreate.isSuppressed() && !app.quickCreate.getDrag();
+      app.quickCreate.isSuppressed() &&
+      paintFrame?.owner !== "quickCreate" &&
+      paintFrame?.owner !== "sequenceMessage";
     if (!hoverSuppressed || sequenceDragging) {
       context.save();
       context.translate(appState.scrollX, appState.scrollY);

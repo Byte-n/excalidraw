@@ -1555,6 +1555,7 @@ export type AppClassProperties = {
   elementsPendingErasure: App["elementsPendingErasure"];
   editorInterface: App["editorInterface"];
   scene: App["scene"];
+  pointer: App["pointer"];
   setState: App["setState"];
   moveTableCellSelectionFocus: App["moveTableCellSelectionFocus"];
   editSelectedTableCellBackgroundText: App["editSelectedTableCellBackgroundText"];

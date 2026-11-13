@@ -6,6 +6,7 @@
  * other target clears the mirror. Container control / body targets keep their
  * existing dispatch.
  */
+import { CURSOR_TYPE } from "@excalidraw/common";
 import { isSameSuggestedBinding } from "@excalidraw/element";
 
 import type {
@@ -33,10 +34,48 @@ export const applyPointerFrame = (
   app: PointerApp,
   frame: PointerFrame,
 ): void => {
+  // A hover frame must never displace a sequence-affordance gesture frame:
+  // those owners keep the frame until pointerup (synthetic moves may report no
+  // buttons). Selection / table / mindmap sessions keep the old behavior.
+  const existingFrame =
+    typeof app.pointer?.getFrame === "function" ? app.pointer.getFrame() : null;
+  const sequenceOwnedFrame =
+    existingFrame &&
+    ((existingFrame.phase === "gesture" &&
+      (existingFrame.owner === "quickCreate" ||
+        existingFrame.owner === "sequenceMessage")) ||
+      (existingFrame.phase === "armed" &&
+        existingFrame.target.kind === "poleActivation"));
+  if (frame.phase === "hover" && sequenceOwnedFrame) {
+    return;
+  }
+
   // 1. clear the previous frame's container hover
   clearContainerInteractionHover(app);
 
-  // 2. dispatch by target kind
+  // 2. store the frame first: mirror sync / repaint below read `getFrame()`.
+  app.pointer.setFrame(frame, { repaint: false });
+
+  // 3. sequence-affordance hover mirrors are derived from the frame (PR4a).
+  //    Gesture owners write their own fields; sync only mirrors hover/armed.
+  app.quickCreate?.syncHoverFromFrame?.(frame);
+  switch (frame.target.kind) {
+    case "quickCreateHandle":
+    case "activationEdge":
+    case "poleActivation":
+      if (
+        frame.phase === "hover" &&
+        !app.state.viewModeEnabled &&
+        app.isInteractionEnabled()
+      ) {
+        app.cursor.set(CURSOR_TYPE.POINTER);
+      }
+      break;
+    default:
+      break;
+  }
+
+  // 3. dispatch by target kind
   switch (frame.target.kind) {
     case "containerControl":
     case "containerBody":
@@ -76,8 +115,4 @@ export const applyPointerFrame = (
       clearSuggestedBinding(app);
       break;
   }
-
-  // 3. PR2 keeps cursor ownership in the legacy flow; container targets already
-  //    had their cursor set by dispatchContainerInteraction above.
-  app.pointer.setFrame(frame, { repaint: false });
 };

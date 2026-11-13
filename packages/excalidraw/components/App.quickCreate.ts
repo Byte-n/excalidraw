@@ -1,4 +1,4 @@
-import { CURSOR_TYPE, DRAGGING_THRESHOLD, KEYS } from "@excalidraw/common";
+import { KEYS } from "@excalidraw/common";
 import { pointFrom, pointRotateRads } from "@excalidraw/math";
 
 import {
@@ -82,9 +82,12 @@ import { getCurrentItemArrowProps } from "./app/arrowCreation";
 import { hitCompositeControlPoint } from "./app/compositeShapeControls";
 import { getPresetSize } from "./app/createPresets";
 import { buildPresetElementsCentered } from "./app/presetPlacement";
+import { DRAGGING_THRESHOLD } from "./app/pointerFrame";
+import { getStrictTopmostElementAt } from "./app/pointerQuickCreate";
 import { getCatalogItem, isFlowchartShapeId } from "./presetCatalog";
 
 import type { CreationIdentity } from "./app/createPresets";
+import type { PointerFrame } from "./app/pointerFrame";
 import type {
   CreationSpec,
   PresetCatalogGroupId,
@@ -92,8 +95,6 @@ import type {
 } from "./presetCatalog";
 
 import type { NullableGridSize, PointerDownState } from "../types";
-
-import type React from "react";
 
 import type App from "./App";
 
@@ -846,95 +847,97 @@ export class AppQuickCreate {
     );
   };
 
-  handlePointerMove = (sceneX: number, sceneY: number) => {
-    // 面板待决：手柄整组收起、只留待决连线，不做任何悬停判定（也不 reset——
-    // reset 会把待决连线的预演缓存一起丢掉）
-    if (this.pendingInsert) {
-      return;
-    }
-    // 手势进行中：悬停判定整组让位（预演改由拖拽态驱动）。这里必须早退而不是
-    // 走下面的 reset 分支——reset 会把拖拽预演一起丢掉。
-    if (
-      this.drag ||
-      this.sequenceConnectionDrag ||
-      this.sequenceEndpointPreview
-    ) {
-      return;
-    }
-    // 修饰键按住时手柄整组不渲染也不命中，悬停态一并清掉。
-    // 状态由键盘监听维护，这里只是不再做命中判定。
-    if (this.modifierHeld) {
-      this.reset();
-      return;
-    }
-    // 手势进行中不作悬停判定（与脑图「+」同一口径）
-    if (
-      this.app.state.newElement ||
-      this.app.state.selectionElement ||
-      this.app.state.multiElement ||
-      this.app.state.selectedElementsAreBeingDragged ||
-      this.app.state.resizingElement ||
-      this.app.state.isRotating
-    ) {
-      this.reset();
-      return;
-    }
-    // 手柄源：单选的 quick-create 目标（时序图形已被排除）
-    const target = getQuickCreateTargetElement(this.app);
-    const hit = target
-      ? hitTestQuickCreateHandle(
-          this.app,
-          sceneX,
-          sceneY,
-          "mouse",
-          false,
-          target,
-        )
-      : null;
-    // 让位规则：热区命中的路径很热（每次 pointermove 都走），所以只在已经命中
-    // 热区之后才做「指针下是否压着别的元素」的场景命中查询，命中时视为未命中。
-    const source = hit
-      ? this.app.scene.getNonDeletedElement(hit.elementId)
-      : null;
-    const effectiveHit =
-      hit && source && this.isBlockedByElementAt(sceneX, sceneY, source)
-        ? null
-        : hit;
-    if (
-      effectiveHit?.elementId !== this.hovered?.elementId ||
-      effectiveHit?.direction !== this.hovered?.direction
-    ) {
-      this.hovered = effectiveHit
-        ? {
-            direction: effectiveHit.direction,
-            elementId: effectiveHit.elementId,
-          }
+  /**
+   * Dispatch-owned mirror writer (PR4a): derives the legacy hover fields from
+   * the resolved pointer frame. No other module writes them.
+   */
+  syncHoverFromFrame = (frame: PointerFrame | null): void => {
+    const hoverLike = frame?.phase === "hover" || frame?.phase === "armed";
+    const handleTarget =
+      hoverLike && frame?.target.kind === "quickCreateHandle"
+        ? frame.target
         : null;
-      if (!effectiveHit) {
-        // 悬停离开：预演跟着收起，位图缓存一并丢掉（见 reset）
+    const sequenceTarget =
+      hoverLike && frame?.target.kind === "activationEdge"
+        ? frame.target
+        : null;
+    const poleTarget =
+      hoverLike && frame?.target.kind === "poleActivation"
+        ? frame.target
+        : null;
+
+    const nextHovered = handleTarget
+      ? {
+          direction: handleTarget.direction,
+          elementId: handleTarget.elementId,
+        }
+      : null;
+    const nextSequence = sequenceTarget
+      ? {
+          elementId: sequenceTarget.elementId,
+          side: sequenceTarget.side,
+          point: {
+            x: sequenceTarget.point[0],
+            y: sequenceTarget.point[1],
+          },
+        }
+      : null;
+    const nextPole = poleTarget
+      ? {
+          lifelineId: poleTarget.lifelineId,
+          localY: poleTarget.placement.localY,
+          center: {
+            x: poleTarget.placement.center.x,
+            y: poleTarget.placement.center.y,
+          },
+          angle: poleTarget.placement.angle,
+        }
+      : null;
+
+    let changed = false;
+    if (
+      nextHovered?.elementId !== this.hovered?.elementId ||
+      nextHovered?.direction !== this.hovered?.direction
+    ) {
+      this.hovered = nextHovered;
+      if (!nextHovered) {
         this.ghost = null;
       }
-      // 圆点 ↔ 加号的形态只存在组件字段里、不进 appState，setState({}) 不会让
-      // 交互层重渲染（InteractiveCanvas 是 memo），必须显式重绘一帧
+      changed = true;
+    }
+    if (
+      nextSequence?.elementId !== this.sequenceConnection?.elementId ||
+      nextSequence?.side !== this.sequenceConnection?.side ||
+      nextSequence?.point.x !== this.sequenceConnection?.point.x ||
+      nextSequence?.point.y !== this.sequenceConnection?.point.y
+    ) {
+      this.sequenceConnection = nextSequence;
+      this.sequenceConnectionGhost = null;
+      changed = true;
+    }
+    if (
+      nextPole?.lifelineId !== this.poleActivation?.lifelineId ||
+      nextPole?.center.x !== this.poleActivation?.center.x ||
+      nextPole?.center.y !== this.poleActivation?.center.y ||
+      nextPole?.localY !== this.poleActivation?.localY
+    ) {
+      this.poleActivation = nextPole;
+      this.poleActivationGhost = null;
+      changed = true;
+    }
+    if (changed) {
       this.app.repaint.request();
     }
-    // 杆上激活条预演：指针已被方向手柄 / 变换手柄 / 复合图形控制点占用时不再
-    // 解析；落点还会排除与已有激活条重叠的位置（见 `resolvePoleActivationTarget`）。
-    // 于是「看到预演」与「点下去能创建」始终是同一个判定。
-    // 激活条动态连接点优先：指针贴近某条激活条的竖边时，不再预演「杆上建条」。
-    this.updateSequenceConnection(sceneX, sceneY, Boolean(effectiveHit));
-    this.updatePoleActivation(
-      sceneX,
-      sceneY,
-      Boolean(effectiveHit) || Boolean(this.sequenceConnection),
-    );
-    // 在 pointerCanvas 的工具光标之后运行，命中时不被覆盖
-    if (
-      (effectiveHit || this.poleActivation || this.sequenceConnection) &&
-      !this.app.state.viewModeEnabled &&
-      this.app.isInteractionEnabled()
-    ) {
-      this.app.cursor.set(CURSOR_TYPE.POINTER);
+  };
+
+  /** Clear the dispatch-owned hover mirrors (modal / input changes). */
+  clearHoverMirrors = (): void => {
+    const hadHover =
+      !!this.hovered || !!this.poleActivation || !!this.sequenceConnection;
+    this.hovered = null;
+    this.clearHoverAffordances();
+    if (hadHover) {
+      this.app.repaint.request();
     }
   };
 
@@ -945,30 +948,13 @@ export class AppQuickCreate {
     !this.app.state.editingTextElement &&
     this.app.isInteractionEnabled();
 
-  /**
-   * 严格取指针下的最上层元素。
-   *
-   * 不能换成 `getElementAtPosition`：后者把选中元素的包围盒（含命中容差）也算作
-   * 命中，严格重测失败时再回退到**下面那个**元素。激活条压在杆上时，指针落在
-   * 条边缘的缩放手柄热区里，就会返回被压着的生命线——「杆上创建激活条」的预演
-   * 与激活条自己的交互于是同时出现，预演还叠在条上。
-   */
+  /** 严格取指针下的最上层元素（纯函数实现见 pointerQuickCreate）。 */
   private getStrictTopmostElementAt = (
     sceneX: number,
     sceneY: number,
     ignoreIds?: ReadonlySet<string>,
-  ): NonDeletedExcalidrawElement | null => {
-    // 锁定元素也参与遮挡判定：锁定条压在杆上时同样不该冒出创建预演
-    const hits = this.app.getElementsAtPosition(sceneX, sceneY, {
-      includeLockedElements: true,
-    });
-    for (let index = hits.length - 1; index >= 0; index--) {
-      if (!ignoreIds?.has(hits[index].id)) {
-        return hits[index];
-      }
-    }
-    return null;
-  };
+  ): NonDeletedExcalidrawElement | null =>
+    getStrictTopmostElementAt(this.app, sceneX, sceneY, ignoreIds);
 
   /**
    * 候选激活条是否会与同一根杆上已有的激活条相交。在生命线本地坐标系里比较：
@@ -1487,161 +1473,96 @@ export class AppQuickCreate {
 
   /**
    * 按下时臂化「杆上点击」：这里**不创建**，也不吞手势——拖拽时仍交给通用选择
-   * 路径移动生命线；是点击还是拖拽由 `handlePointerUp` 按距离判定。
+   * 路径移动生命线；是点击还是拖拽由 `handlePointerUp` 按 frame.origin 判定。
    */
-  private armPoleActivationClick = (
-    point: QuickCreatePoint,
-    pointerType: PointerType = "mouse",
+  armPoleClick = (
+    frame: PointerFrame,
+    pointerDownState: PointerDownState,
   ): boolean => {
-    if (
-      !this.canHoverAffordances() ||
-      // 变换手柄 / 复合控制点优先：在这些热区上按下是缩放，不能同时臂化建条
-      this.isHigherPriorityAffordanceHovered(point.x, point.y, pointerType)
-    ) {
-      return false;
-    }
-    const target = this.resolvePoleActivationTarget(point.x, point.y);
-    if (!target) {
+    if (frame.target.kind !== "poleActivation") {
       return false;
     }
     this.poleActivationClick = {
-      lifelineId: target.lifeline.id,
-      localY: target.localY,
-      center: target.center,
-      angle: target.angle,
-      origin: point,
+      lifelineId: frame.target.lifelineId,
+      localY: frame.target.placement.localY,
+      center: {
+        x: frame.target.placement.center.x,
+        y: frame.target.placement.center.y,
+      },
+      angle: frame.target.placement.angle,
+      origin: { x: frame.point[0], y: frame.point[1] },
     };
+    void pointerDownState;
     return true;
   };
 
-  /**
-   * 命中方向手柄则接管本次手势：**只臂化、不建图**，等到抬起时才按「有没有拖过
-   * 阈值」决定落点（见 handlePointerUp）。返回 true 时调用方须提前 return。
-   */
-  preparePointerDown = (
+  /** 方向手柄 pointerdown：只接管手势，落点由抬起时判定。 */
+  startHandleGesture = (
+    frame: PointerFrame,
     pointerDownState: PointerDownState,
-    event: React.PointerEvent<HTMLElement>,
   ): boolean => {
-    // 面板待决：这次 pointerdown 放给通用路径——面板的 Popover 在 pointerdown
-    // （落在面板外）时调 cancelPendingInsert 把待决连线落地并关面板。让手柄接管
-    // 会让这次点击既不关面板、又长出第二路手势。
-    if (this.pendingInsert) {
+    if (frame.target.kind !== "quickCreateHandle") {
       return false;
     }
-    // 只接管裸的主键点击：带修饰键的点击是选择手势（shift 多选、alt 复制等），
-    // 右键留给上下文菜单，一律不吞。
-    if (
-      event.button !== 0 ||
-      event.shiftKey ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.altKey
-    ) {
+    const source = this.app.scene.getNonDeletedElement(frame.target.elementId);
+    if (!source) {
       return false;
     }
-    if (
-      !this.app.isInteractionEnabled() ||
-      this.app.state.viewModeEnabled ||
-      this.app.state.editingTextElement
-    ) {
-      return false;
-    }
-    const resolvedPointerType: PointerType =
-      event.pointerType === "touch" || event.pointerType === "pen"
-        ? event.pointerType
-        : "mouse";
-    const origin = {
-      x: pointerDownState.origin.x,
-      y: pointerDownState.origin.y,
-    };
-    // 手柄源在这里按按下点重新解析：不能依赖上一次 pointermove 的悬停结果
-    // （触屏 / 快速点击都可能没有前置 move）。
-    const handleTarget = getQuickCreateTargetElement(this.app);
-    const hit = handleTarget
-      ? hitTestQuickCreateHandle(
-          this.app,
-          origin.x,
-          origin.y,
-          resolvedPointerType,
-          false,
-          handleTarget,
-        )
-      : null;
-    const source = hit && this.app.scene.getNonDeletedElement(hit.elementId);
-    if (!hit || !source) {
-      // 激活条动态连接点：按住连接点拖出消息（优先于杆上建条）
-      if (
-        this.startSequenceConnectionDrag(
-          origin,
-          resolvedPointerType,
-          pointerDownState,
-        )
-      ) {
-        return true;
-      }
-      // 没有命中手柄：如果按在杆上，臂化「单击建激活条」；其余情况照常让给选择
-      this.armPoleActivationClick(origin, resolvedPointerType);
-      return false;
-    }
-    // 让位规则（与 handlePointerMove 共用同一个判定，否则会出现「高亮着却点不动」）：
-    // 指针底下压着别的元素时，这次手势让给选择——那儿本来就会选中/拖动那个元素，
-    // 而手柄的用途是「往这个方向长一份」，目标位置已经有东西了，用户更可能想选中它。
-    if (
-      this.isBlockedByElementAt(
-        pointerDownState.origin.x,
-        pointerDownState.origin.y,
-        source,
-      )
-    ) {
-      return false;
-    }
-    const point = {
-      x: pointerDownState.origin.x,
-      y: pointerDownState.origin.y,
-    };
-    // 指针同时落在圆点热区与某个变换手柄命中区内时，比「谁的中心更近」：
-    // 手柄中心更近或相等 → 让给缩放（鼠标下拖边缩放的语义与加手柄前一致）；
-    // 圆点更近 → 圆点接管。touch/pen 的手柄命中矩形更大（28/16px，以边外 4px
-    // 为中心），会把圆点中心也包进去，但圆点中心仍更近，所以触屏点圆点照样建图、
-    // 点胶囊中心仍是缩放。
-    if (
-      getElementWithTransformHandleType(
-        [source],
-        this.app.state,
-        point.x,
-        point.y,
-        this.app.state.zoom,
-        resolvedPointerType,
-        this.app.scene.getNonDeletedElementsMap(),
-        this.app.editorInterface,
-      ) &&
-      !this.isDotCloserThanTransformHandle(
-        source,
-        point,
-        hit.direction,
-        resolvedPointerType,
-      )
-    ) {
-      return false;
-    }
+    const point = { x: frame.point[0], y: frame.point[1] };
     pointerDownState.drag.blockDragging = true;
     pointerDownState.resize.handleType = false;
     pointerDownState.resize.isResizing = false;
-    this.hovered = null;
-    this.ghost = null;
-    this.poleActivation = null;
-    this.poleActivationGhost = null;
-    this.poleActivationClick = null;
-    this.sequenceConnection = null;
-    this.sequenceConnectionGhost = null;
+    this.clearHoverMirrors();
     this.drag = {
-      direction: hit.direction,
+      direction: frame.target.direction,
       elementId: source.id,
       origin: point,
       pointer: point,
       moved: false,
     };
-    // 按下即刻换「按下档」字形（组件字段，setState({}) 不会重绘 InteractiveCanvas）
+    this.app.pointer.setFrame({
+      ...frame,
+      phase: "gesture",
+      owner: "quickCreate",
+      origin: frame.origin ?? frame.point,
+    });
+    this.app.repaint.request();
+    return true;
+  };
+
+  /** 激活条连接点 pointerdown：接管消息拖拽手势。 */
+  startMessageGesture = (
+    frame: PointerFrame,
+    pointerDownState: PointerDownState,
+  ): boolean => {
+    if (frame.target.kind !== "activationEdge") {
+      return false;
+    }
+    const source = this.app.scene.getNonDeletedElement(frame.target.elementId);
+    if (!source || !isActivationElement(source)) {
+      return false;
+    }
+    const origin = { x: frame.point[0], y: frame.point[1] };
+    const local = getSequenceLifelineLocalPoint(source, origin.x, origin.y);
+    pointerDownState.drag.blockDragging = true;
+    pointerDownState.resize.handleType = false;
+    pointerDownState.resize.isResizing = false;
+    this.clearHoverMirrors();
+    this.sequenceConnectionDrag = {
+      elementId: source.id,
+      side: frame.target.side,
+      exit: { x: frame.target.point[0], y: frame.target.point[1] },
+      startLocalY: Math.min(Math.max(local.y, 1), source.height - 1),
+      origin,
+      pointer: origin,
+      moved: false,
+    };
+    this.app.pointer.setFrame({
+      ...frame,
+      phase: "gesture",
+      owner: "sequenceMessage",
+      origin: frame.origin ?? frame.point,
+    });
     this.app.repaint.request();
     return true;
   };
@@ -1651,12 +1572,12 @@ export class AppQuickCreate {
    * 已经归方向手柄所有，让给选择路径会让同一次按下先选出别的元素。指针不动的
    * 那些移动事件只更新坐标，阈值一次越过就不再回退（拖回去也算拖过）。
    */
-  handlePointerMoveFromPointerDown = (
-    pointerDownState: PointerDownState,
+  handleGestureMove = (
+    frame: PointerFrame,
     scenePoint: QuickCreatePoint,
   ): boolean => {
     const sequenceDrag = this.sequenceConnectionDrag;
-    if (sequenceDrag) {
+    if (frame.owner === "sequenceMessage" && sequenceDrag) {
       sequenceDrag.pointer = { x: scenePoint.x, y: scenePoint.y };
       if (!sequenceDrag.moved) {
         const distance = Math.hypot(
@@ -1670,21 +1591,39 @@ export class AppQuickCreate {
       this.app.repaint.request();
       return true;
     }
-    const drag = this.drag;
-    if (!drag) {
+    if (frame.owner === "quickCreate" && this.drag) {
+      const drag = this.drag;
+      drag.pointer = { x: scenePoint.x, y: scenePoint.y };
+      if (!drag.moved) {
+        const distance = Math.hypot(
+          scenePoint.x - drag.origin.x,
+          scenePoint.y - drag.origin.y,
+        );
+        drag.moved = distance * this.app.state.zoom.value >= DRAGGING_THRESHOLD;
+      }
+      this.app.repaint.request();
+      return true;
+    }
+    // 杆上臂化：越过阈值即丢弃这次点击（拖生命线，不创建）
+    if (frame.phase === "armed" && frame.target.kind === "poleActivation") {
+      const moved =
+        Math.hypot(
+          scenePoint.x - (frame.origin?.[0] ?? scenePoint.x),
+          scenePoint.y - (frame.origin?.[1] ?? scenePoint.y),
+        ) *
+          this.app.state.zoom.value >=
+        DRAGGING_THRESHOLD;
+      if (moved && this.poleActivationClick) {
+        this.poleActivationClick = null;
+        this.poleActivation = null;
+        this.poleActivationGhost = null;
+        // 臂化被丢弃：frame 也一并清空（否则预演继续挂在 armed 上）
+        this.app.pointer.clear();
+        this.app.repaint.request();
+      }
       return false;
     }
-    drag.pointer = { x: scenePoint.x, y: scenePoint.y };
-    if (!drag.moved) {
-      const distance = Math.hypot(
-        scenePoint.x - drag.origin.x,
-        scenePoint.y - drag.origin.y,
-      );
-      drag.moved = distance * this.app.state.zoom.value >= DRAGGING_THRESHOLD;
-    }
-    // 预演跟手：几何每帧都变，只能显式重绘（setState 不会让 memo 的交互层重画）
-    this.app.repaint.request();
-    return true;
+    return false;
   };
 
   /**
@@ -1697,12 +1636,14 @@ export class AppQuickCreate {
    *   预演继续留着，等提交/取消时再收口。
    */
   handlePointerUp = (
+    frame: PointerFrame | null,
     pointerDownState: PointerDownState,
     event: PointerEvent,
     scenePoint: QuickCreatePoint,
   ): boolean => {
     if (this.cancelledPointerDown === pointerDownState) {
       this.cancelledPointerDown = null;
+      this.app.pointer.clear();
       return true;
     }
     // 端点拖拽的杆上预演随本次手势结束；真正落地由 actionFinalize 重新解析
@@ -1710,7 +1651,7 @@ export class AppQuickCreate {
     // 激活条连接线：结束时按松手点解落位；没越过阈值（只是点了下连接点）
     // 或起端已被删除就不落地。
     const sequenceDrag = this.sequenceConnectionDrag;
-    if (sequenceDrag) {
+    if (frame?.owner === "sequenceMessage" && sequenceDrag) {
       this.sequenceConnectionDrag = null;
       this.sequenceConnectionGhost = null;
       sequenceDrag.pointer = { x: scenePoint.x, y: scenePoint.y };
@@ -1726,14 +1667,19 @@ export class AppQuickCreate {
         this.createSequenceMessage(source, sequenceDrag);
       }
       pointerDownState.drag.hasOccurred = true;
+      this.app.pointer.clear();
       this.app.repaint.request();
       return true;
     }
-    // 杆上单击：按下时只臂化，这里按拖动距离判定。越过阈值说明用户是在拖生命线
-    // （P2 语义），交给通用选择路径，不创建激活条。
+    // 杆上单击：按下时只臂化，这里按 frame.origin 判定。越过阈值说明用户是在拖
+    // 生命线（P2 语义），交给通用选择路径，不创建激活条。
     const poleClick = this.poleActivationClick;
     this.poleActivationClick = null;
-    if (poleClick) {
+    if (
+      poleClick &&
+      frame?.phase === "armed" &&
+      frame.target.kind === "poleActivation"
+    ) {
       const moved =
         Math.hypot(
           scenePoint.x - poleClick.origin.x,
@@ -1744,12 +1690,13 @@ export class AppQuickCreate {
       if (event.type === "pointerup" && !moved) {
         this.createPoleActivation(poleClick);
         pointerDownState.drag.hasOccurred = true;
+        this.app.pointer.clear();
         this.app.repaint.request();
         return true;
       }
     }
     const drag = this.drag;
-    if (!drag) {
+    if (frame?.owner !== "quickCreate" || !drag) {
       return false;
     }
     this.drag = null;
@@ -1776,9 +1723,19 @@ export class AppQuickCreate {
     }
     // 无论落地与否都算这次手势已处理：免得通用路径再排一次空的历史捕获
     pointerDownState.drag.hasOccurred = true;
+    this.app.pointer.clear();
     this.app.repaint.request();
     return true;
   };
+
+  /** Whether a quick-create / sequence-message pointer gesture still needs teardown. */
+  hasPointerGesture = (): boolean =>
+    Boolean(
+      this.drag ||
+        this.sequenceConnectionDrag ||
+        this.poleActivationClick ||
+        this.cancelledPointerDown,
+    );
 
   /** Esc 取消：不建图、不留历史；抬起时由 cancelledPointerDown 吞掉收尾。 */
   handlePointerKeyDown = (
@@ -1795,6 +1752,7 @@ export class AppQuickCreate {
       this.cancelledPointerDown = pointerDownState;
       this.sequenceConnectionDrag = null;
       this.sequenceConnectionGhost = null;
+      this.app.pointer.clear();
       this.app.repaint.request();
       event.preventDefault();
       event.stopPropagation();
@@ -1806,6 +1764,7 @@ export class AppQuickCreate {
       this.poleActivationClick = null;
       this.poleActivation = null;
       this.poleActivationGhost = null;
+      this.app.pointer.clear();
       this.app.repaint.request();
       return false;
     }
@@ -1815,6 +1774,7 @@ export class AppQuickCreate {
     this.cancelledPointerDown = pointerDownState;
     this.drag = null;
     this.ghost = null;
+    this.app.pointer.clear();
     this.app.repaint.request();
     event.preventDefault();
     event.stopPropagation();

@@ -105,9 +105,29 @@ export type PointerFrameInput = {
 export type PointerFrame = {
   phase: PointerPhase;
   point: GlobalPoint;
+  /** pointerdown origin (armed / gesture); absent while hovering. */
+  origin?: GlobalPoint;
   target: PointerTarget;
   pointerType: PointerFrameInput["pointerType"];
   owner?: GestureOwner;
+};
+
+/** Screen-pixel drag threshold shared by all frame-owned gestures. */
+export const DRAGGING_THRESHOLD = 10;
+
+/** Whether the frame moved past `DRAGGING_THRESHOLD` (screen px). */
+export const hasFrameMoved = (
+  frame: Pick<PointerFrame, "origin" | "point">,
+  zoom: number,
+): boolean => {
+  if (!frame.origin) {
+    return false;
+  }
+  const distance = Math.hypot(
+    frame.point[0] - frame.origin[0],
+    frame.point[1] - frame.origin[1],
+  );
+  return distance * zoom >= DRAGGING_THRESHOLD;
 };
 
 type ProviderFor<K extends PointerTarget["kind"]> = {
@@ -322,6 +342,19 @@ export const isSamePointerFrame = (
     return true;
   }
   if (previous.phase !== next.phase) {
+    return false;
+  }
+  if (previous.owner !== next.owner) {
+    return false;
+  }
+  if (Boolean(previous.origin) !== Boolean(next.origin)) {
+    return false;
+  }
+  if (
+    previous.origin &&
+    next.origin &&
+    !sameGlobalPoint(previous.origin, next.origin)
+  ) {
     return false;
   }
   if (!sameGlobalPoint(previous.point, next.point)) {

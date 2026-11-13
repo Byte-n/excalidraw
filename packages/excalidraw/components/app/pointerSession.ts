@@ -686,7 +686,7 @@ export const handleCanvasPointerDown = (
     altKey: event.altKey,
   });
   // PR2 has no frame consumer yet: store the frame without an extra repaint
-  app.pointer.setFrame(frame, { repaint: false });
+  app.pointer.setFrame({ ...frame, origin: frame.point }, { repaint: false });
   const interactionTarget = frame.target;
   if (
     interactionTarget.kind !== "containerControl" &&
@@ -793,12 +793,49 @@ export const handleCanvasPointerDown = (
     return;
   }
 
-  // 方向手柄早于选择/缩放判定：命中即在对应方向建副本+连线并吞掉本次手势，
-  // 否则这次点击会先被框选/拖拽吃掉（圆点落在指示框外的空白处）。会话监听
-  // 仍要挂上——抬起时由通用收尾把 cursorButton、指针状态复位。
-  if (app.quickCreate.preparePointerDown(pointerDownState, event)) {
-    attachPointerSessionListeners(app, event, pointerDownState);
-    return;
+  // 时序 affordance：按本次 pointerdown 解析出的 armed frame 分派 owner（PR4a）。
+  // 修饰键 / 只读 / 编辑文本 / 待决面板一律放给通用选择路径。
+  const sequenceFrame = app.pointer.getFrame();
+  const sequenceGestureEligible =
+    sequenceFrame?.phase === "armed" &&
+    event.button === 0 &&
+    !event.shiftKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    app.isInteractionEnabled() &&
+    !app.state.viewModeEnabled &&
+    !app.state.editingTextElement &&
+    !app.quickCreate.hasPendingInsert();
+  if (sequenceGestureEligible && sequenceFrame) {
+    switch (sequenceFrame.target.kind) {
+      case "quickCreateHandle":
+        if (
+          app.quickCreate.startHandleGesture(sequenceFrame, pointerDownState)
+        ) {
+          attachPointerSessionListeners(app, event, pointerDownState);
+          return;
+        }
+        break;
+      case "activationEdge":
+        if (
+          app.quickCreate.startMessageGesture(sequenceFrame, pointerDownState)
+        ) {
+          attachPointerSessionListeners(app, event, pointerDownState);
+          return;
+        }
+        break;
+      case "poleActivation":
+        // 只臂化，不吞手势：拖拽仍归选择（拖生命线）
+        app.quickCreate.armPoleClick(sequenceFrame, pointerDownState);
+        app.pointer.setFrame(
+          { ...sequenceFrame, origin: sequenceFrame.point, owner: "selection" },
+          { repaint: false },
+        );
+        break;
+      default:
+        break;
+    }
   }
 
   const selectionHandled = app.handleSelectionOnPointerDown(
@@ -1253,14 +1290,38 @@ export const onPointerMoveFromPointerDownHandler = (
       return;
     }
 
-    // 方向手柄（拖拽创建）：按下时已接管本次手势，移动只维护指针位置与阈值
-    if (
-      app.quickCreate.handlePointerMoveFromPointerDown(
-        pointerDownState,
+    // 时序 affordance 手势（owner = quickCreate / sequenceMessage）与杆上臂化：
+    // 更新 frame.point 后交给 AppQuickCreate 维护预演 / 阈值。
+    const gestureFrame = app.pointer.getFrame();
+    const ownsSequenceAffordance =
+      gestureFrame !== null &&
+      (gestureFrame.owner === "quickCreate" ||
+        gestureFrame.owner === "sequenceMessage" ||
+        (gestureFrame.phase === "armed" &&
+          gestureFrame.target.kind === "poleActivation"));
+    if (ownsSequenceAffordance && gestureFrame) {
+      const nextFrame = {
+        ...gestureFrame,
+        point: pointFrom<GlobalPoint>(pointerCoords.x, pointerCoords.y),
+      };
+      const handled = app.quickCreate.handleGestureMove(
+        nextFrame,
         pointerCoords,
-      )
-    ) {
-      return;
+      );
+      // 杆上臂化越过阈值会自行清空 frame；其余情况（含未过阈值）继续更新
+      if (
+        gestureFrame.phase === "armed" &&
+        gestureFrame.target.kind === "poleActivation" &&
+        !app.quickCreate.hasPointerGesture()
+      ) {
+        // arm dropped
+      } else {
+        app.pointer.setFrame(nextFrame, { repaint: false });
+      }
+      // 杆上臂化只丢弃点击，不吞拖生命线的手势
+      if (handled) {
+        return;
+      }
     }
 
     if (app.state.activeLockedId) {
@@ -2423,10 +2484,22 @@ export const onPointerUpFromPointerDownHandler = (
       return;
     }
 
-    // 方向手柄：抬起时按「拖过阈值没有」定落点（拖拽落指针处 / 点击落让位后的
-    // 基准位），pointercancel 与丢失抬起都只取消、不建图
+    // 时序 affordance：抬起时按 frame owner / phase 分派；其它 target 交回选择路径
+    const upFrame = app.pointer.getFrame();
+    const handlesSequenceUp =
+      upFrame?.owner === "quickCreate" ||
+      upFrame?.owner === "sequenceMessage" ||
+      (upFrame?.phase === "armed" &&
+        upFrame.target.kind === "poleActivation") ||
+      app.quickCreate.hasPointerGesture();
     if (
-      app.quickCreate.handlePointerUp(pointerDownState, childEvent, sceneCoords)
+      handlesSequenceUp &&
+      app.quickCreate.handlePointerUp(
+        upFrame,
+        pointerDownState,
+        childEvent,
+        sceneCoords,
+      )
     ) {
       return;
     }
