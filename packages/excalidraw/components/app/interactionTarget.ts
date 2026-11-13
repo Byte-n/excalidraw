@@ -249,6 +249,23 @@ export const resolveInteractionTarget = (
     }
   }
 
+  // Multi-selection transform handles beat a selected linear element's point
+  // handles (legacy handleSelectionOnPointerDown computed the multi-selection
+  // handle before it ever tried the linear point gesture).
+  if (selected.length > 1) {
+    const handle = getTransformHandleTypeFromCoords(
+      getCommonBounds(selected),
+      point.x,
+      point.y,
+      app.state.zoom,
+      (event?.pointerType || "mouse") as any,
+      app.editorInterface,
+    );
+    if (handle && !(handle === "rotation" && selected.some(isTableElement))) {
+      return { kind: "transformHandle", elementId: selected[0].id, handle };
+    }
+  }
+
   const linear = app.state.selectedLinearElement;
   if (linear) {
     const element = LinearElementEditor.getElement(
@@ -269,19 +286,7 @@ export const resolveInteractionTarget = (
     }
   }
 
-  if (selected.length > 1) {
-    const handle = getTransformHandleTypeFromCoords(
-      getCommonBounds(selected),
-      point.x,
-      point.y,
-      app.state.zoom,
-      (event?.pointerType || "mouse") as any,
-      app.editorInterface,
-    );
-    if (handle && !(handle === "rotation" && selected.some(isTableElement))) {
-      return { kind: "transformHandle", elementId: selected[0].id, handle };
-    }
-  } else if (selected.length === 1) {
+  if (selected.length === 1) {
     const handle = getElementWithTransformHandleType(
       selected,
       app.state,

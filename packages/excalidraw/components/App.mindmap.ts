@@ -330,7 +330,8 @@ export class AppMindmap {
 
   /**
    * 悬停节点：hover 帧直接读 target；pointerdown 的 armed 帧已覆盖 hover 帧，
-   * 此时回落到上一次 hover 位置的命中（旧字段在 pointerdown 前持久保留）。
+   * 此时回落到上一次 hover 帧的 target（旧字段在 pointerdown 前持久保留）。
+   * 不重新命中测试：pointerdown 不应产生新的 hover 命中。
    */
   private resolveHoveredNodeId = (): string | null => {
     const frame = this.app.pointer.getFrame();
@@ -341,18 +342,9 @@ export class AppMindmap {
     if (fromFrame || frame?.phase === "hover") {
       return fromFrame;
     }
-    const hoverPoint = this.app.pointer.getLastHoverPoint();
-    if (!hoverPoint) {
-      return null;
-    }
-    const hit = this.app.getElementAtPosition(hoverPoint[0], hoverPoint[1], {
-      includeBoundTextElement: true,
-    });
-    return hit
-      ? getMindmapNodeIdFromPointerTarget(this.app, {
-          kind: "element",
-          elementId: hit.id,
-        })
+    const hoverTarget = this.app.pointer.getLastHoverTarget?.();
+    return hoverTarget
+      ? getMindmapNodeIdFromPointerTarget(this.app, hoverTarget)
       : null;
   };
 
