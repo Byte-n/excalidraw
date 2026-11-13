@@ -87,7 +87,6 @@ import {
   getMindmapLayoutConfig,
   MINDMAP_COLLAPSE_STUB_LENGTH,
   getQuickCreateHandles,
-  getQuickCreateTargetElement,
   QUICK_CREATE_HANDLE_SIZE,
   QUICK_CREATE_HANDLE_SIZE_HOVER,
   QUICK_CREATE_HANDLE_SIZE_DOWN,
@@ -1414,7 +1413,7 @@ const renderQuickCreateHandles = (
   // **手势一旦开始就不受修饰键影响**——拖到一半把预演整组抽掉，等于中途失去反馈
   const dragging = app.quickCreate.getDrag();
   const suppressed = app.quickCreate.isSuppressed() && !dragging;
-  // 手柄源由 AppQuickCreate 统一解析：选中目标优先，没有选中时是悬停的激活条
+  // 手柄源由 AppQuickCreate 统一解析：只有单选的 basic / flowchart 图形
   const handles = getQuickCreateHandles(
     app,
     "mouse",
@@ -1502,30 +1501,6 @@ const renderQuickCreateHandles = (
       context.lineCap = "butt";
     }
   }
-  context.restore();
-};
-
-/**
- * 生命线杆上的激活条预演：指针悬停杆时画一条半透明激活条，单击即在该位置
- * 落地。元素由 `AppQuickCreate.getPoleActivationGhostElements` 提供（固定身份、
- * 带缓存），这里只负责画——与 quick-create 的预演同一套渲染。
- *
- * 与 `renderQuickCreateHandles` 一样，调用点在已按 scrollX/scrollY 平移过的
- * 上下文里（`renderQuickCreateGhost` 会把 scroll 归零抵消外层平移）。
- */
-const renderPoleActivationGhost = (
-  context: CanvasRenderingContext2D,
-  app: AppClassProperties,
-  appState: InteractiveCanvasAppState,
-  allElementsMap: NonDeletedSceneElementsMap,
-) => {
-  const elements = app.quickCreate.getPoleActivationGhostElements();
-  if (!elements.length) {
-    return;
-  }
-  context.save();
-  context.setLineDash([]);
-  renderQuickCreateGhost(context, app, appState, elements, allElementsMap);
   context.restore();
 };
 
@@ -4246,26 +4221,6 @@ const _renderInteractiveScene = ({
       }
     }
     context.restore();
-
-    // 悬停档的 quick-create 反馈：没有选中 quick-create 目标时，悬停激活条也要
-    // 出左 / 右两个连接点；生命线杆上的激活条预演与选中状态无关，单独画。
-    const hoverSuppressed =
-      app.quickCreate.isSuppressed() && !app.quickCreate.getDrag();
-    if (!hoverSuppressed) {
-      context.save();
-      context.translate(appState.scrollX, appState.scrollY);
-      if (!getQuickCreateTargetElement(app)) {
-        renderQuickCreateHandles(
-          context,
-          app,
-          appState,
-          selectionColor,
-          allElementsMap,
-        );
-      }
-      renderPoleActivationGhost(context, app, appState, allElementsMap);
-      context.restore();
-    }
 
     // 变换读数：单选与多选共用一条出口，放在上面两个长度分支之外——它的显
     // 隐条件与手柄并不重合，抄进分支里会立刻漂移。口径是「有手柄可指才有读

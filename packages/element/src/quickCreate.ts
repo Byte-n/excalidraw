@@ -4,13 +4,7 @@ import { pointFrom, pointRotateRads } from "@excalidraw/math";
 import type { GlobalPoint, Radians } from "@excalidraw/math";
 
 import { getElementAbsoluteCoords } from "./bounds";
-import {
-  isActivationElement,
-  isSequenceFragmentElement,
-  isSequenceLifelineElement,
-  isShapeId,
-  isShapeElement,
-} from "./compositeShape";
+import { isSequenceShapeId, isShapeId, isShapeElement } from "./compositeShape";
 import { isMindmapNodeElement } from "./typeChecks";
 
 import type {
@@ -27,16 +21,6 @@ export const QUICK_CREATE_DIRECTIONS: readonly QuickCreateDirection[] = [
   "bottom",
   "left",
 ];
-
-/**
- * 激活条只暴露左 / 右两个连接点：时序消息是水平的，上 / 下手柄既没有语义，
- * 也会和生命线杆底控制点抢空间。
- */
-export const QUICK_CREATE_ACTIVATION_DIRECTIONS: readonly QuickCreateDirection[] =
-  ["right", "left"];
-
-/** 激活条连接点圆心外移距离（屏幕 px）；激活条很窄，不能沿用基础图形的 22 */
-export const QUICK_CREATE_ACTIVATION_OFFSET = 14;
 
 /**
  * 常态与悬停**共用**的圆心外移距离（屏幕 px）：两种状态圆心必须重合，
@@ -142,7 +126,11 @@ export const getQuickCreateDirectionVector = (
   return { x: rx, y: ry };
 };
 
-/** 方向手柄只对 basic ∪ fc-* 的未锁定图形出现 */
+/**
+ * 方向手柄只对 basic ∪ fc-* 的未锁定图形出现。时序图的图形（生命线、激活条、
+ * fragment）一律不提供 quick create：它们的交互分别是杆控制点 / 行控件，方向
+ * 手柄既没有语义，也会与这些控件抢空间。
+ */
 export const isQuickCreateTargetElement = (
   element: ExcalidrawElement | null | undefined,
 ): element is NonDeletedExcalidrawElement =>
@@ -151,10 +139,7 @@ export const isQuickCreateTargetElement = (
   !element.locked &&
   isShapeElement(element) &&
   isShapeId(element.shape.id) &&
-  // A sequence fragment is a single-column row container, not a box that
-  // spawns neighbouring shapes: its direction handles would sit on top of the
-  // row rails/insertion dots. It gets table-style row controls instead.
-  !isSequenceFragmentElement(element);
+  !isSequenceShapeId(element.shape.id);
 
 /**
  * 出口 A：源在**出发方向**上的边缘中点——中心沿旋转后的方向向量走该轴的半尺寸。
@@ -300,38 +285,23 @@ export const getQuickCreateHandles = (
   if (!element || !isQuickCreateTargetElement(element)) {
     return [];
   }
-  // Sequence lifelines have their own bottom control point; direction handles
-  // would collide with it and are not implemented for sequence messages yet.
-  if (isSequenceLifelineElement(element)) {
-    return [];
-  }
-  const activation = isActivationElement(element);
-  const directions = activation
-    ? QUICK_CREATE_ACTIVATION_DIRECTIONS
-    : QUICK_CREATE_DIRECTIONS;
   const zoom = app.state.zoom.value;
   const bounds = getElementAbsoluteCoords(
     element,
     app.scene.getNonDeletedElementsMap(),
   );
-  // 紧凑档按**屏幕**尺寸判定，小图形与低缩放走同一条规则；激活条固定走常规档，
-  // 否则 30px 宽的条永远落在紧凑档，连接点会缩得看不清。
+  // 紧凑档按**屏幕**尺寸判定，小图形与低缩放走同一条规则。
   const compact =
-    !activation &&
     Math.min(element.width, element.height) * zoom <
-      QUICK_CREATE_COMPACT_THRESHOLD;
+    QUICK_CREATE_COMPACT_THRESHOLD;
   const offset =
-    (activation
-      ? QUICK_CREATE_ACTIVATION_OFFSET
-      : compact
-      ? QUICK_CREATE_OFFSET_COMPACT
-      : QUICK_CREATE_HANDLE_OFFSET) / zoom;
+    (compact ? QUICK_CREATE_OFFSET_COMPACT : QUICK_CREATE_HANDLE_OFFSET) / zoom;
   const centers = getHandleCenters(bounds, element.angle, offset);
   const hitSize =
     (pointerType === "touch"
       ? QUICK_CREATE_HIT_SIZE_TOUCH
       : QUICK_CREATE_HIT_SIZE) / zoom;
-  return directions.map((direction) => ({
+  return QUICK_CREATE_DIRECTIONS.map((direction) => ({
     direction,
     elementId: element.id,
     center: centers[direction],

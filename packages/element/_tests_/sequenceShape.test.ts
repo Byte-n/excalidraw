@@ -1202,13 +1202,16 @@ describe("sequence fragment rows", () => {
     expect(deleteSequenceFragmentRow(element, rows[0].id)).toBeNull();
   });
 
-  it("does not offer quick-create handles on a fragment", () => {
+  it("does not offer quick-create handles on any sequence shape", () => {
     expect(
       isQuickCreateTargetElement(makeElement("sc-fragment", 400, 240)),
     ).toBe(false);
     expect(
       isQuickCreateTargetElement(makeElement("sc-activation", 30, 100)),
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      isQuickCreateTargetElement(makeElement("sc-lifeline-entity", 64, 428)),
+    ).toBe(false);
   });
 
   it("keeps the tab label to one line", () => {
