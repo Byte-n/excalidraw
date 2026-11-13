@@ -24,7 +24,7 @@ import { createIcon } from "./icons";
  * 几何函数），再等比缩放进 24×24：图标画的是头部 glyph（含描边专用附件），
  * 杆不进图标。
  *
- * `sc-activation` 的头部盒就是整个元素（30×100），`sc-fragment` 是外框（400×240）
+ * `sc-activation` 的头部盒就是整个元素（16×100），`sc-fragment` 是外框（400×240）
  * 加左上角页签，均按同样规则取路径。
  */
 

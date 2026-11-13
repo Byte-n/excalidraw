@@ -286,7 +286,7 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
       id: "sc-activation",
       backgroundColor: "#c5d7e9",
       strokeColor: "#1e1e1e",
-      width: 30,
+      width: 16,
       height: 100,
     },
     // fragment 只有页签填充（样本 `#f5f5f5` → gray[0]），外框仍只描边

@@ -123,8 +123,13 @@ export const isSequenceLifelineElement = <T extends ExcalidrawElement>(
   );
 };
 
-/** Default activation bar size, shared by preset defaults and pole placement. */
-export const SEQUENCE_ACTIVATION_WIDTH = 30;
+/**
+ * Default activation bar size, shared by preset defaults and pole placement.
+ * Deliberately narrower than the Lark sample's 30px: a 30px bar is half the
+ * width of a 64px lifeline head and reads as a block rather than a UML
+ * activation bar.
+ */
+export const SEQUENCE_ACTIVATION_WIDTH = 16;
 export const SEQUENCE_ACTIVATION_HEIGHT = 100;
 
 /** Clearance kept between an auto-created activation and the pole ends. */

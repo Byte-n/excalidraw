@@ -1782,13 +1782,18 @@ describe("sequence activation geometry", () => {
       },
     );
     expect(getActivationAnchor(activation, "left")).toEqual([100, 100]);
-    expect(getActivationAnchor(activation, "right")).toEqual([130, 100]);
+    expect(getActivationAnchor(activation, "right")).toEqual([
+      100 + SEQUENCE_ACTIVATION_WIDTH,
+      100,
+    ]);
     expect(getActivationAnchorAtSceneY(activation, "right", 60)).toEqual([
-      130, 60,
+      100 + SEQUENCE_ACTIVATION_WIDTH,
+      60,
     ]);
     // 夹进竖向范围（留 1px 余量）
     expect(getActivationAnchorAtSceneY(activation, "right", 10)).toEqual([
-      130, 51,
+      100 + SEQUENCE_ACTIVATION_WIDTH,
+      51,
     ]);
     expect(getActivationAnchorAtSceneY(activation, "left", 500)).toEqual([
       100, 149,

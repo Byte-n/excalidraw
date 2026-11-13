@@ -14,7 +14,7 @@
 | `life_line` | `data_base` | `数据库` | `sc-lifeline-data-base` | 圆柱（顶/底半椭圆 rx=34 ry=16）+ 顶椭圆下半弧 | `COLOR_PALETTE.blue[0]` `#e8f0f8` | 68 × 450 |
 | `life_line` | `object_lifeline` | `对象` | `sc-lifeline-object` | 圆角矩形 r=7 铺满头部盒 | `COLOR_PALETTE.blue[0]` `#e8f0f8` | 120 × 420 |
 | `life_line` | `collection` | `集合` | `sc-lifeline-collection` | 两个圆角矩形 r=4 错位 8（后排先画、前排后画） | `COLOR_PALETTE.blue[0]` `#e8f0f8` | 118 × 428 |
-| `activation` | — | — | `sc-activation` | 圆角矩形 r=5 铺满 | `COLOR_PALETTE.blue[1]` `#c5d7e9` | 30 × 100 |
+| `activation` | — | — | `sc-activation` | 圆角矩形 r=5 铺满 | `COLOR_PALETTE.blue[1]` `#c5d7e9` | 16 × 100 |
 | `combined_fragment` | — | `Opt / Loop` | `sc-fragment` | 单列行容器：外框 (0,0)→(400,0)→(400,240)→(0,240) 只描边；页签 (0,0)→(0,36.272)→(80,36.272)→(92,24.272)→(92,0) 填充并描边；首行是 operator 标签，下面是条件行 | `COLOR_PALETTE.gray[0]` `#f4f4f4`（仅页签） | 400 × 240 |
 
 「默认填充（映射后）」是样本 `fill_color`（fragment 以 PDF 实测的页签填充为准）按**保色相、族内取最近档**映射到的项目色板色；「默认尺寸」是创建预设的尺寸。两者都落在 `packages/excalidraw/components/shapePresetDefaults.ts` 的 `SHAPE_PRESET_DEFAULTS`。
@@ -38,6 +38,7 @@
 | # | 项 | PDF 实测 | JSON | 采用 |
 | --- | --- | --- | --- | --- |
 | 1 | `activation` 圆角 | 5 | `border_radius` 4 | PDF 的 5（绘制路径以 PDF 为准） |
+| 1b | `activation` 宽度 | 30 | 30 | 16：30 时与 64 宽生命线头部相比过宽，按 UML 习惯收窄 |
 | 2 | 描边宽 | 图标型/杆/页签 2、盒型 4 | 全部 `"narrow"` | 项目规范样式 thin(1)：`narrow` 的既有映射口径 |
 | 3 | `object_lifeline` 填充 | `#f0f4fc` | `#f5f5f5` | 与其他生命线一致的 `#f0f4fc` → `blue[0]` |
 | 4 | `control` 节点坐标 | 渲染原点比 JSON 偏 (−10, −14.234) | — | 几何按渲染实测取（图元与文本随之整体偏移已被吸收进局部坐标） |
