@@ -7,7 +7,7 @@ import type {
   StrokeWidthKey,
 } from "@excalidraw/common";
 
-import type { ConnectionHit, LinearElementEditor } from "@excalidraw/element";
+import type { LinearElementEditor } from "@excalidraw/element";
 
 import type { MaybeTransformHandleType } from "@excalidraw/element";
 import type { PreparedTableUniformScale } from "@excalidraw/element";
@@ -20,7 +20,6 @@ import type {
   TextAlign,
   ExcalidrawElement,
   GroupId,
-  ExcalidrawBindableElement,
   ExcalidrawArrowElement,
   Arrowhead,
   FontFamilyValues,
@@ -223,7 +222,6 @@ export type StaticCanvasAppState = Readonly<
     currentHoveredFontFamily: AppState["currentHoveredFontFamily"];
     hoveredElementIds: AppState["hoveredElementIds"];
     hoveredElementId: AppState["hoveredElementId"];
-    suggestedBinding: AppState["suggestedBinding"];
     // Cropping
     croppingElementId: AppState["croppingElementId"];
   }
@@ -242,7 +240,6 @@ export type InteractiveCanvasAppState = Readonly<
     isBindingEnabled: AppState["isBindingEnabled"];
     isMidpointSnappingEnabled: AppState["isMidpointSnappingEnabled"];
     gridModeEnabled: AppState["gridModeEnabled"];
-    suggestedBinding: AppState["suggestedBinding"];
     hoveredArrowTextAnchor: AppState["hoveredArrowTextAnchor"];
     isRotating: AppState["isRotating"];
     elementsToHighlight: AppState["elementsToHighlight"];
@@ -629,18 +626,6 @@ export interface AppState {
    */
   inputDevice: InputDevice;
   /**
-   * The bindable element the UI highlights for the user when an arrow is
-   * dragged or otherwise its endpoint being close to said element.
-   *
-   * Derived mirror of the pointer frame's `connection` target: only
-   * `applyPointerFrame` and gesture owners write it (03-connection-integration
-   * §4.6). PR6 removes it.
-   */
-  suggestedBinding: {
-    element: NonDeleted<ExcalidrawBindableElement>;
-    hit: ConnectionHit;
-  } | null;
-  /**
    * Where on a hovered arrow the text tool would attach text if clicked —
    * a free endpoint (binds the arrow to a new text element positioned against
    * that endpoint) or the arrow's midpoint (adds a label bound to the arrow).
@@ -937,7 +922,6 @@ export type UIAppState = Omit<
   // highlights) — identity churns per pointermove while interacting
   | "snapLines"
   | "originSnapOffset"
-  | "suggestedBinding"
   | "hoveredArrowTextAnchor"
   | "frameToHighlight"
   | "elementsToHighlight"

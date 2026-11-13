@@ -20,7 +20,6 @@ import {
   isPathALoop,
   bindOrUnbindBindingElement,
   isPointInElement,
-  pickConnectionTargetForPoint,
   getBindingStrategyForDraggingBindingElementEndpoints,
   getRotationCursor,
 } from "@excalidraw/element";
@@ -73,7 +72,6 @@ import type {
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
   ExcalidrawTableElement,
-  ExcalidrawBindableElement,
   NonDeleted,
   ExcalidrawTextContainer,
 } from "@excalidraw/element/types";
@@ -141,7 +139,6 @@ export const restoreSelectionTool = (app: PointerApp) => {
     app.setState(
       {
         newElement: null,
-        suggestedBinding: null,
         activeTool: updateActiveTool(app.state, {
           type: app.state.preferredSelectionTool.type,
         }),
@@ -1251,7 +1248,6 @@ export const handleFreeDrawElementOnPointerDown = (
 
   app.setState({
     newElement: element,
-    suggestedBinding: null,
   });
 };
 
@@ -1440,45 +1436,6 @@ export const handleLinearElementOnPointerDown = (
       pointerDownState.origin.x,
       pointerDownState.origin.y,
     );
-    const elementsMap = app.scene.getNonDeletedElementsMap();
-    // The armed frame already resolved the same point (same provider as hover):
-    // reuse its hit so the initial binding cannot drift from the preview.
-    let picked: ReturnType<typeof pickConnectionTargetForPoint> = null;
-    const armedFrame = app.pointer.getFrame();
-    if (
-      armedFrame?.phase === "armed" &&
-      armedFrame.target.kind === "connection"
-    ) {
-      const element = app.scene.getNonDeletedElement(
-        armedFrame.target.elementId,
-      ) as NonDeleted<ExcalidrawBindableElement> | null;
-      if (element) {
-        picked = { element, hit: armedFrame.target.hit };
-      }
-    }
-    if (!picked && isBindingEnabled(app.state)) {
-      picked = pickConnectionTargetForPoint(
-        point,
-        app.scene.getNonDeletedElements(),
-        {
-          arrow: {
-            elbowed: app.state.currentItemArrowType === "elbow",
-          },
-          zoom: app.state.zoom.value,
-          isMidpointSnappingEnabled: app.state.isMidpointSnappingEnabled,
-          gridSize: app.state.gridModeEnabled
-            ? app.getEffectiveGridSize()
-            : undefined,
-          angleLocked: shouldRotateWithDiscreteAngle(event.nativeEvent),
-          elementsMap,
-          startOrEnd: "end",
-        },
-        () => null,
-      );
-    }
-    const boundElement = (picked?.element ??
-      null) as NonDeleted<ExcalidrawBindableElement> | null;
-    const boundHit = picked?.hit ?? null;
 
     app.scene.mutateElement(element, {
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(0, 0)],
@@ -1547,10 +1504,6 @@ export const handleLinearElementOnPointerDown = (
         return {
           ...prevState,
           newElement: element,
-          suggestedBinding:
-            boundElement && boundHit && isBindingElement(element)
-              ? { element: boundElement, hit: boundHit }
-              : null,
           selectedElementIds: nextSelectedElementIds,
           selectedLinearElement: linearElementEditor,
         };

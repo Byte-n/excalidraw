@@ -142,9 +142,9 @@ export {
   SEQUENCE_CONNECTION_SNAP_DISTANCE,
   SEQUENCE_MESSAGE_SNAP_DISTANCE,
   buildConnectionQuery,
-  isSameSuggestedBinding,
+  clearConnectionPreviewFrame,
   pickConnectionTarget,
   pickConnectionTargetForPoint,
   resolveConnectionHit,
-  suggestedBindingForElbow,
+  setConnectionPreviewFrame,
 } from "./connection";

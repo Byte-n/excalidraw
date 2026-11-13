@@ -62,6 +62,16 @@ const arrowEndpoint = (
     h.app.scene.getNonDeletedElementsMap(),
   );
 
+/** The connection preview is the frame's `connection` target (PR6). */
+const connectionPreview = () => {
+  const frame = h.app.pointer.getFrame();
+  if (frame?.target.kind !== "connection") {
+    return null;
+  }
+  const element = h.app.scene.getNonDeletedElement(frame.target.elementId);
+  return element ? { element, hit: frame.target.hit } : null;
+};
+
 const expectPointsClose = (a: GlobalPoint, b: GlobalPoint, digits = 2) => {
   expect(a[0]).toBeCloseTo(b[0], digits);
   expect(a[1]).toBeCloseTo(b[1], digits);
@@ -89,7 +99,7 @@ describe("connection preview = landing (PR3a)", () => {
 
     let preview: GlobalPoint | null = null;
     await waitFor(() => {
-      const suggested = h.app.state.suggestedBinding;
+      const suggested = connectionPreview();
       expect(suggested?.element.id).toBe(rect.id);
       preview = suggested!.hit.point;
     });
@@ -123,7 +133,7 @@ describe("connection preview = landing (PR3a)", () => {
 
     let preview: GlobalPoint | null = null;
     await waitFor(() => {
-      const suggested = h.app.state.suggestedBinding;
+      const suggested = connectionPreview();
       expect(suggested?.element.id).toBe(rect.id);
       preview = suggested!.hit.point;
     });
@@ -148,7 +158,7 @@ describe("connection preview = landing (PR3a)", () => {
     mouse.moveTo(nearAnchor[0], nearAnchor[1]);
 
     await waitFor(() => {
-      const suggested = h.app.state.suggestedBinding;
+      const suggested = connectionPreview();
       expect(suggested?.element.id).toBe(rect.id);
       expect(suggested?.hit.tier).toBe("anchor");
       // midpointAnchors order: top, right, bottom, left
@@ -165,7 +175,7 @@ describe("connection preview = landing (PR3a)", () => {
     });
     mouse.moveTo(nearAnchor[0] + 1, nearAnchor[1]);
     await waitFor(() => {
-      const suggested = h.app.state.suggestedBinding;
+      const suggested = connectionPreview();
       expect(suggested?.hit.tier).not.toBe("anchor");
     });
   });
@@ -184,7 +194,7 @@ describe("connection preview = landing (PR3a)", () => {
     const point = pointFrom<GlobalPoint>(643, 334);
     mouse.moveTo(point[0], point[1]);
     await waitFor(() => {
-      const suggested = h.app.state.suggestedBinding;
+      const suggested = connectionPreview();
       expect(suggested?.element.id).toBe(small.id);
       expect(suggested?.hit.tier).toBe("outline");
       expect(suggested?.hit.point[1]).toBeCloseTo(334, 0);
@@ -206,7 +216,7 @@ describe("connection preview = landing (PR3a)", () => {
 
     let preview: GlobalPoint | null = null;
     await waitFor(() => {
-      const suggested = h.app.state.suggestedBinding;
+      const suggested = connectionPreview();
       expect(suggested?.element.id).toBe(rect.id);
       expect(suggested?.hit.tier).not.toBe("anchor");
       preview = suggested!.hit.point;
@@ -235,7 +245,7 @@ describe("connection preview = landing (PR3a)", () => {
       mouse.moveTo(503, 270);
     });
     await waitFor(() => {
-      expect(h.app.state.suggestedBinding).toBeNull();
+      expect(connectionPreview()).toBeNull();
     });
   });
 
@@ -275,10 +285,8 @@ describe("connection preview = landing (PR3a)", () => {
     } as LinearElementEditor;
 
     const pointer = pointFrom<GlobalPoint>(400, 310);
-    let updates: ReturnType<typeof LinearElementEditor.handlePointDragging> =
-      null;
     await act(() => {
-      updates = LinearElementEditor.handlePointDragging(
+      LinearElementEditor.handlePointDragging(
         new PointerEvent("pointermove"),
         h.app,
         pointer[0],
@@ -287,7 +295,7 @@ describe("connection preview = landing (PR3a)", () => {
       );
     });
 
-    const hit = updates!.suggestedBinding!.hit.point;
+    const hit = connectionPreview()!.hit.point;
     const arrowAfter = h.app.scene.getNonDeletedElement(
       arrow.id,
     ) as NonDeleted<ExcalidrawLinearElement>;
@@ -353,7 +361,7 @@ describe("sequence message preview = landing", () => {
 
     let preview: GlobalPoint | null = null;
     await waitFor(() => {
-      const suggested = h.app.state.suggestedBinding;
+      const suggested = connectionPreview();
       expect(suggested?.element.id).toBe(target.id);
       preview = suggested!.hit.point;
     });

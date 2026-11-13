@@ -352,7 +352,6 @@ const resetScene = (
     selectedElementIds: {},
     selectedLinearElement: null,
     newElement: null,
-    suggestedBinding: null,
     isBindingEnabled: true,
     bindingPreference: "enabled",
     gridModeEnabled: mode === "grid",

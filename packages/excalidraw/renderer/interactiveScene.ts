@@ -116,11 +116,13 @@ import type {
   TransformHandleType,
   QuickCreateHandle,
   TransformStatusReadout,
+  ConnectionHit,
 } from "@excalidraw/element";
 
 import type {
   ElementsMap,
   ExcalidrawArrowElement,
+  ExcalidrawBindableElement,
   ExcalidrawShapeElement,
   ExcalidrawElement,
   ExcalidrawFrameLikeElement,
@@ -166,7 +168,6 @@ import {
 } from "./helpers";
 
 import type {
-  AppState,
   AppClassProperties,
   FragmentRowSelection,
   FragmentStructureHover,
@@ -592,17 +593,17 @@ const renderSequenceActivationDot = (
 
 const renderBindingHighlightForBindableElement_simple = (
   context: CanvasRenderingContext2D,
-  suggestedBinding: NonNullable<AppState["suggestedBinding"]>,
+  binding: {
+    element: NonDeleted<ExcalidrawBindableElement>;
+    hit: ConnectionHit;
+  },
   elementsMap: ElementsMap,
   appState: InteractiveCanvasAppState,
   angleLocked = false,
 ) => {
   // resolved through the parent chain, so cell members of a table inside a
   // frame highlight against the frame like other frame descendants
-  const enclosingFrame = getContainingFrame(
-    suggestedBinding.element,
-    elementsMap,
-  );
+  const enclosingFrame = getContainingFrame(binding.element, elementsMap);
   if (enclosingFrame && isFrameLikeElement(enclosingFrame)) {
     context.translate(enclosingFrame.x, enclosingFrame.y);
 
@@ -625,12 +626,12 @@ const renderBindingHighlightForBindableElement_simple = (
     context.translate(-enclosingFrame.x, -enclosingFrame.y);
   }
 
-  switch (suggestedBinding.element.type) {
+  switch (binding.element.type) {
     case "magicframe":
     case "frame":
       context.save();
 
-      context.translate(suggestedBinding.element.x, suggestedBinding.element.y);
+      context.translate(binding.element.x, binding.element.y);
 
       context.lineWidth = 6 / Math.max(0.25, appState.zoom.value);
       context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, ${
@@ -642,19 +643,14 @@ const renderBindingHighlightForBindableElement_simple = (
         context.roundRect(
           0,
           0,
-          suggestedBinding.element.width,
-          suggestedBinding.element.height,
+          binding.element.width,
+          binding.element.height,
           FRAME_STYLE.radius / appState.zoom.value,
         );
         context.stroke();
         context.closePath();
       } else {
-        context.strokeRect(
-          0,
-          0,
-          suggestedBinding.element.width,
-          suggestedBinding.element.height,
-        );
+        context.strokeRect(0, 0, binding.element.width, binding.element.height);
       }
 
       context.restore();
@@ -662,23 +658,23 @@ const renderBindingHighlightForBindableElement_simple = (
     default:
       context.save();
 
-      if (isShapeElement(suggestedBinding.element)) {
+      if (isShapeElement(binding.element)) {
         context.lineWidth = 6 / Math.max(0.25, appState.zoom.value);
         context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, ${
           BINDING_GLOW_ALPHA[appState.theme]
         })`;
-        strokeCompositeShapeOutline(context, suggestedBinding.element);
+        strokeCompositeShapeOutline(context, binding.element);
         context.restore();
         break;
       }
 
-      const center = elementCenterPoint(suggestedBinding.element, elementsMap);
+      const center = elementCenterPoint(binding.element, elementsMap);
 
       context.translate(center[0], center[1]);
-      context.rotate(suggestedBinding.element.angle as Radians);
+      context.rotate(binding.element.angle as Radians);
       context.translate(-center[0], -center[1]);
 
-      context.translate(suggestedBinding.element.x, suggestedBinding.element.y);
+      context.translate(binding.element.x, binding.element.y);
 
       context.lineWidth = 6 / Math.max(0.25, appState.zoom.value);
       context.strokeStyle = `rgba(${BINDING_HIGHLIGHT_RGB[appState.theme]}, ${
@@ -686,19 +682,19 @@ const renderBindingHighlightForBindableElement_simple = (
       })`;
 
       const [segments, curves] = deconstructRectanguloidElement(
-        suggestedBinding.element,
+        binding.element,
       );
 
       // Draw each line segment individually
       segments.forEach((segment) => {
         context.beginPath();
         context.moveTo(
-          segment[0][0] - suggestedBinding.element.x,
-          segment[0][1] - suggestedBinding.element.y,
+          segment[0][0] - binding.element.x,
+          segment[0][1] - binding.element.y,
         );
         context.lineTo(
-          segment[1][0] - suggestedBinding.element.x,
-          segment[1][1] - suggestedBinding.element.y,
+          segment[1][0] - binding.element.x,
+          segment[1][1] - binding.element.y,
         );
         context.stroke();
       });
@@ -708,16 +704,16 @@ const renderBindingHighlightForBindableElement_simple = (
         const [start, control1, control2, end] = curve;
         context.beginPath();
         context.moveTo(
-          start[0] - suggestedBinding.element.x,
-          start[1] - suggestedBinding.element.y,
+          start[0] - binding.element.x,
+          start[1] - binding.element.y,
         );
         context.bezierCurveTo(
-          control1[0] - suggestedBinding.element.x,
-          control1[1] - suggestedBinding.element.y,
-          control2[0] - suggestedBinding.element.x,
-          control2[1] - suggestedBinding.element.y,
-          end[0] - suggestedBinding.element.x,
-          end[1] - suggestedBinding.element.y,
+          control1[0] - binding.element.x,
+          control1[1] - binding.element.y,
+          control2[0] - binding.element.x,
+          control2[1] - binding.element.y,
+          end[0] - binding.element.x,
+          end[1] - binding.element.y,
         );
         context.stroke();
       });
@@ -728,7 +724,7 @@ const renderBindingHighlightForBindableElement_simple = (
 
   // The landing point / anchors come straight from the connection hit; the
   // renderer never re-derives midpoints or activation points.
-  const { hit } = suggestedBinding;
+  const { hit } = binding;
   const showAnchors =
     appState.isMidpointSnappingEnabled &&
     !appState.gridModeEnabled &&
@@ -762,14 +758,13 @@ const renderBindingHighlightForBindableElement_simple = (
 const renderBindingHighlightForBindableElement = (
   app: AppClassProperties,
   context: CanvasRenderingContext2D,
-  suggestedBinding: AppState["suggestedBinding"],
+  binding: {
+    element: NonDeleted<ExcalidrawBindableElement>;
+    hit: ConnectionHit;
+  },
   allElementsMap: NonDeletedSceneElementsMap,
   appState: InteractiveCanvasAppState,
 ) => {
-  if (suggestedBinding === null) {
-    return;
-  }
-
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
   const angleLocked =
@@ -777,7 +772,7 @@ const renderBindingHighlightForBindableElement = (
     shouldRotateWithDiscreteAngle(app.lastPointerMoveEvent);
   renderBindingHighlightForBindableElement_simple(
     context,
-    suggestedBinding,
+    binding,
     allElementsMap,
     appState,
     angleLocked,
@@ -3598,14 +3593,21 @@ const _renderInteractiveScene = ({
     }
   }
 
-  if (appState.isBindingEnabled && appState.suggestedBinding) {
-    renderBindingHighlightForBindableElement(
-      app,
-      context,
-      appState.suggestedBinding,
-      allElementsMap,
-      appState,
-    );
+  const pointerFrame = app.pointer.getFrame();
+  if (appState.isBindingEnabled && pointerFrame?.target.kind === "connection") {
+    const bindableElement = allElementsMap.get(pointerFrame.target.elementId);
+    if (bindableElement) {
+      renderBindingHighlightForBindableElement(
+        app,
+        context,
+        {
+          element: bindableElement as NonDeleted<ExcalidrawBindableElement>,
+          hit: pointerFrame.target.hit,
+        },
+        allElementsMap,
+        appState,
+      );
+    }
   }
 
   if (appState.hoveredArrowTextAnchor) {

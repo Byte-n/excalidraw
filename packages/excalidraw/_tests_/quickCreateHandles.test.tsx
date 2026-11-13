@@ -3320,11 +3320,15 @@ describe("quick create handles", () => {
       mouse.moveTo(408, 260);
 
       await waitFor(() => {
-        const suggested = h.app.state.suggestedBinding;
-        expect(suggested?.element.id).toBe(activation.id);
+        const frame = h.app.pointer.getFrame();
+        expect(
+          frame?.target.kind === "connection" && frame.target.elementId,
+        ).toBe(activation.id);
+        const hit =
+          frame?.target.kind === "connection" ? frame.target.hit : null;
         // 预览与落点同源：均落在激活条右边缘的 Γ 上（边缘 416 再外移一个 gap）
-        expect(suggested?.hit.point[0]).toBeCloseTo(422, 6);
-        expect(suggested?.hit.point[1]).toBeCloseTo(260, 6);
+        expect(hit?.point[0]).toBeCloseTo(422, 6);
+        expect(hit?.point[1]).toBeCloseTo(260, 6);
       });
 
       mouse.upAt(408, 260);

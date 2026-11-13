@@ -205,3 +205,28 @@ rg "cursor\.set" packages/excalidraw/components/app/pointerCanvas.ts packages/ex
 - 连接预览与落点同源；
 - 渲染器不重算几何；
 - 所有验收项通过。
+
+## 实施记录（2026-11-14，6a：删除 suggestedBinding）
+
+- 实际改动：删除 `AppState["suggestedBinding"]`（类型 / 初始值 / appState 导出 /
+  Static·InteractiveCanvas props / LayerUI / actionDeselect / actionFinalize / keyboard /
+  lifecycle / pointerCanvas / pointerSelection / pointerSession 的全部写入与清理），
+  删除 `linearElementEditor` 返回对象与比较中的该字段。新增
+  `element/src/connection/preview.ts`：端点/折线点拖拽时把落点写成 gesture 帧
+  （`setConnectionPreviewFrame` / `clearConnectionPreviewFrame`），渲染器只读
+  `app.pointer.getFrame()` + scene 绘制 binding highlight。删除
+  `connection/suggestedBinding.ts`、`isSameSuggestedBinding`、`suggestedBindingForElbow`。
+- 与计划的偏差：预览帧 helper 放在 element 包（线性编辑器在 element 内，依赖方向
+  决定了不能放 pointerDispatch）；`handleHoverSelectedLinearElement` 不再在拖拽中把
+  `isDragging` 置 false（旧行为由镜像 setState 顺带覆盖，删除后需保留拖拽态）。
+  另含两个 PR5 回归修复（见 `30a39bf8`）：多选手柄优先于 linearHandle；armed 帧
+  复用上次 hover target，避免命中缓存污染导致 pointerup 误取消选择。
+- 基线变化：contextmenu / regression / utils export 快照仅删 `"suggestedBinding": null`
+  行；history 快照 63 行字段 + 5 个渲染计数 -1（删除仅为镜像的 setState）+ 1 个
+  skip 用例陈旧快照；`move.test` inline 计数 interactive 23→24、static 17→16
+  （预览帧显式重绘取代镜像 setState）。
+- 新增/调整测试：`connectionPreview.test.tsx` 改读 frame 的 connection target；
+  element 包 1841 项全绿；excalidraw 全量仅 3 个既有 animation 失败。
+- grep：生产/测试/快照无 `suggestedBinding`（CHANGELOG 历史文案与无关的
+  `suggestedBindings` 复数导出除外）。
+- 遗留问题：6b 删除旧落点函数与渲染器重算，并跑最终验收。

@@ -8,6 +8,7 @@ import {
   ShapeCache,
   selectGroupsForSelectedElements,
   makeNextSelectedElementIds,
+  clearConnectionPreviewFrame,
 } from "@excalidraw/element";
 
 import {
@@ -106,12 +107,12 @@ export const terminateActiveInteraction = (app: App) => {
     isRotating: false,
     isCropping: false,
     croppingElementId: null,
-    suggestedBinding: null,
     frameToHighlight: null,
     elementsToHighlight: null,
     snapLines: [],
     showHyperlinkPopup: false,
   });
+  clearConnectionPreviewFrame(app);
   app["deselectElements"]();
   if (!app.isInteractionEnabled()) {
     app.setState({ originSnapOffset: null });

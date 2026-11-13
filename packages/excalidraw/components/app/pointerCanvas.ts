@@ -1054,9 +1054,8 @@ export const handleCanvasPointerMove = (
     return;
   }
 
-  // Arrow / line hover: the frame's `connection` target drives the
-  // `suggestedBinding` mirror (elbow included) and clears it on every
-  // non-connection frame.
+  // Arrow / line hover: the frame's `connection` target is the only preview
+  // source; the renderer reads it directly (scene provides the element).
   const isArrowHoverEligible =
     (app.state.activeTool.type === "arrow" ||
       app.state.activeTool.type === "line") &&
@@ -1084,12 +1083,9 @@ export const handleCanvasPointerMove = (
     );
   } else if (app.pointer.getFrame()?.target.kind === "connection") {
     // The hover no longer applies (pressed / dragging / scrollbar): drop the
-    // derived mirror so it cannot go stale. The frame itself draws nothing for
-    // this target, so no extra interactive repaint is needed.
+    // connection frame so its preview cannot go stale. The following state
+    // updates (pointerdown / tool switch) repaint the interactive layer.
     app.pointer.setFrame(null, { repaint: false });
-    if (app.state.suggestedBinding) {
-      app.setState({ suggestedBinding: null });
-    }
   }
 
   const isPressingAnyButton = Boolean(event.buttons);
@@ -1633,7 +1629,6 @@ export const handleHoverSelectedLinearElement = (
       app.setState({
         selectedLinearElement: {
           ...app.state.selectedLinearElement,
-          isDragging: false,
           hoveredFocusPointBinding,
         },
       });

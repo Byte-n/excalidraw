@@ -4,13 +4,6 @@
  *
  * PR5a-1: one cursor writer per frame; hover mirrors derived here.
  */
-import { isSameSuggestedBinding } from "@excalidraw/element";
-
-import type {
-  ExcalidrawBindableElement,
-  NonDeleted,
-} from "@excalidraw/element/types";
-
 import { clearPointerHover, updateDerivedPointerState } from "./pointerDerived";
 import { getCursorForPointerTarget } from "./pointerCursor";
 import { renderContainerInteractionHover } from "./interactionTarget";
@@ -20,16 +13,27 @@ import type App from "../App";
 
 type PointerApp = Pick<App, keyof App> & Record<string, any>;
 
-const clearSuggestedBinding = (app: PointerApp) => {
-  if (app.state.suggestedBinding) {
-    app.setState({ suggestedBinding: null });
-  }
-};
-
 const isSequenceTarget = (target: PointerFrame["target"] | undefined) =>
   target?.kind === "quickCreateHandle" ||
   target?.kind === "activationEdge" ||
   target?.kind === "poleActivation";
+
+const sameConnectionTarget = (
+  a: PointerFrame["target"] | undefined,
+  b: PointerFrame["target"] | undefined,
+): boolean => {
+  if (a?.kind !== "connection" || b?.kind !== "connection") {
+    return false;
+  }
+  return (
+    a.elementId === b.elementId &&
+    a.hit.tier === b.hit.tier &&
+    a.hit.anchorIndex === b.hit.anchorIndex &&
+    a.hit.point[0] === b.hit.point[0] &&
+    a.hit.point[1] === b.hit.point[1] &&
+    a.hit.anchors.length === b.hit.anchors.length
+  );
+};
 
 export const applyPointerFrame = (
   app: PointerApp,
@@ -99,26 +103,10 @@ export const applyPointerFrame = (
     case "containerControl":
     case "containerBody":
       renderContainerInteractionHover(app, frame.target.candidate);
-      clearSuggestedBinding(app);
       break;
-    case "connection": {
-      const element = app.scene.getNonDeletedElement(
-        frame.target.elementId,
-      ) as NonDeleted<ExcalidrawBindableElement> | null;
-      if (!element) {
-        clearSuggestedBinding(app);
-        break;
-      }
-      const next = { element, hit: frame.target.hit };
-      app.setState((prev) =>
-        isSameSuggestedBinding(prev.suggestedBinding, next)
-          ? null
-          : { suggestedBinding: next },
-      );
-      break;
-    }
-    default:
-      clearSuggestedBinding(app);
+    case "connection":
+      // The renderer reads the frame's connection target directly; nothing to
+      // mirror into app state (PR6).
       break;
   }
 
@@ -135,9 +123,15 @@ export const applyPointerFrame = (
         nextTarget.kind === "mindmapAddButton" &&
         (previousTarget.elementId !== nextTarget.elementId ||
           previousTarget.button !== nextTarget.button)));
+  const connectionChanged =
+    frameChanged &&
+    (nextTarget.kind === "connection" ||
+      previousTarget?.kind === "connection") &&
+    !sameConnectionTarget(previousTarget, nextTarget);
   if (
     isSequenceTarget(frame.target) ||
     isSequenceTarget(existingFrame?.target) ||
+    connectionChanged ||
     mindmapAddButtonChanged
   ) {
     app.repaint.request();

@@ -116,14 +116,16 @@ describe("move element", () => {
 
     // `UI.createElement("arrow")` leaves the arrow tool active, so `clickOn`
     // hovers rectB with the arrow tool. PR3a replaced the legacy hover branch
-    // with the `connection` frame target, which writes the `suggestedBinding`
-    // mirror (18 → 19). PR5a adds one repaint per synthetic `refreshHover`
+    // with the `connection` frame target, which drives the preview directly
+    // (18 → 19). PR5a adds one repaint per synthetic `refreshHover`
     // pointermove that now resolves a transform handle (the synthesized event
-    // has no `pointerType`; the frame normalizes it to "mouse"), hence 23.
+    // has no `pointerType`; the frame normalizes it to "mouse"). PR6 renders
+    // the preview straight from the frame (one extra explicit repaint; the
+    // mirror `setState` no longer forces a static render), hence 24 / 16.
     expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-      `23`,
+      `24`,
     );
-    expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`17`);
+    expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`16`);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(3);
     expect(h.state.selectedElementIds[rectB.id]).toBeTruthy();

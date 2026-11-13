@@ -470,17 +470,12 @@ export const isPointerPipelineShadowEnabled = () =>
   typeof window !== "undefined" &&
   Boolean((window as any).__POINTER_PIPELINE_SHADOW__);
 
-const warnShadowMismatch = (
-  frame: PointerFrame,
-  legacy: unknown,
-  app: PointerApp,
-) => {
+const warnShadowMismatch = (frame: PointerFrame, legacy: unknown) => {
   console.warn("[pointer-pipeline-shadow] frame/legacy mismatch", {
     point: frame.point,
     target: frame.target,
     pointerType: frame.pointerType,
     legacy,
-    suggestedBinding: app.state?.suggestedBinding ?? null,
   });
 };
 
@@ -507,17 +502,13 @@ export const compareFrameWithLegacy = (
         typeof hasPoleActivation === "function" &&
         !hasPoleActivation.call(app.quickCreate)
       ) {
-        warnShadowMismatch(frame, "no pole activation hover", app);
+        warnShadowMismatch(frame, "no pole activation hover");
       }
       break;
     }
-    case "connection": {
-      const legacy = app.state?.suggestedBinding ?? null;
-      if (legacy?.element?.id !== frame.target.elementId) {
-        warnShadowMismatch(frame, legacy, app);
-      }
+    case "connection":
+      // The frame is the only connection-preview source since PR6.
       break;
-    }
     default:
       break;
   }

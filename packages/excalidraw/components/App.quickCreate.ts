@@ -530,7 +530,7 @@ export class AppQuickCreate {
     const pointer = pointFrom<GlobalPoint>(sceneX, sceneY);
     const constrained = constrainSequenceMessagePoint(axis, pointer);
     const constrainedPoint = { x: constrained[0], y: constrained[1] };
-    // 有现成激活条可连：交给通用绑定（预演由 suggestedBinding 画），这里只
+    // 有现成激活条可连：交给通用绑定（预演由 connection frame 画），这里只
     // 负责把指针拉回消息轴。
     const target = findSequenceMessageTarget(
       axis,

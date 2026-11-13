@@ -37,7 +37,6 @@ export {
 } from "./resolve";
 
 export {
-  getSuggestedBindingAnchors,
-  isSameSuggestedBinding,
-  suggestedBindingForElbow,
-} from "./suggestedBinding";
+  clearConnectionPreviewFrame,
+  setConnectionPreviewFrame,
+} from "./preview";

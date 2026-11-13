@@ -87,6 +87,7 @@ import {
   updateBoundElements,
   updateCompositeShapeControlPoint,
   getBindingGap,
+  clearConnectionPreviewFrame,
   clampSequenceLifelineHeight,
   isSequenceLifelineElement,
 } from "@excalidraw/element";
@@ -478,7 +479,6 @@ export const handleCanvasPointerDown = (
       appState: {
         newElement: null,
         editingTextElement: null,
-        suggestedBinding: null,
         selectedElementIds: makeNextSelectedElementIds(
           Object.keys(app.state.selectedElementIds)
             .filter((key) => key !== element.id)
@@ -1719,7 +1719,6 @@ export const onPointerMoveFromPointerDownHandler = (
           pointerCoords.y,
           linearElementEditor,
         );
-
         if (newState) {
           pointerDownState.lastCoords.x = pointerCoords.x;
           pointerDownState.lastCoords.y = pointerCoords.y;
@@ -1728,7 +1727,6 @@ export const onPointerMoveFromPointerDownHandler = (
           // NOTE: Optimize setState calls because it
           // affects history and performance
           if (
-            newState.suggestedBinding !== app.state.suggestedBinding ||
             !isShallowEqual(
               newState.selectedLinearElement?.selectedPointsIndices ?? [],
               app.state.selectedLinearElement?.selectedPointsIndices ?? [],
@@ -2442,9 +2440,9 @@ export const onPointerUpFromPointerDownHandler = (
           hitBoundText: pointerDownState.hit.arrowLabel,
         });
         if (editingLinearElement !== app.state.selectedLinearElement) {
+          clearConnectionPreviewFrame(app);
           app.setState({
             selectedLinearElement: editingLinearElement,
-            suggestedBinding: null,
           });
         }
       }
@@ -2661,7 +2659,7 @@ export const onPointerUpFromPointerDownHandler = (
             sceneCoords,
           });
         }
-        app.setState({ suggestedBinding: null });
+        clearConnectionPreviewFrame(app);
         if (!app.isToolLocked()) {
           app.setState(
             (prevState) => ({
@@ -3509,10 +3507,10 @@ export const onPointerUpFromPointerDownHandler = (
         // if lasso is turned on but from selection => reset to selection
         (activeTool.type === "lasso" && activeTool.fromSelection))
     ) {
+      clearConnectionPreviewFrame(app);
       app.setState(
         {
           newElement: null,
-          suggestedBinding: null,
           activeTool: updateActiveTool(app.state, {
             type: app.state.preferredSelectionTool.type,
           }),
@@ -3524,10 +3522,10 @@ export const onPointerUpFromPointerDownHandler = (
         },
       );
     } else {
+      clearConnectionPreviewFrame(app);
       app.setState(
         {
           newElement: null,
-          suggestedBinding: null,
         },
         () => app.cursor.refreshHover(),
       );

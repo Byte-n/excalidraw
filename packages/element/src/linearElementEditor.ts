@@ -53,12 +53,15 @@ import type { Bounds } from "@excalidraw/common";
 import {
   resolveAttachPointForNonElbowBinding,
   getBindingStrategyForDraggingBindingElementEndpoints,
-  isBindingEnabled,
   resolveConnectionHitForArrowEndpoint,
   resolveConnectionHitForElbowArrowEndpoint,
   updateBoundPoint,
 } from "./binding";
-import { isSameSuggestedBinding } from "./connection/suggestedBinding";
+import {
+  clearConnectionPreviewFrame,
+  setConnectionPreviewFrame,
+} from "./connection/preview";
+
 import {
   constrainSequenceMessagePoint,
   getSequenceMessageAxis,
@@ -84,6 +87,8 @@ import { ShapeCache, toggleLinePolygonState } from "./shape";
 import { getLockedLinearCursorAlignSize } from "./sizeHelpers";
 
 import { isLineElement, isLinearElement } from "./typeChecks";
+
+import type { ConnectionHit } from "./connection/types";
 
 import type { Scene } from "./Scene";
 
@@ -136,7 +141,6 @@ type PointMoveOtherUpdates = {
   startBinding?: ElementBinding | null;
   endBinding?: ElementBinding | null;
   moveMidPointsWithElement?: boolean | null;
-  suggestedBinding?: AppState["suggestedBinding"] | null;
 };
 
 const BoundTextPositionCache = new WeakMap<
@@ -369,7 +373,7 @@ export class LinearElementEditor {
     scenePointerX: number,
     scenePointerY: number,
     linearElementEditor: LinearElementEditor,
-  ): Pick<AppState, "suggestedBinding" | "selectedLinearElement"> | null {
+  ): Pick<AppState, "selectedLinearElement"> | null {
     const elementsMap = app.scene.getNonDeletedElementsMap();
     const elements = app.scene.getNonDeletedElements();
     const { elementId } = linearElementEditor;
@@ -431,7 +435,6 @@ export class LinearElementEditor {
     }
 
     // Apply the point movement if needed
-    let suggestedBinding: AppState["suggestedBinding"] = null;
     const { positions, updates } = pointDraggingUpdates(
       [idx],
       deltaX,
@@ -465,12 +468,6 @@ export class LinearElementEditor {
           !app.state.gridModeEnabled,
       },
     );
-    // Set the suggested binding from the updates if available
-    if (isBindingElement(element, false)) {
-      if (isBindingEnabled(app.state)) {
-        suggestedBinding = updates?.suggestedBinding ?? null;
-      }
-    }
 
     // Move the arrow over the bindable object in terms of z-index
     if (isBindingElement(element)) {
@@ -488,11 +485,7 @@ export class LinearElementEditor {
     }
 
     // PERF: Avoid state updates if not absolutely necessary
-    if (
-      app.state.selectedLinearElement?.customLineAngle === customLineAngle &&
-      (!suggestedBinding ||
-        isSameSuggestedBinding(app.state.suggestedBinding, suggestedBinding))
-    ) {
+    if (app.state.selectedLinearElement?.customLineAngle === customLineAngle) {
       return null;
     }
 
@@ -503,7 +496,6 @@ export class LinearElementEditor {
 
     return {
       selectedLinearElement: newLinearElementEditor,
-      suggestedBinding,
     };
   }
 
@@ -513,7 +505,7 @@ export class LinearElementEditor {
     scenePointerX: number,
     scenePointerY: number,
     linearElementEditor: LinearElementEditor,
-  ): Pick<AppState, "suggestedBinding" | "selectedLinearElement"> | null {
+  ): Pick<AppState, "selectedLinearElement"> | null {
     const elementsMap = app.scene.getNonDeletedElementsMap();
     const elements = app.scene.getNonDeletedElements();
     const { elbowed, elementId, initialState } = linearElementEditor;
@@ -619,7 +611,6 @@ export class LinearElementEditor {
     }
 
     // Apply the point movement if needed
-    let suggestedBinding: AppState["suggestedBinding"] = null;
     const { positions, updates } = pointDraggingUpdates(
       selectedPointsIndices,
       deltaX,
@@ -654,13 +645,6 @@ export class LinearElementEditor {
           !app.state.gridModeEnabled,
       },
     );
-
-    // Set the suggested binding from the updates if available
-    if (isBindingElement(element, false)) {
-      if (isBindingEnabled(app.state) && (startIsSelected || endIsSelected)) {
-        suggestedBinding = updates?.suggestedBinding ?? null;
-      }
-    }
 
     // Move the arrow over the bindable object in terms of z-index
     if (isBindingElement(element) && startIsSelected !== endIsSelected) {
@@ -723,7 +707,6 @@ export class LinearElementEditor {
 
     return {
       selectedLinearElement: newLinearElementEditor,
-      suggestedBinding,
     };
   }
 
@@ -2386,6 +2369,14 @@ const normalizeSelectedPoints = (
   return nextPoints.length ? nextPoints : null;
 };
 
+const clearGestureConnectionPreview = (app: AppClassProperties) => {
+  if (clearConnectionPreviewFrame(app)) {
+    // The frame no longer carries a connection target: repaint the interactive
+    // layer so the landing highlight disappears mid-drag.
+    app.repaint.request();
+  }
+};
+
 const pointDraggingUpdates = (
   selectedPointsIndices: readonly number[],
   deltaX: number,
@@ -2420,6 +2411,7 @@ const pointDraggingUpdates = (
 
   // Linear elements have no special logic
   if (!isArrowElement(element)) {
+    clearGestureConnectionPreview(app);
     return {
       positions: naiveDraggingPoints,
     };
@@ -2448,7 +2440,7 @@ const pointDraggingUpdates = (
 
   if (isElbowArrow(element)) {
     const startOrEnd = startIsDragged ? "start" : "end";
-    const suggestedBindingElement = startIsDragged
+    const previewElement = startIsDragged
       ? start.element
       : endIsDragged
       ? end.element
@@ -2463,10 +2455,10 @@ const pointDraggingUpdates = (
       elementsMap,
     );
     // Same resolver / flags as the landing (bindPointToSnapToElementOutline).
-    const hit = suggestedBindingElement
+    const hit = previewElement
       ? resolveConnectionHitForElbowArrowEndpoint(
           element,
-          suggestedBindingElement,
+          previewElement,
           startOrEnd,
           draggedGlobal,
           elementsMap,
@@ -2481,20 +2473,26 @@ const pointDraggingUpdates = (
         )
       : null;
 
+    if (hit && previewElement) {
+      setConnectionPreviewFrame(
+        app,
+        previewElement,
+        hit,
+        pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
+      );
+    } else {
+      clearGestureConnectionPreview(app);
+    }
+
     return {
       positions: naiveDraggingPoints,
-      updates: {
-        suggestedBinding:
-          hit && suggestedBindingElement
-            ? { element: suggestedBindingElement, hit }
-            : null,
-      },
     };
   }
 
   // Handle the case where neither endpoint is being dragged
   // but we need to update bound endpoints
   if (!startIsDragged && !endIsDragged) {
+    clearGestureConnectionPreview(app);
     const nextArrow = {
       ...element,
       points: element.points.map((p, idx) => {
@@ -2548,15 +2546,18 @@ const pointDraggingUpdates = (
   }
 
   if (startIsDragged === endIsDragged) {
+    clearGestureConnectionPreview(app);
     return {
       positions: naiveDraggingPoints,
     };
   }
 
   // Generate the next bindings for the arrow
-  const updates: PointMoveOtherUpdates = {
-    suggestedBinding: null,
-  };
+  const updates: PointMoveOtherUpdates = {};
+  let preview: {
+    element: NonDeleted<ExcalidrawBindableElement>;
+    hit: ConnectionHit;
+  } | null = null;
   const landingOptsFor = (startOrEnd: "start" | "end") => {
     // Same "other end" as the binding strategy: for multi-point arrows this is
     // the adjacent point (index 1 / -2), not the far endpoint.
@@ -2605,10 +2606,10 @@ const pointDraggingUpdates = (
         elementsMap,
         landingOpts,
       );
-      updates.suggestedBinding = hit ? { element: start.element, hit } : null;
+      if (hit) {
+        preview = { element: start.element, hit };
+      }
     }
-  } else if (startIsDragged) {
-    updates.suggestedBinding = app.state.suggestedBinding;
   }
 
   if (end.element === null) {
@@ -2637,10 +2638,21 @@ const pointDraggingUpdates = (
         elementsMap,
         landingOpts,
       );
-      updates.suggestedBinding = hit ? { element: end.element, hit } : null;
+      if (hit) {
+        preview = { element: end.element, hit };
+      }
     }
-  } else if (endIsDragged) {
-    updates.suggestedBinding = app.state.suggestedBinding;
+  }
+
+  if (preview) {
+    setConnectionPreviewFrame(
+      app,
+      preview.element,
+      preview.hit,
+      pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
+    );
+  } else {
+    clearGestureConnectionPreview(app);
   }
 
   // Simulate the updated arrow for the bind point calculation

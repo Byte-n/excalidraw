@@ -32,6 +32,7 @@ import {
   isElbowArrow,
   isFrameLikeElement,
   updateBoundElements,
+  clearConnectionPreviewFrame,
 } from "@excalidraw/element";
 import { flushSync } from "react-dom";
 
@@ -234,7 +235,8 @@ export const onKeyUp = (app: KeyboardApp, event: KeyboardEvent) => {
         });
       }
     });
-    app.setState({ suggestedBinding: null });
+    clearConnectionPreviewFrame(app);
+    app.repaint.request();
   }
   app.flowchart.handleKeyEvent(event);
 };
@@ -890,7 +892,7 @@ export const setActiveTool = (
     app.focusContainer();
   }
   if (!isLinearElementType(nextActiveTool.type)) {
-    app.setState({ suggestedBinding: null });
+    clearConnectionPreviewFrame(app);
   }
   if (nextActiveTool.type === "image") {
     app["onImageToolbarButtonClick"]();
