@@ -22,3 +22,6 @@ export {
   buildConnectionPaths,
   nearestPointOnOutline,
 } from "./outline";
+
+export type { RayProjector } from "./resolve";
+export { pickConnectionTarget, resolveConnectionHit } from "./resolve";

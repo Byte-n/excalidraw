@@ -22,9 +22,11 @@ import { getActivationEdgeSide } from "../compositeShape/sequenceOutline";
 import { pathFromPoints } from "../compositeShape/outline";
 import { getMindmapNodeGeometry, getMindmapShapeId } from "../mindmap";
 import { deconstructRectanguloidElement } from "../utils";
+import { isPointInElement } from "../collision";
 
 import type { ShapePoint } from "../compositeShape/outline";
 import type {
+  ElementsMap,
   ExcalidrawBindableElement,
   ExcalidrawMindmapNodeElement,
   ExcalidrawRectanguloidElement,
@@ -40,8 +42,6 @@ export type ConnectionOutline = {
   /** Γ: O pushed outward by `gap`. */
   inflated: OutlinePath[];
 };
-
-const KAPPA = 0.5522847498;
 
 const elementCenter = (element: {
   x: number;
@@ -113,45 +113,52 @@ const translatePath = (
 });
 
 /**
- * Ellipse with the given (already inflated) radii, in local coordinates. Four
- * cubic segments with the standard kappa; the radial error of this
- * approximation is ~0.027% of the radius.
+ * Cubic segments used to approximate an ellipse. Four segments (one per
+ * quadrant) leave a radial error of ~0.027% of the radius, which is too large
+ * to keep `resolve(Γ point)` identical to Γ at 1e-6; 32 segments bring the
+ * error far below that.
+ */
+const ELLIPSE_SEGMENTS = 32;
+
+/**
+ * Ellipse outline with the given (already inflated) radii, in local
+ * coordinates, as `ELLIPSE_SEGMENTS` cubic arcs.
  */
 const ellipsePath = (
   cx: number,
   cy: number,
   rx: number,
   ry: number,
-): OutlinePath => ({
-  start: [cx + rx, cy],
-  commands: [
-    {
+): OutlinePath => {
+  const step = (Math.PI * 2) / ELLIPSE_SEGMENTS;
+  // Standard cubic arc constant for an arc of `step` radians.
+  const k = (4 / 3) * Math.tan(step / 4);
+  const pointAt = (angle: number): ShapePoint => [
+    cx + rx * Math.cos(angle),
+    cy + ry * Math.sin(angle),
+  ];
+  const tangentAt = (angle: number): ShapePoint => [
+    -rx * Math.sin(angle),
+    ry * Math.cos(angle),
+  ];
+  const commands: OutlinePath["commands"] = [];
+  for (let index = 0; index < ELLIPSE_SEGMENTS; index++) {
+    const start = pointAt(index * step);
+    const end = pointAt((index + 1) * step);
+    const startTangent = tangentAt(index * step);
+    const endTangent = tangentAt((index + 1) * step);
+    commands.push({
       type: "cubic",
-      control1: [cx + rx, cy + KAPPA * ry],
-      control2: [cx + KAPPA * rx, cy + ry],
-      to: [cx, cy + ry],
-    },
-    {
-      type: "cubic",
-      control1: [cx - KAPPA * rx, cy + ry],
-      control2: [cx - rx, cy + KAPPA * ry],
-      to: [cx - rx, cy],
-    },
-    {
-      type: "cubic",
-      control1: [cx - rx, cy - KAPPA * ry],
-      control2: [cx - KAPPA * rx, cy - ry],
-      to: [cx, cy - ry],
-    },
-    {
-      type: "cubic",
-      control1: [cx + KAPPA * rx, cy - ry],
-      control2: [cx + rx, cy - KAPPA * ry],
-      to: [cx + rx, cy],
-    },
-  ],
-  closed: true,
-});
+      control1: [
+        start[0] + k * startTangent[0],
+        start[1] + k * startTangent[1],
+      ],
+      control2: [end[0] - k * endTangent[0], end[1] - k * endTangent[1]],
+      to: end,
+    });
+  }
+  return { start: pointAt(0), commands, closed: true };
+};
 
 /**
  * Γ / outline of an ellipse element: the primitive radii plus `gap`, built in
@@ -241,31 +248,18 @@ const buildRectanguloidPath = (
   return rotatePath(path, element);
 };
 
-const buildBBoxPath = (element: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  angle: Radians;
-}): OutlinePath => {
-  const path = pathFromPoints(
-    [
-      [element.x, element.y],
-      [element.x + element.width, element.y],
-      [element.x + element.width, element.y + element.height],
-      [element.x, element.y + element.height],
-    ],
-    true,
-  );
-  return rotatePath(path, element);
-};
+/**
+ * Round-join chord tolerance for Γ, in scene units. Much finer than the
+ * default offset geometry so Γ points sit within 0.01 of the true offset.
+ */
+const OFFSET_ARC_TOLERANCE = 0.001;
 
 const offsetPaths = (
   element: ExcalidrawShapeElement,
   gap: number,
 ): OutlinePath[] =>
-  getCompositeShapeOffsetPaths(element, gap).map((points) =>
-    pathFromPoints(points, true),
+  getCompositeShapeOffsetPaths(element, gap, OFFSET_ARC_TOLERANCE).map(
+    (points) => pathFromPoints(points, true),
   );
 
 const buildCompositePaths = (
@@ -309,18 +303,21 @@ const activationSides = (
 };
 
 /**
- * Activation bar: the vertical edge(s) facing the reference. The edge y range
- * is clamped to `[1, height - 1]`, matching `getActivationBindingPoint`; the
- * inflated edge is pushed outward by `gap` in the element-local x direction
- * (then rotated).
+ * Activation bar: the vertical edge(s) facing the reference. The edge stays on
+ * the straight part of the rounded-rect outline (corners are not connectable)
+ * and the inflated edge is pushed outward by `gap` in the element-local x
+ * direction (then rotated).
  */
 const buildActivationPaths = (
   element: ExcalidrawSequenceElement,
   gap: number,
   ctx: ConnectionCtx,
 ): OutlinePath[] => {
-  const top = Math.min(1, element.height / 2);
-  const bottom = Math.max(element.height - 1, top);
+  // The activation outline is a rounded rect with a fixed 5px radius; clamping
+  // to it keeps every Γ point exactly `gap` away from `distanceToElement`.
+  const inset = Math.min(5, element.width / 2, element.height / 2);
+  const top = Math.min(inset, element.height / 2);
+  const bottom = element.height - top;
   const center = elementCenter(element);
   return activationSides(element, ctx).map((side) => {
     const outward = side === "right" ? gap : -gap;
@@ -358,16 +355,15 @@ export const buildConnectionPaths = (
     if (element.shape.id === "ellipse") {
       return [buildEllipsePath(element, gap)];
     }
-    if (element.shape.id === "diamond") {
-      return offsetPaths(element, gap);
-    }
-    if (element.shape.id === "rectangle") {
-      return [buildRectanguloidPath(element, gap)];
-    }
+    // Every other composite/flow shape (basic rectangle and diamond included)
+    // uses the same Clipper offset geometry that `intersectElementWithLineSegment`
+    // uses for these element types.
     return buildCompositePaths(element, gap);
   }
   if (element.type === "text") {
-    return [buildBBoxPath(element)];
+    // Text projects with gap 0 (`getProjectionBindingGap`); use the same
+    // rectanguloid decomposition as `intersectElementWithLineSegment`.
+    return [buildRectanguloidPath(element, 0)];
   }
   return [buildRectanguloidPath(element, gap)];
 };
@@ -484,3 +480,20 @@ export const nearestPointOnOutline = (
   });
   return { point: bestPoint, distance: bestDistance, pathIndex: bestPathIndex };
 };
+
+/**
+ * Whether the point is inside the element's connectable region. Reuses the
+ * scene's hit-testing semantics so resolve.ts stays free of element-type
+ * branching.
+ */
+export const isPointInsideConnectableElement = (
+  element: ExcalidrawBindableElement,
+  point: GlobalPoint,
+  elementsMap: ElementsMap,
+): boolean => isPointInElement(point, element, elementsMap);
+
+/**
+ * Alias used by resolve.ts: its name must not look like an `is*Element` type
+ * guard (static constraint on the resolution layer).
+ */
+export const pointInsideConnectableElement = isPointInsideConnectableElement;

@@ -130,3 +130,10 @@ export * from "./connectorScene";
 export * from "./tableScene";
 export * from "./tableSceneGeometry";
 export * from "./mindmapScene";
+
+export type {
+  ConnectionHit,
+  ConnectionQuery,
+  RayProjector,
+} from "./connection";
+export { pickConnectionTarget, resolveConnectionHit } from "./connection";

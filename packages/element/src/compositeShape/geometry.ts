@@ -183,6 +183,12 @@ const CLIPPER_SCALE = 1000;
 export const getCompositeShapeOffsetPaths = (
   element: ExcalidrawShapeElement,
   offset: number,
+  /**
+   * Optional round-join chord tolerance (scene units). Callers that need
+   * sub-pixel offset accuracy (connection Γ) pass a smaller value; the default
+   * preserves the long-standing binding/collision geometry.
+   */
+  arcTolerance?: number,
 ): GlobalPoint[][] => {
   const outline = getCompositeShapeGlobalPath(element);
   const points = flattenCompositeShapePath(outline);
@@ -191,7 +197,7 @@ export const getCompositeShapeOffsetPaths = (
   }
   const clipper = new ClipperLib.ClipperOffset(
     2,
-    CLIPPER_SCALE * Math.min(0.25, Math.abs(offset) / 10),
+    CLIPPER_SCALE * Math.min(arcTolerance ?? 0.25, Math.abs(offset) / 10),
   );
   clipper.AddPath(
     points.map(([x, y]) => ({
