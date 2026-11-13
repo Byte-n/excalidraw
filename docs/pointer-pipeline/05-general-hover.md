@@ -457,3 +457,23 @@ expect(spy).toHaveBeenCalledTimes(1);
   `interaction-target.test.ts` 增加“非容器 target 也只写一次 cursor”断言。
 - 遗留问题：5a-2 的 pointerdown target switch / composite / transform 分支删除、表格
   标题 grip 迁移仍未做；5b 思维导图 hover 仍由 `App.mindmap` 持有。
+
+## 实施记录（2026-11-14，5a-2）
+
+- 实际改动：`pointerSession` 的 pointerdown 改为按 armed frame 的 `target.kind` 分派
+  （textHandle / containerControl-titleGrip|titleBar / compositeControl / transformHandle /
+  linearHandle），用 `skipSelectionDispatch` 表达「已武装、继续收尾但不进选择分派」。
+  `handleSelectionOnPointerDown` 删除 composite 与 transform/多选手柄解析，抽出
+  `beginCompositeControlGesture` / `beginTransformGesture` / `beginLinearPointGesture`。
+  表格标题 grip 走 `containerControl` target；新增 `hitIsContainerTitle`，避免已选标题
+  文本被解析成 `selectedElement` 而绕过标题手势。
+- 与计划的偏差：`titleBar` 与 `titleGrip` 共用入口（旧 handler 两者都处理）；
+  linearHandle 的 `continue` 分支显式补 `previousSelectedElementIds` 镜像；
+  多选含 mindmap 的 rotation 守卫仍只在 hover 侧（PR2 起如此，pointerdown 现在与
+  hover 一致）。非选择工具的旧 hover 块（pointerCanvas 的复合控制/变换手柄）
+  仍保留，待 PR6 清理。
+- 基线变化：无快照差异。
+- 新增/调整测试：`pointer-hover-down.test.tsx`（8 个 kind 的 hover = down）；
+  `interaction-target.test.ts` 补 §5.2 矩阵；`tableStructure.test.tsx` 的
+  「scale 手势绕过选择入口」用例改为断言 transformHandle 分派。
+- 遗留问题：5b 思维导图 hover 仍由 `App.mindmap` 持有。

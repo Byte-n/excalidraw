@@ -41,7 +41,6 @@ import {
   cropElement,
   getElementsInResizingFrame,
   getFrameChildren,
-  hasBoundingBox,
   isElbowArrow,
   isFrameLikeElement,
   isImageElement,
@@ -56,19 +55,14 @@ import {
 import {
   editGroupForSelectedElement,
   getCommonBounds,
-  getElementWithTransformHandleType,
   getElementsInGroup,
   getResizeArrowDirection,
   getResizeOffsetXY,
-  getTransformHandleTypeFromCoords,
   handleFocusPointPointerDown,
   isBindingElement,
   isElementInGroup,
   isEmbeddableElement,
   isLinearElement,
-  isMindmapEdgeElement,
-  isMindmapNodeElement,
-  isShapeElement,
   LinearElementEditor,
   selectGroupsForSelectedElements,
 } from "@excalidraw/element";
@@ -104,10 +98,9 @@ import { getCurrentItemArrowProps } from "./arrowCreation";
 
 import * as tableController from "./table";
 
-import {
-  getCompositeControlPointGlobal,
-  hitCompositeControlPoint,
-} from "./compositeShapeControls";
+import { getCompositeControlPointGlobal } from "./compositeShapeControls";
+
+import type { PointerTarget } from "./pointerFrame";
 
 import type { ToolType } from "../../types";
 
@@ -435,212 +428,201 @@ export const maybeHandleResize = (
   return false;
 };
 
+/**
+ * Arms the composite shape control point drag (05-general-hover.md §4.7).
+ * Semantics of the old inline branch: record the armed control and claim the
+ * hit element, then let the caller keep the rest of the pointer session
+ * (mindmap / tool dispatch / listeners) while skipping selection dispatch.
+ */
+export const beginCompositeControlGesture = (
+  app: PointerApp,
+  target: Extract<PointerTarget, { kind: "compositeControl" }>,
+  pointerDownState: PointerDownState,
+): boolean => {
+  const element = app.scene
+    .getSelectedElements(app.state)
+    .find((candidate: any) => candidate.id === target.elementId);
+  if (!element) {
+    return false;
+  }
+  const [x, y] = getCompositeControlPointGlobal(element as any, target.control);
+  pointerDownState.compositeControl.active = {
+    elementId: element.id,
+    kind: target.control.kind,
+    offset: {
+      x: pointerDownState.origin.x - x,
+      y: pointerDownState.origin.y - y,
+    },
+    hasChanged: false,
+  };
+  pointerDownState.hit.element = element;
+  pointerDownState.hit.allHitElements = [element];
+  return true;
+};
+
+/**
+ * Arms a transform / rotation / whole-table-scale gesture from the armed
+ * frame's `transformHandle` target (05-general-hover.md §4.7). This is the
+ * old inline branch verbatim: set `resizingElement` unless cropping, then
+ * either hand the handle to the table scale owner or start a generic resize.
+ */
+export const beginTransformGesture = (
+  app: PointerApp,
+  target: Extract<PointerTarget, { kind: "transformHandle" }>,
+  pointerDownState: PointerDownState,
+): void => {
+  const elementsMap = app.scene.getNonDeletedElementsMap();
+  const selectedElements: any[] = app.scene.getSelectedElements(app.state);
+  const isSingleSelection = selectedElements.length === 1;
+
+  if (isSingleSelection) {
+    if (target.handle === "rotation") {
+      app.setState({
+        resizingElement: selectedElements[0],
+      });
+    } else if (app.state.croppingElementId) {
+      // cropping keeps only the handle type; the crop session owns the frame
+    } else {
+      app.setState({
+        resizingElement: selectedElements[0],
+      });
+    }
+  }
+
+  pointerDownState.resize.handleType = target.handle;
+
+  if (isSingleSelection && isTableElement(selectedElements[0])) {
+    // 接管为整表缩放手势：四角等比缩放、四边单轴拉伸（phase-1.md:99）。
+    tableController.maybeArmTableScaleGesture(
+      app,
+      pointerDownState,
+      selectedElements[0] as NonDeleted<ExcalidrawTableElement>,
+      target.handle,
+    );
+    // The table's frame scaling owns every handle; its side borders belong to
+    // the row/column gesture.
+    pointerDownState.resize.handleType = false;
+    return;
+  }
+
+  pointerDownState.resize.isResizing = true;
+  // 通用变换手势（含旋转）：清掉上一次手势残留的旋转增量。读数里的
+  // 「选区大小」不在这里冻结——它跟选区框一样取实时 AABB。
+  app.transformStatus.beginGesture();
+  pointerDownState.resize.offset = tupleToCoors(
+    getResizeOffsetXY(
+      pointerDownState.resize.handleType,
+      selectedElements,
+      elementsMap,
+      pointerDownState.origin.x,
+      pointerDownState.origin.y,
+    ),
+  );
+  if (
+    isSingleSelection &&
+    isLinearElement(selectedElements[0]) &&
+    selectedElements[0].points.length === 2
+  ) {
+    pointerDownState.resize.arrowDirection = getResizeArrowDirection(
+      pointerDownState.resize.handleType,
+      selectedElements[0],
+    );
+  }
+};
+
+export type LinearPointGestureOutcome =
+  | "didAddPoint"
+  | "focusPoint"
+  | "continue";
+
+/**
+ * Enters the selected linear element editing gesture (point / label /
+ * midpoint). Returns how the caller must continue: `didAddPoint` was fully
+ * handled by the old selection handler (it returned true), `focusPoint`
+ * skips selection dispatch, and `continue` keeps the regular selection path.
+ */
+export const beginLinearPointGesture = (
+  app: PointerApp,
+  pointerDownState: PointerDownState,
+  event: React.PointerEvent<HTMLElement>,
+): LinearPointGestureOutcome => {
+  if (!app.state.selectedLinearElement) {
+    return "continue";
+  }
+  const linearElementEditor = app.state.selectedLinearElement;
+  const ret = LinearElementEditor.handlePointerDown(
+    event,
+    app,
+    app.store,
+    pointerDownState.origin,
+    linearElementEditor,
+    app.scene,
+  );
+
+  if (ret.hitElement) {
+    pointerDownState.hit.element = ret.hitElement;
+  }
+  pointerDownState.hit.arrowLabel = ret.hitBoundText;
+  if (ret.linearElementEditor) {
+    app.setState({ selectedLinearElement: ret.linearElementEditor });
+  }
+  if (ret.didAddPoint) {
+    return "didAddPoint";
+  }
+
+  // Also check at current pointer position if focus point is being hovered
+  // (in case we're clicking directly without a prior move event)
+  const elementsMap = app.scene.getNonDeletedElementsMap();
+  const arrow = LinearElementEditor.getElement(
+    linearElementEditor.elementId,
+    elementsMap,
+  ) as any;
+
+  if (arrow && isBindingElement(arrow)) {
+    const { hitFocusPoint, pointerOffset } = handleFocusPointPointerDown(
+      arrow,
+      pointerDownState,
+      elementsMap,
+      app.state,
+    );
+
+    // If focus point is hit, update state and prevent element selection
+    if (hitFocusPoint) {
+      app.setState({
+        selectedLinearElement: {
+          ...linearElementEditor,
+          hoveredFocusPointBinding: hitFocusPoint,
+          draggedFocusPointBinding: hitFocusPoint,
+          pointerOffset,
+        },
+      });
+      return "focusPoint";
+    }
+  }
+  return "continue";
+};
+
 export const handleSelectionOnPointerDown = (
   app: PointerApp,
   event: React.PointerEvent<HTMLElement>,
   pointerDownState: PointerDownState,
 ): boolean => {
   if (isSelectionLikeTool(app.state.activeTool.type)) {
-    const elements = app.scene.getNonDeletedElements();
-    const elementsMap = app.scene.getNonDeletedElementsMap();
     const selectedElements: any[] = app.scene.getSelectedElements(app.state);
 
-    if (
-      selectedElements.length === 1 &&
-      isShapeElement(selectedElements[0]) &&
-      !selectedElements[0].locked &&
-      !app.state.viewModeEnabled &&
-      !app.state.editingTextElement &&
-      !app.state.croppingElementId &&
-      !event.shiftKey &&
-      !event[KEYS.CTRL_OR_CMD]
-    ) {
-      const element = selectedElements[0];
-      const point = hitCompositeControlPoint(
-        element,
-        pointerDownState.origin.x,
-        pointerDownState.origin.y,
-        app.state.zoom.value,
-        event.pointerType,
+    // 复合控制点 / 变换手柄由 armed frame 的 target 在 pointerSession 中
+    // 分派并接管；走到这里说明没有 resize 手柄，保留线段点拖拽与选择逻辑。
+    if (!pointerDownState.resize.handleType) {
+      const linearGesture = beginLinearPointGesture(
+        app,
+        pointerDownState,
+        event,
       );
-      if (point) {
-        const [x, y] = getCompositeControlPointGlobal(element, point);
-        pointerDownState.compositeControl.active = {
-          elementId: element.id,
-          kind: point.kind,
-          offset: {
-            x: pointerDownState.origin.x - x,
-            y: pointerDownState.origin.y - y,
-          },
-          hasChanged: false,
-        };
-        pointerDownState.hit.element = element;
-        pointerDownState.hit.allHitElements = [element];
+      if (linearGesture === "didAddPoint") {
+        return true;
+      }
+      if (linearGesture === "focusPoint") {
         return false;
-      }
-    }
-
-    if (
-      selectedElements.length === 1 &&
-      // 「能不能拿手柄」与「画不画框」同源：这里原本把 isElbowArrow / isEditing
-      // / 连接线两点 / 移动端 又重写了一遍，与 hasBoundingBox 慢慢就会各说各话。
-      hasBoundingBox([selectedElements[0]], app.state, app.editorInterface) &&
-      !(
-        app.state.selectedLinearElement &&
-        app.state.selectedLinearElement.hoverPointIndex !== -1
-      )
-    ) {
-      const elementWithTransformHandleType = getElementWithTransformHandleType(
-        elements,
-        app.state,
-        pointerDownState.origin.x,
-        pointerDownState.origin.y,
-        app.state.zoom,
-        event.pointerType,
-        app.scene.getNonDeletedElementsMap(),
-        app.editorInterface,
-      );
-      if (elementWithTransformHandleType != null) {
-        if (elementWithTransformHandleType.transformHandleType === "rotation") {
-          app.setState({
-            resizingElement: elementWithTransformHandleType.element,
-          });
-          pointerDownState.resize.handleType =
-            elementWithTransformHandleType.transformHandleType;
-        } else if (app.state.croppingElementId) {
-          pointerDownState.resize.handleType =
-            elementWithTransformHandleType.transformHandleType;
-        } else {
-          app.setState({
-            resizingElement: elementWithTransformHandleType.element,
-          });
-          pointerDownState.resize.handleType =
-            elementWithTransformHandleType.transformHandleType;
-        }
-      }
-    } else if (selectedElements.length > 1) {
-      pointerDownState.resize.handleType = getTransformHandleTypeFromCoords(
-        getCommonBounds(
-          selectedElements.filter(
-            (element: any) =>
-              !app.scene.getMindmapHiddenElementIds().has(element.id),
-          ),
-        ),
-        pointerDownState.origin.x,
-        pointerDownState.origin.y,
-        app.state.zoom,
-        event.pointerType,
-        app.editorInterface,
-      );
-      if (
-        pointerDownState.resize.handleType === "rotation" &&
-        selectedElements.some(
-          (element: any) =>
-            isMindmapNodeElement(element) ||
-            isMindmapEdgeElement(element) ||
-            isTableElement(element),
-        )
-      ) {
-        pointerDownState.resize.handleType = false;
-      }
-    }
-    let tableScaleGestureArmed = false;
-    if (pointerDownState.resize.handleType) {
-      const handleType = pointerDownState.resize.handleType;
-      if (
-        selectedElements.length === 1 &&
-        isTableElement(selectedElements[0])
-      ) {
-        // 接管为整表缩放手势：四角等比缩放、四边单轴拉伸（phase-1.md:99）。
-        // 每帧从 originalElements 快照 × 指针倍率重算预览，释放时一次性
-        // 持久化文字模式并捕获一次。多选含表格不走这里：通用 resize 的
-        // table 分支已能保持网格不变量与语义子树同步（phase-1.2.md）。
-        tableScaleGestureArmed = tableController.maybeArmTableScaleGesture(
-          app,
-          pointerDownState,
-          selectedElements[0] as NonDeleted<ExcalidrawTableElement>,
-          handleType,
-        );
-        // The table's frame scaling owns every handle; its side borders
-        // belong to the row/column gesture.
-        pointerDownState.resize.handleType = false;
-      } else {
-        pointerDownState.resize.isResizing = true;
-        // 通用变换手势（含旋转）：清掉上一次手势残留的旋转增量。读数里的
-        // 「选区大小」不在这里冻结——它跟选区框一样取实时 AABB。
-        app.transformStatus.beginGesture();
-        pointerDownState.resize.offset = tupleToCoors(
-          getResizeOffsetXY(
-            pointerDownState.resize.handleType,
-            selectedElements,
-            elementsMap,
-            pointerDownState.origin.x,
-            pointerDownState.origin.y,
-          ),
-        );
-        if (
-          selectedElements.length === 1 &&
-          isLinearElement(selectedElements[0]) &&
-          selectedElements[0].points.length === 2
-        ) {
-          pointerDownState.resize.arrowDirection = getResizeArrowDirection(
-            pointerDownState.resize.handleType,
-            selectedElements[0],
-          );
-        }
-      }
-    } else if (!tableScaleGestureArmed) {
-      if (app.state.selectedLinearElement) {
-        const linearElementEditor = app.state.selectedLinearElement;
-        const ret = LinearElementEditor.handlePointerDown(
-          event,
-          app,
-          app.store,
-          pointerDownState.origin,
-          linearElementEditor,
-          app.scene,
-        );
-
-        if (ret.hitElement) {
-          pointerDownState.hit.element = ret.hitElement;
-        }
-        pointerDownState.hit.arrowLabel = ret.hitBoundText;
-        if (ret.linearElementEditor) {
-          app.setState({ selectedLinearElement: ret.linearElementEditor });
-        }
-        if (ret.didAddPoint) {
-          return true;
-        }
-
-        // Also check at current pointer position if focus point is being hovered
-        // (in case we're clicking directly without a prior move event)
-        const elementsMap = app.scene.getNonDeletedElementsMap();
-        const arrow = LinearElementEditor.getElement(
-          linearElementEditor.elementId,
-          elementsMap,
-        ) as any;
-
-        if (arrow && isBindingElement(arrow)) {
-          const { hitFocusPoint, pointerOffset } = handleFocusPointPointerDown(
-            arrow,
-            pointerDownState,
-            elementsMap,
-            app.state,
-          );
-
-          // If focus point is hit, update state and prevent element selection
-          if (hitFocusPoint) {
-            app.setState({
-              selectedLinearElement: {
-                ...linearElementEditor,
-                hoveredFocusPointBinding: hitFocusPoint,
-                draggedFocusPointBinding: hitFocusPoint,
-                pointerOffset,
-              },
-            });
-            return false;
-          }
-        }
       }
 
       const allHitElements = app.getElementsAtPosition(

@@ -220,6 +220,22 @@ const candidateBelongsToHit = (
   candidate: ContainerInteractionCandidate,
 ) => candidate.containerId === hit.id;
 
+/**
+ * A table's own title text is the container's title control, not an
+ * independent element: clicking it (even when it is the selected element)
+ * must stay with the container so the title bar / grip entry keeps its
+ * pointerdown semantics (05-general-hover.md §4.7).
+ */
+const hitIsContainerTitle = (
+  hit: NonDeleted<ExcalidrawElement>,
+  candidate: ContainerInteractionCandidate | undefined,
+) =>
+  Boolean(
+    candidate &&
+      hit.containerRef?.kind === "tableTitle" &&
+      hit.containerRef.elementId === candidate.containerId,
+  );
+
 export const resolveInteractionTarget = (
   app: PointerApp,
   point: ScenePoint,
@@ -312,7 +328,8 @@ export const resolveInteractionTarget = (
     hit &&
     !hit.locked &&
     isSelected(app, hit) &&
-    !(candidate && candidateBelongsToHit(hit, candidate))
+    !(candidate && candidateBelongsToHit(hit, candidate)) &&
+    !hitIsContainerTitle(hit, candidate)
   ) {
     return { kind: "selectedElement", elementId: hit.id };
   }
@@ -321,7 +338,8 @@ export const resolveInteractionTarget = (
       hit &&
       !hit.locked &&
       isSelected(app, hit) &&
-      !candidateBelongsToHit(hit, candidate)
+      !candidateBelongsToHit(hit, candidate) &&
+      !hitIsContainerTitle(hit, candidate)
     ) {
       return { kind: "selectedElement", elementId: hit.id };
     }

@@ -38,8 +38,6 @@ import {
   unmountComponent,
 } from "./test-utils";
 
-import type { PointerDownState } from "../types";
-
 unmountComponent();
 
 const { h } = window;
@@ -1762,24 +1760,14 @@ describe("table row/column structure", () => {
       ).toMatchObject({ tableId: table.id, kind: "titleGrip" });
     });
 
-    it("suspends hover for a gesture armed by selection handling", () => {
+    it("suspends hover for a scale gesture armed by the transform handle", () => {
       const { table } = scaleFixture();
       selectTable(table);
       const handle = seHandleCenter(table);
-      const armTableGesture = h.app.armTableStructureGestureOnPointerDown.bind(
-        h.app,
-      );
-      const structureArm = vi
-        .spyOn(h.app, "armTableStructureGestureOnPointerDown")
-        .mockReturnValue(false);
-      const selectionArm = vi
-        .spyOn(h.app as any, "handleSelectionOnPointerDown")
-        .mockImplementation((...args: unknown[]) => {
-          armTableGesture(args[1] as PointerDownState);
-          return false;
-        });
       mouseDown(handle.x, handle.y);
-      expect(selectionArm).toHaveBeenCalled();
+      // PR5a-2: the armed frame's transformHandle dispatches table scaling
+      // directly (no selection-handler detour).
+      expect(h.app.pointer.getFrame()?.target.kind).toBe("transformHandle");
       expect(h.app.interactionState.isTableGestureActive).toBe(true);
 
       const cellHover = vi.spyOn(
@@ -1790,8 +1778,6 @@ describe("table row/column structure", () => {
       expect(cellHover).not.toHaveBeenCalled();
       mouseUp(handle.x + 20, handle.y + 20);
       expect(h.app.interactionState.isTableGestureActive).toBe(false);
-      selectionArm.mockRestore();
-      structureArm.mockRestore();
     });
 
     it("renders each scale preview and captures one undo entry", async () => {

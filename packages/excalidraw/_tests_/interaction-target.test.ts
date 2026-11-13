@@ -2,9 +2,16 @@ import { pointFrom } from "@excalidraw/math";
 
 import { CURSOR_TYPE } from "@excalidraw/common";
 
+import {
+  buildShapeData,
+  getCompositeShapeControlPoints,
+} from "@excalidraw/element";
+
 import type { GlobalPoint } from "@excalidraw/math";
 
+import { getCompositeControlPointGlobal } from "../components/app/compositeShapeControls";
 import { TABLE_STRUCTURE_RAIL_HIT_SIZE } from "../components/app/table";
+import { getTableTitleBar } from "../components/app/tableTitle";
 import {
   clearContainerInteractionHover,
   dispatchContainerInteraction,
@@ -53,6 +60,48 @@ const tableElement = (id = "table-1", locked = false) =>
     },
   } as any);
 
+const textElement = (id = "text-1", x = 1000, y = 1000) =>
+  ({
+    id,
+    type: "text",
+    x,
+    y,
+    width: 100,
+    height: 60,
+    angle: 0,
+    locked: false,
+    autoResize: false,
+  } as any);
+
+const lineElement = (id = "line-1", x = 1000, y = 1000) =>
+  ({
+    id,
+    type: "line",
+    x,
+    y,
+    width: 100,
+    height: 0,
+    angle: 0,
+    locked: false,
+    points: [
+      [0, 0],
+      [100, 0],
+    ],
+  } as any);
+
+const compositeElement = (id = "composite-1", x = 1000, y = 1000) =>
+  ({
+    id,
+    type: "composite",
+    x,
+    y,
+    width: 100,
+    height: 100,
+    angle: 0,
+    locked: false,
+    shape: buildShapeData("cube"),
+  } as any);
+
 const createMockApp = ({
   elements = [],
   selectedElements = [],
@@ -60,6 +109,7 @@ const createMockApp = ({
   hitElement = null,
   hitTextAutoResizeHandle = false,
   tableStructureHover = null,
+  selectedLinearElement = null,
 }: {
   elements?: any[];
   selectedElements?: any[];
@@ -67,22 +117,26 @@ const createMockApp = ({
   hitElement?: any;
   hitTextAutoResizeHandle?: boolean;
   tableStructureHover?: any;
+  selectedLinearElement?: any;
 } = {}) => {
+  const elementsMap = new Map(elements.map((element) => [element.id, element]));
   return {
     state: {
       selectedElementIds: selectedIds,
-      selectedLinearElement: null,
+      selectedLinearElement,
+      activeTool: { type: "selection" },
       zoom: { value: 1 },
       tableStructureHover,
     },
     scene: {
       getNonDeletedElements: () => elements,
       getSelectedElements: () => selectedElements,
-      getNonDeletedElementsMap: () => new Map(),
+      getNonDeletedElementsMap: () => elementsMap,
     },
     getElementAtPosition: () => hitElement,
     getTopLayerFrameAtSceneCoords: () => null,
     isHittingTextAutoResizeHandle: () => hitTextAutoResizeHandle,
+    isInteractionEnabled: () => false,
     editorInterface,
     cursor: { set: vi.fn() },
     pointer: { setFrame: vi.fn() },
@@ -366,6 +420,90 @@ describe("resolveInteractionTarget", () => {
       { pointerType: "mouse" },
     );
     expect(downTarget).toEqual(hoverTarget);
+  });
+});
+
+describe("PR5a-2 priority matrix (05 §5.2)", () => {
+  it("resolves a composite control point over a transform handle", () => {
+    const composite = compositeElement();
+    const control = getCompositeShapeControlPoints(composite)[0];
+    const [x, y] = getCompositeControlPointGlobal(composite, control);
+    const app = createMockApp({
+      elements: [composite],
+      selectedElements: [composite],
+      selectedIds: { "composite-1": true },
+      hitElement: composite,
+    });
+
+    // the frame provider keeps the composite control above the base target
+    expect(resolvePointerFrame(app, frameInput({ x, y })).target).toMatchObject(
+      {
+        kind: "compositeControl",
+        elementId: "composite-1",
+        control: { kind: "cube-depth" },
+      },
+    );
+  });
+
+  it("prefers a text auto-resize handle over a transform handle", () => {
+    const text = textElement();
+    const transformApp = createMockApp({
+      selectedElements: [text],
+      selectedIds: { "text-1": true },
+      hitElement: text,
+    });
+    expect(
+      resolveInteractionTarget(transformApp, { x: 1000, y: 1000 }).kind,
+    ).toBe("transformHandle");
+
+    const handleApp = createMockApp({
+      selectedElements: [text],
+      selectedIds: { "text-1": true },
+      hitElement: text,
+      hitTextAutoResizeHandle: true,
+    });
+    expect(resolveInteractionTarget(handleApp, { x: 1000, y: 1000 })).toEqual({
+      kind: "textHandle",
+      elementId: "text-1",
+    });
+  });
+
+  it("resolves a selected linear point endpoint to a linear handle", () => {
+    const line = lineElement();
+    const app = createMockApp({
+      elements: [line],
+      selectedElements: [line],
+      selectedIds: { "line-1": true },
+      hitElement: line,
+      selectedLinearElement: { elementId: "line-1" },
+    });
+    expect(resolveInteractionTarget(app, { x: 1000, y: 1000 })).toEqual({
+      kind: "linearHandle",
+      elementId: "line-1",
+    });
+  });
+
+  it("resolves the table title grip to a titleGrip container control", () => {
+    const table = tableElement();
+    const title = {
+      ...textElement("title-1", table.x, table.y),
+      fontSize: 12,
+      text: "Title",
+      containerRef: { kind: "tableTitle", elementId: "table-1" },
+    };
+    const bar = getTableTitleBar(table, title, 1, title.fontSize);
+    const grip = {
+      x: bar.grip.x + bar.grip.width / 2,
+      y: bar.grip.y + bar.grip.height / 2,
+    };
+    const app = createMockApp({ elements: [table, title] });
+
+    expect(resolveInteractionTarget(app, grip)).toMatchObject({
+      kind: "containerControl",
+      containerId: "table-1",
+      control: "reorder",
+      candidate: { gesture: "titleGrip" },
+    });
   });
 });
 

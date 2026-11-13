@@ -134,6 +134,12 @@ import {
 } from "./pointerFrame";
 import * as tableController from "./table";
 
+import {
+  beginCompositeControlGesture,
+  beginLinearPointGesture,
+  beginTransformGesture,
+} from "./pointerSelection";
+
 import type { UnsubscribeCallback } from "../../types";
 
 import type App from "../App";
@@ -636,31 +642,8 @@ export const handleCanvasPointerDown = (
     selectedElementsAreBeingDragged: false,
   });
 
-  if (isSelectionLikeTool(app.state.activeTool.type)) {
-    const table = tableController.handleTableTitleGripPointerDown(
-      app,
-      pointerDownState.origin,
-    );
-    if (table !== undefined) {
-      if (table) {
-        pointerDownState.hit.allHitElements = [table];
-        attachPointerSessionListeners(app, event, pointerDownState);
-      }
-      return;
-    }
-  }
-
   if (app.state.tableCellSelection?.mobileMode) {
     app.selectTableCellAtPoint(pointerDownState.origin, event.shiftKey);
-    return;
-  }
-
-  if (
-    app.handleTextAutoResizeHandlePointerDown(
-      selectedElements,
-      pointerDownState.origin,
-    )
-  ) {
     return;
   }
 
@@ -686,7 +669,7 @@ export const handleCanvasPointerDown = (
     shiftKey: event.shiftKey,
     altKey: event.altKey,
   });
-  // PR2 has no frame consumer yet: store the frame without an extra repaint
+  // store the armed frame without an extra repaint
   app.pointer.setFrame({ ...frame, origin: frame.point }, { repaint: false });
   const interactionTarget = frame.target;
   if (
@@ -698,6 +681,76 @@ export const handleCanvasPointerDown = (
       fragmentRowSelection: null,
     });
   }
+
+  // Pointer-down dispatches on the armed frame target (05-general-hover.md
+  // §4.7): handles and control points come from the frame, never re-resolved
+  // from geometry here.
+  let skipSelectionDispatch = false;
+  switch (interactionTarget.kind) {
+    case "textHandle":
+      if (
+        app.handleTextAutoResizeHandlePointerDown(
+          selectedElements,
+          pointerDownState.origin,
+        )
+      ) {
+        return;
+      }
+      break;
+    case "containerControl": {
+      const gesture = interactionTarget.candidate.gesture;
+      if (
+        isSelectionLikeTool(app.state.activeTool.type) &&
+        (gesture === "titleGrip" || gesture === "titleBar")
+      ) {
+        const table = tableController.handleTableTitleGripPointerDown(
+          app,
+          pointerDownState.origin,
+        );
+        if (table !== undefined) {
+          if (table) {
+            pointerDownState.hit.allHitElements = [table];
+            attachPointerSessionListeners(app, event, pointerDownState);
+          }
+          return;
+        }
+      }
+      break;
+    }
+    case "compositeControl":
+      // modifiers keep the legacy selection semantics (composite control
+      // points are only armed by a plain click)
+      if (!event.shiftKey && !event[KEYS.CTRL_OR_CMD]) {
+        if (
+          beginCompositeControlGesture(app, interactionTarget, pointerDownState)
+        ) {
+          skipSelectionDispatch = true;
+        }
+      }
+      break;
+    case "transformHandle":
+      beginTransformGesture(app, interactionTarget, pointerDownState);
+      skipSelectionDispatch = true;
+      break;
+    case "linearHandle": {
+      const outcome = beginLinearPointGesture(app, pointerDownState, event);
+      if (outcome === "didAddPoint") {
+        return;
+      }
+      if (outcome === "continue") {
+        // the old selection handler recorded the pre-drag selection at the end
+        // of its linear branch; keep that mirror for point / label drags
+        app.setState({
+          previousSelectedElementIds: app.state.selectedElementIds,
+        });
+      }
+      skipSelectionDispatch = true;
+      break;
+    }
+    default:
+      break;
+  }
+
   // Unified dispatch (interaction-target-resolution.md §pointer-down): only a
   // container control zone — or the selected table's own body, whose zones
   // the arm call still resolves — starts a structure gesture. Text, linear
@@ -839,10 +892,9 @@ export const handleCanvasPointerDown = (
     }
   }
 
-  const selectionHandled = app.handleSelectionOnPointerDown(
-    event,
-    pointerDownState,
-  );
+  const selectionHandled = skipSelectionDispatch
+    ? false
+    : app.handleSelectionOnPointerDown(event, pointerDownState);
   suspendHoverForTableGesture(app, pointerDownState);
   if (selectionHandled) {
     return;
