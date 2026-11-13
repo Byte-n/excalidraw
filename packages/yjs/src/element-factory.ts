@@ -59,7 +59,15 @@ export const createSceneConnectionEndpoint = ({
 }): SceneConnectionEndpoint => ({
   elementId: target.id,
   ...(isElbowArrow(arrow)
-    ? calculateAttachPointForElbowArrowBinding(arrow, target, end, elements)
+    ? calculateAttachPointForElbowArrowBinding(
+        arrow,
+        target,
+        end,
+        elements,
+        true,
+        true,
+        { zoom: 1, isMidpointSnappingEnabled: true },
+      )
     : calculateAttachPointForNonElbowArrowBinding(
         arrow,
         target,

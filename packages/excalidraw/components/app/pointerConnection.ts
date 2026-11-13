@@ -27,8 +27,7 @@ const isConnectionHoverApplicable = (
   isBindingEnabled(app.state) &&
   !app.state.newElement &&
   !app.state.editingTextElement &&
-  !app.state.viewModeEnabled &&
-  app.state.currentItemArrowType !== "elbow";
+  !app.state.viewModeEnabled;
 
 export const connectionProvider: ProviderFor<"connection"> = {
   kind: "connection",

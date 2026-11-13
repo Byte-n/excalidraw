@@ -2540,6 +2540,13 @@ export class AppQuickCreate {
             target,
             startOrEnd,
             elementsMap,
+            true,
+            this.app.state.isMidpointSnappingEnabled,
+            this.getNonElbowLandingOpts(
+              startOrEnd === "start"
+                ? pointFrom<GlobalPoint>(connector.entry.x, connector.entry.y)
+                : pointFrom<GlobalPoint>(connector.exit.x, connector.exit.y),
+            ),
           )
         : resolveAttachPointForNonElbowBinding(
             arrow,

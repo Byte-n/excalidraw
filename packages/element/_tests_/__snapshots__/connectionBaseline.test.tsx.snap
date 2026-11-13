@@ -43,12 +43,12 @@ exports[`connection baseline > activation > activation/elbow/center/default/drag
 exports[`connection baseline > activation > activation/elbow/center/grid/create 1`] = `
 {
   "endAttach": [
-    "-0.37500",
+    "1.37500",
     "0.50010",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    294,
+    322,
     "300.01000",
   ],
   "startAttach": null,
@@ -69,12 +69,12 @@ exports[`connection baseline > activation > activation/elbow/center/grid/drag-st
     300,
   ],
   "startAttach": [
-    "-0.37500",
+    "1.37500",
     "0.50010",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    294,
+    322,
     "300.01000",
   ],
 }
@@ -83,12 +83,12 @@ exports[`connection baseline > activation > activation/elbow/center/grid/drag-st
 exports[`connection baseline > activation > activation/elbow/center/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
+    "1.37500",
     "0.50010",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "308.00160",
+    322,
     "300.01000",
   ],
   "startAttach": null,
@@ -109,12 +109,12 @@ exports[`connection baseline > activation > activation/elbow/center/no-midpoint/
     300,
   ],
   "startAttach": [
-    "0.50010",
+    "1.37500",
     "0.50010",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "308.00160",
+    322,
     "300.01000",
   ],
 }
@@ -123,12 +123,12 @@ exports[`connection baseline > activation > activation/elbow/center/no-midpoint/
 exports[`connection baseline > activation > activation/elbow/center/shift/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
+    "1.37500",
     "0.50010",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "308.00160",
+    322,
     "300.01000",
   ],
   "startAttach": null,
@@ -149,12 +149,12 @@ exports[`connection baseline > activation > activation/elbow/center/shift/drag-s
     300,
   ],
   "startAttach": [
-    "0.50010",
+    "1.37500",
     "0.50010",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "308.00160",
+    322,
     "300.01000",
   ],
 }
@@ -163,13 +163,13 @@ exports[`connection baseline > activation > activation/elbow/center/shift/drag-s
 exports[`connection baseline > activation > activation/elbow/corner-tr/out2/default/create 1`] = `
 {
   "endAttach": [
-    "1.32770",
-    "0.01000",
+    "1.37500",
+    "0.05000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "321.24390",
-    251,
+    322,
+    255,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -189,13 +189,13 @@ exports[`connection baseline > activation > activation/elbow/corner-tr/out2/defa
     "-8.70940",
   ],
   "startAttach": [
-    "1.32770",
-    "0.01000",
+    "1.37500",
+    "0.05000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "321.24390",
-    251,
+    322,
+    255,
   ],
 }
 `;
@@ -203,13 +203,13 @@ exports[`connection baseline > activation > activation/elbow/corner-tr/out2/defa
 exports[`connection baseline > activation > activation/elbow/corner-tr/out2/grid/create 1`] = `
 {
   "endAttach": [
-    "1.31860",
-    "0.00650",
+    "1.37500",
+    "0.10000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "321.09740",
-    "250.65080",
+    322,
+    260,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -229,13 +229,13 @@ exports[`connection baseline > activation > activation/elbow/corner-tr/out2/grid
     0,
   ],
   "startAttach": [
-    "1.31860",
-    "0.00650",
+    "1.37500",
+    "0.10000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "321.09740",
-    "250.65080",
+    322,
+    260,
   ],
 }
 `;
@@ -243,13 +243,13 @@ exports[`connection baseline > activation > activation/elbow/corner-tr/out2/grid
 exports[`connection baseline > activation > activation/elbow/corner-tr/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "1.11850",
-    "-0.03560",
+    "1.37500",
+    "0.05000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "317.89590",
-    "246.43740",
+    322,
+    255,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -269,13 +269,13 @@ exports[`connection baseline > activation > activation/elbow/corner-tr/out2/no-m
     "-8.70940",
   ],
   "startAttach": [
-    "1.11850",
-    "-0.03560",
+    "1.37500",
+    "0.05000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "317.89590",
-    "246.43740",
+    322,
+    255,
   ],
 }
 `;
@@ -283,13 +283,13 @@ exports[`connection baseline > activation > activation/elbow/corner-tr/out2/no-m
 exports[`connection baseline > activation > activation/elbow/corner-tr/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "1.11850",
-    "-0.03560",
+    "1.37500",
+    "0.05000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "317.89590",
-    "246.43740",
+    322,
+    255,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -309,13 +309,13 @@ exports[`connection baseline > activation > activation/elbow/corner-tr/out2/shif
     "-8.70940",
   ],
   "startAttach": [
-    "1.11850",
-    "-0.03560",
+    "1.37500",
+    "0.05000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "317.89590",
-    "246.43740",
+    322,
+    255,
   ],
 }
 `;
@@ -323,13 +323,13 @@ exports[`connection baseline > activation > activation/elbow/corner-tr/out2/shif
 exports[`connection baseline > activation > activation/elbow/edge-bottom/out2/default/create 1`] = `
 {
   "endAttach": [
-    "1.32770",
-    "0.99000",
+    "1.37500",
+    "0.95000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "321.24390",
-    349,
+    322,
+    345,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -349,13 +349,13 @@ exports[`connection baseline > activation > activation/elbow/edge-bottom/out2/de
     612,
   ],
   "startAttach": [
-    "1.32770",
-    "0.99000",
+    "1.37500",
+    "0.95000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "321.24390",
-    349,
+    322,
+    345,
   ],
 }
 `;
@@ -363,13 +363,13 @@ exports[`connection baseline > activation > activation/elbow/edge-bottom/out2/de
 exports[`connection baseline > activation > activation/elbow/edge-bottom/out2/grid/create 1`] = `
 {
   "endAttach": [
-    0,
-    "1.04800",
+    "-0.37500",
+    "0.90000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    300,
-    "354.79520",
+    294,
+    340,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -389,13 +389,13 @@ exports[`connection baseline > activation > activation/elbow/edge-bottom/out2/gr
     620,
   ],
   "startAttach": [
-    0,
-    "1.04800",
+    "-0.37500",
+    "0.90000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    300,
-    "354.79520",
+    294,
+    340,
   ],
 }
 `;
@@ -403,13 +403,13 @@ exports[`connection baseline > activation > activation/elbow/edge-bottom/out2/gr
 exports[`connection baseline > activation > activation/elbow/edge-bottom/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
-    "1.06000",
+    "1.37500",
+    "0.95000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "308.00160",
-    356,
+    322,
+    345,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -429,13 +429,13 @@ exports[`connection baseline > activation > activation/elbow/edge-bottom/out2/no
     612,
   ],
   "startAttach": [
-    "0.50010",
-    "1.06000",
+    "1.37500",
+    "0.95000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "308.00160",
-    356,
+    322,
+    345,
   ],
 }
 `;
@@ -443,13 +443,13 @@ exports[`connection baseline > activation > activation/elbow/edge-bottom/out2/no
 exports[`connection baseline > activation > activation/elbow/edge-bottom/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
-    "1.06000",
+    "1.37500",
+    "0.95000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "308.00160",
-    356,
+    322,
+    345,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -469,13 +469,13 @@ exports[`connection baseline > activation > activation/elbow/edge-bottom/out2/sh
     612,
   ],
   "startAttach": [
-    "0.50010",
-    "1.06000",
+    "1.37500",
+    "0.95000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "308.00160",
-    356,
+    322,
+    345,
   ],
 }
 `;
@@ -1105,13 +1105,13 @@ exports[`connection baseline > activation > activation/elbow/edge-right/out3/shi
 exports[`connection baseline > activation > activation/elbow/edge-top/out2/default/create 1`] = `
 {
   "endAttach": [
-    "1.32770",
-    "0.01000",
+    "1.37500",
+    "0.05000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "321.24390",
-    251,
+    322,
+    255,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -1131,13 +1131,13 @@ exports[`connection baseline > activation > activation/elbow/edge-top/out2/defau
     -12,
   ],
   "startAttach": [
-    "1.32770",
-    "0.01000",
+    "1.37500",
+    "0.05000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "321.24390",
-    251,
+    322,
+    255,
   ],
 }
 `;
@@ -1145,13 +1145,13 @@ exports[`connection baseline > activation > activation/elbow/edge-top/out2/defau
 exports[`connection baseline > activation > activation/elbow/edge-top/out2/grid/create 1`] = `
 {
   "endAttach": [
-    0,
-    "-0.04800",
+    "-0.37500",
+    "0.10000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    300,
-    "245.20480",
+    294,
+    260,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -1171,13 +1171,13 @@ exports[`connection baseline > activation > activation/elbow/edge-top/out2/grid/
     -20,
   ],
   "startAttach": [
-    0,
-    "-0.04800",
+    "-0.37500",
+    "0.10000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    300,
-    "245.20480",
+    294,
+    260,
   ],
 }
 `;
@@ -1185,13 +1185,13 @@ exports[`connection baseline > activation > activation/elbow/edge-top/out2/grid/
 exports[`connection baseline > activation > activation/elbow/edge-top/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
-    "-0.06000",
+    "1.37500",
+    "0.05000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "308.00160",
-    244,
+    322,
+    255,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -1211,13 +1211,13 @@ exports[`connection baseline > activation > activation/elbow/edge-top/out2/no-mi
     -12,
   ],
   "startAttach": [
-    "0.50010",
-    "-0.06000",
+    "1.37500",
+    "0.05000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "308.00160",
-    244,
+    322,
+    255,
   ],
 }
 `;
@@ -1225,13 +1225,13 @@ exports[`connection baseline > activation > activation/elbow/edge-top/out2/no-mi
 exports[`connection baseline > activation > activation/elbow/edge-top/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
-    "-0.06000",
+    "1.37500",
+    "0.05000",
   ],
   "endBinding": "baseline-activation",
   "endPoint": [
-    "308.00160",
-    244,
+    322,
+    255,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -1251,13 +1251,13 @@ exports[`connection baseline > activation > activation/elbow/edge-top/out2/shift
     -12,
   ],
   "startAttach": [
-    "0.50010",
-    "-0.06000",
+    "1.37500",
+    "0.05000",
   ],
   "startBinding": "baseline-activation",
   "startPoint": [
-    "308.00160",
-    244,
+    322,
+    255,
   ],
 }
 `;
@@ -3863,13 +3863,13 @@ exports[`connection baseline > diamond > diamond/elbow/corner-tr/out2/shift/crea
 exports[`connection baseline > diamond > diamond/elbow/edge-bottom/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
-    "1.04790",
+    "0.48490",
+    "1.03830",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "399.90000",
-    "375.74620",
+    "396.97360",
+    "374.59660",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -3883,13 +3883,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-bottom/out2/default/
 exports[`connection baseline > diamond > diamond/elbow/edge-bottom/out2/grid/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
-    "1.04810",
+    "0.49990",
+    "1.04930",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "400.02000",
-    "375.77550",
+    "399.97610",
+    "375.91120",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -3903,13 +3903,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-bottom/out2/grid/cre
 exports[`connection baseline > diamond > diamond/elbow/edge-bottom/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
-    "1.04810",
+    "0.50250",
+    "1.04980",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "400.02000",
-    "375.77550",
+    "400.50100",
+    "375.97900",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -3923,13 +3923,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-bottom/out2/no-midpo
 exports[`connection baseline > diamond > diamond/elbow/edge-bottom/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
-    "1.04810",
+    "0.50250",
+    "1.04940",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "400.02000",
-    "375.77550",
+    "400.50100",
+    "375.92250",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -3943,13 +3943,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-bottom/out2/shift/cr
 exports[`connection baseline > diamond > diamond/elbow/edge-left/out2/default/create 1`] = `
 {
   "endAttach": [
-    "-0.02890",
-    "0.49920",
+    "-0.00720",
+    "0.45720",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "294.21400",
-    "309.90000",
+    "298.55380",
+    "304.86400",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -3980,13 +3980,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-left/out2/grid/creat
 exports[`connection baseline > diamond > diamond/elbow/edge-left/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "-0.02910",
-    "0.50010",
+    "-0.02990",
+    "0.50380",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "294.17090",
-    "310.01200",
+    "294.02400",
+    "310.46200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4000,13 +4000,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-left/out2/no-midpoin
 exports[`connection baseline > diamond > diamond/elbow/edge-left/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "-0.02910",
-    "0.50010",
+    "-0.02970",
+    "0.50380",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "294.17090",
-    "310.01200",
+    "294.06900",
+    "310.46200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4020,13 +4020,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-left/out2/shift/crea
 exports[`connection baseline > diamond > diamond/elbow/edge-right/arbitrary/default/create 1`] = `
 {
   "endAttach": [
-    "0.78000",
-    "0.22370",
+    "0.76530",
+    "0.20860",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    456,
-    "276.84180",
+    "453.06150",
+    "275.03130",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4060,13 +4060,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/arbitrary/grid
 exports[`connection baseline > diamond > diamond/elbow/edge-right/arbitrary/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "0.75000",
-    "0.19290",
+    "0.76530",
+    "0.20860",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    450,
-    "273.14490",
+    "453.06150",
+    "275.03130",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4080,13 +4080,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/arbitrary/no-m
 exports[`connection baseline > diamond > diamond/elbow/edge-right/arbitrary/shift/create 1`] = `
 {
   "endAttach": [
-    "0.75000",
-    "0.19290",
+    "0.76530",
+    "0.20860",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    450,
-    "273.14490",
+    "453.06150",
+    "275.03130",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4100,13 +4100,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/arbitrary/shif
 exports[`connection baseline > diamond > diamond/elbow/edge-right/deep/default/create 1`] = `
 {
   "endAttach": [
-    "1.02820",
-    "0.49920",
+    "0.90480",
+    "0.35180",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "505.64940",
-    "309.90000",
+    "480.95610",
+    "292.21880",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4140,13 +4140,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/deep/grid/crea
 exports[`connection baseline > diamond > diamond/elbow/edge-right/deep/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "1.02830",
-    "0.50010",
+    "0.90480",
+    "0.35180",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "505.66440",
-    "310.01200",
+    "480.95610",
+    "292.21880",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4160,13 +4160,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/deep/no-midpoi
 exports[`connection baseline > diamond > diamond/elbow/edge-right/deep/shift/create 1`] = `
 {
   "endAttach": [
-    "1.02830",
-    "0.50010",
+    "0.90480",
+    "0.35180",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "505.66440",
-    "310.01200",
+    "480.95610",
+    "292.21880",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4180,13 +4180,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/deep/shift/cre
 exports[`connection baseline > diamond > diamond/elbow/edge-right/in3/default/create 1`] = `
 {
   "endAttach": [
-    "1.02820",
-    "0.49920",
+    "1.00760",
+    "0.45740",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "505.64940",
-    "309.90000",
+    "501.52430",
+    "304.89220",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4220,13 +4220,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/in3/grid/creat
 exports[`connection baseline > diamond > diamond/elbow/edge-right/in3/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "1.02830",
-    "0.50010",
+    "1.00260",
+    "0.45230",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "505.66440",
-    "310.01200",
+    "500.52620",
+    "304.27720",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4240,13 +4240,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/in3/no-midpoin
 exports[`connection baseline > diamond > diamond/elbow/edge-right/in3/shift/create 1`] = `
 {
   "endAttach": [
-    "1.02830",
-    "0.50010",
+    "1.00260",
+    "0.45230",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "505.66440",
-    "310.01200",
+    "500.52620",
+    "304.27720",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4260,13 +4260,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/in3/shift/crea
 exports[`connection baseline > diamond > diamond/elbow/edge-right/out2/default/create 1`] = `
 {
   "endAttach": [
-    "1.02820",
-    "0.49920",
+    "1.00760",
+    "0.45740",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "505.64940",
-    "309.90000",
+    "501.52430",
+    "304.89220",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4297,13 +4297,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/out2/grid/crea
 exports[`connection baseline > diamond > diamond/elbow/edge-right/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "1.02830",
-    "0.50010",
+    "1.02990",
+    "0.50440",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "505.66440",
-    "310.01200",
+    "505.98070",
+    "310.52460",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4317,13 +4317,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/out2/no-midpoi
 exports[`connection baseline > diamond > diamond/elbow/edge-right/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "1.02830",
-    "0.50010",
+    "1.02870",
+    "0.50440",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "505.66440",
-    "310.01200",
+    "505.74340",
+    "310.52460",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4405,13 +4405,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-right/out3/shift/cre
 exports[`connection baseline > diamond > diamond/elbow/edge-top/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
-    "-0.04710",
+    "0.48450",
+    "-0.03780",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "399.90000",
-    "244.34510",
+    "396.89800",
+    "245.46790",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4425,13 +4425,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-top/out2/default/cre
 exports[`connection baseline > diamond > diamond/elbow/edge-top/out2/grid/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
-    "-0.04730",
+    "0.49980",
+    "-0.04920",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "400.02000",
-    "244.31920",
+    "399.96300",
+    "244.09080",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4445,13 +4445,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-top/out2/grid/create
 exports[`connection baseline > diamond > diamond/elbow/edge-top/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
-    "-0.04730",
+    "0.50260",
+    "-0.04980",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "400.02000",
-    "244.31920",
+    "400.52230",
+    "244.01980",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -4465,13 +4465,13 @@ exports[`connection baseline > diamond > diamond/elbow/edge-top/out2/no-midpoint
 exports[`connection baseline > diamond > diamond/elbow/edge-top/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "0.50010",
-    "-0.04730",
+    "0.50260",
+    "-0.04850",
   ],
   "endBinding": "baseline-diamond",
   "endPoint": [
-    "400.02000",
-    "244.31920",
+    "400.52230",
+    "244.18380",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -6333,12 +6333,12 @@ exports[`connection baseline > ellipse > ellipse/elbow/corner-tr/out2/shift/drag
 exports[`connection baseline > ellipse > ellipse/elbow/edge-bottom/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
+    "0.50010",
     "1.05000",
   ],
   "endBinding": "baseline-ellipse",
   "endPoint": [
-    "399.90000",
+    "400.02000",
     376,
   ],
   "startAttach": null,
@@ -6359,12 +6359,12 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-bottom/out2/default/
     632,
   ],
   "startAttach": [
-    "0.49950",
+    "0.50010",
     "1.05000",
   ],
   "startBinding": "baseline-ellipse",
   "startPoint": [
-    "399.90000",
+    "400.02000",
     376,
   ],
 }
@@ -6494,12 +6494,12 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-left/out2/default/cr
 {
   "endAttach": [
     "-0.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-ellipse",
   "endPoint": [
-    "294.00010",
-    "309.90000",
+    294,
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -6520,12 +6520,12 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-left/out2/default/dr
   ],
   "startAttach": [
     "-0.03000",
-    "0.49920",
+    "0.50010",
   ],
   "startBinding": "baseline-ellipse",
   "startPoint": [
-    "294.00010",
-    "309.90000",
+    294,
+    "310.01200",
   ],
 }
 `;
@@ -6647,13 +6647,13 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-left/out2/shift/drag
 exports[`connection baseline > ellipse > ellipse/elbow/edge-right/arbitrary/default/create 1`] = `
 {
   "endAttach": [
-    "0.85360",
-    "0.09030",
+    "0.86860",
+    "0.10480",
   ],
   "endBinding": "baseline-ellipse",
   "endPoint": [
-    "470.71070",
-    "260.83100",
+    "473.72210",
+    "262.57680",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -6667,13 +6667,13 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-right/arbitrary/defa
 exports[`connection baseline > ellipse > ellipse/elbow/edge-right/arbitrary/grid/create 1`] = `
 {
   "endAttach": [
-    "0.90000",
-    "0.13920",
+    "0.84600",
+    "0.08330",
   ],
   "endBinding": "baseline-ellipse",
   "endPoint": [
-    480,
-    "266.70070",
+    "469.19120",
+    260,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -6687,13 +6687,13 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-right/arbitrary/grid
 exports[`connection baseline > ellipse > ellipse/elbow/edge-right/arbitrary/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "0.85360",
-    "0.09030",
+    "0.86860",
+    "0.10480",
   ],
   "endBinding": "baseline-ellipse",
   "endPoint": [
-    "470.71070",
-    "260.83100",
+    "473.72210",
+    "262.57680",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -6707,13 +6707,13 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-right/arbitrary/no-m
 exports[`connection baseline > ellipse > ellipse/elbow/edge-right/arbitrary/shift/create 1`] = `
 {
   "endAttach": [
-    "0.85360",
-    "0.09030",
+    "0.86860",
+    "0.10480",
   ],
   "endBinding": "baseline-ellipse",
   "endPoint": [
-    "470.71070",
-    "260.83100",
+    "473.72210",
+    "262.57680",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -6728,12 +6728,12 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-right/deep/default/c
 {
   "endAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-ellipse",
   "endPoint": [
-    "505.99990",
-    "309.90000",
+    506,
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -6808,12 +6808,12 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-right/in3/default/cr
 {
   "endAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-ellipse",
   "endPoint": [
-    "505.99990",
-    "309.90000",
+    506,
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -6888,12 +6888,12 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-right/out2/default/c
 {
   "endAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-ellipse",
   "endPoint": [
-    "505.99990",
-    "309.90000",
+    506,
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -6914,12 +6914,12 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-right/out2/default/d
   ],
   "startAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "startBinding": "baseline-ellipse",
   "startPoint": [
-    "505.99990",
-    "309.90000",
+    506,
+    "310.01200",
   ],
 }
 `;
@@ -7109,12 +7109,12 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-right/out3/shift/cre
 exports[`connection baseline > ellipse > ellipse/elbow/edge-top/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
+    "0.50010",
     "-0.05000",
   ],
   "endBinding": "baseline-ellipse",
   "endPoint": [
-    "399.90000",
+    "400.02000",
     244,
   ],
   "startAttach": null,
@@ -7135,12 +7135,12 @@ exports[`connection baseline > ellipse > ellipse/elbow/edge-top/out2/default/dra
     -12,
   ],
   "startAttach": [
-    "0.49950",
+    "0.50010",
     "-0.05000",
   ],
   "startBinding": "baseline-ellipse",
   "startPoint": [
-    "399.90000",
+    "400.02000",
     244,
   ],
 }
@@ -9985,13 +9985,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-bottom/out2/sh
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-left/out2/default/create 1`] = `
 {
   "endAttach": [
-    "-0.02870",
-    "0.50010",
+    "-0.02950",
+    "0.50870",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "294.26850",
-    "310.01200",
+    "294.09290",
+    "311.04400",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10022,13 +10022,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-left/out2/grid
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-left/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "-0.02860",
-    "0.50010",
+    "-0.03000",
+    "0.50050",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "294.27020",
-    "310.01200",
+    "294.00010",
+    "310.05480",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10042,13 +10042,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-left/out2/no-m
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-left/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "-0.02860",
-    "0.50010",
+    "-0.02870",
+    "0.50050",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "294.27020",
-    "310.01200",
+    "294.25380",
+    "310.05480",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10062,13 +10062,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-left/out2/shif
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/arbitrary/default/create 1`] = `
 {
   "endAttach": [
-    "0.91190",
-    "0.25000",
+    "0.89540",
+    "0.21760",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "482.37510",
-    280,
+    "479.07190",
+    "276.11390",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10102,13 +10102,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/arbitrar
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/arbitrary/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "0.91190",
-    "0.25000",
+    "0.89540",
+    "0.21760",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "482.37510",
-    280,
+    "479.07190",
+    "276.11390",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10122,13 +10122,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/arbitrar
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/arbitrary/shift/create 1`] = `
 {
   "endAttach": [
-    "0.91190",
-    "0.25000",
+    "0.89540",
+    "0.21760",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "482.37510",
-    280,
+    "479.07190",
+    "276.11390",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10142,13 +10142,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/arbitrar
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/deep/default/create 1`] = `
 {
   "endAttach": [
-    "1.02860",
-    "0.50010",
+    "1.02950",
+    "0.49130",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "505.72810",
-    "310.01200",
+    "505.90710",
+    "308.95600",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10182,12 +10182,12 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/deep/gri
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/deep/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "1.02860",
+    "1.03000",
     "0.50010",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "505.72980",
+    "505.99940",
     "310.01200",
   ],
   "startAttach": null,
@@ -10207,7 +10207,7 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/deep/shi
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "505.72980",
+    "505.72910",
     "310.01200",
   ],
   "startAttach": null,
@@ -10222,13 +10222,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/deep/shi
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/in3/default/create 1`] = `
 {
   "endAttach": [
-    "1.02860",
-    "0.50010",
+    "1.02950",
+    "0.49130",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "505.72810",
-    "310.01200",
+    "505.90710",
+    "308.95600",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10262,13 +10262,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/in3/grid
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/in3/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "1.02860",
-    "0.50010",
+    "1.01660",
+    "0.45530",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "505.72980",
-    "310.01200",
+    "503.31360",
+    "304.63350",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10282,13 +10282,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/in3/no-m
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/in3/shift/create 1`] = `
 {
   "endAttach": [
-    "1.02860",
-    "0.50010",
+    "1.01660",
+    "0.45530",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "505.72980",
-    "310.01200",
+    "503.31360",
+    "304.63350",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10302,13 +10302,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/in3/shif
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/out2/default/create 1`] = `
 {
   "endAttach": [
-    "1.02860",
-    "0.50010",
+    "1.02950",
+    "0.49130",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "505.72810",
-    "310.01200",
+    "505.90710",
+    "308.95600",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10339,13 +10339,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/out2/gri
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "1.02860",
-    "0.50010",
+    "1.03000",
+    "0.49950",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "505.72980",
-    "310.01200",
+    "505.99990",
+    "309.94520",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -10359,13 +10359,13 @@ exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/out2/no-
 exports[`connection baseline > fc-hexagon > fc-hexagon/elbow/edge-right/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "1.02860",
-    "0.50010",
+    "1.02870",
+    "0.49950",
   ],
   "endBinding": "baseline-fc-hexagon",
   "endPoint": [
-    "505.72980",
-    "310.01200",
+    "505.74620",
+    "309.94520",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -12147,13 +12147,13 @@ exports[`connection baseline > frame > frame/elbow/center/shift/create 1`] = `
 exports[`connection baseline > frame > frame/elbow/corner-tr/out2/default/create 1`] = `
 {
   "endAttach": [
-    "1.03000",
-    0,
+    "1.02570",
+    "-0.02570",
   ],
   "endBinding": "baseline-frame",
   "endPoint": [
-    506,
-    250,
+    "505.14280",
+    "246.91570",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -12184,13 +12184,13 @@ exports[`connection baseline > frame > frame/elbow/corner-tr/out2/grid/create 1`
 exports[`connection baseline > frame > frame/elbow/corner-tr/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "1.03000",
-    0,
+    "1.02570",
+    "-0.02570",
   ],
   "endBinding": "baseline-frame",
   "endPoint": [
-    506,
-    250,
+    "505.14280",
+    "246.91570",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -12204,13 +12204,13 @@ exports[`connection baseline > frame > frame/elbow/corner-tr/out2/no-midpoint/cr
 exports[`connection baseline > frame > frame/elbow/corner-tr/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "1.03000",
-    0,
+    "1.02570",
+    "-0.02570",
   ],
   "endBinding": "baseline-frame",
   "endPoint": [
-    506,
-    250,
+    "505.14280",
+    "246.91570",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -12224,12 +12224,12 @@ exports[`connection baseline > frame > frame/elbow/corner-tr/out2/shift/create 1
 exports[`connection baseline > frame > frame/elbow/edge-bottom/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
+    "0.50010",
     "1.05000",
   ],
   "endBinding": "baseline-frame",
   "endPoint": [
-    "399.90000",
+    "400.02000",
     376,
   ],
   "startAttach": null,
@@ -12305,12 +12305,12 @@ exports[`connection baseline > frame > frame/elbow/edge-left/out2/default/create
 {
   "endAttach": [
     "-0.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-frame",
   "endPoint": [
     294,
-    "309.90000",
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -12601,12 +12601,12 @@ exports[`connection baseline > frame > frame/elbow/edge-right/out2/default/creat
 {
   "endAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-frame",
   "endPoint": [
     506,
-    "309.90000",
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -12745,12 +12745,12 @@ exports[`connection baseline > frame > frame/elbow/edge-right/out3/shift/create 
 exports[`connection baseline > frame > frame/elbow/edge-top/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
+    "0.50010",
     "-0.05000",
   ],
   "endBinding": "baseline-frame",
   "endPoint": [
-    "399.90000",
+    "400.02000",
     244,
   ],
   "startAttach": null,
@@ -14483,13 +14483,13 @@ exports[`connection baseline > rectangle > rectangle/elbow/center/shift/drag-sta
 exports[`connection baseline > rectangle > rectangle/elbow/corner-tr/out2/default/create 1`] = `
 {
   "endAttach": [
-    "1.03000",
-    0,
+    "1.02560",
+    "-0.02610",
   ],
   "endBinding": "baseline-rectangle",
   "endPoint": [
-    506,
-    250,
+    "505.12000",
+    "246.87200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -14509,13 +14509,13 @@ exports[`connection baseline > rectangle > rectangle/elbow/corner-tr/out2/defaul
     "115.20210",
   ],
   "startAttach": [
-    "1.03000",
-    0,
+    "1.02560",
+    "-0.02610",
   ],
   "startBinding": "baseline-rectangle",
   "startPoint": [
-    506,
-    250,
+    "505.12000",
+    "246.87200",
   ],
 }
 `;
@@ -14557,13 +14557,13 @@ exports[`connection baseline > rectangle > rectangle/elbow/corner-tr/out2/grid/d
 exports[`connection baseline > rectangle > rectangle/elbow/corner-tr/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "1.03000",
-    0,
+    "1.02560",
+    "-0.02610",
   ],
   "endBinding": "baseline-rectangle",
   "endPoint": [
-    506,
-    250,
+    "505.12000",
+    "246.87200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -14583,13 +14583,13 @@ exports[`connection baseline > rectangle > rectangle/elbow/corner-tr/out2/no-mid
     "115.20210",
   ],
   "startAttach": [
-    "1.03000",
-    0,
+    "1.02560",
+    "-0.02610",
   ],
   "startBinding": "baseline-rectangle",
   "startPoint": [
-    506,
-    250,
+    "505.12000",
+    "246.87200",
   ],
 }
 `;
@@ -14597,13 +14597,13 @@ exports[`connection baseline > rectangle > rectangle/elbow/corner-tr/out2/no-mid
 exports[`connection baseline > rectangle > rectangle/elbow/corner-tr/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "1.03000",
-    0,
+    "1.02560",
+    "-0.02380",
   ],
   "endBinding": "baseline-rectangle",
   "endPoint": [
-    506,
-    250,
+    "505.12000",
+    "247.14980",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -14623,13 +14623,13 @@ exports[`connection baseline > rectangle > rectangle/elbow/corner-tr/out2/shift/
     "115.20210",
   ],
   "startAttach": [
-    "1.03000",
-    0,
+    "1.02560",
+    "-0.02380",
   ],
   "startBinding": "baseline-rectangle",
   "startPoint": [
-    506,
-    250,
+    "505.12000",
+    "247.14980",
   ],
 }
 `;
@@ -14637,12 +14637,12 @@ exports[`connection baseline > rectangle > rectangle/elbow/corner-tr/out2/shift/
 exports[`connection baseline > rectangle > rectangle/elbow/edge-bottom/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
+    "0.50010",
     "1.05000",
   ],
   "endBinding": "baseline-rectangle",
   "endPoint": [
-    "399.90000",
+    "400.02000",
     376,
   ],
   "startAttach": null,
@@ -14663,12 +14663,12 @@ exports[`connection baseline > rectangle > rectangle/elbow/edge-bottom/out2/defa
     632,
   ],
   "startAttach": [
-    "0.49950",
+    "0.50010",
     "1.05000",
   ],
   "startBinding": "baseline-rectangle",
   "startPoint": [
-    "399.90000",
+    "400.02000",
     376,
   ],
 }
@@ -14798,12 +14798,12 @@ exports[`connection baseline > rectangle > rectangle/elbow/edge-left/out2/defaul
 {
   "endAttach": [
     "-0.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle",
   "endPoint": [
     294,
-    "309.90000",
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -14824,12 +14824,12 @@ exports[`connection baseline > rectangle > rectangle/elbow/edge-left/out2/defaul
   ],
   "startAttach": [
     "-0.03000",
-    "0.49920",
+    "0.50010",
   ],
   "startBinding": "baseline-rectangle",
   "startPoint": [
     294,
-    "309.90000",
+    "310.01200",
   ],
 }
 `;
@@ -15032,12 +15032,12 @@ exports[`connection baseline > rectangle > rectangle/elbow/edge-right/deep/defau
 {
   "endAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle",
   "endPoint": [
     506,
-    "309.90000",
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -15112,12 +15112,12 @@ exports[`connection baseline > rectangle > rectangle/elbow/edge-right/in3/defaul
 {
   "endAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle",
   "endPoint": [
     506,
-    "309.90000",
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -15192,12 +15192,12 @@ exports[`connection baseline > rectangle > rectangle/elbow/edge-right/out2/defau
 {
   "endAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle",
   "endPoint": [
     506,
-    "309.90000",
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -15218,12 +15218,12 @@ exports[`connection baseline > rectangle > rectangle/elbow/edge-right/out2/defau
   ],
   "startAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "startBinding": "baseline-rectangle",
   "startPoint": [
     506,
-    "309.90000",
+    "310.01200",
   ],
 }
 `;
@@ -15413,12 +15413,12 @@ exports[`connection baseline > rectangle > rectangle/elbow/edge-right/out3/shift
 exports[`connection baseline > rectangle > rectangle/elbow/edge-top/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
+    "0.50010",
     "-0.05000",
   ],
   "endBinding": "baseline-rectangle",
   "endPoint": [
-    "399.90000",
+    "400.02000",
     244,
   ],
   "startAttach": null,
@@ -15439,12 +15439,12 @@ exports[`connection baseline > rectangle > rectangle/elbow/edge-top/out2/default
     -12,
   ],
   "startAttach": [
-    "0.49950",
+    "0.50010",
     "-0.05000",
   ],
   "startBinding": "baseline-rectangle",
   "startPoint": [
-    "399.90000",
+    "400.02000",
     244,
   ],
 }
@@ -18189,13 +18189,13 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/center/sh
 exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/corner-tr/out2/default/create 1`] = `
 {
   "endAttach": [
-    "1.02460",
-    "-0.02570",
+    "1.02560",
+    "-0.02610",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "522.40930",
-    "307.83660",
+    "522.60100",
+    "307.89140",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18229,13 +18229,13 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/corner-tr
 exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/corner-tr/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "1.02460",
-    "-0.02570",
+    "1.02560",
+    "-0.02610",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "522.40930",
-    "307.83660",
+    "522.60100",
+    "307.89140",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18249,13 +18249,13 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/corner-tr
 exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/corner-tr/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "1.02460",
-    "-0.02570",
+    "1.02480",
+    "-0.02530",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "522.40930",
-    "307.83660",
+    "522.41920",
+    "307.89140",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18269,13 +18269,13 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/corner-tr
 exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-bottom/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49910",
+    "0.50010",
     "1.05000",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "366.85000",
-    "367.07140",
+    "367.01720",
+    "367.16790",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18306,13 +18306,13 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-bott
 exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-bottom/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "0.48270",
+    "0.50010",
     "1.05000",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    364,
-    "365.42600",
+    "367.01720",
+    "367.16790",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18326,13 +18326,13 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-bott
 exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-bottom/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "0.48270",
+    "0.50010",
     "1.05000",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    364,
-    "365.42600",
+    "367.01720",
+    "367.16790",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18347,12 +18347,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-left
 {
   "endAttach": [
     "-0.03000",
-    "0.49950",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "308.22990",
-    "256.95000",
+    "308.19510",
+    "257.01030",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18387,12 +18387,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-left
 {
   "endAttach": [
     "-0.03000",
-    "0.47110",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "309.93300",
-    254,
+    "308.19510",
+    "257.01030",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18407,12 +18407,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-left
 {
   "endAttach": [
     "-0.03000",
-    "0.47110",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "309.93300",
-    254,
+    "308.19510",
+    "257.01030",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18427,12 +18427,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-righ
 {
   "endAttach": [
     "1.03000",
-    "0.30450",
+    "0.33330",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "503.53090",
-    "342.67950",
+    "501.79890",
+    "345.67960",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18467,12 +18467,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-righ
 {
   "endAttach": [
     "1.03000",
-    "0.30450",
+    "0.33330",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "503.53090",
-    "342.67950",
+    "501.79890",
+    "345.67960",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18487,12 +18487,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-righ
 {
   "endAttach": [
     "1.03000",
-    "0.30450",
+    "0.33330",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "503.53090",
-    "342.67950",
+    "501.79890",
+    "345.67960",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18507,12 +18507,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-righ
 {
   "endAttach": [
     "1.03000",
-    "0.49950",
+    "0.32680",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "491.82790",
-    "362.95000",
+    "502.19120",
+    345,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18587,12 +18587,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-righ
 {
   "endAttach": [
     "1.03000",
-    "0.49950",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "491.82790",
-    "362.95000",
+    "491.79290",
+    "363.01050",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18627,12 +18627,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-righ
 {
   "endAttach": [
     "1.03000",
-    "0.45670",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "494.39710",
-    "358.50000",
+    "491.79290",
+    "363.01050",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18647,12 +18647,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-righ
 {
   "endAttach": [
     "1.03000",
-    "0.45670",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "494.39710",
-    "358.50000",
+    "491.79290",
+    "363.01050",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18667,12 +18667,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-righ
 {
   "endAttach": [
     "1.03000",
-    "0.49950",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "491.82790",
-    "362.95000",
+    "491.79290",
+    "363.01050",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18707,12 +18707,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-righ
 {
   "endAttach": [
     "1.03000",
-    "0.52890",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "490.06700",
-    366,
+    "491.79290",
+    "363.01050",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18727,12 +18727,12 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-righ
 {
   "endAttach": [
     "1.03000",
-    "0.52890",
+    "0.50010",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "490.06700",
-    366,
+    "491.79290",
+    "363.01050",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18817,13 +18817,13 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-righ
 exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-top/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49910",
+    "0.50010",
     "-0.05000",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    "432.85000",
-    "252.75540",
+    "433.01750",
+    "252.85210",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18854,13 +18854,13 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-top/
 exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-top/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "0.51730",
+    "0.50010",
     "-0.05000",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    436,
-    "254.57400",
+    "433.01750",
+    "252.85210",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -18874,13 +18874,13 @@ exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-top/
 exports[`connection baseline > rectangle-rot30 > rectangle-rot30/elbow/edge-top/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "0.51730",
+    "0.50010",
     "-0.05000",
   ],
   "endBinding": "baseline-rectangle-rot30",
   "endPoint": [
-    436,
-    "254.57400",
+    "433.01750",
+    "252.85210",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -20550,13 +20550,13 @@ exports[`connection baseline > stickynote > stickynote/elbow/center/shift/create
 exports[`connection baseline > stickynote > stickynote/elbow/corner-tr/out2/default/create 1`] = `
 {
   "endAttach": [
-    "1.03000",
-    0,
+    "1.02570",
+    "-0.02570",
   ],
   "endBinding": "baseline-stickynote",
   "endPoint": [
-    506,
-    250,
+    "505.14280",
+    "246.91570",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -20587,13 +20587,13 @@ exports[`connection baseline > stickynote > stickynote/elbow/corner-tr/out2/grid
 exports[`connection baseline > stickynote > stickynote/elbow/corner-tr/out2/no-midpoint/create 1`] = `
 {
   "endAttach": [
-    "1.03000",
-    0,
+    "1.02570",
+    "-0.02570",
   ],
   "endBinding": "baseline-stickynote",
   "endPoint": [
-    506,
-    250,
+    "505.14280",
+    "246.91570",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -20607,13 +20607,13 @@ exports[`connection baseline > stickynote > stickynote/elbow/corner-tr/out2/no-m
 exports[`connection baseline > stickynote > stickynote/elbow/corner-tr/out2/shift/create 1`] = `
 {
   "endAttach": [
-    "1.03000",
-    0,
+    "1.02570",
+    "-0.02570",
   ],
   "endBinding": "baseline-stickynote",
   "endPoint": [
-    506,
-    250,
+    "505.14280",
+    "246.91570",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -20627,12 +20627,12 @@ exports[`connection baseline > stickynote > stickynote/elbow/corner-tr/out2/shif
 exports[`connection baseline > stickynote > stickynote/elbow/edge-bottom/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
+    "0.50010",
     "1.05000",
   ],
   "endBinding": "baseline-stickynote",
   "endPoint": [
-    "399.90000",
+    "400.02000",
     376,
   ],
   "startAttach": null,
@@ -20708,12 +20708,12 @@ exports[`connection baseline > stickynote > stickynote/elbow/edge-left/out2/defa
 {
   "endAttach": [
     "-0.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-stickynote",
   "endPoint": [
     294,
-    "309.90000",
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -20865,12 +20865,12 @@ exports[`connection baseline > stickynote > stickynote/elbow/edge-right/deep/def
 {
   "endAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-stickynote",
   "endPoint": [
     506,
-    "309.90000",
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -20945,12 +20945,12 @@ exports[`connection baseline > stickynote > stickynote/elbow/edge-right/in3/defa
 {
   "endAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-stickynote",
   "endPoint": [
     506,
-    "309.90000",
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -21025,12 +21025,12 @@ exports[`connection baseline > stickynote > stickynote/elbow/edge-right/out2/def
 {
   "endAttach": [
     "1.03000",
-    "0.49920",
+    "0.50010",
   ],
   "endBinding": "baseline-stickynote",
   "endPoint": [
     506,
-    "309.90000",
+    "310.01200",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -21169,12 +21169,12 @@ exports[`connection baseline > stickynote > stickynote/elbow/edge-right/out3/shi
 exports[`connection baseline > stickynote > stickynote/elbow/edge-top/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
+    "0.50010",
     "-0.05000",
   ],
   "endBinding": "baseline-stickynote",
   "endPoint": [
-    "399.90000",
+    "400.02000",
     244,
   ],
   "startAttach": null,
@@ -22866,12 +22866,12 @@ exports[`connection baseline > text > text/elbow/center/grid/create 1`] = `
 {
   "endAttach": [
     "0.50010",
-    "0.50010",
+    0,
   ],
   "endBinding": "baseline-text",
   "endPoint": [
     "400.02000",
-    "280.00600",
+    250,
   ],
   "startAttach": null,
   "startBinding": null,
@@ -22892,12 +22892,12 @@ exports[`connection baseline > text > text/elbow/center/grid/drag-start 1`] = `
   ],
   "startAttach": [
     "0.50010",
-    "0.50010",
+    0,
   ],
   "startBinding": "baseline-text",
   "startPoint": [
     "400.02000",
-    "280.00600",
+    250,
   ],
 }
 `;
@@ -22986,12 +22986,12 @@ exports[`connection baseline > text > text/elbow/corner-tr/out2/default/create 1
 {
   "endAttach": [
     1,
-    0,
+    "0.00010",
   ],
   "endBinding": "baseline-text",
   "endPoint": [
-    500,
-    250,
+    "499.99950",
+    "250.00590",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -23012,12 +23012,12 @@ exports[`connection baseline > text > text/elbow/corner-tr/out2/default/drag-sta
   ],
   "startAttach": [
     1,
-    0,
+    "0.00010",
   ],
   "startBinding": "baseline-text",
   "startPoint": [
-    500,
-    250,
+    "499.99950",
+    "250.00590",
   ],
 }
 `;
@@ -23060,12 +23060,12 @@ exports[`connection baseline > text > text/elbow/corner-tr/out2/no-midpoint/crea
 {
   "endAttach": [
     1,
-    0,
+    "0.00010",
   ],
   "endBinding": "baseline-text",
   "endPoint": [
-    500,
-    250,
+    "499.99950",
+    "250.00590",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -23086,12 +23086,12 @@ exports[`connection baseline > text > text/elbow/corner-tr/out2/no-midpoint/drag
   ],
   "startAttach": [
     1,
-    0,
+    "0.00010",
   ],
   "startBinding": "baseline-text",
   "startPoint": [
-    500,
-    250,
+    "499.99950",
+    "250.00590",
   ],
 }
 `;
@@ -23100,12 +23100,12 @@ exports[`connection baseline > text > text/elbow/corner-tr/out2/shift/create 1`]
 {
   "endAttach": [
     1,
-    0,
+    "0.00010",
   ],
   "endBinding": "baseline-text",
   "endPoint": [
-    500,
-    250,
+    "499.99970",
+    "250.00710",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -23126,12 +23126,12 @@ exports[`connection baseline > text > text/elbow/corner-tr/out2/shift/drag-start
   ],
   "startAttach": [
     1,
-    0,
+    "0.00010",
   ],
   "startBinding": "baseline-text",
   "startPoint": [
-    500,
-    250,
+    "499.99970",
+    "250.00710",
   ],
 }
 `;
@@ -23139,12 +23139,12 @@ exports[`connection baseline > text > text/elbow/corner-tr/out2/shift/drag-start
 exports[`connection baseline > text > text/elbow/edge-bottom/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
+    "0.50010",
     1,
   ],
   "endBinding": "baseline-text",
   "endPoint": [
-    "399.90000",
+    "400.02000",
     310,
   ],
   "startAttach": null,
@@ -23165,12 +23165,12 @@ exports[`connection baseline > text > text/elbow/edge-bottom/out2/default/drag-s
     572,
   ],
   "startAttach": [
-    "0.49950",
+    "0.50010",
     1,
   ],
   "startBinding": "baseline-text",
   "startPoint": [
-    "399.90000",
+    "400.02000",
     310,
   ],
 }
@@ -23300,12 +23300,12 @@ exports[`connection baseline > text > text/elbow/edge-left/out2/default/create 1
 {
   "endAttach": [
     0,
-    "0.49830",
+    "0.50010",
   ],
   "endBinding": "baseline-text",
   "endPoint": [
     300,
-    "279.90000",
+    "280.00600",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -23326,12 +23326,12 @@ exports[`connection baseline > text > text/elbow/edge-left/out2/default/drag-sta
   ],
   "startAttach": [
     0,
-    "0.49830",
+    "0.50010",
   ],
   "startBinding": "baseline-text",
   "startPoint": [
     300,
-    "279.90000",
+    "280.00600",
   ],
 }
 `;
@@ -23454,12 +23454,12 @@ exports[`connection baseline > text > text/elbow/edge-right/arbitrary/default/cr
 {
   "endAttach": [
     1,
-    "0.33330",
+    "0.50010",
   ],
   "endBinding": "baseline-text",
   "endPoint": [
     500,
-    270,
+    "280.00600",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -23534,12 +23534,12 @@ exports[`connection baseline > text > text/elbow/edge-right/deep/default/create 
 {
   "endAttach": [
     1,
-    "0.49830",
+    "0.50010",
   ],
   "endBinding": "baseline-text",
   "endPoint": [
     500,
-    "279.90000",
+    "280.00600",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -23614,12 +23614,12 @@ exports[`connection baseline > text > text/elbow/edge-right/in3/default/create 1
 {
   "endAttach": [
     1,
-    "0.49830",
+    "0.50010",
   ],
   "endBinding": "baseline-text",
   "endPoint": [
     500,
-    "279.90000",
+    "280.00600",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -23694,12 +23694,12 @@ exports[`connection baseline > text > text/elbow/edge-right/out2/default/create 
 {
   "endAttach": [
     1,
-    "0.49830",
+    "0.50010",
   ],
   "endBinding": "baseline-text",
   "endPoint": [
     500,
-    "279.90000",
+    "280.00600",
   ],
   "startAttach": null,
   "startBinding": null,
@@ -23720,12 +23720,12 @@ exports[`connection baseline > text > text/elbow/edge-right/out2/default/drag-st
   ],
   "startAttach": [
     1,
-    "0.49830",
+    "0.50010",
   ],
   "startBinding": "baseline-text",
   "startPoint": [
     500,
-    "279.90000",
+    "280.00600",
   ],
 }
 `;
@@ -23915,12 +23915,12 @@ exports[`connection baseline > text > text/elbow/edge-right/out3/shift/create 1`
 exports[`connection baseline > text > text/elbow/edge-top/out2/default/create 1`] = `
 {
   "endAttach": [
-    "0.49950",
+    "0.50010",
     0,
   ],
   "endBinding": "baseline-text",
   "endPoint": [
-    "399.90000",
+    "400.02000",
     250,
   ],
   "startAttach": null,
@@ -23941,12 +23941,12 @@ exports[`connection baseline > text > text/elbow/edge-top/out2/default/drag-star
     -12,
   ],
   "startAttach": [
-    "0.49950",
+    "0.50010",
     0,
   ],
   "startBinding": "baseline-text",
   "startPoint": [
-    "399.90000",
+    "400.02000",
     250,
   ],
 }

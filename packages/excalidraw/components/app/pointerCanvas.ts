@@ -18,11 +18,8 @@ import {
 } from "@excalidraw/common";
 import {
   getCommonBounds,
-  getHoveredElementForBinding,
-  isBindingEnabled,
   LinearElementEditor,
   hasBoundTextElement,
-  isBindingElementType,
   isImageElement,
   isEmbeddableElement,
   isLinearElement,
@@ -42,12 +39,8 @@ import {
   isLineElement,
   isSimpleArrow,
   isTableElement,
-  isPointInElement,
   isPointInSequenceLifelineHead,
   isSequenceLifelineElement,
-  maxBindingDistance_simple,
-  getSnapOutlineMidPoint,
-  suggestedBindingForElbow,
 } from "@excalidraw/element";
 
 import {
@@ -946,47 +939,6 @@ export const handleCanvasPointerMove = (
     }
   }
 
-  // Elbow arrows keep the legacy hover path until PR3b switches them to the
-  // connection provider too.
-  const isElbowArrowTool =
-    app.state.activeTool.type === "arrow" &&
-    app.state.currentItemArrowType === "elbow";
-
-  if (isElbowArrowTool && isBindingElementType(app.state.activeTool.type)) {
-    // Hovering with a selected tool or creating new linear element via click
-    // and point
-    const { newElement } = app.state;
-    if (!newElement && isBindingEnabled(app.state)) {
-      const globalPoint = pointFrom<GlobalPoint>(scenePointerX, scenePointerY);
-      const elementsMap = app.scene.getNonDeletedElementsMap();
-      const hoveredElement = getHoveredElementForBinding(
-        globalPoint,
-        app.scene.getNonDeletedElements(),
-        elementsMap,
-        maxBindingDistance_simple(app.state.zoom),
-      );
-      if (hoveredElement) {
-        app.setState({
-          suggestedBinding: suggestedBindingForElbow(
-            hoveredElement,
-            globalPoint,
-            getSnapOutlineMidPoint(
-              globalPoint,
-              hoveredElement,
-              elementsMap,
-              app.state.zoom,
-            ),
-            elementsMap,
-          ),
-        });
-      } else if (app.state.suggestedBinding) {
-        app.setState({
-          suggestedBinding: null,
-        });
-      }
-    }
-  }
-
   if (app.state.multiElement && app.state.selectedLinearElement) {
     const { multiElement, selectedLinearElement } = app.state;
     const { x: rx, y: ry, points } = multiElement;
@@ -1100,42 +1052,10 @@ export const handleCanvasPointerMove = (
     return;
   }
 
-  // Legacy elbow arrow hover. Non-elbow arrows are resolved by the connection
-  // provider below (single writer, preview == landing).
-  if (
-    isElbowArrowTool &&
-    app.state.activeTool.type === "arrow" &&
-    !app.state.newElement
-  ) {
-    const scenePointer = pointFrom<GlobalPoint>(scenePointerX, scenePointerY);
-    const hit = getHoveredElementForBinding(
-      scenePointer,
-      app.scene.getNonDeletedElements(),
-      app.scene.getNonDeletedElementsMap(),
-      maxBindingDistance_simple(app.state.zoom),
-    );
-    const elementsMap = app.scene.getNonDeletedElementsMap();
-    if (hit && !isPointInElement(scenePointer, hit, elementsMap)) {
-      app.setState({
-        suggestedBinding: suggestedBindingForElbow(
-          hit,
-          scenePointer,
-          getSnapOutlineMidPoint(
-            scenePointer,
-            hit,
-            elementsMap,
-            app.state.zoom,
-          ),
-          elementsMap,
-        ),
-      });
-    }
-  }
-
-  // Non-elbow arrow hover: the frame's `connection` target drives the
-  // `suggestedBinding` mirror and clears it on every non-connection frame.
+  // Arrow / line hover: the frame's `connection` target drives the
+  // `suggestedBinding` mirror (elbow included) and clears it on every
+  // non-connection frame.
   const isArrowHoverEligible =
-    !isElbowArrowTool &&
     (app.state.activeTool.type === "arrow" ||
       app.state.activeTool.type === "line") &&
     !event.buttons &&

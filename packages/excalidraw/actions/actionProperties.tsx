@@ -2283,6 +2283,12 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
                   "start",
                   elementsMap,
                   appState.isBindingEnabled,
+                  appState.isMidpointSnappingEnabled,
+                  {
+                    zoom: appState.zoom.value,
+                    isMidpointSnappingEnabled:
+                      appState.isMidpointSnappingEnabled,
+                  },
                 ),
               }
             : null;
@@ -2297,6 +2303,12 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
                   "end",
                   elementsMap,
                   appState.isBindingEnabled,
+                  appState.isMidpointSnappingEnabled,
+                  {
+                    zoom: appState.zoom.value,
+                    isMidpointSnappingEnabled:
+                      appState.isMidpointSnappingEnabled,
+                  },
                 ),
               }
             : null;

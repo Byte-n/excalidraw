@@ -55,13 +55,10 @@ import {
   getBindingStrategyForDraggingBindingElementEndpoints,
   isBindingEnabled,
   resolveConnectionHitForArrowEndpoint,
-  snapToMid,
+  resolveConnectionHitForElbowArrowEndpoint,
   updateBoundPoint,
 } from "./binding";
-import {
-  isSameSuggestedBinding,
-  suggestedBindingForElbow,
-} from "./connection/suggestedBinding";
+import { isSameSuggestedBinding } from "./connection/suggestedBinding";
 import {
   constrainSequenceMessagePoint,
   getSequenceMessageAxis,
@@ -2450,37 +2447,47 @@ const pointDraggingUpdates = (
   );
 
   if (isElbowArrow(element)) {
+    const startOrEnd = startIsDragged ? "start" : "end";
     const suggestedBindingElement = startIsDragged
       ? start.element
       : endIsDragged
       ? end.element
       : null;
-    const draggedPoint = pointFrom<GlobalPoint>(
-      scenePointerX - linearElementEditor.pointerOffset.x,
-      scenePointerY - linearElementEditor.pointerOffset.y,
+    const draggedIndex = startIsDragged ? 0 : element.points.length - 1;
+    const draggedLocal =
+      naiveDraggingPoints.get(draggedIndex)?.point ??
+      element.points[draggedIndex];
+    const draggedGlobal = LinearElementEditor.getPointGlobalCoordinates(
+      element,
+      draggedLocal,
+      elementsMap,
     );
-    const midPoint =
-      suggestedBindingElement && app.state.isMidpointSnappingEnabled
-        ? snapToMid(
-            suggestedBindingElement,
-            elementsMap,
-            draggedPoint,
-            undefined,
-            element,
-          )
-        : undefined;
+    // Same resolver / flags as the landing (bindPointToSnapToElementOutline).
+    const hit = suggestedBindingElement
+      ? resolveConnectionHitForElbowArrowEndpoint(
+          element,
+          suggestedBindingElement,
+          startOrEnd,
+          draggedGlobal,
+          elementsMap,
+          {
+            zoom: app.state.zoom.value,
+            isMidpointSnappingEnabled: app.state.isMidpointSnappingEnabled,
+            gridSize: app.state.gridModeEnabled
+              ? app.getEffectiveGridSize()
+              : undefined,
+            angleLocked,
+          },
+        )
+      : null;
 
     return {
       positions: naiveDraggingPoints,
       updates: {
-        suggestedBinding: suggestedBindingElement
-          ? suggestedBindingForElbow(
-              suggestedBindingElement,
-              draggedPoint,
-              midPoint,
-              elementsMap,
-            )
-          : null,
+        suggestedBinding:
+          hit && suggestedBindingElement
+            ? { element: suggestedBindingElement, hit }
+            : null,
       },
     };
   }

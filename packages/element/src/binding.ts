@@ -1,7 +1,6 @@
 import { arrayToMap, invariant } from "@excalidraw/common";
 
 import {
-  PRECISION,
   clamp,
   lineSegment,
   pointDistance,
@@ -580,6 +579,12 @@ export const bindBindingElement = (
         elementsMap,
         shouldSnapToOutline,
         isMidpointSnappingEnabled,
+        {
+          ...opts,
+          isMidpointSnappingEnabled:
+            opts?.isMidpointSnappingEnabled ?? isMidpointSnappingEnabled,
+          zoom: opts?.zoom ?? 1,
+        },
       ),
     };
   } else {
@@ -1056,13 +1061,163 @@ const getDistanceForBinding = (
   return distance > bindDistance ? null : distance;
 };
 
+export type ElbowLandingOpts = {
+  zoom?: number;
+  isMidpointSnappingEnabled?: boolean;
+  gridSize?: NullableGridSize;
+  angleLocked?: boolean;
+  reference?: GlobalPoint;
+  adjacentPoint?: GlobalPoint;
+};
+
+/**
+ * ③-tier elbow landing: the axis ray (horizontal / vertical two-pass
+ * intersection) with `avoidRectangularCorner` applied first. `snapToMid` is
+ * gone — tiers ①/② are handled by `resolveConnectionHit`; this is only the
+ * fallback when the point is outside both bands (or angle-locked).
+ */
+export const projectElbowAxisRay = ({
+  element,
+  point,
+  arrow,
+  elementsMap,
+  startOrEnd,
+  customIntersector,
+}: {
+  element: ExcalidrawBindableElement;
+  point: GlobalPoint;
+  arrow: ExcalidrawLinearElement;
+  elementsMap: ElementsMap;
+  startOrEnd: "start" | "end";
+  customIntersector?: LineSegment<GlobalPoint>;
+}): GlobalPoint | null => {
+  const elbowed = isElbowArrow(arrow);
+  const edgePoint =
+    isRectanguloidElement(element) && elbowed
+      ? avoidRectangularCorner(arrow, element, elementsMap, point)
+      : point;
+  const bindingGap = getProjectionBindingGap(element, arrow);
+  const aabb = aabbForElement(element, elementsMap);
+  const bindableCenter = getCenterForBounds(aabb);
+  const isHorizontal = headingIsHorizontal(
+    headingForPointFromElement(element, aabb, point),
+  );
+  // `snapToMid` used to move the resolved point; the unified landing no longer
+  // does that here (see 03-connection-integration.md §4.4.1).
+  const resolved = point;
+  const otherPoint = pointFrom<GlobalPoint>(
+    isHorizontal ? bindableCenter[0] : resolved[0],
+    !isHorizontal ? bindableCenter[1] : resolved[1],
+  );
+  const intersector =
+    customIntersector ??
+    lineSegment(
+      otherPoint,
+      pointFromVector(
+        vectorScale(
+          vectorNormalize(vectorFromPoint(resolved, otherPoint)),
+          Math.max(element.width, element.height) * 2,
+        ),
+        otherPoint,
+      ),
+    );
+  let intersection = intersectElementWithLineSegment(
+    element,
+    elementsMap,
+    intersector,
+    bindingGap,
+  ).sort(pointDistanceSq)[0];
+
+  if (!intersection) {
+    const anotherPoint = pointFrom<GlobalPoint>(
+      !isHorizontal ? bindableCenter[0] : resolved[0],
+      isHorizontal ? bindableCenter[1] : resolved[1],
+    );
+    const anotherIntersector = lineSegment(
+      anotherPoint,
+      pointFromVector(
+        vectorScale(
+          vectorNormalize(vectorFromPoint(resolved, anotherPoint)),
+          Math.max(element.width, element.height) * 2,
+        ),
+        anotherPoint,
+      ),
+    );
+    intersection = intersectElementWithLineSegment(
+      element,
+      elementsMap,
+      anotherIntersector,
+      getProjectionBindingGap(element, arrow, BASE_BINDING_GAP_ELBOW),
+    ).sort(pointDistanceSq)[0];
+  }
+
+  // Legacy degenerate fallback: no usable axis returns the (corner-adjusted)
+  // landing itself, as HEAD did.
+  return intersection ?? edgePoint;
+};
+
+const elbowReferencePoint = (
+  arrow: ExcalidrawLinearElement,
+  startOrEnd: "start" | "end",
+  elementsMap: ElementsMap,
+): GlobalPoint =>
+  LinearElementEditor.getPointAtIndexGlobalCoordinates(
+    arrow,
+    startOrEnd === "start" ? 1 : -2,
+    elementsMap,
+  );
+
+const makeElbowRayProjector =
+  (customIntersector?: LineSegment<GlobalPoint>): RayProjector =>
+  (args) =>
+    projectElbowAxisRay({
+      element: args.element,
+      point: args.point,
+      arrow: args.arrow as ExcalidrawLinearElement,
+      elementsMap: args.elementsMap,
+      startOrEnd: args.startOrEnd ?? "start",
+      customIntersector,
+    });
+
+/**
+ * Elbow landing shared by previews and bindings: build the query once and
+ * return the full hit (tier included). Mirrors the non-elbow helper.
+ */
+export const resolveConnectionHitForElbowArrowEndpoint = (
+  arrow: NonDeleted<ExcalidrawElbowArrowElement>,
+  element: ExcalidrawBindableElement,
+  startOrEnd: "start" | "end",
+  endpoint: GlobalPoint,
+  elementsMap: ElementsMap,
+  opts: ElbowLandingOpts = {},
+): ConnectionHit | null => {
+  const reference =
+    opts.reference ?? elbowReferencePoint(arrow, startOrEnd, elementsMap);
+  return resolveConnectionHit(
+    buildConnectionQuery({
+      element,
+      point: endpoint,
+      reference,
+      arrow,
+      zoom: opts.zoom ?? 1,
+      isMidpointSnappingEnabled: opts.isMidpointSnappingEnabled ?? true,
+      gridSize: opts.gridSize,
+      angleLocked: opts.angleLocked ?? false,
+      elementsMap,
+      adjacentPoint: opts.adjacentPoint ?? reference,
+      startOrEnd,
+    }),
+    makeElbowRayProjector(),
+  );
+};
+
 export const bindPointToSnapToElementOutline = (
   arrowElement: ExcalidrawLinearElement,
   bindableElement: ExcalidrawBindableElement,
   startOrEnd: "start" | "end",
   elementsMap: ElementsMap,
   customIntersector?: LineSegment<GlobalPoint>,
-  isMidpointSnappingEnabled = true,
+  opts: ElbowLandingOpts = {},
 ): GlobalPoint => {
   const elbowed = isElbowArrow(arrowElement);
   const point = LinearElementEditor.getPointAtIndexGlobalCoordinates(
@@ -1076,15 +1231,40 @@ export const bindPointToSnapToElementOutline = (
     return point;
   }
 
-  const edgePoint =
-    isRectanguloidElement(bindableElement) && elbowed
-      ? avoidRectangularCorner(
-          arrowElement,
-          bindableElement,
-          elementsMap,
-          point,
-        )
-      : point;
+  if (elbowed) {
+    const hit = resolveConnectionHitForElbowArrowEndpoint(
+      arrowElement as NonDeleted<ExcalidrawElbowArrowElement>,
+      bindableElement,
+      startOrEnd,
+      point,
+      elementsMap,
+      opts,
+    );
+    if (hit) {
+      return hit.point;
+    }
+    // ③ fallback: axis ray, preserving the legacy degenerate return.
+    return (
+      projectElbowAxisRay({
+        element: bindableElement,
+        point,
+        arrow: arrowElement,
+        elementsMap,
+        startOrEnd,
+        customIntersector,
+      }) ??
+      (isRectanguloidElement(bindableElement)
+        ? avoidRectangularCorner(
+            arrowElement,
+            bindableElement,
+            elementsMap,
+            point,
+          )
+        : point)
+    );
+  }
+
+  const edgePoint = point;
   const adjacentPoint =
     customIntersector && !elbowed
       ? customIntersector[1]
@@ -1096,126 +1276,37 @@ export const bindPointToSnapToElementOutline = (
   // 投影 gap：折线档的落点就是这里求出的交点，所以文本目标同样不留 gap
   // （见 `getProjectionBindingGap`）。
   const bindingGap = getProjectionBindingGap(bindableElement, arrowElement);
-  const aabb = aabbForElement(bindableElement, elementsMap);
-  const bindableCenter = getCenterForBounds(aabb);
 
-  let intersection: GlobalPoint | null = null;
-  if (elbowed) {
-    const isHorizontal = headingIsHorizontal(
-      headingForPointFromElement(bindableElement, aabb, point),
+  // Non-elbow (line) fallback: intersect the edgePoint → adjacentPoint ray.
+  let intersector = customIntersector;
+  if (!intersector) {
+    const halfVector = vectorScale(
+      vectorNormalize(vectorFromPoint(edgePoint, adjacentPoint)),
+      pointDistance(edgePoint, adjacentPoint) +
+        Math.max(bindableElement.width, bindableElement.height) +
+        bindingGap * 2,
     );
-    const snapPoint = isMidpointSnappingEnabled
-      ? snapToMid(bindableElement, elementsMap, edgePoint, 0.05, arrowElement)
-      : undefined;
-    const resolved = snapPoint || point;
-    const otherPoint = pointFrom<GlobalPoint>(
-      isHorizontal ? bindableCenter[0] : resolved[0],
-      !isHorizontal ? bindableCenter[1] : resolved[1],
+    intersector = lineSegment(
+      pointFromVector(halfVector, adjacentPoint),
+      pointFromVector(vectorScale(halfVector, -1), adjacentPoint),
     );
-    const intersector =
-      customIntersector ??
-      lineSegment(
-        otherPoint,
-        pointFromVector(
-          vectorScale(
-            vectorNormalize(vectorFromPoint(resolved, otherPoint)),
-            Math.max(bindableElement.width, bindableElement.height) * 2,
-          ),
-          otherPoint,
-        ),
-      );
-    intersection = intersectElementWithLineSegment(
-      bindableElement,
-      elementsMap,
-      intersector,
-      bindingGap,
-    ).sort(pointDistanceSq)[0];
+  }
 
-    if (!intersection) {
-      const anotherPoint = pointFrom<GlobalPoint>(
-        !isHorizontal ? bindableCenter[0] : resolved[0],
-        isHorizontal ? bindableCenter[1] : resolved[1],
-      );
-      const anotherIntersector = lineSegment(
-        anotherPoint,
-        pointFromVector(
-          vectorScale(
-            vectorNormalize(vectorFromPoint(resolved, anotherPoint)),
-            Math.max(bindableElement.width, bindableElement.height) * 2,
-          ),
-          anotherPoint,
-        ),
-      );
-      intersection = intersectElementWithLineSegment(
-        bindableElement,
-        elementsMap,
-        anotherIntersector,
-        // 兜底那一趟的基准 gap 历来是折线常量（不含 strokeWidth 补偿），沿用其
-        // 数值；但文本目标的就不留 gap —— 这一趟同样在决定端点落点。
-        getProjectionBindingGap(
+  const intersection =
+    pointDistance(edgePoint, adjacentPoint) < 1
+      ? edgePoint
+      : intersectElementWithLineSegment(
           bindableElement,
-          arrowElement,
-          BASE_BINDING_GAP_ELBOW,
-        ),
-      ).sort(pointDistanceSq)[0];
-    }
-  } else {
-    let intersector = customIntersector;
-    if (!intersector) {
-      const halfVector = vectorScale(
-        vectorNormalize(vectorFromPoint(edgePoint, adjacentPoint)),
-        pointDistance(edgePoint, adjacentPoint) +
-          Math.max(bindableElement.width, bindableElement.height) +
-          bindingGap * 2,
-      );
-      intersector =
-        customIntersector ??
-        lineSegment(
-          pointFromVector(halfVector, adjacentPoint),
-          pointFromVector(vectorScale(halfVector, -1), adjacentPoint),
-        );
-    }
+          elementsMap,
+          intersector,
+          bindingGap,
+        ).sort(
+          (g, h) =>
+            pointDistanceSq(g, adjacentPoint) -
+            pointDistanceSq(h, adjacentPoint),
+        )[0];
 
-    intersection =
-      pointDistance(edgePoint, adjacentPoint) < 1
-        ? edgePoint
-        : intersectElementWithLineSegment(
-            bindableElement,
-            elementsMap,
-            intersector,
-            bindingGap,
-          ).sort(
-            (g, h) =>
-              pointDistanceSq(g, adjacentPoint) -
-              pointDistanceSq(h, adjacentPoint),
-          )[0];
-  }
-
-  // 求交一无所获时**原样返回落点**（`edgePoint` 就是落点自己）。折线档有两档已知的
-  // 几何退化会落进这一支，都是 HEAD 既有行为，本波只记录不修：
-  //
-  // (1) 轴对齐相切：落点恰好落在目标某条**外扩边所在的平面**上、另一轴又在盒外时，
-  //     主射线与那条边共线（`intersectElementWithLineSegment` 对共线不返回交点），
-  //     兜底那一趟也整条错过轮廓 → 两支都求不到交点，落点在轮廓外被原样留下、最多脱
-  //     开约 15px（低缩放下约 20px）。**这一档对本波「文本 gap 归零」敏感**：那条相切
-  //     平面原本在 `y = text.y - gap`（带小数，几乎撞不上），文本 gap 归零后挪到了文
-  //     本自身的边平面（常为整数），网格模式下会**系统性**撞上（实测命中：走这一支的文本
-  //     目标 662 点，其中 356 点本就落在轮廓上、原样返回无害，真正被留在轮廓外的是
-  //     306 点；矩形 360 点全在轮廓外；非折线 0 点）。要修得动共线语义，影响面远超本波，故不修。
-  // (2) 落点贴着目标中心：`snapToMid` 判「离中心太近」而不吸附，`resolved` 留在中心
-  //     附近，`otherPoint` / `anotherPoint` 随即与它重合 → 两条射线方向退化（零长），
-  //     求交同样无从谈起。落点于是被原样留在**图形内部**（换矩形 / 椭圆同样复现）——
-  //     `arrowEndpointTextBinding.test.tsx` 里那条折线用例特意把落点挪到「内部靠左」
-  //     绕开它。同样不修。
-  if (
-    !intersection ||
-    // Too close to determine vector from intersection to edgePoint
-    pointDistanceSq(edgePoint, intersection) < PRECISION
-  ) {
-    return edgePoint;
-  }
-
-  return intersection;
+  return intersection ?? edgePoint;
 };
 
 /**
@@ -1919,6 +2010,7 @@ export const calculateAttachPointForElbowArrowBinding = (
   elementsMap: ElementsMap,
   shouldSnapToOutline = true,
   isMidpointSnappingEnabled = true,
+  opts?: ElbowLandingOpts,
 ): { attachPoint: AttachPoint } => {
   const bounds = [
     hoveredElement.x,
@@ -1933,7 +2025,13 @@ export const calculateAttachPointForElbowArrowBinding = (
         startOrEnd,
         elementsMap,
         undefined,
-        isMidpointSnappingEnabled,
+        {
+          ...opts,
+          isMidpointSnappingEnabled:
+            opts?.isMidpointSnappingEnabled ?? isMidpointSnappingEnabled,
+          zoom: opts?.zoom ?? 1,
+          angleLocked: opts?.angleLocked ?? false,
+        },
       )
     : LinearElementEditor.getPointAtIndexGlobalCoordinates(
         linearElement,

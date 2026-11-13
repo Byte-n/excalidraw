@@ -48,6 +48,10 @@ export const getSuggestedBindingAnchors = (
  * Legacy elbow preview as a `ConnectionHit`. Elbow landing/binding is
  * intentionally untouched in 3a; this only adapts the preview payload to the
  * derived-mirror type so the renderer can read `hit`.
+ *
+ * PR3b switched the elbow preview to `resolveConnectionHitForElbowArrowEndpoint`,
+ * so this has no production callers anymore — kept exported until PR6 removes
+ * the legacy mirror helpers together with `getSnapOutlineMidPoint` / `snapToMid`.
  */
 export const suggestedBindingForElbow = (
   element: NonDeleted<ExcalidrawBindableElement>,
