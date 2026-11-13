@@ -119,8 +119,8 @@ const POLE_GHOST_IDENTITY: CreationIdentity = {
  */
 /** 指针离边缘多近（屏幕 px）就显示连接点 */
 export const SEQUENCE_CONNECTION_SNAP_DISTANCE = 12;
-/** 允许指针略微压进条内（屏幕 px），避免来回跨过边缘时连接点闪烁 */
-export const SEQUENCE_CONNECTION_INSIDE_TOLERANCE = 2;
+/** 允许指针略微压进条内（屏幕 px），覆盖连接点圆点的内半圈，避免点圆点时落到移动手势 */
+export const SEQUENCE_CONNECTION_INSIDE_TOLERANCE = 4;
 /** 起点所在激活条的纵向死区（屏幕 px）：太靠近起点时不判定为自消息终点 */
 export const SEQUENCE_CONNECTION_MIN_SELF_GAP = 12;
 /** 自消息向外绕出的横向距离（场景 px） */
@@ -360,6 +360,25 @@ export class AppQuickCreate {
 
   /** 进行中的连接线拖拽（渲染层读它画预演） */
   getSequenceConnectionDrag = () => this.sequenceConnectionDrag;
+
+  /**
+   * 连接线拖拽的落点：终点吸附到激活条上（含自消息）时返回贴边点，
+   * 自由延伸没有落点返回 null。渲染层用它与起点画同款圆点。
+   */
+  getSequenceConnectionDropPoint = (): QuickCreatePoint | null => {
+    const drag = this.sequenceConnectionDrag;
+    if (!drag?.moved) {
+      return null;
+    }
+    const source = this.app.scene.getNonDeletedElement(drag.elementId);
+    if (!source || !isActivationElement(source)) {
+      return null;
+    }
+    const placement = this.resolveSequenceMessagePlacement(drag, source);
+    return placement && placement.kind !== "free"
+      ? placement.anchors.end
+      : null;
+  };
 
   /** 连接线预演的元素（渲染层每帧来取；空数组表示不画） */
   getSequenceConnectionGhostElements =

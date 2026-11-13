@@ -16,6 +16,7 @@ import {
   isMindmapNodeElement,
   QUICK_CREATE_GHOST_ALPHA,
   QUICK_CREATE_HANDLE_REST_ALPHA,
+  resizeTest,
   SEQUENCE_SHAPE_IDS,
   shapeElementType,
   updateBoundElements,
@@ -43,7 +44,7 @@ import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
 import { Keyboard, Pointer, UI } from "./helpers/ui";
-import { act, fireEvent, render, screen } from "./test-utils";
+import { act, fireEvent, render, screen, waitFor } from "./test-utils";
 
 import type { PresetCatalogGroupId } from "../components/presetCatalog";
 import type { Drawable } from "roughjs/bin/core";
@@ -3152,6 +3153,67 @@ describe("quick create handles", () => {
       expect(live().filter(isArrowElement)).toHaveLength(0);
     });
 
+    it("reveals the connection point on a selected bar instead of a horizontal resize", () => {
+      const activation = createActivation(400, 200);
+      API.setElements([activation]);
+      API.setSelectedElements([activation]);
+      mouse.reset();
+
+      // 右边缘外 5px：选中框的贴边热区不能再把它判成 e 缩放
+      mouse.moveTo(421, 250);
+      const hover = h.app.quickCreate.getSequenceConnectionHover();
+      expect(hover).toEqual(
+        expect.objectContaining({ elementId: activation.id, side: "right" }),
+      );
+      expect(
+        resizeTest(
+          activation,
+          h.scene.getNonDeletedElementsMap(),
+          h.state,
+          421,
+          250,
+          h.state.zoom,
+          "mouse",
+          h.app.editorInterface,
+        ),
+      ).toBe(false);
+      // 左边缘同理
+      expect(
+        resizeTest(
+          activation,
+          h.scene.getNonDeletedElementsMap(),
+          h.state,
+          395,
+          250,
+          h.state.zoom,
+          "mouse",
+          h.app.editorInterface,
+        ),
+      ).toBe(false);
+    });
+
+    it("gives the connection point priority over moving a selected bar", () => {
+      const source = createActivation(400, 200);
+      API.setElements([source]);
+      API.setSelectedElements([source]);
+      mouse.reset();
+
+      // 压在连接点圆点的内半圈（边缘内 3px）
+      mouse.moveTo(413, 250);
+      expect(h.app.quickCreate.getSequenceConnectionHover()).not.toBeNull();
+
+      mouse.downAt(413, 250);
+      mouse.moveTo(600, 250);
+      mouse.upAt(600, 250);
+
+      // 建出的是消息，不是把激活条拖走
+      const arrow = lastArrow();
+      expect(arrow.startBinding?.elementId).toBe(source.id);
+      const updated = h.app.scene.getNonDeletedElement(source.id)!;
+      expect(updated.x).toBeCloseTo(400, 6);
+      expect(updated.y).toBeCloseTo(200, 6);
+    });
+
     it("previews a straight line, then a polyline when the end returns to the source", () => {
       const source = createActivation(400, 200);
       API.setElements([source]);
@@ -3193,6 +3255,60 @@ describe("quick create handles", () => {
       expect(arrowPoint(arrow, 0).y).toBeCloseTo(250, 1);
       expect(arrowPoint(arrow, 1).y).toBeCloseTo(250, 1);
       expect(arrowPoint(arrow, 1).x).toBeCloseTo(500, 6);
+    });
+
+    it("exposes the landing point while the dragged end sits on an activation", () => {
+      const source = createActivation(400, 200);
+      const target = createActivation(600, 200);
+      API.setElements([source, target]);
+      mouse.reset();
+
+      mouse.moveTo(421, 250);
+      mouse.downAt(421, 250);
+
+      // 终点压到目标激活条的左边缘：落点取边缘上的起端 y
+      mouse.moveTo(596, 250);
+      expect(h.app.quickCreate.getSequenceConnectionDropPoint()).toEqual({
+        x: 600,
+        y: 250,
+      });
+
+      // 拖回起点激活条：自消息终点同样有落点
+      mouse.moveTo(404, 280);
+      expect(h.app.quickCreate.getSequenceConnectionDropPoint()).toEqual({
+        x: 416,
+        y: 280,
+      });
+
+      // 空白处自由延伸：没有落点
+      mouse.moveTo(500, 350);
+      expect(h.app.quickCreate.getSequenceConnectionDropPoint()).toBeNull();
+
+      mouse.upAt(500, 350);
+    });
+
+    it("shows a dynamic drop point while an arrow endpoint is dragged onto the bar", async () => {
+      const activation = createActivation(400, 200);
+      API.setElements([activation]);
+      mouse.reset();
+
+      UI.clickTool("arrow");
+      mouse.downAt(500, 400);
+      // 指针压在条内：落点仍应贴在右边缘的指针 y 上
+      mouse.moveTo(408, 260);
+
+      await waitFor(() => {
+        const suggested = h.app.state.suggestedBinding;
+        expect(suggested?.element.id).toBe(activation.id);
+        expect(suggested?.midPoint?.[0]).toBeCloseTo(416, 6);
+        expect(suggested?.midPoint?.[1]).toBeCloseTo(260, 6);
+      });
+
+      mouse.upAt(408, 260);
+
+      const arrow = lastArrow();
+      expect(arrow.endBinding?.elementId).toBe(activation.id);
+      expect(arrowPoint(arrow, arrow.points.length - 1).y).toBeCloseTo(260, 0);
     });
 
     it("cancels the drag on Escape", () => {

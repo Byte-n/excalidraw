@@ -2385,6 +2385,8 @@ const pointDraggingUpdates = (
                       scenePointerX - linearElementEditor.pointerOffset.x,
                       scenePointerY - linearElementEditor.pointerOffset.y,
                     ),
+                    undefined,
+                    element,
                   )
                 : undefined,
             }
@@ -2484,6 +2486,11 @@ const pointDraggingUpdates = (
               start.element,
               elementsMap,
               app.state.zoom,
+              LinearElementEditor.getPointAtIndexGlobalCoordinates(
+                element,
+                -1,
+                elementsMap,
+              ),
             ),
           }
         : null;
@@ -2518,6 +2525,11 @@ const pointDraggingUpdates = (
               end.element,
               elementsMap,
               app.state.zoom,
+              LinearElementEditor.getPointAtIndexGlobalCoordinates(
+                element,
+                0,
+                elementsMap,
+              ),
             ),
           }
         : null;

@@ -124,6 +124,7 @@ export {
   getSequenceLifelineGlobalPoint,
   getActivationAnchor,
   getActivationAnchorAtSceneY,
+  getActivationBindingPoint,
   normalizeSequenceLifelineGeometry,
   clampSequenceLifelineHeight,
   getSequenceLifelineDefaultSize,

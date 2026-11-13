@@ -16,6 +16,7 @@ import type { AppState, Zoom } from "@excalidraw/excalidraw/types";
 import type { Bounds } from "@excalidraw/common";
 
 import { getElementSelectionFrameCoords } from "./bounds";
+import { isActivationElement } from "./compositeShape";
 import {
   getTransformHandlesFromCoords,
   getTransformHandles,
@@ -60,6 +61,9 @@ export const resizeTest = <Point extends GlobalPoint | LocalPoint>(
   if (!appState.selectedElementIds[element.id]) {
     return false;
   }
+  // 激活条宽度锁定：左 / 右两侧的「贴边兜底热区」不能当作水平缩放，
+  // 否则悬停/按住竖边会变成 ew 缩放（且会抢走动态连接点的手势）。
+  const activation = isActivationElement(element);
 
   const { rotation: rotationTransformHandle, ...transformHandles } =
     getTransformHandles(element, zoom, elementsMap, pointerType, {});
@@ -112,6 +116,10 @@ export const resizeTest = <Point extends GlobalPoint | LocalPoint>(
       );
 
       for (const [dir, side] of Object.entries(sides)) {
+        // 激活条只保留 n / s 两条边带；e / w 既不画手柄也不响应
+        if (activation && (dir === "e" || dir === "w")) {
+          continue;
+        }
         // test to see if x, y are on the line segment
         if (
           pointOnLineSegment(

@@ -388,13 +388,18 @@ export const getTransformHandles = (
       rotation: true,
     };
   }
-  // 激活条宽度锁定：不给 e / w 与旋转手柄，只留 n / s（及角点改高度）
+  // 激活条宽度锁定：不给 e / w、角点与旋转手柄，只留 n / s 改高度。
+  // 角点是比例缩放（会同时暗示改宽），与「宽度不可变」冲突，一并去掉。
   const activation = isActivationElement(element);
   if (activation) {
     omitSides = {
       ...omitSides,
       e: true,
       w: true,
+      nw: true,
+      ne: true,
+      sw: true,
+      se: true,
       rotation: true,
     };
   }

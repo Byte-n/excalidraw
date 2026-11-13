@@ -23,13 +23,13 @@ import type { Bounds } from "@excalidraw/common";
 
 import { getCenterForBounds } from "./bounds";
 import {
+  getActivationBindingPoint,
   getCompositeShapeAnchors,
   isActivationElement,
   isSequenceLifelineElement,
   isShapeElement,
   isShapeWithId,
   isShapeWithIdIn,
-  snapSequenceActivationLocalY,
 } from "./compositeShape";
 import { updateSequenceActivationsForLifeline } from "./sequenceActivation";
 import {
@@ -1325,26 +1325,35 @@ export const snapToMid = (
   const verticalThreshold = clamp(tolerance * height, 5, 80);
   const horizontalThreshold = clamp(tolerance * width, 5, 80);
 
+  // 激活条只有左 / 右两条可连边：上 / 下象限也按指针在中心线哪一侧归到左或右，
+  // 避免时序消息吸到激活条的顶边 / 底边。y 直接取指针位置（夹在条内），不再吸附
+  // 到固定的自动锚点——连接点本身就是动态的（见 App.quickCreate）。
+  // 放在「离中心太近就放弃」的守卫之前：窄条的中心几乎总在指针附近，
+  // 那条守卫在这里只会让折线端点退回条中心。
+  if (isActivationElement(bindTarget)) {
+    // 端点该贴左还是右，取箭头**另一端**的方向；指针压在窄条中心时
+    // 靠指针自己的 x 分不出左右，取错了会横穿激活条。
+    let referencePoint: GlobalPoint | undefined;
+    if (arrowElement && arrowElement.points.length >= 2) {
+      const start = LinearElementEditor.getPointAtIndexGlobalCoordinates(
+        arrowElement,
+        0,
+        elementsMap,
+      );
+      const end = LinearElementEditor.getPointAtIndexGlobalCoordinates(
+        arrowElement,
+        -1,
+        elementsMap,
+      );
+      referencePoint =
+        pointDistance(p, start) <= pointDistance(p, end) ? end : start;
+    }
+    return getActivationBindingPoint(bindTarget, p, referencePoint, bindingGap);
+  }
+
   // Too close to the center makes it hard to resolve direction precisely
   if (pointDistance(center, nonRotated) < bindingGap) {
     return undefined;
-  }
-
-  // 激活条只有左 / 右两条可连边：上 / 下象限也按指针在中心线哪一侧归到左或右，
-  // 避免时序消息吸到激活条的顶边 / 底边。每条边有多个自动吸附点，取离指针纵向
-  // 最近的那个；中点一定是候选之一。
-  if (isActivationElement(bindTarget)) {
-    const isRight = nonRotated[0] >= center[0];
-    const edgeX = isRight ? x + width : x;
-    const localY = snapSequenceActivationLocalY(height, nonRotated[1] - y);
-    return pointRotateRads(
-      pointFrom<GlobalPoint>(
-        edgeX + (isRight ? bindingGap : -bindingGap),
-        y + localY,
-      ),
-      center,
-      angle,
-    );
   }
 
   if (
@@ -1762,6 +1771,18 @@ const projectPointOntoBoundElementOutline = (
     arrow.points.length === 2
       ? otherFocusPoint || otherArrowPoint
       : otherArrowPoint;
+  // 激活条只有左 / 右两条可连边，连接点是**动态**的：落点直接取焦点所在 y
+  // 对应的贴边点（夹在条内），不按「焦点 → 另一端」的射线求交。射线在指针
+  // 已经压进窄条内部时会把落点斜推到下 / 上边缘，与显示的落点指示器不一致。
+  // 贴左还是右由箭头另一端决定（指针在条中心时分不出左右）。
+  if (isActivationElement(bindableElement)) {
+    return getActivationBindingPoint(
+      bindableElement,
+      focusPoint,
+      otherPoint,
+      getProjectionBindingGap(bindableElement, arrow),
+    );
+  }
   // 另一端与落点重合时（新建箭头在 pointerdown 那一刻两端还叠在一起）射线退化成
   // 一点，求交无从谈起。这时**没有**可用的方向，改按「就近吸附到最近的那条外扩
   // 边」定方向 —— 见 projectFocusPointOntoInflatedOutline。落点在这里被永久冻结

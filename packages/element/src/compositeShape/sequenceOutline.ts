@@ -5,7 +5,7 @@ import {
   getVerticalOffset,
   randomId,
 } from "@excalidraw/common";
-import { pointFrom, pointRotateRads } from "@excalidraw/math";
+import { pointFrom, pointRotateRads, clamp } from "@excalidraw/math";
 
 import type { GlobalPoint, Radians } from "@excalidraw/math";
 
@@ -399,6 +399,63 @@ export const getActivationAnchor = (
     center,
     element.angle,
   );
+};
+
+/**
+ * Which vertical edge of an activation a connector should attach to: the edge
+ * facing the connector's **other endpoint**. The pointer itself often sits
+ * inside the narrow bar, where its x cannot tell left from right; the rest of
+ * the connector can. Without a usable reference the focus point's own side is
+ * used (e.g. the initial hover before an arrow exists).
+ */
+export const getActivationEdgeSide = (
+  element: ExcalidrawSequenceElement,
+  focusPoint: GlobalPoint,
+  referencePoint?: GlobalPoint,
+): "left" | "right" => {
+  const focusLocal = getSequenceLifelineLocalPoint(
+    element,
+    focusPoint[0],
+    focusPoint[1],
+  );
+  if (referencePoint) {
+    const refLocal = getSequenceLifelineLocalPoint(
+      element,
+      referencePoint[0],
+      referencePoint[1],
+    );
+    if (Math.abs(refLocal.x - element.width / 2) > 1e-6) {
+      return refLocal.x < element.width / 2 ? "left" : "right";
+    }
+  }
+  return focusLocal.x < element.width / 2 ? "left" : "right";
+};
+
+/**
+ * Where an arrow endpoint attaches to an activation: the focus point's y on
+ * the facing left/right edge, pushed `gap` outward. This is the single source
+ * of truth for both non-elbow projection and elbow `snapToMid`.
+ */
+export const getActivationBindingPoint = (
+  element: ExcalidrawSequenceElement,
+  focusPoint: GlobalPoint,
+  referencePoint: GlobalPoint | undefined,
+  gap: number,
+): GlobalPoint => {
+  const side = getActivationEdgeSide(element, focusPoint, referencePoint);
+  const local = getSequenceLifelineLocalPoint(
+    element,
+    focusPoint[0],
+    focusPoint[1],
+  );
+  const localY = clamp(local.y, 1, element.height - 1);
+  const [edgeX, edgeY] = getActivationAnchor(element, side, localY);
+  const [outwardX, outwardY] = pointRotateRads<GlobalPoint>(
+    pointFrom<GlobalPoint>(side === "right" ? 1 : -1, 0),
+    pointFrom<GlobalPoint>(0, 0),
+    element.angle,
+  );
+  return pointFrom<GlobalPoint>(edgeX + outwardX * gap, edgeY + outwardY * gap);
 };
 
 /**

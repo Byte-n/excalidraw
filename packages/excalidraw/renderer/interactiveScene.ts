@@ -31,10 +31,12 @@ import {
 import {
   deconstructRectanguloidElement,
   elementCenterPoint,
+  getActivationBindingPoint,
   getCompositeShapeAnchors,
   getCompositeShapeControlPoints,
   getCompositeShapeGlobalPath,
   getCompositeShapeOffsetPaths,
+  isActivationElement,
   isShapeElement,
   FOCUS_POINT_SIZE,
   getTransformHandles,
@@ -569,12 +571,38 @@ const strokeCompositeShapeOutline = (
   context.stroke();
 };
 
+/**
+ * 激活条上的连接圆点：连接点的悬停 / 拖拽起点与箭头落点共用同一套画法，
+ * 「拖出消息的起点」和「连接线落点」看起来才是同一个标记。坐标是场景坐标，
+ * 半径同样是场景单位（调用方按屏幕像素除以 zoom 后传入）。
+ */
+const renderSequenceActivationDot = (
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  sceneRadius: number,
+  selectionColor: string,
+  appState: InteractiveCanvasAppState,
+) => {
+  context.save();
+  context.setLineDash([]);
+  context.beginPath();
+  context.arc(x, y, sceneRadius, 0, Math.PI * 2);
+  context.fillStyle = selectionColor;
+  context.fill();
+  context.lineWidth = 1.5 / appState.zoom.value;
+  context.strokeStyle = getThemedColor("#fff", appState.theme);
+  context.stroke();
+  context.restore();
+};
+
 const renderBindingHighlightForBindableElement_simple = (
   context: CanvasRenderingContext2D,
   suggestedBinding: NonNullable<AppState["suggestedBinding"]>,
   elementsMap: ElementsMap,
   appState: InteractiveCanvasAppState,
   pointerCoords: GlobalPoint | null,
+  selectionColor: string,
   angleLocked = false,
 ) => {
   // resolved through the parent chain, so cell members of a table inside a
@@ -704,6 +732,35 @@ const renderBindingHighlightForBindableElement_simple = (
       context.restore();
 
       break;
+  }
+
+  if (isActivationElement(suggestedBinding.element)) {
+    // 激活条很窄，指针通常落在条内；它的落点固定在左右竖边上，且是**动态**的
+    // 单点，不走下面的通用吸附锚点，也不受「吸附到中点」开关影响。
+    // 优先用绑定逻辑解出的 suggestedBinding.midPoint —— 它已经按箭头另一端
+    // 选好了左 / 右边缘；指针压在条中心时不能靠指针的 x 判断左右。
+    const rawPoint = suggestedBinding.midPoint ?? pointerCoords ?? undefined;
+    if (rawPoint) {
+      const [x, y] = getActivationBindingPoint(
+        suggestedBinding.element,
+        rawPoint,
+        undefined,
+        0,
+      );
+      // 与连接点圆点同一口径：拖拽中半径略大，悬停预判小一号
+      const dragging =
+        Boolean(appState.newElement) ||
+        Boolean(appState.selectedLinearElement?.selectedPointsIndices);
+      renderSequenceActivationDot(
+        context,
+        x,
+        y,
+        (dragging ? 5 : 4) / appState.zoom.value,
+        selectionColor,
+        appState,
+      );
+    }
+    return;
   }
 
   if (
@@ -844,6 +901,7 @@ const renderBindingHighlightForBindableElement = (
   suggestedBinding: AppState["suggestedBinding"],
   allElementsMap: NonDeletedSceneElementsMap,
   appState: InteractiveCanvasAppState,
+  selectionColor: string,
 ) => {
   if (suggestedBinding === null) {
     return;
@@ -851,12 +909,17 @@ const renderBindingHighlightForBindableElement = (
 
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
-  const pointerCoords = app.lastPointerMoveCoords
-    ? pointFrom<GlobalPoint>(
-        app.lastPointerMoveCoords.x,
-        app.lastPointerMoveCoords.y,
-      )
-    : null;
+  // 指针用 viewport.lastPosition：它挂在 ownerDocument 的 pointermove 上，
+  // 拖拽端点时也逐帧更新；`lastPointerMoveCoords` 只在画布上的 hover 移动里
+  // 更新，拖拽中会停在按下点，动态落点就不会跟手。
+  const scenePointer = viewportCoordsToSceneCoords(
+    {
+      clientX: app.viewport.lastPosition.x,
+      clientY: app.viewport.lastPosition.y,
+    },
+    appState,
+  );
+  const pointerCoords = pointFrom<GlobalPoint>(scenePointer.x, scenePointer.y);
   const angleLocked =
     !!app.lastPointerMoveEvent &&
     shouldRotateWithDiscreteAngle(app.lastPointerMoveEvent);
@@ -866,6 +929,7 @@ const renderBindingHighlightForBindableElement = (
     allElementsMap,
     appState,
     pointerCoords,
+    selectionColor,
     angleLocked,
   );
   context.restore();
@@ -1553,18 +1617,28 @@ const renderSequenceConnection = (
   if (!point) {
     return;
   }
-  const zoom = appState.zoom.value;
-  const radius = (drag ? 5 : 4) / zoom;
-  context.save();
-  context.setLineDash([]);
-  context.beginPath();
-  context.arc(point.x, point.y, radius, 0, Math.PI * 2);
-  context.fillStyle = selectionColor;
-  context.fill();
-  context.lineWidth = 1.5 / zoom;
-  context.strokeStyle = getThemedColor("#fff", appState.theme);
-  context.stroke();
-  context.restore();
+  const sceneRadius = (drag ? 5 : 4) / appState.zoom.value;
+  renderSequenceActivationDot(
+    context,
+    point.x,
+    point.y,
+    sceneRadius,
+    selectionColor,
+    appState,
+  );
+  // 终点吸附到（或回到）激活条上时，在落点画同款圆点——起点与终点
+  // 用同一个标记，拖拽中始终能看到消息会落在哪里。
+  const dropPoint = app.quickCreate.getSequenceConnectionDropPoint();
+  if (dropPoint) {
+    renderSequenceActivationDot(
+      context,
+      dropPoint.x,
+      dropPoint.y,
+      sceneRadius,
+      selectionColor,
+      appState,
+    );
+  }
 };
 
 /**
@@ -3631,6 +3705,7 @@ const _renderInteractiveScene = ({
       appState.suggestedBinding,
       allElementsMap,
       appState,
+      renderConfig.selectionColor || getSelectionColor(app.interactiveCanvas),
     );
   }
 

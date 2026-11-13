@@ -35,8 +35,10 @@ import type {
 
 import { elementCenterPoint } from "./bounds";
 import {
+  getActivationBindingPoint,
   getCompositeShapeAnchors,
   getCompositeShapeCornerRadius,
+  isActivationElement,
   isShapeElement,
   isShapeWithId,
 } from "./compositeShape";
@@ -519,7 +521,17 @@ export const getSnapOutlineMidPoint = (
   element: ExcalidrawBindableElement,
   elementsMap: ElementsMap,
   zoom: AppState["zoom"],
+  /**
+   * 箭头另一端的位置。激活条只有左 / 右两条边，贴哪一边由这个参考点决定；
+   * 缺省时退回指针自身所在的一侧（用于还没有箭头的悬停预判）。
+   */
+  referencePoint?: GlobalPoint,
 ) => {
+  // 激活条只有左 / 右两条边，且连接点是**动态**的：y 直接取指针在条内的位置，
+  // 不再从一组固定锚点里挑最近的那个。
+  if (isActivationElement(element)) {
+    return getActivationBindingPoint(element, point, referencePoint, 0);
+  }
   const center = elementCenterPoint(element, elementsMap);
   const sideMidpoints = isShapeElement(element)
     ? getCompositeShapeAnchors(element)
@@ -602,6 +614,11 @@ export const projectAttachPointOntoDiagonal = (
       element,
       elementsMap,
       zoom,
+      LinearElementEditor.getPointAtIndexGlobalCoordinates(
+        arrow,
+        startOrEnd === "start" ? -1 : 0,
+        elementsMap,
+      ),
     );
     if (sideMidPoint) {
       return sideMidPoint;

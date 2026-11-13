@@ -8,7 +8,7 @@ import {
 import { lineSegment, pointFrom, pointRotateRads } from "@excalidraw/math";
 import { RoughGenerator } from "roughjs/bin/generator";
 
-import type { GlobalPoint, Radians } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
 
 import type { Zoom } from "@excalidraw/excalidraw/types";
 
@@ -47,7 +47,6 @@ import {
   getCompositeShapeAnchors,
   getSequenceActivationAnchorLocalYs,
   getSequenceActivationAnchors,
-  snapSequenceActivationLocalY,
   getCompositeShapeGeometry,
   getCompositeShapeSelectionFrame,
   getCompositeShapeTextBounds,
@@ -1665,7 +1664,8 @@ describe("sequence activation geometry", () => {
       expect(y).toBeLessThan(100);
     }
 
-    // registry-level anchors (used by the suggested-binding dots) match
+    // registry-level anchors mirror the helper set. The interactive connection
+    // point is dynamic now, so these are no longer drawn as a fixed dot set.
     const globalAnchors = getCompositeShapeAnchors(activation);
     expect(globalAnchors).toHaveLength(anchors.length);
     for (const [x, y] of globalAnchors) {
@@ -1675,25 +1675,112 @@ describe("sequence activation geometry", () => {
     }
   });
 
-  it("snaps activation endpoints to the nearest left/right anchor, never top/bottom", () => {
+  it("snaps activation endpoints to the pointer y on a left/right edge, never top/bottom", () => {
     const activation = makeElement("sc-activation", 30, 100);
     const arrow = newArrowElement({ type: "arrow", x: 200, y: 30 });
     const elementsMap = elementsMapFor(activation);
-    const targetY = getSequenceActivationAnchorLocalYs(100)[1];
-    const pointer = pointFrom<GlobalPoint>(31, targetY + 1);
 
-    expect(snapSequenceActivationLocalY(100, targetY + 1)).toBe(targetY);
-
+    // 动态连接点：y 取指针位置，不再吸到固定锚点
+    const pointer = pointFrom<GlobalPoint>(31, 30);
     const snapped = snapToMid(activation, elementsMap, pointer, 0.05, arrow)!;
-    expect(snapped[1]).toBeCloseTo(targetY, 6);
-    expect(snapped[1]).toBeGreaterThan(0);
-    expect(snapped[1]).toBeLessThan(100);
+    expect(snapped[0]).toBeGreaterThan(30);
+    expect(snapped[1]).toBeCloseTo(30, 6);
 
-    // the non-elbow projection path uses the same multi-anchor set
+    // 上 / 下象限同样归到左 / 右竖边，y 夹进条内
+    const nearTop = snapToMid(
+      activation,
+      elementsMap,
+      pointFrom<GlobalPoint>(31, -50),
+      0.05,
+      arrow,
+    )!;
+    expect(nearTop[0]).toBeGreaterThan(30);
+    expect(nearTop[1]).toBeCloseTo(1, 6);
+    const nearBottom = snapToMid(
+      activation,
+      elementsMap,
+      pointFrom<GlobalPoint>(31, 500),
+      0.05,
+      arrow,
+    )!;
+    expect(nearBottom[0]).toBeGreaterThan(30);
+    expect(nearBottom[1]).toBeCloseTo(99, 6);
+    const fromLeft = snapToMid(
+      activation,
+      elementsMap,
+      pointFrom<GlobalPoint>(-10, 40),
+      0.05,
+      arrow,
+    )!;
+    expect(fromLeft[0]).toBeLessThan(0);
+    expect(fromLeft[1]).toBeCloseTo(40, 6);
+
+    // 非折线路径的 suggested midpoint 用同一个动态点
     const midPoint = getSnapOutlineMidPoint(pointer, activation, elementsMap, {
       value: 1,
     } as any);
-    expect(midPoint?.[1]).toBeCloseTo(targetY, 6);
+    expect(midPoint?.[0]).toBeCloseTo(30, 6);
+    expect(midPoint?.[1]).toBeCloseTo(30, 6);
+  });
+
+  it("picks the activation edge facing the arrow's other end", () => {
+    const activation = makeElement("sc-activation", 30, 100);
+    const elementsMap = elementsMapFor(activation);
+    // 指针压在条的正中心：自己的 x 分不出左右
+    const pointer = pointFrom<GlobalPoint>(15, 50);
+    const zoom = { value: 1 } as any;
+
+    const arrowToRight = newArrowElement({
+      type: "arrow",
+      x: 15,
+      y: 50,
+      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(185, 0)],
+    });
+    const right = snapToMid(
+      activation,
+      elementsMap,
+      pointer,
+      undefined,
+      arrowToRight,
+    )!;
+    expect(right[0]).toBeGreaterThan(30);
+    expect(right[1]).toBeCloseTo(50, 6);
+
+    const arrowToLeft = newArrowElement({
+      type: "arrow",
+      x: 15,
+      y: 50,
+      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(-185, 0)],
+    });
+    const left = snapToMid(
+      activation,
+      elementsMap,
+      pointer,
+      undefined,
+      arrowToLeft,
+    )!;
+    expect(left[0]).toBeLessThan(0);
+    expect(left[1]).toBeCloseTo(50, 6);
+
+    // suggested midpoint 用同一个参考点
+    expect(
+      getSnapOutlineMidPoint(
+        pointer,
+        activation,
+        elementsMap,
+        zoom,
+        pointFrom<GlobalPoint>(200, 50),
+      )?.[0],
+    ).toBeCloseTo(30, 6);
+    expect(
+      getSnapOutlineMidPoint(
+        pointer,
+        activation,
+        elementsMap,
+        zoom,
+        pointFrom<GlobalPoint>(-200, 50),
+      )?.[0],
+    ).toBeCloseTo(0, 6);
   });
 
   it("hits the pole corridor but not the head or the blank area", () => {
@@ -1916,7 +2003,7 @@ describe("activation lifeline binding", () => {
     expect(getSequenceActivationResize(activation, "w", -400, 150)).toBeNull();
   });
 
-  it("offers only vertical (and corner) resize handles", () => {
+  it("offers only vertical resize handles", () => {
     const activation = makeElement("sc-activation", 30, 100, {
       x: 100,
       y: 100,
@@ -1932,6 +2019,11 @@ describe("activation lifeline binding", () => {
     expect(handles.s).toBeTruthy();
     expect(handles.e).toBeUndefined();
     expect(handles.w).toBeUndefined();
+    // 角点是比例缩放（同时暗示改宽），与宽度锁定冲突
+    expect(handles.nw).toBeUndefined();
+    expect(handles.ne).toBeUndefined();
+    expect(handles.sw).toBeUndefined();
+    expect(handles.se).toBeUndefined();
     expect(handles.rotation).toBeUndefined();
   });
 });
@@ -2019,7 +2111,9 @@ describe("sequence fragment row background texts", () => {
     expect(layout.verticalAlign).toBe("top");
     expect(layout.x).toBe(fragment.x + TABLE_CELL_TEXT_PADDING_X);
     expect(layout.y).toBe(fragment.y + HEADER + TABLE_CELL_TEXT_PADDING_Y);
-    expect(layout.width).toBeLessThanOrEqual(400 - TABLE_CELL_TEXT_PADDING_X * 2);
+    expect(layout.width).toBeLessThanOrEqual(
+      400 - TABLE_CELL_TEXT_PADDING_X * 2,
+    );
     expect(layout.angle).toBe(0);
   });
 

@@ -7,7 +7,7 @@
 
 > **修订（2026-11-13）**：时序图的所有图形（8 个生命线、`sc-activation`、 `sc-fragment`）**不再提供 quick create 方向手柄**。已移除：激活条左 / 右方向手柄、拖到空白弹「插入图形」面板、拖到生命线杆上自动建条。唯一保留的特例是**生命线杆悬停 / 单击创建激活条**（§4.4）：预演与单击落地都不变。激活条也可由图形抽屉创建。
 >
-> **连接点（2026-11-13 重新实现）**：指针靠近激活条左 / 右竖边时（屏幕 12px 内，含略压进条内 2px）显示一个**跟随指针 y 的动态连接点**，不再是固定的几个锚点；按住该点拖拽即创建消息并全程预演。落点规则：终点吸附到**起点所在的激活条** → 折线（自消息），起点附近 12px 内不吸附；吸附到**其它激活条** → 水平直线；未吸附 → 沿出发边前方水平延伸，松手后按预演现状落地。消息线型由落点决定，不跟随当前箭头样式。
+> **连接点（2026-11-13 重新实现）**：指针靠近激活条左 / 右竖边时（屏幕 12px 内，含略压进条内 4px）显示一个**跟随指针 y 的动态连接点**，不再是固定的几个锚点；按住该点拖拽即创建消息并全程预演。落点规则：终点吸附到**起点所在的激活条** → 折线（自消息），起点附近 12px 内不吸附；吸附到**其它激活条** → 水平直线；未吸附 → 沿出发边前方水平延伸，松手后按预演现状落地。消息线型由落点决定，不跟随当前箭头样式。**连接线工具**同样只显示指针所在的一个动态落点，不再绘制整组固定锚点；折线 / 非折线绑定的吸附 y 都取指针位置。
 
 ## 1. 实施前状态
 
@@ -33,7 +33,7 @@
 | 7   | 激活条默认尺寸 16 × 100 由元素层常量派生，预置与杆上创建共用同一份     |
 | 8   | 激活条与生命线杆建立持久绑定，生命线移动 / 缩放 / 旋转时激活条跟随     |
 | 9   | 拖动激活条靠近杆时横向吸附到杆中心；落点建立 / 更新绑定，拖离则解绑    |
-| 10  | 激活条宽度锁定，只能通过 n / s（及角点）修改高度                       |
+| 10  | 激活条宽度锁定，只能通过 `n` / `s` 修改高度（无角点、水平与旋转手柄）  |
 
 补充约定：
 
@@ -82,11 +82,14 @@ export const isActivationElement = (element) =>
 - 右：`(element.x + element.width, element.y + localY)`；
 - 旋转后按 `element.angle` 绕中心旋转。
 
-连接点**不是固定锚点**：指针靠近左 / 右竖边时，点贴在边上、`localY` 直接取指针位置（夹在条的竖向范围内）。指针必须落在条的纵向范围内，横向允许在边外 `SEQUENCE_CONNECTION_SNAP_DISTANCE`（屏幕 12px）内；允许略压进条内 `SEQUENCE_CONNECTION_INSIDE_TOLERANCE`（屏幕 2px）只为跨边缘时不闪烁，条身中心仍然用于选择 / 拖动。
+连接点**不是固定锚点**：指针靠近左 / 右竖边时，点贴在边上、`localY` 直接取指针位置（夹在条的竖向范围内）。指针必须落在条的纵向范围内，横向允许在边外 `SEQUENCE_CONNECTION_SNAP_DISTANCE`（屏幕 12px）内；允许略压进条内 `SEQUENCE_CONNECTION_INSIDE_TOLERANCE`（屏幕 4px，覆盖圆点内半圈）以便点圆点时优先进入建消息手势，条身中心仍然用于选择 / 拖动。
 
 实现：
 
 - `getActivationAnchor(element, side, localY)` 返回旋转后的边缘点，动态连接点直接复用它；
+- `getActivationEdgeSide` / `getActivationBindingPoint` 是连接线工具与消息创建共用的落点几何：贴左还是右由**箭头另一端**决定（指针压在窄条内部时，指针自己的 x 分不出左右），y 取焦点位置并在条内夹取；
+- 落点指示器与连接点圆点共用同一套画法（选择色填充 + 白描边，拖拽中半径略大、悬停预判小一号），不再复用通用吸附锚点的实心大圆；
+- 拖拽消息时，终点吸附到激活条上（含拖回起点的自消息）就在落点画同款圆点，自由延伸不画——起点与终点用同一个标记；
 - `AppQuickCreate.resolveSequenceConnection` 扫描指针附近的激活条，取最近的一条边，算出贴边点；
 - 消息落点由 `AppQuickCreate.resolveSequenceMessagePlacement` 统一解析（预演与落地同源）：
   - 指针在起点那条激活条内、且离起点超过 `SEQUENCE_CONNECTION_MIN_SELF_GAP`（屏幕 12px）→ 自消息（四点折线，向外绕 `SEQUENCE_SELF_MESSAGE_OFFSET`）；
@@ -123,7 +126,7 @@ shape: {
 | 拖动激活条 | `dragElements` 在 24px 阈值内横向吸附到最近杆中心、写入 / 更新 `link`；越过阈值则解绑并自由移动 |
 | 复制 / 粘贴 | 连续复制时重映射 `lifelineId`；只复制激活条时丢弃 `link`（避免副本叠在原生命线上） |
 
-**宽度锁定**：激活条只有高度可改。`getTransformHandles` 隐藏 `e` / `w` 与旋转手柄，并强制生成 `n` / `s`；`getSequenceActivationResize` 只取 `n` / `s` 分量， `x` 与 `width` 始终取原值（旋转时以对边中点为锚保持位置）。
+**宽度锁定**：激活条只有高度可改。`getTransformHandles` 隐藏 `e` / `w`、四个角点与旋转手柄（角点是比例缩放，会同时暗示改宽），并强制生成 `n` / `s`；`resizeTest` 的贴边兜底热区同样跳过 `e` / `w`，避免悬停左 / 右边缘时出现水平缩放光标；`getSequenceActivationResize` 只取 `n` / `s` 分量， `x` 与 `width` 始终取原值（旋转时以对边中点为锚保持位置）。动态连接点的按下手势优先于移动：命中连接点（含圆点压进条内的内半圈）时不会拖动激活条。
 
 ## 4. P3b：创建交互
 
@@ -201,14 +204,14 @@ shape: {
 - [x] `element/src/compositeShape/sequenceOutline.ts`
   - [x] `isActivationElement`；
   - [x] 激活条尺寸常量 `SEQUENCE_ACTIVATION_WIDTH/HEIGHT`；
-  - [x] 左右边缘多个自动吸附点（`getSequenceActivationAnchorLocalYs` / `getSequenceActivationAnchors` / `snapSequenceActivationLocalY`）；
+  - [x] 动态连接点几何：`getActivationAnchor`（旧的多锚点助手保留为工具函数，交互吸附已改为指针 y）；
   - [x] `isPointOnSequenceLifelinePole`；
   - [x] `getSequenceLifelinePoleActivationPlacement`（夹取 + 旋转）；
-  - [x] `getActivationAnchor` / `getActivationAnchorAtSceneY`。
+  - [x] `getActivationAnchorAtSceneY`（保留为工具函数）。
 - [x] `element/src/typeChecks.ts`
   - [x] `isBindableElement` 只放开 `sc-activation`（`sequence` 家族里的生命线仍排除）。
 - [x] `element/src/binding.ts`
-  - [x] `snapToMid` 的 activation 分支只吸附左 / 右边缘；
+  - [x] `snapToMid` 的 activation 分支只吸附左 / 右边缘，y 取指针位置（动态）；
   - [x] 消息箭头端点由显式 `focusPoint` 投影，落点与预演同源；
   - [x] 生命线作为「落点参考」但不进入 `isBindableElement`；
   - [x] 生命线几何变化时调用 `updateSequenceActivationsForLifeline`，再更新绑在激活条上的箭头。
@@ -255,7 +258,7 @@ shape: {
 - [x] 拖动激活条靠近杆时吸附到杆中心并建立绑定；
 - [x] 拖动已绑定激活条只沿杆滑动；拖离 24px 阈值后解绑；
 - [x] 连续复制时重映射绑定，单独复制激活条时丢弃绑定；
-- [x] 激活条只能改高度：无 `e` / `w` / 旋转手柄，`n` / `s` 与角点只改高度；
+- [x] 激活条只能改高度：无 `e` / `w`、角点与旋转手柄，也不响应左 / 右边缘的水平缩放热区；
 - [x] 悬停激活条只出现左 / 右两点；
 - [x] 拖到另一个激活条生成箭头（两端 y 对齐，消息水平）；
 - [x] 拖到杆上生成激活条 + 箭头；
@@ -271,10 +274,11 @@ shape: {
 
 - [x] 能在两条生命线之间画出水平消息；
 - [x] 指针靠近激活条左 / 右竖边时出现跟随指针 y 的动态连接点（条身中心不出点）；
-- [x] 从连接点拖到另一条激活条生成水平直线消息，两端绑定；
+- [x] 从连接点拖到另一条激活条生成水平直线消息，两端绑定；拖拽中终点落在目标激活条上时显示与起点同款的落点圆点；
 - [x] 拖回起点所在的激活条生成折线自消息（两端绑定同一条）；
 - [x] 起点附近 12px 纵向死区内不吸附成自消息终点；
 - [x] 未吸附到任何激活条时保持水平延伸，松手按预演现状落地（只绑起端）；
+- [x] 拖拽箭头端点 / 新建箭头落到激活条上时，只显示一个跟随指针 y 的落点指示器，且与最终绑定位置一致；
 - [x] 消息端点落在激活条左右边缘；
 - [x] 悬停杆、单击生成激活条；
 - [x] 激活条跟随生命线移动 / 缩放；
