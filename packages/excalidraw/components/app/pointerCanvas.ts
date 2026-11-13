@@ -89,13 +89,13 @@ import {
 } from "../hyperlink/Hyperlink";
 import { isPointHittingLink } from "../hyperlink/helpers";
 
-import {
-  clearContainerInteractionHover,
-  dispatchContainerInteraction,
-  resolveInteractionTarget,
-} from "./interactionTarget";
-
 import { hitCompositeControlPoint } from "./compositeShapeControls";
+import { applyPointerFrame } from "./pointerDispatch";
+import {
+  currentPointerMode,
+  resolvePointerFrame,
+  resolvePointerType,
+} from "./pointerFrame";
 import { handleTableTitleDoubleClick } from "./table";
 
 import type { AppState, CollaboratorPointer } from "../../types";
@@ -838,23 +838,23 @@ export const handleCanvasPointerMove = (
     isSelectionLikeTool(app.state.activeTool.type);
 
   if (canDispatchInteraction) {
-    // Unified interaction target (interaction-target-resolution.md): container
-    // providers own their hover state and cursor; every other target keeps
-    // the generic flow below.
-    const interactionTarget = resolveInteractionTarget(
-      app,
-      scenePointer,
+    // Unified pointer frame (02-frame-contract.md): container providers own
+    // their hover state and cursor; every other target keeps the generic flow
+    // below. Frame resolution is a pure read; only the dispatch writes.
+    const frame = resolvePointerFrame(app, {
+      point: pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
+      phase: "hover",
+      mode: currentPointerMode(app),
+      pointerType: resolvePointerType(event.pointerType),
       event,
-    );
+    });
+    applyPointerFrame(app, frame);
     if (
-      interactionTarget.kind === "containerControl" ||
-      interactionTarget.kind === "containerBody"
+      frame.target.kind === "containerControl" ||
+      frame.target.kind === "containerBody"
     ) {
-      dispatchContainerInteraction(app, interactionTarget.candidate);
       return;
     }
-    // moving onto a non-container target must not leave container hover behind
-    clearContainerInteractionHover(app);
   } else {
     // dispatch ineligible (dragging, creating, gesturing): the legacy
     // structure-hover channel keeps its behavior for those flows

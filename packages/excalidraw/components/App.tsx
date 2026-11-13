@@ -137,6 +137,7 @@ import { AppQuickCreate } from "./App.quickCreate";
 import { AppTransformStatus } from "./App.transformStatus";
 import { AppRepaint } from "./App.repaint";
 import { AppPan } from "./App.pan";
+import { AppPointerState } from "./app/pointerState";
 import { AppCreatePreview } from "./App.createPreview";
 import { AppToolDrag } from "./App.toolDrag";
 import { AppViewport } from "./App.viewport";
@@ -319,6 +320,8 @@ class App extends React.Component<AppProps, AppState> {
   public mindmap: AppMindmap = new AppMindmap(this);
   public quickCreate: AppQuickCreate = new AppQuickCreate(this);
   public transformStatus: AppTransformStatus = new AppTransformStatus(this);
+  /** 指针帧状态：每帧唯一解析结果；只由 applyPointerFrame 写入 */
+  public pointer: AppPointerState = new AppPointerState(this);
   /** 交互层画布的显式重绘入口（setState({}) 画不出来，见 App.repaint.ts） */
   public repaint: AppRepaint = new AppRepaint();
   public cursor: AppCursor = new AppCursor(this);

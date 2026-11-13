@@ -1,4 +1,8 @@
+import { pointFrom } from "@excalidraw/math";
+
 import { CURSOR_TYPE } from "@excalidraw/common";
+
+import type { GlobalPoint } from "@excalidraw/math";
 
 import { TABLE_STRUCTURE_RAIL_HIT_SIZE } from "../components/app/table";
 import {
@@ -10,6 +14,11 @@ import {
   type ContainerInteractionProvider,
   type InteractionTarget,
 } from "../components/app/interactionTarget";
+import { applyPointerFrame } from "../components/app/pointerDispatch";
+import {
+  resolvePointerFrame,
+  type PointerFrameInput,
+} from "../components/app/pointerFrame";
 
 const editorInterface = {
   formFactor: "desktop",
@@ -76,9 +85,17 @@ const createMockApp = ({
     isHittingTextAutoResizeHandle: () => hitTextAutoResizeHandle,
     editorInterface,
     cursor: { set: vi.fn() },
+    pointer: { setFrame: vi.fn() },
     setState: vi.fn(),
   } as any;
 };
+
+const frameInput = (point: { x: number; y: number }): PointerFrameInput => ({
+  point: pointFrom<GlobalPoint>(point.x, point.y),
+  phase: "hover",
+  mode: "selection",
+  pointerType: "mouse",
+});
 
 /** The scene point on the table's left reorder rail. */
 const railPoint = (table: any) => ({
@@ -435,5 +452,61 @@ describe("container interaction dispatch", () => {
       first.unregister();
       second.unregister();
     }
+  });
+
+  it("sets the container cursor through applyPointerFrame", () => {
+    const table = tableElement();
+    const app = createMockApp({ elements: [table] });
+
+    const frame = resolvePointerFrame(app, frameInput(railPoint(table)));
+    expect(frame.target.kind).toBe("containerControl");
+
+    applyPointerFrame(app, frame);
+
+    expect(app.cursor.set).toHaveBeenCalledWith(CURSOR_TYPE.MOVE);
+    expect(app.setState).toHaveBeenCalledWith({
+      tableStructureHover: expect.objectContaining({
+        tableId: "table-1",
+        kind: "rowGrip",
+      }),
+    });
+    expect(app.pointer.setFrame).toHaveBeenCalledWith(frame, {
+      repaint: false,
+    });
+  });
+
+  it("clears container hover when moving from a control to a normal element", () => {
+    const table = tableElement();
+    const rect = rectElement("rect-1");
+    // the mock state is static, so seed it with the hover the dispatch leaves
+    const app = createMockApp({
+      elements: [table],
+      hitElement: rect,
+      tableStructureHover: { tableId: "table-1", kind: "rowGrip" } as any,
+    });
+
+    applyPointerFrame(
+      app,
+      resolvePointerFrame(app, frameInput(railPoint(table))),
+    );
+    expect(app.cursor.set).toHaveBeenCalledWith(CURSOR_TYPE.MOVE);
+
+    app.setState.mockClear();
+    app.cursor.set.mockClear();
+
+    const nextFrame = resolvePointerFrame(
+      app,
+      frameInput({ x: 5000, y: 5000 }),
+    );
+    expect(nextFrame.target).toEqual({
+      kind: "element",
+      elementId: "rect-1",
+    });
+
+    applyPointerFrame(app, nextFrame);
+
+    expect(app.setState).toHaveBeenCalledWith({ tableStructureHover: null });
+    // a non-container target writes no cursor by itself
+    expect(app.cursor.set).not.toHaveBeenCalled();
   });
 });

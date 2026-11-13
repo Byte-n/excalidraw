@@ -93,7 +93,7 @@ import {
 
 import { EVENT } from "@excalidraw/common";
 
-import type { LocalPoint } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
 import type {
   ExcalidrawElement,
   ExcalidrawFreeDrawElement,
@@ -126,8 +126,12 @@ import {
   getFragmentStructureHoverAtSceneCoords,
   selectFragmentRow,
 } from "./fragment";
+import {
+  currentPointerMode,
+  resolvePointerFrame,
+  resolvePointerType,
+} from "./pointerFrame";
 import * as tableController from "./table";
-import { resolveInteractionTarget } from "./interactionTarget";
 
 import type { UnsubscribeCallback } from "../../types";
 
@@ -669,11 +673,19 @@ export const handleCanvasPointerDown = (
   // before container structure gestures so a selected child that overlaps a
   // table rail or insertion boundary can still be dragged/transformed. The
   // table element itself remains eligible for its own structure controls.
-  const interactionTarget = resolveInteractionTarget(
-    app,
-    pointerDownState.origin,
-    event.nativeEvent,
-  );
+  const frame = resolvePointerFrame(app, {
+    point: pointFrom<GlobalPoint>(
+      pointerDownState.origin.x,
+      pointerDownState.origin.y,
+    ),
+    phase: "armed",
+    mode: currentPointerMode(app),
+    pointerType: resolvePointerType(event.pointerType),
+    event: event.nativeEvent,
+  });
+  // PR2 has no frame consumer yet: store the frame without an extra repaint
+  app.pointer.setFrame(frame, { repaint: false });
+  const interactionTarget = frame.target;
   if (
     interactionTarget.kind !== "containerControl" &&
     (app.state.tableRowColSelection || app.state.fragmentRowSelection)
