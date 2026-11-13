@@ -9,6 +9,7 @@ import {
   isBoundToContainer,
   isElbowArrow,
   isFrameLikeElement,
+  isSequenceFragmentElement,
   isTableElement,
 } from "@excalidraw/element";
 
@@ -36,7 +37,10 @@ const deleteSelectedElements = (
   app: AppClassProperties,
 ) => {
   const selectedContainers = getSelectedElements(elements, appState).filter(
-    (el) => isFrameLikeElement(el) || isTableElement(el),
+    (el) =>
+      isFrameLikeElement(el) ||
+      isTableElement(el) ||
+      isSequenceFragmentElement(el),
   );
   const containerSubtreeIds = new Set<ExcalidrawElement["id"]>();
   const elementsMap = app.scene.getNonDeletedElementsMap();

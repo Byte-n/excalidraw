@@ -51,7 +51,7 @@ import {
   isBoundToContainer,
   isMindmapLayoutFrozen,
   isStickyNoteElement,
-  isTableCellBackgroundText,
+  isContainerBackgroundText,
   isTextElement,
   resolveTableBackgroundTextFontWeight,
 } from "@excalidraw/element";
@@ -523,7 +523,7 @@ export const textWysiwyg = ({
       }
       const [viewportX, viewportY] = getViewportCoords(coordX, coordY);
 
-      if (!container && !isTableCellBackgroundText(updatedTextElement)) {
+      if (!container && !isContainerBackgroundText(updatedTextElement)) {
         maxWidth = (appState.width - 8 - viewportX) / appState.zoom.value;
         width = Math.min(width, maxWidth);
       } else if (container) {
@@ -531,7 +531,7 @@ export const textWysiwyg = ({
       }
 
       // Background text uses its measured box; keep the editor at that size.
-      if (!isTableCellBackgroundText(updatedTextElement)) {
+      if (!isContainerBackgroundText(updatedTextElement)) {
         // add 5% buffer otherwise it causes wysiwyg to jump
         height *= 1.05;
       }
@@ -619,7 +619,7 @@ export const textWysiwyg = ({
 
   if (
     isBoundToContainer(element) ||
-    isTableCellBackgroundText(element) ||
+    isContainerBackgroundText(element) ||
     !element.autoResize
   ) {
     whiteSpace = "pre-wrap";

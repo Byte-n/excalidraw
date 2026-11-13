@@ -1126,6 +1126,32 @@ export const getSequenceFragmentRowLayout = (
   return { rows: layoutRows, separators };
 };
 
+export type SequenceFragmentRowBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+/**
+ * Element-local bounds of one row: the fragment is a single-column table, so
+ * a row is the cell its background text is laid out against.
+ */
+export const getSequenceFragmentRowBounds = (
+  width: number,
+  height: number,
+  fragment: SequenceFragmentData | undefined,
+  rowId: string,
+): SequenceFragmentRowBounds | null => {
+  const row = getSequenceFragmentRowLayout(height, fragment).rows.find(
+    (candidate) => candidate.id === rowId,
+  );
+  if (!row) {
+    return null;
+  }
+  return { x: 0, y: row.y, width, height: row.height };
+};
+
 /** Dash pattern of the fragment's row dividers (mirrors the lifeline pole). */
 export const SEQUENCE_FRAGMENT_ROW_DIVIDER_DASH = [4, 4];
 

@@ -383,7 +383,7 @@ export type ContainerGestureVisual = TableResizeGestureVisual;
  * boundary, separator resize — minus columns and cell semantics.
  */
 export type FragmentStructureHover =
-  | { elementId: string; kind: "body" }
+  | { elementId: string; kind: "body"; rowId: string }
   | { elementId: string; kind: "rowGrip"; rowId: string }
   | { elementId: string; kind: "rowResize"; rowId: string; edge: "end" }
   | { elementId: string; kind: "rowInsert"; boundaryIndex: number }
@@ -1691,6 +1691,8 @@ export type PointerDownState = Readonly<{
   };
   hit: {
     tableBodyHitElement: NonDeleted<ExcalidrawElement> | null;
+    /** Selected fragment body row under the pointer-down, if any. */
+    fragmentBodyHitRow: { elementId: string; rowId: string } | null;
     // The element the pointer is "hitting", is determined on the initial
     // pointer down event
     element: NonDeleted<ExcalidrawElement> | null;

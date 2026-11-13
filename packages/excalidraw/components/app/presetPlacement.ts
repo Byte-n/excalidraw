@@ -7,7 +7,6 @@ import {
   getSequenceFragmentRowLayout,
   isSequenceFragmentElement,
   isStickyNoteElement,
-  newTextElement,
 } from "@excalidraw/element";
 
 import type {
@@ -17,8 +16,6 @@ import type {
   NonDeleted,
 } from "@excalidraw/element/types";
 
-import { SHAPE_PRESET_STYLE } from "../shapePresetDefaults";
-
 import {
   createTablePresetDrafts,
   getMindmapPresetTree,
@@ -26,6 +23,7 @@ import {
   newCreationDraft,
   PRESET_SIZES,
 } from "./createPresets";
+import { buildFragmentRowBackgroundText } from "./fragmentRowText";
 
 import type { CreationSpec, FragmentPreset } from "../presetCatalog";
 import type App from "../App";
@@ -111,13 +109,10 @@ const FRAGMENT_ROW_LABELS: Record<FragmentPreset, readonly string[]> = {
   "condition-else": ["[Condition]", "[Else]"],
 };
 
-const FRAGMENT_ROW_TEXT_PADDING_X = 8;
-const FRAGMENT_ROW_TEXT_PADDING_Y = 6;
-
 /**
- * 组合片段预设的装配：按预设铺好初始行，并在每个条件行左上角放一条默认
- * 文本（`[Condition]` / `[Else]`）。行文本是普通画布文字，不写入行数据——
- * 与用户后续在行里敲出来的文字完全相同，可以单独移动/编辑/删除。
+ * 组合片段预设的装配：按预设铺好初始行，并在每个条件行放一条默认背景文本
+ * （`[Condition]` / `[Else]`）。文本绑定到行（`fragmentRow` ref），换行会撑高
+ * 该行，行为与表格单元格背景文本一致；首行仍只有 operator 页签标签。
  */
 const buildSequenceFragmentPresetElements = (
   app: App,
@@ -155,17 +150,9 @@ const buildSequenceFragmentPresetElements = (
       return [];
     }
     return [
-      newTextElement({
-        x: seeded.x + FRAGMENT_ROW_TEXT_PADDING_X,
-        y: seeded.y + row.y + FRAGMENT_ROW_TEXT_PADDING_Y,
+      buildFragmentRowBackgroundText(app, seeded, row.id, {
         text: label,
-        fontSize: 14,
-        fontFamily: app.state.currentItemFontFamily,
-        strokeColor: SHAPE_PRESET_STYLE.strokeColor,
-        textAlign: "left",
-        verticalAlign: "top",
-        autoResize: true,
-        ...deriveIdentity(identity, index + 1),
+        identity: deriveIdentity(identity, index + 1),
       }),
     ];
   });

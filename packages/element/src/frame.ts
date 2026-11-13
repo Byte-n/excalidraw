@@ -93,6 +93,15 @@ export const bindElementsToFramesAfterDuplication = (
           mutateElement(nextElement, nextElementMap, {
             containerRef: { kind: "tableTitle", elementId: nextParentId },
           });
+        } else if (containerRef.kind === "fragmentRow") {
+          mutateElement(nextElement, nextElementMap, {
+            containerRef: {
+              kind: "fragmentRow",
+              elementId: nextParentId,
+              rowId: containerRef.rowId,
+              role: containerRef.role,
+            },
+          });
         } else {
           mutateElement(nextElement, nextElementMap, {
             containerRef: frameLikeContainerRef(nextParentId),
@@ -871,7 +880,9 @@ export const updateFrameMembershipOfSelectedElements = <
       // re-judged only by an explicit drop, handled by the cell commit in
       // the caller (`updateTableCellMembershipOfSelectedElements`). Frames
       // must not absorb tableCell chains via `getContainingFrame` ascent.
-      element.containerRef?.kind === "tableCell"
+      // A fragmentRow ref is row chrome and follows the same rule.
+      element.containerRef?.kind === "tableCell" ||
+      element.containerRef?.kind === "fragmentRow"
     ) {
       return;
     }

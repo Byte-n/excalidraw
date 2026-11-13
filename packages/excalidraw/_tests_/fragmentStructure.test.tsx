@@ -1,11 +1,21 @@
-import { TABLE_STRUCTURE_INSERTION_OFFSET } from "@excalidraw/common";
+import {
+  KEYS,
+  TABLE_CELL_TEXT_PADDING_X,
+  TABLE_CELL_TEXT_PADDING_Y,
+  TABLE_STRUCTURE_INSERTION_OFFSET,
+} from "@excalidraw/common";
 
-import type { ExcalidrawSequenceElement } from "@excalidraw/element/types";
+import type {
+  ExcalidrawSequenceElement,
+  ExcalidrawTextElement,
+} from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
 import { getFragmentStructureHoverAtSceneCoords } from "../components/app/fragment";
 
 import { API } from "./helpers/api";
+import { Keyboard } from "./helpers/ui";
+import { getTextEditor, updateTextEditor } from "./queries/dom";
 
 import {
   act,
@@ -40,6 +50,23 @@ const mouseUp = (clientX: number, clientY: number) => {
     pointerType: "mouse",
   });
 };
+const clickAt = (clientX: number, clientY: number) => {
+  mouseDown(clientX, clientY);
+  mouseUp(clientX, clientY);
+};
+const doubleClickAt = (clientX: number, clientY: number) => {
+  fireEvent.doubleClick(GlobalTestState.interactiveCanvas, {
+    clientX,
+    clientY,
+  });
+};
+const getRowTexts = () =>
+  h.elements.filter(
+    (element): element is ExcalidrawTextElement =>
+      element.type === "text" &&
+      !element.isDeleted &&
+      element.containerRef?.kind === "fragmentRow",
+  );
 
 const HEADER_HEIGHT = 36.272;
 const BODY_HEIGHT = 203.728;
@@ -143,5 +170,124 @@ describe("sequence fragment row structure", () => {
     expect(live.shape.fragment?.rows.map((row) => row.id)).toEqual(["header"]);
     expect(live.height).toBeCloseTo(HEADER_HEIGHT, 6);
     expect(h.state.fragmentRowSelection).toBeNull();
+  });
+
+  it("creates a body row background text on double click and grows the row while typing", async () => {
+    const fragment = createFixture();
+    const x = fragment.x + fragment.width / 2;
+    const y = fragment.y + HEADER_HEIGHT + BODY_HEIGHT / 2;
+    doubleClickAt(x, y);
+
+    const editor = await getTextEditor();
+    const texts = getRowTexts();
+    expect(texts).toHaveLength(1);
+    expect(texts[0].containerRef).toEqual({
+      kind: "fragmentRow",
+      elementId: fragment.id,
+      rowId: "body",
+      role: "backgroundText",
+    });
+    expect(texts[0].containerId).toBeNull();
+    expect(texts[0].autoResize).toBe(false);
+    // fragment row text is fixed top-left inside the table cell padding
+    expect(texts[0].textAlign).toBe("left");
+    expect(texts[0].verticalAlign).toBe("top");
+    expect(texts[0].x).toBeCloseTo(
+      fragment.x + TABLE_CELL_TEXT_PADDING_X,
+      6,
+    );
+    expect(texts[0].y).toBeCloseTo(
+      fragment.y + HEADER_HEIGHT + TABLE_CELL_TEXT_PADDING_Y,
+      6,
+    );
+    expect(h.state.editingTextElement?.id).toBe(texts[0].id);
+
+    updateTextEditor(
+      editor,
+      "A long condition label that wraps onto several lines inside the row and must stay visible while it is being edited. ".repeat(
+        10,
+      ),
+    );
+
+    const live = getFragment(fragment.id);
+    expect(live.height).toBeGreaterThan(240);
+    const bodyRow = live.shape.fragment?.rows[1];
+    expect(bodyRow?.height).toBeGreaterThan(BODY_HEIGHT);
+    const text = getRowTexts()[0];
+    expect(text.height).toBeLessThanOrEqual(bodyRow!.height);
+    // table cell padding: 12px on each side
+    expect(text.width).toBeLessThanOrEqual(live.width - 24);
+
+    Keyboard.exitTextEditor(editor);
+  });
+
+  it("double-clicking the header keeps editing the operator label", async () => {
+    const fragment = createFixture();
+    doubleClickAt(
+      fragment.x + fragment.width / 2,
+      fragment.y + HEADER_HEIGHT / 2,
+    );
+
+    const editor = await getTextEditor();
+    expect(getRowTexts()).toHaveLength(0);
+    // the generic path binds a text to the fragment (the operator tab label)
+    expect(h.state.editingTextElement?.containerId).toBe(fragment.id);
+    Keyboard.exitTextEditor(editor);
+  });
+
+  it("selects a row from the body and edits its background text with Enter", async () => {
+    const fragment = createFixture();
+    const x = fragment.x + fragment.width / 2;
+    const y = fragment.y + HEADER_HEIGHT + BODY_HEIGHT / 2;
+    clickAt(x, y);
+    expect(h.state.selectedElementIds[fragment.id]).toBe(true);
+
+    clickAt(x, y);
+    expect(h.state.fragmentRowSelection).toEqual({
+      elementId: fragment.id,
+      rowId: "body",
+    });
+    expect(h.state.selectedElementIds[fragment.id]).toBeUndefined();
+
+    Keyboard.keyPress(KEYS.ENTER);
+    const editor = await getTextEditor();
+    expect(getRowTexts()).toHaveLength(1);
+    expect(h.state.editingTextElement?.containerRef).toEqual({
+      kind: "fragmentRow",
+      elementId: fragment.id,
+      rowId: "body",
+      role: "backgroundText",
+    });
+    Keyboard.exitTextEditor(editor);
+  });
+
+  it("deletes the row's background text together with the row", async () => {
+    const fragment = createFixture();
+    const centerX = fragment.x + fragment.width / 2;
+    const centerY = fragment.y + HEADER_HEIGHT + BODY_HEIGHT / 2;
+    doubleClickAt(centerX, centerY);
+    const editor = await getTextEditor();
+    updateTextEditor(editor, "hello");
+    Keyboard.exitTextEditor(editor);
+    expect(getRowTexts()).toHaveLength(1);
+
+    const live = getFragment(fragment.id);
+    const rowY = live.y + HEADER_HEIGHT + (live.shape.fragment?.rows[1].height ?? 0) / 2;
+    mouseMove(live.x - 12, rowY);
+    mouseDown(live.x - 12, rowY);
+    mouseUp(live.x - 12, rowY);
+    expect(h.state.fragmentRowSelection).toEqual({
+      elementId: fragment.id,
+      rowId: "body",
+    });
+
+    await act(async () => {
+      expect(h.app.deleteSelectedFragmentRow()).toBe(true);
+    });
+    expect(getRowTexts()).toHaveLength(0);
+    const after = getFragment(fragment.id);
+    expect(after.shape.fragment?.rows.map((row) => row.id)).toEqual([
+      "header",
+    ]);
   });
 });

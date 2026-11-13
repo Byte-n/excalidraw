@@ -58,7 +58,9 @@ import {
   getSequenceFragmentRowLayout,
   isSequenceFragmentElement,
   isTableElement,
+  isContainerBackgroundText,
   isTableCellBackgroundText,
+  isFragmentRowBackgroundText,
   getTableAxisBlockRange,
   getTableCellBounds,
   getTableCellFillColor,
@@ -2330,6 +2332,67 @@ const withFragmentLocalTransform = (
   context.restore();
 };
 
+/**
+ * Editing a row's background text keeps the table's location cues: a 2px
+ * accent inner stroke on the edited row plus its outer rail. Every other
+ * fragment overlay stays suppressed while editing.
+ */
+const renderFragmentEditingIndicator = (
+  context: CanvasRenderingContext2D,
+  appState: InteractiveCanvasAppState,
+  elementsMap: ElementsMap,
+) => {
+  const editing = appState.editingTextElement;
+  if (!editing || !isFragmentRowBackgroundText(editing)) {
+    return;
+  }
+  const ref = editing.containerRef;
+  if (ref?.kind !== "fragmentRow") {
+    return;
+  }
+  const fragment = elementsMap.get(ref.elementId);
+  if (
+    !fragment ||
+    fragment.isDeleted ||
+    !isSequenceFragmentElement(fragment)
+  ) {
+    return;
+  }
+  const liveFragment = fragment as NonDeleted<ExcalidrawElement>;
+  const layout = getSequenceFragmentRowLayout(
+    fragment.height,
+    fragment.shape.fragment,
+  );
+  const row = layout.rows.find((entry) => entry.id === ref.rowId);
+  if (!row) {
+    return;
+  }
+  withFragmentLocalTransform(context, appState, liveFragment, () => {
+    const zoom = appState.zoom.value;
+    const inset = 1 / zoom;
+    context.strokeStyle = getThemedColor(
+      TABLE_STRUCTURE_ACCENT,
+      appState.theme,
+    );
+    context.lineWidth = 2 / zoom;
+    context.strokeRect(
+      inset,
+      row.y + inset,
+      liveFragment.width - inset * 2,
+      row.height - inset * 2,
+    );
+    drawStructureRail(
+      context,
+      appState,
+      -TABLE_STRUCTURE_RAIL_OFFSET / zoom,
+      row.y,
+      row.height,
+      "row",
+      "selected",
+    );
+  });
+};
+
 const renderFragmentStructureAffordances = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
@@ -2373,8 +2436,9 @@ const renderFragmentStructureAffordances = (
       return;
     }
 
-    // Hovered row band for the reorder grip.
-    if (hover.kind === "rowGrip") {
+    // Hovered row band for the reorder grip; a plain body hover lights the
+    // cell the pointer rests on (table cell hover parity).
+    if (hover.kind === "rowGrip" || hover.kind === "body") {
       const row = layout.rows.find((entry) => entry.id === hover.rowId);
       if (row) {
         context.fillStyle = getThemedColor(
@@ -3471,12 +3535,15 @@ const _renderInteractiveScene = ({
   const editingTableBackgroundText = isTableCellBackgroundText(
     appState.editingTextElement,
   );
+  const editingBackgroundText = isContainerBackgroundText(
+    appState.editingTextElement,
+  );
   const activeTextElement = getActiveTextElement(selectedElements, appState);
 
   if (
     activeTextElement &&
     !activeTextElement.autoResize &&
-    !isTableCellBackgroundText(activeTextElement) &&
+    !isContainerBackgroundText(activeTextElement) &&
     !(
       activeTextElement.containerId &&
       isSequenceFragmentElement(elementsMap.get(activeTextElement.containerId))
@@ -3495,7 +3562,7 @@ const _renderInteractiveScene = ({
     const textElement = allElementsMap.get(appState.editingTextElement.id) as
       | ExcalidrawTextElement
       | undefined;
-    if (textElement && !isTableCellBackgroundText(textElement)) {
+    if (textElement && !isContainerBackgroundText(textElement)) {
       if (!textElement.autoResize) {
         renderTextBox(
           textElement,
@@ -3836,14 +3903,21 @@ const _renderInteractiveScene = ({
     // (cell inner stroke + the row/column rails) survive the suppression
     renderTableEditingIndicator(context, appState, elementsMap);
   }
+  if (isFragmentRowBackgroundText(appState.editingTextElement)) {
+    renderFragmentEditingIndicator(context, appState, elementsMap);
+  }
 
   if (tableVisual && !editingTableBackgroundText) {
     renderTableStructureHover(context, appState, tableVisual, elementsMap);
   }
 
   // Sequence fragment rows: the same row vocabulary as a table, minus the
-  // columns and cell chrome. The selection band survives without hover.
-  if (appState.fragmentStructureHover || appState.fragmentRowSelection) {
+  // columns and cell chrome. The selection band survives without hover; an
+  // open row editor keeps only its row's location cues.
+  if (
+    !editingBackgroundText &&
+    (appState.fragmentStructureHover || appState.fragmentRowSelection)
+  ) {
     const fragmentId =
       appState.fragmentStructureHover?.elementId ??
       appState.fragmentRowSelection?.elementId;
@@ -3865,7 +3939,7 @@ const _renderInteractiveScene = ({
 
   // Paint selected elements
   if (
-    !editingTableBackgroundText &&
+    !editingBackgroundText &&
     !appState.selectionElement &&
     !appState.multiElement &&
     !appState.newElement &&

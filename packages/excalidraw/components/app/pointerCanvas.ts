@@ -531,10 +531,12 @@ export const handleCanvasDoubleClick = (
 
   // double-clicking a cell's blank area (or its background text) edits that
   // cell's background text; hits above the table fall through to the generic
-  // text handling below
+  // text handling below. A fragment row is a single-column table cell and
+  // follows the same rule; its header row keeps the operator label path.
   if (
     handleTableTitleDoubleClick(app, { x: sceneX, y: sceneY }) ||
-    app.handleTableCellDoubleClick(sceneX, sceneY)
+    app.handleTableCellDoubleClick(sceneX, sceneY) ||
+    app.handleFragmentDoubleClick(sceneX, sceneY)
   ) {
     return;
   }

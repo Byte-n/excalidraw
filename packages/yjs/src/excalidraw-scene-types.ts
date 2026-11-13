@@ -35,6 +35,12 @@ export type ExcalidrawSceneElement = {
         elementId: string;
         cellId: string;
         role: "content" | "backgroundText";
+      }
+    | {
+        kind: "fragmentRow";
+        elementId: string;
+        rowId: string;
+        role: "backgroundText";
       };
   boundElements?: readonly { id: string; type: string }[] | null;
   startBinding?: {

@@ -18,6 +18,7 @@ import { deepCopyElement } from "@excalidraw/element";
 import {
   isFrameLikeElement,
   isInitializedImageElement,
+  isSequenceFragmentElement,
   isTableElement,
 } from "@excalidraw/element";
 
@@ -161,12 +162,15 @@ export const serializeAsClipboardJSON = ({
 }) => {
   const elementsMap = arrayToMap(elements);
   // members keep their containerRef only when the container itself is part of
-  // the copy — frame-like containers and tables (whose cell members reference
-  // the table element) both qualify
+  // the copy — frame-like containers, tables and sequence fragments (whose
+  // cell/row members reference the container) all qualify
   const copiedContainerIds = new Set<string>(
     elements
       .filter(
-        (element) => isFrameLikeElement(element) || isTableElement(element),
+        (element) =>
+          isFrameLikeElement(element) ||
+          isTableElement(element) ||
+          isSequenceFragmentElement(element),
       )
       .map((element) => element.id),
   );

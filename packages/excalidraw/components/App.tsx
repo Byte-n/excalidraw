@@ -43,6 +43,7 @@ import {
   normalizeSequenceFragmentGeometry,
   redrawTextBoundingBox,
   getSequenceFragmentTextBounds,
+  refitSequenceFragmentRowBackgroundTexts,
   fitSequenceFragmentOperator,
   SEQUENCE_FRAGMENT_DEFAULT_OPERATOR,
   resolveElementRenderState,
@@ -160,6 +161,7 @@ import {
   type InteractionState,
 } from "./app/pointerSession";
 import * as fragmentController from "./app/fragment";
+import { getSequenceFragmentRowTextInsertionIndex } from "./app/fragmentRowText";
 import { AppView } from "./app/render";
 import * as sceneController from "./app/scene";
 import * as tableController from "./app/table";
@@ -2034,6 +2036,26 @@ class App extends React.Component<AppProps, AppState> {
     return fragmentController.deleteSelectedFragmentRow(this);
   };
 
+  /** Double-click on a fragment body row edits/creates its background text. */
+  public handleFragmentDoubleClick = (
+    sceneX: number,
+    sceneY: number,
+  ): boolean => {
+    return fragmentController.handleFragmentDoubleClick(this, sceneX, sceneY);
+  };
+
+  /** Enter on a selected fragment row edits its background text. */
+  public editSelectedFragmentRowBackgroundText = (): boolean => {
+    return fragmentController.editSelectedFragmentRowBackgroundText(this);
+  };
+
+  /** ArrowUp/ArrowDown moves the selected fragment row. */
+  public moveSelectedFragmentRowFocus = (
+    direction: "up" | "down",
+  ): boolean => {
+    return fragmentController.moveSelectedFragmentRowFocus(this, direction);
+  };
+
   public deleteSelectedTableRowCol = (): boolean => {
     return tableController.deleteSelectedTableRowCol(this);
   };
@@ -2175,8 +2197,15 @@ class App extends React.Component<AppProps, AppState> {
     });
 
     const chunkedElements: ExcalidrawElement[][] = [];
+    const incomingFragmentIds = new Set<string>();
 
     for (const element of preparedElements) {
+      if (isSequenceFragmentElement(element)) {
+        incomingFragmentIds.add(element.id);
+      }
+      if (element.containerRef?.kind === "fragmentRow") {
+        incomingFragmentIds.add(element.containerRef.elementId);
+      }
       const currentChunk = chunkedElements[chunkedElements.length - 1];
 
       if (
@@ -2201,6 +2230,11 @@ class App extends React.Component<AppProps, AppState> {
               frameId,
               containerRef.cellId,
             )
+          : frameId && containerRef?.kind === "fragmentRow"
+          ? getSequenceFragmentRowTextInsertionIndex(
+              this.scene.getElementsIncludingDeleted(),
+              frameId,
+            )
           : frameId
           ? getFrameChildrenInsertionIndex(
               this.scene.getElementsIncludingDeleted(),
@@ -2216,6 +2250,17 @@ class App extends React.Component<AppProps, AppState> {
         [text],
         fragmentIndex < 0 ? null : fragmentIndex + 1,
       );
+    }
+
+    // Normalization/operator fit above may have moved row boundaries; lay the
+    // incoming row background texts out against the live rows.
+    for (const fragmentId of incomingFragmentIds) {
+      const fragment = this.scene.getNonDeletedElement(fragmentId);
+      if (fragment && isSequenceFragmentElement(fragment)) {
+        refitSequenceFragmentRowBackgroundTexts(this.scene, fragment, {
+          grow: false,
+        });
+      }
     }
   };
 

@@ -8,9 +8,12 @@ import {
   redrawTextBoundingBox,
   getBoundTextElement,
   frameLikeContainerRef,
+  isContainerBackgroundText,
+  isFragmentRowBackgroundText,
   isTableCellBackgroundText,
   isTextElement,
   isValidTextContainer,
+  refitSequenceFragmentRowBackgroundTexts,
 } from "@excalidraw/element";
 
 import { flushSync } from "react-dom";
@@ -61,6 +64,7 @@ import { textWysiwyg } from "../../wysiwyg/textWysiwyg";
 import { withBatchedUpdates } from "../../reactUtils";
 
 import * as tableController from "./table";
+import * as fragmentController from "./fragment";
 import { commitCanvasElementOperation } from "./sceneOperations";
 
 import type App from "../App";
@@ -139,14 +143,33 @@ export const handleTextWysiwyg = (
     if (!fit) {
       return;
     }
+    const heightDelta = fit.height - fragment.height;
     if (
-      Math.abs(fit.height - fragment.height) > 1e-6 ||
+      Math.abs(heightDelta) > 1e-6 ||
       fit.shape.fragment?.operatorWidth !==
         fragment.shape.fragment?.operatorWidth
     ) {
+      // A grown header expands the box downward from its local top edge; on a
+      // rotated fragment the unrotated x/y must be compensated so the visual
+      // top-left stays put instead of drifting around the new center.
+      const angle = fragment.angle ?? 0;
       app.scene.mutateElement(fragment, {
         height: fit.height,
         shape: fit.shape,
+        ...(heightDelta !== 0 && angle
+          ? {
+              x: fragment.x + (Math.sin(angle) * heightDelta) / 2,
+              y: fragment.y + ((Math.cos(angle) - 1) * heightDelta) / 2,
+            }
+          : {}),
+      });
+    }
+    // the header row may have changed height: body rows (and their background
+    // texts) move with it
+    const fittedFragment = app.scene.getNonDeletedElement(fragment.id);
+    if (fittedFragment && isSequenceFragmentElement(fittedFragment)) {
+      refitSequenceFragmentRowBackgroundTexts(app.scene, fittedFragment, {
+        grow: false,
       });
     }
     if (!redraw) {
@@ -262,7 +285,7 @@ export const handleTextWysiwyg = (
           return newElementWith(_element, {
             originalText: nextOriginalText,
             isDeleted: isDeleted ?? _element.isDeleted,
-            ...(isTableCellBackgroundText(_element)
+            ...(isContainerBackgroundText(_element)
               ? {}
               : stickyLayout?.text ??
                 refreshTextDimensions(
@@ -308,6 +331,8 @@ export const handleTextWysiwyg = (
     onTextLayoutReady: withBatchedUpdates(() => {
       if (isTableCellBackgroundText(element)) {
         tableController.refitTableCellBackgroundText(app, element.id);
+      } else if (isFragmentRowBackgroundText(element)) {
+        fragmentController.refitFragmentRowBackgroundText(app, element.id);
       }
     }),
     onSubmit: withBatchedUpdates(({ viaKeyboard, nextOriginalText }) => {
@@ -316,12 +341,15 @@ export const handleTextWysiwyg = (
       updateElement(nextOriginalText, isDeleted);
       if (isTableCellBackgroundText(element)) {
         tableController.refitTableCellBackgroundText(app, element.id);
+      } else if (isFragmentRowBackgroundText(element)) {
+        fragmentController.refitFragmentRowBackgroundText(app, element.id);
       }
       const didCreateMindmapNode = app.mindmap.handleTextSubmit(element);
       const elementIdToSelect =
         viaKeyboard &&
         !app.isToolLocked() &&
-        app.state.activeTool.type !== "autoshape"
+        app.state.activeTool.type !== "autoshape" &&
+        !isContainerBackgroundText(element)
           ? element.containerId || (!isDeleted ? element.id : null)
           : null;
 

@@ -51,6 +51,7 @@ import {
   isSequenceLifelineElement,
   isShapeElement,
   normalizeSequenceFragmentGeometry,
+  refitSequenceFragmentRowBackgroundTexts,
 } from "./compositeShape";
 import {
   getBoundTextElement,
@@ -282,6 +283,22 @@ export const transformElements = (
         if (normalized !== latest) {
           scene.mutateElement(latest, { shape: normalized.shape });
         }
+        const original = originalElements.get(selectedElement.id);
+        const live = scene.getNonDeletedElement(latest.id);
+        if (!original || !live || !isSequenceFragmentElement(live)) {
+          continue;
+        }
+        const scaleX = original.width ? live.width / original.width : 1;
+        const scaleY = original.height ? live.height / original.height : 1;
+        // fonts follow a uniform scale only (table scale semantics); axis
+        // scaling freezes them and just lays the text out again
+        refitSequenceFragmentRowBackgroundTexts(scene, live, {
+          grow: false,
+          fontScale:
+            Math.abs(scaleX - scaleY) < 1e-6 && Number.isFinite(scaleX)
+              ? scaleX
+              : 1,
+        });
       }
 
       return true;
@@ -661,6 +678,14 @@ const rotateSingleElement = (
       });
     }
   }
+
+  if (isSequenceFragmentElement(element)) {
+    const live = scene.getNonDeletedElement(element.id);
+    if (live) {
+      // row background text rotates with the fragment
+      refitSequenceFragmentRowBackgroundTexts(scene, live, { grow: false });
+    }
+  }
 };
 
 export const rescalePointsInElement = (
@@ -914,6 +939,16 @@ const rotateMultipleElements = (
           angle: normalizeRadians((centerAngle + origAngle) as Radians),
         });
       }
+    }
+  }
+
+  for (const element of elements) {
+    if (!isSequenceFragmentElement(element)) {
+      continue;
+    }
+    const live = scene.getNonDeletedElement(element.id);
+    if (live) {
+      refitSequenceFragmentRowBackgroundTexts(scene, live, { grow: false });
     }
   }
 
@@ -1454,9 +1489,21 @@ export const resizeSingleElement = (
         ? fitSequenceFragmentOperator(resizedFragment, label)
         : null;
       if (fit && label) {
+        const heightDelta = fit.height - resizedFragment.height;
+        const angle = resizedFragment.angle ?? 0;
         scene.mutateElement(resizedFragment, {
           height: fit.height,
           shape: fit.shape,
+          ...(heightDelta !== 0 && angle
+            ? {
+                x:
+                  resizedFragment.x +
+                  (Math.sin(angle) * heightDelta) / 2,
+                y:
+                  resizedFragment.y +
+                  ((Math.cos(angle) - 1) * heightDelta) / 2,
+              }
+            : {}),
         });
         const updated = scene.getNonDeletedElement(resizedFragment.id);
         if (updated) {
@@ -1466,6 +1513,15 @@ export const resizeSingleElement = (
     }
 
     updateBoundElements(latestElement, scene);
+
+    // Row background text follows the resized box: a width change re-wraps
+    // (and may grow rows), a pure height change only moves the row bands.
+    const refitTarget = scene.getNonDeletedElement(latestElement.id);
+    if (refitTarget && isSequenceFragmentElement(refitTarget)) {
+      refitSequenceFragmentRowBackgroundTexts(scene, refitTarget, {
+        grow: Math.abs(origElement.width - refitTarget.width) > 1e-6,
+      });
+    }
   }
 };
 
@@ -2196,6 +2252,14 @@ export const resizeMultipleElements = (
             shouldResizeFromCenter,
             false,
           );
+        }
+        if (isSequenceFragmentElement(element)) {
+          const liveFragment = scene.getNonDeletedElement(id);
+          if (liveFragment) {
+            refitSequenceFragmentRowBackgroundTexts(scene, liveFragment, {
+              grow: false,
+            });
+          }
         }
       }
     }

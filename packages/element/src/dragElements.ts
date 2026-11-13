@@ -27,6 +27,7 @@ import {
 } from "./sequenceActivation";
 import {
   isActivationElement,
+  isSequenceFragmentElement,
   isSequenceLifelineElement,
 } from "./compositeShape";
 
@@ -95,7 +96,10 @@ export const dragSelectedElements = (
   const containers = new Set(
     selectedElements
       .filter(
-        (element) => isFrameLikeElement(element) || isTableElement(element),
+        (element) =>
+          isFrameLikeElement(element) ||
+          isTableElement(element) ||
+          isSequenceFragmentElement(element),
       )
       .map((element) => element.id),
   );
@@ -115,7 +119,11 @@ export const dragSelectedElements = (
             continue;
           }
           elementsToUpdate.add(member);
-          if (isTableElement(member) || isFrameLikeElement(member)) {
+          if (
+            isTableElement(member) ||
+            isFrameLikeElement(member) ||
+            isSequenceFragmentElement(member)
+          ) {
             containers.add(member.id);
             nextFrontier.push(member.id);
           }

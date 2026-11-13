@@ -78,6 +78,9 @@ const sameContainerRef = (
   if (a.kind === "tableCell" && b.kind === "tableCell") {
     return a.cellId === b.cellId && a.role === b.role;
   }
+  if (a.kind === "fragmentRow" && b.kind === "fragmentRow") {
+    return a.rowId === b.rowId && a.role === b.role;
+  }
   return true;
 };
 

@@ -138,6 +138,7 @@ export {
   getSequenceFragmentTabPath,
   getSequenceFragmentTextBounds,
   getSequenceFragmentRowLayout,
+  getSequenceFragmentRowBounds,
   getSequenceFragmentRowPaths,
   createSequenceFragmentInitialRows,
   getSequenceFragmentRowIndexAt,
@@ -171,4 +172,17 @@ export type {
   SequenceFragmentRowAddition,
   SequenceFragmentResize,
   SequenceFragmentRowsUpdate,
+  SequenceFragmentRowBounds,
 } from "./compositeShape/sequenceOutline";
+
+export {
+  fragmentRowContainerRef,
+  getFragmentRowBackgroundTexts,
+  getSequenceFragmentRowBackgroundTextLayout,
+  refitSequenceFragmentRowBackgroundTexts,
+} from "./compositeShape/sequenceFragmentScene";
+
+export type {
+  SequenceFragmentRowBackgroundTextLayout,
+  SequenceFragmentRowTextRefitOptions,
+} from "./compositeShape/sequenceFragmentScene";

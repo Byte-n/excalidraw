@@ -1,6 +1,7 @@
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
 
 import { newElementWith } from "../src/mutateElement";
+import { newElement } from "../src/newElement";
 import { Scene } from "../src/Scene";
 import { getFrameChildren, getFrameChildrenInsertionIndex } from "../src/frame";
 import {
@@ -18,6 +19,7 @@ import type {
   ExcalidrawTextElement,
   NonDeleted,
   NonDeletedExcalidrawElement,
+  SequenceShapeData,
 } from "../src/types";
 
 describe("Test TypeChecks", () => {
@@ -314,6 +316,83 @@ describe("Test TypeChecks", () => {
           },
         ]),
       ).toThrow("Invalid container reference");
+    });
+  });
+
+  describe("fragmentRow container refs", () => {
+    const makeFragment = () => {
+      const shape: SequenceShapeData = {
+        id: "sc-fragment",
+        schemaVersion: 1,
+        fragment: {
+          rows: [
+            { id: "header", height: 36.272 },
+            { id: "body", height: 203.728 },
+          ],
+        },
+      };
+      return newElement({
+        type: "sequence",
+        x: 0,
+        y: 0,
+        width: 400,
+        height: 240,
+        shape,
+      });
+    };
+    const rowText = (fragment: ExcalidrawElement, rowId: string) => ({
+      ...API.createElement({ type: "text" }),
+      containerRef: {
+        kind: "fragmentRow" as const,
+        elementId: fragment.id,
+        rowId,
+        role: "backgroundText" as const,
+      },
+    });
+
+    it("accepts a text background member on a body row", () => {
+      const fragment = makeFragment();
+      expect(() =>
+        assertValidContainerRefs([fragment, rowText(fragment, "body")]),
+      ).not.toThrow();
+    });
+
+    it("rejects the header row, missing rows, non-text and duplicates", () => {
+      const fragment = makeFragment();
+      expect(() =>
+        assertValidContainerRefs([fragment, rowText(fragment, "header")]),
+      ).toThrow("Invalid fragment row container reference");
+      expect(() =>
+        assertValidContainerRefs([fragment, rowText(fragment, "missing")]),
+      ).toThrow("Invalid fragment row container reference");
+      expect(() =>
+        assertValidContainerRefs([
+          fragment,
+          {
+            ...API.createElement({ type: "rectangle" }),
+            containerRef: {
+              kind: "fragmentRow",
+              elementId: fragment.id,
+              rowId: "body",
+              role: "backgroundText",
+            },
+          },
+        ]),
+      ).toThrow("must be a text element");
+      expect(() =>
+        assertValidContainerRefs([
+          fragment,
+          rowText(fragment, "body"),
+          rowText(fragment, "body"),
+        ]),
+      ).toThrow("already has background text");
+    });
+
+    it("rejects a parent that is not a fragment", () => {
+      const rectangle = API.createElement({ type: "rectangle" });
+      expect(() =>
+        assertValidContainerRefs([rectangle, rowText(rectangle, "body")]),
+      ).toThrow("Invalid fragment row container reference");
     });
   });
 

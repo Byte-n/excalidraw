@@ -35,7 +35,7 @@ import {
   duplicateElements,
 } from "../src/duplicate";
 import { assertValidContainerRefs } from "../src/typeChecks";
-import { newMindmapNodeElement } from "../src/newElement";
+import { newElement, newMindmapNodeElement } from "../src/newElement";
 import { isShapeWithId } from "../src/compositeShape";
 import { mindmapShapeData } from "../src/mindmap";
 
@@ -56,6 +56,56 @@ const assertCloneObjects = (source: any, clone: any) => {
 };
 
 describe("duplicating single elements", () => {
+  it("remaps a fragment row background text to the duplicated fragment", () => {
+    const fragment = newElement({
+      type: "sequence",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 240,
+      shape: {
+        id: "sc-fragment",
+        schemaVersion: 1,
+        fragment: {
+          rows: [
+            { id: "header", height: 36.272 },
+            { id: "body", height: 203.728 },
+          ],
+        },
+      },
+    });
+    const text = API.createElement({
+      type: "text",
+      containerRef: {
+        kind: "fragmentRow",
+        elementId: fragment.id,
+        rowId: "body",
+        role: "backgroundText",
+      },
+    });
+
+    const result = duplicateElements({
+      type: "everything",
+      elements: [fragment, text],
+      randomizeSeed: true,
+    });
+    const duplicateFragment = result.duplicatedElements.find(
+      (element) => element.type === "sequence",
+    )!;
+    const duplicateText = result.duplicatedElements.find(
+      (element) => element.type === "text",
+    )!;
+    expect(duplicateText.containerRef).toEqual({
+      kind: "fragmentRow",
+      elementId: duplicateFragment.id,
+      rowId: "body",
+      role: "backgroundText",
+    });
+    expect(() =>
+      assertValidContainerRefs(result.elementsWithDuplicates),
+    ).not.toThrow();
+  });
+
   it("preserves a mindmap node's persisted shape when cloning", () => {
     const element = newMindmapNodeElement({
       x: 0,

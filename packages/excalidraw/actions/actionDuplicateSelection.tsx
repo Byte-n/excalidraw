@@ -80,10 +80,12 @@ export const actionDuplicateSelection = register({
           y: origElement.y + DEFAULT_GRID_SIZE / 2,
           containerRef:
             // a copied table member keeps the ref already remapped to the
-            // copied table's structure (regenerated ids); a graphic copied
-            // without its table gets re-judged at the new position instead
-            // of dangling toward the source table (phase-1.md:69)
-            origElement.containerRef?.kind === "tableCell"
+            // copied table's structure (regenerated ids); a fragment row text
+            // is remapped the same way (row ids stay stable). A graphic
+            // copied without its table gets re-judged at the new position
+            // instead of dangling toward the source table (phase-1.md:69)
+            origElement.containerRef?.kind === "tableCell" ||
+            origElement.containerRef?.kind === "fragmentRow"
               ? duplicateElement.containerRef
               : duplicateParentId !== undefined
               ? { kind: "frameLike", elementId: duplicateParentId }

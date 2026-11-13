@@ -427,11 +427,24 @@ describe("图形抽屉的单击放置", () => {
     expect(texts.map((text) => text.text)).toEqual(
       expect.arrayContaining(["Opt / Loop", "[Condition]", "[Else]"]),
     );
-    // row labels are ordinary canvas text, not bound to the fragment
+    // condition labels are row background texts, like table cell background
+    // text: bound to the row (single-column cell), not ordinary canvas text
     const condition = texts.find((text) => text.text === "[Condition]")!;
     const elseLabel = texts.find((text) => text.text === "[Else]")!;
     expect(condition.containerId).toBeNull();
     expect(elseLabel.containerId).toBeNull();
+    expect(condition.containerRef).toEqual({
+      kind: "fragmentRow",
+      elementId: fragment!.id,
+      rowId: rows[1].id,
+      role: "backgroundText",
+    });
+    expect(elseLabel.containerRef).toEqual({
+      kind: "fragmentRow",
+      elementId: fragment!.id,
+      rowId: rows[2].id,
+      role: "backgroundText",
+    });
     expect(condition.y).toBeLessThan(elseLabel.y);
   });
 

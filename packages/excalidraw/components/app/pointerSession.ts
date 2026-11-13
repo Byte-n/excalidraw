@@ -122,6 +122,10 @@ import * as gestureController from "./gesture";
 
 import { getCompositeControlPointLocal } from "./compositeShapeControls";
 import { getPresetPlacement, isPresetCreationTool } from "./createPresets";
+import {
+  getFragmentStructureHoverAtSceneCoords,
+  selectFragmentRow,
+} from "./fragment";
 import * as tableController from "./table";
 import { resolveInteractionTarget } from "./interactionTarget";
 
@@ -704,10 +708,16 @@ export const handleCanvasPointerDown = (
   // Fragment row controls use the same structure channel: a container-control
   // target is one of its rails/dots/separators, or the selected fragment's
   // own body (the arm call resolves the body's actual zones).
-  const targetIsSelectedFragmentBody =
-    interactionTarget.kind === "selectedElement" &&
+  const selectedFragment =
     selectedElements.length === 1 &&
-    isSequenceFragmentElement(selectedElements[0]);
+    isSequenceFragmentElement(selectedElements[0])
+      ? selectedElements[0]
+      : null;
+  const targetIsSelectedFragmentBody =
+    !!selectedFragment &&
+    (interactionTarget.kind === "selectedElement" ||
+      (interactionTarget.kind === "containerBody" &&
+        interactionTarget.containerId === selectedFragment.id));
   if (
     (interactionTarget.kind === "containerControl" ||
       targetIsSelectedFragmentBody) &&
@@ -728,6 +738,25 @@ export const handleCanvasPointerDown = (
     pointerDownState.origin.x,
     pointerDownState.origin.y,
   );
+  // A click inside the selected fragment's own body selects the row on
+  // pointer up (the drag still owns the gesture until then).
+  if (
+    selectedFragment &&
+    targetIsSelectedFragmentBody &&
+    !event[KEYS.CTRL_OR_CMD] &&
+    bodyHit?.id === selectedFragment.id
+  ) {
+    const hover = getFragmentStructureHoverAtSceneCoords(
+      app,
+      pointerDownState.origin,
+    );
+    if (hover?.kind === "body" && hover.elementId === selectedFragment.id) {
+      pointerDownState.hit.fragmentBodyHitRow = {
+        elementId: selectedFragment.id,
+        rowId: hover.rowId,
+      };
+    }
+  }
   if (
     selectedTable &&
     !event[KEYS.CTRL_OR_CMD] &&
@@ -1077,6 +1106,7 @@ export const initialPointerDownState = (
     },
     hit: {
       tableBodyHitElement: null,
+      fragmentBodyHitRow: null,
       element: null,
       allHitElements: [],
       wasAddedToSelection: false,
@@ -2932,6 +2962,18 @@ export const onPointerUpFromPointerDownHandler = (
         }
       } else {
         pointerDownState.hit.element = bodyHit;
+      }
+    }
+
+    // Clicking inside the selected fragment's body selects the row (table
+    // cell parity); a drag keeps the element gesture instead.
+    if (
+      pointerDownState.hit.fragmentBodyHitRow &&
+      !pointerDownState.drag.hasOccurred
+    ) {
+      const { elementId, rowId } = pointerDownState.hit.fragmentBodyHitRow;
+      if (selectFragmentRow(app, elementId, rowId)) {
+        return;
       }
     }
 

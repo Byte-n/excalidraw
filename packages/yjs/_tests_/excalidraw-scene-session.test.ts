@@ -605,3 +605,59 @@ test("同一画板重复创建和销毁桥接 100 次，observer 数量回到基
   }
   assert.equal(callbacks.count, 0);
 });
+
+test("fragment 行背景文本：合法保留，首行/缺失行/重复行引用被解除", () => {
+  const fragment = element("fragment", 0, {
+    type: "sequence",
+    width: 400,
+    height: 200,
+    shape: {
+      id: "sc-fragment",
+      schemaVersion: 1,
+      fragment: {
+        rows: [
+          { id: "header", height: 36 },
+          { id: "body", height: 164 },
+        ],
+      },
+    },
+  });
+  const rowText = (id: string, rowId: string) =>
+    element(id, 0, {
+      type: "text",
+      text: "T",
+      originalText: "T",
+      fontSize: 13,
+      fontFamily: 1,
+      baseFontSize: null,
+      textAlign: "left",
+      verticalAlign: "top",
+      containerId: null,
+      autoResize: false,
+      lineHeight: 1.25,
+      containerRef: {
+        kind: "fragmentRow",
+        elementId: "fragment",
+        rowId,
+        role: "backgroundText",
+      },
+    });
+
+  const shown = projectExcalidrawDisplayElements([
+    fragment,
+    rowText("a-valid", "body"),
+    rowText("b-header", "header"),
+    rowText("c-missing", "missing"),
+    rowText("d-dup-body", "body"),
+  ]);
+  const byId = new Map(shown.map((entry) => [entry.id, entry]));
+  assert.deepEqual(byId.get("a-valid")!.containerRef, {
+    kind: "fragmentRow",
+    elementId: "fragment",
+    rowId: "body",
+    role: "backgroundText",
+  });
+  for (const id of ["b-header", "c-missing", "d-dup-body"]) {
+    assert.equal(byId.get(id)!.containerRef, undefined);
+  }
+});

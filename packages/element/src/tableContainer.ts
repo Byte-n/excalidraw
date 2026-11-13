@@ -4,6 +4,7 @@ import { syncMovedIndices } from "./fractionalIndex";
 import { getBoundTextElement } from "./textElement";
 import { mutateElement } from "./mutateElement";
 import { getMindmapElementsForSelection } from "./mindmap";
+import { isSequenceFragmentElement } from "./compositeShape/sequenceOutline";
 import {
   assertValidTableData,
   getTableCellAtPoint,
@@ -394,7 +395,9 @@ export const getContainerSubtreeElements = (
         subtreeIds.add(boundTextElement.id);
       }
       if (
-        (isTableElement(member) || isFrameLikeElement(member)) &&
+        (isTableElement(member) ||
+          isFrameLikeElement(member) ||
+          isSequenceFragmentElement(member)) &&
         !seenContainers.has(member.id)
       ) {
         seenContainers.add(member.id);

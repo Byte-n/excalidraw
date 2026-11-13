@@ -10,6 +10,7 @@ import {
   isTableElement,
   isTextElement,
 } from "./typeChecks";
+import { isSequenceFragmentElement } from "./compositeShape";
 import { getElementsInGroup } from "./groups";
 import { syncMovedIndices } from "./fractionalIndex";
 import { getSelectedElements } from "./selection";
@@ -613,6 +614,13 @@ function shiftElementsAccountingForFrames(
     }
   }
 
+  const fullySelectedFragments = new Set<string>();
+  for (const element of allElements) {
+    if (elementsToMove.has(element.id) && isSequenceFragmentElement(element)) {
+      fullySelectedFragments.add(element.id);
+    }
+  }
+
   const frameAwareContiguousElementsToMove: {
     regularElements: ExcalidrawElement[];
     frameChildren: Map<ExcalidrawFrameLikeElement["id"], ExcalidrawElement[]>;
@@ -633,7 +641,8 @@ function shiftElementsAccountingForFrames(
         isFrameLikeElement(element) ||
         isTableElement(element) ||
         (frameId && fullySelectedFrames.has(frameId)) ||
-        (frameId && fullySelectedTables.has(frameId))
+        (frameId && fullySelectedTables.has(frameId)) ||
+        (frameId && fullySelectedFragments.has(frameId))
       ) {
         frameAwareContiguousElementsToMove.regularElements.push(element);
       } else if (!frameId) {

@@ -10,7 +10,7 @@ import {
   isFrameLikeElement,
   isIframeLikeElement,
   isNonDeletedElement,
-  isTableCellBackgroundText,
+  isContainerBackgroundText,
   isTextBindableContainer,
   isTextElement,
   isCursorInFrame,
@@ -127,7 +127,7 @@ export const getElementsAtPosition = (
         // hitting, selecting or dragging what is above it (phase-1.md:141).
         // It is reached through its cell's double-click, and stays hittable
         // while its own editor is open.
-        !isTableCellBackgroundText(element) ||
+        !isContainerBackgroundText(element) ||
         app.state.editingTextElement?.id === element.id,
     )
     .filter(

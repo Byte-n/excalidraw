@@ -278,6 +278,40 @@ export const onKeyDown = (
   }
 
   if (
+    app.state.fragmentRowSelection &&
+    !isInputLike(event.target) &&
+    !app.state.editingTextElement &&
+    !event[KEYS.CTRL_OR_CMD] &&
+    !event.altKey
+  ) {
+    if (
+      event.key === KEYS.ENTER &&
+      app.editSelectedFragmentRowBackgroundText()
+    ) {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === KEYS.ESCAPE) {
+      const elementId = app.state.fragmentRowSelection.elementId;
+      app.setState({
+        fragmentRowSelection: null,
+        selectedElementIds: { [elementId]: true },
+      });
+      event.preventDefault();
+      return;
+    }
+    if (
+      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      app.moveSelectedFragmentRowFocus(
+        event.key === "ArrowDown" ? "down" : "up",
+      )
+    ) {
+      event.preventDefault();
+      return;
+    }
+  }
+
+  if (
     !isInputLike(event.target) &&
     !event[KEYS.CTRL_OR_CMD] &&
     !event.altKey &&

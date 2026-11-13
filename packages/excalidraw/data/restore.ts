@@ -866,9 +866,25 @@ const repairFrameMembership = (
   element: Mutable<ExcalidrawElement>,
   elementsMap: Map<string, Mutable<ExcalidrawElement>>,
 ) => {
-  const frameId = element.containerRef?.elementId;
-  if (frameId && !elementsMap.has(frameId)) {
+  const ref = element.containerRef;
+  if (!ref) {
+    return;
+  }
+  const parent = elementsMap.get(ref.elementId);
+  if (!parent) {
     element.containerRef = undefined;
+    return;
+  }
+  // a row ref whose row vanished (or names the operator header) is dangling:
+  // drop it instead of failing scene validation
+  if (ref.kind === "fragmentRow" && isSequenceFragmentElement(parent)) {
+    const rows = parent.shape.fragment?.rows;
+    if (
+      !rows?.some((row) => row.id === ref.rowId) ||
+      ref.rowId === rows[0]?.id
+    ) {
+      element.containerRef = undefined;
+    }
   }
 };
 
@@ -984,7 +1000,13 @@ export const restoreElements = <T extends ExcalidrawElement>(
       }
     | undefined,
 ): CombineBrandsIfNeeded<T, OrderedExcalidrawElement> => {
-  if (targetElements?.some((element) => element.type === "table")) {
+  if (
+    targetElements?.some(
+      (element) =>
+        element.type === "table" ||
+        (element.type === "sequence" && isSequenceFragmentElement(element)),
+    )
+  ) {
     const incomingIds = new Set<string>();
     for (const element of targetElements) {
       if (incomingIds.has(element.id)) {

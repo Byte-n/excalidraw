@@ -104,11 +104,26 @@ export type TableTitleContainerRef = Readonly<{
   elementId: string;
 }>;
 
+/**
+ * A sequence fragment's row background text: the fragment is a
+ * single-column table, so each body row owns at most one background text.
+ * The header row (`rows[0]`, the operator tab) never carries one.
+ */
+export type FragmentRowContainerRef = Readonly<{
+  kind: "fragmentRow";
+  /** Direct parent container element id (the fragment element). */
+  elementId: string;
+  /** Body row of the parent fragment the element belongs to. */
+  rowId: string;
+  role: "backgroundText";
+}>;
+
 /** Direct spatial parent. Later container kinds extend this discriminated union. */
 export type DirectContainerRef =
   | FrameLikeContainerRef
   | TableCellContainerRef
-  | TableTitleContainerRef;
+  | TableTitleContainerRef
+  | FragmentRowContainerRef;
 
 export type BackgroundTextStyle = Readonly<{
   fontFamily?: string;

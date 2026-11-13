@@ -1,5 +1,7 @@
 import {
   DEFAULT_FONT_FAMILY,
+  TABLE_CELL_TEXT_PADDING_X,
+  TABLE_CELL_TEXT_PADDING_Y,
   getLineHeight,
   getVerticalOffset,
 } from "@excalidraw/common";
@@ -59,6 +61,10 @@ import {
   SEQUENCE_MIN_ACTIVATION_OFFSET,
   getSequenceFragmentResize,
   getSequenceFragmentRowLayout,
+  getSequenceFragmentRowBounds,
+  getSequenceFragmentRowBackgroundTextLayout,
+  refitSequenceFragmentRowBackgroundTexts,
+  fragmentRowContainerRef,
   getSequenceFragmentRowPaths,
   getSequenceFragmentTabPath,
   getSequenceFragmentTextBounds,
@@ -1919,5 +1925,168 @@ describe("activation lifeline binding", () => {
     expect(handles.e).toBeUndefined();
     expect(handles.w).toBeUndefined();
     expect(handles.rotation).toBeUndefined();
+  });
+});
+
+describe("sequence fragment row background texts", () => {
+  const HEADER = 36.272;
+  const BODY_A = 90;
+  const BODY_B = 240 - HEADER - BODY_A;
+  const normalizeFragment = (element: ExcalidrawShapeElement) =>
+    normalizeSequenceFragmentGeometry(element) as ExcalidrawShapeElement & {
+      shape: Extract<SequenceShapeData, { id: "sc-fragment" }>;
+    };
+  const makeFragment = () =>
+    normalizeFragment(
+      makeFragmentElement(400, 240, {
+        rows: [
+          { id: "header", height: HEADER },
+          { id: "row-a", height: BODY_A },
+          { id: "row-b", height: BODY_B },
+        ],
+      }),
+    ) as ExcalidrawShapeElement & {
+      shape: Extract<SequenceShapeData, { id: "sc-fragment" }>;
+    };
+  const makeRowText = (
+    fragment: ExcalidrawShapeElement,
+    rowId: string,
+    text: string,
+    verticalAlign: "top" | "middle" = "top",
+  ) =>
+    newTextElement({
+      x: fragment.x,
+      y: fragment.y,
+      text,
+      fontSize: 13,
+      fontFamily: DEFAULT_FONT_FAMILY,
+      lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+      textAlign: "left",
+      verticalAlign,
+      autoResize: false,
+      containerRef: fragmentRowContainerRef(fragment.id, rowId),
+    });
+
+  it("derives a single-column cell bounds per row", () => {
+    const fragment = makeFragment();
+    expect(
+      getSequenceFragmentRowBounds(
+        fragment.width,
+        fragment.height,
+        fragment.shape.fragment,
+        "row-a",
+      ),
+    ).toEqual({ x: 0, y: HEADER, width: 400, height: BODY_A });
+    expect(
+      getSequenceFragmentRowBounds(
+        fragment.width,
+        fragment.height,
+        fragment.shape.fragment,
+        "missing",
+      ),
+    ).toBeNull();
+  });
+
+  it("lays the text out with table cell padding, fixed top-left", () => {
+    const fragment = makeFragment();
+    const text = {
+      ...makeRowText(fragment, "row-a", "hello"),
+      textAlign: "center" as const,
+      verticalAlign: "middle" as const,
+    };
+    const bounds = getSequenceFragmentRowBounds(
+      fragment.width,
+      fragment.height,
+      fragment.shape.fragment,
+      "row-a",
+    )!;
+    const layout = getSequenceFragmentRowBackgroundTextLayout(
+      text,
+      fragment,
+      bounds,
+    );
+    expect(layout.text).toBe("hello");
+    // alignment is owned by the fragment: top-left regardless of the text
+    expect(layout.textAlign).toBe("left");
+    expect(layout.verticalAlign).toBe("top");
+    expect(layout.x).toBe(fragment.x + TABLE_CELL_TEXT_PADDING_X);
+    expect(layout.y).toBe(fragment.y + HEADER + TABLE_CELL_TEXT_PADDING_Y);
+    expect(layout.width).toBeLessThanOrEqual(400 - TABLE_CELL_TEXT_PADDING_X * 2);
+    expect(layout.angle).toBe(0);
+  });
+
+  it("grows the wrapped row, the fragment, and shifts the lower row text", () => {
+    const fragment = makeFragment();
+    const longText = makeRowText(
+      fragment,
+      "row-a",
+      "A condition label that wraps onto many lines inside the row width ".repeat(
+        6,
+      ),
+    );
+    const lowerText = makeRowText(fragment, "row-b", "lower");
+    const lowerBefore = getSequenceFragmentRowBackgroundTextLayout(
+      lowerText,
+      fragment,
+      getSequenceFragmentRowBounds(
+        fragment.width,
+        fragment.height,
+        fragment.shape.fragment,
+        "row-b",
+      )!,
+    );
+    const scene = new Scene([fragment, longText, lowerText]);
+
+    refitSequenceFragmentRowBackgroundTexts(scene, fragment, { grow: true });
+
+    const live = scene.getNonDeletedElement(fragment.id) as typeof fragment;
+    expect(live.height).toBeGreaterThan(240);
+    const rows = live.shape.fragment!.rows;
+    expect(rows[1].height).toBeGreaterThan(BODY_A);
+    expect(rows[2].height).toBeCloseTo(BODY_B, 6);
+    expect(rows.reduce((sum, row) => sum + row.height, 0)).toBeCloseTo(
+      live.height,
+      6,
+    );
+    const liveLower = scene.getNonDeletedElement(lowerText.id)!;
+    expect(liveLower.y).toBeCloseTo(lowerBefore.y + (live.height - 240), 6);
+    const liveText = scene.getNonDeletedElement(longText.id)!;
+    expect(liveText.height).toBeLessThanOrEqual(rows[1].height);
+  });
+
+  it("does not grow rows when grow is off, only re-lays the text", () => {
+    const fragment = makeFragment();
+    const text = {
+      ...makeRowText(fragment, "row-a", "hello"),
+      y: fragment.y,
+    };
+    const scene = new Scene([fragment, text]);
+    refitSequenceFragmentRowBackgroundTexts(scene, fragment, { grow: false });
+    const live = scene.getNonDeletedElement(fragment.id)!;
+    expect(live.height).toBe(240);
+    const liveText = scene.getNonDeletedElement(text.id)!;
+    expect(liveText.y).toBe(fragment.y + HEADER + TABLE_CELL_TEXT_PADDING_Y);
+  });
+
+  it("rotates with its fragment", () => {
+    const baseFragment = makeFragment();
+    const fragment = {
+      ...baseFragment,
+      angle: (Math.PI / 2) as Radians,
+    };
+    const text = makeRowText(fragment, "row-a", "hello");
+    const bounds = getSequenceFragmentRowBounds(
+      fragment.width,
+      fragment.height,
+      fragment.shape.fragment,
+      "row-a",
+    )!;
+    const layout = getSequenceFragmentRowBackgroundTextLayout(
+      text,
+      fragment,
+      bounds,
+    );
+    expect(layout.angle).toBeCloseTo(Math.PI / 2, 6);
+    expect(Number.isFinite(layout.x) && Number.isFinite(layout.y)).toBe(true);
   });
 });

@@ -5,20 +5,30 @@ import {
 import {
   deleteSequenceFragmentRow,
   getCursorForResizingElement,
+  getFragmentRowBackgroundTexts,
   getSequenceFragmentInsertionBoundaries,
+  getSequenceFragmentRowBounds,
   getSequenceFragmentRowIndexAt,
   getSequenceFragmentRowLayout,
   getSequenceFragmentRowSeparatorYs,
   insertSequenceFragmentRow,
   isSequenceFragmentElement,
+  isTextElement,
   moveSequenceFragmentRow,
+  refitSequenceFragmentRowBackgroundTexts,
   resizeSequenceFragmentRow,
   updateBoundElements,
 } from "@excalidraw/element";
 import { pointFrom, pointRotateRads } from "@excalidraw/math";
 
 import type { Radians } from "@excalidraw/math";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type {
+  ExcalidrawElement,
+  ExcalidrawTextElement,
+  NonDeleted,
+} from "@excalidraw/element/types";
+
+import { buildFragmentRowBackgroundText } from "./fragmentRowText";
 
 import type {
   FragmentPointerGesture,
@@ -180,7 +190,13 @@ export const getFragmentStructureHoverAtSceneCoords = (
         }
       }
     }
-    return { elementId: element.id, kind: "body" };
+    const rowIndex = getSequenceFragmentRowIndexAt(
+      element.height,
+      fragment,
+      local.y,
+    );
+    const row = layout.rows[rowIndex];
+    return row ? { elementId: element.id, kind: "body", rowId: row.id } : null;
   }
 
   return null;
@@ -218,6 +234,282 @@ export const setFragmentStructureHover = (
     return;
   }
   app.setState({ fragmentStructureHover: hover });
+};
+
+const getFragmentRowBounds = (
+  fragment: NonDeleted<ExcalidrawElement>,
+  rowId: string,
+) =>
+  isSequenceFragmentElement(fragment)
+    ? getSequenceFragmentRowBounds(
+        fragment.width,
+        fragment.height,
+        fragment.shape.fragment,
+        rowId,
+      )
+    : null;
+
+/** Fragment row center in scene coords (rotation-aware), for the caret. */
+const getFragmentRowCenter = (
+  fragment: NonDeleted<ExcalidrawElement>,
+  bounds: { x: number; y: number; width: number; height: number },
+): { x: number; y: number } => {
+  const local = pointFrom(
+    bounds.x + bounds.width / 2,
+    bounds.y + bounds.height / 2,
+  );
+  const [rx, ry] = fragment.angle
+    ? pointRotateRads(
+        local,
+        pointFrom(fragment.width / 2, fragment.height / 2),
+        fragment.angle as Radians,
+      )
+    : local;
+  return { x: fragment.x + rx, y: fragment.y + ry };
+};
+
+/** Re-lay the fragment's row background texts against the current rows. */
+const refitFragmentRowTexts = (
+  app: FragmentApp,
+  fragment: NonDeleted<ExcalidrawElement>,
+  opts?: { rowIds?: readonly string[]; grow?: boolean },
+): void => {
+  if (!isSequenceFragmentElement(fragment)) {
+    return;
+  }
+  if (refitSequenceFragmentRowBackgroundTexts(app.scene, fragment, opts)) {
+    app.scene.triggerUpdate();
+  }
+};
+
+/**
+ * Re-fit one row's edited background text to its row, growing the row when
+ * wrapped content needs more space (table cell parity).
+ */
+export const refitFragmentRowBackgroundText = (
+  app: FragmentApp,
+  elementId: string,
+): boolean => {
+  const elementsMap = app.scene.getNonDeletedElementsMap();
+  const text = elementsMap.get(elementId);
+  const ref = text?.containerRef;
+  if (!text || text.type !== "text" || ref?.kind !== "fragmentRow") {
+    return false;
+  }
+  const fragment = elementsMap.get(ref.elementId);
+  if (!fragment || !isSequenceFragmentElement(fragment)) {
+    return false;
+  }
+  refitFragmentRowTexts(app, fragment, { rowIds: [ref.rowId] });
+  return true;
+};
+
+const getFragmentRowBackgroundInsertionIndex = (
+  app: FragmentApp,
+  fragment: NonDeleted<ExcalidrawElement>,
+): number => {
+  const elements = app.scene.getElementsIncludingDeleted();
+  const fragmentIndex = elements.findIndex(
+    (element) => element.id === fragment.id,
+  );
+  if (fragmentIndex === -1) {
+    return elements.length;
+  }
+  let index = fragmentIndex + 1;
+  while (index < elements.length) {
+    const ref = elements[index].containerRef;
+    if (ref?.kind === "fragmentRow" && ref.elementId === fragment.id) {
+      index++;
+    } else {
+      break;
+    }
+  }
+  return index;
+};
+
+/** Double-click on a body row edits or creates that row's background text. */
+export const handleFragmentDoubleClick = (
+  app: FragmentApp,
+  sceneX: number,
+  sceneY: number,
+): boolean => {
+  const hits = app.getElementsAtPosition(sceneX, sceneY);
+  const topHit = hits[hits.length - 1];
+  if (!topHit || !isSequenceFragmentElement(topHit)) {
+    return false;
+  }
+  const local = getFragmentLocalPoint(topHit, sceneX, sceneY);
+  if (
+    local.x < 0 ||
+    local.x > topHit.width ||
+    local.y < 0 ||
+    local.y > topHit.height
+  ) {
+    return false;
+  }
+  const rowIndex = getSequenceFragmentRowIndexAt(
+    topHit.height,
+    topHit.shape.fragment,
+    local.y,
+  );
+  if (rowIndex < 1) {
+    // the header row is the operator tab: the generic path edits its label
+    return false;
+  }
+  const row = getSequenceFragmentRowLayout(
+    topHit.height,
+    topHit.shape.fragment,
+  ).rows[rowIndex];
+  if (!row) {
+    return false;
+  }
+  app.cursor.reset();
+  editFragmentRowBackgroundText(app, topHit, row.id, {
+    x: sceneX,
+    y: sceneY,
+  });
+  return true;
+};
+
+/** Enter on a selected row: edit that row's background text (table parity). */
+export const editSelectedFragmentRowBackgroundText = (
+  app: FragmentApp,
+): boolean => {
+  const selection: FragmentRowSelection | null =
+    app.state.fragmentRowSelection;
+  if (!selection || app.state.editingTextElement) {
+    return false;
+  }
+  const fragment = app.scene.getNonDeletedElement(selection.elementId);
+  if (
+    !fragment ||
+    !isSequenceFragmentElement(fragment) ||
+    fragment.locked
+  ) {
+    return false;
+  }
+  const bounds = getFragmentRowBounds(fragment, selection.rowId);
+  if (!bounds) {
+    return false;
+  }
+  editFragmentRowBackgroundText(
+    app,
+    fragment,
+    selection.rowId,
+    getFragmentRowCenter(fragment, bounds),
+  );
+  return true;
+};
+
+const editFragmentRowBackgroundText = (
+  app: FragmentApp,
+  fragment: NonDeleted<ExcalidrawElement>,
+  rowId: string,
+  initialCaretSceneCoords: { x: number; y: number },
+): void => {
+  const elementsMap = app.scene.getNonDeletedElementsMap();
+  const existing = getFragmentRowBackgroundTexts(
+    elementsMap,
+    fragment.id,
+    rowId,
+  ).find(
+    (element) => isTextElement(element),
+  ) as NonDeleted<ExcalidrawTextElement> | undefined;
+
+  if (existing) {
+    refitFragmentRowBackgroundText(app, existing.id);
+    const fitted = app.scene.getNonDeletedElement(existing.id) as
+      | NonDeleted<ExcalidrawTextElement>
+      | undefined;
+    if (!fitted) {
+      return;
+    }
+    app.setState({ editingTextElement: fitted });
+    app.handleTextWysiwyg(fitted, {
+      isExistingElement: true,
+      initialCaretSceneCoords,
+    });
+    return;
+  }
+
+  const text = buildFragmentRowBackgroundText(app, fragment, rowId, {
+    text: "",
+  });
+  app.scene.insertElementsAtIndex(
+    [text],
+    getFragmentRowBackgroundInsertionIndex(app, fragment),
+  );
+  app.setState({ editingTextElement: text });
+  app.handleTextWysiwyg(text, { isExistingElement: false });
+};
+
+/**
+ * Select a fragment row from the body (pointer up without drag). Mirrors the
+ * table's cell selection: the row's own channel takes over and the element
+ * selection is dropped so Delete reaches the row command.
+ */
+export const selectFragmentRow = (
+  app: FragmentApp,
+  elementId: string,
+  rowId: string,
+): boolean => {
+  const fragment = app.scene.getNonDeletedElement(elementId);
+  if (!fragment || !isSequenceFragmentElement(fragment) || fragment.locked) {
+    return false;
+  }
+  if (!getFragmentRowBounds(fragment, rowId)) {
+    return false;
+  }
+  app.setState((prevState: any) => {
+    const selectedElementIds = { ...prevState.selectedElementIds };
+    delete selectedElementIds[elementId];
+    return {
+      selectedElementIds,
+      fragmentRowSelection: { elementId, rowId },
+    };
+  });
+  return true;
+};
+
+/** ArrowUp/ArrowDown on a selected row moves the row selection (body only). */
+export const moveSelectedFragmentRowFocus = (
+  app: FragmentApp,
+  direction: "up" | "down",
+): boolean => {
+  const selection: FragmentRowSelection | null =
+    app.state.fragmentRowSelection;
+  if (!selection || app.state.editingTextElement) {
+    return false;
+  }
+  const fragment = app.scene.getNonDeletedElement(selection.elementId);
+  if (!fragment || !isSequenceFragmentElement(fragment)) {
+    return false;
+  }
+  const layout = getSequenceFragmentRowLayout(
+    fragment.height,
+    fragment.shape.fragment,
+  );
+  const index = layout.rows.findIndex((row) => row.id === selection.rowId);
+  if (index < 1) {
+    return false;
+  }
+  const nextIndex = Math.max(
+    1,
+    Math.min(
+      layout.rows.length - 1,
+      index + (direction === "down" ? 1 : -1),
+    ),
+  );
+  if (nextIndex === index) {
+    return false;
+  }
+  app.setState({
+    fragmentRowSelection: {
+      elementId: fragment.id,
+      rowId: layout.rows[nextIndex].id,
+    },
+  });
+  return true;
 };
 
 /** Drop target for a row drag: final index plus the line to paint. */
@@ -290,6 +582,10 @@ export const armFragmentStructureGestureOnPointerDown = (
       shape: update.shape,
     });
     app.scene.triggerUpdate();
+    const live = app.scene.getNonDeletedElement(element.id);
+    if (live) {
+      refitFragmentRowTexts(app, live, { grow: false });
+    }
     pointerDownState.fragmentGesture.active = {
       kind: "insertRow",
       elementId: element.id,
@@ -393,6 +689,8 @@ export const handleFragmentGestureMove = (
       // the operator tab's height is the header row height: keep its bound
       // label laid out against the live tab
       updateBoundElements(element, app.scene);
+      // row boundaries moved: row background texts follow their rows
+      refitFragmentRowTexts(app, element, { grow: false });
       gesture.hasChanged = true;
     }
     setFragmentStructureHover(app, {
@@ -438,6 +736,10 @@ export const cancelFragmentGesture = (
       shape: gesture.startShape,
     });
     app.scene.triggerUpdate();
+    const live = app.scene.getNonDeletedElement(element.id);
+    if (live) {
+      refitFragmentRowTexts(app, live, { grow: false });
+    }
   }
   setFragmentStructureHover(app, null);
   return true;
@@ -473,6 +775,10 @@ export const finalizeFragmentGestureOnPointerUp = (
         shape: update.shape,
       });
       app.scene.triggerUpdate();
+      const live = app.scene.getNonDeletedElement(element.id);
+      if (live) {
+        refitFragmentRowTexts(app, live, { grow: false });
+      }
     }
   }
   setFragmentStructureHover(app, null);
@@ -498,10 +804,27 @@ export const deleteSelectedFragmentRow = (app: FragmentApp): boolean => {
   }
   app.setState({ fragmentRowSelection: null });
   app.store.scheduleCapture();
+  // the row's background text goes with its row — a dangling row ref would
+  // fail scene validation
+  const elementsMap = app.scene.getNonDeletedElementsMap();
+  for (const text of getFragmentRowBackgroundTexts(
+    elementsMap,
+    element.id,
+    selection.rowId,
+  )) {
+    app.scene.mutateElement(text, {
+      isDeleted: true,
+      containerRef: undefined,
+    });
+  }
   app.scene.mutateElement(element, {
     height: update.height,
     shape: update.shape,
   });
   app.scene.triggerUpdate();
+  const live = app.scene.getNonDeletedElement(element.id);
+  if (live) {
+    refitFragmentRowTexts(app, live, { grow: false });
+  }
   return true;
 };

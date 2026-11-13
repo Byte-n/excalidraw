@@ -14,7 +14,7 @@ import { getIndexedTableChildren } from "./tableChildrenIndex";
 import { measureText } from "./textMeasurements";
 import { getTableHeight, getTableWidth } from "./tableStruct";
 import { isElbowArrow, isMindmapEdgeElement } from "./typeChecks";
-import { isShapeElement } from "./compositeShape";
+import { isSequenceFragmentElement, isShapeElement } from "./compositeShape";
 
 import type { ElementUpdate } from "./mutateElement";
 import type {
@@ -172,10 +172,12 @@ const getDirectTableCellChildren = (
   if (indexed) {
     const children = indexed.filter((element) => !element.isDeleted);
     iterateCollection(elements, (element) => {
+      const ref = element.containerRef;
       if (
         !element.isDeleted &&
-        element.containerRef?.kind === "tableTitle" &&
-        element.containerRef.elementId === tableId
+        (ref?.kind === "tableTitle" || ref?.kind === "fragmentRow") &&
+        ref.elementId === tableId &&
+        !children.some((child) => child.id === element.id)
       ) {
         children.push(element);
       }
@@ -188,7 +190,9 @@ const getDirectTableCellChildren = (
     const ref = element.containerRef;
     if (
       !element.isDeleted &&
-      (ref?.kind === "tableCell" || ref?.kind === "tableTitle") &&
+      (ref?.kind === "tableCell" ||
+        ref?.kind === "tableTitle" ||
+        ref?.kind === "fragmentRow") &&
       ref.elementId === tableId
     ) {
       children.push(element);
@@ -247,7 +251,7 @@ const collectTableSubtree = (
       }
       byId.set(child.id, child);
       ordered.push(child);
-      if (child.type === "table") {
+      if (child.type === "table" || isSequenceFragmentElement(child)) {
         queue.push(child);
       }
     }

@@ -9,6 +9,7 @@ import type { MarkNonNullable } from "@excalidraw/common/utility-types";
 import {
   assertShapeElementType,
   isActivationElement,
+  isSequenceFragmentElement,
   isShapeElement,
 } from "./compositeShape";
 import { assertMindmapShapeData } from "./mindmap";
@@ -43,6 +44,7 @@ import type {
   ExcalidrawMindmapEdgeElement,
   DirectContainerRef,
   TableCellContainerRef,
+  FragmentRowContainerRef,
   ExcalidrawTableElement,
 } from "./types";
 
@@ -138,6 +140,23 @@ export const isTableCellBackgroundText = <T extends ExcalidrawElement>(
   element?.containerRef?.kind === "tableCell" &&
   element.containerRef.role === "backgroundText";
 
+/** A fragment body row's background text (the single-column cell text). */
+export const isFragmentRowBackgroundText = <T extends ExcalidrawElement>(
+  element: T | null | undefined,
+): boolean =>
+  element?.containerRef?.kind === "fragmentRow" &&
+  element.containerRef.role === "backgroundText";
+
+/**
+ * Background text owned by a container cell/row. Like table cell background
+ * text, fragment row text is chrome outside its editor: it must not be hit,
+ * selected, dragged or box-selected, and the editor treats it as unbound.
+ */
+export const isContainerBackgroundText = <T extends ExcalidrawElement>(
+  element: T | null | undefined,
+): boolean =>
+  isTableCellBackgroundText(element) || isFragmentRowBackgroundText(element);
+
 export const frameLikeContainerRef = (elementId: string | null | undefined) => {
   if (elementId == null) {
     return undefined;
@@ -182,6 +201,38 @@ const assertValidTableCellRef = (
     throw new Error(
       `Unsupported table cell role: ${String(containerRef.role)}`,
     );
+  }
+};
+
+const assertValidFragmentRowRef = (
+  element: ExcalidrawElement,
+  containerRef: FragmentRowContainerRef,
+  parent: ExcalidrawElement,
+): void => {
+  if (!isSequenceFragmentElement(parent)) {
+    throw new Error(
+      `Invalid fragment row container reference on ${element.id}: ${containerRef.elementId}`,
+    );
+  }
+  const rows = parent.shape.fragment?.rows;
+  const headerRowId = rows?.[0]?.id;
+  if (
+    typeof containerRef.rowId !== "string" ||
+    containerRef.rowId.length === 0 ||
+    !rows?.some((row) => row.id === containerRef.rowId) ||
+    containerRef.rowId === headerRowId
+  ) {
+    throw new Error(
+      `Invalid fragment row container reference on ${element.id}: ${containerRef.rowId}`,
+    );
+  }
+  if (!isTextElement(element)) {
+    throw new Error(
+      `Fragment row background text ${element.id} must be a text element`,
+    );
+  }
+  if (element.containerId) {
+    throw new Error(`Bound text ${element.id} cannot have a containerRef`);
   }
 };
 
@@ -232,6 +283,15 @@ export const validateContainerRef = (
     assertValidTableCellRef(element, containerRef, parent);
     return;
   }
+  if (containerRef.kind === "fragmentRow") {
+    if (!parent || parent.isDeleted) {
+      throw new Error(
+        `Invalid container reference on ${element.id}: ${containerRef.elementId}`,
+      );
+    }
+    assertValidFragmentRowRef(element, containerRef, parent);
+    return;
+  }
   if (containerRef.kind === "tableTitle") {
     if (
       !parent ||
@@ -257,18 +317,25 @@ const assertSingleBackgroundTextPerCell = (
   const seen = new Set<string>();
   for (const element of elements) {
     const containerRef = element.containerRef;
-    if (
-      element.isDeleted ||
-      containerRef?.kind !== "tableCell" ||
-      containerRef.role !== "backgroundText"
-    ) {
+    if (element.isDeleted || !containerRef) {
       continue;
     }
-    const key = `${containerRef.elementId}\u0000${containerRef.cellId}`;
+    let key: string;
+    let message: string;
+    if (containerRef.kind === "tableCell") {
+      if (containerRef.role !== "backgroundText") {
+        continue;
+      }
+      key = `cell\u0000${containerRef.elementId}\u0000${containerRef.cellId}`;
+      message = `Cell ${containerRef.cellId} of table ${containerRef.elementId} already has background text`;
+    } else if (containerRef.kind === "fragmentRow") {
+      key = `row\u0000${containerRef.elementId}\u0000${containerRef.rowId}`;
+      message = `Row ${containerRef.rowId} of fragment ${containerRef.elementId} already has background text`;
+    } else {
+      continue;
+    }
     if (seen.has(key)) {
-      throw new Error(
-        `Cell ${containerRef.cellId} of table ${containerRef.elementId} already has background text`,
-      );
+      throw new Error(message);
     }
     seen.add(key);
   }

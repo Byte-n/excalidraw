@@ -6,6 +6,7 @@ import {
 
 import { getBoundTextElement } from "./textElement";
 import { getIndexedTableCellChildren } from "./tableChildrenIndex";
+import { isSequenceFragmentElement } from "./compositeShape/sequenceOutline";
 import {
   getTableBackgroundTextStyle,
   getTableSubtreeElements,
@@ -46,7 +47,11 @@ export const collectCellMemberIds = (
       cellId,
     ) ?? []) {
       ids.add(member.id);
-      if (isTableElement(member) || isFrameLikeElement(member)) {
+      if (
+        isTableElement(member) ||
+        isFrameLikeElement(member) ||
+        isSequenceFragmentElement(member)
+      ) {
         for (const descendant of getTableSubtreeElements(
           allElements,
           member.id,
