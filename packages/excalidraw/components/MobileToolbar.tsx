@@ -23,11 +23,11 @@ import {
   TOOLS,
 } from "./Tools";
 
+import { FramePresetIcon, MindmapPresetIcon } from "./presetIcons";
 import {
   TextIcon,
   ImageIcon,
   DotsIcon,
-  frameToolIcon,
   EmbedIcon,
   laserPointerToolIcon,
   drawShapeToolIcon,
@@ -35,7 +35,6 @@ import {
   mermaidLogoIcon,
   MagicIcon,
   stickyNoteToolIcon,
-  mindmapIcon,
 } from "./icons";
 
 import "./ToolIcon.scss";
@@ -114,27 +113,31 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
     return true;
   });
   const extraToolSelected = extraTools.includes(activeTool.type);
-  const extraIcon = extraToolSelected
-    ? activeTool.type === "text"
-      ? TextIcon
-      : activeTool.type === "image"
-      ? ImageIcon
-      : activeTool.type === "frame"
-      ? frameToolIcon
-      : activeTool.type === "stickynote"
-      ? stickyNoteToolIcon
-      : activeTool.type === "embeddable"
-      ? EmbedIcon
-      : activeTool.type === "laser"
-      ? laserPointerToolIcon
-      : activeTool.type === "bucketfill"
-      ? bucketFillIcon
-      : activeTool.type === "mindmap"
-      ? mindmapIcon
-      : activeTool.type === "magicframe"
-      ? MagicIcon
-      : DotsIcon
-    : DotsIcon;
+  const extraIcon = extraToolSelected ? (
+    activeTool.type === "text" ? (
+      TextIcon
+    ) : activeTool.type === "image" ? (
+      ImageIcon
+    ) : activeTool.type === "frame" ? (
+      <FramePresetIcon />
+    ) : activeTool.type === "stickynote" ? (
+      stickyNoteToolIcon
+    ) : activeTool.type === "embeddable" ? (
+      EmbedIcon
+    ) : activeTool.type === "laser" ? (
+      laserPointerToolIcon
+    ) : activeTool.type === "bucketfill" ? (
+      bucketFillIcon
+    ) : activeTool.type === "mindmap" ? (
+      <MindmapPresetIcon />
+    ) : activeTool.type === "magicframe" ? (
+      MagicIcon
+    ) : (
+      DotsIcon
+    )
+  ) : (
+    DotsIcon
+  );
 
   const toolProps = { app, activeTool };
 
@@ -260,7 +263,7 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
           {!showFrameToolOutside && (
             <DropdownMenu.Item
               onSelect={() => app.setActiveTool({ type: "frame" })}
-              icon={frameToolIcon}
+              icon={<FramePresetIcon />}
               shortcut={KEYS.F.toLocaleUpperCase()}
               data-testid="toolbar-frame"
               selected={frameToolSelected}
@@ -311,7 +314,7 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
           {app.props.UIOptions.tools?.mindmap !== false && (
             <DropdownMenu.Item
               onSelect={() => app.setActiveTool({ type: "mindmap" })}
-              icon={mindmapIcon}
+              icon={<MindmapPresetIcon />}
               shortcut={getToolShortcut("mindmap")}
               data-testid="toolbar-mindmap"
               selected={activeTool.type === "mindmap"}

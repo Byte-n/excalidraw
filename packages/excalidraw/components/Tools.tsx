@@ -21,14 +21,16 @@ import {
   isFlowchartShapeId,
   isGenericShapeId,
 } from "./presetCatalog";
-import { getStickyNotePresetIcon } from "./StickyNotePresetIcon";
+import {
+  FramePresetIcon,
+  MindmapPresetIcon,
+  ShapePresetIcon,
+  getStickyNotePresetIcon,
+} from "./presetIcons";
 import { ToolPopover } from "./ToolPopover";
 
 import {
   SelectionIcon,
-  RectangleIcon,
-  DiamondIcon,
-  EllipseIcon,
   ArrowIcon,
   LineIcon,
   FreedrawIcon,
@@ -40,10 +42,8 @@ import {
   bucketFillIcon,
   LassoIcon,
   handIcon,
-  frameToolIcon,
   EmbedIcon,
   stickyNoteToolIcon,
-  mindmapIcon,
   tableToolIcon,
 } from "./icons";
 
@@ -96,17 +96,17 @@ export const TOOLS = defineTools({
     fillable: true,
   },
   rectangle: {
-    icon: RectangleIcon,
+    icon: <ShapePresetIcon id="rectangle" />,
     letterKey: KEYS.R,
     numericKey: KEYS["2"],
     fillable: true,
   },
   diamond: {
-    icon: DiamondIcon,
+    icon: <ShapePresetIcon id="diamond" />,
     fillable: true,
   },
   ellipse: {
-    icon: EllipseIcon,
+    icon: <ShapePresetIcon id="ellipse" />,
     fillable: true,
   },
   arrow: {
@@ -146,7 +146,7 @@ export const TOOLS = defineTools({
     toggle: true,
   },
   frame: {
-    icon: frameToolIcon,
+    icon: <FramePresetIcon />,
     letterKey: KEYS.F,
   },
   autoshape: {
@@ -167,7 +167,7 @@ export const TOOLS = defineTools({
     letterKey: KEYS.B,
   },
   mindmap: {
-    icon: mindmapIcon,
+    icon: <MindmapPresetIcon />,
     letterKey: "m",
   },
   table: {

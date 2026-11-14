@@ -79,8 +79,6 @@ import {
   DotsHorizontalIcon,
   pencilIcon,
   RectangleIcon,
-  EllipseIcon,
-  DiamondIcon,
   ArrowRightIcon,
   CenterHorizontallyIcon,
   LayersIcon,
@@ -101,6 +99,7 @@ import { ToolbarGroup } from "./toolbar/ToolbarGroup";
 import { ToolbarMoreMenu } from "./toolbar/ToolbarMoreMenu";
 
 import { getShapeActionPredicates } from "./shapeActionPredicates";
+import { getPresetShapeIcon } from "./presetIcons";
 
 import type { ShapeActionPredicates } from "./shapeActionPredicates";
 import type { AppClassProperties, UIAppState, AppState } from "../types";
@@ -118,11 +117,11 @@ const PROPERTIES_CLASSES = clsx([
   "properties-content",
 ]);
 
-const MINDMAP_SHAPES: readonly [MindmapNodeShape, React.ReactNode][] = [
-  ["rectangle", RectangleIcon],
-  ["ellipse", EllipseIcon],
-  ["diamond", DiamondIcon],
-  ["pill", RectangleIcon],
+const MINDMAP_SHAPES: readonly Exclude<MindmapNodeShape, "text">[] = [
+  "rectangle",
+  "ellipse",
+  "diamond",
+  "pill",
 ];
 
 const MINDMAP_DIRECTIONS: readonly [MindmapLayoutDirection, TranslationKeys][] =
@@ -389,11 +388,11 @@ const MindmapNodeShapeGroup = ({ app }: { app: AppClassProperties }) => {
             onSelect={() => app.mindmap.setNodeShape(derivedShape)}
           />
         )}
-        {MINDMAP_SHAPES.map(([shape, icon]) => (
+        {MINDMAP_SHAPES.map((shape) => (
           <IconButton
             key={shape}
             type="toggle"
-            icon={icon}
+            icon={getPresetShapeIcon(shape, app.state.theme)}
             checked={
               getMindmapShapeId(node) === shape && shape !== derivedShape
             }

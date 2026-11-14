@@ -10,22 +10,17 @@ import {
 import type {
   StickyNotePreset,
   TablePresetId,
-  BasicShapeId,
   ShapeId,
 } from "@excalidraw/element";
 import type { MindmapLayoutDirection, Theme } from "@excalidraw/element/types";
 
-import { getCompositeShapeIcon } from "./CompositeShapeIcon";
-import { getSequenceShapeIcon } from "./SequenceShapeIcon";
-import { getStickyNotePresetIcon } from "./StickyNotePresetIcon";
-import { getTablePresetIcon } from "./TablePresetIcon";
 import {
-  DiamondIcon,
-  EllipseIcon,
-  RectangleIcon,
-  frameToolIcon,
-  mindmapIcon,
-} from "./icons";
+  getFramePresetIcon,
+  getMindmapPresetIcon,
+  getPresetShapeIcon,
+  getStickyNotePresetIcon,
+  getTablePresetIcon,
+} from "./presetIcons";
 
 import type { TranslationKeys } from "../i18n";
 import type { ReactNode } from "react";
@@ -101,22 +96,12 @@ export type GenericShapeId = ShapeId;
 
 export { isShapeId as isGenericShapeId } from "@excalidraw/element";
 
-/** 基础图形的缩略图：矩形/菱形/椭圆走各自工具图标，其余走复合图形图标 */
-const getBasicShapeIcon = (id: BasicShapeId): ReactNode =>
-  id === "diamond"
-    ? DiamondIcon
-    : id === "ellipse"
-    ? EllipseIcon
-    : id === "rectangle"
-    ? RectangleIcon
-    : getCompositeShapeIcon(id);
-
 const BASIC_ITEMS: readonly PresetCatalogItem[] = BASIC_SHAPE_IDS.map(
   (id): PresetCatalogItem => ({
     id,
     titleKey: `toolBar.${id}`,
     fillable: supportsFill(id),
-    getIcon: () => getBasicShapeIcon(id),
+    getIcon: (theme) => getPresetShapeIcon(id, theme),
     creation: {
       kind: "shape",
       tool:
@@ -135,7 +120,7 @@ const FLOWCHART_ITEMS: readonly PresetCatalogItem[] = FLOWCHART_SHAPE_IDS.map(
     id,
     titleKey: `toolBar.${id}`,
     fillable: supportsFill(id),
-    getIcon: () => getCompositeShapeIcon(id),
+    getIcon: (theme) => getPresetShapeIcon(id, theme),
     creation: { kind: "shape", tool: "rectangle", shapeId: id },
   }),
 );
@@ -146,7 +131,7 @@ const SEQUENCE_ITEMS: readonly PresetCatalogItem[] = SEQUENCE_SHAPE_IDS.flatMap(
       id,
       titleKey: `toolBar.${id}`,
       fillable: supportsFill(id),
-      getIcon: () => getSequenceShapeIcon(id),
+      getIcon: (theme) => getPresetShapeIcon(id, theme),
       creation: { kind: "shape", tool: "rectangle", shapeId: id },
     });
     if (id !== "sc-fragment") {
@@ -169,7 +154,8 @@ const SEQUENCE_ITEMS: readonly PresetCatalogItem[] = SEQUENCE_SHAPE_IDS.flatMap(
         id: "sc-fragment-else",
         titleKey: "toolBar.sc-fragment-else",
         fillable: supportsFill(id),
-        getIcon: () => getSequenceShapeIcon(id, { fragmentBodyRows: 2 }),
+        getIcon: (theme) =>
+          getPresetShapeIcon(id, theme, { fragmentBodyRows: 2 }),
         creation: {
           kind: "shape",
           tool: "rectangle",
@@ -200,7 +186,7 @@ const FRAME_ITEMS: readonly PresetCatalogItem[] = [
   {
     id: "frame",
     titleKey: "shapeDrawer.frame",
-    getIcon: () => frameToolIcon,
+    getIcon: (theme) => getFramePresetIcon(theme),
     creation: { kind: "frame" },
   },
 ];
@@ -233,28 +219,28 @@ const MINDMAP_ITEMS: readonly PresetCatalogItem[] = [
     id: "mindmap-right",
     titleKey: "mindmapPreset.directionRight",
     iconRotation: 0,
-    getIcon: () => mindmapIcon,
+    getIcon: (theme) => getMindmapPresetIcon(theme),
     creation: { kind: "mindmap", direction: "left-to-right" },
   },
   {
     id: "mindmap-left",
     titleKey: "mindmapPreset.directionLeft",
     iconRotation: 180,
-    getIcon: () => mindmapIcon,
+    getIcon: (theme) => getMindmapPresetIcon(theme),
     creation: { kind: "mindmap", direction: "right-to-left" },
   },
   {
     id: "mindmap-down",
     titleKey: "mindmapPreset.directionDown",
     iconRotation: 90,
-    getIcon: () => mindmapIcon,
+    getIcon: (theme) => getMindmapPresetIcon(theme),
     creation: { kind: "mindmap", direction: "top-to-bottom" },
   },
   {
     id: "mindmap-up",
     titleKey: "mindmapPreset.directionUp",
     iconRotation: -90,
-    getIcon: () => mindmapIcon,
+    getIcon: (theme) => getMindmapPresetIcon(theme),
     creation: { kind: "mindmap", direction: "bottom-to-top" },
   },
 ];
