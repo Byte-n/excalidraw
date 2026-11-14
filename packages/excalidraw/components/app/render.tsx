@@ -538,7 +538,7 @@ export const AppView = ({ app }: { app: App }) => {
                               border={app.props.viewportStatusFrame.border}
                             />
                           )}
-                        {app.frames.renderFrameNameEditor()}
+                        {app.elementTitles.renderElementTitleEditor()}
                         {app.isDefaultUIEnabled() &&
                           app.state.activeLockedId && (
                             <UnlockPopup

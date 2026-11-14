@@ -1,14 +1,9 @@
-import {
-  getFontString,
-  invariant,
-  TABLE_CELL_TEXT_FONT_SIZE,
-  TABLE_STRUCTURE_RAIL_OFFSET,
-} from "@excalidraw/common";
+import { invariant, TABLE_CELL_TEXT_FONT_SIZE } from "@excalidraw/common";
 
 import { newTableElement, newTextElement } from "./newElement";
 import { getIndexedTableCellChildren } from "./tableChildrenIndex";
 import { getTableSubtreeElements } from "./tableContainer";
-import { measureText, normalizeText } from "./textMeasurements";
+import { normalizeText } from "./textMeasurements";
 import {
   getCellsInTableRange,
   getMemberTranslationsForColumns,
@@ -50,8 +45,6 @@ import type {
 import type {
   ExcalidrawElement,
   ExcalidrawTableElement,
-  ExcalidrawTextElement,
-  FontFamilyValues,
   NonDeleted,
   TableCellData,
   TableDataV1,
@@ -60,16 +53,14 @@ import type {
 
 export type TableTarget = Readonly<{ tableId: string }>;
 export type CellStylePatch = NullableStyle<TableCellData["style"]>;
-export type TableStylePatch = NullableStyle<Omit<TableStyle, "title">> & {
-  readonly title?: NullableStyle<NonNullable<TableStyle["title"]>>;
-};
+export type TableStylePatch = NullableStyle<TableStyle>;
 export type TableOperation =
   | {
       action: "create";
       position: ScenePoint;
       rowCount: number;
       columnCount: number;
-      title?: string;
+      name?: string;
       style?: TableStylePatch;
     }
   | { action: "delete"; target: TableTarget }
@@ -90,7 +81,7 @@ export type TableOperation =
       cellId: string;
       style: CellStylePatch;
     }
-  | { action: "setTitle"; target: TableTarget; text: string }
+  | { action: "setName"; target: TableTarget; name: string }
   | { action: "setStyle"; target: TableTarget; style: TableStylePatch };
 export type TableOperationReferences = Extract<
   CanvasElementOperationReferences,
@@ -119,112 +110,17 @@ const patchStyle = <T extends object>(
   return next;
 };
 
-export const getTableSceneTitle = (
-  elements: readonly ExcalidrawElement[],
-  tableId: string,
-): NonDeleted<ExcalidrawTextElement> | undefined =>
-  elements
-    .filter(
-      (element): element is NonDeleted<ExcalidrawTextElement> =>
-        !element.isDeleted &&
-        isTextElement(element) &&
-        element.containerRef?.kind === "tableTitle" &&
-        element.containerRef.elementId === tableId,
-    )
-    .sort(compareSlotIdentity)[0];
-
-/** Extra clearance between the rail band and the title's bottom edge. */
-const TABLE_TITLE_RAIL_CLEARANCE = 9;
-
-/**
- * Scene-space distance from the table frame to the title's bottom edge: the
- * row/column rails hug the frame from the outside, so the title clears them
- * before the configured gap starts. The same value positions created titles
- * and the empty-title placeholder, so the title never moves between states.
- */
-const getTableTitleOffsetY = (table: ExcalidrawTableElement) =>
-  TABLE_STRUCTURE_RAIL_OFFSET +
-  TABLE_TITLE_RAIL_CLEARANCE +
-  (table.table.style?.title?.gap ?? 8);
-
-/** Title persistent position is scene coordinates only; zoom belongs to the editor. */
-export const getTableSceneTitlePosition = (
-  table: ExcalidrawTableElement,
-  title: Pick<ExcalidrawTextElement, "width" | "height">,
-) => {
-  const align = table.table.style?.title?.align ?? "start";
-  return {
-    x:
-      table.x +
-      (align === "center"
-        ? (table.width - title.width) / 2
-        : align === "end"
-        ? table.width - title.width
-        : 0),
-    y: table.y - getTableTitleOffsetY(table) - title.height,
-  };
-};
-
-export const positionTableSceneTitle = (
-  scene: Scene,
-  table: ExcalidrawTableElement,
-) => {
-  const title = getTableSceneTitle(
-    scene.getElementsIncludingDeleted(),
-    table.id,
-  );
-  if (title) {
-    scene.mutateElement(title, getTableSceneTitlePosition(table, title));
-  }
-};
-
-export const setTableSceneTitle = (
-  scene: Scene,
-  table: ExcalidrawTableElement,
-  value: string,
-  options?: { fontFamily?: FontFamilyValues },
-) => {
-  const text = normalizeText(value);
-  let title = getTableSceneTitle(scene.getElementsIncludingDeleted(), table.id);
-  if (!title) {
-    title = newTextElement({
-      x: table.x,
-      y: table.y,
-      text,
-      fontFamily: options?.fontFamily,
-      containerRef: { kind: "tableTitle", elementId: table.id },
-    });
-    scene.insertElementsAtIndex([title], scene.getElementIndex(table.id) + 1);
-  } else {
-    scene.mutateElement(title, {
-      text,
-      originalText: text,
-      ...measureText(text, getFontString(title), title.lineHeight),
-    });
-  }
-  positionTableSceneTitle(scene, table);
-  return title;
-};
-
 export const setTableSceneStyle = (
   scene: Scene,
   table: ExcalidrawTableElement,
   patch: TableStylePatch,
 ) => {
-  const { title, ...leaves } = patch;
-  const style = patchStyle(table.table.style ?? {}, leaves);
   scene.mutateElement(table, {
     table: {
       ...table.table,
-      style: {
-        ...style,
-        ...(title !== undefined && {
-          title: patchStyle(table.table.style?.title ?? {}, title),
-        }),
-      },
+      style: patchStyle(table.table.style ?? {}, patch),
     },
   });
-  positionTableSceneTitle(scene, table);
 };
 
 export const setTableSceneCellStyle = (
@@ -493,7 +389,6 @@ const updateTableStructure = (
     table,
     next.cells.filter((cell) => !cell.mergedInto).map((cell) => cell.id),
   );
-  positionTableSceneTitle(scene, table);
 };
 
 export const applyTableOperation = (
@@ -514,6 +409,7 @@ export const applyTableOperation = (
       }
       table = newTableElement({
         type: "table",
+        name: operation.name,
         x: operation.position.x,
         y: operation.position.y,
         rowCount: operation.rowCount,
@@ -540,9 +436,6 @@ export const applyTableOperation = (
       case "create":
         if (operation.style) {
           setTableSceneStyle(scene, table, operation.style);
-        }
-        if (operation.title !== undefined) {
-          setTableSceneTitle(scene, table, operation.title);
         }
         references.rows = table.table.rows.map((row, index) => ({
           rowId: row.id,
@@ -585,8 +478,8 @@ export const applyTableOperation = (
           operation.style,
         );
         break;
-      case "setTitle":
-        setTableSceneTitle(scene, table, operation.text);
+      case "setName":
+        scene.mutateElement(table, { name: operation.name.trim() || null });
         break;
       case "setStyle":
         setTableSceneStyle(scene, table, operation.style);

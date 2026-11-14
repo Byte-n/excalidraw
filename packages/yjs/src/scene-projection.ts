@@ -41,8 +41,6 @@ export function projectExcalidrawDisplayElements<
         !!parent &&
         ["frame", "magicframe"].includes(parent.type) &&
         !["frame", "magicframe"].includes(element.type);
-    } else if (ref.kind === "tableTitle") {
-      valid = valid && parent?.type === "table" && element.type === "text";
     } else if (ref.kind === "fragmentRow") {
       const shape = parent?.shape as
         | { id?: string; fragment?: { rows?: readonly { id: string }[] } }
@@ -83,16 +81,15 @@ export function projectExcalidrawDisplayElements<
     if (
       element.isDeleted ||
       !ref ||
-      (ref.kind !== "tableTitle" &&
-        !(ref.kind === "tableCell" && ref.role === "backgroundText") &&
-        !(ref.kind === "fragmentRow" && ref.role === "backgroundText"))
+      !(
+        (ref.kind === "tableCell" && ref.role === "backgroundText") ||
+        (ref.kind === "fragmentRow" && ref.role === "backgroundText")
+      )
     ) {
       continue;
     }
     const slot = JSON.stringify(
-      ref.kind === "tableTitle"
-        ? ["title", ref.elementId]
-        : ref.kind === "fragmentRow"
+      ref.kind === "fragmentRow"
         ? ["row", ref.elementId, ref.rowId]
         : ["cell", ref.elementId, ref.cellId],
     );

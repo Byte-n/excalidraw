@@ -1,8 +1,8 @@
 import {
-  DEFAULT_FONT_FAMILY,
   KEYS,
   TABLE_STRUCTURE_INSERTION_OFFSET,
   TABLE_STRUCTURE_RAIL_OFFSET,
+  TABLE_TITLE_OFFSET_Y,
 } from "@excalidraw/common";
 import { getTransformHandles } from "@excalidraw/element";
 import * as Element from "@excalidraw/element";
@@ -16,6 +16,7 @@ import type {
 
 import { Excalidraw } from "../index";
 import * as StaticScene from "../renderer/staticScene";
+import { getElementTitleLayout } from "../renderer/elementTitle";
 import {
   cleanAppStateForExport,
   clearAppStateForDatabase,
@@ -24,10 +25,6 @@ import {
 import { actionFinalize } from "../actions/actionFinalize";
 import { actionDeselect } from "../actions/actionDeselect";
 import { getTableStructureHoverAtSceneCoords } from "../components/app/table";
-
-import { getTableTitleBar } from "../components/app/tableTitle";
-
-import { getTextEditor, updateTextEditor } from "./queries/dom";
 
 import { API } from "./helpers/api";
 import { Keyboard } from "./helpers/ui";
@@ -1562,46 +1559,6 @@ describe("table row/column structure", () => {
       );
     });
 
-    it("keeps the title content-sized through scale preview and commit", async () => {
-      const { table, text } = scaleFixture();
-      const title = Element.newTextElement({
-        x: table.x,
-        y: table.y - 45,
-        text: "Budget 2026",
-        fontSize: 20,
-        containerRef: { kind: "tableTitle", elementId: table.id },
-      });
-      API.setElements([table, title, text]);
-      selectTable(table);
-
-      const original = {
-        width: title.width,
-        height: title.height,
-        fontSize: title.fontSize,
-        gap: table.y - (title.y + title.height),
-      };
-      const handle = seHandleCenter(table);
-      mouseDown(handle.x, handle.y);
-      mouseMove(handle.x + 96, handle.y + 42);
-      await nextFrame();
-
-      const preview = live(title) as ExcalidrawTextElement;
-      expect(preview.width).toBe(original.width);
-      expect(preview.height).toBe(original.height);
-      expect(preview.fontSize).toBe(original.fontSize);
-      expect(preview.autoResize).toBe(true);
-      mouseUp(handle.x + 96, handle.y + 42);
-      const committed = live(title) as ExcalidrawTextElement;
-      expect(committed.width).toBe(original.width);
-      expect(committed.height).toBe(original.height);
-      expect(committed.fontSize).toBe(original.fontSize);
-      expect(committed.autoResize).toBe(true);
-      expect(committed.text).toBe("Budget 2026");
-      expect(getTable().y - (committed.y + committed.height)).toBeCloseTo(
-        original.gap,
-      );
-    });
-
     it("stretches one axis from a side frame and keeps every font size", async () => {
       const { table, text, snapshot } = scaleFixture();
       selectTable(table);
@@ -1676,92 +1633,34 @@ describe("table row/column structure", () => {
       });
     });
 
-    it("selects the table from the title grip and edits a single-line title", async () => {
+    it("selects and moves the table from its title", async () => {
       const { table } = scaleFixture();
-      const bar = getTableTitleBar(table, undefined, 1, DEFAULT_FONT_FAMILY);
-      expect(bar.y + bar.height).toBe(
-        table.y - TABLE_STRUCTURE_RAIL_OFFSET - 9 - 8,
-      );
-      const gripX = bar.grip.x + bar.grip.width / 2;
-      const gripY = bar.grip.y + bar.grip.height / 2;
-      mouseMove(gripX, gripY);
-      expect(tableHover()).toMatchObject({
-        tableId: table.id,
-        kind: "titleGrip",
-      });
-      mouseDown(gripX, gripY);
+      const layout = getElementTitleLayout(table, { zoom: 1 });
+      expect(layout.y + layout.height).toBe(table.y - TABLE_TITLE_OFFSET_Y);
+      const titleX = layout.x + layout.width / 2;
+      const titleY = layout.y + layout.height / 2;
+
+      mouseDown(titleX, titleY);
       expect(h.state.selectedElementIds[table.id]).toBe(true);
-      mouseUp(gripX, gripY);
+      mouseUp(titleX, titleY);
       expect(h.state.selectedElementIds[table.id]).toBe(true);
+      expect(
+        h.elements.filter(
+          (element) =>
+            (element.containerRef as { kind?: string } | undefined)?.kind ===
+            "tableTitle",
+        ),
+      ).toHaveLength(0);
 
-      fireEvent.doubleClick(GlobalTestState.interactiveCanvas, {
-        clientX: bar.x + 30,
-        clientY: bar.y + bar.height / 2,
-      });
-      const editor = await getTextEditor();
-      updateTextEditor(editor, "Budget\n2026");
-      expect(editor.value).toBe("Budget 2026");
-      fireEvent.keyDown(editor, { key: "Enter" });
-      const title = h.elements.find(
-        (element) => element.containerRef?.kind === "tableTitle",
-      ) as ExcalidrawTextElement;
-      expect(title.originalText).toBe("Budget 2026");
-      expect(title.text).toBe("Budget 2026");
-      const positionedBar = getTableTitleBar(table, title, 1, title.fontFamily);
-      expect(title.y).toBe(positionedBar.y);
-
-      const titlePosition = { x: title.x, y: title.y };
-      const textX = title.x + title.width / 2;
-      const textY = title.y + title.height / 2;
-      mouseDown(textX, textY);
-      mouseMove(textX + 40, textY + 30);
-      await nextFrame();
-      mouseUp(textX + 40, textY + 30);
-      expect({ x: live(title).x, y: live(title).y }).toEqual(titlePosition);
-
-      const titleGripX = positionedBar.grip.x + positionedBar.grip.width / 2;
-      const titleGripY = positionedBar.grip.y + positionedBar.grip.height / 2;
       const tablePosition = { x: table.x, y: table.y };
-      mouseDown(titleGripX, titleGripY);
-      mouseUp(titleGripX, titleGripY);
-      expect(h.state.selectedElementIds[table.id]).toBe(true);
-      expect(h.state.selectedElementIds[title.id]).toBeUndefined();
-      fireEvent.doubleClick(GlobalTestState.interactiveCanvas, {
-        clientX: titleGripX,
-        clientY: titleGripY,
-      });
-      const gripEditor = await getTextEditor();
-      expect(gripEditor.value).toBe("Budget 2026");
-      fireEvent.keyDown(gripEditor, { key: "Enter" });
-      mouseDown(titleGripX, titleGripY);
-      mouseMove(titleGripX + 40, titleGripY + 30);
+      mouseDown(titleX, titleY);
+      mouseMove(titleX + 40, titleY + 30);
       await nextFrame();
-      mouseUp(titleGripX + 40, titleGripY + 30);
-      expect({ x: live(title).x, y: live(title).y }).toEqual({
-        x: titlePosition.x + 40,
-        y: titlePosition.y + 30,
-      });
-      expect(live(title).containerRef).toEqual({
-        kind: "tableTitle",
-        elementId: table.id,
-      });
+      mouseUp(titleX + 40, titleY + 30);
       expect({ x: live(table).x, y: live(table).y }).toEqual({
         x: tablePosition.x + 40,
         y: tablePosition.y + 30,
       });
-      expect({
-        x: live(title).x - live(table).x,
-        y: live(title).y - live(table).y,
-      }).toEqual({
-        x: titlePosition.x - tablePosition.x,
-        y: titlePosition.y - tablePosition.y,
-      });
-      expect(
-        getTableStructureHoverAtSceneCoords(h.app, {
-          x: titleGripX + 40,
-          y: titleGripY + 30,
-        }),
-      ).toMatchObject({ tableId: table.id, kind: "titleGrip" });
     });
 
     it("suspends hover for a scale gesture armed by the transform handle", () => {

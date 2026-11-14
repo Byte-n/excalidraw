@@ -391,8 +391,7 @@ export const duplicateElements = (
 
     // cell members are copied together with their table, never on their own
     if (
-      (element.containerRef?.kind === "tableCell" ||
-        element.containerRef?.kind === "tableTitle") &&
+      element.containerRef?.kind === "tableCell" &&
       tableIdsToDuplicate.has(element.containerRef.elementId)
     ) {
       continue;
@@ -410,8 +409,7 @@ export const duplicateElements = (
       const targetIndex = findLastIndex(elementsWithDuplicates, (el) => {
         return (
           el.id === tableId ||
-          ((el.containerRef?.kind === "tableCell" ||
-            el.containerRef?.kind === "tableTitle") &&
+          (el.containerRef?.kind === "tableCell" &&
             el.containerRef.elementId === tableId) ||
           (isBoundToContainer(el) &&
             elementsMap.get(el.containerId)?.containerRef?.elementId ===

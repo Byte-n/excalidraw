@@ -9,7 +9,6 @@ import {
 import {
   arrayToMap,
   DEFAULT_TRANSFORM_HANDLE_SPACING,
-  DEFAULT_ELEMENT_PROPS,
   TABLE_STRUCTURE_RAIL_OFFSET,
   TABLE_STRUCTURE_INSERTION_OFFSET,
   TABLE_STYLE,
@@ -54,6 +53,7 @@ import {
   getSequenceFragmentRowLayout,
   isSequenceFragmentElement,
   isTableElement,
+  isTitledElement,
   isContainerBackgroundText,
   isTableCellBackgroundText,
   isFragmentRowBackgroundText,
@@ -139,14 +139,6 @@ import type {
   NonDeletedSceneElementsMap,
 } from "@excalidraw/element/types";
 
-import {
-  getTableTitle,
-  getTableTitleBar,
-  getTableTitleFont,
-  getTableTitleLineHeight,
-  TABLE_TITLE_FONT_SIZE,
-  TABLE_TITLE_PLACEHOLDER,
-} from "../components/app/tableTitle";
 import { getMindmapNodeIdFromPointerTarget } from "../components/App.mindmap";
 import { renderSnaps } from "../renderer/renderSnaps";
 import { getCompositeControlPointGlobal } from "../components/app/compositeShapeControls";
@@ -173,7 +165,7 @@ import {
   snapScrollToDevicePixels,
   getSelectionColor,
 } from "./helpers";
-import { getFrameNameLayout } from "./frameName";
+import { getElementTitleLayout } from "./elementTitle";
 
 import type { PointerHoverSnapshot } from "../components/app/pointerSnapshot";
 import type {
@@ -1825,53 +1817,8 @@ const renderTableStructureAffordances = (
   appState: InteractiveCanvasAppState,
   table: NonDeleted<ExcalidrawTableElement>,
   hover: TableRowColStructureHover | null = null,
-  title?: ExcalidrawTextElement,
 ) => {
   withTableLocalTransform(context, appState, () => {
-    if (hover?.tableId === table.id) {
-      const fontFamily = title?.fontFamily ?? appState.currentItemFontFamily;
-      const bar = getTableTitleBar(
-        table,
-        title,
-        appState.zoom.value,
-        fontFamily,
-      );
-      const dot = 1.4 / appState.zoom.value;
-      context.save();
-      context.fillStyle = getThemedColor("#6b6f76", appState.theme);
-      for (let row = 0; row < 2; row++) {
-        for (let column = 0; column < 3; column++) {
-          context.beginPath();
-          context.arc(
-            bar.grip.x + (4 + column * 6) / appState.zoom.value,
-            bar.grip.y + (7 + row * 6) / appState.zoom.value,
-            dot,
-            0,
-            Math.PI * 2,
-          );
-          context.fill();
-        }
-      }
-      if (!title) {
-        // the placeholder previews the title exactly as it will be created:
-        // same font, same box; only the ink is faded
-        const lineHeightPx = getTableTitleLineHeight(fontFamily);
-        context.globalAlpha = 0.4;
-        context.fillStyle = getThemedColor(
-          DEFAULT_ELEMENT_PROPS.strokeColor,
-          appState.theme,
-        );
-        context.font = getTableTitleFont(fontFamily);
-        context.textBaseline = "alphabetic";
-        context.fillText(
-          TABLE_TITLE_PLACEHOLDER,
-          bar.x,
-          bar.y +
-            getVerticalOffset(fontFamily, TABLE_TITLE_FONT_SIZE, lineHeightPx),
-        );
-      }
-      context.restore();
-    }
     const railOffset = getTableStructureIndicatorOffset(appState.zoom.value);
     const rowSelection =
       appState.tableRowColSelection?.tableId === table.id &&
@@ -3477,11 +3424,12 @@ const renderResetAutoResizeHandle = (
 };
 
 /**
- * Frame titles are canvas chrome now: the rename input is the only DOM node
- * left (`AppFrames.renderFrameNameEditor`). The title is screen-fixed, follows
- * render-only offsets, and inks with selection / hover state.
+ * Element titles are canvas chrome now: the rename input is the only DOM node
+ * left (`AppElementTitles.renderElementTitleEditor`). The title is
+ * screen-fixed, follows render-only offsets, and inks with selection / hover
+ * state.
  */
-const renderFrameNames = (
+const renderElementTitles = (
   context: CanvasRenderingContext2D,
   app: AppClassProperties,
   appState: InteractiveCanvasAppState,
@@ -3505,15 +3453,18 @@ const renderFrameNames = (
 
   context.save();
   context.translate(appState.scrollX, appState.scrollY);
-  for (const frame of app.scene.getNonDeletedFramesLikes()) {
-    if (frame.id === app.state.editingFrame) {
+  for (const element of app.scene.getNonDeletedElements()) {
+    if (!isTitledElement(element)) {
       continue;
     }
-    const renderState = app.getElementRenderState(frame);
+    if (element.id === app.state.editingElementTitle) {
+      continue;
+    }
+    const renderState = app.getElementRenderState(element);
     if (
       renderState.opacity === 0 ||
       !isElementInViewport(
-        getRenderElementWithPositionOverride(frame, renderState.offset),
+        getRenderElementWithPositionOverride(element, renderState.offset),
         app.canvas.width / app.ownerWindow.devicePixelRatio,
         app.canvas.height / app.ownerWindow.devicePixelRatio,
         {
@@ -3528,15 +3479,15 @@ const renderFrameNames = (
     ) {
       continue;
     }
-    const layout = getFrameNameLayout(frame, {
+    const layout = getElementTitleLayout(element, {
       zoom: appState.zoom.value,
-      focused: focusedSearchIds.has(frame.id),
+      focused: focusedSearchIds.has(element.id),
     });
     const x = layout.x + renderState.offset.x;
     const y = layout.y + renderState.offset.y;
-    const isSelected = !!appState.selectedElementIds[frame.id];
-    const isDropTarget = hover.frameToHighlight?.id === frame.id;
-    const isHovered = hover.elementId === frame.id;
+    const isSelected = !!appState.selectedElementIds[element.id];
+    const isDropTarget = hover.frameToHighlight?.id === element.id;
+    const isHovered = hover.elementId === element.id;
     const color =
       isSelected || isDropTarget
         ? selectionColor
@@ -4029,13 +3980,7 @@ const _renderInteractiveScene = ({
 
   if (!editingTableBackgroundText) {
     for (const table of structureTables.values()) {
-      renderTableStructureAffordances(
-        context,
-        appState,
-        table,
-        tableVisual,
-        getTableTitle(app.scene.getNonDeletedElements(), table.id),
-      );
+      renderTableStructureAffordances(context, appState, table, tableVisual);
     }
   } else {
     // while a cell's background text is edited, only its location cues
@@ -4488,7 +4433,7 @@ const _renderInteractiveScene = ({
       context.fillStyle =
         SEARCH_MATCH_COLOR[appState.theme][focus ? "focus" : "match"];
 
-      const zoomFactor = isFrameLikeElement(element) ? appState.zoom.value : 1;
+      const zoomFactor = isTitledElement(element) ? appState.zoom.value : 1;
 
       context.translate(appState.scrollX, appState.scrollY);
       context.translate(cx, cy);
@@ -4508,7 +4453,7 @@ const _renderInteractiveScene = ({
     }
   });
 
-  renderFrameNames(context, app, appState, pointerSnapshot.hover);
+  renderElementTitles(context, app, appState, pointerSnapshot.hover);
 
   renderSnaps(context, appState);
 

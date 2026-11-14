@@ -56,7 +56,6 @@
     "tableInnerBorder": "内框线",
     "tableBorderWidth": "边框宽度",
     "tableBorderStyle": "边框样式",
-    "tableTitleAlign": "标题对齐",
     "copyStyles": "拷贝样式",
     "pasteStyles": "粘贴样式",
     "stroke": "描边",
@@ -322,6 +321,7 @@
     "multipleResults": "结果",
     "placeholder": "在画布上查找文本…",
     "frames": "画框",
+    "tables": "表格",
     "texts": "文本"
   },
   "outline": {

@@ -6,7 +6,7 @@ import {
   getColorTargetElement,
   hasBoundTextElement,
   isElbowArrow,
-  isFrameLikeElement,
+  isTitledElement,
   isImageElement,
   isLinearElement,
   isTextElement,
@@ -204,8 +204,8 @@ export const getShapeActionPredicates = (
       singleSelected &&
       isLinearElement(targetElements[0]) &&
       !isElbowArrow(targetElements[0]),
-    /** Frame/MagicFrame 场景：浮动栏「重命名」入口（聚焦画布标题输入框） */
-    frameRename: singleSelected && isFrameLikeElement(targetElements[0]),
+    /** Frame/MagicFrame/Table 场景：浮动栏「重命名」入口 */
+    titleRename: singleSelected && isTitledElement(targetElements[0]),
   };
 };
 

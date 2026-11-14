@@ -1,5 +1,3 @@
-import { TABLE_STRUCTURE_RAIL_OFFSET } from "@excalidraw/common";
-
 import { pointFrom } from "@excalidraw/math";
 
 import { describe, expect, it, vi } from "vitest";
@@ -12,7 +10,7 @@ import {
   newTableElement,
   newTextElement,
 } from "../src/newElement";
-import { applyTableOperation, getTableSceneTitle } from "../src/tableScene";
+import { applyTableOperation } from "../src/tableScene";
 import { CanvasSceneError } from "../src/sceneOperations";
 import { setCustomTextMetricsProvider } from "../src/textMeasurements";
 import { resolveTableBackgroundTextFontWeight } from "../src/tableRender";
@@ -94,7 +92,7 @@ const assertError = (
 };
 
 describe("完整表格纯场景操作", () => {
-  it("重复标题和背景文字按显示投影的稳定身份选择，合并不拼接隐藏文字", () => {
+  it("重复背景文字按显示投影的稳定身份选择，合并不拼接隐藏文字", () => {
     const table = fixture();
     const first = cellAt(table, 0, 0);
     const second = cellAt(table, 0, 1);
@@ -107,21 +105,6 @@ describe("完整表格纯场景操作", () => {
       id: "a-background",
     };
     const next = background(table, second.id, "下一格");
-    const title = newTextElement({
-      x: 100,
-      y: 50,
-      text: "标题",
-      containerRef: { kind: "tableTitle", elementId: table.id },
-    });
-    expect(
-      getTableSceneTitle(
-        [
-          { ...title, id: "z-title" },
-          { ...title, id: "a-title" },
-        ],
-        table.id,
-      )?.id,
-    ).toBe("a-title");
     const result = applyTableOperation([table, hidden, visible, next], {
       action: "mergeCells",
       target: { tableId: table.id },
@@ -136,7 +119,7 @@ describe("完整表格纯场景操作", () => {
     ).toBe(true);
   });
 
-  it("创建真实标题和稳定行列格子引用，不依赖 DOM", () => {
+  it("创建表格名称和稳定行列格子引用，不依赖 DOM", () => {
     vi.stubGlobal("document", undefined);
     try {
       const result = applyTableOperation([], {
@@ -144,29 +127,24 @@ describe("完整表格纯场景操作", () => {
         position: { x: 10, y: 100 },
         rowCount: 2,
         columnCount: 3,
-        title: "标题",
-        style: { backgroundColor: "#fff", title: { align: "end", gap: 7 } },
+        name: "标题",
+        style: { backgroundColor: "#fff" },
       });
-      expect(result.createdElementIds).toHaveLength(2);
+      expect(result.createdElementIds).toHaveLength(1);
       expect(result.references.domain).toBe("table");
       if (result.references.domain !== "table") {
         throw new Error("表格引用缺失");
       }
       const table = tableIn(result.elements, result.references.tableId);
+      expect(table.name).toBe("标题");
       expect(table.width).toBe(480);
       expect(table.height).toBe(112);
       expect(result.references.rows).toHaveLength(2);
       expect(result.references.columns).toHaveLength(3);
       expect(result.references.cells).toHaveLength(6);
-      const title = getTableSceneTitle(result.elements, table.id)!;
-      expect(title.containerRef).toEqual({
-        kind: "tableTitle",
-        elementId: table.id,
-      });
-      expect(title.x).toBe(table.x + table.width - title.width);
-      expect(title.y).toBe(
-        table.y - (TABLE_STRUCTURE_RAIL_OFFSET + 9 + 7) - title.height,
-      );
+      expect(
+        result.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -554,61 +532,51 @@ describe("完整表格纯场景操作", () => {
     }
   });
 
-  it("标题更新保持真实文字 ID，样式叶子 null 恢复继承布局且不清除省略字段", () => {
+  it("表格名称更新写回元素，样式叶子 null 恢复继承布局且不清除省略字段", () => {
     const created = applyTableOperation([], {
       action: "create",
       position: { x: 100, y: 100 },
       rowCount: 1,
       columnCount: 1,
-      title: "旧标题",
+      name: "旧标题",
       style: {
         borderColor: "red",
         opacity: 60,
-        title: { align: "end", gap: 10 },
       },
     });
     const table = created.elements.find(isTableElement)!;
-    const title = getTableSceneTitle(created.elements, table.id)!;
+    expect(table.name).toBe("旧标题");
     const renamed = applyTableOperation(created.elements, {
-      action: "setTitle",
+      action: "setName",
       target: { tableId: table.id },
-      text: "更长的新标题",
+      name: "更长的新标题",
     });
-    expect(getTableSceneTitle(renamed.elements, table.id)?.id).toBe(title.id);
+    expect(tableIn(renamed.elements, table.id).name).toBe("更长的新标题");
     const cleared = applyTableOperation(renamed.elements, {
       action: "setStyle",
       target: { tableId: table.id },
-      style: { borderColor: null, title: { align: null, gap: null } },
+      style: { borderColor: null },
     });
     expect(tableIn(cleared.elements, table.id).table.style).toEqual({
       opacity: 60,
-      title: {},
     });
-    const nextTitle = getTableSceneTitle(cleared.elements, table.id)!;
-    expect(nextTitle.x).toBe(table.x);
-    expect(nextTitle.y).toBe(
-      table.y - (TABLE_STRUCTURE_RAIL_OFFSET + 9 + 8) - nextTitle.height,
-    );
-    expect(nextTitle.version).toBe(title.version);
     const empty = applyTableOperation(cleared.elements, {
-      action: "setTitle",
+      action: "setName",
       target: { tableId: table.id },
-      text: "",
+      name: "   ",
     });
-    expect(getTableSceneTitle(empty.elements, table.id)).toMatchObject({
-      id: title.id,
-      originalText: "",
-      isDeleted: false,
-    });
+    expect(tableIn(empty.elements, table.id).name).toBe(null);
+    expect(
+      empty.elements.filter((element) => element.type === "text"),
+    ).toHaveLength(0);
   });
 
-  it("整表删除包含标题、正文子树与绑定文字并保留输入墓碑", () => {
+  it("整表删除包含正文子树与绑定文字并保留输入墓碑", () => {
     const created = applyTableOperation([], {
       action: "create",
       position: { x: 0, y: 50 },
       rowCount: 1,
       columnCount: 1,
-      title: "删除标题",
     });
     const table = created.elements.find(isTableElement)!;
     const member = newElement({

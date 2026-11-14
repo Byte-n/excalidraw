@@ -73,6 +73,7 @@ import type {
   ExcalidrawTableElement,
   ExcalidrawTextContainer,
   ExcalidrawTextElement,
+  ExcalidrawTitledElement,
   FileId,
   InitializedExcalidrawImageElement,
   MagicGenerationData,
@@ -146,7 +147,7 @@ import { AppWheel } from "./App.wheel";
 import { AppEmbeds } from "./app/embeds";
 import * as eventListeners from "./app/eventListeners";
 import * as filesController from "./app/files";
-import { AppFrames } from "./app/frames";
+import { AppElementTitles } from "./app/elementTitles";
 import * as gestureController from "./app/gesture";
 import * as hitTestController from "./app/hitTest";
 import * as keyboardController from "./app/keyboard";
@@ -195,10 +196,10 @@ import type {
   ElementRenderOffsets,
   ElementRenderOverride,
   ElementRenderOverrides,
+  ElementTitleBoundsCache,
   ElementsPendingErasure,
   ExcalidrawImperativeAPI,
   ExcalidrawImperativeAPIEventMap,
-  FrameNameBoundsCache,
   GenerateDiagramToCode,
   Gesture,
   GestureEvent,
@@ -842,12 +843,13 @@ class App extends React.Component<AppProps, AppState> {
     return this.embeds.renderEmbeddables();
   }
 
-  public frames = new AppFrames(this);
-  public frameNameBoundsCache: FrameNameBoundsCache =
-    this.frames.frameNameBoundsCache;
+  public elementTitles = new AppElementTitles(this);
+  public elementTitleBoundsCache: ElementTitleBoundsCache =
+    this.elementTitles.elementTitleBoundsCache;
 
-  private resetEditingFrame = (frame: ExcalidrawFrameLikeElement | null) =>
-    this.frames.resetEditingFrame(frame);
+  private resetEditingElementTitle = (
+    element: ExcalidrawTitledElement | null,
+  ) => this.elementTitles.resetEditingElementTitle(element);
 
   public toggleOverscrollBehavior = (event: React.PointerEvent) => {
     // when pointer inside editor, disable overscroll behavior to prevent

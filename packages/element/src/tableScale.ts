@@ -5,13 +5,11 @@ import {
   STICKY_NOTE_MAX_FONT_SIZE,
   STICKY_NOTE_MIN_SIZE,
   STICKY_NOTE_PADDING,
-  getFontString,
   getLineHeight,
   rescalePoints,
 } from "@excalidraw/common";
 
 import { getIndexedTableChildren } from "./tableChildrenIndex";
-import { measureText } from "./textMeasurements";
 import { getTableHeight, getTableWidth } from "./tableStruct";
 import { isElbowArrow, isMindmapEdgeElement } from "./typeChecks";
 import { isSequenceFragmentElement, isShapeElement } from "./compositeShape";
@@ -175,7 +173,7 @@ const getDirectTableCellChildren = (
       const ref = element.containerRef;
       if (
         !element.isDeleted &&
-        (ref?.kind === "tableTitle" || ref?.kind === "fragmentRow") &&
+        ref?.kind === "fragmentRow" &&
         ref.elementId === tableId &&
         !children.some((child) => child.id === element.id)
       ) {
@@ -190,9 +188,7 @@ const getDirectTableCellChildren = (
     const ref = element.containerRef;
     if (
       !element.isDeleted &&
-      (ref?.kind === "tableCell" ||
-        ref?.kind === "tableTitle" ||
-        ref?.kind === "fragmentRow") &&
+      (ref?.kind === "tableCell" || ref?.kind === "fragmentRow") &&
       ref.elementId === tableId
     ) {
       children.push(element);
@@ -331,12 +327,6 @@ const getSubtreeMinScales = (
   };
 
   for (const element of subtree.ordered) {
-    if (
-      element.type === "text" &&
-      element.containerRef?.kind === "tableTitle"
-    ) {
-      continue;
-    }
     if (element.width > 0) {
       considerWidth(MIN_WIDTH_OR_HEIGHT / element.width);
     }
@@ -450,35 +440,6 @@ const computeElementScaleUpdate = (
     scaleFonts: boolean;
   },
 ): ElementUpdate<NonDeletedExcalidrawElement> => {
-  if (element.type === "text" && element.containerRef?.kind === "tableTitle") {
-    const table = hostsById.get(element.containerRef.elementId);
-    if (table?.type === "table") {
-      const text = element.originalText.replace(/\s*[\r\n]+\s*/g, " ");
-      const { width, height } = measureText(
-        text,
-        getFontString(element),
-        element.lineHeight,
-      );
-      const tableX = anchor.x + (table.x - anchor.x) * scaleX;
-      const tableY = anchor.y + (table.y - anchor.y) * scaleY;
-      const align = table.table.style?.title?.align ?? "start";
-      const tableWidth = table.width * scaleX;
-      const titleUpdate: TableElementUpdate = {
-        x:
-          align === "center"
-            ? tableX + (tableWidth - width) / 2
-            : align === "end"
-            ? tableX + tableWidth - width
-            : tableX + (element.x - table.x),
-        y: tableY + (element.y - table.y),
-        width,
-        height,
-        text,
-        autoResize: true,
-      };
-      return titleUpdate;
-    }
-  }
   const nextWidth = element.width * scaleX;
   const nextHeight = element.height * scaleY;
   const update: TableElementUpdate = {

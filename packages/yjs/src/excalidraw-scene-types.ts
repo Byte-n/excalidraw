@@ -29,7 +29,6 @@ export type ExcalidrawSceneElement = {
   containerId?: string | null;
   containerRef?:
     | { kind: "frameLike"; elementId: string }
-    | { kind: "tableTitle"; elementId: string }
     | {
         kind: "tableCell";
         elementId: string;

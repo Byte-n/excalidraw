@@ -35,7 +35,6 @@ const TABLE_STYLE_KEYS = new Set<string>([
   "gridStyle",
   "clipContent",
   "header",
-  "title",
 ]);
 const BACKGROUND_TEXT_STYLE_KEYS = new Set<string>([
   "fontFamily",
@@ -65,8 +64,6 @@ const assertStyle = (
     }
     if (key === "backgroundText") {
       assertStyle(value, BACKGROUND_TEXT_STYLE_KEYS, "background text");
-    } else if (key === "title") {
-      assertStyle(value, new Set(["gap", "align"]), "table title");
     } else if (
       [
         "backgroundColor",

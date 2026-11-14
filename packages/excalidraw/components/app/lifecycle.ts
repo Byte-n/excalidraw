@@ -1,6 +1,6 @@
 /* eslint-disable dot-notation -- Controllers access private App coordination fields. */
 import {
-  isFrameLikeElement,
+  isTitledElement,
   CaptureUpdateAction,
   isElementLink,
   isMeasureTextSupported,
@@ -79,9 +79,13 @@ export const terminateActiveInteraction = (app: App) => {
   editorJotaiStore.set(activeEyeDropperAtom, null);
   editorJotaiStore.set(convertElementTypePopupAtom, null);
 
-  if (app.state.editingFrame) {
-    const frame = app.scene.getNonDeletedElement(app.state.editingFrame);
-    app["resetEditingFrame"](frame && isFrameLikeElement(frame) ? frame : null);
+  if (app.state.editingElementTitle) {
+    const element = app.scene.getNonDeletedElement(
+      app.state.editingElementTitle,
+    );
+    app["resetEditingElementTitle"](
+      element && isTitledElement(element) ? element : null,
+    );
   }
 
   // textWysiwyg's submit path uses flushSync. Defer until after the current

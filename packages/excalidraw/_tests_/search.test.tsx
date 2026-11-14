@@ -11,6 +11,7 @@ import {
 
 import type {
   ExcalidrawFrameLikeElement,
+  ExcalidrawTableElement,
   ExcalidrawTextElement,
 } from "@excalidraw/element/types";
 
@@ -244,5 +245,28 @@ describe("search", () => {
     await waitFor(() => {
       expect(h.app.state.searchMatches?.matches.length).toBe(3);
     });
+  });
+
+  it("should match table names", async () => {
+    const scrollIntoViewMock = jest.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    API.setElements([API.createElement({ type: "table" })]);
+
+    API.updateElement(h.elements[0] as ExcalidrawTableElement, {
+      name: "Budget report",
+    });
+
+    Keyboard.withModifierKeys({ ctrl: true }, () => {
+      Keyboard.keyPress(KEYS.F);
+    });
+
+    const searchInput = await querySearchInput();
+    updateTextEditor(searchInput, "report");
+
+    await waitFor(() => {
+      expect(h.app.state.searchMatches?.matches.length).toBe(1);
+    });
+    expect(h.app.state.searchMatches?.matches[0].id).toBe(h.elements[0].id);
   });
 });

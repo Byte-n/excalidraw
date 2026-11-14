@@ -525,10 +525,10 @@ describe("toggling `interaction` at runtime", () => {
     });
     API.setElements([frame]);
     API.updateElement(frame, { name: "before" });
-    act(() => h.setState({ editingFrame: frame.id }));
+    act(() => h.setState({ editingElementTitle: frame.id }));
 
     const frameNameInput = await waitFor(() => {
-      const input = queryContainer(".frame-name input");
+      const input = queryContainer(".element-title input");
       expect(input).not.toBe(null);
       return input as HTMLInputElement;
     });
@@ -543,8 +543,8 @@ describe("toggling `interaction` at runtime", () => {
     );
 
     await waitFor(() => {
-      expect(h.state.editingFrame).toBe(null);
-      expect(queryContainer(".frame-name input")).toBe(null);
+      expect(h.state.editingElementTitle).toBe(null);
+      expect(queryContainer(".element-title input")).toBe(null);
     });
     expect(h.elements.find((element) => element.id === frame.id)).toMatchObject(
       { name: "committed" },

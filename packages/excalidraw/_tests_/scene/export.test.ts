@@ -10,6 +10,7 @@ import {
   FONT_FAMILY,
   FRAME_STYLE,
   TABLE_STYLE,
+  TABLE_TITLE_OFFSET_Y,
 } from "@excalidraw/common";
 
 import { pointFrom } from "@excalidraw/math";
@@ -1077,5 +1078,33 @@ describe("exporting tables", () => {
 
     expect(horizontalLineYs(after)[0]).toBe(horizontalLineYs(before)[0] + 40);
     expect(after.outerHTML).not.toBe(before.outerHTML);
+  });
+});
+
+describe("exporting table titles", () => {
+  it("includes the table name above the grid", async () => {
+    const table = {
+      ...API.createElement({
+        type: "table",
+        x: 10,
+        y: 120,
+      }),
+      name: "Budget",
+    };
+
+    const canvas = await exportToCanvas({
+      elements: [table],
+      files: null,
+      exportPadding: 0,
+    });
+
+    expect(canvas.width).toEqual(table.width);
+    expect(canvas.height).toEqual(
+      table.height +
+        Math.trunc(
+          FRAME_STYLE.nameFontSize * FRAME_STYLE.nameLineHeight +
+            TABLE_TITLE_OFFSET_Y,
+        ),
+    );
   });
 });

@@ -5,6 +5,7 @@ import {
   FRAME_STYLE,
   FONT_FAMILY,
   SVG_NS,
+  TABLE_TITLE_OFFSET_Y,
   THEME,
   MIME_TYPES,
   EXPORT_DATA_TYPES,
@@ -31,10 +32,11 @@ import { newElementWith } from "@excalidraw/element";
 import { isFrameLikeElement } from "@excalidraw/element";
 
 import {
+  getElementTitle,
   getElementsOverlappingFrame,
   getFrameLikeElements,
-  getFrameLikeTitle,
   getRootElements,
+  isTitledElement,
 } from "@excalidraw/element";
 
 import { syncInvalidIndices } from "@excalidraw/element";
@@ -101,22 +103,25 @@ const truncateText = (
 };
 
 /**
- * When exporting frames, we need to render frame labels which are currently
- * being rendered in DOM when editing. Adding the labels as regular text
- * elements seems like a simple hack. In the future we'll want to move to
- * proper canvas rendering, even within editor (instead of DOM).
+ * When exporting, element titles are rendered as regular text elements:
+ * frames and tables otherwise only paint their titles on the interactive
+ * canvas.
  */
-const addFrameLabelsAsTextElements = (
+const addElementLabelsAsTextElements = (
   elements: readonly NonDeletedExcalidrawElement[],
   opts: Pick<AppState, "exportWithDarkMode">,
 ) => {
   const nextElements: NonDeletedExcalidrawElement[] = [];
   for (const element of elements) {
-    if (isFrameLikeElement(element)) {
+    if (isTitledElement(element)) {
       let textElement: Mutable<NonDeleted<ExcalidrawTextElement>> =
         newTextElement({
           x: element.x,
-          y: element.y - FRAME_STYLE.nameOffsetY,
+          y:
+            element.y -
+            (element.type === "table"
+              ? TABLE_TITLE_OFFSET_Y
+              : FRAME_STYLE.nameOffsetY),
           fontFamily: FONT_FAMILY.Helvetica,
           fontSize: FRAME_STYLE.nameFontSize,
           lineHeight:
@@ -124,7 +129,7 @@ const addFrameLabelsAsTextElements = (
           strokeColor: opts.exportWithDarkMode
             ? FRAME_STYLE.nameColorDarkTheme
             : FRAME_STYLE.nameColorLightTheme,
-          text: getFrameLikeTitle(element),
+          text: getElementTitle(element),
         });
       textElement.y -= textElement.height;
 
@@ -173,7 +178,7 @@ const prepareElementsForRender = ({
       arrayToMap(elements),
     );
   } else if (frameRendering.enabled && frameRendering.name) {
-    nextElements = addFrameLabelsAsTextElements(elements, {
+    nextElements = addElementLabelsAsTextElements(elements, {
       exportWithDarkMode,
     });
   } else {

@@ -22,8 +22,8 @@ export class AppWheel {
   constructor(private app: App) {}
 
   /** the editor surfaces whose wheel input the editor consumes; everywhere
-   * else (menus, sidebars, …) the DOM keeps scrolling. The frame-name labels
-   * are DOM, but sit inside the container this listener is attached to */
+   * else (menus, sidebars, …) the DOM keeps scrolling. The element-title
+   * inputs are DOM, but sit inside the container this listener is attached to */
   private isOverEditorSurface = (event: WheelEvent) => {
     const { ownerWindow } = this.app;
     return (
@@ -31,7 +31,7 @@ export class AppWheel {
       event.target instanceof ownerWindow.HTMLTextAreaElement ||
       event.target instanceof ownerWindow.HTMLIFrameElement ||
       (event.target instanceof ownerWindow.HTMLElement &&
-        event.target.classList.contains(CLASSES.FRAME_NAME))
+        event.target.classList.contains(CLASSES.ELEMENT_TITLE))
     );
   };
 

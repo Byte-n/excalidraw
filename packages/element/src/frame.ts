@@ -32,7 +32,6 @@ import { tableCellContainerRef } from "./tableContainer";
 import {
   frameLikeContainerRef,
   isBoundToContainer,
-  isFrameElement,
   isFrameLikeElement,
   isTextElement,
 } from "./typeChecks";
@@ -88,10 +87,6 @@ export const bindElementsToFramesAfterDuplication = (
                 containerRef.cellId) as string,
               containerRef.role,
             ),
-          });
-        } else if (containerRef.kind === "tableTitle") {
-          mutateElement(nextElement, nextElementMap, {
-            containerRef: { kind: "tableTitle", elementId: nextParentId },
           });
         } else if (containerRef.kind === "fragmentRow") {
           mutateElement(nextElement, nextElementMap, {
@@ -1127,18 +1122,6 @@ export const shouldApplyFrameClip = (
   }
 
   return false;
-};
-
-const DEFAULT_FRAME_NAME = "Frame";
-const DEFAULT_AI_FRAME_NAME = "AI Frame";
-
-export const getDefaultFrameName = (element: ExcalidrawFrameLikeElement) => {
-  // TODO name frames "AI" only if specific to AI frames
-  return isFrameElement(element) ? DEFAULT_FRAME_NAME : DEFAULT_AI_FRAME_NAME;
-};
-
-export const getFrameLikeTitle = (element: ExcalidrawFrameLikeElement) => {
-  return element.name === null ? getDefaultFrameName(element) : element.name;
 };
 
 export const getElementsOverlappingFrame = <T extends ExcalidrawElement>(

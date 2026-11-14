@@ -187,9 +187,6 @@ export const handleTextWysiwyg = (
   };
 
   const updateElement = (nextOriginalText: string, isDeleted: boolean) => {
-    if (element.containerRef?.kind === "tableTitle") {
-      nextOriginalText = nextOriginalText.replace(/\s*[\r\n]+\s*/g, " ");
-    }
     // The fragment's first row is an operator label: hard line breaks are
     // normalized to spaces, automatic wrapping is driven by the tab width.
     if (

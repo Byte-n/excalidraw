@@ -86,14 +86,6 @@ import { buildTableCellBackgroundText } from "./tableCellText";
 
 import { setTableMoveDragOpacity } from "./scene";
 
-import {
-  getTableTitle,
-  getTableTitleBar,
-  isInTableTitleBar,
-  isInTableTitleGrip,
-  startTableTitleEditing,
-} from "./tableTitle";
-
 import type { PointerHoverSnapshot } from "./pointerSnapshot";
 
 import type App from "../App";
@@ -1446,19 +1438,6 @@ export const getTableStructureHoverAtSceneCoords = (
     if (structureHover?.kind === "columnInsert") {
       return structureHover;
     }
-    const title = getTableTitle(app.scene.getNonDeletedElements(), element.id);
-    const bar = getTableTitleBar(
-      element,
-      title,
-      app.state.zoom.value,
-      title?.fontFamily ?? app.state.currentItemFontFamily,
-    );
-    if (isInTableTitleBar(sceneCoords, bar)) {
-      return {
-        tableId: element.id,
-        kind: isInTableTitleGrip(sceneCoords, bar) ? "titleGrip" : "titleBar",
-      };
-    }
   }
   const table = getStructureZoneTableAtSceneCoords(
     app,
@@ -1478,58 +1457,10 @@ export const getTableStructureHoverAtSceneCoords = (
   );
 };
 
-export const handleTableTitleGripPointerDown = (
-  app: TableApp,
-  point: { x: number; y: number },
-): ExcalidrawTableElement | null | undefined => {
-  const hover = getTableStructureHoverAtSceneCoords(app, point);
-  if (hover?.kind === "rowInsert" || hover?.kind === "columnInsert") {
-    return undefined;
-  }
-  const hit = app.getElementAtPosition(point.x, point.y);
-  if (hit?.type === "text" && hit.containerRef?.kind === "tableTitle") {
-    return null;
-  }
-  if (hover?.kind !== "titleGrip" && hover?.kind !== "titleBar") {
-    return undefined;
-  }
-  if (hover.kind === "titleGrip") {
-    const table = app.scene.getNonDeletedElement(hover.tableId);
-    if (!table || !isTableElement(table)) {
-      return undefined;
-    }
-    app.setState({
-      selectedElementIds: { [hover.tableId]: true },
-      tableCellSelection: null,
-      tableRowColSelection: null,
-    });
-    return table;
-  }
-  return null;
-};
-
-export const handleTableTitleDoubleClick = (
-  app: TableApp,
-  point: { x: number; y: number },
-): boolean => {
-  const hover = getTableStructureHoverAtSceneCoords(app, point);
-  if (!hover || (hover.kind !== "titleBar" && hover.kind !== "titleGrip")) {
-    return false;
-  }
-  const table = app.scene.getNonDeletedElement(hover.tableId);
-  if (!table || !isTableElement(table)) {
-    return false;
-  }
-  startTableTitleEditing(app as App, table);
-  return true;
-};
-
 const STRUCTURE_CURSORS: {
   [T in TableRowColStructureHover["kind"]]: string;
 } = {
   table: CURSOR_TYPE.AUTO,
-  titleBar: CURSOR_TYPE.TEXT,
-  titleGrip: CURSOR_TYPE.MOVE,
   rowGrip: CURSOR_TYPE.MOVE,
   columnGrip: CURSOR_TYPE.MOVE,
   rowResize: getCursorForResizingElement({ transformHandleType: "s" }),
@@ -1816,10 +1747,6 @@ export const armTableStructureGestureOnPointerDown = (
 
   switch (hover.kind) {
     case "table": {
-      return false;
-    }
-    case "titleBar":
-    case "titleGrip": {
       return false;
     }
     case "rowGrip":

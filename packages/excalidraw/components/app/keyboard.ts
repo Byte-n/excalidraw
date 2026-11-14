@@ -31,6 +31,7 @@ import {
   isLinearElement,
   isElbowArrow,
   isFrameLikeElement,
+  isTableElement,
   updateBoundElements,
   clearConnectionPreviewFrame,
 } from "@excalidraw/element";
@@ -715,9 +716,12 @@ export const onKeyDown = (
         });
         event.preventDefault();
         return;
-      } else if (isFrameLikeElement(selectedElement)) {
+      } else if (
+        isFrameLikeElement(selectedElement) ||
+        isTableElement(selectedElement)
+      ) {
         app.setState({
-          editingFrame: selectedElement.id,
+          editingElementTitle: selectedElement.id,
         });
       }
     }

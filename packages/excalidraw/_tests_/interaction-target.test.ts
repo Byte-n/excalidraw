@@ -1,6 +1,6 @@
 import { pointFrom } from "@excalidraw/math";
 
-import { CURSOR_TYPE, DEFAULT_FONT_FAMILY } from "@excalidraw/common";
+import { CURSOR_TYPE } from "@excalidraw/common";
 
 import {
   buildShapeData,
@@ -11,7 +11,6 @@ import type { GlobalPoint } from "@excalidraw/math";
 
 import { getCompositeControlPointGlobal } from "../components/app/compositeShapeControls";
 import { TABLE_STRUCTURE_RAIL_HIT_SIZE } from "../components/app/table";
-import { getTableTitleBar } from "../components/app/tableTitle";
 import {
   getContainerProviderCursor,
   registerContainerInteractionProvider,
@@ -478,29 +477,6 @@ describe("PR5a-2 priority matrix (05 §5.2)", () => {
     expect(resolveInteractionTarget(app, { x: 1000, y: 1000 })).toEqual({
       kind: "linearHandle",
       elementId: "line-1",
-    });
-  });
-
-  it("resolves the table title grip to a titleGrip container control", () => {
-    const table = tableElement();
-    const title = {
-      ...textElement("title-1", table.x, table.y),
-      fontSize: 12,
-      text: "Title",
-      containerRef: { kind: "tableTitle", elementId: "table-1" },
-    };
-    const bar = getTableTitleBar(table, title, 1, DEFAULT_FONT_FAMILY);
-    const grip = {
-      x: bar.grip.x + bar.grip.width / 2,
-      y: bar.grip.y + bar.grip.height / 2,
-    };
-    const app = createMockApp({ elements: [table, title] });
-
-    expect(resolveInteractionTarget(app, grip)).toMatchObject({
-      kind: "containerControl",
-      containerId: "table-1",
-      control: "reorder",
-      candidate: { gesture: "titleGrip" },
     });
   });
 });

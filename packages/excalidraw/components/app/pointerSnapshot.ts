@@ -84,8 +84,6 @@ const sameTableHover = (
   }
   switch (previous.kind) {
     case "table":
-    case "titleBar":
-    case "titleGrip":
       return true;
     case "rowGrip":
       return previous.rowId === (next as typeof previous).rowId;

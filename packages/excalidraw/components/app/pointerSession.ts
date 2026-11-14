@@ -39,6 +39,7 @@ import {
   deepCopyElement,
   isArrowElement,
   isFrameLikeElement,
+  isTitledElement,
   isImageElement,
   isEmbeddableElement,
   isInitializedImageElement,
@@ -685,23 +686,6 @@ export const handleCanvasPointerDown = (
       }
       break;
     case "containerControl": {
-      const gesture = interactionTarget.candidate.gesture;
-      if (
-        isSelectionLikeTool(app.state.activeTool.type) &&
-        (gesture === "titleGrip" || gesture === "titleBar")
-      ) {
-        const table = tableController.handleTableTitleGripPointerDown(
-          app,
-          pointerDownState.origin,
-        );
-        if (table !== undefined) {
-          if (table) {
-            pointerDownState.hit.allHitElements = [table];
-            attachPointerSessionListeners(app, event, pointerDownState);
-          }
-          return;
-        }
-      }
       break;
     }
     case "compositeControl":
@@ -1947,9 +1931,9 @@ export const onPointerMoveFromPointerDownHandler = (
 
         app.setState({ snapLines });
 
-        // when we're editing the name of a frame, we want the user to be
-        // able to select and interact with the text input
-        if (!app.state.editingFrame) {
+        // when we're editing an element title, we want the user to be able
+        // to select and interact with the text input
+        if (!app.state.editingElementTitle) {
           dragSelectedElements(
             pointerDownState,
             selectedElements,
@@ -3379,8 +3363,8 @@ export const onPointerUpFromPointerDownHandler = (
             element: hitElement,
             elementsMap,
             threshold: app.getElementHitThreshold(hitElement),
-            frameNameBound: isFrameLikeElement(hitElement)
-              ? app.frameNameBoundsCache.get(hitElement)
+            titleBound: isTitledElement(hitElement)
+              ? app.elementTitleBoundsCache.get(hitElement)
               : null,
           },
           elementsMap,

@@ -395,22 +395,15 @@ describe("table content clipping", () => {
 });
 
 describe("table copy", () => {
-  it("copies a title with a remapped table binding", async () => {
+  it("copies the table name with the table", async () => {
     await render(<Excalidraw autoFocus={true} handleKeyboardGlobally={true} />);
     const ownerDocument = h.app.ownerDocument;
     const originalElementFromPoint = ownerDocument.elementFromPoint;
     Object.assign(ownerDocument, {
       elementFromPoint: () => GlobalTestState.canvas,
     });
-    const table = makeTable("title-table", 0, 80);
-    const title = API.createElement({
-      type: "text",
-      x: 0,
-      y: 40,
-      text: "Budget",
-      containerRef: { kind: "tableTitle", elementId: table.id },
-    });
-    API.setElements([table, title]);
+    const table = { ...makeTable("title-table", 0, 80), name: "Budget" };
+    API.setElements([table]);
     expect(() => assertValidContainerRefs(h.elements)).not.toThrow();
     API.setSelectedElements([table as never]);
     const selected = h.app.scene.getSelectedElements({
@@ -424,27 +417,17 @@ describe("table copy", () => {
     );
     await waitFor(() =>
       expect(h.elements.filter((element) => !element.isDeleted)).toHaveLength(
-        4,
+        2,
       ),
     );
     const tableCopy = h.elements.find(
       (element) => element.type === "table" && element.id !== table.id,
     )!;
-    const titleCopy = h.elements.find(
-      (element) => element.type === "text" && element.id !== title.id,
-    )!;
-    expect(titleCopy.containerRef).toEqual({
-      kind: "tableTitle",
-      elementId: tableCopy.id,
-    });
-    expect(getLiveElement(title.id).containerRef?.elementId).toBe(table.id);
+    expect((tableCopy as ExcalidrawTableElement).name).toBe("Budget");
+    expect(
+      h.elements.filter((element) => element.type === "text"),
+    ).toHaveLength(0);
     expect(() => assertValidContainerRefs(h.elements)).not.toThrow();
-    expect(() =>
-      assertValidContainerRefs([
-        ...h.elements,
-        { ...title, id: "second-title" },
-      ]),
-    ).toThrow();
     if (originalElementFromPoint) {
       Object.assign(ownerDocument, {
         elementFromPoint: originalElementFromPoint,

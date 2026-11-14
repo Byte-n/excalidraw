@@ -112,7 +112,7 @@ export const CLASSES = {
   SEARCH_MENU_INPUT_WRAPPER: "layer-ui__search-inputWrapper",
   CONVERT_ELEMENT_TYPE_POPUP: "ConvertElementTypePopup",
   SHAPE_ACTIONS_THEME_SCOPE: "shape-actions-theme-scope",
-  FRAME_NAME: "frame-name",
+  ELEMENT_TITLE: "element-title",
   DROPDOWN_MENU_EVENT_WRAPPER: "dropdown-menu-event-wrapper",
 };
 
@@ -360,6 +360,9 @@ export const TABLE_STRUCTURE_RAIL_OFFSET =
   2 + DEFAULT_TRANSFORM_HANDLE_SPACING * 2;
 export const TABLE_STRUCTURE_INSERTION_OFFSET =
   TABLE_STRUCTURE_RAIL_OFFSET + 12;
+
+/** Screen-space distance from a table's top edge to its title's bottom edge. */
+export const TABLE_TITLE_OFFSET_Y = TABLE_STRUCTURE_RAIL_OFFSET + 9 + 8;
 
 export const SIDE_RESIZING_THRESHOLD = 2 * DEFAULT_TRANSFORM_HANDLE_SPACING;
 // a small epsilon to make side resizing always take precedence

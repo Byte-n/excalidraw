@@ -252,13 +252,6 @@ const cellStyle = z
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0);
-const tableStyleTitle = z
-  .object({
-    gap: finite.nonnegative().nullable().optional(),
-    align: z.enum(["start", "center", "end"]).nullable().optional(),
-  })
-  .strict()
-  .refine((value) => Object.keys(value).length > 0);
 const tableStyle = z
   .object({
     backgroundColor: nullableString,
@@ -271,7 +264,6 @@ const tableStyle = z
     gridStyle: z.enum(["solid", "dashed", "dotted"]).nullable().optional(),
     clipContent: z.boolean().nullable().optional(),
     header: z.boolean().nullable().optional(),
-    title: tableStyleTitle.optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, "表格样式更新不能为空");
@@ -282,7 +274,7 @@ export const TableEditInputSchema = z.discriminatedUnion("action", [
       position: point,
       rowCount: z.number().int().positive(),
       columnCount: z.number().int().positive(),
-      title: z.string().optional(),
+      name: z.string().optional(),
       style: tableStyle.optional(),
     })
     .strict(),
@@ -340,9 +332,9 @@ export const TableEditInputSchema = z.discriminatedUnion("action", [
     .strict(),
   z
     .object({
-      action: z.literal("setTitle"),
+      action: z.literal("setName"),
       target: tableTarget,
-      text: z.string(),
+      name: z.string(),
     })
     .strict(),
   z

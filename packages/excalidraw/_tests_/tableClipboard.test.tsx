@@ -47,7 +47,7 @@ beforeEach(async () => {
 });
 
 describe("table range clipboard", () => {
-  it("keeps merged style, title and descendants through file and library reuse", () => {
+  it("keeps merged style, name and descendants through file and library reuse", () => {
     const base = API.createElement({
       type: "table",
       rowCount: 1,
@@ -56,6 +56,7 @@ describe("table range clipboard", () => {
     const [anchor, covered] = base.table.cells;
     const table = {
       ...base,
+      name: "Report",
       table: {
         ...base.table,
         style: { backgroundColor: "#fafafa" },
@@ -69,11 +70,6 @@ describe("table range clipboard", () => {
         ],
       },
     };
-    const title = API.createElement({
-      type: "text",
-      text: "Report",
-      containerRef: { kind: "tableTitle", elementId: table.id },
-    });
     const note = API.createElement({
       type: "text",
       text: "Value",
@@ -93,12 +89,12 @@ describe("table range clipboard", () => {
         role: "content",
       },
     });
-    const scene = [table, title, note, member];
+    const scene = [table, note, member];
     const saved = JSON.parse(
       serializeAsJSON(scene, getDefaultAppState(), {}, "local"),
     );
     const reopened = restoreElements(saved.elements, null);
-    expect(reopened).toHaveLength(4);
+    expect(reopened).toHaveLength(3);
     const item = {
       id: "merged",
       status: "unpublished" as const,
@@ -118,6 +114,7 @@ describe("table range clipboard", () => {
     const copiedTable = copies.find(
       (element) => element.type === "table",
     ) as ExcalidrawTableElement;
+    expect(copiedTable.name).toBe("Report");
     expect(copiedTable.table.style).toEqual(table.table.style);
     expect(copiedTable.table.rows[0].style).toEqual(table.table.rows[0].style);
     expect(copiedTable.table.cells[0].columnSpan).toBe(2);
@@ -126,10 +123,10 @@ describe("table range clipboard", () => {
     );
     expect(copiedTable.table.cells[0].id).not.toBe(anchor.id);
     expect(
-      copies.find(
+      copies.filter(
         (element) => element.type === "text" && element.text === "Report",
-      )?.containerRef?.elementId,
-    ).toBe(copiedTable.id);
+      ),
+    ).toHaveLength(0);
     expect(
       copies.find(
         (element) => element.type === "text" && element.text === "Value",
@@ -353,7 +350,10 @@ describe("table range clipboard", () => {
   });
 
   it("exports the complete subtree of one selected table", () => {
-    const table = API.createElement({ type: "table" });
+    const table = {
+      ...API.createElement({ type: "table" }),
+      name: "Title",
+    };
     const member = API.createElement({
       type: "rectangle",
       containerRef: {
@@ -363,21 +363,15 @@ describe("table range clipboard", () => {
         role: "content",
       },
     });
-    const title = API.createElement({
-      type: "text",
-      text: "Title",
-      containerRef: { kind: "tableTitle", elementId: table.id },
-    });
     const outside = API.createElement({ type: "ellipse" });
     const result = prepareElementsForExport(
-      [table, member, title, outside],
+      [table, member, outside],
       { selectedElementIds: { [table.id]: true } },
       true,
     );
     expect(result.exportedElements.map((element) => element.id)).toEqual([
       table.id,
       member.id,
-      title.id,
     ]);
   });
 

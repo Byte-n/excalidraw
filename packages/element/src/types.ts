@@ -99,11 +99,6 @@ export type TableCellContainerRef = Readonly<{
   role: "content" | "backgroundText";
 }>;
 
-export type TableTitleContainerRef = Readonly<{
-  kind: "tableTitle";
-  elementId: string;
-}>;
-
 /**
  * A sequence fragment's row background text: the fragment is a
  * single-column table, so each body row owns at most one background text.
@@ -122,7 +117,6 @@ export type FragmentRowContainerRef = Readonly<{
 export type DirectContainerRef =
   | FrameLikeContainerRef
   | TableCellContainerRef
-  | TableTitleContainerRef
   | FragmentRowContainerRef;
 
 export type BackgroundTextStyle = Readonly<{
@@ -154,7 +148,6 @@ export type TableStyle = Readonly<{
    * rewrites cells or texts, and clearing it restores the plain first row.
    */
   header?: boolean;
-  title?: Readonly<{ gap?: number; align?: "start" | "center" | "end" }>;
 }>;
 
 export type TableRowData = Readonly<{
@@ -595,12 +588,17 @@ export type ExcalidrawMagicFrameElement = _ExcalidrawElementBase & {
 export type ExcalidrawTableElement = _ExcalidrawElementBase &
   Readonly<{
     type: "table";
+    name: string | null;
     table: TableDataV1;
   }>;
 
 export type ExcalidrawFrameLikeElement =
   | ExcalidrawFrameElement
   | ExcalidrawMagicFrameElement;
+
+export type ExcalidrawTitledElement =
+  | ExcalidrawFrameLikeElement
+  | ExcalidrawTableElement;
 
 /**
  * These are elements that don't have any additional properties.

@@ -7,39 +7,42 @@ import {
   THEME,
 } from "@excalidraw/common";
 import {
-  getFrameLikeTitle,
+  getElementTitle,
   getRenderElementWithPositionOverride,
   isElementInViewport,
-  isFrameLikeElement,
+  isTitledElement,
 } from "@excalidraw/element";
 
-import type { ExcalidrawFrameLikeElement } from "@excalidraw/element/types";
+import type { ExcalidrawTitledElement } from "@excalidraw/element/types";
 
-import { getFrameNameLayout } from "../../renderer/frameName";
+import {
+  getElementTitleLayout,
+  getElementTitleOffsetY,
+} from "../../renderer/elementTitle";
 
-import type { FrameNameBoundsCache } from "../../types";
+import type { ElementTitleBoundsCache } from "../../types";
 import type App from "../App";
 
-const FRAME_NAME_EDIT_PADDING = 6;
+const ELEMENT_TITLE_EDIT_PADDING = 6;
 
-export class AppFrames {
+export class AppElementTitles {
   constructor(private app: App) {}
 
-  private getFrameNameEnabled = () =>
+  private getElementTitleEnabled = () =>
     this.app.state.frameRendering.enabled && this.app.state.frameRendering.name;
 
-  frameNameBoundsCache: FrameNameBoundsCache = {
-    get: (frameElement) => {
-      if (!this.getFrameNameEnabled()) {
+  elementTitleBoundsCache: ElementTitleBoundsCache = {
+    get: (element) => {
+      if (!this.getElementTitleEnabled()) {
         return null;
       }
-      let bounds = this.frameNameBoundsCache._cache.get(frameElement.id);
+      let bounds = this.elementTitleBoundsCache._cache.get(element.id);
       if (
         !bounds ||
         bounds.zoom !== this.app.state.zoom.value ||
-        bounds.versionNonce !== frameElement.versionNonce
+        bounds.versionNonce !== element.versionNonce
       ) {
-        const layout = getFrameNameLayout(frameElement, {
+        const layout = getElementTitleLayout(element, {
           zoom: this.app.state.zoom.value,
         });
         bounds = {
@@ -48,9 +51,9 @@ export class AppFrames {
           width: layout.width,
           height: layout.height,
           zoom: this.app.state.zoom.value,
-          versionNonce: frameElement.versionNonce,
+          versionNonce: element.versionNonce,
         };
-        this.frameNameBoundsCache._cache.set(frameElement.id, bounds);
+        this.elementTitleBoundsCache._cache.set(element.id, bounds);
       }
       return bounds;
     },
@@ -60,18 +63,21 @@ export class AppFrames {
     _cache: new Map(),
   };
 
-  /** Topmost frame whose title layout contains the point (view mode aside). */
-  public hitTestFrameName = (
+  /** Topmost titled element whose title layout contains the point. */
+  public hitTestElementTitle = (
     sceneX: number,
     sceneY: number,
-  ): ExcalidrawFrameLikeElement | null => {
-    if (!this.getFrameNameEnabled() || this.app.state.viewModeEnabled) {
+  ): ExcalidrawTitledElement | null => {
+    if (!this.getElementTitleEnabled() || this.app.state.viewModeEnabled) {
       return null;
     }
-    const frames = this.app.scene.getNonDeletedFramesLikes();
-    for (let index = frames.length - 1; index >= 0; index--) {
-      const frame = frames[index];
-      const layout = getFrameNameLayout(frame, {
+    const elements = this.app.scene.getNonDeletedElements();
+    for (let index = elements.length - 1; index >= 0; index--) {
+      const element = elements[index];
+      if (!isTitledElement(element)) {
+        continue;
+      }
+      const layout = getElementTitleLayout(element, {
         zoom: this.app.state.zoom.value,
       });
       if (
@@ -80,47 +86,51 @@ export class AppFrames {
         sceneY >= layout.y &&
         sceneY <= layout.y + layout.height
       ) {
-        return frame;
+        return element;
       }
     }
     return null;
   };
 
-  public resetEditingFrame = (frame: ExcalidrawFrameLikeElement | null) => {
-    if (frame) {
-      this.app.scene.mutateElement(frame, { name: frame.name?.trim() || null });
+  public resetEditingElementTitle = (
+    element: ExcalidrawTitledElement | null,
+  ) => {
+    if (element) {
+      this.app.scene.mutateElement(element, {
+        name: element.name?.trim() || null,
+      });
     }
-    this.app.setState({ editingFrame: null });
+    this.app.setState({ editingElementTitle: null });
   };
 
   /**
-   * The only remaining DOM node for frame titles: the rename input. The title
-   * itself is painted on the interactive canvas (`renderer/frameName.ts`).
+   * The only remaining DOM node for element titles: the rename input. Titles
+   * themselves are painted on the interactive canvas (`renderer/elementTitle.ts`).
    */
-  public renderFrameNameEditor = () => {
-    if (!this.getFrameNameEnabled()) {
-      if (this.app.state.editingFrame) {
-        this.resetEditingFrame(null);
+  public renderElementTitleEditor = () => {
+    if (!this.getElementTitleEnabled()) {
+      if (this.app.state.editingElementTitle) {
+        this.resetEditingElementTitle(null);
       }
       return null;
     }
 
-    const editingFrameId = this.app.state.editingFrame;
-    if (!editingFrameId) {
+    const editingElementId = this.app.state.editingElementTitle;
+    if (!editingElementId) {
       return null;
     }
-    const frame = this.app.scene.getNonDeletedElement(editingFrameId);
-    if (!frame || !isFrameLikeElement(frame)) {
+    const element = this.app.scene.getNonDeletedElement(editingElementId);
+    if (!element || !isTitledElement(element)) {
       return null;
     }
 
     const isDarkTheme = this.app.state.theme === THEME.DARK;
     // Editing is interaction and keeps to document geometry: render-only
     // offsets must neither move the editor nor end the edit.
-    const renderState = this.app.getElementRenderState(frame, null);
+    const renderState = this.app.getElementRenderState(element, null);
     if (
       !isElementInViewport(
-        getRenderElementWithPositionOverride(frame, renderState.offset),
+        getRenderElementWithPositionOverride(element, renderState.offset),
         this.app.canvas.width / this.app.ownerWindow.devicePixelRatio,
         this.app.canvas.height / this.app.ownerWindow.devicePixelRatio,
         {
@@ -133,28 +143,28 @@ export class AppFrames {
         this.app.scene.getNonDeletedElementsMap(),
       )
     ) {
-      this.resetEditingFrame(frame);
+      this.resetEditingElementTitle(element);
       return null;
     }
 
     const { x: x1, y: y1 } = sceneCoordsToViewportCoords(
       {
-        sceneX: frame.x,
-        sceneY: frame.y,
+        sceneX: element.x,
+        sceneY: element.y,
       },
       this.app.state,
     );
-    const frameName = getFrameLikeTitle(frame);
+    const elementTitle = getElementTitle(element);
 
     return (
       <div
-        key={frame.id}
-        className={CLASSES.FRAME_NAME}
+        key={element.id}
+        className={CLASSES.ELEMENT_TITLE}
         style={{
           position: "absolute",
           bottom: `${
             this.app.state.height +
-            FRAME_STYLE.nameOffsetY -
+            getElementTitleOffsetY(element) -
             y1 +
             this.app.state.offsetTop
           }px`,
@@ -165,20 +175,20 @@ export class AppFrames {
       >
         <input
           autoFocus
-          value={frameName}
+          value={elementTitle}
           onChange={(event) => {
-            this.app.scene.mutateElement(frame, {
+            this.app.scene.mutateElement(element, {
               name: event.target.value,
             });
           }}
           onFocus={(event) => event.target.select()}
-          onBlur={() => this.resetEditingFrame(frame)}
+          onBlur={() => this.resetEditingElementTitle(element)}
           onKeyDown={(event) => {
             // for some inexplicable reason, `onBlur` triggered on ESC
-            // does not reset `state.editingFrame` despite being called,
+            // does not reset `state.editingElementTitle` despite being called,
             // and we need to reset it here as well
             if (event.key === KEYS.ESCAPE || event.key === KEYS.ENTER) {
-              this.resetEditingFrame(frame);
+              this.resetEditingElementTitle(element);
             }
           }}
           style={{
@@ -188,21 +198,21 @@ export class AppFrames {
             ),
             border: "none",
             display: "block",
-            padding: `${FRAME_NAME_EDIT_PADDING}px`,
+            padding: `${ELEMENT_TITLE_EDIT_PADDING}px`,
             borderRadius: 4,
             boxShadow: "inset 0 0 0 1px var(--color-selection)",
             fontFamily: "Assistant",
             fontSize: `${FRAME_STYLE.nameFontSize}px`,
-            transform: `translate(-${FRAME_NAME_EDIT_PADDING}px, ${FRAME_NAME_EDIT_PADDING}px)`,
+            transform: `translate(-${ELEMENT_TITLE_EDIT_PADDING}px, ${ELEMENT_TITLE_EDIT_PADDING}px)`,
             color: "var(--color-on-surface)",
             overflow: "hidden",
             maxWidth: `${
               this.app.ownerDocument.body.clientWidth -
               x1 -
-              FRAME_NAME_EDIT_PADDING
+              ELEMENT_TITLE_EDIT_PADDING
             }px`,
           }}
-          size={frameName.length + 1 || 1}
+          size={elementTitle.length + 1 || 1}
           dir="auto"
           autoComplete="off"
           autoCapitalize="off"

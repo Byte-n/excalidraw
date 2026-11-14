@@ -28,7 +28,7 @@ import type {
   Radians,
 } from "@excalidraw/math";
 
-import type { FrameNameBounds } from "@excalidraw/excalidraw/types";
+import type { ElementTitleBounds } from "@excalidraw/excalidraw/types";
 
 import { isPathALoop } from "./utils";
 import {
@@ -141,7 +141,7 @@ export type HitTestArgs = {
   element: ExcalidrawElement;
   threshold: number;
   elementsMap: ElementsMap;
-  frameNameBound?: FrameNameBounds | null;
+  titleBound?: ElementTitleBounds | null;
   overrideShouldTestInside?: boolean;
 };
 
@@ -150,11 +150,11 @@ let cachedElement: WeakRef<ExcalidrawElement> | null = null;
 let cachedThreshold: number = Infinity;
 let cachedHit: boolean = false;
 let cachedOverrideShouldTestInside = false;
-let cachedFrameNameBound: FrameNameBounds | null = null;
+let cachedTitleBound: ElementTitleBounds | null = null;
 
-const frameNameBoundsEqual = (
-  a: FrameNameBounds | null,
-  b: FrameNameBounds | null,
+const titleBoundsEqual = (
+  a: ElementTitleBounds | null,
+  b: ElementTitleBounds | null,
 ) =>
   a === b ||
   (!!a &&
@@ -169,7 +169,7 @@ export const hitElementItself = ({
   element,
   threshold,
   elementsMap,
-  frameNameBound = null,
+  titleBound = null,
   overrideShouldTestInside = false,
 }: HitTestArgs) => {
   if (isMindmapElementHidden(element, elementsMap)) {
@@ -184,7 +184,7 @@ export const hitElementItself = ({
     pointsEqual(point, cachedPoint) &&
     (cachedHit ? cachedThreshold <= threshold : cachedThreshold >= threshold) &&
     overrideShouldTestInside === cachedOverrideShouldTestInside &&
-    frameNameBoundsEqual(frameNameBound, cachedFrameNameBound)
+    titleBoundsEqual(titleBound, cachedTitleBound)
   ) {
     const derefElement = cachedElement?.deref();
     if (
@@ -197,14 +197,14 @@ export const hitElementItself = ({
     }
   }
 
-  // Hit test against a frame's name
-  const hitFrameName = frameNameBound
+  // Hit test against an element's title
+  const hitTitle = titleBound
     ? isPointWithinBounds(
-        pointFrom(frameNameBound.x - threshold, frameNameBound.y - threshold),
+        pointFrom(titleBound.x - threshold, titleBound.y - threshold),
         point,
         pointFrom(
-          frameNameBound.x + frameNameBound.width + threshold,
-          frameNameBound.y + frameNameBound.height + threshold,
+          titleBound.x + titleBound.width + threshold,
+          titleBound.y + titleBound.height + threshold,
         ),
       )
     : false;
@@ -231,7 +231,7 @@ export const hitElementItself = ({
 
   // PERF: Bail out early if the point is not even in the
   // rotated bounding box or not hitting the frame name (saves 99%)
-  if (!hitBounds && !hitFrameName) {
+  if (!hitBounds && !hitTitle) {
     return false;
   }
 
@@ -245,14 +245,14 @@ export const hitElementItself = ({
       isPointOnElementOutline(point, element, elementsMap, threshold)
     : isPointOnElementOutline(point, element, elementsMap, threshold);
 
-  const result = hitElement || hitFrameName;
+  const result = hitElement || hitTitle;
 
   // Cache end result
   cachedPoint = point;
   cachedElement = new WeakRef(element);
   cachedThreshold = threshold;
   cachedOverrideShouldTestInside = overrideShouldTestInside;
-  cachedFrameNameBound = frameNameBound;
+  cachedTitleBound = titleBound;
   cachedHit = result;
 
   return result;

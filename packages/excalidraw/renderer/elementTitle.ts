@@ -1,24 +1,29 @@
 /**
- * Frame-title layout shared by the canvas renderer and hit testing.
+ * Element-title layout shared by the canvas renderer and hit testing.
  *
  * Titles are screen-fixed chrome: the DOM implementation drew them at 12 CSS
  * px regardless of zoom, so the layout divides every length by zoom and the
  * canvas runs under the scene transform.
  */
-import { FONT_FAMILY, FRAME_STYLE, getFontString } from "@excalidraw/common";
-import { getFrameLikeTitle, getLineWidth } from "@excalidraw/element";
+import {
+  FONT_FAMILY,
+  FRAME_STYLE,
+  TABLE_TITLE_OFFSET_Y,
+  getFontString,
+} from "@excalidraw/common";
+import { getElementTitle, getLineWidth } from "@excalidraw/element";
 
 import type {
-  ExcalidrawFrameLikeElement,
+  ExcalidrawTitledElement,
   FontString,
 } from "@excalidraw/element/types";
 
-/** Board glyph left of the frame title (design: 10px box). */
-export const FRAME_NAME_GLYPH_SIZE = 10;
+/** Board glyph left of an element title (design: 10px box). */
+export const ELEMENT_TITLE_GLYPH_SIZE = 10;
 /** Gap between the glyph and the title text (design: 5px). */
-export const FRAME_NAME_GLYPH_GAP = 5;
+export const ELEMENT_TITLE_GLYPH_GAP = 5;
 
-export type FrameNameLayout = {
+export type ElementTitleLayout = {
   /** Scene x of the glyph's left edge. */
   x: number;
   /** Scene y of the title's top edge. */
@@ -33,7 +38,7 @@ export type FrameNameLayout = {
   font: FontString;
 };
 
-const getFrameNameFont = (zoom: number): FontString =>
+const getElementTitleFont = (zoom: number): FontString =>
   getFontString({
     fontSize: FRAME_STYLE.nameFontSize / zoom,
     fontFamily: FONT_FAMILY.Assistant,
@@ -54,28 +59,31 @@ const truncateToWidth = (text: string, font: FontString, maxWidth: number) => {
   return ellipsis;
 };
 
-export const getFrameNameLayout = (
-  frame: ExcalidrawFrameLikeElement,
+export const getElementTitleOffsetY = (element: ExcalidrawTitledElement) =>
+  element.type === "table" ? TABLE_TITLE_OFFSET_Y : FRAME_STYLE.nameOffsetY;
+
+export const getElementTitleLayout = (
+  element: ExcalidrawTitledElement,
   {
     zoom,
     focused = false,
   }: {
     zoom: number;
-    /** Search focus expands the title past the frame width, like the DOM. */
+    /** Search focus expands the title past the element width, like the DOM. */
     focused?: boolean;
   },
-): FrameNameLayout => {
-  const font = getFrameNameFont(zoom);
-  const glyphSize = FRAME_NAME_GLYPH_SIZE / zoom;
-  const glyphGap = FRAME_NAME_GLYPH_GAP / zoom;
+): ElementTitleLayout => {
+  const font = getElementTitleFont(zoom);
+  const glyphSize = ELEMENT_TITLE_GLYPH_SIZE / zoom;
+  const glyphGap = ELEMENT_TITLE_GLYPH_GAP / zoom;
   const height = (FRAME_STYLE.nameFontSize * FRAME_STYLE.nameLineHeight) / zoom;
-  const maxTextWidth = Math.max(0, frame.width - glyphSize - glyphGap);
-  const text = getFrameLikeTitle(frame);
+  const maxTextWidth = Math.max(0, element.width - glyphSize - glyphGap);
+  const text = getElementTitle(element);
   const fitted = focused ? text : truncateToWidth(text, font, maxTextWidth);
   const textWidth = getLineWidth(fitted, font);
   return {
-    x: frame.x,
-    y: frame.y - FRAME_STYLE.nameOffsetY / zoom - height,
+    x: element.x,
+    y: element.y - getElementTitleOffsetY(element) / zoom - height,
     width: glyphSize + glyphGap + textWidth,
     height,
     glyphSize,

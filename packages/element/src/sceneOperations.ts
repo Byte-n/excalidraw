@@ -90,7 +90,7 @@ export type CanvasElementOperationReferences =
         | "mergeCells"
         | "splitCell"
         | "setCellStyle"
-        | "setTitle"
+        | "setName"
         | "setStyle";
       tableId: string;
       cellId?: string;

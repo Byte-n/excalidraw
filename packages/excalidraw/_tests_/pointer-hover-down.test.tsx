@@ -10,7 +10,6 @@ import {
   isMindmapNodeElement,
   LinearElementEditor,
 } from "@excalidraw/element";
-import { setTableSceneTitle } from "@excalidraw/element/tableScene";
 
 import type { LocalPoint } from "@excalidraw/math";
 import type {
@@ -20,7 +19,7 @@ import type {
 } from "@excalidraw/element/types";
 
 import { getCompositeControlPointGlobal } from "../components/app/compositeShapeControls";
-import { getTableTitleBar } from "../components/app/tableTitle";
+import { getElementTitleLayout } from "../renderer/elementTitle";
 import { restoreElements } from "../data/restore";
 import { getTextAutoResizeHandle } from "../textAutoResizeHandle";
 
@@ -166,28 +165,18 @@ describe("hover = pointerdown target (PR5a-2)", () => {
     await expectHoverDownKind(x, y, "compositeControl");
   });
 
-  it("containerControl (table title grip)", async () => {
+  it("element (table title hit area)", async () => {
     const table = API.createElement({ type: "table", x: 200, y: 400 });
     API.setElements([table]);
-    act(() => {
-      setTableSceneTitle(
-        h.app.scene,
-        h.app.scene.getNonDeletedElement(
-          table.id,
-        ) as NonDeleted<ExcalidrawTableElement>,
-        "Title",
-      );
-    });
     const liveTable = h.app.scene.getNonDeletedElement(
       table.id,
     ) as NonDeleted<ExcalidrawTableElement>;
-    const title = h.elements.find(
-      (element) => element.containerRef?.kind === "tableTitle",
-    ) as any;
-    const bar = getTableTitleBar(liveTable, title, 1, title.fontFamily);
-    const gripX = bar.grip.x + bar.grip.width / 2;
-    const gripY = bar.grip.y + bar.grip.height / 2;
-    await expectHoverDownKind(gripX, gripY, "containerControl");
+    const layout = getElementTitleLayout(liveTable, { zoom: 1 });
+    await expectHoverDownKind(
+      layout.x + layout.width / 2,
+      layout.y + layout.height / 2,
+      "element",
+    );
   });
 
   const mindmapFixture = () =>

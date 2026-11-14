@@ -313,13 +313,13 @@ describe("setElementRenderOverrides", () => {
     });
     API.setElements([frame]);
     API.updateElement(frame, { name: "  Draft  " });
-    act(() => h.setState({ editingFrame: frame.id }));
+    act(() => h.setState({ editingElementTitle: frame.id }));
     const query = (selector: string) =>
       GlobalTestState.renderResult.container.querySelector<HTMLElement>(
         selector,
       );
     const nameElement = await waitFor(() => {
-      const element = query(".frame-name");
+      const element = query(".element-title");
       expect(element?.querySelector("input")).not.toBe(null);
       return element!;
     });
@@ -329,15 +329,15 @@ describe("setElementRenderOverrides", () => {
     // A render-only offset that puts the frame far off-screen must neither
     // end the edit (which trims and commits the name) nor move the editor.
     submit(new Map([[frame.id, { offset: { x: 10000, y: 0 } }]]));
-    expect(h.state.editingFrame).toBe(frame.id);
+    expect(h.state.editingElementTitle).toBe(frame.id);
     expect(API.getElement(frame).name).toBe("  Draft  ");
     expect(onChange).not.toHaveBeenCalled();
-    expect(query(".frame-name input")).not.toBe(null);
-    expect(query(".frame-name")!.style.left).toBe(documentLeft);
+    expect(query(".element-title input")).not.toBe(null);
+    expect(query(".element-title")!.style.left).toBe(documentLeft);
 
     // Back to being a decoration, the name follows the offset and is culled.
-    act(() => h.setState({ editingFrame: null }));
-    expect(query(".frame-name")).toBe(null);
+    act(() => h.setState({ editingElementTitle: null }));
+    expect(query(".element-title")).toBe(null);
   });
 
   it.each([
@@ -375,14 +375,14 @@ describe("setElementRenderOverrides", () => {
           zoom: { value: getNormalizedZoom(zoom) },
           scrollX: 25,
           scrollY: -30,
-          editingFrame: editing ? frame.id : null,
+          editingElementTitle: editing ? frame.id : null,
         }),
       );
       const nameElement = editing
         ? await waitFor(() => {
             const element =
               GlobalTestState.renderResult.container.querySelector<HTMLElement>(
-                ".frame-name",
+                ".element-title",
               );
             expect(element?.querySelector("input")).not.toBe(null);
             return element!;
@@ -391,11 +391,13 @@ describe("setElementRenderOverrides", () => {
       if (!editing) {
         // The title is canvas chrome: no DOM label outside the rename editor.
         expect(
-          GlobalTestState.renderResult.container.querySelector(".frame-name"),
+          GlobalTestState.renderResult.container.querySelector(
+            ".element-title",
+          ),
         ).toBe(null);
       }
       const documentLeft = nameElement?.style.left;
-      const cache = h.app.frameNameBoundsCache;
+      const cache = h.app.elementTitleBoundsCache;
       cache._cache.clear();
       const documentBounds = cache.get(frame)!;
       const point = {

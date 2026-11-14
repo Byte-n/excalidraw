@@ -14,6 +14,7 @@ import {
   isTextBindableContainer,
   isTextElement,
   isCursorInFrame,
+  isTitledElement,
 } from "@excalidraw/element";
 
 import { DEFAULT_COLLISION_THRESHOLD } from "@excalidraw/common";
@@ -31,7 +32,7 @@ import type {
 } from "@excalidraw/element/types";
 import type { EditorInterface } from "@excalidraw/common";
 
-import type { AppState, FrameNameBoundsCache } from "../../types";
+import type { AppState, ElementTitleBoundsCache } from "../../types";
 
 /** Narrow dependency surface for the high-frequency hit testing path. */
 export type HitTestApp = {
@@ -44,7 +45,7 @@ export type HitTestApp = {
     | "getSelectedElements"
   >;
   editorInterface: EditorInterface;
-  frameNameBoundsCache: FrameNameBoundsCache;
+  elementTitleBoundsCache: ElementTitleBoundsCache;
   hitElement: (
     x: number,
     y: number,
@@ -90,8 +91,8 @@ export const hitElement = (
     element,
     threshold,
     elementsMap,
-    frameNameBound: isFrameLikeElement(element)
-      ? app.frameNameBoundsCache.get(element)
+    titleBound: isTitledElement(element)
+      ? app.elementTitleBoundsCache.get(element)
       : null,
   });
 };
@@ -209,8 +210,8 @@ export const getElementAtPosition = (
       element: elementWithHighestZIndex,
       threshold: getElementHitThreshold(app, elementWithHighestZIndex) / 2,
       elementsMap: app.scene.getNonDeletedElementsMap(),
-      frameNameBound: isFrameLikeElement(elementWithHighestZIndex)
-        ? app.frameNameBoundsCache.get(elementWithHighestZIndex)
+      titleBound: isTitledElement(elementWithHighestZIndex)
+        ? app.elementTitleBoundsCache.get(elementWithHighestZIndex)
         : null,
     })
       ? elementWithHighestZIndex

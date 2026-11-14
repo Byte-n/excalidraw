@@ -645,24 +645,7 @@ export const textWysiwyg = ({
     overflowWrap: "break-word",
     boxSizing: "content-box",
   });
-  const isTableTitle = element.containerRef?.kind === "tableTitle";
-  if (isTableTitle) {
-    // design (phase-6): the title editor is a filled box with a 1px
-    // selection-color outline; negative margins cancel the padding/border so
-    // the glyphs stay exactly on their canvas position
-    const padX = 6;
-    const padY = 2;
-    Object.assign(editable.style, {
-      background: "var(--input-bg-color, #ffffff)",
-      border: "1px solid var(--color-selection)",
-      borderRadius: "4px",
-      padding: `${padY}px ${padX}px`,
-      margin: `-${padY + 1}px 0 0 -${padX + 1}px`,
-    });
-  }
-  editable.value = isTableTitle
-    ? element.originalText.replace(/\s*[\r\n]+\s*/g, " ")
-    : element.originalText;
+  editable.value = element.originalText;
   updateWysiwygStyle();
 
   const getCaretIndexFromInitialSceneCoords = () => {
@@ -823,9 +806,7 @@ export const textWysiwyg = ({
     };
 
     editable.oninput = () => {
-      const normalized = isTableTitle
-        ? normalizeText(editable.value).replace(/\s*[\r\n]+\s*/g, " ")
-        : normalizeText(editable.value);
+      const normalized = normalizeText(editable.value);
       if (editable.value !== normalized) {
         const selectionStart = editable.selectionStart;
         editable.value = normalized;
@@ -878,10 +859,7 @@ export const textWysiwyg = ({
       event.preventDefault();
       handleSubmit();
       app.actionManager.executeAction(actionSaveToActiveFile);
-    } else if (
-      event.key === KEYS.ENTER &&
-      (isTableTitle || event[KEYS.CTRL_OR_CMD])
-    ) {
+    } else if (event.key === KEYS.ENTER && event[KEYS.CTRL_OR_CMD]) {
       event.preventDefault();
       if (event.isComposing || event.keyCode === 229) {
         return;

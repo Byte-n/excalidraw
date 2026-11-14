@@ -45,7 +45,7 @@ exports[`exportToSvg > with default arguments 1`] = `
   "currentTablePreset": "plain",
   "cursorButton": "up",
   "defaultSidebarDockedPreference": false,
-  "editingFrame": null,
+  "editingElementTitle": null,
   "editingGroupId": null,
   "editingTextElement": null,
   "elementsToHighlight": null,

@@ -24,7 +24,7 @@ import {
   getMindmapShapeId,
   isArrowElement,
   isEmbeddableElement,
-  isFrameLikeElement,
+  isTitledElement,
   isMindmapEdgeElement,
   isSequenceFragmentElement,
   isTableElement,
@@ -86,9 +86,6 @@ import {
   StrokeWidthBaseIcon,
   StrokeStyleDashedIcon,
   StrokeStyleDottedIcon,
-  TextAlignLeftIcon,
-  TextAlignCenterIcon,
-  TextAlignRightIcon,
   tableCellSelectIcon,
   tableCellMultiSelectIcon,
   tableCellMergeIcon,
@@ -731,16 +728,18 @@ const FloatbarLinkAction = ({
 };
 
 /**
- * Frame 场景：浮动栏「重命名」入口（聚焦画布标题输入框，双击标题同效） */
-const FrameRenameAction = ({
+ * Titled element scene: the floating bar's rename entry focuses the canvas
+ * title input; double-clicking the title has the same effect.
+ */
+const ElementTitleRenameAction = ({
   app,
   targetElements,
 }: {
   app: AppClassProperties;
   targetElements: ExcalidrawElement[];
 }) => {
-  const frame = targetElements[0];
-  if (!frame || !isFrameLikeElement(frame)) {
+  const element = targetElements[0];
+  if (!element || !isTitledElement(element)) {
     return null;
   }
   return (
@@ -750,8 +749,8 @@ const FrameRenameAction = ({
         icon={pencilIcon}
         title={t("labels.rename")}
         aria-label={t("labels.rename")}
-        data-testid="frame-rename"
-        onClick={() => app.setState({ editingFrame: frame.id })}
+        data-testid="element-title-rename"
+        onClick={() => app.setState({ editingElementTitle: element.id })}
       />
     </div>
   );
@@ -931,7 +930,7 @@ export const FloatbarShapeActions = ({
   const hasTextGroups = predicates.text;
   const hasMiddleGroups =
     !!mindmapNode ||
-    predicates.frameRename ||
+    predicates.titleRename ||
     predicates.cropEditor ||
     hasStyleGroups ||
     predicates.arrowType ||
@@ -992,9 +991,9 @@ export const FloatbarShapeActions = ({
         </>
       )}
 
-      {/* Frame：重命名入口 */}
-      {predicates.frameRename && (
-        <FrameRenameAction app={app} targetElements={targetElements} />
+      {/* 有标题元素：重命名入口 */}
+      {predicates.titleRename && (
+        <ElementTitleRenameAction app={app} targetElements={targetElements} />
       )}
 
       {/* 图片：裁剪入口 */}
@@ -1770,26 +1769,6 @@ const TableStyleActions = ({
       icon: StrokeStyleDottedIcon,
     },
   ];
-  const titleAlignOptions = [
-    {
-      value: "start" as const,
-      text: t("labels.left"),
-      icon: TextAlignLeftIcon,
-      testId: "table-title-align-start",
-    },
-    {
-      value: "center" as const,
-      text: t("labels.center"),
-      icon: TextAlignCenterIcon,
-      testId: "table-title-align-center",
-    },
-    {
-      value: "end" as const,
-      text: t("labels.right"),
-      icon: TextAlignRightIcon,
-      testId: "table-title-align-end",
-    },
-  ];
   const colorPicker = (
     <ColorPicker
       key="fill"
@@ -1908,16 +1887,6 @@ const TableStyleActions = ({
           >
             {t("labels.tableHeaderRow")}
           </CheckboxItem>
-          <ToolbarGroup legend={t("labels.tableTitleAlign")}>
-            <div className="buttonList">
-              <RadioSelection
-                group="table-title-align"
-                options={titleAlignOptions}
-                value={table.table.style?.title?.align ?? "start"}
-                onChange={(value) => update({ title: { align: value } })}
-              />
-            </div>
-          </ToolbarGroup>
         </>
       )}
     </div>

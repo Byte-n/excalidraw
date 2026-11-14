@@ -716,7 +716,10 @@ export const restoreElement = (
       // only bounded float drift between the element size and its rows and
       // columns is normalized here; gross inconsistencies throw
       return normalizeTableDimensions(
-        restoreElementWithProperties(element, { table: element.table }),
+        restoreElementWithProperties(element, {
+          name: element.name ?? null,
+          table: element.table,
+        }),
       );
     }
     case "iframe":
@@ -1433,7 +1436,7 @@ export const restoreAppState = (
     currentItemStickynoteBackgroundColor: normalizeStickyNoteBackgroundColor(
       nextAppState.currentItemStickynoteBackgroundColor,
     ),
-    editingFrame: null,
+    editingElementTitle: null,
   };
 };
 

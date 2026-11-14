@@ -94,7 +94,6 @@ import {
   resolvePointerFrame,
   resolvePointerType,
 } from "./pointerFrame";
-import { handleTableTitleDoubleClick } from "./table";
 
 import type { AppState, CollaboratorPointer } from "../../types";
 
@@ -354,14 +353,14 @@ export const handleCanvasDoubleClick = (
     return;
   }
 
-  // Frame titles are canvas chrome: double-clicking the title layout starts
-  // the rename editor (the only remaining DOM surface for a frame name).
-  const frameNameHit = app.frames.hitTestFrameName(
+  // Element titles are canvas chrome: double-clicking a title layout starts
+  // the rename editor (the only remaining DOM surface for a title).
+  const titleHit = app.elementTitles.hitTestElementTitle(
     mindmapScenePoint.x,
     mindmapScenePoint.y,
   );
-  if (frameNameHit) {
-    app.setState({ editingFrame: frameNameHit.id });
+  if (titleHit) {
+    app.setState({ editingElementTitle: titleHit.id });
     return;
   }
 
@@ -513,7 +512,6 @@ export const handleCanvasDoubleClick = (
   // text handling below. A fragment row is a single-column table cell and
   // follows the same rule; its header row keeps the operator label path.
   if (
-    handleTableTitleDoubleClick(app, { x: sceneX, y: sceneY }) ||
     app.handleTableCellDoubleClick(sceneX, sceneY) ||
     app.handleFragmentDoubleClick(sceneX, sceneY)
   ) {

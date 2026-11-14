@@ -29,6 +29,7 @@ import type {
   ExcalidrawEmbeddableElement,
   ExcalidrawMagicFrameElement,
   ExcalidrawFrameLikeElement,
+  ExcalidrawTitledElement,
   ExcalidrawElementType,
   ExcalidrawIframeLikeElement,
   OrderedExcalidrawElement,
@@ -328,10 +329,6 @@ export type TableRowColStructureHover =
   | {
       tableId: ExcalidrawTableElement["id"];
       kind: "table";
-    }
-  | {
-      tableId: ExcalidrawTableElement["id"];
-      kind: "titleBar" | "titleGrip";
     }
   | {
       tableId: ExcalidrawTableElement["id"];
@@ -679,9 +676,9 @@ export interface AppState {
     clip: boolean;
   };
   /**
-   * frame-like element whose name is currently being edited
+   * titled element (frame-like or table) whose name is currently being edited
    */
-  editingFrame: ExcalidrawFrameLikeElement["id"] | null;
+  editingElementTitle: ExcalidrawElement["id"] | null;
   elementsToHighlight: readonly NonDeletedExcalidrawElement[] | null;
   /**
    * set when a new text is created or when an existing text is being edited
@@ -1817,22 +1814,20 @@ export interface ExcalidrawImperativeAPI {
   onEvent: InstanceType<typeof App>["onEvent"];
 }
 
-export type FrameNameBounds = {
+export type ElementTitleBounds = {
   x: number;
   y: number;
   width: number;
   height: number;
 };
 
-export type FrameNameBoundsCache = {
-  get: (
-    frameElement: ExcalidrawFrameLikeElement | ExcalidrawMagicFrameElement,
-  ) => FrameNameBounds | null;
+export type ElementTitleBoundsCache = {
+  get: (element: ExcalidrawTitledElement) => ElementTitleBounds | null;
   _cache: Map<
     string,
-    FrameNameBounds & {
+    ElementTitleBounds & {
       zoom: AppState["zoom"]["value"];
-      versionNonce: ExcalidrawFrameLikeElement["versionNonce"];
+      versionNonce: ExcalidrawTitledElement["versionNonce"];
     }
   >;
 };

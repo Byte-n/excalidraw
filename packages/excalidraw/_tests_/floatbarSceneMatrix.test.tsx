@@ -242,9 +242,28 @@ describe("浮动栏场景矩阵（T3）", () => {
 
     const bar = queryFloatbar()!;
     fireEvent.click(
-      bar.querySelector<HTMLButtonElement>("[data-testid='frame-rename']")!,
+      bar.querySelector<HTMLButtonElement>(
+        "[data-testid='element-title-rename']",
+      )!,
     );
-    expect(h.state.editingFrame).toBe(frame.id);
+    expect(h.state.editingElementTitle).toBe(frame.id);
+  });
+
+  it("Table：重命名入口聚焦画布标题", async () => {
+    await render(<Excalidraw />);
+    const table = API.createElement({ type: "table" });
+    API.setElements([table]);
+    act(() => {
+      API.setAppState({ selectedElementIds: { [table.id]: true } });
+    });
+
+    const bar = queryFloatbar()!;
+    fireEvent.click(
+      bar.querySelector<HTMLButtonElement>(
+        "[data-testid='element-title-rename']",
+      )!,
+    );
+    expect(h.state.editingElementTitle).toBe(table.id);
   });
 
   it("Frame：外露背景色板（画板填充可设），样式弹层只剩透明度", async () => {

@@ -66,7 +66,6 @@
     "tableInnerBorder": "Inner frame line",
     "tableBorderWidth": "Border width",
     "tableBorderStyle": "Border style",
-    "tableTitleAlign": "Title align",
     "copyStyles": "Copy styles",
     "pasteStyles": "Paste styles",
     "stroke": "Stroke",
@@ -326,6 +325,7 @@
     "multipleResults": "results",
     "placeholder": "Find text on canvas...",
     "frames": "Frames",
+    "tables": "Tables",
     "texts": "Texts"
   },
   "outline": {

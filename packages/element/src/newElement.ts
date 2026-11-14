@@ -489,6 +489,7 @@ export const newMagicFrameElement = (
 export const newTableElement = (
   opts: {
     type: "table";
+    name?: string;
     preset?: TablePresetId;
     rowCount?: number;
     columnCount?: number;
@@ -512,6 +513,7 @@ export const newTableElement = (
     {
       ..._newElementBase<ExcalidrawTableElement>("table", opts),
       type: "table",
+      name: opts?.name || null,
       // tables never rotate; any incoming angle is ignored
       angle: 0 as Radians,
       width: getTableWidth(table),

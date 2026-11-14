@@ -6,7 +6,7 @@ import { MIN_ZOOM, viewportCoordsToSceneCoords } from "@excalidraw/common";
 
 import { resolveInputDevice } from "../appState";
 import { Excalidraw } from "../index";
-import { getFrameNameLayout } from "../renderer/frameName";
+import { getElementTitleLayout } from "../renderer/elementTitle";
 import { getNormalizedZoom } from "../scene";
 
 import { API } from "./helpers/api";
@@ -430,7 +430,7 @@ describe("wheel over a frame label", () => {
 
     // The title is canvas chrome, so the wheel target is the interactive
     // canvas: exactly one editor-surface listener handles it.
-    const layout = getFrameNameLayout(frame, { zoom: h.state.zoom.value });
+    const layout = getElementTitleLayout(frame, { zoom: h.state.zoom.value });
     const clientX =
       (layout.x + layout.width / 2 + h.state.scrollX) * h.state.zoom.value +
       h.state.offsetLeft;

@@ -1,10 +1,8 @@
-import { getFontString } from "@excalidraw/common";
 import { pointFrom, type LocalPoint } from "@excalidraw/math";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
 
 import { newElementWith, type ElementUpdate } from "../src/mutateElement";
-import { newTextElement } from "../src/newElement";
 import { Scene } from "../src/Scene";
 import {
   computeTableAxisScale,
@@ -14,7 +12,6 @@ import {
   prepareTableUniformScale,
 } from "../src/tableScale";
 import { getIndexedTableChildren } from "../src/tableChildrenIndex";
-import { measureText } from "../src/textMeasurements";
 import { isTableElement } from "../src/typeChecks";
 
 import type {
@@ -191,69 +188,6 @@ describe("computeTableUniformScale: grid geometry", () => {
 });
 
 describe("computeTableUniformScale: subtree members", () => {
-  it("keeps the title content-sized and single-line while scaling the table", () => {
-    const table = makeNonUniformTable();
-    const title = newTextElement({
-      x: table.x,
-      y: table.y - 40,
-      text: "Budget 2026",
-      fontSize: 20,
-      containerRef: { kind: "tableTitle", elementId: table.id },
-    });
-    const originalGap = table.y - (title.y + title.height);
-
-    for (const scale of [0.5, 2]) {
-      const result = computeTableUniformScale([table, title], table.id, scale, {
-        anchor: { x: table.x + table.width, y: table.y + table.height },
-        persistTextModes: true,
-      })!;
-      const tableUpdate = updateOf(result, table.id);
-      const titleUpdate = updateOf(result, title.id);
-      expect(titleUpdate.fontSize).toBeUndefined();
-      expect(titleUpdate.width).toBe(title.width);
-      expect(titleUpdate.height).toBe(title.height);
-      expect(titleUpdate.text).toBe(title.text);
-      expect(titleUpdate.autoResize).toBe(true);
-      expect(titleUpdate.x).toBe(tableUpdate.x);
-      expect(
-        tableUpdate.y! - (titleUpdate.y! + titleUpdate.height!),
-      ).toBeCloseTo(originalGap);
-    }
-  });
-
-  it("repairs a fixed-width title and keeps its size during axis scaling", () => {
-    const table = makeNonUniformTable();
-    const title = newElementWith(
-      newTextElement({
-        x: table.x,
-        y: table.y - 50,
-        text: "Annual\nReport",
-        fontSize: 20,
-        containerRef: { kind: "tableTitle", elementId: table.id },
-      }),
-      { width: 20, autoResize: false },
-    );
-    const expected = measureText(
-      "Annual Report",
-      getFontString(title),
-      title.lineHeight,
-    );
-    const result = computeTableAxisScale([table, title], table.id, 0.7, 1, {
-      persistTextModes: true,
-    })!;
-    const update = result.updates.get(title.id) as UpdateBag;
-    expect(update).toMatchObject({
-      x: title.x,
-      y: title.y,
-      text: "Annual Report",
-      width: expected.width,
-      height: expected.height,
-      autoResize: true,
-    });
-    expect(update.fontSize).toBeUndefined();
-    expect(result.clampedScaleX).toBe(0.7);
-  });
-
   it("moves and scales cell content around the anchor", () => {
     const table = makeNonUniformTable();
     const content = API.createElement({

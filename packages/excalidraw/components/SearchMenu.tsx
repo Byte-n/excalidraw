@@ -13,6 +13,7 @@ import {
 
 import {
   getCommonBounds,
+  getElementTitle,
   getTableCellBounds,
   isElementCompletelyInViewport,
   isSceneBoundsCompletelyInViewport,
@@ -35,11 +36,10 @@ import {
   isMindmapNodeElement,
 } from "@excalidraw/element";
 
-import { getDefaultFrameName } from "@excalidraw/element/frame";
-
 import type {
   ElementsMap,
   ExcalidrawFrameLikeElement,
+  ExcalidrawTableElement,
   ExcalidrawTextElement,
 } from "@excalidraw/element/types";
 
@@ -58,6 +58,7 @@ import {
   upIcon,
   searchIcon,
   frameToolIcon,
+  tableToolIcon,
   TextIcon,
 } from "./icons";
 
@@ -75,7 +76,10 @@ const SEARCH_DEBOUNCE = 350;
 const FONT_SIZE_LEGIBILITY_THRESHOLD = 14;
 
 type SearchMatchItem = {
-  element: ExcalidrawTextElement | ExcalidrawFrameLikeElement;
+  element:
+    | ExcalidrawTextElement
+    | ExcalidrawFrameLikeElement
+    | ExcalidrawTableElement;
   searchQuery: SearchQuery;
   index: number;
   preview: {
@@ -282,7 +286,8 @@ export const SearchMenu = () => {
 
         if (
           !isTextElement(currentElement) &&
-          !isFrameLikeElement(currentElement)
+          !isFrameLikeElement(currentElement) &&
+          !isTableElement(currentElement)
         ) {
           return;
         }
@@ -304,12 +309,14 @@ export const SearchMenu = () => {
           y: currentElement.y + (match.matchedLines[0]?.offsetY ?? 0),
           width: match.matchedLines[0]?.width,
           height: match.matchedLines[0]?.height,
-          fontSize: isFrameLikeElement(currentElement)
-            ? FRAME_STYLE.nameFontSize
-            : currentElement.fontSize,
-          fontFamily: isFrameLikeElement(currentElement)
-            ? FONT_FAMILY.Assistant
-            : currentElement.fontFamily,
+          fontSize:
+            isFrameLikeElement(currentElement) || isTableElement(currentElement)
+              ? FRAME_STYLE.nameFontSize
+              : currentElement.fontSize,
+          fontFamily:
+            isFrameLikeElement(currentElement) || isTableElement(currentElement)
+              ? FONT_FAMILY.Assistant
+              : currentElement.fontFamily,
         });
 
         const fontSize = matchAsElement.fontSize;
@@ -615,10 +622,18 @@ const MatchListBase = (props: MatchListProps) => {
     [props.matches],
   );
 
+  const tableNameMatches = useMemo(
+    () => props.matches.items.filter((match) => isTableElement(match.element)),
+    [props.matches],
+  );
+
   const textMatches = useMemo(
     () => props.matches.items.filter((match) => isTextElement(match.element)),
     [props.matches],
   );
+
+  const tableOffset = frameNameMatches.length;
+  const textOffset = tableOffset + tableNameMatches.length;
 
   return (
     <div>
@@ -639,6 +654,29 @@ const MatchListBase = (props: MatchListProps) => {
             />
           ))}
 
+          {tableNameMatches.length + textMatches.length > 0 && (
+            <div className="layer-ui__divider" />
+          )}
+        </div>
+      )}
+
+      {tableNameMatches.length > 0 && (
+        <div className="layer-ui__search-result-container">
+          <div className="layer-ui__search-result-title">
+            <div className="title-icon">{tableToolIcon}</div>
+            <div>{t("search.tables")}</div>
+          </div>
+          {tableNameMatches.map((searchMatch, index) => (
+            <ListItem
+              key={searchMatch.element.id + searchMatch.index}
+              searchQuery={props.searchQuery}
+              preview={searchMatch.preview}
+              mindmap={searchMatch.mindmap}
+              highlighted={index + tableOffset === props.focusIndex}
+              onClick={() => props.onItemClick(index + tableOffset)}
+            />
+          ))}
+
           {textMatches.length > 0 && <div className="layer-ui__divider" />}
         </div>
       )}
@@ -655,8 +693,8 @@ const MatchListBase = (props: MatchListProps) => {
               searchQuery={props.searchQuery}
               preview={searchMatch.preview}
               mindmap={searchMatch.mindmap}
-              highlighted={index + frameNameMatches.length === props.focusIndex}
-              onClick={() => props.onItemClick(index + frameNameMatches.length)}
+              highlighted={index + textOffset === props.focusIndex}
+              onClick={() => props.onItemClick(index + textOffset)}
             />
           ))}
         </div>
@@ -895,13 +933,13 @@ const getMatchedLines = (
   return matchedLines;
 };
 
-const getMatchInFrame = (
-  frame: ExcalidrawFrameLikeElement,
+const getMatchInElementTitle = (
+  element: ExcalidrawFrameLikeElement | ExcalidrawTableElement,
   searchQuery: SearchQuery,
   index: number,
   zoomValue: number,
 ): SearchMatch["matchedLines"] => {
-  const text = frame.name ?? getDefaultFrameName(frame);
+  const text = getElementTitle(element);
   const matchedText = text.slice(index, index + searchQuery.length);
 
   const prefixText = text.slice(0, index);
@@ -931,7 +969,7 @@ const getMatchInFrame = (
       offsetY,
       width,
       height: matchedMetrics.height,
-      showOnCanvas: offsetX + width <= frame.width * zoomValue,
+      showOnCanvas: offsetX + width <= element.width * zoomValue,
     },
   ];
 };
@@ -966,8 +1004,13 @@ const handleSearch = debounce(
       isFrameLikeElement(el),
     ) as ExcalidrawFrameLikeElement[];
 
+    const tables = elements.filter((el) =>
+      isTableElement(el),
+    ) as ExcalidrawTableElement[];
+
     texts.sort((a, b) => a.y - b.y);
     frames.sort((a, b) => a.y - b.y);
+    tables.sort((a, b) => a.y - b.y);
 
     const textMatches: SearchMatchItem[] = [];
 
@@ -1020,11 +1063,11 @@ const handleSearch = debounce(
 
     for (const frame of frames) {
       let match = null;
-      const name = frame.name ?? getDefaultFrameName(frame);
+      const name = getElementTitle(frame);
 
       while ((match = regex.exec(name)) !== null) {
         const preview = getMatchPreview(name, match.index, searchQuery);
-        const matchedLines = getMatchInFrame(
+        const matchedLines = getMatchInElementTitle(
           frame,
           searchQuery,
           match.index,
@@ -1043,12 +1086,43 @@ const handleSearch = debounce(
       }
     }
 
+    const tableMatches: SearchMatchItem[] = [];
+
+    for (const table of tables) {
+      let match = null;
+      const name = getElementTitle(table);
+
+      while ((match = regex.exec(name)) !== null) {
+        const preview = getMatchPreview(name, match.index, searchQuery);
+        const matchedLines = getMatchInElementTitle(
+          table,
+          searchQuery,
+          match.index,
+          app.state.zoom.value,
+        );
+
+        if (matchedLines.length > 0) {
+          tableMatches.push({
+            element: table,
+            searchQuery,
+            preview,
+            index: match.index,
+            matchedLines,
+          });
+        }
+      }
+    }
+
     const visibleIds = new Set(
       app.visibleElements.map((visibleElement) => visibleElement.id),
     );
 
-    // putting frame matches first
-    const matchItems: SearchMatchItem[] = [...frameMatches, ...textMatches];
+    // putting title matches first
+    const matchItems: SearchMatchItem[] = [
+      ...frameMatches,
+      ...tableMatches,
+      ...textMatches,
+    ];
 
     const visibleIndex = matchItems.findIndex((matchItem) =>
       visibleIds.has(matchItem.element.id),
