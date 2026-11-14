@@ -171,12 +171,16 @@ export class AppElementTitles {
     });
     const titleLineHeight =
       FRAME_STYLE.nameFontSize * FRAME_STYLE.nameLineHeight;
-    // The glyph is not painted while editing, but its slot stays reserved so
-    // the input text starts on the title's text origin (glyph + gap in).
+    // The canvas drops the whole title while editing, so the editor paints the
+    // glyph itself and reserves its slot: the input text must start on the
+    // title's text origin (glyph + gap in).
     const paddingLeft =
       ELEMENT_TITLE_EDIT_PADDING +
       ELEMENT_TITLE_GLYPH_SIZE +
       ELEMENT_TITLE_GLYPH_GAP;
+    const glyphTop =
+      ELEMENT_TITLE_EDIT_PADDING * 2 +
+      (titleLineHeight - ELEMENT_TITLE_GLYPH_SIZE) / 2;
     const textWidth = Math.max(
       getLineWidth(elementTitle, titleFont),
       getLineWidth("0", titleFont),
@@ -208,6 +212,28 @@ export class AppElementTitles {
           opacity: renderState.opacity,
         }}
       >
+        <svg
+          width={ELEMENT_TITLE_GLYPH_SIZE}
+          height={ELEMENT_TITLE_GLYPH_SIZE}
+          viewBox={`0 0 ${ELEMENT_TITLE_GLYPH_SIZE} ${ELEMENT_TITLE_GLYPH_SIZE}`}
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: 0,
+            top: `${glyphTop}px`,
+            color: "var(--color-selection)",
+            overflow: "visible",
+            pointerEvents: "none",
+          }}
+        >
+          <path
+            d="M3 0v10M7 0v10M0 3h10M0 7h10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.2}
+            strokeLinecap="round"
+          />
+        </svg>
         <input
           autoFocus
           value={elementTitle}
