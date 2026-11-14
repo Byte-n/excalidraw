@@ -75,21 +75,17 @@ export const getElementHoverCursor = (
   const selectedElements = app.scene.getSelectedElements?.(app.state) ?? [];
   const selected = app.state.selectedElementIds[elementId];
 
-  // link hover (tooltip/state is derived in updateDerivedPointerState)
-  if (app.hitLinkElement?.id === elementId && !selected) {
+  const hover = app.pointer?.getHoverSnapshot?.();
+  // link hover (tooltip is applied as a DOM side effect after commit)
+  if (hover?.linkElementId === elementId && !selected) {
     return CURSOR_TYPE.POINTER;
   }
   // interactive embed hover
-  if (
-    app.state.activeEmbeddable?.state === "hover" &&
-    app.state.activeEmbeddable.element.id === elementId
-  ) {
+  if (hover?.embedElementId === elementId) {
     return CURSOR_TYPE.POINTER;
   }
   if (app.state.activeTool?.type === "text") {
-    return app.state.hoveredArrowTextAnchor
-      ? CURSOR_TYPE.POINTER
-      : CURSOR_TYPE.TEXT;
+    return hover?.arrowTextAnchor ? CURSOR_TYPE.POINTER : CURSOR_TYPE.TEXT;
   }
   if (element && isMindmapEdgeElement(element)) {
     return app.mindmap?.isCompleteMindmapSelection?.()

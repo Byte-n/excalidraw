@@ -378,36 +378,23 @@ describe("setElementRenderOverrides", () => {
           editingFrame: editing ? frame.id : null,
         }),
       );
-      const title = await waitFor(() => {
-        const element =
-          GlobalTestState.renderResult.container.querySelector<HTMLElement>(
-            ".frame-name",
-          );
-        expect(element).not.toBe(null);
-        return element!;
-      });
-      // JSDOM has no layout: measure the rendered CSS position, including
-      // visual offsets, within the editor's viewport rectangle.
-      const measure = vi
-        .spyOn(title, "getBoundingClientRect")
-        .mockImplementation(() => {
-          const width = 60;
-          const height = editing ? 32 : 20;
-          const left = h.state.offsetLeft + parseFloat(title.style.left);
-          const bottom =
-            h.state.offsetTop + h.state.height - parseFloat(title.style.bottom);
-          return {
-            x: left,
-            y: bottom - height,
-            left,
-            top: bottom - height,
-            right: left + width,
-            bottom,
-            width,
-            height,
-            toJSON: () => ({}),
-          };
-        });
+      const nameElement = editing
+        ? await waitFor(() => {
+            const element =
+              GlobalTestState.renderResult.container.querySelector<HTMLElement>(
+                ".frame-name",
+              );
+            expect(element?.querySelector("input")).not.toBe(null);
+            return element!;
+          })
+        : null;
+      if (!editing) {
+        // The title is canvas chrome: no DOM label outside the rename editor.
+        expect(
+          GlobalTestState.renderResult.container.querySelector(".frame-name"),
+        ).toBe(null);
+      }
+      const documentLeft = nameElement?.style.left;
       const cache = h.app.frameNameBoundsCache;
       cache._cache.clear();
       const documentBounds = cache.get(frame)!;
@@ -420,11 +407,10 @@ describe("setElementRenderOverrides", () => {
       onChange.mockClear();
       const documentElements = JSON.stringify(h.elements);
 
-      // First measurement happens with a translated title (unless editing).
+      // Render-only offsets never move the hit bounds or the rename editor.
       submit(new Map([[frame.id, { offset: { x: 120, y: 150 } }]]));
       const bounds = cache.get(frame);
       expect(bounds).toEqual(documentBounds);
-      measure.mockClear();
       submit(new Map([[frame.id, { offset: { x: 140, y: 160 } }]]));
       expect(cache.get(frame)).toBe(bounds);
       submit(null);
@@ -433,7 +419,10 @@ describe("setElementRenderOverrides", () => {
       expect(h.app.hitElement(point.x + 120, point.y + 150, frame, false)).toBe(
         false,
       );
-      expect(measure).not.toHaveBeenCalled();
+      if (nameElement) {
+        expect(nameElement.style.left).toBe(documentLeft);
+        expect(nameElement.querySelector("input")).not.toBe(null);
+      }
       expect(JSON.stringify(h.elements)).toBe(documentElements);
       expect(onChange).not.toHaveBeenCalled();
     },
@@ -573,9 +562,13 @@ describe("render override geometry", () => {
       state: AppState = appState,
       map: RenderableElementsMap = elementsMap,
     ) => {
+      const frameToHighlight =
+        (state as AppState & { frameToHighlight?: any }).frameToHighlight ??
+        null;
       const { visibleElements } = renderer.getRenderableElements({
         ...state,
         selectedElements: scene.getSelectedElements(state),
+        frameToHighlight,
       });
       offsets = getElementRenderOffsets(overrides, offsets);
       return offsets.size
@@ -584,6 +577,7 @@ describe("render override geometry", () => {
             map,
             state,
             offsets,
+            frameToHighlight,
           )
         : visibleElements;
     };
@@ -733,9 +727,9 @@ describe("render override geometry", () => {
     });
     const { appState, visibleWith } = setup([a, b, frame, child]);
     const overrides = new Map([[a.id, { offset: { x: -590, y: 0 } }]]);
-    const ids = (state: AppState) =>
+    const ids = (state: AppState & { frameToHighlight?: any }) =>
       visibleWith(overrides, state).map((element) => element.id);
-    const selected: AppState = {
+    const selected: AppState & { frameToHighlight: typeof frame } = {
       ...appState,
       selectedElementIds: { [a.id]: true },
       frameToHighlight: frame,
@@ -766,7 +760,7 @@ describe("render override geometry", () => {
       height: 100,
     });
     const { appState, visibleWith } = setup([a, b, frame]);
-    const dragging: AppState = {
+    const dragging: AppState & { frameToHighlight: typeof frame } = {
       ...appState,
       selectedElementIds: { [a.id]: true },
       frameToHighlight: frame,

@@ -43,6 +43,8 @@ import {
   getLinkHandleFromCoords,
 } from "../components/hyperlink/helpers";
 
+import { EMPTY_POINTER_HOVER } from "../components/app/pointerSnapshot";
+
 import {
   bootstrapCanvas,
   getNormalizedCanvasDimensions,
@@ -53,6 +55,7 @@ import type {
   StaticCanvasRenderConfig,
   StaticSceneRenderConfig,
 } from "../scene/types";
+
 import type { StaticCanvasAppState, Zoom } from "../types";
 
 const GridLineColor = {
@@ -280,6 +283,7 @@ const _renderStaticScene = ({
   visibleElements,
   scale,
   appState: unsnappedAppState,
+  pointerHover = EMPTY_POINTER_HOVER,
   renderConfig,
 }: StaticSceneRenderConfig) => {
   if (canvas === null) {
@@ -291,9 +295,17 @@ const _renderStaticScene = ({
 
   const { renderGrid = true, isExporting } = renderConfig;
   // export draws vectors, not cached bitmaps — nothing to keep on the grid
-  const appState = isExporting
+  const snappedAppState = isExporting
     ? unsnappedAppState
     : snapScrollToDevicePixels(unsnappedAppState, scale);
+  // Hover lives in the pointer snapshot. The static renderer consumes a local
+  // projection so `renderElement` keeps its existing hover hooks.
+  const appState = {
+    ...snappedAppState,
+    hoveredElementId: pointerHover.elementId,
+    hoveredElementIds: pointerHover.elementIds,
+    frameToHighlight: pointerHover.frameToHighlight,
+  };
 
   const [normalizedWidth, normalizedHeight] = getNormalizedCanvasDimensions(
     canvas,

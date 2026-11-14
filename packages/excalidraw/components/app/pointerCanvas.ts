@@ -21,7 +21,6 @@ import {
   LinearElementEditor,
   hasBoundTextElement,
   isImageElement,
-  isEmbeddableElement,
   isLinearElement,
   isIframeLikeElement,
   isMindmapEdgeElement,
@@ -84,7 +83,8 @@ import {
 import { isPointHittingLink } from "../hyperlink/helpers";
 
 import { hitCompositeControlPoint } from "./compositeShapeControls";
-import { updateIframeLikeElementHover } from "./embeds";
+import { applyPointerHoverSideEffects } from "./pointerDerived";
+import { resolvePointerHover } from "./pointerHover";
 import "./pointerConnection";
 import "./pointerQuickCreate";
 import "./pointerSequence";
@@ -172,12 +172,13 @@ export const getElementLinkAtPosition = (
 };
 
 export const updateElementLinkHoverAffordance = (app: PointerApp): boolean => {
-  if (
-    app.hitLinkElement &&
-    !app.state.selectedElementIds[app.hitLinkElement.id]
-  ) {
+  const linkElementId = app.pointer.getHoverSnapshot?.().linkElementId;
+  const linkElement = linkElementId
+    ? app.scene.getNonDeletedElement(linkElementId)
+    : null;
+  if (linkElement && !app.state.selectedElementIds[linkElement.id]) {
     showHyperlinkTooltip(
-      app.hitLinkElement,
+      linkElement,
       app.state,
       app.scene.getNonDeletedElementsMap(),
     );
@@ -185,45 +186,6 @@ export const updateElementLinkHoverAffordance = (app: PointerApp): boolean => {
   }
   hideHyperlinkToolip();
   return false;
-};
-
-/** Legacy wrapper: affordance + cursor (frame dispatch computes the cursor). */
-export const applyElementLinkHoverAffordance = (app: PointerApp): boolean => {
-  const hit = updateElementLinkHoverAffordance(app);
-  if (hit) {
-    app.cursor.set(CURSOR_TYPE.POINTER);
-  }
-  return hit;
-};
-
-export const updateFrameToHighlight = (
-  app: PointerApp,
-  frameToHighlight: any,
-) => {
-  if (app.state.frameToHighlight !== frameToHighlight) {
-    app.setState({ frameToHighlight });
-  }
-};
-
-export const maybeUpdateFrameToHighlightOnPointerMove = (
-  app: PointerApp,
-  sceneCoords: { x: number; y: number },
-  isOverScrollBar: boolean,
-) => {
-  if (
-    app.state.newElement ||
-    app.state.multiElement ||
-    app.state.selectionElement ||
-    app.state.selectedElementsAreBeingDragged
-  ) {
-    return;
-  }
-  updateFrameToHighlight(
-    app,
-    !isOverScrollBar && isEligibleFrameChildType(app.state.activeTool.type)
-      ? app.getTopLayerFrameAtSceneCoords(sceneCoords)
-      : null,
-  );
 };
 
 export const handleCanvasPointerUp = (
@@ -281,11 +243,11 @@ export const handleElementLinkClick = (
   app: PointerApp,
   event: React.PointerEvent<HTMLCanvasElement>,
 ) => {
-  if (
-    !app.hitLinkElement ||
-    !app.lastPointerDownEvent ||
-    !app.lastPointerUpEvent
-  ) {
+  const linkElementId = app.pointer.getHoverSnapshot?.().linkElementId;
+  const linkElement = linkElementId
+    ? app.scene.getNonDeletedElement(linkElementId)
+    : null;
+  if (!linkElement || !app.lastPointerDownEvent || !app.lastPointerUpEvent) {
     return;
   }
   const draggedDistance = pointDistance(
@@ -303,14 +265,14 @@ export const handleElementLinkClick = (
   const elementsMap = app.scene.getNonDeletedElementsMap();
   if (
     !isPointHittingLink(
-      app.hitLinkElement,
+      linkElement,
       elementsMap,
       app.state,
       pointFrom(down.x, down.y),
       app.editorInterface.formFactor === "phone",
     ) ||
     !isPointHittingLink(
-      app.hitLinkElement,
+      linkElement,
       elementsMap,
       app.state,
       pointFrom(up.x, up.y),
@@ -320,15 +282,15 @@ export const handleElementLinkClick = (
     return;
   }
   hideHyperlinkToolip();
-  if (!app.hitLinkElement.link) {
+  if (!linkElement.link) {
     return;
   }
-  const url = normalizeLink(app.hitLinkElement.link);
+  const url = normalizeLink(linkElement.link);
   const customEvent = app.props.onLinkOpen
     ? wrapEvent(EVENT.EXCALIDRAW_LINK, event.nativeEvent)
     : undefined;
   if (customEvent) {
-    app.props.onLinkOpen?.({ ...app.hitLinkElement, link: url }, customEvent);
+    app.props.onLinkOpen?.({ ...linkElement, link: url }, customEvent);
   }
   if (!customEvent?.defaultPrevented) {
     const target = isLocalLink(url) ? "_self" : "_blank";
@@ -389,6 +351,17 @@ export const handleCanvasDoubleClick = (
   }
   const mindmapScenePoint = viewportCoordsToSceneCoords(event, app.state);
   if (app.mindmap.handleDoubleClick(mindmapScenePoint.x, mindmapScenePoint.y)) {
+    return;
+  }
+
+  // Frame titles are canvas chrome: double-clicking the title layout starts
+  // the rename editor (the only remaining DOM surface for a frame name).
+  const frameNameHit = app.frames.hitTestFrameName(
+    mindmapScenePoint.x,
+    mindmapScenePoint.y,
+  );
+  if (frameNameHit) {
+    app.setState({ editingFrame: frameNameHit.id });
     return;
   }
 
@@ -648,13 +621,18 @@ export const maybeHandleElementLinkClick = (
         includeLockedElements: true,
       },
     );
-    app.hitLinkElement = app.getElementLinkAtPosition(scenePointer, hitElement);
+    const linkElement = app.getElementLinkAtPosition(scenePointer, hitElement);
+    app.pointer.setHover({
+      ...app.pointer.getHoverSnapshot(),
+      linkElementId: linkElement?.id ?? null,
+    });
   }
 
+  const linkElementId = app.pointer.getHoverSnapshot?.().linkElementId;
   if (
-    app.hitLinkElement &&
+    linkElementId &&
     app.lastPointerDownEvent &&
-    !app.state.selectedElementIds[app.hitLinkElement.id]
+    !app.state.selectedElementIds[linkElementId]
   ) {
     app.handleElementLinkClick(event);
     return true;
@@ -666,32 +644,24 @@ export const handleInteractiveContentPointerMove = (
   app: PointerApp,
   event: React.PointerEvent<HTMLCanvasElement>,
 ) => {
+  app.lastPointerMoveEvent = event.nativeEvent;
   const scenePointer = viewportCoordsToSceneCoords(event, app.state);
-  const hitElementMightBeLocked = app.getElementAtPosition(
-    scenePointer.x,
-    scenePointer.y,
-    { includeLockedElements: true },
+  const hover = resolvePointerHover(
+    app,
+    null,
+    { point: scenePointer },
+    app.pointer.getHoverSnapshot(),
   );
+  app.pointer.setHover(hover);
 
-  if (app.isEmbedsEnabled()) {
-    const hitElement = hitElementMightBeLocked?.locked
-      ? null
-      : hitElementMightBeLocked;
-    if (
-      app.handleIframeLikeElementHover({
-        hitElement,
-        scenePointer,
-        moveEvent: event,
-      })
-    ) {
-      return;
-    }
+  if (hover.embedElementId) {
+    app.cursor.set(CURSOR_TYPE.POINTER);
+    return;
   }
 
-  app.hitLinkElement = app.isLinksEnabled()
-    ? app.getElementLinkAtPosition(scenePointer, hitElementMightBeLocked)
-    : undefined;
-  if (!app.applyElementLinkHoverAffordance()) {
+  if (updateElementLinkHoverAffordance(app)) {
+    app.cursor.set(CURSOR_TYPE.POINTER);
+  } else {
     app.cursor.reset();
   }
 };
@@ -759,7 +729,6 @@ export const handleCanvasPointerMove = (
   app.updateMultiTouchGesture(event);
 
   if (app.interactionState.isTableGestureActive) {
-    app.transformStatus.clearHovered();
     return;
   }
 
@@ -769,7 +738,6 @@ export const handleCanvasPointerMove = (
     app.interactionState.isDraggingScrollBar ||
     isHandToolActive(app.state)
   ) {
-    app.transformStatus.clearHovered();
     return;
   }
 
@@ -844,25 +812,26 @@ export const handleCanvasPointerMove = (
   }
 
   // dispatch ineligible (dragging, creating, view mode, gestures): the legacy
-  // structure/derived channels keep their behavior for those flows
-  if (!canDispatchInteraction) {
-    // no frame owns the transform readout on this path (HEAD parity: clear
-    // once, then the legacy handle branch below may set it again)
-    app.transformStatus.clearHovered();
-    app.maybeUpdateFrameToHighlightOnPointerMove(
-      { x: scenePointerX, y: scenePointerY },
-      isOverScrollBar,
-    );
-    app.maybeUpdateTableCellHighlightOnPointerMove(
-      { x: scenePointerX, y: scenePointerY },
-      isOverScrollBar,
-    );
-    app.maybeUpdateTableStructureHoverOnPointerMove(
-      {
-        x: scenePointerX,
-        y: scenePointerY,
-      },
-      isOverScrollBar,
+  // derived channels keep their behavior for those flows; container hover is
+  // frame-owned and therefore suspended here.
+  // dispatch ineligible (dragging, creating, view mode, gestures): the frame
+  // drop-target stays live for creation tools, matching the old
+  // `maybeUpdateFrameToHighlightOnPointerMove` timing. The rest of the hover
+  // snapshot is resolved in the legacy block below.
+  if (
+    !canDispatchInteraction &&
+    !app.state.newElement &&
+    !app.state.multiElement &&
+    !app.state.selectionElement &&
+    !app.state.selectedElementsAreBeingDragged
+  ) {
+    app.pointer.setFrameHighlight(
+      !isOverScrollBar && isEligibleFrameChildType(app.state.activeTool.type)
+        ? app.getTopLayerFrameAtSceneCoords({
+            x: scenePointerX,
+            y: scenePointerY,
+          })
+        : null,
     );
   }
 
@@ -1184,10 +1153,6 @@ export const handleCanvasPointerMove = (
             getCursorForResizingElement(elementWithTransformHandleType),
           );
         }
-        // 与光标同一个判定：光标切成变换操作态，读数就出现
-        app.transformStatus.setHoveredHandle(
-          elementWithTransformHandleType.transformHandleType,
-        );
         return;
       }
     }
@@ -1227,7 +1192,6 @@ export const handleCanvasPointerMove = (
           }),
         );
       }
-      app.transformStatus.setHoveredHandle(transformHandleType);
       return;
     }
   }
@@ -1236,191 +1200,108 @@ export const handleCanvasPointerMove = (
     return;
   }
 
-  // frame-title DOM bridge (05 §3.3 / O4): pointer-derived and kept at its
-  // original position so the hover value matches HEAD exactly.
-  const hitElementMightBeLocked = app.getElementAtPosition(
-    scenePointerX,
-    scenePointerY,
-    {
-      preferSelected: true,
-      includeLockedElements: true,
-    },
-  );
-  const hoveredElementId = hitElementMightBeLocked?.id ?? null;
-  if (app.state.hoveredElementId !== hoveredElementId) {
-    app.setState({ hoveredElementId });
-  }
-
-  // Selection-mode hover was already resolved and dispatched through the frame:
-  // only the DOM bridge above still runs; the rest is the legacy channel for
-  // non-frame flows (drags, other tools).
+  // Selection-mode hover was already resolved and dispatched through the
+  // frame; the rest is the legacy channel for non-frame flows (drags, other
+  // tools). It still writes the same snapshot, one atomic hover per move.
   if (canDispatchInteraction) {
     return;
   }
 
-  let hitElement: NonDeleted<ExcalidrawElement> | null = null;
-  if (hitElementMightBeLocked && hitElementMightBeLocked.locked) {
-    hitElement = null;
-  } else {
-    hitElement = hitElementMightBeLocked;
+  const hover = resolvePointerHover(
+    app,
+    null,
+    {
+      point: { x: scenePointerX, y: scenePointerY },
+      isOverScrollBar,
+      preserveFrameHighlight: app.state.selectedElementsAreBeingDragged,
+    },
+    app.pointer.getHoverSnapshot(),
+  );
+  app.pointer.setHover(hover);
+
+  const hitElementMightBeLocked = hover.elementId
+    ? app.scene.getNonDeletedElement(hover.elementId)
+    : null;
+  const hitElement: NonDeleted<ExcalidrawElement> | null =
+    hitElementMightBeLocked && !hitElementMightBeLocked.locked
+      ? hitElementMightBeLocked
+      : null;
+  const hoveredArrowTextAnchor = hover.arrowTextAnchor;
+
+  applyPointerHoverSideEffects(app, hover);
+
+  if (hover.embedElementId || hover.linkElementId) {
+    app.cursor.set(CURSOR_TYPE.POINTER);
+    return;
   }
 
-  const hoveredArrowTextAnchor =
-    app.arrowText.updateHoveredAnchor(scenePointer);
-
-  if (
-    !(canDispatchInteraction
-      ? updateIframeLikeElementHover(app as any, {
-          hitElement,
-          scenePointer,
-          moveEvent: event,
-        })
-      : app.handleIframeLikeElementHover({
-          hitElement,
-          scenePointer,
-          moveEvent: event,
-        }))
-  ) {
-    app.hitLinkElement = app.getElementLinkAtPosition(
-      scenePointer,
-      hitElementMightBeLocked,
+  if (isLaserTool) {
+    return;
+  }
+  if (app.state.activeTool.type === "text") {
+    // 文本工具整体就是「输入」光标：空画布、已有文字、可挂标签的图形，
+    // 点下去都是写字，只有箭头的文字锚点例外（那边是点选锚点）
+    app.cursor.set(
+      hoveredArrowTextAnchor ? CURSOR_TYPE.POINTER : CURSOR_TYPE.TEXT,
     );
-  }
-
-  if (
-    !(canDispatchInteraction
-      ? updateElementLinkHoverAffordance(app)
-      : app.applyElementLinkHoverAffordance())
+  } else if (
+    hitElement &&
+    isMindmapEdgeElement(hitElement) &&
+    !app.mindmap.isCompleteMindmapSelection()
   ) {
-    if (!canDispatchInteraction) {
-      if (isLaserTool) {
-        return;
-      }
-      if (
-        hitElement &&
-        (hitElement.link || isEmbeddableElement(hitElement)) &&
-        // 编辑态悬停已选中元素：仅手机端自动弹出（桌面/平板改为点击
-        // 浮动栏「链接」按钮弹出，避免弹层随选中/悬停一直展示）
-        ((app.editorInterface.formFactor === "phone" &&
-          app.state.selectedElementIds[hitElement.id]) ||
-          // 只读/查看模式：悬停带链接元素弹出访问态（设计稿「链接弹层与
-          // 联动态」）；可嵌入元素在查看模式下可直接交互，不弹
-          (app.state.viewModeEnabled &&
-            !!hitElement.link &&
-            !isEmbeddableElement(hitElement))) &&
-        !app.state.contextMenu &&
-        !app.state.showHyperlinkPopup
-      ) {
-        app.setState({ showHyperlinkPopup: "info" });
-      } else if (app.state.activeTool.type === "text") {
-        // 文本工具整体就是「输入」光标：空画布、已有文字、可挂标签的图形，
-        // 点下去都是写字，只有箭头的文字锚点例外（那边是点选锚点）
-        app.cursor.set(
-          hoveredArrowTextAnchor ? CURSOR_TYPE.POINTER : CURSOR_TYPE.TEXT,
-        );
-      } else if (
-        hitElement &&
-        isMindmapEdgeElement(hitElement) &&
-        !app.mindmap.isCompleteMindmapSelection()
-      ) {
-        app.cursor.set(CURSOR_TYPE.POINTER);
-      } else if (
-        !event[KEYS.CTRL_OR_CMD] &&
+    app.cursor.set(CURSOR_TYPE.POINTER);
+  } else if (
+    !event[KEYS.CTRL_OR_CMD] &&
+    app.isHittingCommonBoundingBoxOfSelectedElements(
+      scenePointer,
+      selectedElements,
+    )
+  ) {
+    app.cursor.set(CURSOR_TYPE.MOVE);
+  } else if (app.state.viewModeEnabled) {
+    app.cursor.set(CURSOR_TYPE.GRAB);
+  } else if (app.state.openDialog?.name === "elementLinkSelector") {
+    app.cursor.set(CURSOR_TYPE.AUTO);
+  } else if (isOverScrollBar) {
+    app.cursor.set(CURSOR_TYPE.AUTO);
+  } else if (
+    // if using cmd/ctrl, we're not dragging
+    !event[KEYS.CTRL_OR_CMD] &&
+    // editing text -> don't show move cursor when hovering over its bbox
+    hitElement?.id !== app.state.editingTextElement?.id
+  ) {
+    if (
+      (hitElement ||
         app.isHittingCommonBoundingBoxOfSelectedElements(
           scenePointer,
           selectedElements,
-        )
-      ) {
-        app.cursor.set(CURSOR_TYPE.MOVE);
-      } else if (app.state.viewModeEnabled) {
-        app.cursor.set(CURSOR_TYPE.GRAB);
-      } else if (app.state.openDialog?.name === "elementLinkSelector") {
-        app.cursor.set(CURSOR_TYPE.AUTO);
-      } else if (isOverScrollBar) {
-        app.cursor.set(CURSOR_TYPE.AUTO);
-      } else if (
-        // if using cmd/ctrl, we're not dragging
-        !event[KEYS.CTRL_OR_CMD] &&
-        // editing text -> don't show move cursor when hovering over its bbox
-        hitElement?.id !== app.state.editingTextElement?.id
+        )) &&
+      !hitElement?.locked
+    ) {
+      if (
+        !hitElement ||
+        // Elbow arrows can only be moved when unconnected
+        !isElbowArrow(hitElement) ||
+        !(hitElement.startBinding || hitElement.endBinding)
       ) {
         if (
-          (hitElement ||
-            app.isHittingCommonBoundingBoxOfSelectedElements(
-              scenePointer,
-              selectedElements,
-            )) &&
-          !hitElement?.locked
+          app.state.activeTool.type !== "lasso" ||
+          selectedElements.length > 0
         ) {
-          if (
-            !hitElement ||
-            // Elbow arrows can only be moved when unconnected
-            !isElbowArrow(hitElement) ||
-            !(hitElement.startBinding || hitElement.endBinding)
-          ) {
-            if (
-              app.state.activeTool.type !== "lasso" ||
-              selectedElements.length > 0
-            ) {
-              app.cursor.set(CURSOR_TYPE.MOVE);
-            }
-          }
+          app.cursor.set(CURSOR_TYPE.MOVE);
         }
-      } else {
-        app.cursor.set(CURSOR_TYPE.AUTO);
-      }
-
-      if (app.state.selectedLinearElement) {
-        app.handleHoverSelectedLinearElement(
-          app.state.selectedLinearElement,
-          scenePointerX,
-          scenePointerY,
-        );
       }
     }
+  } else {
+    app.cursor.set(CURSOR_TYPE.AUTO);
   }
 
-  if (app.state.openDialog?.name === "elementLinkSelector" && hitElement) {
-    app.setState((prevState) => {
-      return {
-        hoveredElementIds: updateStable(
-          prevState.hoveredElementIds,
-          selectGroupsForSelectedElements(
-            {
-              editingGroupId: prevState.editingGroupId,
-              selectedElementIds: { [hitElement!.id]: true },
-            },
-            app.scene.getNonDeletedElements(),
-            prevState,
-            app,
-          ).selectedElementIds,
-        ),
-      };
-    });
-  } else if (
-    app.state.openDialog?.name === "elementLinkSelector" &&
-    !hitElement
-  ) {
-    app.setState((prevState) => ({
-      hoveredElementIds: updateStable(prevState.hoveredElementIds, {}),
-    }));
-  }
-};
-
-export const updateHoveredElementIdOnPointerMove = (
-  app: PointerApp,
-  scenePointerX: number,
-  scenePointerY: number,
-) => {
-  // frame-title DOM bridge (05 §3.3, O4): pointer-derived, never frame.target
-  const hitElementMightBeLocked = app.getElementAtPosition(
-    scenePointerX,
-    scenePointerY,
-    { preferSelected: true, includeLockedElements: true },
-  );
-  const hoveredElementId = hitElementMightBeLocked?.id ?? null;
-  if (app.state.hoveredElementId !== hoveredElementId) {
-    app.setState({ hoveredElementId });
+  if (app.state.selectedLinearElement) {
+    app.handleHoverSelectedLinearElement(
+      app.state.selectedLinearElement,
+      scenePointerX,
+      scenePointerY,
+    );
   }
 };
 

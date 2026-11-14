@@ -1,10 +1,8 @@
 import {
   applyDarkModeFilter,
   CLASSES,
-  CURSOR_TYPE,
   FRAME_STYLE,
   KEYS,
-  POINTER_EVENTS,
   sceneCoordsToViewportCoords,
   THEME,
 } from "@excalidraw/common";
@@ -15,65 +13,77 @@ import {
   isFrameLikeElement,
 } from "@excalidraw/element";
 
-import type {
-  ExcalidrawElement,
-  ExcalidrawFrameLikeElement,
-} from "@excalidraw/element/types";
+import type { ExcalidrawFrameLikeElement } from "@excalidraw/element/types";
+
+import { getFrameNameLayout } from "../../renderer/frameName";
 
 import type { FrameNameBoundsCache } from "../../types";
 import type App from "../App";
 
-/** Size of the board glyph left of the frame title (design: 10px box). */
-const FRAME_NAME_GLYPH_SIZE = 10;
+const FRAME_NAME_EDIT_PADDING = 6;
 
 export class AppFrames {
   constructor(private app: App) {}
 
-  private getFrameNameDOMId = (frameElement: ExcalidrawElement) => {
-    return `${this.app.id}-frame-name-${frameElement.id}`;
-  };
+  private getFrameNameEnabled = () =>
+    this.app.state.frameRendering.enabled && this.app.state.frameRendering.name;
 
   frameNameBoundsCache: FrameNameBoundsCache = {
     get: (frameElement) => {
+      if (!this.getFrameNameEnabled()) {
+        return null;
+      }
       let bounds = this.frameNameBoundsCache._cache.get(frameElement.id);
       if (
         !bounds ||
         bounds.zoom !== this.app.state.zoom.value ||
         bounds.versionNonce !== frameElement.versionNonce
       ) {
-        const frameNameDiv = this.app.ownerDocument.getElementById(
-          this.getFrameNameDOMId(frameElement),
-        );
-
-        if (frameNameDiv) {
-          const box = frameNameDiv.getBoundingClientRect();
-          const zoom = this.app.state.zoom.value;
-
-          // Only the title's size comes from layout: its visual position may
-          // have an override. Hit bounds stay anchored to the document frame,
-          // with the title's bottom nameOffsetY screen pixels above it.
-          bounds = {
-            x: frameElement.x,
-            y: frameElement.y - (box.height + FRAME_STYLE.nameOffsetY) / zoom,
-            width: box.width / zoom,
-            height: box.height / zoom,
-            zoom,
-            versionNonce: frameElement.versionNonce,
-          };
-
-          this.frameNameBoundsCache._cache.set(frameElement.id, bounds);
-
-          return bounds;
-        }
-        return null;
+        const layout = getFrameNameLayout(frameElement, {
+          zoom: this.app.state.zoom.value,
+        });
+        bounds = {
+          x: layout.x,
+          y: layout.y,
+          width: layout.width,
+          height: layout.height,
+          zoom: this.app.state.zoom.value,
+          versionNonce: frameElement.versionNonce,
+        };
+        this.frameNameBoundsCache._cache.set(frameElement.id, bounds);
       }
-
       return bounds;
     },
     /**
      * @private
      */
     _cache: new Map(),
+  };
+
+  /** Topmost frame whose title layout contains the point (view mode aside). */
+  public hitTestFrameName = (
+    sceneX: number,
+    sceneY: number,
+  ): ExcalidrawFrameLikeElement | null => {
+    if (!this.getFrameNameEnabled() || this.app.state.viewModeEnabled) {
+      return null;
+    }
+    const frames = this.app.scene.getNonDeletedFramesLikes();
+    for (let index = frames.length - 1; index >= 0; index--) {
+      const frame = frames[index];
+      const layout = getFrameNameLayout(frame, {
+        zoom: this.app.state.zoom.value,
+      });
+      if (
+        sceneX >= layout.x &&
+        sceneX <= layout.x + layout.width &&
+        sceneY >= layout.y &&
+        sceneY <= layout.y + layout.height
+      ) {
+        return frame;
+      }
+    }
+    return null;
   };
 
   public resetEditingFrame = (frame: ExcalidrawFrameLikeElement | null) => {
@@ -83,249 +93,122 @@ export class AppFrames {
     this.app.setState({ editingFrame: null });
   };
 
-  public renderFrameNames = () => {
-    if (
-      !this.app.state.frameRendering.enabled ||
-      !this.app.state.frameRendering.name
-    ) {
+  /**
+   * The only remaining DOM node for frame titles: the rename input. The title
+   * itself is painted on the interactive canvas (`renderer/frameName.ts`).
+   */
+  public renderFrameNameEditor = () => {
+    if (!this.getFrameNameEnabled()) {
       if (this.app.state.editingFrame) {
         this.resetEditingFrame(null);
       }
       return null;
     }
 
+    const editingFrameId = this.app.state.editingFrame;
+    if (!editingFrameId) {
+      return null;
+    }
+    const frame = this.app.scene.getNonDeletedElement(editingFrameId);
+    if (!frame || !isFrameLikeElement(frame)) {
+      return null;
+    }
+
     const isDarkTheme = this.app.state.theme === THEME.DARK;
-    const nonDeletedFramesLikes = this.app.scene.getNonDeletedFramesLikes();
-
-    const focusedSearchMatch =
-      nonDeletedFramesLikes.length > 0
-        ? this.app.state.searchMatches?.focusedId &&
-          isFrameLikeElement(
-            this.app.scene.getElement(this.app.state.searchMatches.focusedId),
-          )
-          ? this.app.state.searchMatches.matches.find((sm) => sm.focus)
-          : null
-        : null;
-
-    return nonDeletedFramesLikes.map((f) => {
-      // The name is a decoration that follows the frame's render overrides,
-      // except while it's being edited: editing is interaction and keeps to
-      // document geometry like everything else interactive. Culling by the
-      // translated frame would otherwise end the edit (and commit the name)
-      // from a render-only override.
-      const renderState = this.app.getElementRenderState(
-        f,
-        f.id === this.app.state.editingFrame
-          ? null
-          : this.app.elementRenderOverrides,
-      );
-      if (
-        !isElementInViewport(
-          getRenderElementWithPositionOverride(f, renderState.offset),
-          this.app.canvas.width / this.app.ownerWindow.devicePixelRatio,
-          this.app.canvas.height / this.app.ownerWindow.devicePixelRatio,
-          {
-            offsetLeft: this.app.state.offsetLeft,
-            offsetTop: this.app.state.offsetTop,
-            scrollX: this.app.state.scrollX,
-            scrollY: this.app.state.scrollY,
-            zoom: this.app.state.zoom,
-          },
-          this.app.scene.getNonDeletedElementsMap(),
-        )
-      ) {
-        if (this.app.state.editingFrame === f.id) {
-          this.resetEditingFrame(f);
-        }
-        // if frame not visible, don't render its name
-        return null;
-      }
-
-      const { x: x1, y: y1 } = sceneCoordsToViewportCoords(
+    // Editing is interaction and keeps to document geometry: render-only
+    // offsets must neither move the editor nor end the edit.
+    const renderState = this.app.getElementRenderState(frame, null);
+    if (
+      !isElementInViewport(
+        getRenderElementWithPositionOverride(frame, renderState.offset),
+        this.app.canvas.width / this.app.ownerWindow.devicePixelRatio,
+        this.app.canvas.height / this.app.ownerWindow.devicePixelRatio,
         {
-          sceneX: f.x + renderState.offset.x,
-          sceneY: f.y + renderState.offset.y,
+          offsetLeft: this.app.state.offsetLeft,
+          offsetTop: this.app.state.offsetTop,
+          scrollX: this.app.state.scrollX,
+          scrollY: this.app.state.scrollY,
+          zoom: this.app.state.zoom,
         },
-        this.app.state,
-      );
+        this.app.scene.getNonDeletedElementsMap(),
+      )
+    ) {
+      this.resetEditingFrame(frame);
+      return null;
+    }
 
-      const FRAME_NAME_EDIT_PADDING = 6;
+    const { x: x1, y: y1 } = sceneCoordsToViewportCoords(
+      {
+        sceneX: frame.x,
+        sceneY: frame.y,
+      },
+      this.app.state,
+    );
+    const frameName = getFrameLikeTitle(frame);
 
-      let frameNameJSX;
-
-      const frameName = getFrameLikeTitle(f);
-
-      if (f.id === this.app.state.editingFrame) {
-        const frameNameInEdit = frameName;
-
-        frameNameJSX = (
-          <input
-            autoFocus
-            value={frameNameInEdit}
-            onChange={(e) => {
-              this.app.scene.mutateElement(f, {
-                name: e.target.value,
-              });
-            }}
-            onFocus={(e) => e.target.select()}
-            onBlur={() => this.resetEditingFrame(f)}
-            onKeyDown={(event) => {
-              // for some inexplicable reason, `onBlur` triggered on ESC
-              // does not reset `state.editingFrame` despite being called,
-              // and we need to reset it here as well
-              if (event.key === KEYS.ESCAPE || event.key === KEYS.ENTER) {
-                this.resetEditingFrame(f);
-              }
-            }}
-            style={{
-              background: applyDarkModeFilter(
-                this.app.state.viewBackgroundColor,
-                isDarkTheme,
-              ),
-              zIndex: 2,
-              border: "none",
-              display: "block",
-              padding: `${FRAME_NAME_EDIT_PADDING}px`,
-              borderRadius: 4,
-              boxShadow: "inset 0 0 0 1px var(--color-selection)",
-              fontFamily: "Assistant",
-              fontSize: `${FRAME_STYLE.nameFontSize}px`,
-              transform: `translate(-${FRAME_NAME_EDIT_PADDING}px, ${FRAME_NAME_EDIT_PADDING}px)`,
-              color: "var(--color-on-surface)",
-              overflow: "hidden",
-              maxWidth: `${
-                this.app.ownerDocument.body.clientWidth -
-                x1 -
-                FRAME_NAME_EDIT_PADDING
-              }px`,
-            }}
-            size={frameNameInEdit.length + 1 || 1}
-            dir="auto"
-            autoComplete="off"
-            autoCapitalize="off"
-            autoCorrect="off"
-          />
-        );
-      } else {
-        frameNameJSX = (
-          <>
-            {/* the board glyph of the design's frame title: two vertical +
-                two horizontal strokes in a 10px box, colored with the title */}
-            <svg
-              width={FRAME_NAME_GLYPH_SIZE}
-              height={FRAME_NAME_GLYPH_SIZE}
-              viewBox={`0 0 ${FRAME_NAME_GLYPH_SIZE} ${FRAME_NAME_GLYPH_SIZE}`}
-              style={{ flex: "none", overflow: "visible" }}
-              aria-hidden
-            >
-              <path
-                d="M3 0v10M7 0v10M0 3h10M0 7h10"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.2}
-                strokeLinecap="round"
-              />
-            </svg>
-            <span
-              style={{
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {frameName}
-            </span>
-          </>
-        );
-      }
-
-      // The title's state colors (design: 交互状态): the default is the muted
-      // frame-title tone; hovering the title or the frame's border inks it;
-      // a selected frame or an active drop target turns it primary.
-      const isHovered = this.app.state.hoveredElementId === f.id;
-      const isSelected = !!this.app.state.selectedElementIds[f.id];
-      const isDropTarget = this.app.state.frameToHighlight?.id === f.id;
-      const frameNameColor =
-        isDropTarget || isSelected
-          ? "var(--color-selection)"
-          : isHovered
-          ? "var(--color-on-surface)"
-          : isDarkTheme
-          ? FRAME_STYLE.nameColorDarkTheme
-          : FRAME_STYLE.nameColorLightTheme;
-
-      return (
-        <div
-          id={this.getFrameNameDOMId(f)}
-          className={CLASSES.FRAME_NAME}
-          key={f.id}
-          style={{
-            position: "absolute",
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-            opacity: renderState.opacity,
-            // Positioning from bottom so that we don't to either
-            // calculate text height or adjust using transform (which)
-            // messes up input position when editing the frame name.
-            // This makes the positioning deterministic and we can calculate
-            // the same position when rendering to canvas / svg.
-            bottom: `${
-              this.app.state.height +
-              FRAME_STYLE.nameOffsetY -
-              y1 +
-              this.app.state.offsetTop
-            }px`,
-            left: `${x1 - this.app.state.offsetLeft}px`,
-            zIndex: 2,
-            fontSize: FRAME_STYLE.nameFontSize,
-            fontWeight: 500,
-            color: frameNameColor,
-            lineHeight: FRAME_STYLE.nameLineHeight,
-            width: "max-content",
-            maxWidth:
-              focusedSearchMatch?.id === f.id && focusedSearchMatch?.focus
-                ? "none"
-                : `${f.width * this.app.state.zoom.value}px`,
-            overflow:
-              f.id === this.app.state.editingFrame ? "visible" : "hidden",
-            whiteSpace: "nowrap",
-            textOverflow: "ellipsis",
-            cursor: CURSOR_TYPE.MOVE,
-            pointerEvents: this.app.state.viewModeEnabled
-              ? POINTER_EVENTS.disabled
-              : POINTER_EVENTS.enabled,
-          }}
-          onPointerDown={(event) => this.app.handleCanvasPointerDown(event)}
-          // The title is DOM, so hovering it never reaches the canvas's
-          // pointermove hit-testing; bridge it into `hoveredElementId` so the
-          // frame gets the same hover feedback as when its border is hovered
-          // (and this title inks via the color above). Not while renaming or
-          // mid-drag (pointer capture keeps these from firing then anyway).
-          onPointerEnter={() => {
-            if (
-              f.id !== this.app.state.editingFrame &&
-              this.app.state.cursorButton !== "down" &&
-              this.app.state.hoveredElementId !== f.id
-            ) {
-              this.app.setState({ hoveredElementId: f.id });
-            }
-          }}
-          onPointerLeave={() => {
-            if (this.app.state.hoveredElementId === f.id) {
-              this.app.setState({ hoveredElementId: null });
-            }
-          }}
-          onContextMenu={this.app.handleCanvasContextMenu}
-          onDoubleClick={() => {
-            this.app.setState({
-              editingFrame: f.id,
+    return (
+      <div
+        key={frame.id}
+        className={CLASSES.FRAME_NAME}
+        style={{
+          position: "absolute",
+          bottom: `${
+            this.app.state.height +
+            FRAME_STYLE.nameOffsetY -
+            y1 +
+            this.app.state.offsetTop
+          }px`,
+          left: `${x1 - this.app.state.offsetLeft}px`,
+          zIndex: 2,
+          opacity: renderState.opacity,
+        }}
+      >
+        <input
+          autoFocus
+          value={frameName}
+          onChange={(event) => {
+            this.app.scene.mutateElement(frame, {
+              name: event.target.value,
             });
           }}
-        >
-          {frameNameJSX}
-        </div>
-      );
-    });
+          onFocus={(event) => event.target.select()}
+          onBlur={() => this.resetEditingFrame(frame)}
+          onKeyDown={(event) => {
+            // for some inexplicable reason, `onBlur` triggered on ESC
+            // does not reset `state.editingFrame` despite being called,
+            // and we need to reset it here as well
+            if (event.key === KEYS.ESCAPE || event.key === KEYS.ENTER) {
+              this.resetEditingFrame(frame);
+            }
+          }}
+          style={{
+            background: applyDarkModeFilter(
+              this.app.state.viewBackgroundColor,
+              isDarkTheme,
+            ),
+            border: "none",
+            display: "block",
+            padding: `${FRAME_NAME_EDIT_PADDING}px`,
+            borderRadius: 4,
+            boxShadow: "inset 0 0 0 1px var(--color-selection)",
+            fontFamily: "Assistant",
+            fontSize: `${FRAME_STYLE.nameFontSize}px`,
+            transform: `translate(-${FRAME_NAME_EDIT_PADDING}px, ${FRAME_NAME_EDIT_PADDING}px)`,
+            color: "var(--color-on-surface)",
+            overflow: "hidden",
+            maxWidth: `${
+              this.app.ownerDocument.body.clientWidth -
+              x1 -
+              FRAME_NAME_EDIT_PADDING
+            }px`,
+          }}
+          size={frameName.length + 1 || 1}
+          dir="auto"
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+        />
+      </div>
+    );
   };
 }

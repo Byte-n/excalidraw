@@ -10,6 +10,7 @@ import type {
 import { isRenderThrottlingEnabled } from "../../reactUtils";
 import { renderStaticScene } from "../../renderer/staticScene";
 
+import type { PointerHoverSnapshot } from "../../components/app/pointerSnapshot";
 import type {
   RenderableElementsMap,
   StaticCanvasRenderConfig,
@@ -27,6 +28,7 @@ type StaticCanvasProps = {
   selectionNonce: number | undefined;
   scale: number;
   appState: StaticCanvasAppState;
+  pointerHover: PointerHoverSnapshot;
   renderConfig: StaticCanvasRenderConfig;
 };
 
@@ -65,6 +67,7 @@ const StaticCanvas = (props: StaticCanvasProps) => {
         allElementsMap: props.allElementsMap,
         visibleElements: props.visibleElements,
         appState: props.appState,
+        pointerHover: props.pointerHover,
         renderConfig: props.renderConfig,
       },
       isRenderThrottlingEnabled(),
@@ -83,8 +86,6 @@ const getRelevantAppStateProps = (appState: AppState): StaticCanvasAppState => {
     height: appState.height,
     viewModeEnabled: appState.viewModeEnabled,
     openDialog: appState.openDialog,
-    hoveredElementIds: appState.hoveredElementIds,
-    hoveredElementId: appState.hoveredElementId,
     offsetLeft: appState.offsetLeft,
     offsetTop: appState.offsetTop,
     theme: appState.theme,
@@ -96,7 +97,6 @@ const getRelevantAppStateProps = (appState: AppState): StaticCanvasAppState => {
     gridStep: appState.gridStep,
     frameRendering: appState.frameRendering,
     selectedElementIds: appState.selectedElementIds,
-    frameToHighlight: appState.frameToHighlight,
     editingGroupId: appState.editingGroupId,
     currentHoveredFontFamily: appState.currentHoveredFontFamily,
     croppingElementId: appState.croppingElementId,
@@ -121,13 +121,23 @@ const areEqual = (
     return false;
   }
 
+  const prevHover = prevProps.pointerHover;
+  const nextHover = nextProps.pointerHover;
+  const sameStaticHover =
+    prevHover === nextHover ||
+    (prevHover.elementId === nextHover.elementId &&
+      prevHover.elementIds === nextHover.elementIds &&
+      prevHover.frameToHighlight?.id === nextHover.frameToHighlight?.id);
+
   return (
+    sameStaticHover &&
     isShallowEqual(
       // asserting AppState because we're being passed the whole AppState
       // but resolve to only the StaticCanvas-relevant props
       getRelevantAppStateProps(prevProps.appState as AppState),
       getRelevantAppStateProps(nextProps.appState as AppState),
-    ) && isShallowEqual(prevProps.renderConfig, nextProps.renderConfig)
+    ) &&
+    isShallowEqual(prevProps.renderConfig, nextProps.renderConfig)
   );
 };
 

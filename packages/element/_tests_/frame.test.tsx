@@ -376,11 +376,11 @@ describe("adding elements to frames", () => {
     mouse.downAt(20, 20);
     mouse.moveTo(40, 40);
 
-    expect(h.state.frameToHighlight?.id).toBe(frame.id);
+    expect(h.app.pointer.getHoverSnapshot().frameToHighlight?.id).toBe(frame.id);
 
     mouse.upAt(40, 40);
 
-    expect(h.state.frameToHighlight).toBe(null);
+    expect(h.app.pointer.getHoverSnapshot().frameToHighlight).toBe(null);
   });
 
   it("should highlight the target frame while hovering with a creation tool", () => {
@@ -389,11 +389,11 @@ describe("adding elements to frames", () => {
     UI.clickTool("rectangle");
     mouse.moveTo(20, 20);
 
-    expect(h.state.frameToHighlight?.id).toBe(frame.id);
+    expect(h.app.pointer.getHoverSnapshot().frameToHighlight?.id).toBe(frame.id);
 
     mouse.moveTo(200, 200);
 
-    expect(h.state.frameToHighlight).toBe(null);
+    expect(h.app.pointer.getHoverSnapshot().frameToHighlight).toBe(null);
   });
 
   it("should not add grid-snapped text outside the frame to the clicked frame", async () => {
@@ -1189,7 +1189,7 @@ describe("adding elements to frames", () => {
       );
       mouse.moveTo(20, 20);
 
-      expect(h.state.frameToHighlight?.id).toBe(frame.id);
+      expect(h.app.pointer.getHoverSnapshot().frameToHighlight?.id).toBe(frame.id);
 
       mouse.upAt(20, 20);
 

@@ -257,7 +257,6 @@ export const actionDeleteSelected = register({
           ),
           previousSelectedElementIds: {},
           selectedLinearElement: null,
-          hoveredElementIds: {},
         },
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       };

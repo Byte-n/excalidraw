@@ -107,7 +107,6 @@ export const terminateActiveInteraction = (app: App) => {
     isRotating: false,
     isCropping: false,
     croppingElementId: null,
-    frameToHighlight: null,
     elementsToHighlight: null,
     snapLines: [],
     showHyperlinkPopup: false,
@@ -164,7 +163,6 @@ export const handleInteractionStateChange = (
   // itself (`renderConfig.renderLinks`)
   if (app.isLinksEnabled(prevProps) !== app.isLinksEnabled()) {
     if (!app.isLinksEnabled()) {
-      app.hitLinkElement = undefined;
       hideHyperlinkToolip();
       app.cursor.reset();
     }
@@ -740,9 +738,7 @@ export function componentDidUpdate(
     prevState.openDialog?.name !== app.state.openDialog?.name
   ) {
     app["deselectElements"]();
-    app.setState({
-      hoveredElementIds: {},
-    });
+    app.setState({});
   }
 
   if (prevProps.zenModeEnabled !== app.props.zenModeEnabled) {

@@ -898,6 +898,15 @@ export const setActiveTool = (
     app["onImageToolbarButtonClick"]();
   }
 
+  // Tool switches invalidate the transient pointer affordances; keep the
+  // snapshot as the only hover source.
+  app.pointer.setHover({
+    ...app.pointer.getHoverSnapshot(),
+    arrowTextAnchor: null,
+    frameToHighlight: null,
+    ...(nextActiveTool.type !== "mindmap" ? { elementIds: {} } : {}),
+  });
+
   app.setState((prevState) => {
     const commonResets = {
       snapLines: prevState.snapLines.length ? [] : prevState.snapLines,
@@ -906,14 +915,6 @@ export const setActiveTool = (
       selectedLinearElement: isSelectionLikeTool(nextActiveTool.type)
         ? prevState.selectedLinearElement
         : null,
-      frameToHighlight: null,
-      // only the text tool offers arrow-endpoint binding, and the highlight
-      // is refreshed on pointermove — don't leave a stale one behind
-      hoveredArrowTextAnchor: null,
-      ...(nextActiveTool.type !== "mindmap" &&
-      Object.keys(prevState.hoveredElementIds).length
-        ? { hoveredElementIds: {} }
-        : {}),
     } as const;
 
     if (nextActiveTool.type === "freedraw") {

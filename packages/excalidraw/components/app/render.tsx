@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { useMemo } from "react";
 import {
   POINTER_EVENTS,
   sceneCoordsToViewportCoords,
@@ -18,6 +19,7 @@ import { ElementCanvasButtons } from "../ElementCanvasButtons";
 import ConvertElementTypePopup, {
   convertElementTypePopupAtom,
 } from "../ConvertElementTypePopup";
+import { usePointerHover } from "../../hooks/usePointerHover";
 import { TOOL_DRAG_PREVIEW_OPACITY } from "../App.toolDrag";
 import { RIGHT_SIDEBAR_WIDTH } from "../App.viewport";
 import { ContextMenu } from "../ContextMenu";
@@ -47,7 +49,13 @@ import {
 import type App from "../App";
 
 export const AppView = ({ app }: { app: App }) => {
-  const selectedElements = app.scene.getSelectedElements(app.state);
+  // Hover-only renders must not invalidate the canvases through a fresh
+  // selection array; selection lives in appState and changes it here.
+  const selectedElements = useMemo(
+    () => app.scene.getSelectedElements(app.state),
+    [app.state, app.scene],
+  );
+  const pointerHover = usePointerHover(app);
   const {
     renderTopRightUI,
     renderTopLeftUI,
@@ -76,7 +84,7 @@ export const AppView = ({ app }: { app: App }) => {
     newElement: app.state.newElement,
     selectedElements,
     selectedElementsAreBeingDragged: app.state.selectedElementsAreBeingDragged,
-    frameToHighlight: app.state.frameToHighlight,
+    frameToHighlight: pointerHover.frameToHighlight,
   });
   app.visibleElements = visibleElements;
   app.hasRenderableElements = renderableElementsMap.size > 0;
@@ -185,7 +193,7 @@ export const AppView = ({ app }: { app: App }) => {
         app.isInteractionEnabled()
           ? (event) => {
               app.toggleOverscrollBehavior(event);
-              app.setState({ hoveredElementId: null });
+              app.pointer.clearHover();
             }
           : undefined
       }
@@ -272,8 +280,8 @@ export const AppView = ({ app }: { app: App }) => {
                           (() => {
                             const viewModeHovered =
                               app.state.viewModeEnabled &&
-                              app.state.hoveredElementId
-                                ? allElementsMap.get(app.state.hoveredElementId)
+                              pointerHover.elementId
+                                ? allElementsMap.get(pointerHover.elementId)
                                 : null;
                             const linkElement = app.state.viewModeEnabled
                               ? viewModeHovered &&
@@ -425,6 +433,7 @@ export const AppView = ({ app }: { app: App }) => {
                                   renderableElementsMap,
                                   app.state,
                                   app.elementRenderOffsets,
+                                  pointerHover.frameToHighlight,
                                 )
                               : visibleElements
                           }
@@ -434,6 +443,7 @@ export const AppView = ({ app }: { app: App }) => {
                           }
                           scale={app.ownerWindow.devicePixelRatio}
                           appState={app.state}
+                          pointerHover={pointerHover}
                           renderConfig={{
                             imageCache: app.imageCache,
                             isExporting: false,
@@ -451,6 +461,7 @@ export const AppView = ({ app }: { app: App }) => {
                         {previewElements?.length ? (
                           <NewElementCanvas
                             appState={app.state}
+                            pointerHover={pointerHover}
                             newElement={newElementCanvasElement}
                             previewElements={previewElements}
                             scale={app.ownerWindow.devicePixelRatio}
@@ -527,7 +538,7 @@ export const AppView = ({ app }: { app: App }) => {
                               border={app.props.viewportStatusFrame.border}
                             />
                           )}
-                        {app.frames.renderFrameNames()}
+                        {app.frames.renderFrameNameEditor()}
                         {app.isDefaultUIEnabled() &&
                           app.state.activeLockedId && (
                             <UnlockPopup

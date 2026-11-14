@@ -1610,7 +1610,6 @@ export class AppQuickCreate {
       selectedElementIds: { [activation.id]: true },
       selectedGroupIds: {},
       selectedLinearElement: null,
-      hoveredElementIds: {},
       editingGroupId: null,
     });
     this.app.store.scheduleCapture();
@@ -1740,7 +1739,6 @@ export class AppQuickCreate {
       selectedElementIds: { [arrow.id]: true },
       selectedGroupIds: {},
       selectedLinearElement: null,
-      hoveredElementIds: {},
       editingGroupId: null,
     });
     this.app.store.scheduleCapture();
@@ -2229,7 +2227,6 @@ export class AppQuickCreate {
       selectedElementIds: { [clone.id]: true },
       selectedGroupIds: {},
       selectedLinearElement: null,
-      hoveredElementIds: {},
       editingGroupId: null,
     });
     // 副本与连线同一次插入，一步可撤销
@@ -2377,7 +2374,6 @@ export class AppQuickCreate {
       selectedElementIds: { [arrow.id]: true },
       selectedGroupIds: {},
       selectedLinearElement: null,
-      hoveredElementIds: {},
       editingGroupId: null,
     });
     // 只这一条连线，一步可撤销
@@ -2586,7 +2582,6 @@ export class AppQuickCreate {
       selectedElementIds: { [shape.id]: true },
       selectedGroupIds: {},
       selectedLinearElement: null,
-      hoveredElementIds: {},
       editingGroupId: null,
     });
     // 连线 + 图形同一次插入，一步可撤销

@@ -72,7 +72,7 @@ rg "getSnapOutlineMidPoint|projectAttachPointOntoDiagonal|getDiagonalsForBindabl
 | `AppState` | `highlightedTableCell` | 保留为 dispatch 写（像素级 cell，不是 target） |
 | `AppState` | `hoveredElementIds` | 保留为 dispatch 写，供链接选择器 / 多元素 highlight |
 | `AppState` | `hoveredElementId` | 保留：画框标题是 DOM，由 `frames.tsx` 桥接，不是 canvas target |
-| `AppState` | `tableStructureHover` / `fragmentStructureHover` | 容器 provider 内部状态；确认只由 provider `renderHover` / `clearHover` 写 |
+| `AppState` | `tableStructureHover` / `fragmentStructureHover` | 已删除：迁入 `AppPointerState` 的 `PointerSnapshot`，由 frame 原子派生，渲染器直接读取 |
 
 **判定标准**：如果字段能被「单个 target + point」完全表达，删除；如果承载多元素或像素级信息，保留为**派生视图**，但必须只有 dispatch 写。
 
@@ -106,13 +106,14 @@ resolvePointerFrame(app, { point, phase, mode, pointerType })
       │   └─ 纯函数：不写 cursor / state / repaint
       ▼
 applyPointerFrame(app, frame)
-      │   ├─ clearPointerHover（providers / mindmap / quickCreate / 派生字段）
+      │   ├─ app.pointer.commit(frame)  ← 原子写入 frame + 派生容器 hover
       │   ├─ switch target.kind → hover / armed / gesture / ghost
-      │   ├─ updateDerivedPointerState（frame / cell / link）
+      │   ├─ updateDerivedPointerState（cell / link / hovered ids）
       │   ├─ cursor.set(getCursorForPointerTarget(...))  ← 唯一 cursor 写者
-      │   └─ app.pointer.setFrame(frame)
+      │   └─ 快照变化（含 hover）→ 一次 repaint.request
       ▼
 renderInteractiveScene
+      ├─ app.pointer.getSnapshot()  ← 容器 hover 的唯一来源
       ├─ switch (frame.target.kind)  ← 预览 / 落点 / 手柄
       └─ ghost / pending 缓存
 ```
@@ -251,3 +252,44 @@ rg "cursor\.set" packages/excalidraw/components/app/pointerCanvas.ts packages/ex
   通过；改动文件 eslint 0 warning；`yarn test:code` 0 error、22 个既有 prettier 警告
   （不在改动文件）。§5.3 三条 grep：`suggestedBinding` 无生产引用；旧落点符号 0；
   `cursor.set` 仅剩非 frame 路径。
+
+## 实施记录（2026-11-14，容器 hover 快照收口）
+
+- 实际改动：新增 `pointerSnapshot.ts`（`PointerSnapshot`、hover 语义相等、从 frame
+  target 派生容器 hover）；`AppPointerState` 改为同步快照存储，`commit(frame)` 原子
+  替换 frame + hover，并对上一份快照做 diff；`setFrame` 保留为 frame-only 包装。
+  `ContainerInteractionProvider` 改为纯解析器（`id` + `getInteractionCandidate` +
+  `getCursor`），删除 `renderHover` / `clearHover` 与 `renderContainerInteractionHover`
+  / `clearContainerInteractionHover` / `dispatchContainerInteraction`。
+  `tableStructureHover` / `fragmentStructureHover` 从 `AppState` 整体删除：渲染器读
+  `app.pointer.getSnapshot().hover`，gesture / deselect / finalize 通过
+  `setTableHover` / `setFragmentHover` / `clearHover` 写同一份快照。
+- 与计划的偏差：`applyPointerFrame` 不再“先全量 clear 再写回”，hover 变化只补一次
+  `repaint.request`；`maybeUpdateTableStructureHoverOnPointerMove` 旧通道删除（容器
+  hover 只由 frame 产生，dispatch 不合格的流程不再显示结构 affordance）。
+- 基线变化：contextmenu / history / regression 快照仅删除两个已移除的 AppState 字段。
+- 测试：新增“同一表格 body 连续移动 hover 不消失”回归用例；interaction-target 的
+  dispatch 用例改为断言 `getSnapshot()`；excalidraw typecheck 与目标测试全绿。
+
+## 实施记录（2026-11-14，剩余 hover 收口与画框标题画布化）
+
+- 实际改动：`PointerSnapshot.hover` 扩展为完整 hover 派生（elementId / elementIds /
+  frameToHighlight / cell / arrowTextAnchor / linkElementId / embedElementId /
+  transformHandle）；新增 `pointerHover.resolvePointerHover` 纯解析器，legacy
+  pointermove 与 frame dispatch 写同一份快照。`AppState` 删除
+  `hoveredElementId` / `hoveredElementIds` / `frameToHighlight` /
+  `highlightedTableCell` / `hoveredArrowTextAnchor` 及 `activeEmbeddable.state`
+  的 `"hover"`；`hitLinkElement` 字段删除，链接命中读快照。`AppPointerState` 增加
+  `subscribe` / `getHoverSnapshot` / `setFrameHighlight` / `setCellHover` /
+  `clearHoverAffordances`；`usePointerHover` 只订阅静态画布与 embed 需要的字段，
+  hover 不再进入 React 状态。
+- 画框标题：`frames.tsx` 不再渲染标题 DOM（仅保留重命名输入框）；新增
+  `renderer/frameName.ts` 计算屏幕固定尺寸的标题布局，交互层画布绘制字形与
+  ellipsis 文本；`frameNameBoundsCache` 改为纯布局测量，双击标题进入重命名。
+- 渲染/画布：静态画布通过 `pointerHover` 投影消费 hover；交互画布、便签悬停、
+  链接 tooltip、embed 悬停、变换读数全部读快照；`AppView` 的 selectedElements
+  按 appState 记忆，避免 hover-only render 让画布重绘。
+- 基线变化：移除 5 个 AppState 字段的全局快照；少量渲染计数随“hover 不再触发
+  React 渲染”调整（move / dragCreate / selection / history / regression）。
+- 测试：新增 `frameTitle.test.tsx`（画布标题无 DOM + 双击重命名）；
+  excalidraw / element typecheck 通过。

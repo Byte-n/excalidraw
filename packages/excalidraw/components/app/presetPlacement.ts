@@ -351,7 +351,6 @@ export const placePreset = (
     ) as Record<string, true>,
     selectedGroupIds: {},
     selectedLinearElement: null,
-    hoveredElementIds: {},
     editingGroupId: null,
   });
   // 整次放置是一步可撤销（含表格泳道自带的多元素）

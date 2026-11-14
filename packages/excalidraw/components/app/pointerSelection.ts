@@ -669,12 +669,12 @@ export const handleSelectionOnPointerDown = (
           );
       }
 
-      app.hitLinkElement = app.getElementLinkAtPosition(
+      const linkElement = app.getElementLinkAtPosition(
         pointerDownState.origin,
         hitElementMightBeLocked,
       );
 
-      if (app.hitLinkElement) {
+      if (linkElement) {
         return true;
       }
 
@@ -1123,7 +1123,10 @@ export const handleTextOnPointerDown = (
   // the click transitions into text editing either way, consuming (or
   // bypassing) whatever anchor was highlighted — don't leave it lingering
   // under the editor, which outlives the hover when the tool is locked
-  app.setState({ hoveredArrowTextAnchor: null });
+  app.pointer.setHover({
+    ...app.pointer.getHoverSnapshot(),
+    arrowTextAnchor: null,
+  });
 
   // a free arrow endpoint takes precedence over adding a label *to* the
   // arrow — it's the smaller, more deliberate target

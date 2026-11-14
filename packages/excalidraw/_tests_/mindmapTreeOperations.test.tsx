@@ -192,7 +192,7 @@ describe("Mindmap P02 树操作界面", () => {
     pointer.clickAt(minus.center[0], minus.center[1]);
     expect(node("a").collapsed).toBe(true);
     expect(h.state.selectedElementIds).toEqual({ a: true });
-    expect(h.state.hoveredElementIds).toEqual({});
+    expect(h.app.pointer.getHoverSnapshot().elementIds).toEqual({});
     expect(
       h.app.getElementAtPosition(hidden.x + 20, hidden.y + 20)?.id,
     ).not.toBe("a1");

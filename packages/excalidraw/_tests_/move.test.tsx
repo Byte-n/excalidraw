@@ -62,7 +62,7 @@ describe("move element", () => {
       fireEvent.pointerUp(canvas);
 
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `7`,
+        `6`,
       );
       expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`6`);
       expect(h.state.selectionElement).toBeNull();
@@ -123,9 +123,9 @@ describe("move element", () => {
     // the preview straight from the frame (one extra explicit repaint; the
     // mirror `setState` no longer forces a static render), hence 24 / 16.
     expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-      `24`,
+      `21`,
     );
-    expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`16`);
+    expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`18`);
     expect(h.state.selectionElement).toBeNull();
     expect(h.elements.length).toEqual(3);
     expect(h.state.selectedElementIds[rectB.id]).toBeTruthy();
@@ -188,7 +188,7 @@ describe("duplicate element on move when ALT is clicked", () => {
       fireEvent.pointerUp(canvas);
 
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `7`,
+        `6`,
       );
       expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`6`);
       expect(h.state.selectionElement).toBeNull();

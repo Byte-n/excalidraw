@@ -218,22 +218,16 @@ export const getFragmentStructureCursor = (
   }
 };
 
-/** Writes the fragment hover channel without redundant setState calls. */
+/**
+ * Gesture-owned write/clear of the fragment row hover channel. Hover frames
+ * derive the same value into the pointer snapshot; gesture previews write the
+ * snapshot synchronously so the renderer always reads one source.
+ */
 export const setFragmentStructureHover = (
   app: FragmentApp,
   hover: FragmentStructureHover | null,
 ): void => {
-  const previous = app.state.fragmentStructureHover;
-  if (
-    previous?.kind === hover?.kind &&
-    previous?.elementId === hover?.elementId &&
-    (previous as any)?.rowId === (hover as any)?.rowId &&
-    (previous as any)?.boundaryIndex === (hover as any)?.boundaryIndex &&
-    (previous as any)?.y === (hover as any)?.y
-  ) {
-    return;
-  }
-  app.setState({ fragmentStructureHover: hover });
+  app.pointer.setFragmentHover(hover);
 };
 
 const getFragmentRowBounds = (
@@ -356,10 +350,8 @@ export const handleFragmentDoubleClick = (
     // the header row is the operator tab: the generic path edits its label
     return false;
   }
-  const row = getSequenceFragmentRowLayout(
-    topHit.height,
-    topHit.shape.fragment,
-  ).rows[rowIndex];
+  const row = getSequenceFragmentRowLayout(topHit.height, topHit.shape.fragment)
+    .rows[rowIndex];
   if (!row) {
     return false;
   }
@@ -375,17 +367,12 @@ export const handleFragmentDoubleClick = (
 export const editSelectedFragmentRowBackgroundText = (
   app: FragmentApp,
 ): boolean => {
-  const selection: FragmentRowSelection | null =
-    app.state.fragmentRowSelection;
+  const selection: FragmentRowSelection | null = app.state.fragmentRowSelection;
   if (!selection || app.state.editingTextElement) {
     return false;
   }
   const fragment = app.scene.getNonDeletedElement(selection.elementId);
-  if (
-    !fragment ||
-    !isSequenceFragmentElement(fragment) ||
-    fragment.locked
-  ) {
+  if (!fragment || !isSequenceFragmentElement(fragment) || fragment.locked) {
     return false;
   }
   const bounds = getFragmentRowBounds(fragment, selection.rowId);
@@ -412,9 +399,9 @@ const editFragmentRowBackgroundText = (
     elementsMap,
     fragment.id,
     rowId,
-  ).find(
-    (element) => isTextElement(element),
-  ) as NonDeleted<ExcalidrawTextElement> | undefined;
+  ).find((element) => isTextElement(element)) as
+    | NonDeleted<ExcalidrawTextElement>
+    | undefined;
 
   if (existing) {
     refitFragmentRowBackgroundText(app, existing.id);
@@ -476,8 +463,7 @@ export const moveSelectedFragmentRowFocus = (
   app: FragmentApp,
   direction: "up" | "down",
 ): boolean => {
-  const selection: FragmentRowSelection | null =
-    app.state.fragmentRowSelection;
+  const selection: FragmentRowSelection | null = app.state.fragmentRowSelection;
   if (!selection || app.state.editingTextElement) {
     return false;
   }
@@ -495,10 +481,7 @@ export const moveSelectedFragmentRowFocus = (
   }
   const nextIndex = Math.max(
     1,
-    Math.min(
-      layout.rows.length - 1,
-      index + (direction === "down" ? 1 : -1),
-    ),
+    Math.min(layout.rows.length - 1, index + (direction === "down" ? 1 : -1)),
   );
   if (nextIndex === index) {
     return false;

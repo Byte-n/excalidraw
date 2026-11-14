@@ -43,6 +43,8 @@ unmountComponent();
 
 const { h } = window;
 
+const tableHover = () => h.app.pointer.getSnapshot().hover.table;
+
 const mouseDown = (clientX: number, clientY: number) => {
   fireEvent.pointerDown(GlobalTestState.interactiveCanvas, {
     clientX,
@@ -251,6 +253,21 @@ describe("table row/column structure", () => {
     });
   });
 
+  it("keeps the body hover stable across consecutive pointer moves", () => {
+    const { table } = createFixture();
+    const point = {
+      x: table.x + COLUMN_WIDTH + COLUMN_WIDTH / 2,
+      y: table.y + ROW_HEIGHT + ROW_HEIGHT / 2,
+    };
+
+    mouseMove(point.x, point.y);
+    expect(tableHover()).toMatchObject({ tableId: table.id, kind: "table" });
+    mouseMove(point.x + 1, point.y + 1);
+    expect(tableHover()).toMatchObject({ tableId: table.id, kind: "table" });
+    mouseMove(point.x + 2, point.y + 2);
+    expect(tableHover()).toMatchObject({ tableId: table.id, kind: "table" });
+  });
+
   it("suspends hover scans during a table gesture and restores them afterwards", () => {
     const { table } = createFixture();
     selectRow(0, table);
@@ -260,25 +277,15 @@ describe("table row/column structure", () => {
 
     expect(h.state.containerGestureVisual).toBeNull();
     expect(h.app.interactionState.isTableGestureActive).toBe(true);
-    const cellHover = vi.spyOn(
-      h.app,
-      "maybeUpdateTableCellHighlightOnPointerMove",
-    );
-    const structureHover = vi.spyOn(
-      h.app,
-      "maybeUpdateTableStructureHoverOnPointerMove",
-    );
     mouseMove(grip.x, grip.y + 20);
-    expect(cellHover).not.toHaveBeenCalled();
-    expect(structureHover).not.toHaveBeenCalled();
+    expect(tableHover()).toBeNull();
 
     mouseUp(grip.x, grip.y + 20);
     expect(h.app.interactionState.isTableGestureActive).toBe(false);
     mouseMove(grip.x, grip.y);
-    expect(cellHover).toHaveBeenCalled();
     // the unified dispatch derives the structure hover again (through the
     // table provider rather than the legacy channel)
-    expect(h.state.tableStructureHover).toMatchObject({
+    expect(tableHover()).toMatchObject({
       tableId: table.id,
       kind: "rowGrip",
     });
@@ -295,7 +302,7 @@ describe("table row/column structure", () => {
       const { table } = createFixture();
 
       mouseMove(table.x - 12, table.y + ROW_HEIGHT / 2);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         tableId: table.id,
         kind: "rowGrip",
         rowId: table.table.rows[0].id,
@@ -349,7 +356,7 @@ describe("table row/column structure", () => {
       // the grip rides the outer edge at the selected row's center
       const grip = { x: table.x - 12, y: table.y + ROW_HEIGHT / 2 };
       mouseMove(grip.x, grip.y);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         tableId: table.id,
         kind: "rowGrip",
         rowId: table.table.rows[0].id,
@@ -640,7 +647,7 @@ describe("table row/column structure", () => {
           edge,
         });
         expect(h.state.selectedElementIds).toEqual({});
-        expect(h.state.tableStructureHover).toBeNull();
+        expect(tableHover()).toBeNull();
         await nextFrame();
         // the 6px rounded rail bar
         expect(railRects()).toContainEqual([
@@ -652,22 +659,21 @@ describe("table row/column structure", () => {
 
         // An unexpected hover must not override the active resize visual.
         act(() =>
-          h.app.setState({
-            tableStructureHover:
-              axis === "row"
-                ? {
-                    tableId: table.id,
-                    kind: "columnResize",
-                    columnId: table.table.columns[0].id,
-                    edge: "end",
-                  }
-                : {
-                    tableId: table.id,
-                    kind: "rowResize",
-                    rowId: table.table.rows[0].id,
-                    edge: "end",
-                  },
-          }),
+          h.app.pointer.setTableHover(
+            axis === "row"
+              ? {
+                  tableId: table.id,
+                  kind: "columnResize",
+                  columnId: table.table.columns[0].id,
+                  edge: "end",
+                }
+              : {
+                  tableId: table.id,
+                  kind: "rowResize",
+                  rowId: table.table.rows[0].id,
+                  edge: "end",
+                },
+          ),
         );
         for (const distance of [16, 2000]) {
           lines.length = 0;
@@ -833,7 +839,7 @@ describe("table row/column structure", () => {
       const separator = { x: table.x + COLUMN_WIDTH, y: table.y + 28 };
       mouseMove(separator.x, separator.y);
       await nextFrame();
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         kind: "columnResize",
         columnId: table.table.columns[0].id,
       });
@@ -928,7 +934,7 @@ describe("table row/column structure", () => {
       // the separator between the first and the second row
       const separator = { x: table.x + 100, y: table.y + ROW_HEIGHT };
       mouseMove(separator.x, separator.y);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         tableId: table.id,
         kind: "rowResize",
         rowId: table.table.rows[0].id,
@@ -962,7 +968,7 @@ describe("table row/column structure", () => {
       const x = table.x + table.width;
       const y = table.y + ROW_HEIGHT / 2;
       mouseMove(x, y);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         kind: "columnResize",
         columnId: table.table.columns[2].id,
       });
@@ -984,7 +990,7 @@ describe("table row/column structure", () => {
       const x = table.x + COLUMN_WIDTH / 2;
       const y = table.y + table.height;
       mouseMove(x, y);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         kind: "rowResize",
         rowId: table.table.rows[2].id,
       });
@@ -1055,7 +1061,7 @@ describe("table row/column structure", () => {
       // outer border
       const border = { x: table.x + 3, y: table.y + ROW_HEIGHT / 2 };
       mouseMove(border.x, border.y);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         kind: "columnResize",
         columnId: table.table.columns[0].id,
         edge: "start",
@@ -1083,7 +1089,7 @@ describe("table row/column structure", () => {
 
       const border = { x: table.x + COLUMN_WIDTH / 2, y: table.y + 3 };
       mouseMove(border.x, border.y);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         kind: "rowResize",
         rowId: table.table.rows[0].id,
         edge: "start",
@@ -1223,12 +1229,12 @@ describe("table row/column structure", () => {
     it("shows structure affordances while hovering a table cell", () => {
       const { table } = createFixture();
       mouseMove(table.x + COLUMN_WIDTH / 2, table.y + ROW_HEIGHT / 2);
-      expect(h.state.tableStructureHover).toEqual({
+      expect(tableHover()).toEqual({
         tableId: table.id,
         kind: "table",
       });
       mouseMove(table.x - 50, table.y - 50);
-      expect(h.state.tableStructureHover).toBeNull();
+      expect(tableHover()).toBeNull();
     });
 
     it("inserts a row at the left rail boundary and shifts the members", () => {
@@ -1236,7 +1242,7 @@ describe("table row/column structure", () => {
 
       const band = { x: table.x - 12, y: table.y };
       mouseMove(band.x, band.y);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         tableId: table.id,
         kind: "rowInsert",
         boundaryIndex: 0,
@@ -1254,7 +1260,7 @@ describe("table row/column structure", () => {
     it("uses the top rail for column dragging and its boundaries for insertion", () => {
       const { table } = createFixture();
       mouseMove(table.x + COLUMN_WIDTH / 2, table.y - 12);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         tableId: table.id,
         kind: "columnGrip",
         columnId: table.table.columns[0].id,
@@ -1262,7 +1268,7 @@ describe("table row/column structure", () => {
 
       const boundary = { x: table.x + COLUMN_WIDTH, y: table.y - 12 };
       mouseMove(boundary.x, boundary.y);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         tableId: table.id,
         kind: "columnInsert",
         boundaryIndex: 1,
@@ -1288,12 +1294,12 @@ describe("table row/column structure", () => {
       // a separator's zone is ±4px (TABLE_STRUCTURE_LINE_HIT_HALF), inside and
       // outside alike
       mouseMove(table.x + table.width + 2, table.y + ROW_HEIGHT / 2);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         kind: "columnResize",
         columnId: table.table.columns[2].id,
       });
       mouseMove(table.x + COLUMN_WIDTH / 2, table.y + table.height + 2);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         kind: "rowResize",
         rowId: table.table.rows[2].id,
       });
@@ -1646,7 +1652,7 @@ describe("table row/column structure", () => {
           const clientX = (x + h.state.scrollX) * zoom + h.state.offsetLeft;
           const clientY = (y + h.state.scrollY) * zoom + h.state.offsetTop;
           mouseMove(clientX, clientY);
-          expect(h.state.tableStructureHover).toMatchObject({ kind });
+          expect(tableHover()).toMatchObject({ kind });
           expect(GlobalTestState.interactiveCanvas.style.cursor).toBe(
             "pointer",
           );
@@ -1663,9 +1669,9 @@ describe("table row/column structure", () => {
       const { table } = scaleFixture();
       selectTable(table);
       mouseMove(table.x - 12, table.y + ROW_HEIGHT / 2);
-      expect(h.state.tableStructureHover).toMatchObject({ kind: "rowGrip" });
+      expect(tableHover()).toMatchObject({ kind: "rowGrip" });
       mouseMove(table.x + COLUMN_WIDTH / 2, table.y - 12);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         kind: "columnGrip",
       });
     });
@@ -1679,7 +1685,7 @@ describe("table row/column structure", () => {
       const gripX = bar.grip.x + bar.grip.width / 2;
       const gripY = bar.grip.y + bar.grip.height / 2;
       mouseMove(gripX, gripY);
-      expect(h.state.tableStructureHover).toMatchObject({
+      expect(tableHover()).toMatchObject({
         tableId: table.id,
         kind: "titleGrip",
       });

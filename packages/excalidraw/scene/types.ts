@@ -19,6 +19,7 @@ import type {
   SocketId,
   PendingExcalidrawElements,
 } from "../types";
+import type { PointerHoverSnapshot } from "../components/app/pointerSnapshot";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { Drawable } from "roughjs/bin/core";
 
@@ -90,6 +91,7 @@ export type StaticSceneRenderConfig = {
   visibleElements: readonly NonDeletedExcalidrawElement[];
   scale: number;
   appState: StaticCanvasAppState;
+  pointerHover?: PointerHoverSnapshot;
   renderConfig: StaticCanvasRenderConfig;
 };
 
@@ -131,6 +133,7 @@ export type NewElementSceneRenderConfig = {
   allElementsMap: NonDeletedSceneElementsMap;
   scale: number;
   appState: AppState;
+  pointerHover?: PointerHoverSnapshot;
   renderConfig: StaticCanvasRenderConfig;
 };
 

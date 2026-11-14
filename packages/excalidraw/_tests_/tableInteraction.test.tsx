@@ -403,43 +403,43 @@ describe("table tool", () => {
     it("highlights the hovered cell and resets off the table", () => {
       const first = cellCenter(table, 0, 0);
       mouseMove(first.x, first.y);
-      expect(h.state.highlightedTableCell).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().cell).toEqual({
         tableId: table.id,
         cellId: table.table.cells[0].id,
       });
 
       const second = cellCenter(table, 1, 1);
       mouseMove(second.x, second.y);
-      expect(h.state.highlightedTableCell).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().cell).toEqual({
         tableId: table.id,
         cellId: table.table.cells[4].id,
       });
 
       // a child above the table takes the pointer — no cell highlight
       mouseMove(130, 130);
-      expect(h.state.highlightedTableCell).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().cell).toBeNull();
 
       mouseMove(20, 20);
-      expect(h.state.highlightedTableCell).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().cell).toBeNull();
     });
 
     it("keeps following the pointer after a click and clears on escape", () => {
       const center = cellCenter(table, 0, 2);
       mouseMove(center.x, center.y);
-      expect(h.state.highlightedTableCell).not.toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().cell).not.toBeNull();
 
       // clicking selects the table; the highlight keeps tracking the hover
       mouseDown(center.x, center.y);
       mouseUp(center.x, center.y);
       expect(h.state.selectedElementIds).toEqual({ [table.id]: true });
       mouseMove(center.x, center.y);
-      expect(h.state.highlightedTableCell).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().cell).toEqual({
         tableId: table.id,
         cellId: table.table.cells[2].id,
       });
 
       Keyboard.keyPress(KEYS.ESCAPE);
-      expect(h.state.highlightedTableCell).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().cell).toBeNull();
       expect(h.state.selectedElementIds).toEqual({});
     });
   });

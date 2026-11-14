@@ -527,7 +527,7 @@ const isStickyNoteLifted = (
   appState: StaticCanvasAppState | InteractiveCanvasAppState,
 ) =>
   appState.hoveredElementId === element.id ||
-  !!appState.hoveredElementIds[element.id] ||
+  !!appState.hoveredElementIds?.[element.id] ||
   ("selectedElementsAreBeingDragged" in appState &&
     !!appState.selectedElementsAreBeingDragged &&
     !!appState.selectedElementIds[element.id]);
@@ -1183,7 +1183,7 @@ export const renderElement = (
   const reduceAlphaForSelection =
     appState.openDialog?.name === "elementLinkSelector" &&
     !appState.selectedElementIds[element.id] &&
-    !appState.hoveredElementIds[element.id];
+    !appState.hoveredElementIds?.[element.id];
 
   context.save();
   context.globalAlpha =

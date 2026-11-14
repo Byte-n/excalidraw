@@ -103,14 +103,14 @@ describe("binding text to an arrow endpoint", () => {
       UI.clickTool("text");
       mouse.moveTo(100, 100);
 
-      expect(h.state.hoveredArrowTextAnchor).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toEqual({
         elementId: "arrow",
         anchor: "end",
       });
 
       // away from the arrow entirely
       mouse.moveTo(400, 400);
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
     });
 
     it("highlights the label midpoint when hovering the arrow itself", () => {
@@ -120,7 +120,7 @@ describe("binding text to an arrow endpoint", () => {
       // mid-arrow, clear of both endpoints
       mouse.moveTo(100, 200);
 
-      expect(h.state.hoveredArrowTextAnchor).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toEqual({
         elementId: "arrow",
         anchor: "label",
       });
@@ -133,7 +133,7 @@ describe("binding text to an arrow endpoint", () => {
       UI.clickTool("text");
       mouse.moveTo(100, 100);
 
-      expect(h.state.hoveredArrowTextAnchor?.anchor).toBe("end");
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor?.anchor).toBe("end");
     });
 
     it("does not offer a label midpoint on an arrow that already has one", () => {
@@ -151,7 +151,7 @@ describe("binding text to an arrow endpoint", () => {
       UI.clickTool("text");
       mouse.moveTo(100, 200);
 
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
     });
 
     // a click only becomes a label when it snaps to the arrow's center, so
@@ -178,14 +178,14 @@ describe("binding text to an arrow endpoint", () => {
 
       // inside the bounding box but nowhere near the stroke or the midpoint
       mouse.moveTo(150, 560);
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
 
       // on the stroke, but far from the midpoint
       mouse.moveTo(175, 490);
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
 
       mouse.moveTo(250, 580);
-      expect(h.state.hoveredArrowTextAnchor).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toEqual({
         elementId: "arrow",
         anchor: "label",
       });
@@ -197,7 +197,7 @@ describe("binding text to an arrow endpoint", () => {
       UI.clickTool("selection");
       mouse.moveTo(100, 100);
 
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
     });
 
     it("clears the highlight on escape", () => {
@@ -205,13 +205,13 @@ describe("binding text to an arrow endpoint", () => {
 
       UI.clickTool("text");
       mouse.moveTo(100, 100);
-      expect(h.state.hoveredArrowTextAnchor).not.toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).not.toBeNull();
 
       // escape reverts the tool via the action's appState rather than
       // `setActiveTool`, so the highlight has to be cleared there too
       Keyboard.keyPress(KEYS.ESCAPE);
 
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
     });
   });
 
@@ -223,7 +223,7 @@ describe("binding text to an arrow endpoint", () => {
       UI.clickTool("text");
       mouse.moveTo(100, 100);
 
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
     });
 
     it("still offers the label anchor — a label is not an arrow binding", () => {
@@ -233,7 +233,7 @@ describe("binding text to an arrow endpoint", () => {
       UI.clickTool("text");
       mouse.moveTo(100, 200);
 
-      expect(h.state.hoveredArrowTextAnchor).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toEqual({
         elementId: "arrow",
         anchor: "label",
       });
@@ -247,15 +247,15 @@ describe("binding text to an arrow endpoint", () => {
 
       UI.clickTool("text");
       mouse.moveTo(100, 100);
-      expect(h.state.hoveredArrowTextAnchor).not.toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).not.toBeNull();
 
       Keyboard.withModifierKeys({ ctrl: true }, () => {
         Keyboard.keyDown("Control");
-        expect(h.state.hoveredArrowTextAnchor).toBeNull();
+        expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
       });
 
       Keyboard.keyUp("Control");
-      expect(h.state.hoveredArrowTextAnchor).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toEqual({
         elementId: "arrow",
         anchor: "end",
       });
@@ -292,11 +292,11 @@ describe("binding text to an arrow endpoint", () => {
 
       UI.clickTool("text");
       mouse.moveTo(100, 100);
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
 
       // ...but the arrow can still take a label at its midpoint
       mouse.moveTo(100, 200);
-      expect(h.state.hoveredArrowTextAnchor).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toEqual({
         elementId: "arrow",
         anchor: "label",
       });
@@ -307,10 +307,10 @@ describe("binding text to an arrow endpoint", () => {
 
       UI.clickTool("text");
       mouse.moveTo(100, 100);
-      expect(h.state.hoveredArrowTextAnchor).not.toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).not.toBeNull();
 
       UI.clickTool("selection");
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
     });
   });
 
@@ -757,7 +757,7 @@ describe("binding text to an arrow endpoint", () => {
 
       UI.clickTool("text");
       mouse.moveTo(100, 100);
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
 
       // the click belongs to the rect, as it would without the arrow there
       await bindTextAt(100, 100, "label");
@@ -774,7 +774,7 @@ describe("binding text to an arrow endpoint", () => {
       UI.clickTool("text");
       mouse.moveTo(100, 100);
 
-      expect(h.state.hoveredArrowTextAnchor).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toEqual({
         elementId: "arrow",
         anchor: "end",
       });
@@ -790,7 +790,7 @@ describe("binding text to an arrow endpoint", () => {
       UI.clickTool("text");
       mouse.moveTo(100, 100);
 
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
     });
   });
 
@@ -819,7 +819,7 @@ describe("binding text to an arrow endpoint", () => {
       // and the endpoint is immediately reusable
       UI.clickTool("text");
       mouse.moveTo(100, 100);
-      expect(h.state.hoveredArrowTextAnchor).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toEqual({
         elementId: arrowId,
         anchor: "end",
       });
@@ -893,7 +893,7 @@ describe("binding text to an arrow endpoint", () => {
 
       UI.clickTool("text");
       mouse.moveTo(100, 100);
-      expect(h.state.hoveredArrowTextAnchor).toBeNull();
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
 
       // the click edits the label rather than binding the endpoint under it
       mouse.clickAt(100, 100);
@@ -949,7 +949,7 @@ describe("binding text to an arrow endpoint", () => {
 
       UI.clickTool("text");
       mouse.moveTo(100, 100);
-      expect(h.state.hoveredArrowTextAnchor).toEqual({
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toEqual({
         elementId: "arrow",
         anchor: "end",
       });

@@ -36,7 +36,7 @@ type GetRenderableElementsOpts = {
   newElement: AppState["newElement"];
   selectedElements: readonly NonDeletedExcalidrawElement[];
   selectedElementsAreBeingDragged: AppState["selectedElementsAreBeingDragged"];
-  frameToHighlight: AppState["frameToHighlight"];
+  frameToHighlight?: NonDeleted<ExcalidrawFrameLikeElement> | null;
 };
 
 export class Renderer {
@@ -59,6 +59,7 @@ export class Renderer {
     elementsMap: RenderableElementsMap,
     appState: AppState,
     offsets: ElementRenderOffsets,
+    frameToHighlight: NonDeleted<ExcalidrawFrameLikeElement> | null = null,
   ) {
     return this._getVisibleElementsWithRenderOffsets({
       visibleElements,
@@ -73,7 +74,7 @@ export class Renderer {
       height: appState.height,
       selectedElements: this.scene.getSelectedElements(appState),
       frameToHighlight: appState.selectedElementsAreBeingDragged
-        ? appState.frameToHighlight
+        ? frameToHighlight
         : null,
     });
   }

@@ -13,8 +13,7 @@ import { getCompositeControlPointGlobal } from "../components/app/compositeShape
 import { TABLE_STRUCTURE_RAIL_HIT_SIZE } from "../components/app/table";
 import { getTableTitleBar } from "../components/app/tableTitle";
 import {
-  clearContainerInteractionHover,
-  dispatchContainerInteraction,
+  getContainerProviderCursor,
   registerContainerInteractionProvider,
   resolveInteractionTarget,
   type ContainerInteractionCandidate,
@@ -26,6 +25,7 @@ import {
   resolvePointerFrame,
   type PointerFrameInput,
 } from "../components/app/pointerFrame";
+import { AppPointerState } from "../components/app/pointerState";
 
 const editorInterface = {
   formFactor: "desktop",
@@ -108,7 +108,6 @@ const createMockApp = ({
   selectedIds = {},
   hitElement = null,
   hitTextAutoResizeHandle = false,
-  tableStructureHover = null,
   selectedLinearElement = null,
 }: {
   elements?: any[];
@@ -116,17 +115,16 @@ const createMockApp = ({
   selectedIds?: Record<string, true>;
   hitElement?: any;
   hitTextAutoResizeHandle?: boolean;
-  tableStructureHover?: any;
   selectedLinearElement?: any;
 } = {}) => {
   const elementsMap = new Map(elements.map((element) => [element.id, element]));
-  return {
+  const repaint = { request: vi.fn() };
+  const app: any = {
     state: {
       selectedElementIds: selectedIds,
       selectedLinearElement,
       activeTool: { type: "selection" },
       zoom: { value: 1 },
-      tableStructureHover,
     },
     scene: {
       getNonDeletedElements: () => elements,
@@ -139,9 +137,11 @@ const createMockApp = ({
     isInteractionEnabled: () => false,
     editorInterface,
     cursor: { set: vi.fn() },
-    pointer: { setFrame: vi.fn() },
+    repaint,
     setState: vi.fn(),
-  } as any;
+  };
+  app.pointer = new AppPointerState(app);
+  return app;
 };
 
 const frameInput = (point: { x: number; y: number }): PointerFrameInput => ({
@@ -166,26 +166,23 @@ const bodyPoint = (table: any) => ({
 interface MockProviderHandles {
   cursor?: string;
   candidate?: ContainerInteractionCandidate | null;
-  renderHover?: ReturnType<typeof vi.fn>;
-  clearHover?: ReturnType<typeof vi.fn>;
 }
+
+let mockProviderSequence = 0;
 
 const registerMockProvider = ({
   cursor = "",
   candidate = null,
-  renderHover = vi.fn(),
-  clearHover = vi.fn(),
 }: MockProviderHandles = {}) => {
+  const id = `mock-provider-${++mockProviderSequence}`;
   const provider: ContainerInteractionProvider = {
-    getInteractionCandidate: () => candidate,
+    id,
+    getInteractionCandidate: () =>
+      candidate ? { ...candidate, providerId: id } : null,
     getCursor: () => cursor,
-    renderHover,
-    clearHover,
   };
   return {
     provider,
-    renderHover,
-    clearHover,
     unregister: registerContainerInteractionProvider(provider),
   };
 };
@@ -194,6 +191,7 @@ const mockCandidate = (
   overrides: Partial<ContainerInteractionCandidate> = {},
 ): ContainerInteractionCandidate => ({
   containerId: "container-1",
+  providerId: "mock-provider",
   control: "border",
   priority: 100,
   ...overrides,
@@ -507,25 +505,28 @@ describe("PR5a-2 priority matrix (05 §5.2)", () => {
   });
 });
 
-describe("container interaction dispatch", () => {
-  it("routes hover state and cursor through the producing provider", () => {
+describe("container interaction snapshot", () => {
+  const applyHover = (app: any, point: { x: number; y: number }) =>
+    applyPointerFrame(app, resolvePointerFrame(app, frameInput(point)));
+
+  it("commits the table rail hover into the pointer snapshot and cursor", () => {
     const table = tableElement();
     const app = createMockApp({ elements: [table] });
     const target = resolveInteractionTarget(app, railPoint(table));
     expect(target.kind).toBe("containerControl");
+    const candidate = (
+      target as Extract<InteractionTarget, { kind: "containerControl" }>
+    ).candidate;
+    expect(candidate.providerId).toBe("table");
+    expect(getContainerProviderCursor(app, candidate)).toBe(CURSOR_TYPE.MOVE);
 
-    dispatchContainerInteraction(
-      app,
-      (target as Extract<InteractionTarget, { kind: "containerControl" }>)
-        .candidate,
-    );
-    expect(app.cursor.set).toHaveBeenCalledWith(CURSOR_TYPE.MOVE);
-    expect(app.setState).toHaveBeenCalledWith({
-      tableStructureHover: expect.objectContaining({
-        tableId: "table-1",
-        kind: "rowGrip",
-      }),
+    applyHover(app, railPoint(table));
+
+    expect(app.pointer.getSnapshot().hover.table).toMatchObject({
+      tableId: "table-1",
+      kind: "rowGrip",
     });
+    expect(app.cursor.set).toHaveBeenCalledWith(CURSOR_TYPE.MOVE);
   });
 
   it("derives the table body reveal from the containerBody target", () => {
@@ -534,17 +535,12 @@ describe("container interaction dispatch", () => {
     const target = resolveInteractionTarget(app, bodyPoint(table));
     expect(target.kind).toBe("containerBody");
 
-    dispatchContainerInteraction(
-      app,
-      (target as Extract<InteractionTarget, { kind: "containerBody" }>)
-        .candidate,
-    );
-    expect(app.setState).toHaveBeenCalledWith({
-      tableStructureHover: { tableId: "table-1", kind: "table" },
+    applyHover(app, bodyPoint(table));
+
+    expect(app.pointer.getSnapshot().hover.table).toEqual({
+      tableId: "table-1",
+      kind: "table",
     });
-    // the body reveal keeps the tool default (AUTO is an empty cursor), so
-    // the dispatch must not override the cursor
-    expect(app.cursor.set).not.toHaveBeenCalled();
   });
 
   it("leaves the cursor untouched when the provider reports none", () => {
@@ -555,81 +551,44 @@ describe("container interaction dispatch", () => {
     });
     try {
       const target = resolveInteractionTarget(app, { x: 0, y: 0 });
-      dispatchContainerInteraction(
-        app,
-        (target as Extract<InteractionTarget, { kind: "containerControl" }>)
-          .candidate,
-      );
-      expect(app.cursor.set).not.toHaveBeenCalled();
-      expect(mock.renderHover).toHaveBeenCalledWith(
-        app,
-        expect.objectContaining({ containerId: "container-1" }),
-      );
+      const candidate = (
+        target as Extract<InteractionTarget, { kind: "containerControl" }>
+      ).candidate;
+      expect(getContainerProviderCursor(app, candidate)).toBe("");
     } finally {
       mock.unregister();
     }
   });
 
-  it("clears every provider's hover state for non-container targets", () => {
-    const table = tableElement();
-    const app = createMockApp({
-      elements: [table],
-      tableStructureHover: { tableId: "table-1", kind: "rowGrip" } as any,
-    });
-    const first = registerMockProvider({ candidate: null });
-    const second = registerMockProvider({ candidate: null });
-    try {
-      clearContainerInteractionHover(app);
-      expect(first.clearHover).toHaveBeenCalledWith(app);
-      expect(second.clearHover).toHaveBeenCalledWith(app);
-      // the built-in table provider clears its shared channel too
-      expect(app.setState).toHaveBeenCalledWith({
-        tableStructureHover: null,
-      });
-    } finally {
-      first.unregister();
-      second.unregister();
-    }
-  });
-
-  it("sets the container cursor through applyPointerFrame", () => {
+  it("keeps the snapshot stable while the pointer stays in the same zone", () => {
     const table = tableElement();
     const app = createMockApp({ elements: [table] });
 
-    const frame = resolvePointerFrame(app, frameInput(railPoint(table)));
-    expect(frame.target.kind).toBe("containerControl");
+    applyHover(app, railPoint(table));
+    const snapshot = app.pointer.getSnapshot();
+    const hover = snapshot.hover.table;
 
-    applyPointerFrame(app, frame);
+    applyHover(app, {
+      x: railPoint(table).x + 1,
+      y: railPoint(table).y + 1,
+    });
 
-    expect(app.cursor.set).toHaveBeenCalledWith(CURSOR_TYPE.MOVE);
-    expect(app.setState).toHaveBeenCalledWith({
-      tableStructureHover: expect.objectContaining({
-        tableId: "table-1",
-        kind: "rowGrip",
-      }),
-    });
-    expect(app.pointer.setFrame).toHaveBeenCalledWith(frame, {
-      repaint: false,
-    });
+    expect(app.pointer.getSnapshot().hover.table).toBe(hover);
   });
 
   it("clears container hover when moving from a control to a normal element", () => {
     const table = tableElement();
     const rect = rectElement("rect-1");
-    // the mock state is static, so seed it with the hover the dispatch leaves
     const app = createMockApp({
       elements: [table],
       hitElement: rect,
-      tableStructureHover: { tableId: "table-1", kind: "rowGrip" } as any,
     });
 
-    applyPointerFrame(
-      app,
-      resolvePointerFrame(app, frameInput(railPoint(table))),
-    );
-    expect(app.cursor.set).toHaveBeenCalledWith(CURSOR_TYPE.MOVE);
-
-    app.setState.mockClear();
+    applyHover(app, railPoint(table));
+    expect(app.pointer.getSnapshot().hover.table).toMatchObject({
+      tableId: "table-1",
+      kind: "rowGrip",
+    });
     app.cursor.set.mockClear();
 
     const nextFrame = resolvePointerFrame(
@@ -643,8 +602,8 @@ describe("container interaction dispatch", () => {
 
     applyPointerFrame(app, nextFrame);
 
-    expect(app.setState).toHaveBeenCalledWith({ tableStructureHover: null });
-    // PR5: the frame dispatcher is the single cursor writer (one write / frame)
+    expect(app.pointer.getSnapshot().hover.table).toBeNull();
+    // the frame dispatcher is the single cursor writer (one write / frame)
     expect(app.cursor.set).toHaveBeenCalledTimes(1);
   });
 });

@@ -41,6 +41,8 @@ import {
   isCurvedArrow,
   isElbowArrow,
   isFrameLikeElement,
+  isElementInViewport,
+  getRenderElementWithPositionOverride,
   isImageElement,
   isLinearElement,
   isLineElement,
@@ -171,12 +173,15 @@ import {
   snapScrollToDevicePixels,
   getSelectionColor,
 } from "./helpers";
+import { getFrameNameLayout } from "./frameName";
 
+import type { PointerHoverSnapshot } from "../components/app/pointerSnapshot";
 import type {
   AppClassProperties,
   FragmentRowSelection,
   FragmentStructureHover,
   InteractiveCanvasAppState,
+  TableRowColStructureHover,
 } from "../types";
 import type {
   InteractiveCanvasRenderConfig,
@@ -345,9 +350,12 @@ const highlightPoint = <Point extends LocalPoint | GlobalPoint>(
 const renderHoveredArrowTextAnchor = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
+  hoveredAnchor: NonNullable<
+    InteractiveCanvasAppState["hoveredArrowTextAnchor"]
+  >,
   elementsMap: ElementsMap,
 ) => {
-  const { elementId, anchor } = appState.hoveredArrowTextAnchor!;
+  const { elementId, anchor } = hoveredAnchor;
 
   const element = elementsMap.get(elementId);
 
@@ -1816,7 +1824,7 @@ const renderTableStructureAffordances = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
   table: NonDeleted<ExcalidrawTableElement>,
-  hover: InteractiveCanvasAppState["tableStructureHover"] = null,
+  hover: TableRowColStructureHover | null = null,
   title?: ExcalidrawTextElement,
 ) => {
   withTableLocalTransform(context, appState, () => {
@@ -2101,7 +2109,8 @@ const renderTableEditingIndicator = (
 
 const getTableStructureVisual = (
   appState: InteractiveCanvasAppState,
-): InteractiveCanvasAppState["tableStructureHover"] => {
+  hover: TableRowColStructureHover | null,
+): TableRowColStructureHover | null => {
   const gesture = appState.containerGestureVisual;
   if (gesture?.container === "table") {
     return gesture.axis === "row"
@@ -2118,7 +2127,7 @@ const getTableStructureVisual = (
           edge: gesture.edge,
         };
   }
-  return appState.tableStructureHover;
+  return hover;
 };
 
 /**
@@ -2164,7 +2173,7 @@ const renderTableResizeSizeLabel = (
 const renderTableStructureHover = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
-  hover: NonNullable<InteractiveCanvasAppState["tableStructureHover"]>,
+  hover: NonNullable<TableRowColStructureHover>,
   elementsMap: ElementsMap,
 ) => {
   const table = elementsMap.get(hover.tableId);
@@ -3467,6 +3476,102 @@ const renderResetAutoResizeHandle = (
   context.restore();
 };
 
+/**
+ * Frame titles are canvas chrome now: the rename input is the only DOM node
+ * left (`AppFrames.renderFrameNameEditor`). The title is screen-fixed, follows
+ * render-only offsets, and inks with selection / hover state.
+ */
+const renderFrameNames = (
+  context: CanvasRenderingContext2D,
+  app: AppClassProperties,
+  appState: InteractiveCanvasAppState,
+  hover: PointerHoverSnapshot,
+) => {
+  if (!appState.frameRendering.enabled || !appState.frameRendering.name) {
+    return;
+  }
+  const isDark = appState.theme === THEME.DARK;
+  const selectionColor = getSelectionColor(app.interactiveCanvas);
+  const hoveredColor = isDark ? "#e3e3e8" : "#1b1b1f";
+  const defaultColor = applyDarkModeFilter(
+    FRAME_STYLE.nameColorLightTheme,
+    isDark,
+  );
+  const focusedSearchIds = new Set(
+    appState.searchMatches?.matches
+      .filter((match) => match.focus)
+      .map((match) => match.id) ?? [],
+  );
+
+  context.save();
+  context.translate(appState.scrollX, appState.scrollY);
+  for (const frame of app.scene.getNonDeletedFramesLikes()) {
+    if (frame.id === app.state.editingFrame) {
+      continue;
+    }
+    const renderState = app.getElementRenderState(frame);
+    if (
+      renderState.opacity === 0 ||
+      !isElementInViewport(
+        getRenderElementWithPositionOverride(frame, renderState.offset),
+        app.canvas.width / app.ownerWindow.devicePixelRatio,
+        app.canvas.height / app.ownerWindow.devicePixelRatio,
+        {
+          offsetLeft: appState.offsetLeft,
+          offsetTop: appState.offsetTop,
+          scrollX: appState.scrollX,
+          scrollY: appState.scrollY,
+          zoom: appState.zoom,
+        },
+        app.scene.getNonDeletedElementsMap(),
+      )
+    ) {
+      continue;
+    }
+    const layout = getFrameNameLayout(frame, {
+      zoom: appState.zoom.value,
+      focused: focusedSearchIds.has(frame.id),
+    });
+    const x = layout.x + renderState.offset.x;
+    const y = layout.y + renderState.offset.y;
+    const isSelected = !!appState.selectedElementIds[frame.id];
+    const isDropTarget = hover.frameToHighlight?.id === frame.id;
+    const isHovered = hover.elementId === frame.id;
+    const color =
+      isSelected || isDropTarget
+        ? selectionColor
+        : isHovered
+        ? hoveredColor
+        : defaultColor;
+    const glyphX = x;
+    const glyphY = y + (layout.height - layout.glyphSize) / 2;
+    const unit = layout.glyphSize / 10;
+
+    context.save();
+    context.globalAlpha = renderState.opacity;
+    context.strokeStyle = color;
+    context.fillStyle = color;
+    context.lineWidth = 1.2 / appState.zoom.value;
+    context.lineCap = "round";
+    context.beginPath();
+    context.moveTo(glyphX + 3 * unit, glyphY);
+    context.lineTo(glyphX + 3 * unit, glyphY + 10 * unit);
+    context.moveTo(glyphX + 7 * unit, glyphY);
+    context.lineTo(glyphX + 7 * unit, glyphY + 10 * unit);
+    context.moveTo(glyphX, glyphY + 3 * unit);
+    context.lineTo(glyphX + 10 * unit, glyphY + 3 * unit);
+    context.moveTo(glyphX, glyphY + 7 * unit);
+    context.lineTo(glyphX + 10 * unit, glyphY + 7 * unit);
+    context.stroke();
+    context.font = layout.font;
+    context.textAlign = "left";
+    context.textBaseline = "top";
+    context.fillText(layout.text, x + layout.glyphSize + layout.glyphGap, y);
+    context.restore();
+  }
+  context.restore();
+};
+
 const _renderInteractiveScene = ({
   app,
   canvas,
@@ -3490,6 +3595,9 @@ const _renderInteractiveScene = ({
   // the same whole-device-pixel scroll the static scene draws at, so the
   // overlays sit exactly on the content
   const appState = snapScrollToDevicePixels(unsnappedAppState, scale);
+  const pointerSnapshot = app.pointer.getSnapshot();
+  const tableStructureHover = pointerSnapshot.hover.table;
+  const fragmentStructureHover = pointerSnapshot.hover.fragment;
   const [normalizedWidth, normalizedHeight] = getNormalizedCanvasDimensions(
     canvas,
     scale,
@@ -3626,24 +3734,29 @@ const _renderInteractiveScene = ({
     }
   }
 
-  if (appState.hoveredArrowTextAnchor) {
-    renderHoveredArrowTextAnchor(context, appState, allElementsMap);
+  if (pointerSnapshot.hover.arrowTextAnchor) {
+    renderHoveredArrowTextAnchor(
+      context,
+      appState,
+      pointerSnapshot.hover.arrowTextAnchor,
+      allElementsMap,
+    );
   }
 
-  if (appState.frameToHighlight) {
+  if (pointerSnapshot.hover.frameToHighlight) {
     renderFrameHighlight(
       context,
       appState,
-      appState.frameToHighlight,
+      pointerSnapshot.hover.frameToHighlight,
       elementsMap,
     );
   }
 
-  if (appState.highlightedTableCell && !editingTableBackgroundText) {
+  if (pointerSnapshot.hover.cell && !editingTableBackgroundText) {
     renderTableCellHighlight(
       context,
       appState,
-      appState.highlightedTableCell,
+      pointerSnapshot.hover.cell,
       elementsMap,
     );
   }
@@ -3688,8 +3801,8 @@ const _renderInteractiveScene = ({
     );
   }
 
-  if (appState.hoveredElementId) {
-    const hoveredElement = allElementsMap.get(appState.hoveredElementId);
+  if (pointerSnapshot.hover.elementId) {
+    const hoveredElement = allElementsMap.get(pointerSnapshot.hover.elementId);
     if (
       hoveredElement &&
       !hoveredElement.isDeleted &&
@@ -3882,7 +3995,7 @@ const _renderInteractiveScene = ({
   // transform handles. This is intentionally adjacent to selected-element
   // rendering so future hover additions cannot cover the resize indicator.
   const structureTables = new Map<string, NonDeleted<ExcalidrawTableElement>>();
-  const tableVisual = getTableStructureVisual(appState);
+  const tableVisual = getTableStructureVisual(appState, tableStructureHover);
   for (const selectedTable of selectedElements) {
     if (isTableElement(selectedTable) && !selectedTable.isDeleted) {
       structureTables.set(selectedTable.id, selectedTable);
@@ -3896,8 +4009,8 @@ const _renderInteractiveScene = ({
     }
   }
 
-  if (appState.tableStructureHover) {
-    const hoveredTable = elementsMap.get(appState.tableStructureHover.tableId);
+  if (tableStructureHover) {
+    const hoveredTable = elementsMap.get(tableStructureHover.tableId);
     if (
       hoveredTable &&
       isTableElement(hoveredTable) &&
@@ -3942,10 +4055,10 @@ const _renderInteractiveScene = ({
   // open row editor keeps only its row's location cues.
   if (
     !editingBackgroundText &&
-    (appState.fragmentStructureHover || appState.fragmentRowSelection)
+    (fragmentStructureHover || appState.fragmentRowSelection)
   ) {
     const fragmentId =
-      appState.fragmentStructureHover?.elementId ??
+      fragmentStructureHover?.elementId ??
       appState.fragmentRowSelection?.elementId;
     const fragment = fragmentId ? elementsMap.get(fragmentId) : undefined;
     if (
@@ -3957,7 +4070,7 @@ const _renderInteractiveScene = ({
         context,
         appState,
         fragment,
-        appState.fragmentStructureHover,
+        fragmentStructureHover,
         appState.fragmentRowSelection,
       );
     }
@@ -4310,13 +4423,20 @@ const _renderInteractiveScene = ({
       !isTextElement(appState.editingTextElement) &&
       !appState.croppingElementId
     ) {
+      const selectionKey = Object.keys(appState.selectedElementIds)
+        .sort()
+        .join(",");
+      const hoveredHandle =
+        pointerSnapshot.hover.transformSelectionKey === selectionKey
+          ? pointerSnapshot.hover.transformHandle
+          : null;
       const readout = getTransformStatusReadout({
         gesture: appState.isRotating
           ? "rotation"
           : app.state.isResizing
           ? "scale"
           : null,
-        hoveredHandle: app.transformStatus.getHoveredHandle(),
+        hoveredHandle,
         selectedElements: visibleSelectedElements,
         elementsMap,
         rotationDelta: app.transformStatus.getRotationDelta(),
@@ -4387,6 +4507,8 @@ const _renderInteractiveScene = ({
       context.restore();
     }
   });
+
+  renderFrameNames(context, app, appState, pointerSnapshot.hover);
 
   renderSnaps(context, appState);
 

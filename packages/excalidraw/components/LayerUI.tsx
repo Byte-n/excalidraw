@@ -722,7 +722,6 @@ const stripIrrelevantAppStateProps = (appState: AppState): UIAppState => {
     shouldCacheIgnoreZoom,
     snapLines,
     originSnapOffset,
-    frameToHighlight,
     elementsToHighlight,
     ...ret
   } = appState;

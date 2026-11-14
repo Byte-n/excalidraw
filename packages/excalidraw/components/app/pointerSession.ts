@@ -325,19 +325,7 @@ export type PointerSessionApp = {
 
 const suspendHoverForStructureGesture = (app: PointerApp) => {
   app.interactionState.isTableGestureActive = true;
-  if (
-    app.state.highlightedTableCell ||
-    app.state.tableStructureHover ||
-    app.state.fragmentStructureHover ||
-    Object.keys(app.state.hoveredElementIds).length
-  ) {
-    app.setState({
-      highlightedTableCell: null,
-      tableStructureHover: null,
-      fragmentStructureHover: null,
-      hoveredElementIds: {},
-    });
-  }
+  app.pointer.clearHoverAffordances();
 };
 
 const suspendHoverForTableGesture = (
@@ -1779,8 +1767,7 @@ export const onPointerMoveFromPointerDownHandler = (
             currentFrameId: getCommonFrameId(selectedElements),
             excludeElementIds: app.state.selectedElementIds,
           });
-      // Only update the state if there is a difference
-      app.updateFrameToHighlight(frameToHighlight);
+      app.pointer.setFrameHighlight(frameToHighlight);
 
       // Marking that click was used for dragging to check
       // if elements should be deselected on pointerup
@@ -2276,6 +2263,17 @@ export const onPointerUpFromPointerDownHandler = (
 ): ((event: PointerEvent) => void) => {
   return withBatchedUpdates((childEvent: PointerEvent) => {
     const elementsMap = app.scene.getNonDeletedElementsMap();
+    // The drag drop target is committed below; the snapshot is then cleared.
+    const dragFrameToHighlight =
+      app.pointer.getHoverSnapshot().frameToHighlight;
+    const frameAwareAppState = () =>
+      ({
+        ...app.state,
+        frameToHighlight: dragFrameToHighlight,
+      } as AppState);
+    if (!pointerDownState.drag.hasOccurred) {
+      app.pointer.setFrameHighlight(null);
+    }
 
     app.removePointer(childEvent);
     pointerDownState.drag.blockDragging = false;
@@ -2317,14 +2315,13 @@ export const onPointerUpFromPointerDownHandler = (
 
     app.activeResizeHandle = null;
     app.transformStatus.endGesture();
+    app.pointer.setFrameHighlight(null);
     app.setState((prevState) => ({
       isResizing: false,
       isRotating: false,
       isCropping: false,
       resizingElement: null,
       selectionElement: null,
-      frameToHighlight: null,
-      highlightedTableCell: null,
       elementsToHighlight: null,
       cursorButton: "up",
       snapLines: updateStable(prevState.snapLines, []),
@@ -3019,7 +3016,7 @@ export const onPointerUpFromPointerDownHandler = (
 
         if (topLayerFrame && !app.state.selectedElementIds[topLayerFrame.id]) {
           const elementsToAdd = selectedElements.filter((element) =>
-            isElementInFrame(element, nextElements, app.state),
+            isElementInFrame(element, nextElements, frameAwareAppState()),
           );
 
           if (app.state.editingGroupId) {
@@ -3036,7 +3033,7 @@ export const onPointerUpFromPointerDownHandler = (
             const elementsToRemove = selectedElements.filter(
               (element) =>
                 element.containerRef?.elementId &&
-                !isElementInFrame(element, nextElements, app.state),
+                !isElementInFrame(element, nextElements, frameAwareAppState()),
             );
 
             updateGroupIdsAfterEditingGroup(elementsToRemove);
@@ -3045,11 +3042,12 @@ export const onPointerUpFromPointerDownHandler = (
 
         nextElements = updateFrameMembershipOfSelectedElements(
           nextElements,
-          app.state,
+          frameAwareAppState(),
           app,
         );
 
         app.scene.replaceAllElements(nextElements);
+        app.pointer.setFrameHighlight(null);
       }
     }
 
@@ -3071,7 +3069,7 @@ export const onPointerUpFromPointerDownHandler = (
     if (pointerDownState.resize.isResizing) {
       let nextElements = updateFrameMembershipOfSelectedElements(
         app.scene.getElementsIncludingDeleted(),
-        app.state,
+        frameAwareAppState(),
         app,
       );
 

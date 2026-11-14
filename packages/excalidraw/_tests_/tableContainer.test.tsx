@@ -336,7 +336,7 @@ describe("table container drag-in", () => {
     pointer.move(target.x - pointer.clientX, target.y - pointer.clientY);
 
     // live preview while dragging
-    expect(h.state.highlightedTableCell).toEqual({
+    expect(h.app.pointer.getHoverSnapshot().cell).toEqual({
       tableId: table.id,
       cellId: target.cellId,
     });
@@ -350,7 +350,7 @@ describe("table container drag-in", () => {
       role: "content",
     });
     // the channel resets once the drop has committed
-    expect(h.state.highlightedTableCell).toBeNull();
+    expect(h.app.pointer.getHoverSnapshot().cell).toBeNull();
   });
 });
 

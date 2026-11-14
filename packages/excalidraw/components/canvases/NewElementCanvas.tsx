@@ -6,6 +6,7 @@ import type { NonDeletedSceneElementsMap } from "@excalidraw/element/types";
 import { isRenderThrottlingEnabled } from "../../reactUtils";
 import { renderNewElementScene } from "../../renderer/renderNewElementScene";
 
+import type { PointerHoverSnapshot } from "../../components/app/pointerSnapshot";
 import type {
   RenderableElementsMap,
   StaticCanvasRenderConfig,
@@ -15,6 +16,7 @@ import type { RoughCanvas } from "roughjs/bin/canvas";
 
 interface NewElementCanvasProps {
   appState: AppState;
+  pointerHover: PointerHoverSnapshot;
   newElement: NonNullable<AppState["newElement"]> | null;
   /** off-scene elements painted alongside `newElement` (a hover/drag preset) */
   previewElements?: readonly NonDeletedExcalidrawElement[];
@@ -44,6 +46,7 @@ const NewElementCanvas = (props: NewElementCanvasProps) => {
         rc: props.rc,
         renderConfig: props.renderConfig,
         appState: props.appState,
+        pointerHover: props.pointerHover,
       },
       isRenderThrottlingEnabled(),
     );

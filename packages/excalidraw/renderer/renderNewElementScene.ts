@@ -15,6 +15,8 @@ import type {
   NonDeletedSceneElementsMap,
 } from "@excalidraw/element/types";
 
+import { EMPTY_POINTER_HOVER } from "../components/app/pointerSnapshot";
+
 import {
   bootstrapCanvas,
   getNormalizedCanvasDimensions,
@@ -35,11 +37,15 @@ const _renderNewElementScene = ({
   allElementsMap,
   scale,
   appState: unsnappedAppState,
+  pointerHover = EMPTY_POINTER_HOVER,
   renderConfig,
 }: NewElementSceneRenderConfig) => {
   if (canvas) {
     // the same whole-device-pixel scroll the static scene draws at
-    const appState = snapScrollToDevicePixels(unsnappedAppState, scale);
+    const appState = {
+      ...snapScrollToDevicePixels(unsnappedAppState, scale),
+      frameToHighlight: pointerHover.frameToHighlight,
+    };
     const [normalizedWidth, normalizedHeight] = getNormalizedCanvasDimensions(
       canvas,
       scale,

@@ -154,14 +154,14 @@ describe("pointer cursor (PR5a-1)", () => {
     });
     await waitFor(() => {
       expect(h.app.pointer.getFrame()?.target.kind).toBe("element");
-      expect(h.state.hoveredElementId).toBe(element.id);
+      expect(h.app.pointer.getHoverSnapshot().elementId).toBe(element.id);
     });
 
     await act(() => {
       mouse.moveTo(700, 700);
     });
     await waitFor(() => {
-      expect(h.state.hoveredElementId).toBe(null);
+      expect(h.app.pointer.getHoverSnapshot().elementId).toBe(null);
     });
 
     // locked elements are included in the frame-title hover bridge
@@ -169,7 +169,7 @@ describe("pointer cursor (PR5a-1)", () => {
       mouse.moveTo(340, 330);
     });
     await waitFor(() => {
-      expect(h.state.hoveredElementId).toBe(locked.id);
+      expect(h.app.pointer.getHoverSnapshot().elementId).toBe(locked.id);
     });
 
     // still pointer-derived after a click-drag selection
@@ -180,7 +180,7 @@ describe("pointer cursor (PR5a-1)", () => {
       mouse.moveTo(160, 140);
     });
     await waitFor(() => {
-      expect(h.state.hoveredElementId).toBe(element.id);
+      expect(h.app.pointer.getHoverSnapshot().elementId).toBe(element.id);
     });
   });
 

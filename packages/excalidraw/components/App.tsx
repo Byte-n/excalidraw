@@ -138,6 +138,7 @@ import { AppTransformStatus } from "./App.transformStatus";
 import { AppRepaint } from "./App.repaint";
 import { AppPan } from "./App.pan";
 import { AppPointerState } from "./app/pointerState";
+
 import { AppCreatePreview } from "./App.createPreview";
 import { AppToolDrag } from "./App.toolDrag";
 import { AppViewport } from "./App.viewport";
@@ -173,6 +174,8 @@ import { AppStateObserver, type OnStateChange } from "./AppStateObserver";
 import { CursorHints } from "./CursorHint";
 
 import { editorInterfaceContextInitialValue } from "./app/context";
+
+import type { PointerHoverSnapshot } from "./app/pointerSnapshot";
 
 import type { textWysiwyg } from "../wysiwyg/textWysiwyg";
 
@@ -319,7 +322,7 @@ class App extends React.Component<AppProps, AppState> {
   public flowchart: AppFlowchart = new AppFlowchart(this);
   public mindmap: AppMindmap = new AppMindmap(this);
   public quickCreate: AppQuickCreate = new AppQuickCreate(this);
-  public transformStatus: AppTransformStatus = new AppTransformStatus(this);
+  public transformStatus: AppTransformStatus = new AppTransformStatus();
   /** 指针帧状态：每帧唯一解析结果；只由 applyPointerFrame 写入 */
   public pointer: AppPointerState = new AppPointerState(this);
   /** 交互层画布的显式重绘入口（setState({}) 画不出来，见 App.repaint.ts） */
@@ -338,7 +341,6 @@ class App extends React.Component<AppProps, AppState> {
 
   public textWysiwygSubmitHandler: ReturnType<typeof textWysiwyg> | null = null;
 
-  hitLinkElement?: NonDeletedExcalidrawElement;
   lastPointerDownEvent: React.PointerEvent<HTMLElement> | null = null;
   private touchMindmapContextMenuAllowed: boolean | null = null;
   /**
@@ -1724,17 +1726,8 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   /**
-   * Applies (or clears) the element-link hover affordances — pointer cursor
-   * and tooltip — based on the current `hitLinkElement`. Returns whether a
-   * link is being hovered.
-   */
-  private applyElementLinkHoverAffordance = (): boolean => {
-    return pointerCanvasController.applyElementLinkHoverAffordance(this);
-  };
-
-  /**
-   * On touchscreens (where no hover precedes the tap) re-derives
-   * `hitLinkElement`, then opens the hit element link, if any.
+   * On touchscreens (where no hover precedes the tap) derives the link hit,
+   * then opens the hit element link, if any.
    * Returns whether a link click was handled.
    */
   private maybeHandleElementLinkClick = (
@@ -1800,41 +1793,27 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private updateFrameToHighlight = (
-    frameToHighlight: AppState["frameToHighlight"],
+    frameToHighlight: PointerHoverSnapshot["frameToHighlight"],
   ) => {
-    pointerCanvasController.updateFrameToHighlight(this, frameToHighlight);
-  };
-
-  private maybeUpdateFrameToHighlightOnPointerMove = (
-    sceneCoords: { x: number; y: number },
-    isOverScrollBar: boolean,
-  ) => {
-    // currently this function is being called even during pointerdown so we
-    // need to make sure we don't re-set the state when dragging and similar
-    //
-    // But, we still want to reset on pointermove in case the state is stale
-    // so we updte even for non-eligible tool types
-    pointerCanvasController.maybeUpdateFrameToHighlightOnPointerMove(
-      this,
-      sceneCoords,
-      isOverScrollBar,
-    );
+    this.pointer.setFrameHighlight(frameToHighlight);
   };
 
   public updateTableCellHighlight = (
-    highlightedTableCell: AppState["highlightedTableCell"],
+    highlightedTableCell: PointerHoverSnapshot["cell"],
   ) => {
-    tableController.updateTableCellHighlight(this, highlightedTableCell);
+    this.pointer.setCellHover(highlightedTableCell);
   };
 
   public maybeUpdateTableCellHighlightOnPointerMove = (
     sceneCoords: { x: number; y: number },
     isOverScrollBar: boolean,
   ) => {
-    tableController.maybeUpdateTableCellHighlightOnPointerMove(
-      this,
-      sceneCoords,
-      isOverScrollBar,
+    this.pointer.setCellHover(
+      tableController.getTableCellHighlightAtSceneCoords(
+        this,
+        sceneCoords,
+        isOverScrollBar,
+      ),
     );
   };
 
@@ -1981,17 +1960,6 @@ class App extends React.Component<AppProps, AppState> {
     );
   };
 
-  public maybeUpdateTableStructureHoverOnPointerMove = (
-    sceneCoords: { x: number; y: number },
-    isOverScrollBar: boolean,
-  ): void => {
-    tableController.maybeUpdateTableStructureHoverOnPointerMove(
-      this,
-      sceneCoords,
-      isOverScrollBar,
-    );
-  };
-
   /**
    * Pointer down on a fragment row rail/dot/separator: arms the row gesture
    * (insert / reorder / resize) and reports whether the gesture was consumed.
@@ -2053,9 +2021,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   /** ArrowUp/ArrowDown moves the selected fragment row. */
-  public moveSelectedFragmentRowFocus = (
-    direction: "up" | "down",
-  ): boolean => {
+  public moveSelectedFragmentRowFocus = (direction: "up" | "down"): boolean => {
     return fragmentController.moveSelectedFragmentRowFocus(this, direction);
   };
 

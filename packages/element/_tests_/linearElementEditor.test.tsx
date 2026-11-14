@@ -268,7 +268,7 @@ describe("Test Linear Elements", () => {
     // drag line from midpoint
     drag(midpoint, pointFrom(midpoint[0] + delta, midpoint[1] + delta));
     expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-      `10`,
+      `11`,
     );
     expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`9`);
     expect(line.points.length).toEqual(3);
@@ -554,7 +554,7 @@ describe("Test Linear Elements", () => {
       // drag line from midpoint
       drag(midpoint, pointFrom(midpoint[0] + delta, midpoint[1] + delta));
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-        `14`,
+        `15`,
       );
       expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`9`);
 
@@ -730,7 +730,7 @@ describe("Test Linear Elements", () => {
         );
 
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-          `18`,
+          `20`,
         );
         expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`12`);
 
@@ -781,7 +781,7 @@ describe("Test Linear Elements", () => {
         drag(hitCoords, pointFrom(hitCoords[0] - delta, hitCoords[1] - delta));
 
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-          `14`,
+          `15`,
         );
         expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`9`);
 
@@ -822,7 +822,7 @@ describe("Test Linear Elements", () => {
         drag(hitCoords, pointFrom(hitCoords[0] + delta, hitCoords[1] + delta));
 
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-          `14`,
+          `15`,
         );
         expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`8`);
 
@@ -871,7 +871,7 @@ describe("Test Linear Elements", () => {
         deletePoint(points[2]);
         expect(line.points.length).toEqual(3);
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-          `18`,
+          `19`,
         );
         expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`11`);
 
@@ -929,7 +929,7 @@ describe("Test Linear Elements", () => {
           ),
         );
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-          `18`,
+          `20`,
         );
         expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`12`);
         expect(line.points.length).toEqual(5);
@@ -1027,7 +1027,7 @@ describe("Test Linear Elements", () => {
         drag(hitCoords, pointFrom(hitCoords[0] + delta, hitCoords[1] + delta));
 
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
-          `14`,
+          `15`,
         );
         expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`8`);
 

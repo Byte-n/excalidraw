@@ -1294,10 +1294,7 @@ describe("interaction={{ enabled: { embeds / interactiveContent } }}", () => {
 
     mouse.reset();
     mouse.moveTo(80, 65);
-    expect(h.state.activeEmbeddable).toMatchObject({
-      element: expect.objectContaining({ id: embed.id }),
-      state: "hover",
-    });
+    expect(h.app.pointer.getHoverSnapshot().embedElementId).toBe(embed.id);
 
     mouse.clickAt(80, 65);
     // activation is deferred (see handleIframeLikeCenterClick)

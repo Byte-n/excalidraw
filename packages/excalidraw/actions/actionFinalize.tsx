@@ -271,7 +271,6 @@ export const actionFinalize = register<FormData>({
                     pointerOffset: { x: 0, y: 0 },
                   },
             selectionElement: null,
-            hoveredArrowTextAnchor: null,
             newElement: null,
             multiElement: null,
           },
@@ -463,6 +462,8 @@ export const actionFinalize = register<FormData>({
         }
       : selectedLinearElement;
 
+    app.pointer.clearHoverAffordances();
+
     return {
       elements: newElements,
       appState: {
@@ -474,11 +475,7 @@ export const actionFinalize = register<FormData>({
         selectionElement: null,
         multiElement: null,
         editingTextElement: null,
-        hoveredArrowTextAnchor: null,
-        frameToHighlight: null,
-        highlightedTableCell: null,
         tableRowColSelection: null,
-        tableStructureHover: null,
         containerGestureVisual: null,
         tableStructurePreview: null,
         selectedElementIds: isDrawShapeTool

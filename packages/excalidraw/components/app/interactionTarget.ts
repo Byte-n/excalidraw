@@ -14,14 +14,17 @@ import type { ExcalidrawElement, NonDeleted } from "@excalidraw/element/types";
 import {
   getFragmentStructureCursor,
   getFragmentStructureHoverAtSceneCoords,
-  setFragmentStructureHover,
 } from "./fragment";
 import {
   getTableBodyHoverAtSceneCoords,
   getTableStructureCursor,
   getTableStructureHoverAtSceneCoords,
-  setTableStructureHover,
 } from "./table";
+import {
+  FRAME_CONTAINER_PROVIDER,
+  FRAGMENT_CONTAINER_PROVIDER,
+  TABLE_CONTAINER_PROVIDER,
+} from "./pointerSnapshot";
 
 import type {
   FragmentStructureHover,
@@ -36,18 +39,22 @@ export type ContainerControl =
   | "border"
   | "body";
 
+export type ContainerProviderId = string;
+
 export type ContainerInteractionCandidate = {
   containerId: string;
+  providerId: ContainerProviderId;
   control: ContainerControl;
   /** Higher priority wins when several containers report the same point. */
   priority: number;
   /** Provider-specific gesture identifier (e.g. the table zone kind). */
   gesture?: string;
-  /** Provider-private render payload handed back to renderHover verbatim. */
+  /** Provider-private hover payload; the snapshot carries it verbatim. */
   data?: unknown;
 };
 
 export interface ContainerInteractionProvider {
+  id: ContainerProviderId;
   /** Report the container's candidate control zone at the point, if any. */
   getInteractionCandidate(
     app: PointerApp,
@@ -55,14 +62,10 @@ export interface ContainerInteractionProvider {
   ): ContainerInteractionCandidate | null;
   /**
    * Cursor for the candidate; an empty string leaves the tool cursor
-   * untouched. Providers must never set the global cursor themselves
+   * untouched. Providers never write hover state or the global cursor
    * (interaction-target-resolution.md).
    */
   getCursor(app: PointerApp, candidate: ContainerInteractionCandidate): string;
-  /** Derive this container's legacy hover state from the candidate. */
-  renderHover(app: PointerApp, candidate: ContainerInteractionCandidate): void;
-  /** Clear this container's hover state. */
-  clearHover(app: PointerApp): void;
 }
 
 export type InteractionTarget =
@@ -84,23 +87,27 @@ export type InteractionTarget =
     }
   | { kind: "canvas" };
 
-const providers: ContainerInteractionProvider[] = [];
+const providers = new Map<string, ContainerInteractionProvider>();
 
 export const registerContainerInteractionProvider = (
   provider: ContainerInteractionProvider,
 ) => {
-  if (!providers.includes(provider)) {
-    providers.push(provider);
-  }
+  const previous = providers.get(provider.id);
+  providers.set(provider.id, provider);
   return () => {
-    const index = providers.indexOf(provider);
-    if (index >= 0) {
-      providers.splice(index, 1);
+    if (providers.get(provider.id) !== provider) {
+      return;
+    }
+    if (previous) {
+      providers.set(provider.id, previous);
+    } else {
+      providers.delete(provider.id);
     }
   };
 };
 
 const tableProvider: ContainerInteractionProvider = {
+  id: TABLE_CONTAINER_PROVIDER,
   getInteractionCandidate: (app, point) => {
     const hover =
       getTableStructureHoverAtSceneCoords(app, point) ??
@@ -122,6 +129,7 @@ const tableProvider: ContainerInteractionProvider = {
         : "body";
     return {
       containerId: hover.tableId,
+      providerId: TABLE_CONTAINER_PROVIDER,
       control,
       // the body reveal must lose to every zone and element hit
       priority: control === "body" ? 10 : 100,
@@ -133,15 +141,10 @@ const tableProvider: ContainerInteractionProvider = {
     const hover = candidate.data as TableRowColStructureHover | undefined;
     return hover ? getTableStructureCursor(hover) : "";
   },
-  renderHover: (app, candidate) => {
-    setTableStructureHover(app, candidate.data as TableRowColStructureHover);
-  },
-  clearHover: (app) => {
-    setTableStructureHover(app, null);
-  },
 };
 
 const fragmentProvider: ContainerInteractionProvider = {
+  id: FRAGMENT_CONTAINER_PROVIDER,
   getInteractionCandidate: (app, point) => {
     const hover = getFragmentStructureHoverAtSceneCoords(app, point);
     if (!hover) {
@@ -159,6 +162,7 @@ const fragmentProvider: ContainerInteractionProvider = {
         : "body";
     return {
       containerId: hover.elementId,
+      providerId: FRAGMENT_CONTAINER_PROVIDER,
       control,
       // the body reveal must lose to every zone and element hit
       priority: control === "body" ? 10 : 100,
@@ -170,15 +174,10 @@ const fragmentProvider: ContainerInteractionProvider = {
     const hover = candidate.data as FragmentStructureHover | undefined;
     return hover ? getFragmentStructureCursor(hover) : "";
   },
-  renderHover: (app, candidate) => {
-    setFragmentStructureHover(app, candidate.data as FragmentStructureHover);
-  },
-  clearHover: (app) => {
-    setFragmentStructureHover(app, null);
-  },
 };
 
 const frameProvider: ContainerInteractionProvider = {
+  id: FRAME_CONTAINER_PROVIDER,
   getInteractionCandidate: (app, point) => {
     const frame = app.getTopLayerFrameAtSceneCoords(point);
     if (!frame) {
@@ -188,7 +187,12 @@ const frameProvider: ContainerInteractionProvider = {
       includeLockedElements: true,
     });
     return hit?.id === frame.id
-      ? { containerId: frame.id, control: "border", priority: 50 }
+      ? {
+          containerId: frame.id,
+          providerId: FRAME_CONTAINER_PROVIDER,
+          control: "border",
+          priority: 50,
+        }
       : null;
   },
   // frames keep the generic cursor semantics (MOVE while selected, default
@@ -196,8 +200,6 @@ const frameProvider: ContainerInteractionProvider = {
   // hover migration covers it
   getCursor: (app, candidate) =>
     app.state.selectedElementIds[candidate.containerId] ? CURSOR_TYPE.MOVE : "",
-  renderHover: () => {},
-  clearHover: () => {},
 };
 
 registerContainerInteractionProvider(tableProvider);
@@ -310,24 +312,10 @@ export const resolveInteractionTarget = (
     preferSelected: true,
     includeLockedElements: true,
   });
-  const resolvedCandidates = providers
-    .map((provider) => {
-      const candidate = provider.getInteractionCandidate(app, point);
-      return candidate ? { provider, candidate } : null;
-    })
-    .filter(
-      (
-        value,
-      ): value is {
-        provider: ContainerInteractionProvider;
-        candidate: ContainerInteractionCandidate;
-      } => Boolean(value),
-    )
-    .sort((a, b) => b.candidate.priority - a.candidate.priority);
-  for (const entry of resolvedCandidates) {
-    providerByCandidate.set(entry.candidate, entry.provider);
-  }
-  const candidate = resolvedCandidates[0]?.candidate;
+  const candidate = [...providers.values()]
+    .map((provider) => provider.getInteractionCandidate(app, point))
+    .filter((value): value is ContainerInteractionCandidate => Boolean(value))
+    .sort((a, b) => b.priority - a.priority)[0];
 
   if (
     hit &&
@@ -375,49 +363,13 @@ export const resolveInteractionTarget = (
   return { kind: "canvas" };
 };
 
-/** Candidates route back to their producing provider for the dispatch. */
-const providerByCandidate = new WeakMap<
-  ContainerInteractionCandidate,
-  ContainerInteractionProvider
->();
-
-/** Dispatch-phase hover only (no cursor): the cursor is computed once by the
- * frame dispatcher (05-general-hover.md §4.4). */
-export const renderContainerInteractionHover = (
-  app: PointerApp,
-  candidate: ContainerInteractionCandidate,
-): void => {
-  providerByCandidate.get(candidate)?.renderHover(app, candidate);
-};
-
-/** Cursor contributed by the container provider; "" leaves it to the tool cursor. */
+/**
+ * Cursor contributed by the container provider; "" leaves it to the tool
+ * cursor. Hover state is derived from the resolved candidate into the pointer
+ * snapshot, so providers only contribute data and never write state.
+ */
 export const getContainerProviderCursor = (
   app: PointerApp,
   candidate: ContainerInteractionCandidate,
 ): string =>
-  providerByCandidate.get(candidate)?.getCursor(app, candidate) ?? "";
-
-/**
- * Legacy wrapper (container pointerdown / tests): hover + cursor in one call.
- * Frame-based hovering goes through the two functions above instead.
- */
-export const dispatchContainerInteraction = (
-  app: PointerApp,
-  candidate: ContainerInteractionCandidate,
-): void => {
-  renderContainerInteractionHover(app, candidate);
-  const cursor = getContainerProviderCursor(app, candidate);
-  if (cursor) {
-    app.cursor.set(cursor);
-  }
-};
-
-/**
- * Moving to a non-container target must not leave any container hover
- * behind; every registered provider clears its own state.
- */
-export const clearContainerInteractionHover = (app: PointerApp): void => {
-  for (const provider of providers) {
-    provider.clearHover(app);
-  }
-};
+  providers.get(candidate.providerId)?.getCursor(app, candidate) ?? "";

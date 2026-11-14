@@ -203,7 +203,6 @@ type _CommonCanvasAppState = {
   openDialog: AppState["openDialog"];
   editingGroupId: AppState["editingGroupId"]; // TODO: move to interactive canvas if possible
   selectedElementIds: AppState["selectedElementIds"]; // TODO: move to interactive canvas if possible
-  frameToHighlight: AppState["frameToHighlight"]; // TODO: move to interactive canvas if possible
   offsetLeft: AppState["offsetLeft"];
   offsetTop: AppState["offsetTop"];
   theme: AppState["theme"];
@@ -220,8 +219,10 @@ export type StaticCanvasAppState = Readonly<
     gridStep: AppState["gridStep"];
     frameRendering: AppState["frameRendering"];
     currentHoveredFontFamily: AppState["currentHoveredFontFamily"];
-    hoveredElementIds: AppState["hoveredElementIds"];
-    hoveredElementId: AppState["hoveredElementId"];
+    // Pointer-hover projection; sourced from `AppPointerState` by the shell.
+    hoveredElementIds?: Readonly<{ [id: string]: true }>;
+    hoveredElementId?: string | null;
+    frameToHighlight?: NonDeleted<ExcalidrawFrameLikeElement> | null;
     // Cropping
     croppingElementId: AppState["croppingElementId"];
   }
@@ -240,16 +241,20 @@ export type InteractiveCanvasAppState = Readonly<
     isBindingEnabled: AppState["isBindingEnabled"];
     isMidpointSnappingEnabled: AppState["isMidpointSnappingEnabled"];
     gridModeEnabled: AppState["gridModeEnabled"];
-    hoveredArrowTextAnchor: AppState["hoveredArrowTextAnchor"];
+    hoveredArrowTextAnchor?: {
+      elementId: ExcalidrawArrowElement["id"];
+      anchor: "start" | "end" | "label";
+    } | null;
     isRotating: AppState["isRotating"];
     elementsToHighlight: AppState["elementsToHighlight"];
-    highlightedTableCell: AppState["highlightedTableCell"];
+    highlightedTableCell?: {
+      tableId: ExcalidrawTableElement["id"];
+      cellId: string;
+    } | null;
     tableCellSelection: AppState["tableCellSelection"];
     tableRowColSelection: AppState["tableRowColSelection"];
-    tableStructureHover: AppState["tableStructureHover"];
     containerGestureVisual: AppState["containerGestureVisual"];
     tableStructurePreview: AppState["tableStructurePreview"];
-    fragmentStructureHover: AppState["fragmentStructureHover"];
     fragmentRowSelection: AppState["fragmentRowSelection"];
     // Collaborators
     collaborators: AppState["collaborators"];
@@ -263,9 +268,9 @@ export type InteractiveCanvasAppState = Readonly<
     // Search matches
     searchMatches: AppState["searchMatches"];
     activeLockedId: AppState["activeLockedId"];
-    // Non-used but needed in binding highlight arrow overdraw
-    hoveredElementIds: AppState["hoveredElementIds"];
-    hoveredElementId: AppState["hoveredElementId"];
+    // Optional hover projection for renderElement consumers (ghost previews).
+    hoveredElementIds?: Readonly<{ [id: string]: true }>;
+    hoveredElementId?: string | null;
     frameRendering: AppState["frameRendering"];
     shouldCacheIgnoreZoom: AppState["shouldCacheIgnoreZoom"];
     exportScale: AppState["exportScale"];
@@ -585,7 +590,7 @@ export interface AppState {
   errorMessage: React.ReactNode;
   activeEmbeddable: {
     element: NonDeletedExcalidrawElement;
-    state: "hover" | "active";
+    state: "active";
   } | null;
   /**
    * for a newly created element
@@ -626,26 +631,6 @@ export interface AppState {
    * device detection exists — see `resolveInputDevice`
    */
   inputDevice: InputDevice;
-  /**
-   * Where on a hovered arrow the text tool would attach text if clicked —
-   * a free endpoint (binds the arrow to a new text element positioned against
-   * that endpoint) or the arrow's midpoint (adds a label bound to the arrow).
-   */
-  hoveredArrowTextAnchor: {
-    elementId: ExcalidrawArrowElement["id"];
-    anchor: "start" | "end" | "label";
-  } | null;
-  frameToHighlight: NonDeleted<ExcalidrawFrameLikeElement> | null;
-  /**
-   * The table cell under the pointer — the shared table-hover channel. The
-   * cell highlight this phase; element drop-target highlighting reuses it in
-   * the next phase. Paired with the tool-gated update in
-   * `maybeUpdateTableCellHighlightOnPointerMove`.
-   */
-  highlightedTableCell: {
-    tableId: ExcalidrawTableElement["id"];
-    cellId: string;
-  } | null;
   tableCellSelection: {
     tableId: ExcalidrawTableElement["id"];
     anchorId: string;
@@ -659,15 +644,7 @@ export interface AppState {
    * instead of deleting the whole table.
    */
   tableRowColSelection: TableRowColSelection | null;
-  /**
-   * The structure affordance under the pointer: a row/column grip, a resize
-   * separator or an insertion boundary (phase-1.md:80, :82). Hover-only; the
-   * gesture itself lives in `PointerDownState["tableGesture"]`.
-   */
-  tableStructureHover: TableRowColStructureHover | null;
   containerGestureVisual: ContainerGestureVisual | null;
-  /** Hovered fragment row control (see `FragmentStructureHover`). */
-  fragmentStructureHover: FragmentStructureHover | null;
   /**
    * Selected fragment row. Like `tableRowColSelection`, this is its own
    * channel: Delete reaches the row command instead of the whole fragment.
@@ -820,8 +797,6 @@ export interface AppState {
 
   lastPointerDownWith: PointerType;
   selectedElementIds: Readonly<{ [id: string]: true }>;
-  hoveredElementIds: Readonly<{ [id: string]: true }>;
-  hoveredElementId: string | null;
   previousSelectedElementIds: { [id: string]: true };
   selectedElementsAreBeingDragged: boolean;
   shouldCacheIgnoreZoom: boolean;
@@ -923,8 +898,6 @@ export type UIAppState = Omit<
   // highlights) — identity churns per pointermove while interacting
   | "snapLines"
   | "originSnapOffset"
-  | "hoveredArrowTextAnchor"
-  | "frameToHighlight"
   | "elementsToHighlight"
 >;
 
@@ -1541,6 +1514,7 @@ export type AppClassProperties = {
   editorInterface: App["editorInterface"];
   scene: App["scene"];
   pointer: App["pointer"];
+  getElementRenderState: App["getElementRenderState"];
   setState: App["setState"];
   moveTableCellSelectionFocus: App["moveTableCellSelectionFocus"];
   editSelectedTableCellBackgroundText: App["editSelectedTableCellBackgroundText"];

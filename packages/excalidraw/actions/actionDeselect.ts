@@ -68,6 +68,7 @@ export const actionDeselect = register({
   perform: (_elements, appState, _, app) => {
     const activeTool = getNextActiveTool(appState, app);
     app.cursor.applyForTool(activeTool);
+    app.pointer.clearHoverAffordances();
 
     if (appState.editingGroupId) {
       const nonDeletedElements = app.scene.getNonDeletedElements();
@@ -103,15 +104,10 @@ export const actionDeselect = register({
           selectedLinearElement: null,
           selectionElement: null,
           showHyperlinkPopup: false,
-          hoveredArrowTextAnchor: null,
-          frameToHighlight: null,
-          highlightedTableCell: null,
           tableRowColSelection: null,
-          tableStructureHover: null,
           containerGestureVisual: null,
           tableStructurePreview: null,
           fragmentRowSelection: null,
-          fragmentStructureHover: null,
         },
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       };
@@ -128,15 +124,10 @@ export const actionDeselect = register({
         selectedLinearElement: null,
         selectionElement: null,
         showHyperlinkPopup: false,
-        hoveredArrowTextAnchor: null,
-        frameToHighlight: null,
-        highlightedTableCell: null,
         tableRowColSelection: null,
-        tableStructureHover: null,
         containerGestureVisual: null,
         tableStructurePreview: null,
         fragmentRowSelection: null,
-        fragmentStructureHover: null,
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };

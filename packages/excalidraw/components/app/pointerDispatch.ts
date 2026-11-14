@@ -4,9 +4,9 @@
  *
  * PR5a-1: one cursor writer per frame; hover mirrors derived here.
  */
-import { clearPointerHover, updateDerivedPointerState } from "./pointerDerived";
+import { applyPointerHoverSideEffects } from "./pointerDerived";
 import { getCursorForPointerTarget } from "./pointerCursor";
-import { renderContainerInteractionHover } from "./interactionTarget";
+import { resolvePointerHover } from "./pointerHover";
 
 import type { PointerFrame } from "./pointerFrame";
 import type App from "../App";
@@ -53,8 +53,9 @@ export const applyPointerFrame = (
     return;
   }
 
-  // 1. full hover cleanup (container providers + derived mirrors)
-  clearPointerHover(app);
+  // 1. affordance preview caches reset with every hover frame; container
+  //    hover is part of the snapshot and replaced atomically below.
+  app.quickCreate?.reset?.();
   if (
     isSequenceTarget(existingFrame?.target) &&
     !isSequenceTarget(frame.target)
@@ -62,52 +63,44 @@ export const applyPointerFrame = (
     app.quickCreate.reset();
   }
 
-  // 2. store the frame first: renderer / cursor helpers read `getFrame()`
+  // 2. store the frame + derived hover atomically: renderer / cursor helpers
+  //    read the snapshot. Comparison runs against the previous synchronous
+  //    snapshot, never against async React state.
   const previousHoverPoint = app.pointer.getLastHoverPoint?.() ?? null;
-  const frameChanged = app.pointer.setFrame(frame, { repaint: false });
+  const hover = resolvePointerHover(
+    app,
+    frame,
+    {},
+    app.pointer.getHoverSnapshot?.(),
+  );
+  const commit = app.pointer.commit(frame, { repaint: false, hover });
+  const frameChanged = commit.frameChanged;
 
-  // 3. transform-handle readout: exactly one write per frame (set OR clear),
-  //    so hovering a handle does not clear + re-set on every pointermove.
-  //    The readout follows the pointer, so a move over the same handle still
-  //    needs one interactive frame (HEAD got this from clear + set).
-  if (frame.target.kind === "transformHandle") {
-    const changed = app.transformStatus?.setHoveredHandle(frame.target.handle);
-    if (
-      !changed &&
-      previousHoverPoint &&
-      (previousHoverPoint[0] !== frame.point[0] ||
-        previousHoverPoint[1] !== frame.point[1])
-    ) {
-      // unchanged handle but the pointer moved: the readout follows the
-      // pointer, so this move still needs one interactive frame
-      app.repaint?.request();
-    }
-  } else {
-    app.transformStatus?.clearHovered();
+  // 3. transform-handle readout follows the pointer: a move over the same
+  //    handle still needs one interactive frame even though the snapshot's
+  //    hover fields are unchanged.
+  if (
+    frame.target.kind === "transformHandle" &&
+    !commit.hoverChanged &&
+    previousHoverPoint &&
+    (previousHoverPoint[0] !== frame.point[0] ||
+      previousHoverPoint[1] !== frame.point[1])
+  ) {
+    app.repaint?.request();
   }
 
-  // 4. target dispatch (hover state only; never the cursor)
-  switch (frame.target.kind) {
-    case "linearHandle": {
-      const editor = app.state.selectedLinearElement;
-      if (editor && editor.elementId === frame.target.elementId) {
-        app.handleHoverSelectedLinearElement(
-          editor,
-          frame.point[0],
-          frame.point[1],
-          { setCursor: false },
-        );
-      }
-      break;
+  // 4. target dispatch (hover state only; never the cursor). Container hover
+  //    was already committed atomically with the frame above.
+  if (frame.target.kind === "linearHandle") {
+    const editor = app.state.selectedLinearElement;
+    if (editor && editor.elementId === frame.target.elementId) {
+      app.handleHoverSelectedLinearElement(
+        editor,
+        frame.point[0],
+        frame.point[1],
+        { setCursor: false },
+      );
     }
-    case "containerControl":
-    case "containerBody":
-      renderContainerInteractionHover(app, frame.target.candidate);
-      break;
-    case "connection":
-      // The renderer reads the frame's connection target directly; nothing to
-      // mirror into app state (PR6).
-      break;
   }
 
   // sequence / mindmap add-button hover visuals are component-external state.
@@ -132,13 +125,15 @@ export const applyPointerFrame = (
     isSequenceTarget(frame.target) ||
     isSequenceTarget(existingFrame?.target) ||
     connectionChanged ||
-    mindmapAddButtonChanged
+    mindmapAddButtonChanged ||
+    (commit.hoverChanged && frame.target.kind !== "linearHandle")
   ) {
     app.repaint.request();
   }
 
-  // 4. derived hover (frame highlight, table cell, hovered ids, link/embed)
-  updateDerivedPointerState(app, frame);
+  // 4. DOM-only hover side effects (link tooltip / popup); every hover
+  //    affordance itself was committed atomically above.
+  applyPointerHoverSideEffects(app, app.pointer.getHoverSnapshot());
 
   // 5. the single cursor write for this frame
   app.cursor.set(getCursorForPointerTarget(app, frame));

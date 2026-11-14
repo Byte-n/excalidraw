@@ -348,8 +348,7 @@ export class AppEmbeds {
             this.app.state.activeEmbeddable?.element === el &&
             this.app.state.activeEmbeddable?.state === "active";
           const isHovered =
-            this.app.state.activeEmbeddable?.element === el &&
-            this.app.state.activeEmbeddable?.state === "hover";
+            this.app.pointer.getHoverSnapshot().embedElementId === el.id;
 
           // scale video embeds based on zoom (capped) so that smaller embeds
           // on canvas when zoomed are still of legible quality
@@ -509,7 +508,7 @@ export const updateIframeLikeElementHover = (
     moveEvent: React.PointerEvent<HTMLCanvasElement>;
   },
 ) => {
-  if (
+  const hovered =
     hitElement &&
     isIframeLikeElement(hitElement) &&
     app["isIframeLikeInteractive"](hitElement) &&
@@ -521,15 +520,13 @@ export const updateIframeLikeElementHover = (
         scenePointer.x,
         scenePointer.y,
       ))
-  ) {
-    app.setState({
-      activeEmbeddable: { element: hitElement, state: "hover" },
-    });
-    return true;
-  } else if (app.state.activeEmbeddable?.state === "hover") {
-    app.setState({ activeEmbeddable: null });
-  }
-  return false;
+      ? hitElement.id
+      : null;
+  app.pointer.setHover({
+    ...app.pointer.getHoverSnapshot(),
+    embedElementId: hovered,
+  });
+  return !!hovered;
 };
 
 export const handleIframeLikeElementHover = (
@@ -720,9 +717,7 @@ export const isIframeLikeElementCenter = (
     !event.shiftKey &&
     !event.metaKey &&
     !event.ctrlKey &&
-    (app.state.activeEmbeddable?.element !== el ||
-      app.state.activeEmbeddable?.state === "hover" ||
-      !app.state.activeEmbeddable) &&
+    app.state.activeEmbeddable?.element !== el &&
     sceneX >= el.x + el.width / 3 &&
     sceneX <= el.x + (2 * el.width) / 3 &&
     sceneY >= el.y + el.height / 3 &&

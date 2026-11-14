@@ -27,7 +27,8 @@ import type {
 } from "@excalidraw/element/types";
 
 import type App from "./App";
-import type { AppState, PointerDownState } from "../types";
+import type { PointerHoverSnapshot } from "./app/pointerSnapshot";
+import type { PointerDownState } from "../types";
 
 /**
  * Text ↔ arrow interactions.
@@ -56,7 +57,7 @@ export class AppArrowText {
   updateHoveredAnchor = (scenePointer: {
     x: number;
     y: number;
-  }): AppState["hoveredArrowTextAnchor"] => {
+  }): PointerHoverSnapshot["arrowTextAnchor"] => {
     const hovered =
       this.app.state.activeTool.type === "text" &&
       !this.app.state.editingTextElement &&
@@ -64,14 +65,10 @@ export class AppArrowText {
         ? this.getAnchorAtPosition(scenePointer.x, scenePointer.y)
         : null;
 
-    const previous = this.app.state.hoveredArrowTextAnchor;
-
-    if (
-      previous?.elementId !== hovered?.elementId ||
-      previous?.anchor !== hovered?.anchor
-    ) {
-      this.app.setState({ hoveredArrowTextAnchor: hovered });
-    }
+    this.app.pointer.setHover({
+      ...this.app.pointer.getHoverSnapshot(),
+      arrowTextAnchor: hovered,
+    });
 
     return hovered;
   };
@@ -141,10 +138,10 @@ export class AppArrowText {
    * Mirrors what `handleTextOnPointerDown` would do at this position, so the
    * highlight can't promise something the click won't deliver.
    */
-  private getAnchorAtPosition(
+  getAnchorAtPosition(
     x: number,
     y: number,
-  ): AppState["hoveredArrowTextAnchor"] {
+  ): PointerHoverSnapshot["arrowTextAnchor"] {
     const endpoint = this.getBindableEndpointAtPosition(x, y);
 
     if (endpoint) {

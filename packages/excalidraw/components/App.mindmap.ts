@@ -702,7 +702,7 @@ export class AppMindmap {
         }
         this.app.syncActionResult({
           elements: this.getLaidOutElements(nextElements, session.graphIds),
-          appState: { hoveredElementIds: {} },
+          appState: {},
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
       }
@@ -714,7 +714,7 @@ export class AppMindmap {
       if (session.offset.x !== 0 || session.offset.y !== 0) {
         this.app.syncActionResult({
           elements: this.getMovedElements(session),
-          appState: { hoveredElementIds: {} },
+          appState: {},
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
       }
@@ -763,7 +763,6 @@ export class AppMindmap {
     }
     this.app.setState({
       selectedElementsAreBeingDragged: false,
-      hoveredElementIds: {},
     });
     this.app.repaint.request();
   };
@@ -2273,7 +2272,6 @@ export class AppMindmap {
         selectedGroupIds: {},
         previousSelectedElementIds: {},
         selectedLinearElement: null,
-        hoveredElementIds: {},
         openDialog: null,
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
@@ -2282,6 +2280,12 @@ export class AppMindmap {
 
   executeTreeCommand = (command: MindmapTreeCommand, nodeId?: string) => {
     this.app.syncActionResult(this.getTreeActionResult(command, nodeId));
+    if (command.type === "toggleCollapse") {
+      const hover = this.app.pointer.getHoverSnapshot();
+      if (Object.keys(hover.elementIds).length) {
+        this.app.pointer.setHover({ ...hover, elementIds: {} });
+      }
+    }
   };
 
   focusNode = (nodeId: string) => {
@@ -2328,7 +2332,6 @@ export class AppMindmap {
           selectedGroupIds: {},
           previousSelectedElementIds: {},
           selectedLinearElement: null,
-          hoveredElementIds: {},
           editingGroupId: null,
         },
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
@@ -2375,7 +2378,6 @@ export class AppMindmap {
         selectedGroupIds: {},
         previousSelectedElementIds: {},
         selectedLinearElement: null,
-        hoveredElementIds: {},
         editingGroupId: null,
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
@@ -2430,7 +2432,6 @@ export class AppMindmap {
         selectedGroupIds: {},
         previousSelectedElementIds: {},
         selectedLinearElement: null,
-        hoveredElementIds: {},
         editingGroupId: null,
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
@@ -2613,7 +2614,6 @@ export class AppMindmap {
         selectedGroupIds: {},
         previousSelectedElementIds: {},
         selectedLinearElement: null,
-        hoveredElementIds: {},
         openDialog: null,
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
@@ -3015,7 +3015,6 @@ export class AppMindmap {
       {
         selectedElementIds: { [node.id]: true },
         selectedLinearElement: null,
-        hoveredElementIds: {},
         selectedGroupIds: {},
         editingGroupId: null,
       },
@@ -3035,7 +3034,6 @@ export class AppMindmap {
       return {
         selectedElementIds,
         selectedLinearElement: null,
-        hoveredElementIds: {},
         selectedGroupIds: {},
         editingGroupId: null,
       };

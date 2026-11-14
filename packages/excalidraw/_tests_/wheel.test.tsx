@@ -2,14 +2,11 @@ import React from "react";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 
-import {
-  CLASSES,
-  MIN_ZOOM,
-  viewportCoordsToSceneCoords,
-} from "@excalidraw/common";
+import { MIN_ZOOM, viewportCoordsToSceneCoords } from "@excalidraw/common";
 
 import { resolveInputDevice } from "../appState";
 import { Excalidraw } from "../index";
+import { getFrameNameLayout } from "../renderer/frameName";
 import { getNormalizedZoom } from "../scene";
 
 import { API } from "./helpers/api";
@@ -429,17 +426,23 @@ describe("wheel over a frame label", () => {
       height: 50,
     });
     API.setElements([frame]);
-    const label = await waitFor(() => {
-      const element = document.querySelector(`.${CLASSES.FRAME_NAME}`);
-      expect(element).not.toBe(null);
-      return element as HTMLElement;
-    });
+    await waitFor(() => expect(h.state.width).toBe(200));
 
-    // the label is DOM inside the editor container, whose wheel listener
-    // accepts it; a React `onWheel` on the label itself used to handle the
-    // same event a second time, panning and zooming twice per tick
+    // The title is canvas chrome, so the wheel target is the interactive
+    // canvas: exactly one editor-surface listener handles it.
+    const layout = getFrameNameLayout(frame, { zoom: h.state.zoom.value });
+    const clientX =
+      (layout.x + layout.width / 2 + h.state.scrollX) * h.state.zoom.value +
+      h.state.offsetLeft;
+    const clientY =
+      (layout.y + layout.height / 2 + h.state.scrollY) * h.state.zoom.value +
+      h.state.offsetTop;
     const start = getViewport();
-    fireEvent.wheel(label, { deltaY: 40 });
+    fireEvent.wheel(GlobalTestState.interactiveCanvas, {
+      deltaY: 40,
+      clientX,
+      clientY,
+    });
     expect(h.state.scrollY).toBeCloseTo(start.scrollY - 40 / start.zoom);
   });
 });

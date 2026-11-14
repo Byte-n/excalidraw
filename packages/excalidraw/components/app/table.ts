@@ -94,6 +94,8 @@ import {
   startTableTitleEditing,
 } from "./tableTitle";
 
+import type { PointerHoverSnapshot } from "./pointerSnapshot";
+
 import type App from "../App";
 
 import type {
@@ -311,19 +313,12 @@ export const finalizeNewTableElementOnPointerUp = (
   app.scene.triggerUpdate();
 };
 
-/** Writes the shared cell-hover channel, no-op when the value is unchanged. */
+/** Writes the shared cell-hover channel into the pointer snapshot. */
 export const updateTableCellHighlight = (
   app: TableApp,
-  highlightedTableCell: AppState["highlightedTableCell"],
+  highlightedTableCell: PointerHoverSnapshot["cell"],
 ): void => {
-  const previous = app.state.highlightedTableCell;
-  if (
-    previous?.tableId === highlightedTableCell?.tableId &&
-    previous?.cellId === highlightedTableCell?.cellId
-  ) {
-    return;
-  }
-  app.setState({ highlightedTableCell });
+  app.pointer.setCellHover(highlightedTableCell);
 };
 
 export const selectTableCellAtPoint = (
@@ -735,11 +730,16 @@ export const centerSelectedTableCellContent = (app: TableApp): boolean => {
  * itself, and the channel is a selection-mode affordance until the drag-in
  * phase widens it to dragged elements.
  */
-export const maybeUpdateTableCellHighlightOnPointerMove = (
+/**
+ * Pure cell-hover resolution shared by the pointer snapshot and the legacy
+ * channels: the same hit test, the same structure-zone suppression and the
+ * same drag-in preview the commit uses.
+ */
+export const getTableCellHighlightAtSceneCoords = (
   app: TableApp,
   sceneCoords: { x: number; y: number },
-  isOverScrollBar: boolean,
-): void => {
+  isOverScrollBar = false,
+): PointerHoverSnapshot["cell"] => {
   if (
     app.state.newElement ||
     app.state.multiElement ||
@@ -748,7 +748,7 @@ export const maybeUpdateTableCellHighlightOnPointerMove = (
     // editor's submit/Esc path resets the channel
     app.state.editingTextElement
   ) {
-    return;
+    return null;
   }
 
   if (app.state.selectedElementsAreBeingDragged) {
@@ -757,21 +757,20 @@ export const maybeUpdateTableCellHighlightOnPointerMove = (
     // A mindmap drag session owns its gesture entirely (no cell drop is
     // committed for it), so it must not advertise one.
     if (app.mindmap.getDragPreview?.()) {
-      return;
+      return null;
     }
     const target = getTableCellDropTargetAtSceneCoords(app, sceneCoords, {
       excludeElementIds: app.state.selectedElementIds,
     });
-    updateTableCellHighlight(
-      app,
-      target ? { tableId: target.table.id, cellId: target.cellId } : null,
-    );
-    return;
+    return target ? { tableId: target.table.id, cellId: target.cellId } : null;
   }
 
-  if (!isSelectionLikeTool(app.state.activeTool.type) || isOverScrollBar) {
-    updateTableCellHighlight(app, null);
-    return;
+  if (
+    !isSelectionLikeTool(app.state.activeTool.type) ||
+    isOverScrollBar ||
+    typeof app.getElementsAtPosition !== "function"
+  ) {
+    return null;
   }
 
   const hits = app.getElementsAtPosition(sceneCoords.x, sceneCoords.y);
@@ -787,11 +786,21 @@ export const maybeUpdateTableCellHighlightOnPointerMove = (
   // boundary or select strip under the pointer suppresses the cell highlight
   const structureHover = getTableStructureHoverAtSceneCoords(app, sceneCoords);
   if (structureHover || !table || !cellId) {
-    updateTableCellHighlight(app, null);
-    return;
+    return null;
   }
 
-  updateTableCellHighlight(app, { tableId: table.id, cellId });
+  return { tableId: table.id, cellId };
+};
+
+export const maybeUpdateTableCellHighlightOnPointerMove = (
+  app: TableApp,
+  sceneCoords: { x: number; y: number },
+  isOverScrollBar: boolean,
+): void => {
+  updateTableCellHighlight(
+    app,
+    getTableCellHighlightAtSceneCoords(app, sceneCoords, isOverScrollBar),
+  );
 };
 
 /**
@@ -1534,27 +1543,16 @@ export const getTableStructureCursor = (
 ): string => STRUCTURE_CURSORS[hover.kind];
 
 /**
- * Writes the shared structure-hover channel, no-op when the value is
- * unchanged. The unified interaction dispatch derives this legacy state
- * field from the resolved target (interaction-target-resolution.md), so
- * callers must not set it around the pointer-move flow themselves.
+ * Gesture-owned write/clear of the table structure hover channel. Hover
+ * frames get the same value derived from their target into the pointer
+ * snapshot; this entry exists for gesture teardown and pointer-session
+ * suspension, and writes the snapshot synchronously.
  */
 export const setTableStructureHover = (
   app: TableApp,
   hover: TableRowColStructureHover | null,
 ): void => {
-  const previous = app.state.tableStructureHover;
-  if (
-    previous?.kind === hover?.kind &&
-    previous?.tableId === hover?.tableId &&
-    (previous as any)?.id === (hover as any)?.id &&
-    (previous as any)?.rowId === (hover as any)?.rowId &&
-    (previous as any)?.columnId === (hover as any)?.columnId &&
-    (previous as any)?.boundaryIndex === (hover as any)?.boundaryIndex
-  ) {
-    return;
-  }
-  app.setState({ tableStructureHover: hover });
+  app.pointer.setTableHover(hover);
 };
 
 /**
@@ -1584,35 +1582,6 @@ export const getTableBodyHoverAtSceneCoords = (
     return { tableId: table.id, kind: "table" };
   }
   return null;
-};
-
-/**
- * Legacy structure-hover channel, kept for flows where the unified
- * interaction dispatch is ineligible (dragging, creating, gesturing). When
- * the dispatch runs, it owns this state through the table provider instead.
- */
-export const maybeUpdateTableStructureHoverOnPointerMove = (
-  app: TableApp,
-  sceneCoords: { x: number; y: number },
-  isOverScrollBar: boolean,
-): void => {
-  if (
-    !isSelectionLikeTool(app.state.activeTool.type) ||
-    isOverScrollBar ||
-    app.state.viewModeEnabled ||
-    app.state.editingTextElement ||
-    app.state.newElement ||
-    app.state.multiElement ||
-    app.state.selectionElement ||
-    app.state.selectedElementsAreBeingDragged
-  ) {
-    return;
-  }
-
-  const hover =
-    getTableStructureHoverAtSceneCoords(app, sceneCoords) ??
-    getTableBodyHoverAtSceneCoords(app, sceneCoords);
-  setTableStructureHover(app, hover);
 };
 
 /**
@@ -1989,8 +1958,8 @@ export const armTableStructureGestureOnPointerDown = (
     }
   }
 
+  setTableStructureHover(app, null);
   app.setState({
-    tableStructureHover: null,
     tableStructurePreview: null,
     containerGestureVisual: getTableGestureVisual(
       pointerDownState.tableGesture.active,
@@ -2313,8 +2282,8 @@ export const cancelTableGesture = (
     return false;
   }
   pointerDownState.tableGesture.active = null;
+  setTableStructureHover(app, null);
   app.setState({
-    tableStructureHover: null,
     tableStructurePreview: null,
     containerGestureVisual: null,
   });
@@ -2362,8 +2331,8 @@ export const finalizeTableGestureOnPointerUp = (
     return false;
   }
   pointerDownState.tableGesture.active = null;
+  setTableStructureHover(app, null);
   app.setState({
-    tableStructureHover: null,
     tableStructurePreview: null,
     containerGestureVisual: null,
   });

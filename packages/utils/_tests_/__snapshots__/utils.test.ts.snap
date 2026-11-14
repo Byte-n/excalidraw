@@ -47,7 +47,6 @@ exports[`exportToSvg > with default arguments 1`] = `
     "name": true,
     "outline": true,
   },
-  "frameToHighlight": null,
   "gridSize": null,
   "isBindingEnabled": true,
   "isLoading": false,
