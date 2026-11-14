@@ -856,7 +856,7 @@ export const LayersIcon = createIcon(
 //
 export const AlignTopIcon = createIcon(
   <>
-    <g clipPath="url(#a)" stroke="currentColor" strokeWidth="1.25">
+    <g stroke="currentColor" strokeWidth="1.25">
       <path
         d="M3.333 3.333h13.334"
         strokeLinecap="round"
@@ -864,18 +864,13 @@ export const AlignTopIcon = createIcon(
       />
       <path d="M13.542 6.458h-.417c-.92 0-1.667.747-1.667 1.667v7.083c0 .92.746 1.667 1.667 1.667h.417c.92 0 1.666-.746 1.666-1.667V8.125c0-.92-.746-1.667-1.666-1.667ZM6.875 6.458h-.417c-.92 0-1.666.747-1.666 1.667v3.75c0 .92.746 1.667 1.666 1.667h.417c.92 0 1.667-.746 1.667-1.667v-3.75c0-.92-.747-1.667-1.667-1.667Z" />
     </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
   </>,
   modifiedTablerIconProps,
 );
 
 export const AlignBottomIcon = createIcon(
   <>
-    <g clipPath="url(#a)" stroke="currentColor" strokeWidth="1.25">
+    <g stroke="currentColor" strokeWidth="1.25">
       <path
         d="M3.333 16.667h13.334"
         strokeLinecap="round"
@@ -883,18 +878,13 @@ export const AlignBottomIcon = createIcon(
       />
       <path d="M6.875 3.125h-.417c-.92 0-1.666.746-1.666 1.667v7.083c0 .92.746 1.667 1.666 1.667h.417c.92 0 1.667-.746 1.667-1.667V4.792c0-.92-.747-1.667-1.667-1.667ZM13.542 5.817h-.417c-.92 0-1.667.747-1.667 1.667v4.391c0 .92.746 1.667 1.667 1.667h.417c.92 0 1.666-.746 1.666-1.667V7.484c0-.92-.746-1.667-1.666-1.667Z" />
     </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
   </>,
   modifiedTablerIconProps,
 );
 
 export const AlignLeftIcon = createIcon(
   <>
-    <g clipPath="url(#a)" stroke="currentColor" strokeWidth="1.25">
+    <g stroke="currentColor" strokeWidth="1.25">
       <path
         d="M3.333 3.333v13.334"
         strokeLinecap="round"
@@ -902,18 +892,13 @@ export const AlignLeftIcon = createIcon(
       />
       <path d="M15.208 4.792H8.125c-.92 0-1.667.746-1.667 1.666v.417c0 .92.747 1.667 1.667 1.667h7.083c.92 0 1.667-.747 1.667-1.667v-.417c0-.92-.746-1.666-1.667-1.666ZM12.516 11.458H8.125c-.92 0-1.667.746-1.667 1.667v.417c0 .92.747 1.666 1.667 1.666h4.391c.92 0 1.667-.746 1.667-1.666v-.417c0-.92-.746-1.667-1.667-1.667Z" />
     </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
   </>,
   modifiedTablerIconProps,
 );
 
 export const AlignRightIcon = createIcon(
   <>
-    <g clipPath="url(#a)" stroke="currentColor" strokeWidth="1.25">
+    <g stroke="currentColor" strokeWidth="1.25">
       <path
         d="M16.667 3.333v13.334"
         strokeLinecap="round"
@@ -921,18 +906,13 @@ export const AlignRightIcon = createIcon(
       />
       <path d="M11.875 4.792H4.792c-.92 0-1.667.746-1.667 1.666v.417c0 .92.746 1.667 1.667 1.667h7.083c.92 0 1.667-.747 1.667-1.667v-.417c0-.92-.746-1.666-1.667-1.666ZM11.683 11.458H7.292c-.92 0-1.667.746-1.667 1.667v.417c0 .92.746 1.666 1.667 1.666h4.39c.921 0 1.667-.746 1.667-1.666v-.417c0-.92-.746-1.667-1.666-1.667Z" />
     </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
   </>,
   modifiedTablerIconProps,
 );
 
 export const DistributeHorizontallyIcon = createIcon(
   <>
-    <g clipPath="url(#a)" stroke="currentColor" strokeWidth="1.25">
+    <g stroke="currentColor" strokeWidth="1.25">
       <path
         d="M16.667 3.333v13.334M3.333 3.333v13.334"
         strokeLinecap="round"
@@ -940,18 +920,13 @@ export const DistributeHorizontallyIcon = createIcon(
       />
       <path d="M14.375 10.208v-.416c0-.92-.746-1.667-1.667-1.667H7.292c-.92 0-1.667.746-1.667 1.667v.416c0 .92.746 1.667 1.667 1.667h5.416c.92 0 1.667-.746 1.667-1.667Z" />
     </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
   </>,
   modifiedTablerIconProps,
 );
 
 export const DistributeVerticallyIcon = createIcon(
   <>
-    <g clipPath="url(#a)" stroke="currentColor" strokeWidth="1.25">
+    <g stroke="currentColor" strokeWidth="1.25">
       <path
         d="M3.333 3.333h13.334M3.333 16.667h13.334"
         strokeLinecap="round"
@@ -959,11 +934,6 @@ export const DistributeVerticallyIcon = createIcon(
       />
       <path d="M10.208 5.625h-.416c-.92 0-1.667.746-1.667 1.667v5.416c0 .92.746 1.667 1.667 1.667h.416c.92 0 1.667-.746 1.667-1.667V7.292c0-.92-.746-1.667-1.667-1.667Z" />
     </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
   </>,
   modifiedTablerIconProps,
 );
@@ -1011,7 +981,6 @@ export const stop = createIcon(
 export const CloseIcon = createIcon(
   <>
     <g
-      clipPath="url(#a)"
       stroke="currentColor"
       strokeWidth="1.25"
       strokeLinecap="round"
@@ -1019,11 +988,6 @@ export const CloseIcon = createIcon(
     >
       <path d="M15 5 5 15M5 5l10 10" />
     </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
   </>,
   modifiedTablerIconProps,
 );
@@ -1153,7 +1117,7 @@ export const FillHachureIcon = createIcon(
 
 export const FillCrossHatchIcon = createIcon(
   <>
-    <g clipPath="url(#a)">
+    <g>
       <path
         d="M5.879 2.625h8.242a3.254 3.254 0 0 1 3.254 3.254v8.242a3.254 3.254 0 0 1-3.254 3.254H5.88a3.254 3.254 0 0 1-3.254-3.254V5.88a3.254 3.254 0 0 1 3.254-3.254Z"
         stroke="currentColor"
@@ -1183,29 +1147,17 @@ export const FillCrossHatchIcon = createIcon(
         />
       </g>
     </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
   </>,
   modifiedTablerIconProps,
 );
 
 export const FillSolidIcon = createIcon(
   <>
-    <g clipPath="url(#a)">
-      <path
-        d="M4.91 2.625h10.18a2.284 2.284 0 0 1 2.285 2.284v10.182a2.284 2.284 0 0 1-2.284 2.284H4.909a2.284 2.284 0 0 1-2.284-2.284V4.909a2.284 2.284 0 0 1 2.284-2.284Z"
-        stroke="currentColor"
-        strokeWidth="1.25"
-      />
-    </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
+    <path
+      d="M4.91 2.625h10.18a2.284 2.284 0 0 1 2.285 2.284v10.182a2.284 2.284 0 0 1-2.284 2.284H4.909a2.284 2.284 0 0 1-2.284-2.284V4.909a2.284 2.284 0 0 1 2.284-2.284Z"
+      stroke="currentColor"
+      strokeWidth="1.25"
+    />
   </>,
   { ...modifiedTablerIconProps, fill: "currentColor" },
 );
@@ -1685,60 +1637,39 @@ export const ArrowheadCardinalityZeroOrManyIcon = React.memo(
 
 export const FontSizeSmallIcon = createIcon(
   <>
-    <g clipPath="url(#a)">
-      <path
-        d="M14.167 6.667a3.333 3.333 0 0 0-3.334-3.334H9.167a3.333 3.333 0 0 0 0 6.667h1.666a3.333 3.333 0 0 1 0 6.667H9.167a3.333 3.333 0 0 1-3.334-3.334"
-        stroke="currentColor"
-        strokeWidth="1.25"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
+    <path
+      d="M14.167 6.667a3.333 3.333 0 0 0-3.334-3.334H9.167a3.333 3.333 0 0 0 0 6.667h1.666a3.333 3.333 0 0 1 0 6.667H9.167a3.333 3.333 0 0 1-3.334-3.334"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </>,
   modifiedTablerIconProps,
 );
 
 export const FontSizeMediumIcon = createIcon(
   <>
-    <g clipPath="url(#a)">
-      <path
-        d="M5 16.667V3.333L10 15l5-11.667v13.334"
-        stroke="currentColor"
-        strokeWidth="1.25"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
+    <path
+      d="M5 16.667V3.333L10 15l5-11.667v13.334"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </>,
   modifiedTablerIconProps,
 );
 
 export const FontSizeLargeIcon = createIcon(
   <>
-    <g clipPath="url(#a)">
-      <path
-        d="M5.833 3.333v13.334h8.334"
-        stroke="currentColor"
-        strokeWidth="1.25"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </g>
-    <defs>
-      <clipPath id="a">
-        <path fill="#fff" d="M0 0h20v20H0z" />
-      </clipPath>
-    </defs>
+    <path
+      d="M5.833 3.333v13.334h8.334"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </>,
   modifiedTablerIconProps,
 );
