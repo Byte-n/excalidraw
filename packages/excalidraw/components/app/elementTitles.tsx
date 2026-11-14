@@ -1,13 +1,17 @@
 import {
   applyDarkModeFilter,
   CLASSES,
+  FONT_FAMILY,
   FRAME_STYLE,
+  getFontFamilyString,
+  getFontString,
   KEYS,
   sceneCoordsToViewportCoords,
   THEME,
 } from "@excalidraw/common";
 import {
   getElementTitle,
+  getLineWidth,
   getRenderElementWithPositionOverride,
   isElementInViewport,
   isTitledElement,
@@ -16,6 +20,8 @@ import {
 import type { ExcalidrawTitledElement } from "@excalidraw/element/types";
 
 import {
+  ELEMENT_TITLE_GLYPH_GAP,
+  ELEMENT_TITLE_GLYPH_SIZE,
   getElementTitleLayout,
   getElementTitleOffsetY,
 } from "../../renderer/elementTitle";
@@ -155,6 +161,35 @@ export class AppElementTitles {
       this.app.state,
     );
     const elementTitle = getElementTitle(element);
+    // The canvas title draws at a screen-fixed 12px, weight 500, on a
+    // 12 * 1.25 line box; the editor must use the same metrics so the text
+    // sits exactly where the title was before it was hidden for editing.
+    const titleFont = getFontString({
+      fontSize: FRAME_STYLE.nameFontSize,
+      fontFamily: FONT_FAMILY.Assistant,
+      fontWeight: 500,
+    });
+    const titleLineHeight =
+      FRAME_STYLE.nameFontSize * FRAME_STYLE.nameLineHeight;
+    // The glyph is not painted while editing, but its slot stays reserved so
+    // the input text starts on the title's text origin (glyph + gap in).
+    const paddingLeft =
+      ELEMENT_TITLE_EDIT_PADDING +
+      ELEMENT_TITLE_GLYPH_SIZE +
+      ELEMENT_TITLE_GLYPH_GAP;
+    const textWidth = Math.max(
+      getLineWidth(elementTitle, titleFont),
+      getLineWidth("0", titleFont),
+    );
+    const editorLeft =
+      x1 - this.app.state.offsetLeft - ELEMENT_TITLE_EDIT_PADDING;
+    const maxTextWidth = Math.max(
+      0,
+      this.app.state.width -
+        editorLeft -
+        paddingLeft -
+        ELEMENT_TITLE_EDIT_PADDING,
+    );
 
     return (
       <div
@@ -198,21 +233,26 @@ export class AppElementTitles {
             ),
             border: "none",
             display: "block",
-            padding: `${ELEMENT_TITLE_EDIT_PADDING}px`,
+            boxSizing: "content-box",
+            width: `${textWidth}px`,
+            height: `${titleLineHeight}px`,
+            paddingTop: `${ELEMENT_TITLE_EDIT_PADDING}px`,
+            paddingRight: `${ELEMENT_TITLE_EDIT_PADDING}px`,
+            paddingBottom: `${ELEMENT_TITLE_EDIT_PADDING}px`,
+            paddingLeft: `${paddingLeft}px`,
             borderRadius: 4,
             boxShadow: "inset 0 0 0 1px var(--color-selection)",
-            fontFamily: "Assistant",
+            fontFamily: getFontFamilyString({
+              fontFamily: FONT_FAMILY.Assistant,
+            }),
             fontSize: `${FRAME_STYLE.nameFontSize}px`,
+            fontWeight: 500,
+            lineHeight: `${titleLineHeight}px`,
             transform: `translate(-${ELEMENT_TITLE_EDIT_PADDING}px, ${ELEMENT_TITLE_EDIT_PADDING}px)`,
             color: "var(--color-on-surface)",
             overflow: "hidden",
-            maxWidth: `${
-              this.app.ownerDocument.body.clientWidth -
-              x1 -
-              ELEMENT_TITLE_EDIT_PADDING
-            }px`,
+            maxWidth: `${maxTextWidth}px`,
           }}
-          size={elementTitle.length + 1 || 1}
           dir="auto"
           autoComplete="off"
           autoCapitalize="off"

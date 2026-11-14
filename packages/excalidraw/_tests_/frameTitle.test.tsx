@@ -88,6 +88,52 @@ describe("element titles are canvas chrome", () => {
     },
   );
 
+  it.each(["frame", "table"] as const)(
+    "aligns the %s rename editor with the canvas title metrics",
+    async (type) => {
+      const element = API.createElement({
+        type,
+        x: 20,
+        y: 30,
+        width: 120,
+        height: 80,
+      });
+      API.setElements([element]);
+      API.updateElement(element, { name: "Flow" });
+
+      act(() => {
+        h.setState({ editingElementTitle: element.id });
+      });
+
+      const input = await waitFor(() => {
+        const node =
+          GlobalTestState.renderResult.container.querySelector<HTMLInputElement>(
+            ".element-title input",
+          );
+        expect(node).not.toBeNull();
+        return node!;
+      });
+
+      const zoom = h.state.zoom.value;
+      const layout = getElementTitleLayout(API.getElement(element) as any, {
+        zoom,
+      });
+      const glyphAndGap = (layout.glyphSize + layout.glyphGap) * zoom;
+      const titleLineHeight =
+        FRAME_STYLE.nameFontSize * FRAME_STYLE.nameLineHeight;
+
+      expect(input.style.fontWeight).toBe("500");
+      expect(input.style.lineHeight).toBe(`${titleLineHeight}px`);
+      expect(input.style.height).toBe(`${titleLineHeight}px`);
+      // The text stays on the title's origin, past the reserved glyph slot.
+      expect(parseFloat(input.style.paddingLeft)).toBeCloseTo(glyphAndGap + 6);
+      expect(parseFloat(input.style.width)).toBeCloseTo(
+        (layout.width - layout.glyphSize - layout.glyphGap) * zoom,
+      );
+      expect(input.hasAttribute("size")).toBe(false);
+    },
+  );
+
   it("keeps table titles screen-fixed across zoom", () => {
     const table = API.createElement({
       type: "table",
