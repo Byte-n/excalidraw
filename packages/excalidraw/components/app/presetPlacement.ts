@@ -6,6 +6,7 @@ import {
   getCommonBounds,
   getSequenceFragmentRowLayout,
   isSequenceFragmentElement,
+  isShapeElement,
   isStickyNoteElement,
 } from "@excalidraw/element";
 
@@ -24,6 +25,7 @@ import {
   PRESET_SIZES,
 } from "./createPresets";
 import { buildFragmentRowBackgroundText } from "./fragmentRowText";
+import { attachDataflowPresetTexts } from "./dataflowPresetText";
 
 import type { CreationSpec, FragmentPreset } from "../presetCatalog";
 import type App from "../App";
@@ -206,7 +208,16 @@ export const buildPresetElementsAt = (
           ),
         };
       }
-      return { elements: [element] };
+      if (!isShapeElement(element)) {
+        return { elements: [element] };
+      }
+      // 数据流预设自带文本；身份逐条派生，预览不得推进共享序列
+      const { container, texts } = attachDataflowPresetTexts(
+        app,
+        element,
+        (index) => deriveIdentity(identity, index + 1),
+      );
+      return { elements: [container, ...texts] };
     }
     case "sticky": {
       const draft = newCreationDraft(

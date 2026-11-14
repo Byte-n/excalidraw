@@ -12,6 +12,7 @@ import {
   getStickyNoteCreationInk,
   getTableCellIdAt,
   getTablePresetLabelCells,
+  isShapeElement,
   newElement,
   newEmbeddableElement,
   newFrameElement,
@@ -39,6 +40,7 @@ import {
   getShapePresetDefaults,
 } from "../shapePresetDefaults";
 
+import { attachDataflowPresetTexts } from "./dataflowPresetText";
 import { buildTableCellBackgroundText } from "./tableCellText";
 
 import type { ShapePresetDefault } from "../shapePresetDefaults";
@@ -458,9 +460,28 @@ export const buildPresetPreviewElements = (
     getPresetShapeId(tool, app.state.preferredGenericShape),
     draft,
   );
-  return [
-    { ...draft, x: at.x, y: at.y, width: size.width, height: size.height },
-  ];
+  const element = {
+    ...draft,
+    x: at.x,
+    y: at.y,
+    width: size.width,
+    height: size.height,
+  } as NonDeleted<ExcalidrawNonSelectionElement>;
+
+  if (!isShapeElement(element)) {
+    return [element];
+  }
+
+  // 预览与落地必须逐项一致：数据流预设自带文本，预览也要画出来
+  const { container, texts } = attachDataflowPresetTexts(
+    app,
+    element,
+    (index) => ({
+      id: `${PREVIEW_ELEMENT_ID}:text:${index}`,
+      seed: PREVIEW_ELEMENT_SEED + index + 1,
+    }),
+  );
+  return [container, ...texts] as NonDeleted<ExcalidrawNonSelectionElement>[];
 };
 
 /**

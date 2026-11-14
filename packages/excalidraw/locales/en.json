@@ -559,6 +559,11 @@
     "directionDown": "Grow down",
     "directionUp": "Grow up"
   },
+  "dataflowPreset": {
+    "externalEntity": "External entity",
+    "process": "Data processing",
+    "dataStore": "Data store"
+  },
   "quickCreate": {
     "insertShape": "Insert shape"
   },

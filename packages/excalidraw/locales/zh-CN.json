@@ -520,6 +520,11 @@
     "directionDown": "向下生长",
     "directionUp": "向上生长"
   },
+  "dataflowPreset": {
+    "externalEntity": "外部实体",
+    "process": "数据处理",
+    "dataStore": "数据存储"
+  },
   "quickCreate": {
     "insertShape": "插入图形"
   },

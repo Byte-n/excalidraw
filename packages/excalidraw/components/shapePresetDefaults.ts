@@ -61,11 +61,12 @@ export type ShapePresetDefault = {
 };
 
 /**
- * 预设共用的**规范样式**（除 shape / 填色 / 尺寸外完全一致，文本为空）。
+ * 预设共用的**规范样式**（除 shape / 填色 / 尺寸外完全一致）。数据流图形的
+ * 预设文案不在这张表里，见 `app/dataflowPresetText`。
  * 逐项对应样本：`strokeColor` = `DEFAULT_NEW_ELEMENT_STROKE_COLOR`
  * （`#1f2329`，项目墨色）、`strokeWidth` = `STROKE_WIDTH.thin`（1，对应样本
  * `narrow`）、`strokeStyle` = `solid`、`fillStyle` = `solid`、`opacity` = 100
- * （对应样本 `border_opacity`/`fill_opacity` 100）。圆角、字号、文本不动。
+ * （对应样本 `border_opacity`/`fill_opacity` 100）。圆角、字号不动。
  *
  * 单个预设可用 `ShapePresetDefault.strokeColor` 覆盖描边色；10 个 `sc-*`
  * 时序图形与 7 个 `df-*` 数据流图形按样本 `#000000` 取

@@ -450,6 +450,49 @@ describe("图形抽屉的单击放置", () => {
     });
   });
 
+  it("数据流图：预设自带文本，df-process 标题栏与正文分槽", () => {
+    expandGroup("dataflow");
+
+    placeItem("df-process");
+    placeItem("df-process-circle");
+    placeItem("df-store-left-label");
+
+    const shapeIdOf = (element: ExcalidrawElement) =>
+      isShapeElement(element) ? element.shape.id : null;
+    const texts = live().filter(isTextElement);
+    const process = live().find(
+      (element) => shapeIdOf(element) === "df-process",
+    )!;
+    const processTexts = texts.filter(
+      (text) => text.containerId === process.id,
+    );
+    const title = processTexts.find((text) => text.containerSlot === "title")!;
+    const body = processTexts.find((text) => !text.containerSlot)!;
+
+    expect(title.text).toBe("1.01.0");
+    expect(body.originalText).toBe(t("dataflowPreset.process"));
+    expect(process.boundElements).toEqual(
+      expect.arrayContaining([
+        { type: "text", id: title.id, slot: "title" },
+        { type: "text", id: body.id },
+      ]),
+    );
+
+    const circle = live().find(
+      (element) => shapeIdOf(element) === "df-process-circle",
+    )!;
+    expect(
+      texts.find((text) => text.containerId === circle.id)?.originalText,
+    ).toBe(`1.0\n${t("dataflowPreset.process")}`);
+
+    const store = live().find(
+      (element) => shapeIdOf(element) === "df-store-left-label",
+    )!;
+    expect(
+      texts.find((text) => text.containerId === store.id)?.originalText,
+    ).toBe(t("dataflowPreset.dataStore"));
+  });
+
   it("时序图：组合片段 else 预设复用 sc-fragment，多一行并带 [Condition]/[Else] 文本", () => {
     expandGroup("sequence");
     placeItem("sc-fragment-else");
