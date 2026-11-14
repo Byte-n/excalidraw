@@ -1,5 +1,6 @@
 import type {
   BasicShapeId,
+  DataflowShapeId,
   FlowchartShapeId,
   SequenceShapeId,
   ShapeElementType,
@@ -7,7 +8,12 @@ import type {
 } from "../types";
 
 /** Shape families. Adding a family (e.g. a later sequence family) is one entry here. */
-export const SHAPE_FAMILIES = ["basic", "flow", "sequence"] as const;
+export const SHAPE_FAMILIES = [
+  "basic",
+  "flow",
+  "sequence",
+  "dataflow",
+] as const;
 export type ShapeFamily = typeof SHAPE_FAMILIES[number];
 
 /** The 29 basic shape ids. */
@@ -75,18 +81,31 @@ export const SEQUENCE_SHAPE_IDS = [
   "sc-fragment",
 ] as const;
 
+/** The 7 data-flow (Lark) shape ids. */
+export const DATAFLOW_SHAPE_IDS = [
+  "df-external-entity",
+  "df-process",
+  "df-process-round",
+  "df-process-circle",
+  "df-store-open",
+  "df-store-left-label",
+  "df-store-plain",
+] as const;
+
 /** Family → its id list. Adding a family adds an entry here. */
 const SHAPE_IDS_BY_FAMILY: Record<ShapeFamily, readonly ShapeId[]> = {
   basic: BASIC_SHAPE_IDS,
   flow: FLOWCHART_SHAPE_IDS,
   sequence: SEQUENCE_SHAPE_IDS,
+  dataflow: DATAFLOW_SHAPE_IDS,
 };
 
-/** All 53 shape ids, expanded in family order. */
+/** All 60 shape ids, expanded in family order. */
 export const SHAPE_IDS: readonly ShapeId[] = [
   ...BASIC_SHAPE_IDS,
   ...FLOWCHART_SHAPE_IDS,
   ...SEQUENCE_SHAPE_IDS,
+  ...DATAFLOW_SHAPE_IDS,
 ];
 
 /**
@@ -97,6 +116,7 @@ export const ELEMENT_TYPE_BY_FAMILY = {
   basic: "composite",
   flow: "flow",
   sequence: "sequence",
+  dataflow: "dataflow",
 } as const;
 
 const FAMILY_BY_SHAPE_ID = new Map<ShapeId, ShapeFamily>(
@@ -124,7 +144,9 @@ export const isFlowchartShapeId = (id: string): id is FlowchartShapeId =>
   (FLOWCHART_SHAPE_IDS as readonly string[]).includes(id);
 export const isSequenceShapeId = (id: string): id is SequenceShapeId =>
   (SEQUENCE_SHAPE_IDS as readonly string[]).includes(id);
-/** Whether an id is one of the 53 shape ids. */
+export const isDataflowShapeId = (id: string): id is DataflowShapeId =>
+  (DATAFLOW_SHAPE_IDS as readonly string[]).includes(id);
+/** Whether an id is one of the 60 shape ids. */
 export const isShapeId = (id: string): id is ShapeId =>
   (SHAPE_IDS as readonly string[]).includes(id);
 
@@ -162,12 +184,24 @@ type _SequenceIdsExhaustive = AssertTrue<
     ? true
     : false
 >;
-/** The three families are pairwise disjoint. */
+/** Every `DataflowShapeId` is registered in `DATAFLOW_SHAPE_IDS`. */
+type _DataflowIdsExhaustive = AssertTrue<
+  Exclude<DataflowShapeId, typeof DATAFLOW_SHAPE_IDS[number]> extends never
+    ? true
+    : false
+>;
+/** The four families are pairwise disjoint. */
 type _FamiliesDisjoint = AssertTrue<
   Extract<BasicShapeId, FlowchartShapeId> extends never
     ? Extract<BasicShapeId, SequenceShapeId> extends never
-      ? Extract<FlowchartShapeId, SequenceShapeId> extends never
-        ? true
+      ? Extract<BasicShapeId, DataflowShapeId> extends never
+        ? Extract<FlowchartShapeId, SequenceShapeId> extends never
+          ? Extract<FlowchartShapeId, DataflowShapeId> extends never
+            ? Extract<SequenceShapeId, DataflowShapeId> extends never
+              ? true
+              : false
+            : false
+          : false
         : false
       : false
     : false
@@ -184,6 +218,10 @@ type _FlowIdsAreFlow = AssertTrue<
 type _SequenceIdsAreSequence = AssertTrue<
   typeof SEQUENCE_SHAPE_IDS[number] extends SequenceShapeId ? true : false
 >;
+/** Every id listed under `dataflow` is actually a `DataflowShapeId`. */
+type _DataflowIdsAreDataflow = AssertTrue<
+  typeof DATAFLOW_SHAPE_IDS[number] extends DataflowShapeId ? true : false
+>;
 /** `ELEMENT_TYPE_BY_FAMILY` maps every family to a `ShapeElementType`. */
 type _ElementTypeCoversFamilies = AssertTrue<
   typeof ELEMENT_TYPE_BY_FAMILY extends Record<ShapeFamily, ShapeElementType>
@@ -196,9 +234,11 @@ export type _ShapeFamilyInterlocks = [
   _BasicIdsExhaustive,
   _FlowIdsExhaustive,
   _SequenceIdsExhaustive,
+  _DataflowIdsExhaustive,
   _FamiliesDisjoint,
   _BasicIdsAreBasic,
   _FlowIdsAreFlow,
   _SequenceIdsAreSequence,
+  _DataflowIdsAreDataflow,
   _ElementTypeCoversFamilies,
 ];

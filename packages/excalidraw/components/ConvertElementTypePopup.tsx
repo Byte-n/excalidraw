@@ -160,6 +160,13 @@ const GENERIC_TYPES: readonly ShapeId[] = [
   "fc-hexagon",
   "fc-off-page-connector",
   "fc-circle",
+  "df-external-entity",
+  "df-process",
+  "df-process-round",
+  "df-process-circle",
+  "df-store-open",
+  "df-store-left-label",
+  "df-store-plain",
 ];
 // indicates order of switching
 const LINEAR_TYPES = [

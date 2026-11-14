@@ -35,6 +35,7 @@ import {
   BASIC_SHAPE_IDS,
   FLOWCHART_SHAPE_IDS,
   SEQUENCE_SHAPE_IDS,
+  DATAFLOW_SHAPE_IDS,
   SHAPE_IDS,
   ELEMENT_TYPE_BY_FAMILY,
   isShapeElementType,
@@ -1653,29 +1654,96 @@ describe("composite shape data", () => {
     expect(BASIC_SHAPE_IDS).toHaveLength(29);
     expect(FLOWCHART_SHAPE_IDS).toHaveLength(14);
     expect(SEQUENCE_SHAPE_IDS).toHaveLength(10);
-    expect(SHAPE_IDS).toHaveLength(53);
+    expect(DATAFLOW_SHAPE_IDS).toHaveLength(7);
+    expect(SHAPE_IDS).toHaveLength(60);
     expect([
       ...BASIC_SHAPE_IDS,
       ...FLOWCHART_SHAPE_IDS,
       ...SEQUENCE_SHAPE_IDS,
+      ...DATAFLOW_SHAPE_IDS,
     ]).toEqual([...SHAPE_IDS]);
     for (const id of SHAPE_IDS) {
       const expected = (BASIC_SHAPE_IDS as readonly string[]).includes(id)
         ? "composite"
         : (FLOWCHART_SHAPE_IDS as readonly string[]).includes(id)
         ? "flow"
-        : "sequence";
+        : (SEQUENCE_SHAPE_IDS as readonly string[]).includes(id)
+        ? "sequence"
+        : "dataflow";
       expect(shapeElementType(id)).toBe(expected);
     }
   });
 
-  it("recognizes exactly the three shape element types at the JSON boundary", () => {
+  it("recognizes exactly the four shape element types at the JSON boundary", () => {
     for (const type of Object.values(ELEMENT_TYPE_BY_FAMILY)) {
       expect(isShapeElementType(type)).toBe(true);
     }
     for (const type of ["mindmap-node", "table", "arrow", "text", 1, null]) {
       expect(isShapeElementType(type)).toBe(false);
     }
+  });
+
+  it("derives the dataflow element type from the shape id during creation", () => {
+    const dataflow = newElement({
+      type: "df-process",
+      x: 0,
+      y: 0,
+      width: 152,
+      height: 137,
+    });
+    expect(dataflow).toMatchObject({
+      type: "dataflow",
+      shape: { id: "df-process" },
+    });
+  });
+
+  describe("dataflow geometry", () => {
+    const geometryFor = (id: ShapeId, width: number, height: number) =>
+      getCompositeShapeGeometry({
+        width,
+        height,
+        shape: buildShapeData(id),
+      });
+
+    it("insets the 152-wide process title rule by 2 at y=28", () => {
+      const geometry = geometryFor("df-process", 152, 137);
+      expect(geometry.details).toHaveLength(1);
+      expect(geometry.details[0].start).toEqual([2, 28]);
+      expect(geometry.details[0].commands).toEqual([
+        { type: "line", to: [150, 28] },
+      ]);
+    });
+
+    it("keeps the left-label rule at x=36 with a 2px inset", () => {
+      const geometry = geometryFor("df-store-left-label", 156, 50);
+      expect(geometry.details).toHaveLength(1);
+      expect(geometry.details[0].start).toEqual([36, 2]);
+      expect(geometry.details[0].commands).toEqual([
+        { type: "line", to: [36, 48] },
+      ]);
+    });
+
+    it("strokes open stores as two rules over a full-rect hit envelope", () => {
+      const geometry = geometryFor("df-store-open", 120, 80);
+      expect(geometry.outline.start).toEqual([0, 0]);
+      expect(geometry.outline.closed).toBe(true);
+      expect(
+        geometry.details.map((path) => [path.start, path.commands]),
+      ).toEqual([
+        [[0, 1], [{ type: "line", to: [120, 1] }]],
+        [[0, 79], [{ type: "line", to: [120, 79] }]],
+      ]);
+      expect(isCompositeShapeOpen("df-store-open")).toBe(false);
+    });
+
+    it("uses a fixed 7 radius clamped by the box", () => {
+      expect(geometryFor("df-external-entity", 120, 80).outline.start).toEqual([
+        7, 0,
+      ]);
+      expect(geometryFor("df-store-plain", 100, 10).outline.start).toEqual([
+        5, 0,
+      ]);
+    });
   });
 
   it("derives the element type from the shape id during creation", () => {

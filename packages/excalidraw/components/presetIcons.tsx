@@ -114,6 +114,11 @@ const getOutlineIconPaths = (id: ShapeId, theme: Theme): PresetIconPath[] => {
     : getPresetFill(defaults, theme);
   const paths: PresetIconPath[] = [];
 
+  // 开放式数据存储只画上下两条规则线；整框仅作为命中/绑定包络。
+  if (id === "df-store-open") {
+    return geometry.details.map((detail) => ({ ...detail }));
+  }
+
   if (geometry.fillFaces?.length) {
     for (const face of geometry.fillFaces) {
       paths.push({

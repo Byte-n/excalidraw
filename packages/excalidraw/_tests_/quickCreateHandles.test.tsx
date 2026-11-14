@@ -362,6 +362,18 @@ describe("quick create handles", () => {
     expect(getQuickCreateHandles(h.app)).toHaveLength(4);
   });
 
+  it("shows them for dataflow shapes too", () => {
+    const shape = API.createElement({
+      type: "df-process",
+      x: 100,
+      y: 100,
+      width: 152,
+      height: 137,
+    });
+    selectShape(shape);
+    expect(getQuickCreateHandles(h.app)).toHaveLength(4);
+  });
+
   it("stays hidden for non-target selections", () => {
     const cases: Record<string, NonDeletedExcalidrawElement> = {
       stickynote: API.createElement({ type: "stickynote", x: 100, y: 100 }),

@@ -32,9 +32,14 @@ type VerticalAlignKeys = keyof typeof VERTICAL_ALIGN;
 export type VerticalAlign = typeof VERTICAL_ALIGN[VerticalAlignKeys];
 export type FractionalIndex = string & { _brand: "franctionalIndex" };
 
+/** Secondary text container slot. Absent means the container's primary text. */
+export type TextContainerSlot = "title";
+
 export type BoundElement = Readonly<{
   id: string;
   type: "arrow" | "text" | "activation";
+  /** Present on a text binding that occupies a secondary container slot. */
+  slot?: TextContainerSlot;
 }>;
 
 type _ExcalidrawElementBase = Readonly<{
@@ -383,15 +388,32 @@ export type SequenceActivationLink = Readonly<{
   localY: number;
 }>;
 
-export type ShapeData = BasicShapeData | FlowchartShapeData | SequenceShapeData;
+/**
+ * Persisted data for a data-flow (Lark) shape; the seven `df-*` ids.
+ */
+export type DataflowShapeData =
+  | Readonly<{ id: "df-external-entity"; schemaVersion: 1 }>
+  | Readonly<{ id: "df-process"; schemaVersion: 1 }>
+  | Readonly<{ id: "df-process-round"; schemaVersion: 1 }>
+  | Readonly<{ id: "df-process-circle"; schemaVersion: 1 }>
+  | Readonly<{ id: "df-store-open"; schemaVersion: 1 }>
+  | Readonly<{ id: "df-store-left-label"; schemaVersion: 1 }>
+  | Readonly<{ id: "df-store-plain"; schemaVersion: 1 }>;
+
+export type ShapeData =
+  | BasicShapeData
+  | FlowchartShapeData
+  | SequenceShapeData
+  | DataflowShapeData;
 
 export type BasicShapeId = BasicShapeData["id"];
 export type FlowchartShapeId = FlowchartShapeData["id"];
 export type SequenceShapeId = SequenceShapeData["id"];
+export type DataflowShapeId = DataflowShapeData["id"];
 export type ShapeId = ShapeData["id"];
 
 /** Top-level element `type` values for the shape families. */
-export type ShapeElementType = "composite" | "flow" | "sequence";
+export type ShapeElementType = "composite" | "flow" | "sequence" | "dataflow";
 
 /** Optional text-fit fields shared by every shape element. */
 type ShapeTextFit = Readonly<{
@@ -423,10 +445,18 @@ export type ExcalidrawSequenceElement = _ExcalidrawElementBase &
   }> &
   ShapeTextFit;
 
+export type ExcalidrawDataflowElement = _ExcalidrawElementBase &
+  Readonly<{
+    type: "dataflow";
+    shape: DataflowShapeData;
+  }> &
+  ShapeTextFit;
+
 export type ExcalidrawShapeElement =
   | ExcalidrawCompositeElement
   | ExcalidrawFlowElement
-  | ExcalidrawSequenceElement;
+  | ExcalidrawSequenceElement
+  | ExcalidrawDataflowElement;
 
 export type ExcalidrawRectangleElement = Merge<
   ExcalidrawCompositeElement,
@@ -608,7 +638,7 @@ export type ExcalidrawGenericElement =
   | ExcalidrawShapeElement;
 
 export type ExcalidrawFlowchartNodeElement =
-  | ExcalidrawShapeElement
+  | Exclude<ExcalidrawShapeElement, ExcalidrawDataflowElement>
   | ExcalidrawStickyNoteElement;
 
 export type ExcalidrawRectanguloidElement =
@@ -681,6 +711,8 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
     textAlign: TextAlign;
     verticalAlign: VerticalAlign;
     containerId: ExcalidrawTextContainer["id"] | null;
+    /** Present when this text occupies a secondary container slot. */
+    containerSlot?: TextContainerSlot;
     originalText: string;
     /**
      * If `true` the width will fit the text. If `false`, the text will

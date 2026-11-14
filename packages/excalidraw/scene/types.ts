@@ -181,6 +181,7 @@ export type ElementShapes = {
   composite: Drawable | Drawable[];
   flow: Drawable | Drawable[];
   sequence: Drawable | Drawable[];
+  dataflow: Drawable | Drawable[];
   iframe: Drawable;
   embeddable: Drawable;
   freedraw: (Drawable | SVGPathString)[];

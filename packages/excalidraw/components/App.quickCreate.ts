@@ -79,7 +79,11 @@ import { getPresetSize } from "./app/createPresets";
 import { buildPresetElementsCentered } from "./app/presetPlacement";
 import { hasFrameMoved } from "./app/pointerFrame";
 import { getStrictTopmostElementAt } from "./app/pointerQuickCreate";
-import { getCatalogItem, isFlowchartShapeId } from "./presetCatalog";
+import {
+  getCatalogItem,
+  isDataflowShapeId,
+  isFlowchartShapeId,
+} from "./presetCatalog";
 
 import type { CreationIdentity } from "./app/createPresets";
 import type { PointerFrame } from "./app/pointerFrame";
@@ -2615,7 +2619,7 @@ export class AppQuickCreate {
   /**
    * 拖到空白松手：先不落地，弹出「插入图形」面板。面板定位用 pointerup 的客户区坐标
    * 减容器偏移（同 `contextMenu.ts` 的既有做法）；分组由源图形的 `shape.id` 推出
-   * （`fc-*` → flowchart，其余 → basic）。面板要读的最小信息同时镜像进 appState。
+   * （`df-*` → dataflow，`fc-*` → flowchart，其余 → basic）。面板要读的最小信息同时镜像进 appState。
    */
   private openInsertMenu = (
     source: NonDeletedExcalidrawElement,
@@ -2634,7 +2638,9 @@ export class AppQuickCreate {
       top: event.clientY - offsetTop,
       left: event.clientX - offsetLeft,
     };
-    const groupId: PresetCatalogGroupId = isFlowchartShapeId(source.shape.id)
+    const groupId: PresetCatalogGroupId = isDataflowShapeId(source.shape.id)
+      ? "dataflow"
+      : isFlowchartShapeId(source.shape.id)
       ? "flowchart"
       : "basic";
     this.pendingInsert = {

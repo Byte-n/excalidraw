@@ -13,6 +13,8 @@ import {
   isTableCellBackgroundText,
   isTextElement,
   isValidTextContainer,
+  isShapeWithId,
+  getTextContainerSlotAtPosition,
   refitSequenceFragmentRowBackgroundTexts,
 } from "@excalidraw/element";
 
@@ -53,6 +55,7 @@ import type {
   ExcalidrawTextElement,
   NonDeleted,
   NonDeletedExcalidrawElement,
+  TextContainerSlot,
 } from "@excalidraw/element/types";
 import type { ArrowEndpoint } from "@excalidraw/element";
 import type { Radians } from "@excalidraw/math";
@@ -77,6 +80,7 @@ export const getTextWysiwygSnappedToCenterPosition = (
   y: number,
   appState: AppState,
   container?: ExcalidrawTextContainer | null,
+  slot?: TextContainerSlot,
 ) => {
   if (container) {
     let elementCenterX = container.x + container.width / 2;
@@ -84,6 +88,7 @@ export const getTextWysiwygSnappedToCenterPosition = (
     const elementCenter = getContainerCenter(
       container,
       app.scene.getNonDeletedElementsMap(),
+      slot,
     );
     if (elementCenter) {
       elementCenterX = elementCenter.x;
@@ -202,6 +207,21 @@ export const handleTextWysiwyg = (
       return;
     }
     const container = getContainerElement(latestTextElement, elementsMap);
+    if (
+      latestTextElement.containerSlot === "title" &&
+      container &&
+      isShapeWithId(container, "df-process")
+    ) {
+      nextOriginalText = nextOriginalText.replace(/\s*[\r\n]+\s*/g, " ");
+      app.scene.mutateElement(latestTextElement, {
+        originalText: nextOriginalText,
+        isDeleted,
+      });
+      if (!isDeleted) {
+        redrawTextBoundingBox(latestTextElement, container, app.scene);
+      }
+      return;
+    }
     // When a composite/linear container's bound text is submitted empty or as
     // whitespace, the text must be deleted. handleSubmit has already detached
     // the text from the container's boundElements, so the composite/connector
@@ -403,6 +423,7 @@ export const isEditingTextContent = (app: Pick<TextApp, "state">) =>
 export const getSelectedTextElement = (
   app: TextApp,
   container?: ExcalidrawTextContainer | null,
+  slot?: TextContainerSlot,
 ): NonDeleted<ExcalidrawTextElement> | null => {
   const selectedElements = app.scene.getSelectedElements(app.state);
   if (selectedElements.length !== 1) {
@@ -419,6 +440,7 @@ export const getSelectedTextElement = (
   return getBoundTextElement(
     selectedElement,
     app.scene.getNonDeletedElementsMap(),
+    slot,
   ) as NonDeleted<ExcalidrawTextElement> | null;
 };
 
@@ -457,13 +479,12 @@ export const getSelectedTextEditingContainerAtPosition = (
     return undefined;
   }
 
-  const textElement = getSelectedTextElement(app, selectedElement);
   const hitTextElement = getTextElementAtPosition(
     app,
     sceneCoords.x,
     sceneCoords.y,
   );
-  return textElement && hitTextElement?.id === textElement.id
+  return hitTextElement?.containerId === selectedElement.id
     ? selectedElement
     : undefined;
 };
@@ -482,6 +503,10 @@ export const isHittingTextAutoResizeHandle = (
       app.scene.getNonDeletedElement(activeTextElement.containerId),
     )
   ) {
+    return false;
+  }
+  // Dataflow title text is a fixed single-line slot; it never resizes.
+  if (activeTextElement?.containerSlot === "title") {
     return false;
   }
   return !!(
@@ -569,6 +594,24 @@ export const startTextEditing = (
     sceneY = arrowEndpointBinding.anchor[1];
   }
 
+  const containerSlot =
+    container && !isLinearElement(container)
+      ? getTextContainerSlotAtPosition(container, sceneX, sceneY)
+      : null;
+  if (
+    container &&
+    insertAtParentCenter &&
+    (containerSlot === "title" || isShapeWithId(container, "df-process"))
+  ) {
+    const center = getContainerCenter(
+      container,
+      app.scene.getNonDeletedElementsMap(),
+      containerSlot ?? undefined,
+    );
+    sceneX = center.x;
+    sceneY = center.y;
+  }
+
   let parentCenterPosition =
     insertAtParentCenter &&
     app.getTextWysiwygSnappedToCenterPosition(
@@ -576,11 +619,13 @@ export const startTextEditing = (
       sceneY,
       app.state,
       container,
+      containerSlot ?? undefined,
     );
   if (container && parentCenterPosition) {
     const boundTextElementToContainer = getBoundTextElement(
       container,
       app.scene.getNonDeletedElementsMap(),
+      containerSlot ?? undefined,
     );
     if (!boundTextElementToContainer) {
       shouldBindToContainer = true;
@@ -588,7 +633,7 @@ export const startTextEditing = (
   }
   const existingTextElement = arrowEndpointBinding
     ? null
-    : app.getSelectedTextElement(container) ||
+    : app.getSelectedTextElement(container, containerSlot ?? undefined) ||
       (container && isLinearElement(container)
         ? getBoundTextElement(container, app.scene.getNonDeletedElementsMap())
         : null) ||
@@ -623,14 +668,25 @@ export const startTextEditing = (
       height: newHeight,
       width: newWidth,
     });
-    sceneX = container.x + newWidth / 2;
-    sceneY = container.y + newHeight / 2;
+    if (isShapeWithId(container, "df-process")) {
+      const center = getContainerCenter(
+        container,
+        app.scene.getNonDeletedElementsMap(),
+        containerSlot ?? undefined,
+      );
+      sceneX = center.x;
+      sceneY = center.y;
+    } else {
+      sceneX = container.x + newWidth / 2;
+      sceneY = container.y + newHeight / 2;
+    }
     if (parentCenterPosition) {
       parentCenterPosition = app.getTextWysiwygSnappedToCenterPosition(
         sceneX,
         sceneY,
         app.state,
         container,
+        containerSlot ?? undefined,
       );
     }
   }
@@ -703,6 +759,10 @@ export const startTextEditing = (
         arrowEndpointBinding?.verticalAlign ??
         (parentCenterPosition ? VERTICAL_ALIGN.MIDDLE : DEFAULT_VERTICAL_ALIGN),
       containerId: shouldBindToContainer ? container?.id : undefined,
+      containerSlot: shouldBindToContainer
+        ? containerSlot ?? undefined
+        : undefined,
+      autoResize: shouldBindToContainer && containerSlot ? false : undefined,
       labelPosition:
         shouldBindToContainer && container && isLinearElement(container)
           ? DEFAULT_BOUND_TEXT_LABEL_POSITION
@@ -724,6 +784,7 @@ export const startTextEditing = (
       boundElements: (container.boundElements || []).concat({
         type: "text",
         id: element.id,
+        ...(containerSlot ? { slot: containerSlot } : {}),
       }),
     });
   }

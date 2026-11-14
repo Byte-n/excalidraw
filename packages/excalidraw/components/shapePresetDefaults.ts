@@ -13,8 +13,8 @@ import {
 import type { GenericShapeId } from "./presetCatalog";
 
 /**
- * 预设图形的**默认填充色、描边色与默认尺寸**表（53 行：29 个基础图形 + 14 个
- * 流程图图形 + 10 个时序图形）。
+ * 预设图形的**默认填充色、描边色与默认尺寸**表（60 行：29 个基础图形 + 14 个
+ * 流程图图形 + 10 个时序图形 + 7 个数据流图形）。
  *
  * 取值来源是平台样本（Lark 侧 `composite`）——
  * `docs/lark-exmples/flow-chart/lark-examples-data.json` 与
@@ -68,7 +68,8 @@ export type ShapePresetDefault = {
  * （对应样本 `border_opacity`/`fill_opacity` 100）。圆角、字号、文本不动。
  *
  * 单个预设可用 `ShapePresetDefault.strokeColor` 覆盖描边色；10 个 `sc-*`
- * 时序图形按样本 `#000000` 取 `COLOR_PALETTE.black`，其余 43 个沿用本表。
+ * 时序图形与 7 个 `df-*` 数据流图形按样本 `#000000` 取
+ * `COLOR_PALETTE.black`，其余 43 个沿用本表。
  */
 export const SHAPE_PRESET_STYLE = {
   strokeColor: DEFAULT_NEW_ELEMENT_STROKE_COLOR, // #1f2329
@@ -79,9 +80,9 @@ export const SHAPE_PRESET_STYLE = {
 } as const;
 
 /**
- * 53 行默认值：key 用 `GenericShapeId`（`import type` 自 `./presetCatalog`），
+ * 60 行默认值：key 用 `GenericShapeId`（`import type` 自 `./presetCatalog`），
  * 目录里加预设而忘配默认值会直接 typecheck 失败。顺序为基础组（`BASIC_SHAPE_IDS`
- * 顺序）在前，14 个 `fc-*`、10 个 `sc-*` 依次在后。
+ * 顺序）在前，14 个 `fc-*`、10 个 `sc-*`、7 个 `df-*` 依次在后。
  */
 export const SHAPE_PRESET_DEFAULTS: Readonly<
   Record<GenericShapeId, ShapePresetDefault>
@@ -310,6 +311,50 @@ export const SHAPE_PRESET_DEFAULTS: Readonly<
     strokeColor: COLOR_PALETTE.black,
     width: 400,
     height: 240,
+  },
+
+  // —— 数据流图形（7）——
+  "df-external-entity": {
+    backgroundColor: COLOR_PALETTE.blue[0],
+    strokeColor: COLOR_PALETTE.black,
+    width: 120,
+    height: 80,
+  },
+  "df-process": {
+    backgroundColor: COLOR_PALETTE.green[0],
+    strokeColor: COLOR_PALETTE.black,
+    width: 152,
+    height: 137,
+  },
+  "df-process-round": {
+    backgroundColor: COLOR_PALETTE.green[0],
+    strokeColor: COLOR_PALETTE.black,
+    width: 120,
+    height: 120,
+  },
+  "df-process-circle": {
+    backgroundColor: COLOR_PALETTE.green[0],
+    strokeColor: COLOR_PALETTE.black,
+    width: 80,
+    height: 80,
+  },
+  "df-store-open": {
+    backgroundColor: COLOR_PALETTE.transparent,
+    strokeColor: COLOR_PALETTE.black,
+    width: 120,
+    height: 80,
+  },
+  "df-store-left-label": {
+    backgroundColor: COLOR_PALETTE.violet[0],
+    strokeColor: COLOR_PALETTE.black,
+    width: 156,
+    height: 50,
+  },
+  "df-store-plain": {
+    backgroundColor: COLOR_PALETTE.violet[0],
+    strokeColor: COLOR_PALETTE.black,
+    width: 156,
+    height: 50,
   },
 };
 

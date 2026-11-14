@@ -46,6 +46,9 @@ import {
   isInitializedImageElement,
   isNonDeletedElement,
   isStickyNoteElement,
+  isShapeWithId,
+  getContainerCenter,
+  getTextContainerSlotAtPosition,
   makeNextSelectedElementIds,
   transformElements,
   updateBoundElements,
@@ -1158,6 +1161,15 @@ export const handleTextOnPointerDown = (
       if (labelCenter) {
         sceneX = labelCenter.x;
         sceneY = labelCenter.y;
+      } else if (isShapeWithId(element, "df-process")) {
+        const slot = getTextContainerSlotAtPosition(element, sceneX, sceneY);
+        const center = getContainerCenter(
+          element,
+          app.scene.getNonDeletedElementsMap(),
+          slot ?? undefined,
+        );
+        sceneX = center.x;
+        sceneY = center.y;
       } else {
         sceneX = element.x + element.width / 2;
         sceneY = element.y + element.height / 2;

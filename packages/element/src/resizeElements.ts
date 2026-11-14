@@ -679,6 +679,19 @@ const rotateSingleElement = (
     }
   }
 
+  const titleText = getBoundTextElement(
+    element,
+    scene.getNonDeletedElementsMap(),
+    "title",
+  );
+  if (titleText && !isLinearElement(element)) {
+    redrawTextBoundingBox(
+      titleText,
+      scene.getNonDeletedElement(element.id) ?? element,
+      scene,
+    );
+  }
+
   if (isSequenceFragmentElement(element)) {
     const live = scene.getNonDeletedElement(element.id);
     if (live) {
@@ -938,6 +951,15 @@ const rotateMultipleElements = (
           y,
           angle: normalizeRadians((centerAngle + origAngle) as Radians),
         });
+      }
+
+      const titleText = getBoundTextElement(element, elementsMap, "title");
+      if (titleText && !isLinearElement(element)) {
+        redrawTextBoundingBox(
+          titleText,
+          scene.getNonDeletedElement(element.id) ?? element,
+          scene,
+        );
       }
     }
   }
@@ -1496,12 +1518,9 @@ export const resizeSingleElement = (
           shape: fit.shape,
           ...(heightDelta !== 0 && angle
             ? {
-                x:
-                  resizedFragment.x +
-                  (Math.sin(angle) * heightDelta) / 2,
+                x: resizedFragment.x + (Math.sin(angle) * heightDelta) / 2,
                 y:
-                  resizedFragment.y +
-                  ((Math.cos(angle) - 1) * heightDelta) / 2,
+                  resizedFragment.y + ((Math.cos(angle) - 1) * heightDelta) / 2,
               }
             : {}),
         });
@@ -2242,7 +2261,8 @@ export const resizeMultipleElements = (
         // geometry instead, as in the single-table gesture
         if (
           !isStickyNoteElement(element) &&
-          getBoundTextElement(element, elementsMap)
+          (getBoundTextElement(element, elementsMap) ||
+            getBoundTextElement(element, elementsMap, "title"))
         ) {
           handleBindTextResize(
             element as NonDeletedExcalidrawElement,

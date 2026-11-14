@@ -85,6 +85,7 @@ export const distanceToElement = (
     case "composite":
     case "flow":
     case "sequence":
+    case "dataflow":
       return element.shape.id === "ellipse"
         ? distanceToEllipseElement(
             element as ExcalidrawEllipseElement,

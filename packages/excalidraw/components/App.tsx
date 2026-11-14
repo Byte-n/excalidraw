@@ -79,6 +79,7 @@ import type {
   MagicGenerationData,
   NonDeleted,
   NonDeletedExcalidrawElement,
+  TextContainerSlot,
 } from "@excalidraw/element/types";
 
 import type {
@@ -1497,8 +1498,9 @@ class App extends React.Component<AppProps, AppState> {
 
   public getSelectedTextElement(
     container?: ExcalidrawTextContainer | null,
+    slot?: TextContainerSlot,
   ): NonDeleted<ExcalidrawTextElement> | null {
-    return textController.getSelectedTextElement(this, container);
+    return textController.getSelectedTextElement(this, container, slot);
   }
 
   private getSelectedTextEditingContainerAtPosition(
@@ -2777,6 +2779,7 @@ class App extends React.Component<AppProps, AppState> {
     y: number,
     appState: AppState,
     container?: ExcalidrawTextContainer | null,
+    slot?: TextContainerSlot,
   ) {
     return textController.getTextWysiwygSnappedToCenterPosition(
       this,
@@ -2784,6 +2787,7 @@ class App extends React.Component<AppProps, AppState> {
       y,
       appState,
       container,
+      slot,
     );
   }
 

@@ -3,6 +3,7 @@ import {
   TABLE_PRESET_IDS,
   supportsFill,
   BASIC_SHAPE_IDS,
+  DATAFLOW_SHAPE_IDS,
   FLOWCHART_SHAPE_IDS,
   SEQUENCE_SHAPE_IDS,
 } from "@excalidraw/element";
@@ -67,6 +68,7 @@ export type PresetCatalogItem = {
 export type PresetCatalogGroupId =
   | "basic"
   | "flowchart"
+  | "dataflow"
   | "sequence"
   | "sticky"
   | "frame"
@@ -86,12 +88,17 @@ export type PresetCatalogGroup = {
  */
 export type {
   BasicShapeId,
+  DataflowShapeId,
   FlowchartShapeId,
   SequenceShapeId,
 } from "@excalidraw/element";
-export { isFlowchartShapeId, isSequenceShapeId } from "@excalidraw/element";
+export {
+  isDataflowShapeId,
+  isFlowchartShapeId,
+  isSequenceShapeId,
+} from "@excalidraw/element";
 
-/** The full 53-id shape union (basic + flowchart + sequence). */
+/** The full 60-id shape union (basic + flowchart + sequence + dataflow). */
 export type GenericShapeId = ShapeId;
 
 export { isShapeId as isGenericShapeId } from "@excalidraw/element";
@@ -116,6 +123,16 @@ const BASIC_ITEMS: readonly PresetCatalogItem[] = BASIC_SHAPE_IDS.map(
 );
 
 const FLOWCHART_ITEMS: readonly PresetCatalogItem[] = FLOWCHART_SHAPE_IDS.map(
+  (id): PresetCatalogItem => ({
+    id,
+    titleKey: `toolBar.${id}`,
+    fillable: supportsFill(id),
+    getIcon: (theme) => getPresetShapeIcon(id, theme),
+    creation: { kind: "shape", tool: "rectangle", shapeId: id },
+  }),
+);
+
+const DATAFLOW_ITEMS: readonly PresetCatalogItem[] = DATAFLOW_SHAPE_IDS.map(
   (id): PresetCatalogItem => ({
     id,
     titleKey: `toolBar.${id}`,
@@ -246,7 +263,7 @@ const MINDMAP_ITEMS: readonly PresetCatalogItem[] = [
 ];
 
 /**
- * 形状/预设的**唯一**目录，七个分组按抽屉的展示顺序排列。顶部 popover 与
+ * 形状/预设的**唯一**目录，八个分组按抽屉的展示顺序排列。顶部 popover 与
  * 抽屉都从这里取数，禁止各渲染点自维护清单。
  */
 export const SHAPE_CATALOG: readonly PresetCatalogGroup[] = [
@@ -255,6 +272,11 @@ export const SHAPE_CATALOG: readonly PresetCatalogGroup[] = [
     id: "flowchart",
     titleKey: "shapeDrawer.flowchart",
     items: FLOWCHART_ITEMS,
+  },
+  {
+    id: "dataflow",
+    titleKey: "shapeDrawer.dataflow",
+    items: DATAFLOW_ITEMS,
   },
   {
     id: "sequence",
@@ -267,7 +289,7 @@ export const SHAPE_CATALOG: readonly PresetCatalogGroup[] = [
   { id: "mindmap", titleKey: "shapeDrawer.mindmap", items: MINDMAP_ITEMS },
 ];
 
-/** 七个分组的全部条目，按目录顺序展平 —— 放置/拖拽按 id 查项时用 */
+/** 八个分组的全部条目，按目录顺序展平 —— 放置/拖拽按 id 查项时用 */
 export const ALL_PRESET_ITEMS: readonly PresetCatalogItem[] =
   SHAPE_CATALOG.flatMap((group) => group.items);
 

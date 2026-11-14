@@ -58,6 +58,7 @@ const TOOL_CONFIG_BAR_TOOLS: ReadonlySet<string> = new Set([
  * - 单元格选区：锚定所选单元格（范围并集），而非整张表格
  * - 文本编辑态：选区此时为空，改为锚定被编辑文本（单元格背景文本锚定所属
  *   单元格，容器文本锚定其容器）
+ * - 标题重命名态（画框/表格）：整体隐藏，画布标题输入接管交互
  * - 无选中·工具配置态：固定视口顶部居中（主工具条下方 12px）
  * - 裁剪/编辑节点模式：整体替换为模式条（裁剪拖动时不隐藏）
  * - 全锁定选区：内联「已锁定 + 解锁」
@@ -97,6 +98,7 @@ export const FloatingShapeActions = () => {
   const visible =
     editorInterface.formFactor !== "phone" &&
     !appState.zenModeEnabled &&
+    !appState.editingElementTitle &&
     showSelectedShapeActions(appState, elements) &&
     (hasActionTarget || TOOL_CONFIG_BAR_TOOLS.has(appState.activeTool.type));
 

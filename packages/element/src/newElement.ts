@@ -33,6 +33,8 @@ import {
 import {
   getBoundTextMaxHeight,
   getBoundTextMaxWidth,
+  getDataflowProcessTitleLayout,
+  isDataflowTitleText,
   truncateTextToBounds,
 } from "./textElement";
 import { normalizeText, measureText } from "./textMeasurements";
@@ -45,6 +47,7 @@ import {
   getCompositeShapeTextFitMode,
   isBasicShapeId,
   isCompositeShapeOpen,
+  isDataflowShapeId,
   isFlowchartShapeId,
   isShapeElement,
 } from "./compositeShape";
@@ -90,12 +93,15 @@ import type {
   BasicShapeData,
   FlowchartShapeData,
   SequenceShapeData,
+  DataflowShapeData,
   ShapeId,
   ShapeElementType,
   ExcalidrawShapeElement,
   ExcalidrawCompositeElement,
   ExcalidrawFlowElement,
   ExcalidrawSequenceElement,
+  ExcalidrawDataflowElement,
+  TextContainerSlot,
   ExcalidrawSelectionElement,
   ExcalidrawTableElement,
 } from "./types";
@@ -229,6 +235,8 @@ const isBasicShapeData = (shape: ShapeData): shape is BasicShapeData =>
   isBasicShapeId(shape.id);
 const isFlowchartShapeData = (shape: ShapeData): shape is FlowchartShapeData =>
   isFlowchartShapeId(shape.id);
+const isDataflowShapeData = (shape: ShapeData): shape is DataflowShapeData =>
+  isDataflowShapeId(shape.id);
 
 export const newElement = (
   opts:
@@ -245,7 +253,8 @@ export const newElement = (
   const shape =
     opts.type === "composite" ||
     opts.type === "flow" ||
-    opts.type === "sequence"
+    opts.type === "sequence" ||
+    opts.type === "dataflow"
       ? (assertShapeElementType(opts.type, opts.shape), opts.shape)
       : buildShapeData(opts.type);
   const baseOpts = {
@@ -282,6 +291,14 @@ export const newElement = (
     return {
       ..._newElementBase<ExcalidrawFlowElement>("flow", baseOpts),
       type: "flow",
+      shape,
+      ...textFit,
+    };
+  }
+  if (isDataflowShapeData(shape)) {
+    return {
+      ..._newElementBase<ExcalidrawDataflowElement>("dataflow", baseOpts),
+      type: "dataflow",
       shape,
       ...textFit,
     };
@@ -573,6 +590,7 @@ export const newTextElement = (
     textAlign?: TextAlign;
     verticalAlign?: VerticalAlign;
     containerId?: ExcalidrawTextContainer["id"] | null;
+    containerSlot?: TextContainerSlot;
     lineHeight?: ExcalidrawTextElement["lineHeight"];
     autoResize?: ExcalidrawTextElement["autoResize"];
     labelPosition?: ExcalidrawTextElement["labelPosition"];
@@ -608,6 +626,7 @@ export const newTextElement = (
     width: metrics.width,
     height: metrics.height,
     containerId: opts.containerId || null,
+    ...(opts.containerSlot ? { containerSlot: opts.containerSlot } : {}),
     originalText: opts.originalText ?? text,
     autoResize: opts.autoResize ?? true,
     lineHeight,
@@ -766,6 +785,20 @@ export const refreshTextDimensions = (
 ) => {
   if (textElement.isDeleted) {
     return;
+  }
+  if (container && isDataflowTitleText(container, textElement)) {
+    const layout = getDataflowProcessTitleLayout(container, textElement);
+    const dimensions = getAdjustedDimensions(
+      textElement,
+      elementsMap,
+      layout.text,
+    );
+    return {
+      text: layout.text,
+      ...dimensions,
+      width: layout.width,
+      height: layout.height,
+    };
   }
   if (container || !textElement.autoResize) {
     const font = getFontString(textElement);

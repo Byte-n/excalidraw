@@ -68,12 +68,14 @@ export {
   BASIC_SHAPE_IDS,
   FLOWCHART_SHAPE_IDS,
   SEQUENCE_SHAPE_IDS,
+  DATAFLOW_SHAPE_IDS,
   ELEMENT_TYPE_BY_FAMILY,
   shapeFamily,
   shapeElementType,
   isBasicShapeId,
   isFlowchartShapeId,
   isSequenceShapeId,
+  isDataflowShapeId,
   isShapeElementType,
 } from "./compositeShape/family";
 
@@ -83,7 +85,20 @@ export type {
   BasicShapeId,
   FlowchartShapeId,
   SequenceShapeId,
+  DataflowShapeId,
 } from "./types";
+
+export {
+  DATAFLOW_CORNER_RADIUS,
+  DATAFLOW_RULE_INSET,
+  DATAFLOW_PROCESS_TITLE_HEIGHT,
+  DATAFLOW_STORE_LABEL_WIDTH,
+  DATAFLOW_STORE_OPEN_RULE_INSET,
+  getDataflowProcessTitleRule,
+  getDataflowProcessTitleTextBounds,
+  getDataflowStoreLeftLabelRule,
+  getDataflowStoreOpenRules,
+} from "./compositeShape/dataFlowOutline";
 
 export {
   SEQUENCE_DEFAULT_POLE_LENGTH,

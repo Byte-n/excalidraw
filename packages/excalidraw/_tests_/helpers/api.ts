@@ -414,6 +414,13 @@ export class API {
       case "sc-lifeline-collection":
       case "sc-activation":
       case "sc-fragment":
+      case "df-external-entity":
+      case "df-process":
+      case "df-process-round":
+      case "df-process-circle":
+      case "df-store-open":
+      case "df-store-left-label":
+      case "df-store-plain":
         element = rest.shape
           ? newElement({
               type: shapeElementType(rest.shape.id),
@@ -442,6 +449,13 @@ export class API {
       case "sequence":
         element = newElement({
           type: "sequence",
+          shape: rest.shape!,
+          ...base,
+        });
+        break;
+      case "dataflow":
+        element = newElement({
+          type: "dataflow",
           shape: rest.shape!,
           ...base,
         });

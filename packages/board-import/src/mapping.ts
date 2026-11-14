@@ -73,6 +73,17 @@ const FLOWCHART_SHAPE_BY_LARK: Record<string, ShapeData> = {
   flow_chart_mq: buildShapeData("fc-circle"),
 };
 
+// 数据流图形（7 项，来自 data-flow 映射表）。
+const DATA_FLOW_SHAPE_BY_LARK: Record<string, ShapeData> = {
+  data_flow_round_rect: buildShapeData("df-external-entity"),
+  data_flow_round_rect2: buildShapeData("df-process"),
+  data_flow_round_rect3: buildShapeData("df-process-round"),
+  data_flow_ellipse: buildShapeData("df-process-circle"),
+  data_store: buildShapeData("df-store-open"),
+  data_store2: buildShapeData("df-store-left-label"),
+  data_store3: buildShapeData("df-store-plain"),
+};
+
 // 未知 / 未登记图形类型的降级目标：普通矩形，保证图形仍可编辑。
 export const FALLBACK_SHAPE: ShapeData = buildShapeData("rectangle");
 
@@ -84,7 +95,9 @@ export function resolveCompositeShape(
     return undefined;
   }
   const shape =
-    BASIC_SHAPE_BY_LARK[shapeType] ?? FLOWCHART_SHAPE_BY_LARK[shapeType];
+    BASIC_SHAPE_BY_LARK[shapeType] ??
+    FLOWCHART_SHAPE_BY_LARK[shapeType] ??
+    DATA_FLOW_SHAPE_BY_LARK[shapeType];
   if (shape === undefined || !isShapeId(shape.id)) {
     return undefined;
   }

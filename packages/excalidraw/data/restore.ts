@@ -65,7 +65,11 @@ import {
   normalizeStickyNoteFontSize,
   normalizeStickyNoteStrokeColor,
 } from "@excalidraw/element";
-import { getBoundTextElement, getContainerElement } from "@excalidraw/element";
+import {
+  getBoundTextElement,
+  getContainerElement,
+  isDataflowTitleText,
+} from "@excalidraw/element";
 import { isStickyNoteElement } from "@excalidraw/element";
 import {
   isSequenceFragmentElement,
@@ -705,6 +709,7 @@ export const restoreElement = (
     case "composite":
     case "flow":
     case "sequence":
+    case "dataflow":
       assertShapeElementType(element.type, element.shape);
       return normalizeSequenceFragmentGeometry(
         normalizeSequenceLifelineGeometry(
@@ -1041,7 +1046,8 @@ export const restoreElements = <T extends ExcalidrawElement>(
       if (
         element.type === "composite" ||
         element.type === "flow" ||
-        element.type === "sequence"
+        element.type === "sequence" ||
+        element.type === "dataflow"
       ) {
         assertShapeElementType(element.type, element.shape);
       } else if (element.type === "mindmap-node") {
@@ -1115,14 +1121,21 @@ export const restoreElements = <T extends ExcalidrawElement>(
       // sticky labels are refitted together with their note below
       !isStickyNoteBoundText(element, restoredElementsMap)
     ) {
+      const container = getContainerElement(element, restoredElementsMap);
       Object.assign(
         element,
-        refreshTextDimensions(
-          element,
-          getContainerElement(element, restoredElementsMap),
-          restoredElementsMap,
-        ),
+        refreshTextDimensions(element, container, restoredElementsMap),
       );
+      if (container && isDataflowTitleText(container, element)) {
+        Object.assign(
+          element,
+          computeBoundTextPosition(
+            container,
+            element as ExcalidrawTextElementWithContainer,
+            restoredElementsMap,
+          ),
+        );
+      }
     }
 
     if (isLinearElement(element)) {

@@ -17,12 +17,13 @@ const PALETTE_COLORS = Object.values(COLOR_PALETTE).flatMap((value) =>
 );
 
 describe("SHAPE_PRESET_DEFAULTS", () => {
-  it("键集合 == 目录 basic + flowchart + sequence 的图形 id 集合（加预设忘配默认值会红）", () => {
+  it("键集合 == 目录 basic + flowchart + dataflow + sequence 的图形 id 集合（加预设忘配默认值会红）", () => {
     // 同一图形可以有多个抽屉预设（组合片段的 condition / condition-else），
     // 它们共用同一份默认值，所以按 `creation.shapeId` 去重后比对。
     const catalogShapeIds = [
       ...getCatalogGroup("basic").items,
       ...getCatalogGroup("flowchart").items,
+      ...getCatalogGroup("dataflow").items,
       ...getCatalogGroup("sequence").items,
     ].flatMap((item) =>
       item.creation.kind === "shape" ? [item.creation.shapeId] : [],
@@ -58,13 +59,15 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
     expect(offPalette).toEqual([]);
   });
 
-  it("只有 10 个时序图形覆盖描边色（其余沿用规范样式）", () => {
+  it("只有 17 个时序/数据流图形覆盖描边色（其余沿用规范样式）", () => {
     const overridden = Object.entries(SHAPE_PRESET_DEFAULTS)
       .filter(([, preset]) => preset.strokeColor !== undefined)
       .map(([id, preset]) => [id, preset.strokeColor] as const);
 
-    expect(overridden).toHaveLength(10);
-    expect(overridden.every(([id]) => id.startsWith("sc-"))).toBe(true);
+    expect(overridden).toHaveLength(17);
+    expect(
+      overridden.every(([id]) => id.startsWith("sc-") || id.startsWith("df-")),
+    ).toBe(true);
     expect(new Set(overridden.map(([, color]) => color))).toEqual(
       new Set([COLOR_PALETTE.black]),
     );
@@ -81,7 +84,7 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
   });
 
   /**
-   * 53 行逐条对照样本：填色为**映射后**的色板值、尺寸取样本取整。表里写的是
+   * 60 行逐条对照样本：填色为**映射后**的色板值、尺寸取样本取整。表里写的是
    * 字面量（不是 `COLOR_PALETTE.*`），所以有人悄悄改实现表会在这一条上红。
    */
   const ROWS: {
@@ -297,11 +300,62 @@ describe("SHAPE_PRESET_DEFAULTS", () => {
       width: 400,
       height: 240,
     },
+
+    // —— 数据流图形（7）——
+    {
+      id: "df-external-entity",
+      backgroundColor: "#e8f0f8",
+      strokeColor: "#1e1e1e",
+      width: 120,
+      height: 80,
+    },
+    {
+      id: "df-process",
+      backgroundColor: "#ebfbee",
+      strokeColor: "#1e1e1e",
+      width: 152,
+      height: 137,
+    },
+    {
+      id: "df-process-round",
+      backgroundColor: "#ebfbee",
+      strokeColor: "#1e1e1e",
+      width: 120,
+      height: 120,
+    },
+    {
+      id: "df-process-circle",
+      backgroundColor: "#ebfbee",
+      strokeColor: "#1e1e1e",
+      width: 80,
+      height: 80,
+    },
+    {
+      id: "df-store-open",
+      backgroundColor: "transparent",
+      strokeColor: "#1e1e1e",
+      width: 120,
+      height: 80,
+    },
+    {
+      id: "df-store-left-label",
+      backgroundColor: "#f0ebfc",
+      strokeColor: "#1e1e1e",
+      width: 156,
+      height: 50,
+    },
+    {
+      id: "df-store-plain",
+      backgroundColor: "#f0ebfc",
+      strokeColor: "#1e1e1e",
+      width: 156,
+      height: 50,
+    },
   ];
 
-  it("恰好 53 行（29 基础 + 14 流程图 + 10 时序），与表本身逐条对照", () => {
-    expect(ROWS).toHaveLength(53);
-    expect(Object.keys(SHAPE_PRESET_DEFAULTS)).toHaveLength(53);
+  it("恰好 60 行（29 基础 + 14 流程图 + 10 时序 + 7 数据流），与表本身逐条对照", () => {
+    expect(ROWS).toHaveLength(60);
+    expect(Object.keys(SHAPE_PRESET_DEFAULTS)).toHaveLength(60);
   });
 
   it.each(ROWS)(

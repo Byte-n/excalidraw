@@ -692,6 +692,7 @@ export const convertToExcalidrawElements = (
       case "composite":
       case "flow":
       case "sequence":
+      case "dataflow":
       case "rectangle":
       case "ellipse":
       case "diamond":
@@ -744,11 +745,19 @@ export const convertToExcalidrawElements = (
       case "sc-lifeline-object":
       case "sc-lifeline-collection":
       case "sc-activation":
-      case "sc-fragment": {
+      case "sc-fragment":
+      case "df-external-entity":
+      case "df-process":
+      case "df-process-round":
+      case "df-process-circle":
+      case "df-store-open":
+      case "df-store-left-label":
+      case "df-store-plain": {
         const shapeId =
           element.type === "composite" ||
           element.type === "flow" ||
-          element.type === "sequence"
+          element.type === "sequence" ||
+          element.type === "dataflow"
             ? element.shape.id
             : element.type;
         const sequenceSize = isSequenceLifelineShapeId(shapeId)
@@ -767,7 +776,8 @@ export const convertToExcalidrawElements = (
         excalidrawElement =
           element.type === "composite" ||
           element.type === "flow" ||
-          element.type === "sequence"
+          element.type === "sequence" ||
+          element.type === "dataflow"
             ? newElement({
                 ...element,
                 type: element.type,
@@ -1089,6 +1099,7 @@ export const convertToExcalidrawElements = (
       case "composite":
       case "flow":
       case "sequence":
+      case "dataflow":
       case "rectangle":
       case "ellipse":
       case "diamond":
@@ -1140,6 +1151,13 @@ export const convertToExcalidrawElements = (
       case "sc-lifeline-collection":
       case "sc-activation":
       case "sc-fragment":
+      case "df-external-entity":
+      case "df-process":
+      case "df-process-round":
+      case "df-process-circle":
+      case "df-store-open":
+      case "df-store-left-label":
+      case "df-store-plain":
       case "stickynote":
       case "arrow": {
         if (element.label?.text) {

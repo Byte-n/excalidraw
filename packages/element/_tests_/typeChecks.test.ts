@@ -8,7 +8,11 @@ import {
   assertValidContainerRefs,
   frameLikeContainerRef,
   hasBoundTextElement,
+  isBindableElement,
+  isEligibleFrameChildType,
+  isFlowchartNodeElement,
   isLinearElement,
+  isTextBindableContainer,
   isTextElement,
 } from "../src/typeChecks";
 
@@ -23,6 +27,19 @@ import type {
 } from "../src/types";
 
 describe("Test TypeChecks", () => {
+  it("treats dataflow shapes as generic text/binding containers, not flowchart nodes", () => {
+    const dataflow = API.createElement({
+      type: "df-process",
+      width: 152,
+      height: 137,
+    });
+
+    expect(isBindableElement(dataflow)).toBe(true);
+    expect(isTextBindableContainer(dataflow)).toBe(true);
+    expect(isFlowchartNodeElement(dataflow)).toBe(false);
+    expect(isEligibleFrameChildType("dataflow")).toBe(true);
+  });
+
   it("only treats nullish frame IDs as no parent", () => {
     expect(frameLikeContainerRef(null)).toBeUndefined();
     expect(frameLikeContainerRef(undefined)).toBeUndefined();

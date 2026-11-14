@@ -28,6 +28,7 @@ import type {
 } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
+import { exportToSvg } from "../scene/export";
 import { API } from "../_tests_/helpers/api";
 import { Keyboard, Pointer, UI } from "../_tests_/helpers/ui";
 import { getTextEditor, updateTextEditor } from "../_tests_/queries/dom";
@@ -2300,6 +2301,146 @@ describe("textWysiwyg", () => {
       Keyboard.undo();
 
       expect(h.elements.filter((el) => !el.isDeleted)).toHaveLength(0);
+    });
+  });
+
+  describe("dataflow df-process dual text slots", () => {
+    beforeEach(async () => {
+      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      API.setElements([]);
+    });
+
+    const createProcess = () =>
+      API.createElement({
+        type: "df-process",
+        x: 100,
+        y: 100,
+        width: 152,
+        height: 137,
+      });
+
+    it("creates a single-line title that truncates without resizing the container", async () => {
+      const process = createProcess();
+      API.setElements([process]);
+
+      mouse.doubleClickAt(process.x + process.width / 2, process.y + 14);
+      mouse.down();
+      const editor = await getTextEditor();
+      mouse.up();
+
+      updateTextEditor(
+        editor,
+        "A very long process title\nthat will certainly overflow the header",
+      );
+      Keyboard.exitTextEditor(editor);
+
+      const title = h.elements.find(
+        (element) =>
+          element.type === "text" && element.containerSlot === "title",
+      ) as ExcalidrawTextElementWithContainer;
+
+      expect(title).toBeDefined();
+      expect(title.containerId).toBe(process.id);
+      expect(process.boundElements).toContainEqual({
+        id: title.id,
+        type: "text",
+        slot: "title",
+      });
+      expect(title.text).toContain("…");
+      expect(title.text).not.toContain("\n");
+      expect(title.originalText).toBe(
+        "A very long process title that will certainly overflow the header",
+      );
+      expect(title.autoResize).toBe(false);
+      expect(title.height).toBeCloseTo(
+        getLineHeightInPx(title.fontSize, title.lineHeight),
+      );
+      expect(process.width).toBe(152);
+      expect(process.height).toBe(137);
+    });
+
+    it("commits the title on Enter instead of inserting a newline", async () => {
+      const process = createProcess();
+      API.setElements([process]);
+
+      mouse.doubleClickAt(process.x + process.width / 2, process.y + 14);
+      mouse.down();
+      const editor = await getTextEditor();
+      mouse.up();
+
+      updateTextEditor(editor, "Top");
+      fireEvent.keyDown(editor, { key: KEYS.ENTER });
+
+      expect(await getTextEditor({ waitForEditor: false })).toBe(null);
+      const title = h.elements.find(
+        (element) =>
+          element.type === "text" && element.containerSlot === "title",
+      ) as ExcalidrawTextElement;
+      expect(title.originalText).toBe("Top");
+      expect(title.text).toBe("Top");
+    });
+
+    it("renders the committed title", async () => {
+      const process = createProcess();
+      API.setElements([process]);
+
+      mouse.doubleClickAt(process.x + process.width / 2, process.y + 14);
+      mouse.down();
+      const editor = await getTextEditor();
+      mouse.up();
+
+      updateTextEditor(editor, "Top");
+      Keyboard.exitTextEditor(editor);
+
+      const svg = await exportToSvg(
+        h.app.scene.getNonDeletedElements(),
+        {
+          exportBackground: false,
+          viewBackgroundColor: h.state.viewBackgroundColor,
+        },
+        null,
+      );
+
+      expect(svg.textContent).toContain("Top");
+    });
+
+    it("edits the body independently and keeps the title", async () => {
+      const process = createProcess();
+      API.setElements([process]);
+
+      mouse.doubleClickAt(process.x + process.width / 2, process.y + 14);
+      mouse.down();
+      let editor = await getTextEditor();
+      mouse.up();
+      updateTextEditor(editor, "Title");
+      Keyboard.exitTextEditor(editor);
+
+      mouse.doubleClickAt(process.x + process.width / 2, process.y + 82);
+      mouse.down();
+      editor = await getTextEditor();
+      mouse.up();
+      updateTextEditor(editor, "Body\nlabel");
+      Keyboard.exitTextEditor(editor);
+
+      const texts = h.elements.filter(
+        (element) => element.type === "text" && !element.isDeleted,
+      ) as ExcalidrawTextElementWithContainer[];
+      const title = texts.find((text) => text.containerSlot === "title")!;
+      const body = texts.find((text) => !text.containerSlot)!;
+
+      expect(title.originalText).toBe("Title");
+      expect(body).toBeDefined();
+      expect(body.containerId).toBe(process.id);
+      expect(body.originalText).toBe("Body\nlabel");
+      expect(process.boundElements).toContainEqual({
+        id: title.id,
+        type: "text",
+        slot: "title",
+      });
+      expect(process.boundElements).toContainEqual({
+        id: body.id,
+        type: "text",
+      });
     });
   });
 });

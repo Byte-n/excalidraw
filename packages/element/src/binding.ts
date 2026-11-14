@@ -2049,9 +2049,13 @@ const newBoundElements = (
   nextBoundElements.push(
     ...elementsToAdd.map(
       (x) =>
-        ({ id: x.id, type: x.type } as
-          | ExcalidrawArrowElement
-          | ExcalidrawTextElement),
+        ({
+          id: x.id,
+          type: x.type,
+          ...(isTextElement(x) && x.containerSlot
+            ? { slot: x.containerSlot }
+            : {}),
+        } as ExcalidrawArrowElement | ExcalidrawTextElement),
     ),
   );
 
@@ -2242,8 +2246,12 @@ export class BoundElement {
         }
 
         if (isTextElement(boundElement)) {
-          if (!bindableElement.boundElements?.find((x) => x.type === "text")) {
-            // rebind only if there is no other text bound already
+          if (
+            !bindableElement.boundElements?.find(
+              (x) => x.type === "text" && x.slot === boundElement.containerSlot,
+            )
+          ) {
+            // rebind only if there is no other text bound to the same slot
             updateElementWith(bindableElement, {
               boundElements: newBoundElements(
                 bindableElement.boundElements,
@@ -2353,10 +2361,16 @@ export class BindableElement {
 
         if (isTextElement(boundElement)) {
           const boundElements = bindableElement.boundElements?.slice() ?? [];
-          // check if this is the last element in the array, if not, there is an previously bound text which should be unbound
+          // check if this is the last element in the array for its slot, if
+          // not, there is a previously bound text in the same slot which
+          // should be unbound
           if (
-            boundElements.reverse().find((x) => x.type === "text")?.id ===
-            boundElement.id
+            boundElements
+              .reverse()
+              .find(
+                (x) =>
+                  x.type === "text" && x.slot === boundElement.containerSlot,
+              )?.id === boundElement.id
           ) {
             if (boundElement.containerId !== bindableElement.id) {
               // rebind if not bound already!

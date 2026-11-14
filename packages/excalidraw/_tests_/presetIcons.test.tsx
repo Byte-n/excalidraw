@@ -55,6 +55,26 @@ describe("presetIcons", () => {
     }
   });
 
+  it("开放式数据存储图标是两条无填充横线", () => {
+    const svg = renderSvg(getPresetShapeIcon("df-store-open", THEME.LIGHT));
+    const paths = Array.from(svg?.querySelectorAll("path") ?? []);
+
+    expect(paths).toHaveLength(2);
+    for (const path of paths) {
+      expect(path.getAttribute("fill")).toBe("none");
+    }
+  });
+
+  it("处理图形图标画出标题分隔线", () => {
+    const svg = renderSvg(getPresetShapeIcon("df-process", THEME.LIGHT));
+    const paths = Array.from(svg?.querySelectorAll("path") ?? []);
+
+    expect(paths).toHaveLength(2);
+    expect(paths[0].getAttribute("fill")).toBe(
+      SHAPE_PRESET_DEFAULTS["df-process"].backgroundColor,
+    );
+  });
+
   it("组合片段 else 预设图标画出虚线行分隔", () => {
     const { container } = render(
       <>

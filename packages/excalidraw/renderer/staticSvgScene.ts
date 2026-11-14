@@ -25,7 +25,11 @@ import {
   getEmbedLink,
 } from "@excalidraw/element";
 import { LinearElementEditor } from "@excalidraw/element";
-import { getBoundTextElement, getContainerElement } from "@excalidraw/element";
+import {
+  getBoundTextElement,
+  getBoundTextElements,
+  getContainerElement,
+} from "@excalidraw/element";
 import { getLineHeightInPx } from "@excalidraw/element";
 import {
   isLinearElement,
@@ -315,7 +319,8 @@ const renderElementToSvg = (
     case "mindmap-edge":
     case "composite":
     case "flow":
-    case "sequence": {
+    case "sequence":
+    case "dataflow": {
       const shape = ShapeCache.generateElementShape(element, renderConfig);
       const nodes = (Array.isArray(shape) ? shape : [shape]).map((drawable) =>
         roughSVGDrawWithPrecision(rsvg, drawable, MAX_DECIMALS_FOR_SVG_EXPORT),
@@ -1140,10 +1145,10 @@ export const renderSceneToSvg = (
             renderConfig,
           );
 
-          const boundTextElement = getBoundTextElement(element, elementsMap);
-          if (boundTextElement?.isDeleted === false) {
+          const boundTextElements = getBoundTextElements(element, elementsMap);
+          for (const boundTextElement of boundTextElements) {
             renderElementToSvg(
-              boundTextElement as Readonly<NonDeletedExcalidrawElement>,
+              boundTextElement,
               elementsMap,
               rsvg,
               svgRoot,
@@ -1151,11 +1156,6 @@ export const renderSceneToSvg = (
               boundTextElement.x + renderConfig.offsetX,
               boundTextElement.y + renderConfig.offsetY,
               renderConfig,
-            );
-          } else if (boundTextElement) {
-            // SAFETY: This should never happen, but log it just in case
-            console.error(
-              "[NONDELETED][INVARIANT] Skipped rendering deleted bound text element",
             );
           }
         } catch (error: any) {

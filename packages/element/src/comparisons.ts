@@ -22,6 +22,7 @@ export const supportsFill = (target: FillTarget) => {
     type === "composite" ||
     type === "flow" ||
     type === "sequence" ||
+    type === "dataflow" ||
     type === "mindmap-node" ||
     type === "stickynote" ||
     type === "iframe" ||

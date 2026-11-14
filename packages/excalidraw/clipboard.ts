@@ -580,7 +580,8 @@ export const parseClipboard = async (
         if (
           element.type === "composite" ||
           element.type === "flow" ||
-          element.type === "sequence"
+          element.type === "sequence" ||
+          element.type === "dataflow"
         ) {
           try {
             assertShapeElementType(element.type, element.shape);

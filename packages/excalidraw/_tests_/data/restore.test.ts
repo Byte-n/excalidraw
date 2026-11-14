@@ -19,6 +19,7 @@ import {
   buildShapeData,
   newElement,
   newElementWith,
+  newTextElement,
 } from "@excalidraw/element";
 import * as sizeHelpers from "@excalidraw/element";
 
@@ -292,6 +293,108 @@ describe("restoreElements", () => {
         null,
       ),
     ).toThrow("Shape data does not belong to element type");
+  });
+
+  it("restores a dataflow element with its shape intact", () => {
+    const dataflow = API.createElement({
+      type: "df-process",
+      width: 152,
+      height: 137,
+    });
+    expect(dataflow.type).toBe("dataflow");
+    const file = JSON.parse(
+      serializeAsJSON([dataflow], getDefaultAppState(), {}, "local"),
+    );
+    const [restored] = restore.restoreElements(file.elements, null);
+    expect(restored).toMatchObject({
+      type: "dataflow",
+      shape: { id: "df-process", schemaVersion: 1 },
+    });
+  });
+
+  it("rejects a dataflow element whose shape belongs to the flow family", () => {
+    const dataflow = API.createElement({
+      type: "df-process",
+      width: 152,
+      height: 137,
+    });
+    expect(() =>
+      restore.restoreElements(
+        [
+          {
+            ...dataflow,
+            shape: { id: "fc-diamond", schemaVersion: 1 },
+          } as unknown as ExcalidrawElement,
+        ],
+        null,
+      ),
+    ).toThrow("Shape data does not belong to element type");
+  });
+
+  it("restores both df-process text slots", () => {
+    const container = newElement({
+      type: "df-process",
+      x: 0,
+      y: 0,
+      width: 152,
+      height: 137,
+    });
+    const body = newTextElement({
+      x: 10,
+      y: 60,
+      text: "Body\nlabel",
+      containerId: container.id,
+    });
+    const title = newTextElement({
+      x: 10,
+      y: 10,
+      text: "Long title that overflows the header",
+      containerId: container.id,
+      containerSlot: "title",
+      autoResize: false,
+    });
+    const withSlots = newElementWith(container, {
+      boundElements: [
+        { type: "text", id: body.id },
+        { type: "text", id: title.id, slot: "title" },
+      ],
+    });
+    const file = JSON.parse(
+      serializeAsJSON(
+        [withSlots, body, title],
+        getDefaultAppState(),
+        {},
+        "local",
+      ),
+    );
+
+    const restored = restore.restoreElements(file.elements, null, {
+      refreshDimensions: true,
+      repairBindings: true,
+    });
+    const restoredContainer = restored.find(
+      (element) => element.type === "dataflow",
+    )!;
+    const restoredTitle = restored.find(
+      (element) => element.type === "text" && element.containerSlot === "title",
+    ) as ExcalidrawTextElement;
+    const restoredBody = restored.find(
+      (element) => element.type === "text" && !element.containerSlot,
+    ) as ExcalidrawTextElement;
+
+    expect(restoredContainer.boundElements).toEqual([
+      { type: "text", id: restoredBody.id },
+      { type: "text", id: restoredTitle.id, slot: "title" },
+    ]);
+    expect(restoredTitle.containerId).toBe(restoredContainer.id);
+    expect(restoredTitle.originalText).toBe(
+      "Long title that overflows the header",
+    );
+    expect(restoredTitle.text).toContain("…");
+    expect(restoredTitle.height).toBeCloseTo(
+      restoredTitle.fontSize * restoredTitle.lineHeight,
+    );
+    expect(restoredBody.originalText).toBe("Body\nlabel");
   });
 
   it("rejects parameterless triangle ids carrying a shape parameter", () => {

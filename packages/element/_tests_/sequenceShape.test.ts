@@ -14,6 +14,7 @@ import type { Zoom } from "@excalidraw/excalidraw/types";
 
 import {
   BASIC_SHAPE_IDS,
+  DATAFLOW_SHAPE_IDS,
   FLOWCHART_SHAPE_IDS,
   SEQUENCE_DEFAULT_POLE_LENGTH,
   SEQUENCE_HIT_HALF_WIDTH,
@@ -226,23 +227,27 @@ const elementsMapFor = (...elements: ExcalidrawShapeElement[]): ElementsMap =>
 describe("sequence shape data", () => {
   it("maps every sequence id to the sequence element type", () => {
     expect(SEQUENCE_SHAPE_IDS).toHaveLength(10);
-    expect(SHAPE_IDS).toHaveLength(53);
+    expect(SHAPE_IDS).toHaveLength(60);
     for (const id of SEQUENCE_SHAPE_IDS) {
       expect(isSequenceShapeId(id)).toBe(true);
       expect(shapeElementType(id)).toBe("sequence");
     }
   });
 
-  it("keeps the three families disjoint and exhaustive", () => {
+  it("keeps the four families disjoint and exhaustive", () => {
     const overlap = (a: readonly string[], b: readonly string[]) =>
       a.filter((id) => b.includes(id));
     expect(overlap(BASIC_SHAPE_IDS, FLOWCHART_SHAPE_IDS)).toEqual([]);
     expect(overlap(BASIC_SHAPE_IDS, SEQUENCE_SHAPE_IDS)).toEqual([]);
+    expect(overlap(BASIC_SHAPE_IDS, DATAFLOW_SHAPE_IDS)).toEqual([]);
     expect(overlap(FLOWCHART_SHAPE_IDS, SEQUENCE_SHAPE_IDS)).toEqual([]);
+    expect(overlap(FLOWCHART_SHAPE_IDS, DATAFLOW_SHAPE_IDS)).toEqual([]);
+    expect(overlap(SEQUENCE_SHAPE_IDS, DATAFLOW_SHAPE_IDS)).toEqual([]);
     expect([
       ...BASIC_SHAPE_IDS,
       ...FLOWCHART_SHAPE_IDS,
       ...SEQUENCE_SHAPE_IDS,
+      ...DATAFLOW_SHAPE_IDS,
     ]).toEqual([...SHAPE_IDS]);
   });
 

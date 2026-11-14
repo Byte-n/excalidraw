@@ -1652,4 +1652,15 @@ describe("table skeletons", () => {
       ),
     ).toThrow("does not match its column sum");
   });
+
+  it("converts a dataflow skeleton to a dataflow element", () => {
+    const [element] = convertToExcalidrawElements(
+      [{ type: "df-process" }] as ExcalidrawElementSkeleton[],
+      opts,
+    );
+    expect(element).toMatchObject({
+      type: "dataflow",
+      shape: { id: "df-process", schemaVersion: 1 },
+    });
+  });
 });

@@ -1,7 +1,7 @@
 import { throttleRAF } from "@excalidraw/common";
 
 import {
-  getBoundTextElement,
+  getBoundTextElements,
   getTargetFrame,
   isInvisiblySmallElement,
   isTextElement,
@@ -175,10 +175,10 @@ const renderPreviewElements = (
       renderConfig,
       appState,
     );
-    const boundText = getBoundTextElement(element, mergedElementsMap);
-    if (boundText) {
+    const boundTextElements = getBoundTextElements(element, mergedElementsMap);
+    for (const boundTextElement of boundTextElements) {
       renderElement(
-        boundText,
+        boundTextElement,
         mergedElementsMap,
         mergedAllElementsMap,
         rc,

@@ -232,7 +232,7 @@ describe("浮动栏场景矩阵（T3）", () => {
     expect(popup.textContent).toContain("Header row");
   });
 
-  it("Frame：重命名入口聚焦画布标题", async () => {
+  it("Frame：重命名入口聚焦画布标题，编辑期间浮动栏隐藏", async () => {
     await render(<Excalidraw />);
     const frame = API.createElement({ type: "frame" });
     API.setElements([frame]);
@@ -247,9 +247,10 @@ describe("浮动栏场景矩阵（T3）", () => {
       )!,
     );
     expect(h.state.editingElementTitle).toBe(frame.id);
+    expect(queryFloatbar()).toBeNull();
   });
 
-  it("Table：重命名入口聚焦画布标题", async () => {
+  it("Table：重命名入口聚焦画布标题，编辑期间浮动栏隐藏", async () => {
     await render(<Excalidraw />);
     const table = API.createElement({ type: "table" });
     API.setElements([table]);
@@ -264,6 +265,7 @@ describe("浮动栏场景矩阵（T3）", () => {
       )!,
     );
     expect(h.state.editingElementTitle).toBe(table.id);
+    expect(queryFloatbar()).toBeNull();
   });
 
   it("Frame：外露背景色板（画板填充可设），样式弹层只剩透明度", async () => {

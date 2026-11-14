@@ -110,7 +110,8 @@ export const shouldTestInside = (element: ExcalidrawElement) => {
   if (
     element.type === "composite" ||
     element.type === "flow" ||
-    element.type === "sequence"
+    element.type === "sequence" ||
+    element.type === "dataflow"
   ) {
     return true;
   }
@@ -555,6 +556,7 @@ export const intersectElementWithLineSegment = (
     case "composite":
     case "flow":
     case "sequence":
+    case "dataflow":
       return element.shape.id === "ellipse"
         ? intersectEllipseWithLineSegment(
             element as ExcalidrawEllipseElement,

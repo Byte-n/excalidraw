@@ -57,7 +57,6 @@ import {
 } from "@excalidraw/element";
 
 import type {
-  ExcalidrawLinearElement,
   ExcalidrawTextElementWithContainer,
   ExcalidrawTextElement,
   NonDeleted,
@@ -366,6 +365,7 @@ export const textWysiwyg = ({
           // a table-scaled mindmap node keeps its frozen geometry
           // (phase-1:113): the editor never grows or shrinks it back
           const isAdaptive =
+            !isSingleLineBoundText &&
             (!isComposite ||
               getCompositeShapeTextFitMode(container) === "auto") &&
             !(
@@ -616,11 +616,15 @@ export const textWysiwyg = ({
 
   let whiteSpace = "pre";
   let wordBreak = "normal";
+  const isSingleLineBoundText = element.containerSlot === "title";
+  const normalizeForEditor = (value: string) =>
+    isSingleLineBoundText ? value.replace(/\s*[\r\n]+\s*/g, " ") : value;
 
   if (
-    isBoundToContainer(element) ||
-    isContainerBackgroundText(element) ||
-    !element.autoResize
+    !isSingleLineBoundText &&
+    (isBoundToContainer(element) ||
+      isContainerBackgroundText(element) ||
+      !element.autoResize)
   ) {
     whiteSpace = "pre-wrap";
     wordBreak = "break-word";
@@ -645,7 +649,7 @@ export const textWysiwyg = ({
     overflowWrap: "break-word",
     boxSizing: "content-box",
   });
-  editable.value = element.originalText;
+  editable.value = normalizeForEditor(element.originalText);
   updateWysiwygStyle();
 
   const getCaretIndexFromInitialSceneCoords = () => {
@@ -743,14 +747,15 @@ export const textWysiwyg = ({
           if (parsed.elements) {
             const text = getTextFromElements(parsed.elements);
             if (text) {
+              const pastedText = normalizeForEditor(text);
               const { selectionStart, selectionEnd, value } = editable;
 
               editable.value =
                 value.slice(0, selectionStart) +
-                text +
+                pastedText +
                 value.slice(selectionEnd);
 
-              const newPos = selectionStart + text.length;
+              const newPos = selectionStart + pastedText.length;
               editable.selectionStart = editable.selectionEnd = newPos;
 
               editable.dispatchEvent(new Event("input"));
@@ -771,7 +776,7 @@ export const textWysiwyg = ({
       if (!textItem) {
         return;
       }
-      const text = normalizeText(textItem.value);
+      const text = normalizeForEditor(normalizeText(textItem.value));
       if (!text) {
         return;
       }
@@ -784,6 +789,7 @@ export const textWysiwyg = ({
         const boundTextElement = getBoundTextElement(
           container,
           app.scene.getNonDeletedElementsMap(),
+          element.containerSlot,
         );
         const font = getFontString({
           fontSize:
@@ -847,6 +853,13 @@ export const textWysiwyg = ({
       event.preventDefault();
       app.actionManager.executeAction(actionResetZoom);
       updateWysiwygStyle();
+    } else if (isSingleLineBoundText && event.key === KEYS.ENTER) {
+      if (event.isComposing || event.keyCode === 229) {
+        return;
+      }
+      event.preventDefault();
+      submittedViaKeyboard = true;
+      handleSubmit();
     } else if (actionDecreaseFontSize.keyTest(event)) {
       app.actionManager.executeAction(actionDecreaseFontSize);
     } else if (actionIncreaseFontSize.keyTest(event)) {
@@ -1013,13 +1026,15 @@ export const textWysiwyg = ({
     );
 
     if (container) {
+      const slot = updateElement.containerSlot;
       if (editable.value.trim()) {
-        const boundTextElementId = getBoundTextElementId(container);
+        const boundTextElementId = getBoundTextElementId(container, slot);
         if (!boundTextElementId || boundTextElementId !== element.id) {
           app.scene.mutateElement(container, {
             boundElements: (container.boundElements || []).concat({
               type: "text",
               id: element.id,
+              ...(slot ? { slot } : {}),
             }),
           });
         } else if (isLinearElement(container)) {
@@ -1029,10 +1044,7 @@ export const textWysiwyg = ({
       } else {
         app.scene.mutateElement(container, {
           boundElements: container.boundElements?.filter(
-            (ele) =>
-              !isTextElement(
-                ele as ExcalidrawTextElement | ExcalidrawLinearElement,
-              ),
+            (ele) => ele.id !== element.id,
           ),
         });
       }

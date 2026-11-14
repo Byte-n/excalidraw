@@ -815,7 +815,8 @@ const _deepCopyElement = (val: any, depth: number = 0) => {
               val.type !== "mindmap-node" &&
               val.type !== "composite" &&
               val.type !== "flow" &&
-              val.type !== "sequence"))
+              val.type !== "sequence" &&
+              val.type !== "dataflow"))
         ) {
           continue;
         }

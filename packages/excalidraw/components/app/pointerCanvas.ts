@@ -28,6 +28,7 @@ import {
   isElbowArrow,
   isPathALoop,
   getContainerCenter,
+  getTextContainerSlotAtPosition,
   hitElementItself,
   getSelectedGroupIdForElement,
   getSelectedGroupIds,
@@ -565,9 +566,15 @@ export const handleCanvasDoubleClick = (
             threshold: app.getElementHitThreshold(container),
           })
         ) {
+          const slot = getTextContainerSlotAtPosition(
+            container,
+            sceneX,
+            sceneY,
+          );
           const midPoint = getContainerCenter(
             container,
             app.scene.getNonDeletedElementsMap(),
+            slot ?? undefined,
           );
 
           sceneX = midPoint.x;

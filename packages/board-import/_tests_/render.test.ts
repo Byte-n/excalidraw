@@ -115,6 +115,25 @@ test("流程图图形映射到 flow 元素族", () => {
   }
 });
 
+test("数据流图形映射到 dataflow 元素族", () => {
+  const cases: Array<[string, string]> = [
+    ["data_flow_round_rect", "df-external-entity"],
+    ["data_flow_round_rect2", "df-process"],
+    ["data_flow_round_rect3", "df-process-round"],
+    ["data_flow_ellipse", "df-process-circle"],
+    ["data_store", "df-store-open"],
+    ["data_store2", "df-store-left-label"],
+    ["data_store3", "df-store-plain"],
+  ];
+  for (const [larkType, expectedId] of cases) {
+    const { elements } = render([
+      shapeNode({ id: `d-${larkType}`, composite_shape: { type: larkType } }),
+    ]);
+    expect(prop<{ id: string }>(elements[0], "shape").id).toBe(expectedId);
+    expect(elements[0].type).toBe("dataflow");
+  }
+});
+
 test("triangle / right_triangle 共用持久化 ID 靠 apexX 区分", () => {
   const { elements } = render([
     shapeNode({ id: "t1", composite_shape: { type: "triangle" } }),
@@ -497,7 +516,7 @@ test("downgraded：未知图形子类型计一次，已知类型为 0", () => {
 test("composite_shape 未知子类型降级为矩形且各计一次，不丢弃", () => {
   const types = [
     "star2",
-    "data_store3",
+    "data_store4",
     "component_shape2",
     "state_start",
     "flow_chart_connector",

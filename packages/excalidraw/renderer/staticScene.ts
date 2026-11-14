@@ -7,7 +7,7 @@ import {
 } from "@excalidraw/common";
 import { isElementLink } from "@excalidraw/element";
 import { createPlaceholderEmbeddableLabel } from "@excalidraw/element";
-import { getBoundTextElement } from "@excalidraw/element";
+import { getBoundTextElements } from "@excalidraw/element";
 import {
   isEmbeddableElement,
   isIframeLikeElement,
@@ -423,7 +423,7 @@ const _renderStaticScene = ({
         }
 
         context.save();
-        const boundTextElement = getBoundTextElement(element, elementsMap);
+        const boundTextElements = getBoundTextElements(element, elementsMap);
 
         const renderState = getRenderState(element);
         clipElementToFrame(element, renderState);
@@ -438,7 +438,7 @@ const _renderStaticScene = ({
           renderState,
         );
 
-        if (boundTextElement) {
+        for (const boundTextElement of boundTextElements) {
           renderElement(
             boundTextElement,
             elementsMap,

@@ -62,6 +62,22 @@ import {
   getSequenceLifelineTextBounds,
   type SequenceLifelineId,
 } from "./sequenceOutline";
+import {
+  getDataflowCircleTextBounds,
+  getDataflowExternalEntityOutline,
+  getDataflowProcessCircleOutline,
+  getDataflowProcessOutline,
+  getDataflowProcessRoundOutline,
+  getDataflowProcessTextBounds,
+  getDataflowProcessTitleRule,
+  getDataflowStoreLeftLabelOutline,
+  getDataflowStoreLeftLabelRule,
+  getDataflowStoreLeftLabelTextBounds,
+  getDataflowStoreOpenOutline,
+  getDataflowStoreOpenRules,
+  getDataflowStorePlainOutline,
+  getDataflowTextBounds,
+} from "./dataFlowOutline";
 
 import { SHAPE_IDS } from "./family";
 
@@ -704,6 +720,39 @@ const drawRectangleShape: ShapeDraw = ({ generator, geometry, options }) => {
         primitive.height,
         options(false),
       );
+};
+
+/**
+ * Open data store: the full rectangle is the hit/binding envelope, but only
+ * the two horizontal rules are stroked. A fill, when set, paints the envelope
+ * without its outline.
+ */
+const drawDataflowStoreOpen: ShapeDraw = ({
+  generator,
+  element,
+  geometry,
+  options,
+}) => {
+  const roughOptions = options(false);
+  const drawables: Drawable[] = [];
+  if (roughOptions.fill) {
+    drawables.push(
+      generator.rectangle(0, 0, element.width, element.height, {
+        ...roughOptions,
+        stroke: "none",
+        strokeWidth: 0,
+      }),
+    );
+  }
+  for (const path of geometry.details) {
+    drawables.push(
+      generator.path(
+        compositeShapePathToSvg(path),
+        detailPathOptions(roughOptions, path),
+      ),
+    );
+  }
+  return drawables;
 };
 
 // ---------------------------------------------------------------------------
@@ -1760,6 +1809,48 @@ export const SHAPES: { [K in ShapeId]: ShapeRegistration<K> } = {
     ],
     draw: drawShadedFaces,
   },
+  "df-external-entity": defineShape(
+    (input) => getDataflowExternalEntityOutline(input.width, input.height),
+    (input) => getDataflowTextBounds(input.width, input.height),
+  ),
+  "df-process": defineShape(
+    (input) => getDataflowProcessOutline(input.width, input.height),
+    (input) => getDataflowProcessTextBounds(input.width, input.height),
+    {
+      details: (input) => [
+        getDataflowProcessTitleRule(input.width, input.height),
+      ],
+    },
+  ),
+  "df-process-round": defineShape(
+    (input) => getDataflowProcessRoundOutline(input.width, input.height),
+    (input) => getDataflowTextBounds(input.width, input.height),
+  ),
+  "df-process-circle": defineShape(
+    (input) => getDataflowProcessCircleOutline(input.width, input.height),
+    (input) => getDataflowCircleTextBounds(input.width, input.height),
+  ),
+  "df-store-open": defineShape(
+    (input) => getDataflowStoreOpenOutline(input.width, input.height),
+    (input) => getDataflowTextBounds(input.width, input.height),
+    {
+      details: (input) => getDataflowStoreOpenRules(input.width, input.height),
+      draw: drawDataflowStoreOpen,
+    },
+  ),
+  "df-store-left-label": defineShape(
+    (input) => getDataflowStoreLeftLabelOutline(input.width, input.height),
+    (input) => getDataflowStoreLeftLabelTextBounds(input.width, input.height),
+    {
+      details: (input) => [
+        getDataflowStoreLeftLabelRule(input.width, input.height),
+      ],
+    },
+  ),
+  "df-store-plain": defineShape(
+    (input) => getDataflowStorePlainOutline(input.width, input.height),
+    (input) => getDataflowTextBounds(input.width, input.height),
+  ),
 };
 
 /**
@@ -1785,7 +1876,8 @@ export const isShapeElement = <T extends ExcalidrawElement>(
 ): element is T & ExcalidrawShapeElement =>
   element?.type === "composite" ||
   element?.type === "flow" ||
-  element?.type === "sequence";
+  element?.type === "sequence" ||
+  element?.type === "dataflow";
 
 export const isShapeWithId = <K extends ShapeId>(
   element: ExcalidrawElement | null | undefined,

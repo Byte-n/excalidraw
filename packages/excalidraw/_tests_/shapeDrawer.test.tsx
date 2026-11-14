@@ -126,7 +126,7 @@ describe("图形抽屉的开合", () => {
 
   afterEach(() => restoreOriginalGetBoundingClientRect());
 
-  it("点「更多功能」打开抽屉，标题与七个分区按 基础→流程图→时序图→便签→画框→表格→脑图 出现", () => {
+  it("点「更多功能」打开抽屉，标题与八个分区按 基础→流程图→数据流图→时序图→便签→画框→表格→脑图 出现", () => {
     // 抽屉常挂载：打开前即已存在，但为关闭态
     expect(drawerRoot()).not.toBeNull();
     expect(drawerRoot()).toHaveAttribute("data-open", "false");
@@ -145,7 +145,7 @@ describe("图形抽屉的开合", () => {
       drawerRoot()!.querySelector(".shape-drawer__title")?.textContent,
     ).toBe(t("shapeDrawer.title"));
 
-    // 七个分区标题与顺序
+    // 八个分区标题与顺序
     expect(
       Array.from(
         document.querySelectorAll<HTMLElement>(
@@ -155,6 +155,7 @@ describe("图形抽屉的开合", () => {
     ).toEqual([
       "shape-drawer-group-basic",
       "shape-drawer-group-flowchart",
+      "shape-drawer-group-dataflow",
       "shape-drawer-group-sequence",
       "shape-drawer-group-sticky",
       "shape-drawer-group-frame",
@@ -168,6 +169,7 @@ describe("图形抽屉的开合", () => {
     ).toEqual([
       t("shapeDrawer.basic"),
       t("shapeDrawer.flowchart"),
+      t("shapeDrawer.dataflow"),
       t("shapeDrawer.sequence"),
       t("shapeDrawer.sticky"),
       t("shapeDrawer.frame"),
@@ -242,12 +244,13 @@ describe("图形抽屉的分区折叠", () => {
 
   afterEach(() => restoreOriginalGetBoundingClientRect());
 
-  it("默认只展开「基础图形」，其余六个分区的网格不可见", () => {
+  it("默认只展开「基础图形」，其余七个分区的网格不可见", () => {
     expect(groupToggle("basic")).toHaveAttribute("aria-expanded", "true");
     expect(groupPanel("basic")).not.toHaveAttribute("hidden");
 
     for (const id of [
       "flowchart",
+      "dataflow",
       "sequence",
       "sticky",
       "frame",
@@ -272,6 +275,21 @@ describe("图形抽屉的分区折叠", () => {
     expect(
       panel.querySelector('[data-testid="shape-drawer-item-fc-diamond"]'),
     ).not.toBeNull();
+  });
+
+  it("展开数据流图分区后其 7 个 df-* 格子可见", () => {
+    const toggle = groupToggle("dataflow");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(groupPanel("dataflow")).toHaveAttribute("hidden");
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const panel = groupPanel("dataflow");
+    expect(panel).not.toHaveAttribute("hidden");
+    expect(
+      panel.querySelectorAll('[data-testid^="shape-drawer-item-df-"]'),
+    ).toHaveLength(7);
   });
 
   it("展开时序图分区后其 11 个 sc-* 格子可见（含组合片段两个预设）", () => {
@@ -394,6 +412,42 @@ describe("图形抽屉的单击放置", () => {
         (element) => isTextElement(element) && element.text === "[Condition]",
       ),
     ).toBe(true);
+  });
+
+  it("数据流图：点 df-* → 落一份 type=dataflow 的图形，尺寸/填色/线宽取预设", () => {
+    expandGroup("dataflow");
+
+    placeItem("df-process");
+    placeItem("df-store-open");
+
+    const created = live().filter(isShapeElement);
+    expect(created).toHaveLength(2);
+
+    const process = created.find(
+      (element) => element.shape.id === "df-process",
+    )!;
+    expect(process).toMatchObject({
+      type: "dataflow",
+      shape: { id: "df-process", schemaVersion: 1 },
+      width: SHAPE_PRESET_DEFAULTS["df-process"].width,
+      height: SHAPE_PRESET_DEFAULTS["df-process"].height,
+      backgroundColor: COLOR_PALETTE.green[0],
+      strokeColor: COLOR_PALETTE.black,
+      strokeWidth: 1,
+    });
+
+    const store = created.find(
+      (element) => element.shape.id === "df-store-open",
+    )!;
+    expect(store).toMatchObject({
+      type: "dataflow",
+      shape: { id: "df-store-open", schemaVersion: 1 },
+      width: SHAPE_PRESET_DEFAULTS["df-store-open"].width,
+      height: SHAPE_PRESET_DEFAULTS["df-store-open"].height,
+      backgroundColor: COLOR_PALETTE.transparent,
+      strokeColor: COLOR_PALETTE.black,
+      strokeWidth: 1,
+    });
   });
 
   it("时序图：组合片段 else 预设复用 sc-fragment，多一行并带 [Condition]/[Else] 文本", () => {
@@ -792,11 +846,11 @@ describe("手机竖屏走底部面板分支", () => {
       `${SHAPE_SHEET_HEIGHT_RATIO * 100}%`,
     );
 
-    // 桌面左侧抽屉分支没有出现；内容仍是同一份目录（七个分区）
+    // 桌面左侧抽屉分支没有出现；内容仍是同一份目录（八个分区）
     expect(document.querySelector("aside.shape-drawer")).toBeNull();
     expect(
       document.querySelectorAll('[data-testid^="shape-drawer-group-"]'),
-    ).toHaveLength(7);
+    ).toHaveLength(8);
   });
 
   it("点遮罩不收起，点弹层内收起按钮才收起", () => {

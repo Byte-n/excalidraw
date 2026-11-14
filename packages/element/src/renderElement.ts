@@ -604,6 +604,7 @@ const drawElementOnCanvas = (
     case "composite":
     case "flow":
     case "sequence":
+    case "dataflow":
     case "iframe":
     case "embeddable": {
       context.lineJoin = "round";
@@ -1351,6 +1352,7 @@ const drawElement = (
     case "composite":
     case "flow":
     case "sequence":
+    case "dataflow":
     case "stickynote":
     case "line":
     case "arrow":

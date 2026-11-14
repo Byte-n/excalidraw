@@ -286,6 +286,29 @@ describe("Paste bound text container", () => {
     });
   });
 
+  it("should preserve dataflow shape data", async () => {
+    const dataflow = API.createElement({
+      type: "df-process",
+      width: 152,
+      height: 137,
+    });
+    pasteWithCtrlCmdShiftV(
+      JSON.stringify({
+        type: "excalidraw/clipboard",
+        elements: [dataflow],
+      }),
+    );
+
+    await waitFor(async () => {
+      await sleep(1);
+      expect(h.elements).toHaveLength(1);
+      expect(h.elements[0]).toMatchObject({
+        type: "dataflow",
+        shape: { id: "df-process", schemaVersion: 1 },
+      });
+    });
+  });
+
   it("should fix diamond bounding box", async () => {
     const data = JSON.stringify({
       type: "excalidraw/clipboard",

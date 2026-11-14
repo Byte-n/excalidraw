@@ -26,16 +26,23 @@ import {
   getCompositeShapePaddedTextBounds,
   getCompositeShapeTextBounds,
   getCompositeShapeTextFitMode,
+  getDataflowProcessTitleTextBounds,
   getSequenceLifelineTextFit,
   isSequenceLifelineElement,
   isShapeElement,
+  isShapeWithId,
+  DATAFLOW_PROCESS_TITLE_HEIGHT,
   type SequenceLifelineElement,
 } from "./compositeShape";
 import { LinearElementEditor } from "./linearElementEditor";
 import { getPositionAfterHeightChange } from "./sizeHelpers";
 
 import { updateStickyNoteLayout } from "./stickyNote";
-import { getLineWidth, measureText } from "./textMeasurements";
+import {
+  getLineHeightInPx,
+  getLineWidth,
+  measureText,
+} from "./textMeasurements";
 import { wrapText } from "./textWrapping";
 import {
   isBoundToContainer,
@@ -61,6 +68,7 @@ import type {
   ExcalidrawTextElement,
   ExcalidrawTextElementWithContainer,
   NonDeleted,
+  TextContainerSlot,
 } from "./types";
 
 const getTextContainerShape = (container: ExcalidrawElement) =>
@@ -80,6 +88,74 @@ const getCompositeTextDimensions = (
   width: number,
   height: number,
 ) => getCompositeShapeDimensionsForText(container, width, height);
+
+const normalizeSingleLineText = (text: string) =>
+  text.replace(/\s*[\r\n]+\s*/g, " ");
+
+/** Whether this text is the secondary title slot of a `df-process` shape. */
+export const isDataflowTitleText = (
+  container: ExcalidrawElement | null | undefined,
+  textElement: ExcalidrawTextElement | null | undefined,
+): textElement is ExcalidrawTextElementWithContainer =>
+  !!container &&
+  !!textElement &&
+  textElement.containerSlot === "title" &&
+  isShapeWithId(container, "df-process");
+
+/**
+ * Single-line layout for the `df-process` title slot: fixed header width,
+ * one line high, ellipsis on overflow. The container is never resized.
+ */
+export const getDataflowProcessTitleLayout = (
+  container: ExcalidrawElement,
+  textElement: ExcalidrawTextElement,
+) => {
+  const bounds = getDataflowProcessTitleTextBounds(
+    container.width,
+    container.height,
+  );
+  const font = getFontString(textElement);
+  const text = truncateTextToBounds(
+    normalizeSingleLineText(textElement.originalText),
+    font,
+    textElement.lineHeight,
+    bounds.width,
+    getLineHeightInPx(textElement.fontSize, textElement.lineHeight),
+  );
+  const metrics = measureText(text, font, textElement.lineHeight);
+  return { text, width: bounds.width, height: metrics.height };
+};
+
+/** Which secondary slot a scene point falls into, or `null` for the body. */
+export const getTextContainerSlotAtPosition = (
+  container: ExcalidrawElement | null | undefined,
+  sceneX: number,
+  sceneY: number,
+): TextContainerSlot | null => {
+  if (!container || !isShapeWithId(container, "df-process")) {
+    return null;
+  }
+  const center = pointFrom(
+    container.x + container.width / 2,
+    container.y + container.height / 2,
+  );
+  const [x, y] = pointRotateRads(
+    pointFrom(sceneX, sceneY),
+    center,
+    -container.angle as Radians,
+  );
+  const localX = x - container.x;
+  const localY = y - container.y;
+  if (
+    localX < 0 ||
+    localX > container.width ||
+    localY < 0 ||
+    localY > container.height
+  ) {
+    return null;
+  }
+  return localY < DATAFLOW_PROCESS_TITLE_HEIGHT ? "title" : null;
+};
 
 export const truncateTextToBounds = (
   text: string,
@@ -168,6 +244,29 @@ export const redrawTextBoundingBox = (
     // may be an uncommitted clone (font actions clone before install), so it
     // is passed explicitly instead of looked up in the scene
     updateStickyNoteLayout(container, scene, { text: textElement });
+    return;
+  }
+
+  if (container && isDataflowTitleText(container, textElement)) {
+    const title = getDataflowProcessTitleLayout(container, textElement);
+    const updatedTextElement = {
+      ...textElement,
+      ...title,
+      angle: container.angle,
+    } as ExcalidrawTextElementWithContainer;
+    const { x, y } = computeBoundTextPosition(
+      container,
+      updatedTextElement,
+      elementsMap,
+    );
+    scene.mutateElement(textElement, {
+      text: title.text,
+      width: title.width,
+      height: title.height,
+      x,
+      y,
+      angle: container.angle,
+    });
     return;
   }
 
@@ -343,6 +442,13 @@ export const redrawTextBoundingBox = (
 
     boundTextUpdates.x = x;
     boundTextUpdates.y = y;
+
+    if (isShapeWithId(container, "df-process")) {
+      const titleText = getBoundTextElement(container, elementsMap, "title");
+      if (titleText) {
+        redrawTextBoundingBox(titleText, layoutContainer, scene);
+      }
+    }
   }
 
   scene.mutateElement(textElement, boundTextUpdates);
@@ -364,11 +470,14 @@ export const handleBindTextResize = (
   }
   const elementsMap = scene.getNonDeletedElementsMap();
   const boundTextElementId = getBoundTextElementId(container);
-  if (!boundTextElementId) {
+  const titleText = getBoundTextElement(container, elementsMap, "title");
+  if (!boundTextElementId && !titleText) {
     return;
   }
   resetOriginalContainerCache(container.id);
-  const textElement = getBoundTextElement(container, elementsMap);
+  const textElement = boundTextElementId
+    ? getBoundTextElement(container, elementsMap)
+    : null;
   if (textElement && textElement.text) {
     if (!container) {
       return;
@@ -487,6 +596,14 @@ export const handleBindTextResize = (
       );
     }
   }
+
+  if (titleText && !titleText.isDeleted) {
+    redrawTextBoundingBox(
+      titleText,
+      scene.getNonDeletedElement(container.id) ?? container,
+      scene,
+    );
+  }
 };
 
 export const computeBoundTextPosition = (
@@ -501,7 +618,10 @@ export const computeBoundTextPosition = (
       elementsMap,
     );
   }
-  const containerCoords = getContainerCoords(container);
+  const containerCoords = getContainerCoords(
+    container,
+    boundTextElement.containerSlot,
+  );
   const maxContainerHeight = getBoundTextMaxHeight(container, boundTextElement);
   const maxContainerWidth = getBoundTextMaxWidth(container, boundTextElement);
 
@@ -567,20 +687,47 @@ export const computeBoundTextPosition = (
   return { x, y };
 };
 
-export const getBoundTextElementId = (container: ExcalidrawElement | null) => {
+export const getBoundTextElementId = (
+  container: ExcalidrawElement | null,
+  slot?: TextContainerSlot,
+) => {
   return container?.boundElements?.length
-    ? container?.boundElements?.find((ele) => ele.type === "text")?.id || null
+    ? container.boundElements.find(
+        (ele) => ele.type === "text" && (slot ? ele.slot === slot : !ele.slot),
+      )?.id || null
     : null;
+};
+
+/** Every non-deleted text bound to this container, across all slots. */
+export const getBoundTextElements = (
+  element: ExcalidrawElement | null,
+  elementsMap: ElementsMap,
+): NonDeleted<ExcalidrawTextElementWithContainer>[] => {
+  if (!element?.boundElements?.length) {
+    return [];
+  }
+  const texts: NonDeleted<ExcalidrawTextElementWithContainer>[] = [];
+  for (const boundElement of element.boundElements) {
+    if (boundElement.type !== "text") {
+      continue;
+    }
+    const textElement = elementsMap.get(boundElement.id);
+    if (textElement && isTextElement(textElement) && !textElement.isDeleted) {
+      texts.push(textElement as NonDeleted<ExcalidrawTextElementWithContainer>);
+    }
+  }
+  return texts;
 };
 
 export const getBoundTextElement = (
   element: ExcalidrawElement | null,
   elementsMap: ElementsMap,
+  slot?: TextContainerSlot,
 ): NonDeleted<ExcalidrawTextElementWithContainer> | null => {
   if (!element) {
     return null;
   }
-  const boundTextElementId = getBoundTextElementId(element);
+  const boundTextElementId = getBoundTextElementId(element, slot);
 
   if (boundTextElementId) {
     const boundTextElement = (elementsMap.get(boundTextElementId) ||
@@ -621,9 +768,13 @@ export const getContainerElement = <
 export const getContainerCenter = (
   container: ExcalidrawElement,
   elementsMap: ElementsMap,
+  slot?: TextContainerSlot,
 ) => {
   if (isShapeElement(container)) {
-    const bounds = getCompositeShapeTextBounds(container);
+    const bounds =
+      slot === "title" && isShapeWithId(container, "df-process")
+        ? getDataflowProcessTitleTextBounds(container.width, container.height)
+        : getCompositeShapeTextBounds(container);
     const center = pointFrom(
       container.x + container.width / 2,
       container.y + container.height / 2,
@@ -653,9 +804,15 @@ export const getContainerCenter = (
   return { x: center[0], y: center[1] };
 };
 
-export const getContainerCoords = (container: ExcalidrawElement) => {
+export const getContainerCoords = (
+  container: ExcalidrawElement,
+  slot?: TextContainerSlot,
+) => {
   if (isShapeElement(container)) {
-    const bounds = getCompositePaddedTextBounds(container);
+    const bounds =
+      slot === "title" && isShapeWithId(container, "df-process")
+        ? getDataflowProcessTitleTextBounds(container.width, container.height)
+        : getCompositePaddedTextBounds(container);
     return {
       x: container.x + bounds.x,
       y: container.y + bounds.y,
@@ -755,6 +912,7 @@ const VALID_CONTAINER_TYPES = new Set([
   "composite",
   "flow",
   "sequence",
+  "dataflow",
   "rectangle",
   "stickynote",
   "ellipse",
@@ -823,6 +981,12 @@ export const getBoundTextMaxWidth = (
     return Math.max(ARROW_LABEL_WIDTH_FRACTION * width, minWidth);
   }
   if (isShapeElement(container)) {
+    if (isDataflowTitleText(container, boundTextElement)) {
+      return getDataflowProcessTitleTextBounds(
+        container.width,
+        container.height,
+      ).width;
+    }
     return getCompositePaddedTextBounds(container).width;
   }
   if (getTextContainerShape(container) === "ellipse") {
@@ -872,6 +1036,12 @@ export const getBoundTextMaxHeight = (
     return height;
   }
   if (isShapeElement(container)) {
+    if (isDataflowTitleText(container, boundTextElement)) {
+      return getDataflowProcessTitleTextBounds(
+        container.width,
+        container.height,
+      ).height;
+    }
     return getCompositePaddedTextBounds(container).height;
   }
   if (getTextContainerShape(container) === "ellipse") {
