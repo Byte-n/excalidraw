@@ -171,28 +171,19 @@ export class AppElementTitles {
     });
     const titleLineHeight =
       FRAME_STYLE.nameFontSize * FRAME_STYLE.nameLineHeight;
-    // The canvas drops the whole title while editing, so the editor paints the
-    // glyph itself and reserves its slot: the input text must start on the
-    // title's text origin (glyph + gap in).
-    const paddingLeft =
-      ELEMENT_TITLE_EDIT_PADDING +
-      ELEMENT_TITLE_GLYPH_SIZE +
-      ELEMENT_TITLE_GLYPH_GAP;
-    const glyphTop =
-      ELEMENT_TITLE_EDIT_PADDING * 2 +
-      (titleLineHeight - ELEMENT_TITLE_GLYPH_SIZE) / 2;
+    // The canvas drops the whole title while editing. Start the box at the
+    // title's text origin (glyph + gap in) so the text does not move; the
+    // glyph slot stays outside the box instead of becoming blank space.
+    const glyphAndGap = ELEMENT_TITLE_GLYPH_SIZE + ELEMENT_TITLE_GLYPH_GAP;
+    const textLeft = x1 - this.app.state.offsetLeft + glyphAndGap;
     const textWidth = Math.max(
       getLineWidth(elementTitle, titleFont),
       getLineWidth("0", titleFont),
     );
-    const editorLeft =
-      x1 - this.app.state.offsetLeft - ELEMENT_TITLE_EDIT_PADDING;
+    const editorLeft = textLeft - ELEMENT_TITLE_EDIT_PADDING;
     const maxTextWidth = Math.max(
       0,
-      this.app.state.width -
-        editorLeft -
-        paddingLeft -
-        ELEMENT_TITLE_EDIT_PADDING,
+      this.app.state.width - editorLeft - ELEMENT_TITLE_EDIT_PADDING * 2,
     );
 
     return (
@@ -207,33 +198,11 @@ export class AppElementTitles {
             y1 +
             this.app.state.offsetTop
           }px`,
-          left: `${x1 - this.app.state.offsetLeft}px`,
+          left: `${textLeft}px`,
           zIndex: 2,
           opacity: renderState.opacity,
         }}
       >
-        <svg
-          width={ELEMENT_TITLE_GLYPH_SIZE}
-          height={ELEMENT_TITLE_GLYPH_SIZE}
-          viewBox={`0 0 ${ELEMENT_TITLE_GLYPH_SIZE} ${ELEMENT_TITLE_GLYPH_SIZE}`}
-          aria-hidden
-          style={{
-            position: "absolute",
-            left: 0,
-            top: `${glyphTop}px`,
-            color: "var(--color-selection)",
-            overflow: "visible",
-            pointerEvents: "none",
-          }}
-        >
-          <path
-            d="M3 0v10M7 0v10M0 3h10M0 7h10"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.2}
-            strokeLinecap="round"
-          />
-        </svg>
         <input
           autoFocus
           value={elementTitle}
@@ -265,7 +234,7 @@ export class AppElementTitles {
             paddingTop: `${ELEMENT_TITLE_EDIT_PADDING}px`,
             paddingRight: `${ELEMENT_TITLE_EDIT_PADDING}px`,
             paddingBottom: `${ELEMENT_TITLE_EDIT_PADDING}px`,
-            paddingLeft: `${paddingLeft}px`,
+            paddingLeft: `${ELEMENT_TITLE_EDIT_PADDING}px`,
             borderRadius: 4,
             boxShadow: "inset 0 0 0 1px var(--color-selection)",
             fontFamily: getFontFamilyString({

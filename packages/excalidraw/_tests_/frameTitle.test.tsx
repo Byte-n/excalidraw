@@ -125,16 +125,12 @@ describe("element titles are canvas chrome", () => {
       expect(input.style.fontWeight).toBe("500");
       expect(input.style.lineHeight).toBe(`${titleLineHeight}px`);
       expect(input.style.height).toBe(`${titleLineHeight}px`);
-      // The glyph slot is painted by the editor instead of left blank.
-      const glyph = input.parentElement!.querySelector("svg")!;
-      expect(glyph).not.toBeNull();
-      expect(glyph.getAttribute("width")).toBe("10");
-      expect(glyph.getAttribute("height")).toBe("10");
-      expect(parseFloat(glyph.style.top)).toBeCloseTo(
-        12 + (titleLineHeight - 10) / 2,
+      // The box starts at the title's text origin; the glyph slot is outside.
+      expect(parseFloat(input.parentElement!.style.left)).toBeCloseTo(
+        (element.x + h.state.scrollX) * zoom + glyphAndGap,
       );
-      // The text stays on the title's origin, past the reserved glyph slot.
-      expect(parseFloat(input.style.paddingLeft)).toBeCloseTo(glyphAndGap + 6);
+      expect(parseFloat(input.style.paddingLeft)).toBeCloseTo(6);
+      expect(input.parentElement!.querySelector("svg")).toBe(null);
       expect(parseFloat(input.style.width)).toBeCloseTo(
         (layout.width - layout.glyphSize - layout.glyphGap) * zoom,
       );
