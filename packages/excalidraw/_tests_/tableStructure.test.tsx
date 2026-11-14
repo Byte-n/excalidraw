@@ -1,4 +1,5 @@
 import {
+  DEFAULT_FONT_FAMILY,
   KEYS,
   TABLE_STRUCTURE_INSERTION_OFFSET,
   TABLE_STRUCTURE_RAIL_OFFSET,
@@ -1671,7 +1672,7 @@ describe("table row/column structure", () => {
 
     it("selects the table from the title grip and edits a single-line title", async () => {
       const { table } = scaleFixture();
-      const bar = getTableTitleBar(table, undefined, 1, 20);
+      const bar = getTableTitleBar(table, undefined, 1, DEFAULT_FONT_FAMILY);
       expect(bar.y + bar.height).toBe(
         table.y - TABLE_STRUCTURE_RAIL_OFFSET - 9 - 8,
       );
@@ -1700,7 +1701,7 @@ describe("table row/column structure", () => {
       ) as ExcalidrawTextElement;
       expect(title.originalText).toBe("Budget 2026");
       expect(title.text).toBe("Budget 2026");
-      const positionedBar = getTableTitleBar(table, title, 1, title.fontSize);
+      const positionedBar = getTableTitleBar(table, title, 1, title.fontFamily);
       expect(title.y).toBe(positionedBar.y);
 
       const titlePosition = { x: title.x, y: title.y };

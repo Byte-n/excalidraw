@@ -1,6 +1,6 @@
 import { pointFrom } from "@excalidraw/math";
 
-import { CURSOR_TYPE } from "@excalidraw/common";
+import { CURSOR_TYPE, DEFAULT_FONT_FAMILY } from "@excalidraw/common";
 
 import {
   buildShapeData,
@@ -491,7 +491,7 @@ describe("PR5a-2 priority matrix (05 §5.2)", () => {
       text: "Title",
       containerRef: { kind: "tableTitle", elementId: "table-1" },
     };
-    const bar = getTableTitleBar(table, title, 1, title.fontSize);
+    const bar = getTableTitleBar(table, title, 1, DEFAULT_FONT_FAMILY);
     const grip = {
       x: bar.grip.x + bar.grip.width / 2,
       y: bar.grip.y + bar.grip.height / 2,

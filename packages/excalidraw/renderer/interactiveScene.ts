@@ -9,13 +9,11 @@ import {
 import {
   arrayToMap,
   DEFAULT_TRANSFORM_HANDLE_SPACING,
-  DEFAULT_FONT_FAMILY,
-  DEFAULT_FONT_SIZE,
+  DEFAULT_ELEMENT_PROPS,
   TABLE_STRUCTURE_RAIL_OFFSET,
   TABLE_STRUCTURE_INSERTION_OFFSET,
   TABLE_STYLE,
   FRAME_STYLE,
-  getFontFamilyString,
   getFontString,
   getVerticalOffset,
   invariant,
@@ -139,7 +137,14 @@ import type {
   NonDeletedSceneElementsMap,
 } from "@excalidraw/element/types";
 
-import { getTableTitle, getTableTitleBar } from "../components/app/tableTitle";
+import {
+  getTableTitle,
+  getTableTitleBar,
+  getTableTitleFont,
+  getTableTitleLineHeight,
+  TABLE_TITLE_FONT_SIZE,
+  TABLE_TITLE_PLACEHOLDER,
+} from "../components/app/tableTitle";
 import { getMindmapNodeIdFromPointerTarget } from "../components/App.mindmap";
 import { renderSnaps } from "../renderer/renderSnaps";
 import { getCompositeControlPointGlobal } from "../components/app/compositeShapeControls";
@@ -1816,11 +1821,12 @@ const renderTableStructureAffordances = (
 ) => {
   withTableLocalTransform(context, appState, () => {
     if (hover?.tableId === table.id) {
+      const fontFamily = title?.fontFamily ?? appState.currentItemFontFamily;
       const bar = getTableTitleBar(
         table,
         title,
         appState.zoom.value,
-        title?.fontSize ?? DEFAULT_FONT_SIZE,
+        fontFamily,
       );
       const dot = 1.4 / appState.zoom.value;
       context.save();
@@ -1839,12 +1845,22 @@ const renderTableStructureAffordances = (
         }
       }
       if (!title) {
-        context.globalAlpha = 0.65;
-        context.font = `700 ${DEFAULT_FONT_SIZE}px ${getFontFamilyString({
-          fontFamily: DEFAULT_FONT_FAMILY,
-        })}`;
-        context.textBaseline = "top";
-        context.fillText("Title", bar.x, bar.y);
+        // the placeholder previews the title exactly as it will be created:
+        // same font, same box; only the ink is faded
+        const lineHeightPx = getTableTitleLineHeight(fontFamily);
+        context.globalAlpha = 0.4;
+        context.fillStyle = getThemedColor(
+          DEFAULT_ELEMENT_PROPS.strokeColor,
+          appState.theme,
+        );
+        context.font = getTableTitleFont(fontFamily);
+        context.textBaseline = "alphabetic";
+        context.fillText(
+          TABLE_TITLE_PLACEHOLDER,
+          bar.x,
+          bar.y +
+            getVerticalOffset(fontFamily, TABLE_TITLE_FONT_SIZE, lineHeightPx),
+        );
       }
       context.restore();
     }

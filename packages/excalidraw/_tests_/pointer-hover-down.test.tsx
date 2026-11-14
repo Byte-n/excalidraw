@@ -184,7 +184,7 @@ describe("hover = pointerdown target (PR5a-2)", () => {
     const title = h.elements.find(
       (element) => element.containerRef?.kind === "tableTitle",
     ) as any;
-    const bar = getTableTitleBar(liveTable, title, 1, title.fontSize);
+    const bar = getTableTitleBar(liveTable, title, 1, title.fontFamily);
     const gripX = bar.grip.x + bar.grip.width / 2;
     const gripY = bar.grip.y + bar.grip.height / 2;
     await expectHoverDownKind(gripX, gripY, "containerControl");

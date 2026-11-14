@@ -2,6 +2,7 @@ import {
   getFontString,
   invariant,
   TABLE_CELL_TEXT_FONT_SIZE,
+  TABLE_STRUCTURE_RAIL_OFFSET,
 } from "@excalidraw/common";
 
 import { newTableElement, newTextElement } from "./newElement";
@@ -132,7 +133,21 @@ export const getTableSceneTitle = (
     )
     .sort(compareSlotIdentity)[0];
 
-/** 标题持久化位置只使用场景坐标；缩放和操作轨道属于编辑器。 */
+/** Extra clearance between the rail band and the title's bottom edge. */
+const TABLE_TITLE_RAIL_CLEARANCE = 9;
+
+/**
+ * Scene-space distance from the table frame to the title's bottom edge: the
+ * row/column rails hug the frame from the outside, so the title clears them
+ * before the configured gap starts. The same value positions created titles
+ * and the empty-title placeholder, so the title never moves between states.
+ */
+const getTableTitleOffsetY = (table: ExcalidrawTableElement) =>
+  TABLE_STRUCTURE_RAIL_OFFSET +
+  TABLE_TITLE_RAIL_CLEARANCE +
+  (table.table.style?.title?.gap ?? 8);
+
+/** Title persistent position is scene coordinates only; zoom belongs to the editor. */
 export const getTableSceneTitlePosition = (
   table: ExcalidrawTableElement,
   title: Pick<ExcalidrawTextElement, "width" | "height">,
@@ -146,7 +161,7 @@ export const getTableSceneTitlePosition = (
         : align === "end"
         ? table.width - title.width
         : 0),
-    y: table.y - (table.table.style?.title?.gap ?? 8) - title.height,
+    y: table.y - getTableTitleOffsetY(table) - title.height,
   };
 };
 

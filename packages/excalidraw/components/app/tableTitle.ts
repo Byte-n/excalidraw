@@ -1,4 +1,4 @@
-import { TABLE_STRUCTURE_RAIL_OFFSET, getFontString } from "@excalidraw/common";
+import { getFontString, getLineHeight } from "@excalidraw/common";
 import { measureText } from "@excalidraw/element";
 import {
   getTableSceneTitle,
@@ -10,13 +10,27 @@ import {
 import type {
   ExcalidrawTableElement,
   ExcalidrawTextElement,
+  FontFamilyValues,
 } from "@excalidraw/element/types";
 
 import type App from "../App";
 
-/** Design spec (phase-6): table titles are created at 12px / weight 500. */
-const TABLE_TITLE_FONT_SIZE = 12;
-const TABLE_TITLE_FONT_WEIGHT = 500;
+/** Design spec (phase-6): table titles use 12px / weight 500. */
+export const TABLE_TITLE_FONT_SIZE = 12;
+export const TABLE_TITLE_FONT_WEIGHT = 500;
+export const TABLE_TITLE_PLACEHOLDER = "Title";
+
+/** The title font string, shared by created titles and the empty placeholder. */
+export const getTableTitleFont = (fontFamily: FontFamilyValues) =>
+  getFontString({
+    fontFamily,
+    fontSize: TABLE_TITLE_FONT_SIZE,
+    fontWeight: TABLE_TITLE_FONT_WEIGHT,
+  });
+
+/** The single-line height a title with `fontFamily` gets once it is created. */
+export const getTableTitleLineHeight = (fontFamily: FontFamilyValues) =>
+  TABLE_TITLE_FONT_SIZE * getLineHeight(fontFamily);
 
 export const getTableTitle = getTableSceneTitle;
 
@@ -24,30 +38,22 @@ export const getTableTitleBar = (
   table: ExcalidrawTableElement,
   title: ExcalidrawTextElement | undefined,
   zoom: number,
-  fontSize: number,
+  fontFamily: FontFamilyValues,
 ) => {
-  const lineHeight = title?.height ?? fontSize * 1.25;
-  const gap = table.table.style?.title?.gap ?? 8;
-  const y = title
-    ? getTableSceneTitlePosition(table, title).y
-    : table.y - (TABLE_STRUCTURE_RAIL_OFFSET + 9 + gap) / zoom - lineHeight;
-  const align = table.table.style?.title?.align ?? "start";
+  // an empty table reserves exactly the box its first title will occupy, so
+  // the placeholder, the hover target and the created title share one geometry
   const width = title?.width ?? Math.min(table.width, 100 / zoom);
-  const x =
-    align === "center"
-      ? table.x + (table.width - width) / 2
-      : align === "end"
-      ? table.x + table.width - width
-      : table.x;
+  const height = title?.height ?? getTableTitleLineHeight(fontFamily);
+  const { x, y } = getTableSceneTitlePosition(table, { width, height });
   const gripSize = 20 / zoom;
   return {
     x,
     y,
     width,
-    height: lineHeight,
+    height,
     grip: {
       x: x - gripSize - 4 / zoom,
-      y: y + (lineHeight - gripSize) / 2,
+      y: y + (height - gripSize) / 2,
       width: gripSize,
       height: gripSize,
     },
@@ -80,7 +86,7 @@ export const startTableTitleEditing = (
   let title = existing;
   if (!title) {
     app.store.scheduleCapture();
-    title = setTableSceneTitle(app.scene, table, "Title", {
+    title = setTableSceneTitle(app.scene, table, TABLE_TITLE_PLACEHOLDER, {
       fontFamily: app.state.currentItemFontFamily,
     });
     // setTableSceneTitle only takes a fontFamily option; the design-spec
@@ -91,11 +97,7 @@ export const startTableTitleEditing = (
       fontWeight: TABLE_TITLE_FONT_WEIGHT,
       ...measureText(
         title.text,
-        getFontString({
-          fontFamily: title.fontFamily,
-          fontSize: TABLE_TITLE_FONT_SIZE,
-          fontWeight: TABLE_TITLE_FONT_WEIGHT,
-        }),
+        getTableTitleFont(title.fontFamily),
         title.lineHeight,
       ),
     });

@@ -1,3 +1,5 @@
+import { TABLE_STRUCTURE_RAIL_OFFSET } from "@excalidraw/common";
+
 import { pointFrom } from "@excalidraw/math";
 
 import { describe, expect, it, vi } from "vitest";
@@ -162,7 +164,9 @@ describe("完整表格纯场景操作", () => {
         elementId: table.id,
       });
       expect(title.x).toBe(table.x + table.width - title.width);
-      expect(title.y).toBe(table.y - title.height - 7);
+      expect(title.y).toBe(
+        table.y - (TABLE_STRUCTURE_RAIL_OFFSET + 9 + 7) - title.height,
+      );
     } finally {
       vi.unstubAllGlobals();
     }
@@ -582,7 +586,9 @@ describe("完整表格纯场景操作", () => {
     });
     const nextTitle = getTableSceneTitle(cleared.elements, table.id)!;
     expect(nextTitle.x).toBe(table.x);
-    expect(nextTitle.y).toBe(table.y - nextTitle.height - 8);
+    expect(nextTitle.y).toBe(
+      table.y - (TABLE_STRUCTURE_RAIL_OFFSET + 9 + 8) - nextTitle.height,
+    );
     expect(nextTitle.version).toBe(title.version);
     const empty = applyTableOperation(cleared.elements, {
       action: "setTitle",

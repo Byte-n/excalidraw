@@ -3,7 +3,6 @@ import {
   KEYS,
   distance,
   DRAGGING_THRESHOLD,
-  DEFAULT_FONT_SIZE,
   getGridPoint,
   isSelectionLikeTool,
   TABLE_STRUCTURE_INSERTION_OFFSET,
@@ -1443,7 +1442,7 @@ export const getTableStructureHoverAtSceneCoords = (
       element,
       title,
       app.state.zoom.value,
-      title?.fontSize ?? DEFAULT_FONT_SIZE,
+      title?.fontFamily ?? app.state.currentItemFontFamily,
     );
     if (isInTableTitleBar(sceneCoords, bar)) {
       return {
