@@ -6,6 +6,7 @@ const { build } = require("esbuild");
 const getConfig = (outdir) => ({
   outdir,
   bundle: true,
+  platform: path.basename(process.cwd()) === "agent-tool" ? "node" : "browser",
   format: "esm",
   entryPoints: ["src/index.ts"],
   entryNames: "[name]",
@@ -19,6 +20,8 @@ const getConfig = (outdir) => ({
     "@excalidraw/element",
     "@excalidraw/math",
     "@excalidraw/fractional-indexing",
+    "@napi-rs/canvas",
+    "jsdom",
     "yjs",
     "@excalidraw/yjs",
     "@hocuspocus/provider",

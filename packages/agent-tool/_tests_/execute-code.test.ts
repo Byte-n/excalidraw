@@ -118,7 +118,7 @@ test("不 await 的写调用在工具返回前完成且登记真实回执", asyn
   expect(result.receipts).toHaveLength(1);
 });
 
-test("SDK 拒绝即使不 await 也收敛为稳定失败并报告原始异常", async () => {
+test("SDK 拒绝即使不 await 也收敛为稳定失败并报告错误码", async () => {
   const error = new CanvasSdkError("not_editable", "会话不可编辑");
   const errors: unknown[] = [];
   const tool = createTool({
@@ -135,7 +135,13 @@ test("SDK 拒绝即使不 await 也收敛为稳定失败并报告原始异常", 
   );
   expect(result.ok).toBe(false);
   expect(result.ok ? undefined : result.error.code).toBe("not_editable");
-  expect(errors).toContain(error);
+  expect(
+    errors.some(
+      (value) =>
+        value instanceof Error &&
+        (value as { code?: unknown }).code === "not_editable",
+    ),
+  ).toBe(true);
 });
 
 test("canvas.apply 参数校验失败时回传合法图形类型", async () => {

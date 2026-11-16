@@ -1,4 +1,4 @@
-import rough from "roughjs/bin/rough";
+import rough from "roughjs";
 import {
   arrayToMap,
   type Bounds,
@@ -52,7 +52,6 @@ import {
   isFreeDrawElement,
   isLinearElement,
   isLineElement,
-  isTextElement,
   isExcalidrawElement,
 } from "./typeChecks";
 import { getElementShape } from "./shape";
@@ -1067,10 +1066,7 @@ const getLinearElementRotatedBounds = (
   const res = getMinMaxXYFromCurvePathOps(ops, transformXY);
   const coords: Bounds = [res[0], res[1], res[2], res[3]];
   if (labelBounds) {
-    const union = LinearElementEditor.getMinMaxXYWithLabel(
-      coords,
-      labelBounds,
-    );
+    const union = LinearElementEditor.getMinMaxXYWithLabel(coords, labelBounds);
     return [union[0], union[1], union[2], union[3]];
   }
   return coords;

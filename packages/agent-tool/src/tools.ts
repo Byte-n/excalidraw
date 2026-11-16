@@ -1,6 +1,6 @@
-import { createCanvasSceneReader } from "./collaboration.js";
 import { buildCanvasOverviewText, createDocsApi } from "./docs/index.js";
-import { directExecutor } from "./direct-executor.js";
+import { workerExecutor } from "./sandbox-executor.js";
+import { CanvasSdkError } from "./sdk/errors.js";
 import { createCanvasSdk } from "./sdk/index.js";
 
 import {
@@ -124,7 +124,7 @@ export const createCanvasExecuteCodeTool = (hooks: CanvasExecuteCodeHooks) => ({
       const session = await hooks.sessionFactory(context);
       const canvas = await (hooks.sdkFactory?.(session, context) ??
         createCanvasSdk(session, context));
-      const executor = hooks.executor ?? directExecutor;
+      const executor = hooks.executor ?? workerExecutor;
       const result = await executor.execute({
         code: parsed.code,
         canvas,
@@ -142,21 +142,30 @@ export const createCanvasExecuteCodeTool = (hooks: CanvasExecuteCodeHooks) => ({
 
 export const createCanvasExportTool = (hooks: CanvasExportHooks) => ({
   name: "canvas_export" as const,
-  description: "从一次有效协作会话读取指定画板的完整 canonical elements 快照。",
+  description:
+    "导出指定画板的 JSON 快照、SVG 或 PNG；PNG 在 Node 端由 SVG 光栅化。",
   inputSchema: ScriptExportInputSchema,
   outputSchema: ScriptExportOutputSchema,
   execute: async (input: unknown, execution: { signal?: AbortSignal } = {}) => {
     const parsed = ScriptExportInputSchema.parse(input);
     const context = { ...parsed, signal: execution.signal };
     if (context.signal?.aborted) {
-      throw new Error("execution_cancelled");
+      throw new CanvasSdkError("execution_cancelled", "脚本执行已取消");
     }
     const session = await hooks.sessionFactory(context);
-    const scene = createCanvasSceneReader(session, context)();
+    const sdk = createCanvasSdk(session, {
+      canvasId: parsed.canvasId,
+      code: "",
+      mode: "read",
+      ...(execution.signal ? { signal: execution.signal } : {}),
+    });
+    const { canvasId: _canvasId, ...exportInput } = parsed;
+    void _canvasId;
+    const result = await sdk.export(exportInput);
     return ScriptExportOutputSchema.parse({
       ok: true,
       status: "read",
-      result: { canvasId: parsed.canvasId, ...scene },
+      result: { canvasId: parsed.canvasId, ...result },
     });
   },
 });

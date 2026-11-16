@@ -711,16 +711,63 @@ test("read 模式写操作抛出 not_editable", async () => {
   ).rejects.toMatchObject({ code: "not_editable" });
 });
 
-test("schema.get 生成 JSON Schema，export 仅接受 JSON", async () => {
+test("schema.get 生成 JSON Schema，export 拒绝未知格式", async () => {
   const sdk = makeSdk("read");
   const schema = await sdk.schema.get({ type: "apply" });
   expect(schema).toMatchObject({ type: "object" });
   expect(JSON.stringify(schema)).toContain("addShape");
   const generateSchema = await sdk.schema.get({ type: "generate" });
   expect(JSON.stringify(generateSchema)).toContain("participants");
-  await expect(sdk.export({ format: "png" as never })).rejects.toMatchObject({
+  await expect(sdk.export({ format: "webp" as never })).rejects.toMatchObject({
     code: "unsupported_format",
   });
   const snapshot = await sdk.export({ format: "json" });
-  expect(snapshot.schemaVersion).toBe(2);
+  expect(snapshot.format).toBe("json");
+  if (snapshot.format === "json") {
+    expect(snapshot.schemaVersion).toBe(2);
+  }
+});
+
+test("export svg/png 渲染可见元素", async () => {
+  const sdk = makeSdk();
+  const created = await sdk.apply({
+    ops: [
+      {
+        op: "addShape",
+        kind: "rectangle",
+        x: 0,
+        y: 0,
+        width: 200,
+        height: 100,
+        label: "服务",
+      },
+    ],
+  });
+  const id = created.createdElementIds[0];
+  const svg = await sdk.export({ format: "svg", ids: [id] });
+  expect(svg.format).toBe("svg");
+  if (svg.format === "svg") {
+    expect(svg.data).toContain("<svg");
+    expect(svg.data).toContain("@font-face");
+    expect(svg.data).toContain("data:font/woff2");
+    expect(svg.width).toBeGreaterThan(0);
+    expect(svg.height).toBeGreaterThan(0);
+  }
+  const png = await sdk.export({ format: "png", ids: [id], scale: 2 });
+  expect(png.format).toBe("png");
+  if (png.format === "png") {
+    expect(png.width).toBeGreaterThan(0);
+    expect(
+      Buffer.from(png.data, "base64")
+        .subarray(0, 8)
+        .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+    ).toBe(true);
+  }
+});
+
+test("export 渲染空场景返回 invalid_input", async () => {
+  const sdk = makeSdk("read");
+  await expect(sdk.export({ format: "svg" })).rejects.toMatchObject({
+    code: "invalid_input",
+  });
 });

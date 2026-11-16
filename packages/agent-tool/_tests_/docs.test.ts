@@ -20,6 +20,7 @@ test("index 返回 9 个 guide，并在允许时按 kind 过滤 topic", async ()
     "mindmap",
     "sequence",
     "generate",
+    "runtime",
     "layout",
     "document",
     "errors",
@@ -82,6 +83,27 @@ test("generate guide 覆盖 diagram/sequence/mindmap/table", async () => {
   expect(mindmap.text).toContain("top-to-bottom");
   const table = await docs.read({ guide: "generate", topic: "table" });
   expect(table.text).toContain("maxWidth");
+});
+
+test("runtime guide 说明沙箱、超时与配额", async () => {
+  const index = await docs.index();
+  expect(
+    index.guides
+      .find((guide) => guide.id === "runtime")
+      ?.topics.map((topic) => topic.id),
+  ).toEqual(["sandbox", "quotas"]);
+  const sandbox = await docs.read({ guide: "runtime", topic: "sandbox" });
+  expect(sandbox.text).toContain("不是安全边界");
+  const quotas = await docs.read({ guide: "runtime", topic: "quotas" });
+  expect(quotas.text).toContain("execution_timeout");
+  expect(quotas.text).toContain("quota_exceeded");
+});
+
+test("document/export 说明 SVG/PNG 与尺寸上限", async () => {
+  const result = await docs.read({ guide: "document", topic: "export" });
+  expect(result.text).toContain("svg");
+  expect(result.text).toContain("png");
+  expect(result.text).toContain("8192");
 });
 
 test("errors/codes 含 version_conflict 与可重试说明", async () => {

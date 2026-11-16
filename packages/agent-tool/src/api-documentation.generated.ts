@@ -201,16 +201,17 @@ export const canvasApiDocumentation = {
     {
       path: "export",
       signature:
-        'export(input?: { format?: "json"; ids?: string[]; region?: CanvasBounds; }) -> Promise<{ [x: string]: unknown; }>',
-      description: "导出 JSON 快照；SVG/PNG 本期不支持。",
+        "export(input?: CanvasExportInput) -> Promise<CanvasJsonExportResult | CanvasSvgExportResult | CanvasPngExportResult>",
+      description: "导出 JSON 快照、SVG 或 PNG；PNG 在 Node 端光栅化。",
       parameters: [
         {
           name: "input",
           optional: true,
-          type: '{ format?: "json"; ids?: string[]; region?: CanvasBounds; }',
+          type: "CanvasExportInput",
         },
       ],
-      returns: "{ [x: string]: unknown; }",
+      returns:
+        "CanvasJsonExportResult | CanvasSvgExportResult | CanvasPngExportResult",
     },
     {
       path: "docs.index",
@@ -374,6 +375,31 @@ export const canvasApiDocumentation = {
       name: "CanvasGenerateApi",
       definition:
         "{ diagram(input: CanvasGenerateDiagramInput): Promise<CanvasApplyReceipt>; sequence(input: CanvasGenerateSequenceInput): Promise<CanvasApplyReceipt>; mindmap(input: CanvasGenerateMindmapInput): Promise<CanvasApplyReceipt>; table(input: CanvasGenerateTableInput): Promise<CanvasApplyReceipt>; }",
+    },
+    {
+      name: "CanvasExportInput",
+      definition:
+        '{ format?: "json" | "svg" | "png"; ids?: string[]; region?: CanvasBounds; scale?: number; background?: boolean; backgroundColor?: string; padding?: number; }',
+    },
+    {
+      name: "CanvasJsonExportResult",
+      definition:
+        '{ format: "json"; schemaVersion: 2; elements: Record<string, unknown>[]; assets: Record<string, unknown>; }',
+    },
+    {
+      name: "CanvasSvgExportResult",
+      definition:
+        '{ format: "svg"; mimeType: "image/svg+xml"; data: string; width: number; height: number; }',
+    },
+    {
+      name: "CanvasPngExportResult",
+      definition:
+        '{ format: "png"; mimeType: "image/png"; data: string; width: number; height: number; }',
+    },
+    {
+      name: "CanvasExportResult",
+      definition:
+        "CanvasJsonExportResult | CanvasSvgExportResult | CanvasPngExportResult",
     },
     {
       name: "CanvasValidateInput",

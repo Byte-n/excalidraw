@@ -245,6 +245,39 @@ export type CanvasGenerateApi = {
   /** 建表格并写入表头/数据单元格。 */
   table(input: CanvasGenerateTableInput): Promise<CanvasApplyReceipt>;
 };
+export type CanvasExportInput = {
+  format?: "json" | "svg" | "png";
+  ids?: string[];
+  region?: CanvasBounds;
+  scale?: number;
+  background?: boolean;
+  backgroundColor?: string;
+  padding?: number;
+};
+export type CanvasJsonExportResult = {
+  format: "json";
+  schemaVersion: 2;
+  elements: Record<string, unknown>[];
+  assets: Record<string, unknown>;
+};
+export type CanvasSvgExportResult = {
+  format: "svg";
+  mimeType: "image/svg+xml";
+  data: string;
+  width: number;
+  height: number;
+};
+export type CanvasPngExportResult = {
+  format: "png";
+  mimeType: "image/png";
+  data: string;
+  width: number;
+  height: number;
+};
+export type CanvasExportResult =
+  | CanvasJsonExportResult
+  | CanvasSvgExportResult
+  | CanvasPngExportResult;
 export type CanvasValidateInput = {
   ids?: string[];
   checks?: Array<"overlap" | "overflow" | "bindings" | "dangling">;
@@ -343,12 +376,8 @@ export interface CanvasSdk {
     /** 按类型返回 apply/layout/generate/text/validate/scene/export 的 JSON Schema。 */
     get(input: { type: CanvasSchemaType }): Promise<Record<string, unknown>>;
   };
-  /** 导出 JSON 快照；SVG/PNG 本期不支持。 */
-  readonly export: (input?: {
-    format?: "json";
-    ids?: string[];
-    region?: CanvasBounds;
-  }) => Promise<Record<string, unknown>>;
+  /** 导出 JSON 快照、SVG 或 PNG；PNG 在 Node 端光栅化。 */
+  readonly export: (input?: CanvasExportInput) => Promise<CanvasExportResult>;
   /** 按 guide/topic 查询画布规则、API 签名、shape/layout/error 清单。 */
   readonly docs: CanvasDocsApi;
 }

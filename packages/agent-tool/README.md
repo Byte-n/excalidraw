@@ -9,7 +9,7 @@
 | `canvas_overview` | 一页硬规则与索引：工具/读写边界、`apply`/`layout` 用法、guide 列表、60 个 shape id、9 个布局算法、错误码 | 只读 |
 | `canvas_docs` | `{ action: "index" \| "read" \| "search", guide?, topic?, query?, kind?, limit? }` 按需查询文档 | 只读 |
 | `execute_code` | 在宿主选择的执行器中运行 JS，注入 `canvas` SDK；返回 JSON 结果并收集写入回执 | 读/写（由 `mode` 决定） |
-| `canvas_export` | 读取指定画板的完整 canonical 场景 JSON 快照 | 只读 |
+| `canvas_export` | 导出指定画板的 JSON 快照、SVG 或 PNG | 只读 |
 
 `canvas_overview` 不接收参数；`canvas_docs` 的 `read` 不传 `topic` 时只返回该 guide 的 topic 列表。
 
@@ -34,7 +34,7 @@ await tool.execute({
 });
 ```
 
-省略 `executor` 时使用包内的直接执行器：严格模式 `AsyncFunction` 调用本次执行构造的 SDK，不隔离全局、不限制内存、不中断同步循环；需要隔离时由宿主注入执行器。宿主可用 `createCanvasScriptTools(hooks)` 一次构造 4 个工具，它们共享同一个 `sessionFactory`。
+省略 `executor` 时使用内置 worker 执行器：脚本在 `worker_threads` 的独立 `vm` 上下文中运行，默认 30s 超时、256MB 内存、10000 次 canvas 调用与 4MB 结果上限；同步死循环会被 `terminate()` 中断。`vm` 不是安全边界，强隔离需宿主换成 QuickJS 或独立进程。需要可信脚本或自定义隔离时，可注入 `executor`，或显式使用 `directExecutor`。宿主可用 `createCanvasScriptTools(hooks)` 一次构造 4 个工具，它们共享同一个 `sessionFactory`。
 
 `execute_code` 输入为 `{ canvasId, code, mode: "read" | "write" }`（严格 schema，拒绝额外字段）。宿主 hook：
 
@@ -62,7 +62,7 @@ await tool.execute({
 | `layout.apply({ ids, algorithm, origin?, options?, dryRun? })` | 对已有 id 计算并提交布局 |
 | `validate({ ids?, checks? })` | `overlap` / `overflow` / `bindings` / `dangling` 结构校验 |
 | `schema.get({ type })` | 返回 `apply`/`layout`/`text`/`validate`/`scene`/`export` 的 JSON Schema |
-| `export({ format?, ids?, region? })` | 仅支持 JSON 快照 |
+| `export({ format?, ids?, region?, scale?, background?, backgroundColor?, padding? })` | JSON 快照 / SVG / PNG；PNG 在 Node 端光栅化 |
 | `docs.index({ kind? })` | guide/topic 索引 |
 | `docs.read({ guide, topic?, includeExamples? })` | 读取 guide 或单个 topic |
 | `docs.search({ query, kind?, limit? })` | 标题/摘要/正文搜索 |
@@ -95,6 +95,28 @@ await tool.execute({
 
 四个方法都接受 `dryRun` 与 `idempotencyKey`，返回普通 `apply` 回执。
 
+## 导出
+
+`canvas.export({ format?, ids?, region?, scale?, background?, backgroundColor?, padding? })`：
+
+- `json`：canonical 快照，包含墓碑与 assets 元数据；
+- `svg`：返回 `{ format, mimeType, data, width, height }`，内联已用字体的 `@font-face`；
+- `png`：先用 jsdom 复用仓库静态 SVG 渲染，再用 `@napi-rs/canvas` 光栅化并返回 base64；
+- `scale` 默认 1、最大 4；宽高上限 8192、总像素上限 3200 万；
+- 只导出可见元素，不包含二进制图片资产。
+
+`canvas_export` 工具接受同一组参数。
+
+## 沙箱与配额
+
+默认 `workerExecutor`（要求 Node >= 22.3）：
+
+- `worker_threads` + `vm`：脚本只拿到 `canvas`、`console`、定时器与标准 JS 内置对象；关闭 `eval`/`new Function`/WASM 编译；
+- 默认 `timeoutMs: 30000`、`memoryLimitMb: 256`、`maxCalls: 10000`、`maxResultBytes: 4MB`；
+- 超时返回 `execution_timeout`，取消返回 `execution_cancelled`，调用/内存/结果超限返回 `quota_exceeded`；
+- `createWorkerExecutor(options)` 可覆盖配额；`vm` 不是安全边界，强隔离需宿主替换为 QuickJS 或独立进程；
+- 场景元素/资产/文本大小仍由协作会话的 scene policy 约束。
+
 ## 时序图语义
 
 `op: "sequence"` 提供参与者、消息、激活条与组合片段的增量操作：
@@ -117,7 +139,7 @@ await tool.execute({
 
 ## 文档体系
 
-- 10 个 guide、31 个 topic：`core` / `shapes` / `connectors` / `mindmap` / `sequence` / `generate` / `layout` / `document` / `errors` / `examples`。
+- 11 个 guide、33 个 topic：`core` / `shapes` / `connectors` / `mindmap` / `sequence` / `generate` / `runtime` / `layout` / `document` / `errors` / `examples`。
 - `canvas_docs` 与 `canvas.docs` 共用同一份数据：`index` / `read` / `search`。
 - 单次 `read` 上限约 4000 字符，超出返回摘要 + 钻取提示并标记 `truncated`；响应带 `docsVersion` 用于判断缓存是否过期。
 - API 签名由 `scripts/generate-api-docs.mjs` 用 TypeScript Compiler API 从 `CanvasSdk` 自动生成到 `src/api-documentation.generated.ts`（13 个成员）；shape/layout/error 清单从代码常量派生，人工 guide 只写判断与任务配方。
@@ -148,7 +170,7 @@ await tool.execute({
 
 - 连接、鉴权、审批、超时、取消与配额由宿主负责；`signal` 为合作取消，异步 SDK 调用在取消后必须停止提交。
 - 会话生命周期不在包内：工具工厂只借用 session，不调用 `close`，宿主需自行释放。
-- 本期未提供：SVG/PNG 导出、MCP server、Mermaid 源码解析。
+- 本期未提供：MCP server、Mermaid 源码解析、二进制图片资产的导出。
 
 ## 开发
 

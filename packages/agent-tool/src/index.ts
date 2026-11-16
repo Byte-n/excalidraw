@@ -72,6 +72,9 @@ export {
 export type { CanvasOp } from "./schemas.js";
 export { createCanvasSdk } from "./sdk/index.js";
 export { CanvasSdkError } from "./sdk/errors.js";
+export { directExecutor } from "./direct-executor.js";
+export { createWorkerExecutor, workerExecutor } from "./sandbox-executor.js";
+export type { WorkerExecutorOptions } from "./sandbox-executor.js";
 export type {
   CanvasSdk,
   CanvasApplyInput,
@@ -87,11 +90,16 @@ export type {
   CanvasDocsSearchResult,
   CanvasDocsTopicSummary,
   CanvasElementSummary,
+  CanvasExportInput,
+  CanvasExportResult,
+  CanvasJsonExportResult,
   CanvasLayoutInput,
   CanvasLayoutReceipt,
+  CanvasPngExportResult,
   CanvasPoint,
   CanvasSceneApi,
   CanvasSceneView,
+  CanvasSvgExportResult,
   CanvasSchemaType,
   CanvasTextApi,
   CanvasTextStyleInput,

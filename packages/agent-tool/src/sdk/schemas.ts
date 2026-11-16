@@ -833,9 +833,13 @@ export const CanvasTextFitInputSchema = z
 
 export const CanvasExportInputSchema = z
   .object({
-    format: z.literal("json").optional(),
-    ids: z.array(id).optional(),
+    format: z.enum(["json", "svg", "png"]).optional(),
+    ids: z.array(id).max(10_000).optional(),
     region: CanvasBoundsSchema.optional(),
+    scale: positive.max(4).optional(),
+    background: z.boolean().optional(),
+    backgroundColor: z.string().min(1).optional(),
+    padding: finite.nonnegative().optional(),
   })
   .strict();
 

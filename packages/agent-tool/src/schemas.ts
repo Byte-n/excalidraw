@@ -461,10 +461,24 @@ export const ScriptExecuteCodeInputSchema = z
     mode: z.enum(["read", "write"]),
   })
   .strict();
+const exportBounds = z
+  .object({
+    x: finite,
+    y: finite,
+    width: finite.nonnegative(),
+    height: finite.nonnegative(),
+  })
+  .strict();
 export const ScriptExportInputSchema = z
   .object({
     canvasId: scriptCanvasId,
-    format: z.literal("json").optional(),
+    format: z.enum(["json", "svg", "png"]).optional(),
+    ids: z.array(id).max(10_000).optional(),
+    region: exportBounds.optional(),
+    scale: positive.max(4).optional(),
+    background: z.boolean().optional(),
+    backgroundColor: z.string().min(1).optional(),
+    padding: finite.nonnegative().optional(),
   })
   .strict();
 export const ScriptOverviewInputSchema = z.object({}).strict();

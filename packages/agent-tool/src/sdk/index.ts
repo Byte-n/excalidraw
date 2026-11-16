@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { DEFAULT_EXPORT_PADDING } from "@excalidraw/common";
+import { getCommonBounds } from "@excalidraw/element";
 import { createCanvasSceneCommands } from "@excalidraw/yjs";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
@@ -198,6 +200,10 @@ const schemaFor = (type: CanvasSchemaType) => {
   }
 };
 
+const MAX_EXPORT_DIMENSION = 8192;
+const MAX_EXPORT_PIXELS = 32_000_000;
+const EXPORT_FORMATS = ["json", "svg", "png"] as const;
+
 const createExportApi = (deps: {
   readScene: () => Scene;
   assertActive: () => void;
@@ -208,11 +214,14 @@ const createExportApi = (deps: {
       input && typeof input === "object"
         ? (input as { format?: unknown }).format
         : undefined;
-    if (format !== undefined && format !== "json") {
+    if (
+      format !== undefined &&
+      !(EXPORT_FORMATS as readonly unknown[]).includes(format)
+    ) {
       throw new CanvasSdkError(
         "unsupported_format",
         `不支持的导出格式: ${String(format)}`,
-        { legalValues: ["json"] },
+        { legalValues: [...EXPORT_FORMATS] },
       );
     }
     const parsed = parseInput(CanvasExportInputSchema, input ?? {});
@@ -227,14 +236,59 @@ const createExportApi = (deps: {
         const region = parsed.region;
         elements = elements.filter((element) => intersects(element, region));
       }
-      return {
-        schemaVersion: 2,
-        elements: elements.map(
-          (element) =>
-            structuredClone(element) as unknown as Record<string, unknown>,
-        ),
-        assets: structuredClone(scene.assets),
+      const requestedFormat = parsed.format ?? "json";
+      if (requestedFormat === "json") {
+        return {
+          format: "json" as const,
+          schemaVersion: 2 as const,
+          elements: elements.map(
+            (element) =>
+              structuredClone(element) as unknown as Record<string, unknown>,
+          ),
+          assets: structuredClone(scene.assets),
+        };
+      }
+
+      const visible = elements.filter((element) => !element.isDeleted);
+      if (!visible.length) {
+        throw new CanvasSdkError("invalid_input", "没有可导出的元素");
+      }
+      const scale = parsed.scale ?? 1;
+      const padding = parsed.padding ?? DEFAULT_EXPORT_PADDING;
+      const [minX, minY, maxX, maxY] = getCommonBounds(visible);
+      const width = (maxX - minX + padding * 2) * scale;
+      const height = (maxY - minY + padding * 2) * scale;
+      if (
+        !Number.isFinite(width) ||
+        !Number.isFinite(height) ||
+        width <= 0 ||
+        height <= 0 ||
+        width > MAX_EXPORT_DIMENSION ||
+        height > MAX_EXPORT_DIMENSION ||
+        width * height > MAX_EXPORT_PIXELS
+      ) {
+        throw new CanvasSdkError("invalid_input", "导出尺寸过大", {
+          width,
+          height,
+          maxDimension: MAX_EXPORT_DIMENSION,
+          maxPixels: MAX_EXPORT_PIXELS,
+        });
+      }
+      const options = {
+        scale,
+        padding,
+        ...(parsed.background !== undefined
+          ? { background: parsed.background }
+          : {}),
+        ...(parsed.backgroundColor !== undefined
+          ? { backgroundColor: parsed.backgroundColor }
+          : {}),
       };
+      const renderer = await import("../export/node-render.js");
+      if (requestedFormat === "svg") {
+        return await renderer.renderSceneSvg(visible, options);
+      }
+      return await renderer.renderScenePng(visible, options);
     } catch (error) {
       throw toCanvasSdkError(error);
     }
@@ -329,21 +383,26 @@ export type {
   CanvasDiagramEdgeInput,
   CanvasDiagramNodeInput,
   CanvasElementSummary,
+  CanvasExportInput,
+  CanvasExportResult,
   CanvasGenerateApi,
   CanvasGenerateDiagramInput,
   CanvasGenerateMindmapInput,
   CanvasGenerateSequenceInput,
   CanvasGenerateTableInput,
+  CanvasJsonExportResult,
   CanvasLayoutInput,
   CanvasLayoutReceipt,
   CanvasMindmapDirection,
   CanvasMindmapNodeInput,
+  CanvasPngExportResult,
   CanvasPoint,
   CanvasSequenceFragmentInput,
   CanvasSequenceMessageInput,
   CanvasSequenceParticipantInput,
   CanvasSceneApi,
   CanvasSceneView,
+  CanvasSvgExportResult,
   CanvasSchemaType,
   CanvasSdk,
   CanvasTextApi,

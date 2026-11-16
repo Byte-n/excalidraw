@@ -25,6 +25,12 @@
       "development": "./dist/dev/index.css",
       "production": "./dist/prod/index.css"
     },
+    "./export-node": {
+      "types": "./dist/types/excalidraw/export-node.d.ts",
+      "development": "./dist/dev/export-node.js",
+      "production": "./dist/prod/export-node.js",
+      "default": "./dist/prod/export-node.js"
+    },
     ".": {
       "types": "./dist/types/excalidraw/index.d.ts",
       "development": "./dist/dev/index.js",

@@ -29,7 +29,7 @@ import {
   DEFAULT_STROKE_STREAMLINE,
 } from "@excalidraw/common";
 
-import { RoughGenerator } from "roughjs/bin/generator";
+import rough from "roughjs";
 
 import type { GlobalPoint, Polygon } from "@excalidraw/math";
 
@@ -98,13 +98,14 @@ import type {
 } from "./types";
 
 import type { Drawable, Options } from "roughjs/bin/core";
+import type { RoughGenerator } from "roughjs/bin/generator";
 import type { Point as RoughPoint } from "roughjs/bin/geometry";
 
 // 折线箭头拐角圆角半径（场景坐标），画布与 SVG 导出共用
 const ELBOW_ARROW_CORNER_RADIUS = 10;
 
 export class ShapeCache {
-  private static rg = new RoughGenerator();
+  private static rg = rough.generator();
   private static cache = new WeakMap<
     ExcalidrawElement,
     {
@@ -677,7 +678,7 @@ export const getFreedrawFillPolygon = (element: ExcalidrawFreeDrawElement) => {
 
   // Same curve as the rendered fill, without roughness jitter. RoughJS also
   // handles inputs simplified to two points.
-  const ops = new RoughGenerator().curve(getFreedrawFillCurvePoints(element), {
+  const ops = rough.generator().curve(getFreedrawFillCurvePoints(element), {
     roughness: 0,
     disableMultiStroke: true,
   }).sets[0].ops;
@@ -705,7 +706,7 @@ export const generateLinearCollisionShape = (
   op: string;
   data: number[];
 }[] => {
-  const generator = new RoughGenerator();
+  const generator = rough.generator();
   const options: Options = {
     seed: element.seed,
     disableMultiStroke: true,

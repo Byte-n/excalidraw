@@ -219,6 +219,8 @@ export const buildCanvasOverviewText = (): string =>
     "- 布局由发起写入的一方计算：新建后用 canvas.layout.apply。",
     "- canvas.generate 可从结构化 spec 一次生成 diagram/sequence/mindmap/table，并在同一事务内完成布局。",
     '- 时序图用 op: "sequence" 的 addParticipant/addMessage/addFragment；布局用 algorithm: "sequence"。',
+    "- 默认在 worker_threads + vm 中执行：默认 30s 超时、256MB、10000 次调用、4MB 结果上限；vm 不是安全边界。",
+    "- canvas.export 支持 json/svg/png；PNG 在 Node 端光栅化。",
     "- local_applied 仅表示本地提交成功，不代表远端持久化。",
     "- 写入要求 execute_code 的 mode 为 write 且会话可编辑。",
     "示例：",

@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Typed Excalidraw Agent semantic tools",
   "type": "module",
+  "engines": {
+    "node": ">=22.3.0"
+  },
   "types": "./dist/types/agent-tool/src/index.d.ts",
   "main": "./dist/prod/index.js",
   "module": "./dist/prod/index.js",
@@ -29,6 +32,7 @@
   },
   "devDependencies": {
     "@hocuspocus/provider": "4.6.0",
+    "@types/jsdom": "21.1.7",
     "yjs": "13.6.32"
   },
   "peerDependencies": {
@@ -38,8 +42,11 @@
   "dependencies": {
     "@excalidraw/common": "0.18.0",
     "@excalidraw/element": "0.18.0",
+    "@excalidraw/excalidraw": "0.18.0",
     "@excalidraw/yjs": "file:../yjs",
     "@excalidraw/yjs-hocuspocus-client": "file:../yjs-hocuspocus-client",
+    "@napi-rs/canvas": "1.1.1",
+    "jsdom": "22.1.0",
     "zod": "4.4.3"
   },
   "publishConfig": {

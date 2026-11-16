@@ -88,7 +88,9 @@ test("script and export validate strict envelopes and host JSON output", async (
   await expect(
     tools[3].execute({ canvasId, filePath: "/tmp/a" }),
   ).rejects.toThrow();
-  await expect(tools[3].execute({ canvasId, format: "png" })).rejects.toThrow();
+  await expect(
+    tools[3].execute({ canvasId, format: "webp" }),
+  ).rejects.toThrow();
   const invalid = createCanvasScriptTools({
     ...port,
     executor: {
@@ -160,15 +162,15 @@ test("导出拒绝未同步会话和取消，且不转移会话关闭职责", as
   });
   try {
     f.binding.setGate({ synced: false });
-    await expect(tool.execute({ canvasId })).rejects.toThrow(
-      "session_unavailable",
-    );
+    await expect(tool.execute({ canvasId })).rejects.toMatchObject({
+      code: "session_unavailable",
+    });
     f.binding.setGate({ synced: true });
     const controller = new AbortController();
     controller.abort();
     await expect(
       tool.execute({ canvasId }, { signal: controller.signal }),
-    ).rejects.toThrow("execution_cancelled");
+    ).rejects.toMatchObject({ code: "execution_cancelled" });
     await tool.execute({ canvasId });
     expect(close).not.toHaveBeenCalled();
   } finally {
@@ -188,7 +190,7 @@ test("异步会话工厂等待期间取消后不读取场景", async () => {
   });
   await expect(
     tool.execute({ canvasId }, { signal: controller.signal }),
-  ).rejects.toThrow("execution_cancelled");
+  ).rejects.toMatchObject({ code: "execution_cancelled" });
   expect(getSceneSnapshot).not.toHaveBeenCalled();
 });
 
@@ -208,16 +210,45 @@ test("导出拒绝非法 canonical 和访问器，不调用 getter 或 toJSON", 
   const accessorTool = createCanvasExportTool({
     sessionFactory: () => withScene(session, unsafe),
   });
-  await expect(accessorTool.execute({ canvasId })).rejects.toThrow(
-    "invalid_scene",
-  );
+  await expect(accessorTool.execute({ canvasId })).rejects.toMatchObject({
+    code: "invalid_scene",
+  });
   expect(getter).not.toHaveBeenCalled();
   const jsonTool = createCanvasExportTool({
     sessionFactory: () =>
       withScene(session, { elements: [], assets: { unsafe: { toJSON } } }),
   });
-  await expect(jsonTool.execute({ canvasId })).rejects.toThrow("invalid_scene");
+  await expect(jsonTool.execute({ canvasId })).rejects.toMatchObject({
+    code: "invalid_scene",
+  });
   expect(toJSON).not.toHaveBeenCalled();
+});
+
+test("canvas_export 支持 svg/png", async () => {
+  const tool = createCanvasExportTool({
+    sessionFactory: () =>
+      withScene(session, { elements: [rectangle()], assets: {} }),
+  });
+  const svg = await tool.execute({ canvasId, format: "svg" });
+  if (!svg.ok) {
+    throw new Error("SVG 导出应成功");
+  }
+  expect(svg.result).toMatchObject({ canvasId, format: "svg" });
+  const svgResult = svg.result as { data: string; width: number };
+  expect(svgResult.data).toContain("<svg");
+  expect(svgResult.width).toBeGreaterThan(0);
+
+  const png = await tool.execute({ canvasId, format: "png", scale: 2 });
+  if (!png.ok) {
+    throw new Error("PNG 导出应成功");
+  }
+  const pngResult = png.result as { data: string; width: number };
+  expect(pngResult.width).toBeGreaterThan(0);
+  expect(
+    Buffer.from(pngResult.data, "base64")
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  ).toBe(true);
 });
 
 test("失败结果保留此前实际提交回执，取消错误沿稳定协议返回", async () => {

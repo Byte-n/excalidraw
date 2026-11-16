@@ -1,4 +1,4 @@
-import rough from "roughjs/bin/rough";
+import rough from "roughjs";
 
 import {
   clamp,
@@ -70,7 +70,6 @@ import {
   layoutTextRegions,
 } from "./text";
 
-import type { TextBlockStyle } from "./text/types";
 import { getCornerRadius } from "./utils";
 
 import { ShapeCache } from "./shape";
@@ -83,6 +82,8 @@ import {
   drawTableGridOnCanvas,
   resolveTableBackgroundTextFontWeight,
 } from "./tableRender";
+
+import type { TextBlockStyle } from "./text/types";
 
 import type {
   ExcalidrawElement,
@@ -889,8 +890,7 @@ const drawElementOnCanvas = (
             element.height,
             lines.length,
             lineHeightPx,
-          ) +
-          getVerticalOffset(style.fontFamily, style.fontSize, lineHeightPx);
+          ) + getVerticalOffset(style.fontFamily, style.fontSize, lineHeightPx);
 
         for (let index = 0; index < lines.length; index++) {
           context.fillText(

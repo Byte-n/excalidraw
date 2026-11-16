@@ -1,7 +1,7 @@
 import throttle from "lodash.throttle";
 import { nanoid } from "nanoid";
 import React from "react";
-import rough from "roughjs/bin/rough";
+import rough from "roughjs";
 
 import {
   APP_NAME,
