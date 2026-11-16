@@ -43,11 +43,13 @@ export type CanvasSceneView =
       assets: Record<string, unknown>;
     };
 export type CanvasSceneApi = {
+  /** 读取场景摘要、完整快照或指定 id/区域内的元素。 */
   get(input?: {
     view?: "summary" | "full";
     ids?: string[];
     region?: CanvasBounds;
   }): Promise<CanvasSceneView>;
+  /** 按文本、类型分页搜索未删除元素。 */
   search(input: {
     query: string;
     types?: string[];
@@ -60,15 +62,18 @@ export type CanvasSceneApi = {
     limit: number;
     hasMore: boolean;
   }>;
+  /** 按 id 读取完整 canonical 元素；任一 id 不存在则报 target_not_found。 */
   getElements(ids: string[]): Promise<Record<string, unknown>[]>;
 };
 export type CanvasTextApi = {
+  /** 度量单行或多行文本的宽高与行高。 */
   measure(input: { text: string; style?: CanvasTextStyleInput }): Promise<{
     width: number;
     height: number;
     lineHeight: number;
     lines: number;
   }>;
+  /** 在最大宽度/高度内换行并返回可放入盒子的文本。 */
   fit(input: {
     text: string;
     style?: CanvasTextStyleInput;
@@ -162,6 +167,59 @@ export type CanvasSchemaType =
   | "validate"
   | "scene"
   | "export";
+export type CanvasDocsKind = "guide" | "type" | "shape" | "layout" | "error";
+export type CanvasDocsTopicSummary = {
+  id: string;
+  title: string;
+  summary: string;
+  kind: CanvasDocsKind;
+};
+export type CanvasDocsGuide = {
+  id: string;
+  title: string;
+  summary: string;
+  topics: CanvasDocsTopicSummary[];
+};
+export type CanvasDocsIndex = {
+  docsVersion: string;
+  guides: CanvasDocsGuide[];
+};
+export type CanvasDocsReadInput = {
+  guide: string;
+  topic?: string;
+  includeExamples?: boolean;
+};
+export type CanvasDocsReadResult = {
+  docsVersion: string;
+  guide: string;
+  topic?: string;
+  text: string;
+  truncated: boolean;
+  fullLength?: number;
+};
+export type CanvasDocsSearchInput = {
+  query: string;
+  kind?: CanvasDocsKind;
+  limit?: number;
+};
+export type CanvasDocsSearchResult = {
+  docsVersion: string;
+  items: Array<{
+    guide: string;
+    topic: string;
+    title: string;
+    snippet: string;
+  }>;
+  total: number;
+};
+export type CanvasDocsApi = {
+  /** 列出 guide 与 topic 索引；kind 可过滤 topic 分类。 */
+  index(input?: { kind?: CanvasDocsKind }): Promise<CanvasDocsIndex>;
+  /** 读取 guide 的 topic 列表或单个 topic；单次响应上限约 4000 字符。 */
+  read(input: CanvasDocsReadInput): Promise<CanvasDocsReadResult>;
+  /** 按标题/摘要/正文搜索 topic，返回命中附近片段。 */
+  search(input: CanvasDocsSearchInput): Promise<CanvasDocsSearchResult>;
+};
 export interface CanvasSdk {
   /** 只读场景访问：summary 轻量摘要，full 返回 canonical 快照。 */
   readonly scene: CanvasSceneApi;
@@ -171,6 +229,7 @@ export interface CanvasSdk {
   readonly apply: (input: CanvasApplyInput) => Promise<CanvasApplyReceipt>;
   /** 对已有 id 执行布局；由发起方计算并提交。 */
   readonly layout: {
+    /** 计算并提交布局，返回受影响元素、bounds 与 layoutToken。 */
     apply(input: CanvasLayoutInput): Promise<CanvasLayoutReceipt>;
   };
   /** 结构校验：重叠、文本溢出、绑定、悬空连线。 */
@@ -179,6 +238,7 @@ export interface CanvasSdk {
   ) => Promise<CanvasValidateResult>;
   /** 返回 Zod 生成的 JSON Schema。 */
   readonly schema: {
+    /** 按类型返回 apply/layout/text/validate/scene/export 的 JSON Schema。 */
     get(input: { type: CanvasSchemaType }): Promise<Record<string, unknown>>;
   };
   /** 导出 JSON 快照；SVG/PNG 本期不支持。 */
@@ -187,4 +247,6 @@ export interface CanvasSdk {
     ids?: string[];
     region?: CanvasBounds;
   }) => Promise<Record<string, unknown>>;
+  /** 按 guide/topic 查询画布规则、API 签名、shape/layout/error 清单。 */
+  readonly docs: CanvasDocsApi;
 }

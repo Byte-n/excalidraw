@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { LAYOUT_ALGORITHM_IDS } from "@excalidraw/element";
 import { ARROWHEAD_VALUES, SHAPE_IDS } from "@excalidraw/yjs";
 
 import { CanvasSdkError } from "./errors.js";
@@ -298,6 +299,27 @@ const resize = z
     "调整尺寸至少指定一个字段",
   );
 
+const layoutOptions = z
+  .object({
+    direction: z.enum(["TB", "LR"]).optional(),
+    rankGap: finite.nonnegative().optional(),
+    nodeGap: finite.nonnegative().optional(),
+    gap: finite.nonnegative().optional(),
+    columns: z.number().int().positive().optional(),
+    axis: z.enum(["x", "y"]).optional(),
+    position: z.enum(["start", "center", "end"]).optional(),
+  })
+  .strict();
+const layoutOp = z
+  .object({
+    op: z.literal("layout"),
+    algorithm: z.enum(LAYOUT_ALGORITHM_IDS),
+    ids: z.array(id).min(1).optional(),
+    origin: point.optional(),
+    options: layoutOptions.optional(),
+  })
+  .strict();
+
 const mindmap = z.union([
   z
     .object({
@@ -478,6 +500,7 @@ export const CanvasOpSchema = z.union([
   deleteOp,
   move,
   resize,
+  layoutOp,
   mindmap,
   table,
 ]);
@@ -495,34 +518,12 @@ export const CanvasApplyInputSchema = z
   .strict();
 export type CanvasApplyInputParsed = z.infer<typeof CanvasApplyInputSchema>;
 
-const layoutAlgorithms = [
-  "layered",
-  "tree",
-  "grid",
-  "row",
-  "column",
-  "stack",
-  "align",
-  "distribute",
-] as const;
-
 export const CanvasLayoutInputSchema = z
   .object({
     ids: z.array(id).min(1).max(1000),
-    algorithm: z.enum(layoutAlgorithms),
+    algorithm: z.enum(LAYOUT_ALGORITHM_IDS),
     origin: point.optional(),
-    options: z
-      .object({
-        direction: z.enum(["TB", "LR"]).optional(),
-        rankGap: finite.nonnegative().optional(),
-        nodeGap: finite.nonnegative().optional(),
-        gap: finite.nonnegative().optional(),
-        columns: finite.nonnegative().optional(),
-        axis: z.enum(["x", "y"]).optional(),
-        position: z.enum(["start", "center", "end"]).optional(),
-      })
-      .strict()
-      .optional(),
+    options: layoutOptions.optional(),
     dryRun: z.boolean().optional(),
   })
   .strict();

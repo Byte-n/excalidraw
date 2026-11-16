@@ -1,14 +1,11 @@
-import { LAYOUT_ALGORITHM_IDS } from "@excalidraw/element";
-import { SHAPE_IDS } from "@excalidraw/yjs";
-
-import { collaborationApiDocumentation } from "./api-documentation.generated.js";
 import { createCanvasSceneReader } from "./collaboration.js";
+import { buildCanvasOverviewText, createDocsApi } from "./docs/index.js";
 import { directExecutor } from "./direct-executor.js";
 import { createCanvasSdk } from "./sdk/index.js";
 
 import {
-  ScriptApiInfoInputSchema,
   ScriptDocumentationOutputSchema,
+  ScriptDocsInputSchema,
   ScriptExecuteCodeInputSchema,
   ScriptExportInputSchema,
   ScriptExportOutputSchema,
@@ -22,51 +19,15 @@ import type {
   CanvasScriptHooks,
 } from "./port.js";
 
-const scriptMethods = collaborationApiDocumentation.members.map(
-  (member) => member.signature,
-);
-const documentation = (member?: string): string => {
-  const members = collaborationApiDocumentation.members.filter(
-    (entry) => !member || entry.name === member,
-  );
-  const text = members
-    .map((entry) =>
-      [
-        entry.signature,
-        entry.description,
-        ...entry.parameters.map(
-          (parameter) => `参数 ${parameter.name}: ${parameter.type}`,
-        ),
-        `返回: Promise<${entry.returns}>`,
-      ].join("\n"),
-    )
-    .join("\n\n");
-  const referencedTypes: { name: string; definition: string }[] = [];
-  let references = text;
-  for (
-    let index = 0;
-    index < collaborationApiDocumentation.types.length;
-    index++
-  ) {
-    for (const type of collaborationApiDocumentation.types) {
-      if (
-        !referencedTypes.some((entry) => entry.name === type.name) &&
-        new RegExp(`\\b${type.name}\\b`).test(references)
-      ) {
-        referencedTypes.push(type);
-        references += `\n${type.definition}`;
-      }
-    }
-  }
-  return `execute_code 中所有公开方法均返回 Promise；原始宿主方法可同步或异步。\n\n${text}\n\n${referencedTypes
-    .map((type) => `${type.name} = ${type.definition}`)
-    .join("\n\n")}`;
-};
-const validDocumentation = (text: string) =>
+const validDocumentation = (result: {
+  text: string;
+  docsVersion?: string;
+  truncated?: boolean;
+}) =>
   ScriptDocumentationOutputSchema.parse({
     ok: true,
     status: "read",
-    result: { text },
+    result,
   });
 
 export const createCanvasOverviewTool = () => ({
@@ -78,31 +39,69 @@ export const createCanvasOverviewTool = () => ({
   execute: async (input: unknown) => {
     const parsed = ScriptOverviewInputSchema.parse(input);
     void parsed;
-    return validDocumentation(
-      [
-        "工具：canvas_overview、canvas_docs、execute_code、canvas_export。",
-        '只读：canvas.scene.get/search/getElements、canvas.text.measure/fit、canvas.validate、canvas.schema.get、canvas.export({ format: "json" })。',
-        "写入：execute_code 使用 write 模式且会话可编辑时，canvas.apply({ ops, expectedVersions?, dryRun?, idempotencyKey? }) 提交语义操作；同批 tempId 可互相引用，失败整批回滚。",
-        "布局：canvas.layout.apply({ ids, algorithm, origin?, options?, dryRun? }) 对已有元素计算布局并随同一次事务提交，回执含 layoutToken。",
-        "回执：apply/layout 返回 elements、bounds、warnings 与变更 id；local_applied 仅表示本地提交成功，不代表远端持久化。",
-        `shape kind 索引：${SHAPE_IDS.join("、")}。`,
-        `layout 算法：${LAYOUT_ALGORITHM_IDS.join("、")}。`,
-        "不要手写 canonical JSON；通过 canvas.apply 的语义操作创建和修改元素。",
-        `协作 API 签名：\n${scriptMethods.join("\n")}`,
-      ].join("\n\n"),
-    );
+    return validDocumentation({ text: buildCanvasOverviewText() });
   },
 });
 
 export const createCanvasApiInfoTool = () => ({
   name: "canvas_docs" as const,
   description:
-    "查询从 CanvasCollaborationApi 类型和 JSDoc 自动生成的 API 文档，包含参数、返回类型及能力限制。",
-  inputSchema: ScriptApiInfoInputSchema,
+    "按 guide/topic 查询画布规则、API 签名、shape/layout/error 清单与任务示例。",
+  inputSchema: ScriptDocsInputSchema,
   outputSchema: ScriptDocumentationOutputSchema,
   execute: async (input: unknown) => {
-    const parsed = ScriptApiInfoInputSchema.parse(input);
-    return validDocumentation(documentation(parsed.member));
+    const parsed = ScriptDocsInputSchema.parse(input);
+    const docs = createDocsApi();
+    if (parsed.action === "index") {
+      const index = await docs.index(
+        parsed.kind ? { kind: parsed.kind } : undefined,
+      );
+      return validDocumentation({
+        docsVersion: index.docsVersion,
+        text: [
+          `docsVersion: ${index.docsVersion}`,
+          ...index.guides.map((guide) =>
+            [
+              `${guide.id}（${guide.title}）：${guide.summary}`,
+              ...guide.topics.map(
+                (topic) =>
+                  `- ${guide.id}/${topic.id}（${topic.title}）：${topic.summary}`,
+              ),
+            ].join("\n"),
+          ),
+        ].join("\n\n"),
+      });
+    }
+    if (parsed.action === "read") {
+      const result = await docs.read({
+        guide: parsed.guide,
+        ...(parsed.topic ? { topic: parsed.topic } : {}),
+        ...(parsed.includeExamples !== undefined
+          ? { includeExamples: parsed.includeExamples }
+          : {}),
+      });
+      return validDocumentation({
+        text: result.text,
+        docsVersion: result.docsVersion,
+        truncated: result.truncated,
+      });
+    }
+    const result = await docs.search({
+      query: parsed.query,
+      ...(parsed.kind ? { kind: parsed.kind } : {}),
+      ...(parsed.limit !== undefined ? { limit: parsed.limit } : {}),
+    });
+    return validDocumentation({
+      docsVersion: result.docsVersion,
+      text: [
+        `docsVersion: ${result.docsVersion}`,
+        `共 ${result.total} 条命中`,
+        ...result.items.map(
+          (item) =>
+            `${item.guide}/${item.topic}（${item.title}）：${item.snippet}`,
+        ),
+      ].join("\n"),
+    });
   },
 });
 

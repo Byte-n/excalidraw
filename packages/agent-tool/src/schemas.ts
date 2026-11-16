@@ -468,20 +468,26 @@ export const ScriptExportInputSchema = z
   })
   .strict();
 export const ScriptOverviewInputSchema = z.object({}).strict();
-export const ScriptApiInfoInputSchema = z
-  .object({
-    member: z
-      .enum([
-        "getScene",
-        "getElements",
-        "query",
-        "createElement",
-        "mutate",
-        "execute",
-      ])
-      .optional(),
-  })
-  .strict();
+const docsKind = z.enum(["guide", "type", "shape", "layout", "error"]);
+export const ScriptDocsInputSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("index"), kind: docsKind.optional() }).strict(),
+  z
+    .object({
+      action: z.literal("read"),
+      guide: z.string().min(1),
+      topic: z.string().min(1).optional(),
+      includeExamples: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("search"),
+      query: z.string().min(1),
+      kind: docsKind.optional(),
+      limit: z.number().int().min(1).max(20).optional(),
+    })
+    .strict(),
+]);
 const scriptError = z
   .object({
     code: z.string().min(1),
@@ -512,7 +518,13 @@ export const ScriptDocumentationOutputSchema = z
   .object({
     ok: z.literal(true),
     status: z.literal("read"),
-    result: z.object({ text: z.string() }).strict(),
+    result: z
+      .object({
+        text: z.string(),
+        docsVersion: z.string().optional(),
+        truncated: z.boolean().optional(),
+      })
+      .strict(),
   })
   .strict();
 export const ScriptExportOutputSchema = z.union([

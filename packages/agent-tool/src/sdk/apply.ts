@@ -6,6 +6,7 @@ import {
   applyTextOperation,
   isShapeElement,
   isTextElement,
+  layoutElements,
 } from "@excalidraw/element";
 
 import { SHAPE_IDS } from "@excalidraw/yjs";
@@ -596,6 +597,33 @@ const runOp = (rawOp: CanvasOp, state: ApplyState) => {
           ...(rawOp.x !== undefined ? { x: rawOp.x } : {}),
           ...(rawOp.y !== undefined ? { y: rawOp.y } : {}),
         },
+      });
+      return;
+    }
+    case "layout": {
+      const ids = rawOp.ids
+        ? rawOp.ids.map((entry) => resolveId(state, entry))
+        : [...state.created].filter((entry) => {
+            const element = state.working.find((item) => item.id === entry);
+            return (
+              element && element.type !== "arrow" && element.type !== "line"
+            );
+          });
+      if (!ids.length) {
+        throw new CanvasSdkError("invalid_input", "layout 需要至少一个元素 id");
+      }
+      const result = layoutElements(state.working, {
+        ids,
+        algorithm: rawOp.algorithm,
+        ...(rawOp.origin ? { origin: rawOp.origin } : {}),
+        ...(rawOp.options ? { options: rawOp.options } : {}),
+      });
+      state.working = [...result.elements];
+      result.affectedElementIds.forEach((id) => state.changed.add(id));
+      state.references.push({
+        domain: "layout",
+        action: "apply",
+        algorithm: rawOp.algorithm,
       });
       return;
     }

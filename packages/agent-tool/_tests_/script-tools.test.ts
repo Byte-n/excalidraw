@@ -41,45 +41,33 @@ test("script tools expose exactly four names without touching the DOM", async ()
   expect(overview.result.text).toContain("canvas.apply");
   expect(overview.result.text).toContain("canvas.layout.apply");
   expect(overview.result.text).toContain("local_applied");
+  expect(overview.result.text).toContain("tempId");
   expect(overview.result.text).toContain("rectangle");
   expect(overview.result.text).toContain("layered");
 });
 
-test("collaboration docs cover every public promise method and member lookup", async () => {
+test("canvas_docs 按 action 查询 guide/topic 文档", async () => {
   const tool = createCanvasScriptTools(port)[1];
-  const all = await tool.execute({});
-  for (const member of [
-    "getScene",
-    "getElements",
-    "query",
-    "createElement",
-    "mutate",
-    "execute",
-  ]) {
-    expect(all.result.text).toContain(`${member}(`);
-    expect((await tool.execute({ member })).result.text).toContain("Promise<");
-  }
-  await expect(tool.execute({ member: "close" })).rejects.toThrow();
-});
+  const read = await tool.execute({
+    action: "read",
+    guide: "core",
+    topic: "conventions",
+  });
+  expect(read.result.text).toContain("tempId");
+  expect(read.result.docsVersion).toBeTruthy();
+  expect(read.result.truncated).toBe(false);
 
-test("生成文档展开参数类型、返回字段和默认能力限制", async () => {
-  const tool = createCanvasScriptTools(port)[1];
-  const mutation = (await tool.execute({ member: "mutate" })).result.text;
-  expect(mutation).toContain('type: "connect"');
-  expect(mutation).toContain("attachPoint: [number, number]");
-  expect(mutation).toContain("changedElementIds: string[]");
-  expect(mutation).toContain("1–1000");
-  expect(mutation).not.toContain("仅 write 模式公开");
-  expect(mutation).not.toContain("execute(");
-  const execute = (await tool.execute({ member: "execute" })).result.text;
-  expect(execute).toContain('action: "setCellText"');
-  expect(execute).toContain("expectedVersion?: number");
-  const query = (await tool.execute({ member: "query" })).result.text;
-  expect(query).toContain("target_not_found");
-  expect(query).toContain("ShapeQueryInput =");
-  const scene = (await tool.execute({ member: "getScene" })).result.text;
-  expect(scene).toContain("ExcalidrawSceneElement =");
-  expect(scene).toContain("CanvasJsonValue =");
+  const index = await tool.execute({ action: "index" });
+  expect(index.result.text).toContain("core");
+  expect(index.result.text).toContain("shapes/catalog");
+
+  const search = await tool.execute({ action: "search", query: "tempId" });
+  expect(search.result.text).toContain("core/workflow");
+
+  await expect(
+    tool.execute({ action: "read", guide: "missing" }),
+  ).rejects.toThrow();
+  await expect(tool.execute({ member: "mutate" })).rejects.toThrow();
 });
 
 test("script and export validate strict envelopes and host JSON output", async () => {

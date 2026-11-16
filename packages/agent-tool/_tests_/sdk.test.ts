@@ -307,6 +307,32 @@ test("layout.apply layered 完成布局且 dryRun 不写入", async () => {
   );
 });
 
+test("apply 的 layout op 在同一次事务内布局本批新建元素", async () => {
+  const sdk = makeSdk();
+  const receipt = await sdk.apply({
+    ops: [
+      { op: "addShape", tempId: "a", kind: "rectangle", x: 0, y: 0 },
+      { op: "addShape", tempId: "b", kind: "rectangle", x: 0, y: 0 },
+      { op: "addShape", tempId: "c", kind: "rectangle", x: 0, y: 0 },
+      { op: "connect", from: "a", to: "b" },
+      { op: "connect", from: "b", to: "c" },
+      { op: "layout", algorithm: "layered" },
+    ],
+  });
+  const ids = [receipt.tempIds.a, receipt.tempIds.b, receipt.tempIds.c];
+  const elements = await Promise.all(ids.map((id) => readElement(sdk, id)));
+  expect(receipt.references).toEqual(
+    expect.arrayContaining([
+      { domain: "layout", action: "apply", algorithm: "layered" },
+    ]),
+  );
+  for (let left = 0; left < elements.length; left++) {
+    for (let right = left + 1; right < elements.length; right++) {
+      expect(area(elements[left], elements[right])).toBe(0);
+    }
+  }
+});
+
 test("text.measure/fit 返回合理度量与截断结果", async () => {
   const sdk = makeSdk("read");
   const measure = await sdk.text.measure({

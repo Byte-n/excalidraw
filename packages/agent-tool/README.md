@@ -1,35 +1,121 @@
 # @excalidraw/agent-tool
 
-提供画板脚本说明、执行与导出工具。连接、鉴权、审批和 session 生命周期由宿主维护；本包根据每次执行借用的 Hocuspocus headless session 构造 Collaboration，不依赖 Node 或任何沙箱实现。
+面向 Agent 的画布工具包：提供 4 个工具（`canvas_overview` / `canvas_docs` / `execute_code` / `canvas_export`），由宿主在服务端（Node）借用一次 Hocuspocus headless session 执行。`execute_code` 注入的 Canvas SDK 负责场景读取、语义写入、文本度量、布局、校验与文档查询；包内不建立连接、不做鉴权/审批，也不关闭 session。MCP 不在本期范围。
+
+## 工具
+
+| 工具 | 作用 | 读写 |
+| --- | --- | --- |
+| `canvas_overview` | 一页硬规则与索引：工具/读写边界、`apply`/`layout` 用法、guide 列表、60 个 shape id、8 个布局算法、错误码 | 只读 |
+| `canvas_docs` | `{ action: "index" \| "read" \| "search", guide?, topic?, query?, kind?, limit? }` 按需查询文档 | 只读 |
+| `execute_code` | 在宿主选择的执行器中运行 JS，注入 `canvas` SDK；返回 JSON 结果并收集写入回执 | 读/写（由 `mode` 决定） |
+| `canvas_export` | 读取指定画板的完整 canonical 场景 JSON 快照 | 只读 |
+
+`canvas_overview` 不接收参数；`canvas_docs` 的 `read` 不传 `topic` 时只返回该 guide 的 topic 列表。
+
+## 快速示例
 
 ```ts
+import { createCanvasExecuteCodeTool } from "@excalidraw/agent-tool";
+
 const tool = createCanvasExecuteCodeTool({
   sessionFactory: () => session,
-  executor: sandboxExecutor, // 可选，由宿主提供
-  onError: (error, context) => reportExecutionError(error, context.canvasId),
+  executor: sandboxExecutor, // 可选，宿主提供的隔离执行器
 });
-await tool.execute(
-  { canvasId, code: "return await collaboration.getScene();", mode: "read" },
-  { signal },
-);
+
+await tool.execute({
+  canvasId,
+  mode: "write",
+  code: `
+    const r = await canvas.apply({ ops: [...] });
+    await canvas.layout.apply({ ids: Object.values(r.tempIds), algorithm: "layered" });
+    return r;
+  `,
+});
 ```
 
-省略 `executor` 时，内部使用严格模式 AsyncFunction 直接执行代码并调用本次执行构造的协作对象；这是直接执行，不隔离全局、限制内存或强制中断同步循环。执行器接收 code、collaboration、signal、cancel 与错误回调，返回符合 ScriptOutputSchema 的 JSON 信封；需要隔离时由宿主显式注入执行器。
+省略 `executor` 时使用包内的直接执行器：严格模式 `AsyncFunction` 调用本次执行构造的 SDK，不隔离全局、不限制内存、不中断同步循环；需要隔离时由宿主注入执行器。宿主可用 `createCanvasScriptTools(hooks)` 一次构造 4 个工具，它们共享同一个 `sessionFactory`。
 
-`sessionFactory(context)` 可同步或异步返回已打开、已授权的 `HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>`。宿主在创建 headless session 时注入 canonical 场景校验，session 的 `getSceneSnapshot()` 在内部检查 JSON 数据并校验原始和复制后的完整场景，不应用 schema transform 的显示投影。默认 `createCanvasCollaboration` 复核同步、generation、实时编辑权限与 mode，调用公开场景命令内核；新增元素复制为 JSON 数据后，由 binding 在事务前校验完整候选场景。`query` 查询未删除的领域元素并支持分页；`createElement` 通过 `kind` 和 x/y/width/height 构造基础形状 JSON 草稿，再由 `mutate(add)` 提交。
+`execute_code` 输入为 `{ canvasId, code, mode: "read" | "write" }`（严格 schema，拒绝额外字段）。宿主 hook：
 
-新增元素输入必须是完整 JSON 数据，拒绝 undefined、访问器和非枚举字段，不静默删除非法属性；读取快照仍允许业务 schema 认可的可选字段缺省。
+- `sessionFactory(context)`：同步或异步返回已打开、已授权的 headless session；`context` 含校验后的 `canvasId`、`mode`、`code` 与独立 `signal`。
+- `sdkFactory?(session, context)`：替换默认 `createCanvasSdk`。
+- `executor?`：替换脚本执行器，接收 `code`、`canvas`、`signal`、`cancel`、`onError`，返回符合输出 schema 的 JSON 信封。
+- `onError?(error, context)`：接收原始异常；输出只返回稳定错误码。
 
-工厂 context 包含校验后的 canvasId、mode、code 与独立执行 signal。结束释放该作用域；异步协作能力必须合作响应取消，禁止取消后提交。默认执行器收敛已开始的调用并登记 mutate/execute 真实回执，协作方法失败则整个执行失败，保留此前回执；onError 接收原始异常，输出只返回稳定错误。默认执行器校验完整 JSON，拒绝循环、getter、非普通对象、undefined 字段及稀疏数组。
+## `execute_code` 注入的 Canvas SDK
 
-`createCanvasExportTool({ sessionFactory })` 通过已校验的 canvasId 和可选 signal 借用会话，在包内检查取消、同步和 generation，与脚本读取共用 session.getSceneSnapshot() 的 canonical 校验与复制能力，生成完整场景 JSON 信封。导出不执行脚本，也不依赖 executor。
+脚本中的 `canvas` 是冻结 facade，所有方法都返回 Promise：
 
-`createCanvasScriptTools` 接收共用的 sessionFactory 和可选执行 hooks，构造四个工具；其 sessionFactory 同时接收脚本执行或导出上下文。生命周期始终属于宿主：工具工厂借用会话且不调用 close，宿主必须在 finally 中调用 session.close() 释放资源。
+| 方法 | 说明 |
+| --- | --- |
+| `scene.get({ view?, ids?, region? })` | `summary` 返回轻量摘要与 `total`；`full` 返回 canonical 快照 |
+| `scene.search({ query, types?, limit?, offset? })` | 按文本/类型分页搜索未删除元素 |
+| `scene.getElements(ids)` | 按 id 读取完整 canonical 元素，缺失即 `target_not_found` |
+| `text.measure({ text, style? })` | 返回宽高、行高与行数；Node 端自动安装确定性度量 |
+| `text.fit({ text, style?, maxWidth, maxHeight? })` | 换行并返回是否截断 |
+| `apply({ ops, expectedVersions?, dryRun?, idempotencyKey? })` | 语义操作批，返回写回执 |
+| `layout.apply({ ids, algorithm, origin?, options?, dryRun? })` | 对已有 id 计算并提交布局 |
+| `validate({ ids?, checks? })` | `overlap` / `overflow` / `bindings` / `dangling` 结构校验 |
+| `schema.get({ type })` | 返回 `apply`/`layout`/`text`/`validate`/`scene`/`export` 的 JSON Schema |
+| `export({ format?, ids?, region? })` | 仅支持 JSON 快照 |
+| `docs.index({ kind? })` | guide/topic 索引 |
+| `docs.read({ guide, topic?, includeExamples? })` | 读取 guide 或单个 topic |
+| `docs.search({ query, kind?, limit? })` | 标题/摘要/正文搜索 |
 
-在本目录运行 `yarn build`、`yarn lint`、`yarn typecheck`、`yarn test`。build 生成既有 development/production/default ESM 与声明产物；本包不构建或携带 Worker。
+## `apply` 语义
 
-### 协作 API 类型和生成文档
+- `ops` 只收语义 skeleton：`addShape` / `addText` / `updateShape` / `updateText` / `connect` / `updateConnector` / `delete` / `move` / `resize` / `mindmap` / `table` / `layout`。`id`、`seed`、`index`、版本与时间戳由服务端生成。
+- 同批引用用 `tempId`，回执 `tempIds` 给出 `tempId → id` 映射；连线端点也接受 `{ point }`。
+- 确定性的输入纠正（如 `"circle"` → `"ellipse"`、字符串 label → `{ text }`、字体名 → 枚举）会产生 `input_corrected` warning，不阻断提交。
+- 任一操作失败整批回滚，不产生半张图；`dryRun: true` 只计算不提交。
+- `expectedVersions` 做乐观并发保护，冲突报 `version_conflict`；`idempotencyKey` 让重试返回同一回执。
+- 写入要求 `mode: "write"` 且会话可编辑，否则报 `not_editable`。
 
-`CanvasCollaborationApi` 显式声明六个成员，导出快照、领域查询/执行、mutation 输入和回执类型。默认宿主方法可以同步或异步返回；`execute_code` 的脚本 facade 始终返回 Promise。写方法只在 write 模式公开；`query` 支持四个领域；`createElement` 使用 `CanvasCreateElementInput` 构造基础形状草稿，复杂领域结构通过 `execute` 创建。
+## `layout.apply`
 
-在本包运行 `yarn docs:generate`，使用 TypeScript Compiler API 提取接口签名、JSDoc 和展开的关联类型，生成 `src/api-documentation.generated.ts`。`collaboration_api_info({ member })` 直接查询这份静态数据，返回参数字段、字面量联合、返回类型和能力限制；省略 member 返回全部成员。运行时不依赖 TypeScript，也不读取源文件。包构建自动重新生成，`yarn docs:check` 可检查提交的生成数据是否过期。修改接口、相关 Zod schema 或 JSDoc 后应重新生成并提交产物。
+- 算法：`layered`、`tree`、`grid`、`row`、`column`、`stack`、`align`、`distribute`。
+- 参数：`{ ids, algorithm, origin?, options?, dryRun? }`；`options` 支持 `direction`（`TB`/`LR`）、`rankGap`、`nodeGap`、`gap`、`columns`、`axis`、`position`。
+- 也可在 `apply` 的 `ops` 末尾加 `{ op: "layout", algorithm }`，在同一次事务内布局本批新建元素；不传 `ids` 时作用于本批创建的非连线元素。
+- 返回 `elements`、`bounds`、`warnings`、`affectedElementIds`、`layoutToken`。
+- 布局由**发起写入的一方**计算并随同一次事务提交；协作服务器不布局，远端只应用结果。
+- 本期没有 `sequence` 算法。
+
+## 文档体系
+
+- 8 个 guide、23 个 topic：`core` / `shapes` / `connectors` / `mindmap` / `layout` / `document` / `errors` / `examples`。
+- `canvas_docs` 与 `canvas.docs` 共用同一份数据：`index` / `read` / `search`。
+- 单次 `read` 上限约 4000 字符，超出返回摘要 + 钻取提示并标记 `truncated`；响应带 `docsVersion` 用于判断缓存是否过期。
+- API 签名由 `scripts/generate-api-docs.mjs` 用 TypeScript Compiler API 从 `CanvasSdk` 自动生成到 `src/api-documentation.generated.ts`（13 个成员）；shape/layout/error 清单从代码常量派生，人工 guide 只写判断与任务配方。
+- `yarn docs:generate` 重新生成；`yarn docs:check` 校验产物是否过期（build 也会自动生成）。
+
+## 回执与错误
+
+写入回执：
+
+```ts
+{
+  elements: Array<{ id, tempId?, type, kind?, bounds, label? }>,
+  bounds,            // 回执可见元素的并集包围盒
+  warnings,          // 非阻断纠正与布局提示
+  changedElementIds, // 变更 id 分类
+  createdElementIds,
+  deletedElementIds,
+  tempIds,           // tempId → id
+  references,        // 各操作的领域引用
+}
+```
+
+`execute_code` 成功时返回 `{ ok: true, status, result, receipts }`；`status: "local_applied"` 仅表示本地事务提交成功，不代表远端客户端已同步或服务端已持久化。`layout.apply` 回执另含 `affectedElementIds` 与 `layoutToken`。
+
+失败时返回 `{ ok: false, error: { code, message, details?, retryable?, hint? }, receipts? }`：`details` 可含 `issues`、`legalValues`、`availableGuides/availableTopics` 等可操作信息；失败前已提交的调用仍会出现在 `receipts` 中。
+
+## 宿主职责与边界
+
+- 连接、鉴权、审批、超时、取消与配额由宿主负责；`signal` 为合作取消，异步 SDK 调用在取消后必须停止提交。
+- 会话生命周期不在包内：工具工厂只借用 session，不调用 `close`，宿主需自行释放。
+- 本期未提供：sequence 语义操作与布局、`generate.*`、SVG/PNG 导出、MCP server。
+
+## 开发
+
+在本目录运行 `yarn test`、`yarn typecheck`、`yarn lint`、`yarn docs:check`；`yarn build` 会先生成 API 文档再构建 ESM 与声明产物。

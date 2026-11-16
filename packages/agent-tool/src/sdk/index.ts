@@ -7,6 +7,7 @@ import type { ExcalidrawSceneElement } from "@excalidraw/yjs";
 import type { HocuspocusHeadlessSession } from "@excalidraw/yjs-hocuspocus-client";
 
 import { createCanvasSceneReader } from "../collaboration.js";
+import { createDocsApi } from "../docs/index.js";
 
 import {
   createApplyApi,
@@ -302,6 +303,7 @@ export const createCanvasSdk = (
       },
     }),
     export: exportScene,
+    docs: Object.freeze(createDocsApi()),
   });
 };
 
@@ -309,6 +311,15 @@ export type {
   CanvasApplyInput,
   CanvasApplyReceipt,
   CanvasBounds,
+  CanvasDocsApi,
+  CanvasDocsGuide,
+  CanvasDocsIndex,
+  CanvasDocsKind,
+  CanvasDocsReadInput,
+  CanvasDocsReadResult,
+  CanvasDocsSearchInput,
+  CanvasDocsSearchResult,
+  CanvasDocsTopicSummary,
   CanvasElementSummary,
   CanvasLayoutInput,
   CanvasLayoutReceipt,

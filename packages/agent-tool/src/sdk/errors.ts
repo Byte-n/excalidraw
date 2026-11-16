@@ -1,18 +1,5 @@
-export type CanvasSdkErrorCode =
-  | "execution_cancelled"
-  | "session_unavailable"
-  | "not_editable"
-  | "invalid_input"
-  | "invalid_operation"
-  | "invalid_scene"
-  | "invalid_asset"
-  | "scene_limit_exceeded"
-  | "target_not_found"
-  | "version_conflict"
-  | "unsupported_format"
-  | "internal_error";
-
-const ERROR_CODES: ReadonlySet<string> = new Set<CanvasSdkErrorCode>([
+/** 对外稳定错误码的有序清单，文档与校验共用。 */
+export const CANVAS_SDK_ERROR_CODES = [
   "execution_cancelled",
   "session_unavailable",
   "not_editable",
@@ -25,7 +12,11 @@ const ERROR_CODES: ReadonlySet<string> = new Set<CanvasSdkErrorCode>([
   "version_conflict",
   "unsupported_format",
   "internal_error",
-]);
+] as const;
+
+export type CanvasSdkErrorCode = typeof CANVAS_SDK_ERROR_CODES[number];
+
+const ERROR_CODES: ReadonlySet<string> = new Set(CANVAS_SDK_ERROR_CODES);
 
 /** SDK 对外稳定错误：只暴露错误码、消息与可选细节，不携带底层堆栈。 */
 export class CanvasSdkError extends Error {

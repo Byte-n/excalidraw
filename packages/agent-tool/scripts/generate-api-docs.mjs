@@ -15,96 +15,100 @@ if (config.error) {
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
 const program = ts.createProgram(parsed.fileNames, parsed.options);
 const checker = program.getTypeChecker();
-const source = program.getSourceFile(path.join(root, "src/port.ts"));
+const source = program.getSourceFile(path.join(root, "src/sdk/types.ts"));
+if (!source) {
+  throw new Error("src/sdk/types.ts not found");
+}
 const declaration = source.statements.find(
   (node) =>
-    ts.isInterfaceDeclaration(node) &&
-    node.name.text === "CanvasCollaborationApi",
+    ts.isInterfaceDeclaration(node) && node.name.text === "CanvasSdk",
 );
 if (!declaration) {
-  throw new Error("CanvasCollaborationApi interface not found");
+  throw new Error("CanvasSdk interface not found");
 }
 const flags = ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.InTypeAlias;
 const describe = (type, node) => checker.typeToString(type, node, flags);
-const members = declaration.members.map((node) => {
-  const name = node.name.getText(source);
-  const symbol = checker.getSymbolAtLocation(node.name);
-  const callable = checker.getTypeAtLocation(node).getNonNullableType();
-  const signature = callable.getCallSignatures()[0];
-  if (!signature) {
-    throw new Error(`Missing callable signature: ${name}`);
-  }
+
+const memberFromSignature = (memberPath, symbol, signature, node) => {
   const parameters = signature.parameters.map((parameter) => {
-    const parameterNode = parameter.valueDeclaration;
-    const type = checker.getTypeOfSymbolAtLocation(parameter, parameterNode);
+    const parameterNode =
+      parameter.valueDeclaration ?? parameter.declarations?.[0];
+    const type = checker.getTypeOfSymbolAtLocation(
+      parameter,
+      parameterNode ?? node,
+    );
     return {
       name: parameter.name,
-      optional: Boolean(parameterNode.questionToken),
-      type: describe(type, parameterNode),
+      optional:
+        Boolean(parameterNode?.questionToken) ||
+        Boolean(parameter.flags & ts.SymbolFlags.Optional),
+      type: describe(type, parameterNode ?? node).replace(
+        / \| undefined$/,
+        "",
+      ),
     };
   });
-  const returns = describe(
-    checker.getAwaitedType(checker.getReturnTypeOfSignature(signature)),
-    node,
-  );
-  const returnName = node.type.type
-    .getText(source)
-    .replace(/^CanvasApiResult<(.*)>$/, "$1");
+  const awaited =
+    checker.getAwaitedType(checker.getReturnTypeOfSignature(signature)) ??
+    checker.getReturnTypeOfSignature(signature);
   return {
-    name,
-    optional: Boolean(node.questionToken),
-    signature: `${name}(${parameters
+    path: memberPath,
+    signature: `${memberPath}(${parameters
       .map(
-        (p) =>
-          `${p.name}${p.optional ? "?" : ""}: ${signature.parameters
-            .find((parameter) => parameter.name === p.name)
-            .valueDeclaration.type.getText(source)}`,
+        (parameter) =>
+          `${parameter.name}${parameter.optional ? "?" : ""}: ${
+            parameter.type
+          }`,
       )
-      .join(", ")}) -> Promise<${returnName}>`,
+      .join(", ")}) -> Promise<${describe(awaited, node)}>`,
     description: ts.displayPartsToString(
       symbol.getDocumentationComment(checker),
     ),
     parameters,
-    returns,
+    returns: describe(awaited, node),
   };
-});
-// Include resolved local aliases: z.infer inputs become usable object/union definitions.
+};
+
+const members = [];
+const collectMembers = (properties, prefix) => {
+  for (const property of properties) {
+    const memberPath = prefix ? `${prefix}.${property.name}` : property.name;
+    const node = property.valueDeclaration ?? property.declarations?.[0];
+    if (!node) {
+      continue;
+    }
+    const type = checker.getTypeOfSymbolAtLocation(property, node);
+    const signature = type.getCallSignatures()[0];
+    if (signature) {
+      members.push(memberFromSignature(memberPath, property, signature, node));
+      continue;
+    }
+    collectMembers(type.getProperties(), memberPath);
+  }
+};
+collectMembers(
+  declaration.members
+    .map((node) => checker.getSymbolAtLocation(node.name))
+    .filter((symbol) => Boolean(symbol)),
+  "",
+);
+
+// Include every Canvas* type alias; CanvasOp is intentionally omitted because
+// canvas.schema.get({ type: "apply" }) provides the canonical operation schema.
 const types = source.statements
   .filter(
     (node) =>
       ts.isTypeAliasDeclaration(node) &&
-      /^Canvas(ApiResult|JsonValue|SceneSnapshot|MutationInput|MutationReceipt|CreateElementInput|ExecuteInput|QueryInput|ShapeQueryInput|ConnectorQueryInput|MindmapQueryInput|TableQueryInput)$/.test(
-        node.name.text,
-      ),
+      node.name.text.startsWith("Canvas") &&
+      node.name.text !== "CanvasOp",
   )
   .map((node) => ({
     name: node.name.text,
     definition: describe(checker.getTypeAtLocation(node), node),
   }));
-for (const node of source.statements) {
-  if (
-    ts.isImportDeclaration(node) &&
-    node.importClause?.namedBindings &&
-    ts.isNamedImports(node.importClause.namedBindings)
-  ) {
-    for (const imported of node.importClause.namedBindings.elements) {
-      if (
-        /QueryInput$/.test(imported.name.text) ||
-        imported.name.text === "ExcalidrawSceneElement"
-      ) {
-        types.push({
-          name: imported.name.text,
-          definition: describe(
-            checker.getTypeAtLocation(imported.name),
-            imported,
-          ),
-        });
-      }
-    }
-  }
-}
-const rawContent = `// Generated by scripts/generate-api-docs.mjs. Do not edit.\nexport const collaborationApiDocumentation = ${JSON.stringify(
-  { name: "CanvasCollaborationApi", members, types },
+
+const rawContent = `// Generated by scripts/generate-api-docs.mjs. Do not edit.\nexport const canvasApiDocumentation = ${JSON.stringify(
+  { name: "CanvasSdk", members, types },
   null,
   2,
 )} as const;\n`;
