@@ -123,8 +123,8 @@ const renderElementToSvg = (
 ) => {
   const offset = { x: offsetX, y: offsetY };
   const [x1, y1, x2, y2] = getElementAbsoluteCoords(element, elementsMap);
-  let cx = (x2 - x1) / 2 - (element.x - x1);
-  let cy = (y2 - y1) / 2 - (element.y - y1);
+  const cx = (x2 - x1) / 2 - (element.x - x1);
+  const cy = (y2 - y1) / 2 - (element.y - y1);
   const degree = (180 * element.angle) / Math.PI;
 
   // element to append node to, most of the time svgRoot

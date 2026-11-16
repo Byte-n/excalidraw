@@ -134,7 +134,6 @@ export class Fonts {
 
         // clear the width cache, so that we don't perform subsequent wrapping based on the stale fallback font metrics
         charWidth.clearCache(getTextElementFont(element));
-
       }
     }
 

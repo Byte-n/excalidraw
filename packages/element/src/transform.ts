@@ -10,7 +10,6 @@ import {
   arrayToMap,
   assertNever,
   cloneJSON,
-  getFontString,
   getUpdatedTimestamp,
   isDevEnv,
   toBrandedType,
@@ -43,12 +42,8 @@ import {
   normalizeStickyNoteFontSize,
   normalizeStickyNoteStrokeColor,
 } from "./stickyNote";
-import { measureText, normalizeText } from "./textMeasurements";
-import {
-  isLinearElement,
-  isFrameLikeElement,
-  isStickyNoteElement,
-} from "./typeChecks";
+import { normalizeText } from "./textMeasurements";
+import { isLinearElement, isFrameLikeElement } from "./typeChecks";
 import {
   assertValidTableData,
   getTableHeight,

@@ -43,7 +43,9 @@ import type {
 
 const STICKY_FONT_SIZE = 28;
 
-const bodyStyle = (overrides: Partial<TextBlockStyle> = {}): TextBlockStyle => ({
+const bodyStyle = (
+  overrides: Partial<TextBlockStyle> = {},
+): TextBlockStyle => ({
   fontFamily: 1,
   fontSize: STICKY_FONT_SIZE,
   lineHeight: getLineHeight(1),
@@ -81,9 +83,7 @@ describe("sticky note paper", () => {
 
   it("has square corners when sharp", () => {
     const sticky = createNote();
-    expect(
-      getStickyNoteCornerRadius({ ...sticky, roundness: null }),
-    ).toBe(0);
+    expect(getStickyNoteCornerRadius({ ...sticky, roundness: null })).toBe(0);
   });
 });
 
@@ -167,7 +167,10 @@ describe("sticky note creation date", () => {
     const now = new Date(2025, 9, 11).getTime();
     expect(getStickyNoteDateLabel(now, { short: true, now })).toBe("10月11日");
     expect(
-      getStickyNoteDateLabel(new Date(2024, 9, 11).getTime(), { short: true, now }),
+      getStickyNoteDateLabel(new Date(2024, 9, 11).getTime(), {
+        short: true,
+        now,
+      }),
     ).toBe("10月11日");
     expect(
       getStickyNoteDateLabel(new Date(2024, 9, 11).getTime(), {
@@ -276,7 +279,11 @@ describe("sticky note ink", () => {
 
 describe("sticky note presets", () => {
   it("inks a default note by the creation rule", () => {
-    expect(getStickyNoteCreationInk(DEFAULT_STICKY_NOTE_BG, STICKY_NOTE_INK)).toBe(STICKY_NOTE_YELLOW_INK);
-    expect(getStickyNoteCreationInk("#ffffff", STICKY_NOTE_INK)).toBe(STICKY_NOTE_INK);
+    expect(
+      getStickyNoteCreationInk(DEFAULT_STICKY_NOTE_BG, STICKY_NOTE_INK),
+    ).toBe(STICKY_NOTE_YELLOW_INK);
+    expect(getStickyNoteCreationInk("#ffffff", STICKY_NOTE_INK)).toBe(
+      STICKY_NOTE_INK,
+    );
   });
 });

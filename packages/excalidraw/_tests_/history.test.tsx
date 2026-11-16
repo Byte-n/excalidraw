@@ -1,16 +1,9 @@
 import React from "react";
-import {
-  queryByText,
-  fireEvent,
-  queryByTestId,
-  waitFor,
-} from "@testing-library/react";
+import { queryByTestId, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 import { pointFrom } from "@excalidraw/math";
 
 import { newElementWith } from "@excalidraw/element";
-
-import { BASE_BINDING_GAP } from "@excalidraw/element";
 
 import {
   EXPORT_DATA_TYPES,
@@ -32,14 +25,13 @@ import { ElementsDelta, AppStateDelta } from "@excalidraw/element";
 
 import { CaptureUpdateAction, StoreDelta } from "@excalidraw/element";
 
-import type { LocalPoint, Radians } from "@excalidraw/math";
+import type { LocalPoint } from "@excalidraw/math";
 
 import type {
   ExcalidrawElbowArrowElement,
   ExcalidrawFrameElement,
   ExcalidrawGenericElement,
   ExcalidrawLinearElement,
-  ExcalidrawTextElement,
   FileId,
   ElementBinding,
   FractionalIndex,
@@ -124,63 +116,6 @@ const red = "#e6f4f1"; // 背景色板网格 teal 族（color-teal，明度档 0
 const blue = "#fdecee"; // 背景色板网格 red 族（color-red，明度档 0）
 const yellow = COLOR_PALETTE.yellow[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX];
 const violet = COLOR_PALETTE.violet[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX];
-
-/**
- * 期望某个 `attachPoint` 落在**目标外扩一个 binding gap 的轮廓**上。
- *
- * 组合 A 里 `attachPoint` 存的就是端点本身（见 `binding.ts` 的
- * `resolveAttachPointForNonElbowBinding`），建连时端点被投到外扩轮廓上，所以比例
- * 能直接从图形几何推出来 —— 不必把某个具体数字抄进测试，也不必回退成
- * `toBeNonNaNNumber()` 那种什么都不验的写法。
- *
- * `side` 是端点贴住的那条外扩边，`along` 是另一轴上的归一化位置（0.5 = 中线）。
- * 容差 1e-3：`normalizeAttachPoint` 会把精确的 0.5 抬成 0.5001，而「落在外扩边上」
- * 这个几何含义本身容许的误差远小于 1e-3 —— 差半个像素（比例上 ~0.005）就会红。
- */
-const attachPointOnInflatedSide = (
-  target: { id: string; width: number; height: number; strokeWidth: number },
-  side: "left" | "right" | "top" | "bottom",
-  along: number,
-) => ({
-  asymmetricMatch: (received: readonly number[]) => {
-    const gap = BASE_BINDING_GAP + target.strokeWidth / 2;
-    const [expectedX, expectedY] =
-      side === "left"
-        ? [-gap / target.width, along]
-        : side === "right"
-        ? [1 + gap / target.width, along]
-        : side === "top"
-        ? [along, -gap / target.height]
-        : [along, 1 + gap / target.height];
-
-    return (
-      Array.isArray(received) &&
-      Math.abs(received[0] - expectedX) < 1e-3 &&
-      Math.abs(received[1] - expectedY) < 1e-3
-    );
-  },
-  toString: () =>
-    `attachPoint on the ${side} inflated side of "${target.id}" (gap ${
-      BASE_BINDING_GAP + target.strokeWidth / 2
-    })`,
-});
-
-/**
- * 同上，直接断言一整个绑定：`elementId` 指向 `target`，且比例落在指定的那条外扩边上。
- * 给了个函数形态是为了在没有 `toEqual` 可比的对象时（例如从 `arrow.startBinding`
- * 直接取值）读起来不别扭。
- */
-const expectAttachPoint = (
-  binding: ElementBinding | null | undefined,
-  target: { id: string; width: number; height: number; strokeWidth: number },
-  side: "left" | "right" | "top" | "bottom",
-  along: number,
-) => {
-  expect(binding?.elementId).toBe(target.id);
-  expect(binding?.attachPoint).toEqual(
-    attachPointOnInflatedSide(target, side, along),
-  );
-};
 
 describe("history", () => {
   beforeEach(() => {

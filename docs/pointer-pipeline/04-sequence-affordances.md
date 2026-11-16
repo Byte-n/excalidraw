@@ -1,9 +1,6 @@
 # PR4：时序 affordance 迁移（激活条 / 杆 / 方向手柄）
 
-> **状态**：未开始。
-> **依赖**：PR2（帧契约）。若 PR3 已合入，预览与落点可直接复用 `connection` hit。
-> **交付后的结果**：激活条连接点、杆上建条预演、方向手柄的 hover / armed / gesture 全部由 `PointerFrame` 驱动；`AppQuickCreate` 只保留几何构造、渲染缓存、异步待决与执行逻辑。
-> **设计来源**：[pointer-affordance-unification.md](../pointer-affordance-unification.md) 阶段 1–3、[sequence-diagram/03-messages-and-activation.md](../sequence-diagram/03-messages-and-activation.md)。
+> **状态**：未开始。 **依赖**：PR2（帧契约）。若 PR3 已合入，预览与落点可直接复用 `connection` hit。 **交付后的结果**：激活条连接点、杆上建条预演、方向手柄的 hover / armed / gesture 全部由 `PointerFrame` 驱动；`AppQuickCreate` 只保留几何构造、渲染缓存、异步待决与执行逻辑。 **设计来源**：[pointer-affordance-unification.md](../pointer-affordance-unification.md) 阶段 1–3、[sequence-diagram/03-messages-and-activation.md](../sequence-diagram/03-messages-and-activation.md)。
 
 ## 1. 目标
 
@@ -29,22 +26,22 @@
 
 [App.quickCreate.ts:320](../../packages/excalidraw/components/App.quickCreate.ts#L320) 起：
 
-| 字段 | 行 | 用途 |
-| --- | --- | --- |
-| `hovered` | :320 | 方向手柄悬停 |
-| `poleActivation` | :326 | 杆上建条悬停预演 |
-| `poleActivationGhost` | :329 | 杆预演缓存 |
-| `poleActivationClick` | :335 | 杆上按下的待决点击 |
-| `sequenceConnection` | :338 | 激活条连接点悬停 |
-| `sequenceConnectionDrag` | :341 | 连接点拖拽手势 |
-| `sequenceConnectionGhost` | :344 | 连接线预演缓存 |
+| 字段                      | 行   | 用途                   |
+| ------------------------- | ---- | ---------------------- |
+| `hovered`                 | :320 | 方向手柄悬停           |
+| `poleActivation`          | :326 | 杆上建条悬停预演       |
+| `poleActivationGhost`     | :329 | 杆预演缓存             |
+| `poleActivationClick`     | :335 | 杆上按下的待决点击     |
+| `sequenceConnection`      | :338 | 激活条连接点悬停       |
+| `sequenceConnectionDrag`  | :341 | 连接点拖拽手势         |
+| `sequenceConnectionGhost` | :344 | 连接线预演缓存         |
 | `sequenceEndpointPreview` | :353 | 端点拖拽的杆上建条预演 |
-| `drag` | :356 | 方向手柄拖拽手势 |
-| `cancelledPointerDown` | :362 | Esc 取消 |
-| `modifierHeld` | :371 | 修饰键 |
-| `ghost` | :379 | 方向手柄预演缓存 |
-| `pendingInsert` | :389 | 插入面板待决 |
-| `pendingGhost` | :392 | 待决连线预演缓存 |
+| `drag`                    | :356 | 方向手柄拖拽手势       |
+| `cancelledPointerDown`    | :362 | Esc 取消               |
+| `modifierHeld`            | :371 | 修饰键                 |
+| `ghost`                   | :379 | 方向手柄预演缓存       |
+| `pendingInsert`           | :389 | 插入面板待决           |
+| `pendingGhost`            | :392 | 待决连线预演缓存       |
 
 ### 3.2 入口
 
@@ -340,9 +337,6 @@ if (frame?.owner && app.quickCreate.ownsGesture(frame)) {
 
 ## 实施记录（2026-11-14）
 
-- 实际改动：新增 `pointerQuickCreate.ts`（quickCreateHandle provider）与
-  `pointerSequence.ts`（activationEdge / poleActivation provider）：严格最上层校验、
-  杆激活重叠检查、快照抑制门控；pointerdown/move/up 按 owner 分派；渲染读 frame。
-- 与计划的偏差：删除 HEAD 的「圆点比变换手柄更近时圆点优先」特例，固定
-  `transformHandle > quickCreateHandle`（计划优先级表）。
+- 实际改动：新增 `pointerQuickCreate.ts`（quickCreateHandle provider）与 `pointerSequence.ts`（activationEdge / poleActivation provider）：严格最上层校验、杆激活重叠检查、快照抑制门控；pointerdown/move/up 按 owner 分派；渲染读 frame。
+- 与计划的偏差：删除 HEAD 的「圆点比变换手柄更近时圆点优先」特例，固定 `transformHandle > quickCreateHandle`（计划优先级表）。
 - 测试：`pointer-sequence.test.tsx`（8 项）；`quickCreateHandles.test.tsx` 改读 frame。

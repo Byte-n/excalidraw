@@ -31,10 +31,7 @@ import {
 } from "./compositeShape";
 
 import { getPerfectElementSize } from "./sizeHelpers";
-import {
-  getTextElementFont,
-  getTextElementStyle,
-} from "./text/elementText";
+import { getTextElementFont, getTextElementStyle } from "./text/elementText";
 import { getMinTextElementWidth } from "./textMeasurements";
 import {
   isArrowElement,

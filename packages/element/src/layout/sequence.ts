@@ -370,7 +370,10 @@ export const layoutSequence = (
         const minY = startActivation.y + 1;
         const maxY = startActivation.y + startActivation.height - 1;
         let startY = Math.min(Math.max(row.y, minY), maxY);
-        let endY = Math.min(Math.max(startY + SELF_MESSAGE_OFFSET, minY), maxY);
+        const endY = Math.min(
+          Math.max(startY + SELF_MESSAGE_OFFSET, minY),
+          maxY,
+        );
         if (endY - startY < SELF_MESSAGE_OFFSET) {
           startY = Math.max(minY, endY - SELF_MESSAGE_OFFSET);
         }

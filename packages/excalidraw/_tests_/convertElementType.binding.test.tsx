@@ -189,9 +189,7 @@ describe("convert element type keeps bound arrows attached", () => {
       id: shape.id,
       type: shapeElementType(target as ShapeId),
       shape: { id: target, schemaVersion: 1 },
-      boundElements: expect.arrayContaining([
-        { id: arrow.id, type: "arrow" },
-      ]),
+      boundElements: expect.arrayContaining([{ id: arrow.id, type: "arrow" }]),
     });
     expect(converted?.texts?.body?.text).toBe("A");
     expect(boundArrow).toMatchObject({ endBinding: { elementId: shape.id } });

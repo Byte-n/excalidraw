@@ -920,11 +920,7 @@ describe("text element", () => {
     const text = newTextElement({ x: 0, y: 0, text: source });
     const scene = new Scene([text], { skipValidation: true });
     const original = { ...text };
-    const resize = (
-      handle: "e" | "w",
-      width: number,
-      height: number,
-    ) =>
+    const resize = (handle: "e" | "w", width: number, height: number) =>
       resizeSingleElement(
         width,
         height,

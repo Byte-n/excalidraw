@@ -80,12 +80,10 @@ import type { RayProjector } from "./connection/resolve";
 import type { ElementUpdate } from "./mutateElement";
 import type {
   ElementsMap,
-  ExcalidrawArrowElement,
   ExcalidrawLinearElement,
   ExcalidrawBindableElement,
   ExcalidrawElbowArrowElement,
   ExcalidrawElement,
-  ExcalidrawTextElement,
   AttachPoint,
   ElementBinding,
   NonDeleted,

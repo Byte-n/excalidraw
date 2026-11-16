@@ -1,8 +1,6 @@
 # Excalidraw Agent 画布能力方案（v1 评审稿）
 
-> 状态：待评审
-> 范围：`packages/agent-tool`、`packages/element`、`packages/yjs`、`packages/excalidraw`、`packages/board-import`、文档与基础设施
-> 本期结论：只提供 Agent tool；MCP 作为后续阶段的薄包装层，不在本期实现
+> 状态：待评审范围：`packages/agent-tool`、`packages/element`、`packages/yjs`、`packages/excalidraw`、`packages/board-import`、文档与基础设施本期结论：只提供 Agent tool；MCP 作为后续阶段的薄包装层，不在本期实现
 
 ---
 
@@ -152,7 +150,10 @@ canvas.export({ format: "json" | "svg" | "png", ids?, region?, scale? })
   "op": "addShape",
   "tempId": "svc",
   "type": "rectangle",
-  "x": 0, "y": 0, "width": 160, "height": 80,
+  "x": 0,
+  "y": 0,
+  "width": 160,
+  "height": 80,
   "label": { "text": "订单服务", "fontSize": 20, "fit": "auto" }
 }
 ```
@@ -169,7 +170,12 @@ canvas.export({ format: "json" | "svg" | "png", ids?, region?, scale? })
 warning 结构：
 
 ```json
-{ "code": "input_corrected", "path": "ops[0].type", "from": "circle", "to": "ellipse" }
+{
+  "code": "input_corrected",
+  "path": "ops[0].type",
+  "from": "circle",
+  "to": "ellipse"
+}
 ```
 
 ---
@@ -234,7 +240,7 @@ warning 结构：
 | align / distribute | 自研 | 纯几何计算 | 低 |
 | 树布局 | 复用 `layoutMindmap` | 已有 tidy tree、方向、间距 | 低 |
 | 分层 DAG（layered） | @dagrejs/dagre | Sugiyama 的分层、交叉最小化、坐标分配不适合轻量自研 | 自研为高 |
-| 正交避障路由 | 先复用现有 elbow；后续自研网格 A* | 小图可接受；大图/复杂障碍需要优化 | 中 |
+| 正交避障路由 | 先复用现有 elbow；后续自研网格 A\* | 小图可接受；大图/复杂障碍需要优化 | 中 |
 | 力导向（force） | 本期不做；需要时用 d3-force（ISC） | 非核心布局，自研不划算 | 低（引入）/高（自研） |
 | 文本度量 | 构建期用 opentype.js/fontkit 生成 metrics 表，运行时求和；需要像素级一致时用 @napi-rs/canvas | 运行时零字体库依赖；但 kerning/CJK fallback 要接受差异或改用 canvas | 中 |
 | PNG 导出 | @napi-rs/canvas | PNG 编码与光栅化不适合自研 | 自研为高 |
@@ -266,23 +272,23 @@ warning 结构：
 
 ### 8.1 数据源
 
-| 数据源 | 生成内容 |
-| --- | --- |
-| TS 类型 + JSDoc | API 签名、参数、返回、字段说明 |
-| Zod schema | JSON Schema、必填/可选、默认值、范围 |
-| shape registry | 60 个 shape id、family、默认参数、选项范围、label 能力 |
-| layout registry | 算法、版本、参数 schema、支持类型 |
-| 常量/枚举 | 字体、字号、对齐、箭头、`TEXT_GAP`、`BOUND_TEXT_PADDING` |
-| 错误/警告码 | code、分类、可否重试、修复建议 |
-| 人工指南 | 决策建议、取舍、任务配方 |
-| 可执行示例 | 编译并跑通的代码 + 预期结果 |
+| 数据源          | 生成内容                                                 |
+| --------------- | -------------------------------------------------------- |
+| TS 类型 + JSDoc | API 签名、参数、返回、字段说明                           |
+| Zod schema      | JSON Schema、必填/可选、默认值、范围                     |
+| shape registry  | 60 个 shape id、family、默认参数、选项范围、label 能力   |
+| layout registry | 算法、版本、参数 schema、支持类型                        |
+| 常量/枚举       | 字体、字号、对齐、箭头、`TEXT_GAP`、`BOUND_TEXT_PADDING` |
+| 错误/警告码     | code、分类、可否重试、修复建议                           |
+| 人工指南        | 决策建议、取舍、任务配方                                 |
+| 可执行示例      | 编译并跑通的代码 + 预期结果                              |
 
 ### 8.2 查询接口
 
 ```ts
-canvas.docs.index({ kind?: "guide" | "type" | "shape" | "layout" | "error" })
-canvas.docs.read({ guide, topic?, includeExamples? })
-canvas.docs.search({ query, kind? })
+canvas.docs.index({ kind: "guide" | "type" | "shape" | "layout" | "error" });
+canvas.docs.read({ guide, topic, includeExamples });
+canvas.docs.search({ query, kind });
 ```
 
 规则：

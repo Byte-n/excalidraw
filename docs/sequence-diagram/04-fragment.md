@@ -71,7 +71,7 @@ export type SequenceFragmentData = Readonly<{
 export type FragmentRowContainerRef = Readonly<{
   kind: "fragmentRow";
   elementId: string; // fragment id
-  rowId: string;     // body row id（禁止 rows[0]）
+  rowId: string; // body row id（禁止 rows[0]）
   role: "backgroundText";
 }>;
 ```

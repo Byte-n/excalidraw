@@ -1,12 +1,13 @@
+import { getTextElementText } from "@excalidraw/element";
+
+import type { ExcalidrawTextElement } from "@excalidraw/element/types";
+
 import {
   convertBoard,
   importBoard,
   materializeAssets,
   projectScene,
 } from "../src/index.js";
-import { getTextElementText } from "@excalidraw/element";
-
-import type { ExcalidrawTextElement } from "@excalidraw/element/types";
 
 import {
   connectorNode,

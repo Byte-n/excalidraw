@@ -7,7 +7,6 @@ import {
   getNonDeletedElements,
   isFrameLikeElement,
   replaceAllElementsInFrame,
-  updateBoundElements,
 } from "@excalidraw/element";
 import {
   getStickyNoteResizeIntent,
@@ -95,8 +94,6 @@ const resizeElementInGroup = (
   originalElementsMap: ElementsMap,
   scene: Scene,
 ) => {
-  const elementsMap = scene.getNonDeletedElementsMap();
-
   const updates = getResizedUpdates(anchorX, anchorY, scale, origElement);
 
   scene.mutateElement(latestElement, updates);
@@ -113,9 +110,7 @@ const resizeElementInGroup = (
       ),
       anchor: "top",
     });
-    return;
   }
-
 };
 
 const resizeGroup = (

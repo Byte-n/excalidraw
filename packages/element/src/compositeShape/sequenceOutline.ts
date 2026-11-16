@@ -35,7 +35,6 @@ import type {
   ExcalidrawElement,
   ExcalidrawSequenceElement,
   ExcalidrawShapeElement,
-  ExcalidrawTextElement,
   SequenceFragmentData,
   SequenceFragmentRow,
   SequenceShapeData,

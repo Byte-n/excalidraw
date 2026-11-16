@@ -200,8 +200,7 @@ export const getShapeActionPredicates = (
         getSelectedElements(elementsMap, appState).some(
           (element) => element.type === "freedraw",
         )),
-    align:
-      alignActionsPredicate(appState, app),
+    align: alignActionsPredicate(appState, app),
     distribute: targetElements.length > 2,
 
     // per-element actions

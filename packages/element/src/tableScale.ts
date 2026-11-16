@@ -25,7 +25,6 @@ import type {
   ExcalidrawElement,
   ExcalidrawLinearElement,
   ExcalidrawTableElement,
-  ExcalidrawTextElement,
   NonDeletedExcalidrawElement,
   TableDataV1,
 } from "./types";

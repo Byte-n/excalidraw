@@ -33,7 +33,6 @@ import {
   getCommonBoundingBox,
   getElementBounds,
 } from "./bounds";
-import { LinearElementEditor } from "./linearElementEditor";
 import { getSequenceActivationLink } from "./sequenceActivation";
 import {
   SEQUENCE_MIN_ACTIVATION_HEIGHT,
@@ -1173,7 +1172,6 @@ export const resizeSingleElement = (
   nextWidth = Math.abs(nextWidth);
   nextHeight = Math.abs(nextHeight);
 
-  const elementsMap = scene.getNonDeletedElementsMap();
   const linearLabel = isLinearElement(latestElement)
     ? latestElement.texts?.label
     : null;
@@ -1231,7 +1229,7 @@ export const resizeSingleElement = (
     }
   }
 
-  let linearLabelFont: { fontSize?: number } = {};
+  const linearLabelFont: { fontSize?: number } = {};
   let mindmapFontSize: number | undefined;
   if (mindmapBody && shouldMaintainAspectRatio) {
     // 正文安全区宽度与实际节点同比例变化，字号按该比例缩放。
@@ -1395,18 +1393,16 @@ export const resizeSingleElement = (
         // the arrow pass below is this function's — keep it single
         bindings: false,
       });
-    } else {
-      if (linearLabel?.text && linearLabelFont.fontSize !== undefined) {
-        scene.mutateElement(latestElement, {
-          texts: withTextBlock(latestElement.texts, "label", {
-            ...linearLabel,
-            style: {
-              ...linearLabel.style,
-              fontSize: linearLabelFont.fontSize,
-            },
-          }),
-        });
-      }
+    } else if (linearLabel?.text && linearLabelFont.fontSize !== undefined) {
+      scene.mutateElement(latestElement, {
+        texts: withTextBlock(latestElement.texts, "label", {
+          ...linearLabel,
+          style: {
+            ...linearLabel.style,
+            fontSize: linearLabelFont.fontSize,
+          },
+        }),
+      });
     }
 
     // 脑图节点在缩放后按正文重新适配放不下的那一维；冻结节点保持几何。
@@ -2198,8 +2194,6 @@ export const resizeMultipleElements = (
       element,
       update: { embeddedTextFontSize, ...update },
     } of elementsAndUpdates) {
-      const { angle } = update;
-
       const embeddedTexts =
         embeddedTextFontSize !== undefined && isLinearElement(element)
           ? element.texts?.label

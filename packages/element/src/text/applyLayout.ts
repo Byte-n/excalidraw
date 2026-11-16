@@ -15,18 +15,18 @@ import { getStickyNoteTextFit } from "../stickyNote";
 import { computeTextContainerDimension } from "../textElement";
 import { isMindmapNodeElement, isStickyNoteElement } from "../typeChecks";
 
+import {
+  getLocalTextRegionLayout,
+  layoutTextRegionsLocal,
+} from "./regionLayout";
+import { getTextRegion } from "./regions";
+
 import type {
   ExcalidrawElement,
   ExcalidrawMindmapNodeElement,
   ExcalidrawShapeElement,
   ExcalidrawStickyNoteElement,
 } from "../types";
-
-import {
-  getLocalTextRegionLayout,
-  layoutTextRegionsLocal,
-} from "./regionLayout";
-import { getTextRegion } from "./regions";
 
 const SHAPE_FIT_EPSILON = 1e-6;
 const SHAPE_FIT_MAX_PASSES = 4;
@@ -145,10 +145,7 @@ export const getMindmapNodeTextLayoutUpdates = (
 
   let { width, height } = element;
   if (layout.width > region.bounds.width + 1e-6) {
-    width = Math.max(
-      width,
-      computeTextContainerDimension(layout.width, shape),
-    );
+    width = Math.max(width, computeTextContainerDimension(layout.width, shape));
   }
   if (layout.height > region.bounds.height + 1e-6) {
     height = Math.max(

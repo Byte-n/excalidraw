@@ -1,8 +1,5 @@
 import { layoutMindmapScene } from "../mindmapScene";
-import {
-  isMindmapEdgeElement,
-  isMindmapNodeElement,
-} from "../typeChecks";
+import { isMindmapEdgeElement, isMindmapNodeElement } from "../typeChecks";
 
 import {
   elementGeometryChanged,
@@ -60,7 +57,9 @@ export const layoutTree = (
   const laidOut = layoutMindmapScene(elements, graphIds);
   const changedIds = new Set(
     laidOut
-      .filter((element) => elementGeometryChanged(inputById.get(element.id), element))
+      .filter((element) =>
+        elementGeometryChanged(inputById.get(element.id), element),
+      )
       .map((element) => element.id),
   );
 

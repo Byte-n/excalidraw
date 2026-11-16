@@ -1013,5 +1013,4 @@ describe("aligning", () => {
     expect(API.getSelectedElements()[1].x).toEqual(150);
     expect(API.getSelectedElements()[2].x).toEqual(100);
   });
-
 });

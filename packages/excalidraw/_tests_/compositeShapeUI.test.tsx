@@ -494,9 +494,7 @@ describe.each([
     const boundArrow = h.app.scene.getNonDeletedElement(arrow.id);
     expect(moved).toMatchObject({
       shape: { id: "triangle", triangle: { apexX: 0.75 } },
-      boundElements: expect.arrayContaining([
-        { id: arrow.id, type: "arrow" },
-      ]),
+      boundElements: expect.arrayContaining([{ id: arrow.id, type: "arrow" }]),
     });
     expect(moved?.texts?.body?.text).toBe("A");
     expect(boundArrow).toMatchObject({
@@ -527,9 +525,9 @@ describe.each([
     expect(h.app.scene.getNonDeletedElement(triangle.id)).toMatchObject({
       shape: { id: "triangle", triangle: { apexX: 0.75 } },
     });
-    expect(h.app.scene.getNonDeletedElement(triangle.id)?.texts?.body?.text).toBe(
-      "A",
-    );
+    expect(
+      h.app.scene.getNonDeletedElement(triangle.id)?.texts?.body?.text,
+    ).toBe("A");
     expect(h.app.scene.getNonDeletedElement(arrow.id)).toMatchObject({
       endBinding: { elementId: triangle.id, attachPoint: [0.75, 0] },
     });

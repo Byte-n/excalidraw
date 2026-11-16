@@ -4,10 +4,6 @@ import {
   bumpVersion,
   getMindmapShapeId,
   getLinearElementSubType,
-  getTextElementFont,
-  getTextElementStyle,
-  getTextElementStylePatch,
-  getTextElementText,
   isShapeElement,
   mutateElement,
   updateElbowArrowPoints,
@@ -31,11 +27,6 @@ import {
 } from "@excalidraw/element";
 
 import {
-} from "@excalidraw/element";
-
-import { wrapText } from "@excalidraw/element";
-
-import {
   assertNever,
   CLASSES,
   isProdEnv,
@@ -45,8 +36,6 @@ import {
   sceneCoordsToViewportCoords,
   updateActiveTool,
 } from "@excalidraw/common";
-
-import { measureText } from "@excalidraw/element";
 
 import { LinearElementEditor } from "@excalidraw/element";
 
@@ -74,14 +63,11 @@ import type {
   ExcalidrawLinearElement,
   ExcalidrawRectangleElement,
   ExcalidrawSelectionElement,
-  ExcalidrawTextContainer,
   FixedSegment,
   NonDeleted,
   NonDeletedExcalidrawElement,
   ShapeId,
 } from "@excalidraw/element/types";
-
-import type { Scene } from "@excalidraw/element";
 
 import { trackEvent } from "../analytics";
 import { atom } from "../editor-jotai";
@@ -645,8 +631,7 @@ export const getConversionTypeFromElements = (
     elements.some(isMindmapNodeElement) &&
     elements.every(
       (element) =>
-        isMindmapNodeElement(element) ||
-        isMindmapEdgeElement(element),
+        isMindmapNodeElement(element) || isMindmapEdgeElement(element),
     )
   ) {
     return "generic";

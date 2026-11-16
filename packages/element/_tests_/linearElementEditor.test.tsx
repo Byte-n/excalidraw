@@ -1,10 +1,9 @@
 import { pointCenter, pointFrom } from "@excalidraw/math";
-import { act, queryByTestId, queryByText } from "@testing-library/react";
+import { act, queryByText } from "@testing-library/react";
 import rough from "roughjs/bin/rough";
 import { vi } from "vitest";
 
 import {
-  CURSOR_TYPE,
   DEFAULT_FONT_FAMILY,
   DEFAULT_FONT_SIZE,
   ROUNDNESS,
@@ -38,8 +37,6 @@ import { hasBoundingBox } from "../src";
 import { LinearElementEditor } from "../src";
 import { newArrowElement } from "../src";
 import { isCurvedArrow } from "../src/typeChecks";
-import { transformElements } from "../src/resizeElements";
-import { getLinearElementPathSegments } from "../src/utils";
 import { getTextBlock } from "../src/text/ops";
 import {
   distanceToElement,
@@ -58,7 +55,6 @@ import type {
   ExcalidrawArrowElement,
   ExcalidrawElement,
   ExcalidrawLinearElement,
-  FontString,
   NonDeleted,
   NonDeletedExcalidrawElement,
 } from "../src/types";
@@ -70,7 +66,6 @@ const renderInteractiveScene = vi.spyOn(
 const renderStaticScene = vi.spyOn(StaticScene, "renderStaticScene");
 
 const { h } = window;
-const font = "20px Cascadia, width: Segoe UI Emoji" as FontString;
 
 describe("Test Linear Elements", () => {
   let container: HTMLElement;

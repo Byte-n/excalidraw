@@ -7,8 +7,6 @@ import {
 
 import { mutateElement, newElementWith } from "./mutateElement";
 
-import { isNonDeletedElement } from ".";
-
 import type {
   ElementsMap,
   ExcalidrawElement,

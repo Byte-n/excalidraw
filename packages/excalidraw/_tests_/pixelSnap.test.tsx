@@ -208,7 +208,6 @@ describe("element pixel snap", () => {
       }
     },
   );
-
 });
 
 describe("scroll pixel snap", () => {

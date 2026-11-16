@@ -5,7 +5,6 @@ import {
   getTextElementText,
   isExcalidrawElement,
   isNonDeletedElement,
-  isSequenceFragmentElement,
   newElementWith,
   updateBoundElements,
 } from "@excalidraw/element";

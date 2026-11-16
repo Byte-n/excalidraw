@@ -1,6 +1,6 @@
 import { getNonDeletedElements } from "@excalidraw/element";
 import { LinearElementEditor } from "@excalidraw/element";
-import { isLinearElement, isTextElement } from "@excalidraw/element";
+import { isLinearElement } from "@excalidraw/element";
 
 import { arrayToMap, KEYS } from "@excalidraw/common";
 
@@ -30,11 +30,7 @@ export const actionSelectAll = register({
     }
 
     const selectedElementIds = elements
-      .filter(
-        (element) =>
-          !element.isDeleted &&
-          !element.locked,
-      )
+      .filter((element) => !element.isDeleted && !element.locked)
       .reduce((map: Record<ExcalidrawElement["id"], true>, element) => {
         map[element.id] = true;
         return map;

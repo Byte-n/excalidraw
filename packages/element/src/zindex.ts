@@ -5,10 +5,7 @@ import { isFiniteNumber } from "@excalidraw/math";
 import type { AppState } from "@excalidraw/excalidraw/types";
 import type { GlobalPoint } from "@excalidraw/math";
 
-import {
-  isFrameLikeElement,
-  isTableElement,
-} from "./typeChecks";
+import { isFrameLikeElement, isTableElement } from "./typeChecks";
 import { isSequenceFragmentElement } from "./compositeShape";
 import { getElementsInGroup } from "./groups";
 import { syncMovedIndices } from "./fractionalIndex";

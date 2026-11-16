@@ -7,10 +7,7 @@ import {
 } from "@excalidraw/common";
 import { isElementLink } from "@excalidraw/element";
 import { createPlaceholderEmbeddableLabel } from "@excalidraw/element";
-import {
-  isEmbeddableElement,
-  isIframeLikeElement,
-} from "@excalidraw/element";
+import { isEmbeddableElement, isIframeLikeElement } from "@excalidraw/element";
 import {
   elementOverlapsWithFrame,
   getTargetFrame,

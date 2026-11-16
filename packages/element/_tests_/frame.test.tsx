@@ -5,7 +5,6 @@ import {
 import { arrayToMap } from "@excalidraw/common";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
-import { actionGroup } from "@excalidraw/excalidraw/actions";
 import {
   Keyboard,
   Pointer,
@@ -326,7 +325,9 @@ describe("adding elements to frames", () => {
     mouse.downAt(20, 20);
     mouse.moveTo(40, 40);
 
-    expect(h.app.pointer.getHoverSnapshot().frameToHighlight?.id).toBe(frame.id);
+    expect(h.app.pointer.getHoverSnapshot().frameToHighlight?.id).toBe(
+      frame.id,
+    );
 
     mouse.upAt(40, 40);
 
@@ -339,7 +340,9 @@ describe("adding elements to frames", () => {
     UI.clickTool("rectangle");
     mouse.moveTo(20, 20);
 
-    expect(h.app.pointer.getHoverSnapshot().frameToHighlight?.id).toBe(frame.id);
+    expect(h.app.pointer.getHoverSnapshot().frameToHighlight?.id).toBe(
+      frame.id,
+    );
 
     mouse.moveTo(200, 200);
 
@@ -1121,7 +1124,9 @@ describe("adding elements to frames", () => {
       );
       mouse.moveTo(20, 20);
 
-      expect(h.app.pointer.getHoverSnapshot().frameToHighlight?.id).toBe(frame.id);
+      expect(h.app.pointer.getHoverSnapshot().frameToHighlight?.id).toBe(
+        frame.id,
+      );
 
       mouse.upAt(20, 20);
 

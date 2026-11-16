@@ -19,10 +19,7 @@ describe("frame selection", () => {
       { includeElementsInFrames: true },
     );
 
-    expect(selected.map((element) => element.id)).toEqual([
-      frame.id,
-      owner.id,
-    ]);
+    expect(selected.map((element) => element.id)).toEqual([frame.id, owner.id]);
   });
 });
 

@@ -295,10 +295,7 @@ export const getFormValue = function <T extends Primitive>(
 };
 
 /** 字体变化后按新的度量更新独立文字的尺寸与位置。 */
-const refreshTextElement = (
-  element: ExcalidrawTextElement,
-  scene: Scene,
-) => {
+const refreshTextElement = (element: ExcalidrawTextElement, scene: Scene) => {
   const latest = scene.getElement(element.id);
   if (!latest || !isTextElement(latest)) {
     return;
@@ -428,32 +425,27 @@ const changeFontSize = (
   getNewEmbeddedFontSize?: (style: TextBlockStyle) => number,
 ) => {
   const newFontSizes = new Set<number>();
-  const elementsMap = app.scene.getNonDeletedElementsMap();
 
-  const updatedElements = changeProperty(
-    elements,
-    appState,
-    (oldElement) => {
-      if (isTextElement(oldElement)) {
-        const newFontSize = getNewFontSize(oldElement);
-        newFontSizes.add(newFontSize);
+  const updatedElements = changeProperty(elements, appState, (oldElement) => {
+    if (isTextElement(oldElement)) {
+      const newFontSize = getNewFontSize(oldElement);
+      newFontSizes.add(newFontSize);
 
-        let newElement: ExcalidrawTextElement = newElementWith(
-          oldElement,
-          getTextElementStylePatch(oldElement, { fontSize: newFontSize }),
-        );
+      let newElement: ExcalidrawTextElement = newElementWith(
+        oldElement,
+        getTextElementStylePatch(oldElement, { fontSize: newFontSize }),
+      );
 
-        newElement = offsetElementAfterFontResize(
-          oldElement,
-          newElement,
-          app.scene,
-        );
+      newElement = offsetElementAfterFontResize(
+        oldElement,
+        newElement,
+        app.scene,
+      );
 
-        return newElement;
-      }
-      return oldElement;
-    },
-  );
+      return newElement;
+    }
+    return oldElement;
+  });
 
   // Update arrow elements after text elements have been updated
   getSelectedElements(elements, appState).forEach((element) => {
@@ -1149,13 +1141,10 @@ export const actionChangeOpacity = register<ExcalidrawElement["opacity"]>({
   trackEvent: false,
   perform: (elements, appState, value) => {
     return {
-      elements: changeProperty(
-        elements,
-        appState,
-        (el) =>
-          newElementWith(el, {
-            opacity: value,
-          }),
+      elements: changeProperty(elements, appState, (el) =>
+        newElementWith(el, {
+          opacity: value,
+        }),
       ),
       appState: { ...appState, currentItemOpacity: value },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
@@ -1362,22 +1351,18 @@ export const actionChangeFontFamily = register<{
       value as ChangeFontFamilyData;
 
     if (resetAll) {
-      const nextElements = changeProperty(
-        elements,
-        appState,
-        (element) => {
-          const cachedElement = cachedElements?.get(element.id);
-          if (cachedElement) {
-            const newElement = newElementWith(element, {
-              ...cachedElement,
-            } as ElementUpdate<NonDeletedExcalidrawElement>);
+      const nextElements = changeProperty(elements, appState, (element) => {
+        const cachedElement = cachedElements?.get(element.id);
+        if (cachedElement) {
+          const newElement = newElementWith(element, {
+            ...cachedElement,
+          } as ElementUpdate<NonDeletedExcalidrawElement>);
 
-            return newElement;
-          }
+          return newElement;
+        }
 
-          return element;
-        },
-      );
+        return element;
+      });
 
       return {
         elements: nextElements,
@@ -1405,9 +1390,10 @@ export const actionChangeFontFamily = register<{
       nextFontFamily = currentHoveredFontFamily;
       nextCaptureUpdateAction = CaptureUpdateAction.EVENTUALLY;
 
-      const selectedTextElements = getSelectedElements(elements, appState).filter(
-        (element) => isTextElement(element),
-      );
+      const selectedTextElements = getSelectedElements(
+        elements,
+        appState,
+      ).filter((element) => isTextElement(element));
 
       // skip on hover re-render for more than 200 text elements or for text element with more than 5000 chars combined
       if (selectedTextElements.length > 200) {
@@ -1461,38 +1447,34 @@ export const actionChangeFontFamily = register<{
       // following causes re-render so make sure we changed the family
       // otherwise it could cause unexpected issues, such as preventing opening the popover when in wysiwyg
       Object.assign(result, {
-        elements: changeProperty(
-          elements,
-          appState,
-          (oldElement) => {
-            if (
-              isTextElement(oldElement) &&
-              (getTextElementStyle(oldElement).fontFamily !== nextFontFamily ||
-                currentItemFontFamily) // force update on selection
-            ) {
-              const newElement: ExcalidrawTextElement = newElementWith(
-                oldElement,
-                getTextElementStylePatch(oldElement, {
-                  fontFamily: nextFontFamily,
-                  lineHeight: getLineHeight(nextFontFamily!),
-                }),
-              );
+        elements: changeProperty(elements, appState, (oldElement) => {
+          if (
+            isTextElement(oldElement) &&
+            (getTextElementStyle(oldElement).fontFamily !== nextFontFamily ||
+              currentItemFontFamily) // force update on selection
+          ) {
+            const newElement: ExcalidrawTextElement = newElementWith(
+              oldElement,
+              getTextElementStylePatch(oldElement, {
+                fontFamily: nextFontFamily,
+                lineHeight: getLineHeight(nextFontFamily!),
+              }),
+            );
 
-              if (!skipFontFaceCheck) {
-                uniqueChars = new Set([
-                  ...uniqueChars,
-                  ...Array.from(getTextElementText(newElement)),
-                ]);
-              }
-
-              changedTextElements.add(newElement);
-
-              return newElement;
+            if (!skipFontFaceCheck) {
+              uniqueChars = new Set([
+                ...uniqueChars,
+                ...Array.from(getTextElementText(newElement)),
+              ]);
             }
 
-            return oldElement;
-          },
-        ),
+            changedTextElements.add(newElement);
+
+            return newElement;
+          }
+
+          return oldElement;
+        }),
       });
 
       // size is irrelevant, but necessary
@@ -1703,20 +1685,16 @@ export const actionChangeTextAlign = register<TextAlign>({
   label: "Change text alignment",
   trackEvent: false,
   perform: (elements, appState, value, app) => {
-    const nextElements = changeProperty(
-      elements,
-      appState,
-      (oldElement) => {
-        if (isTextElement(oldElement)) {
-          return newElementWith(
-            oldElement,
-            getTextElementStylePatch(oldElement, { textAlign: value }),
-          );
-        }
+    const nextElements = changeProperty(elements, appState, (oldElement) => {
+      if (isTextElement(oldElement)) {
+        return newElementWith(
+          oldElement,
+          getTextElementStylePatch(oldElement, { textAlign: value }),
+        );
+      }
 
-        return oldElement;
-      },
-    );
+      return oldElement;
+    });
     changeEmbeddedTextStyles(app, appState, () => ({ textAlign: value }));
     return {
       elements: nextElements,
@@ -1728,7 +1706,6 @@ export const actionChangeTextAlign = register<TextAlign>({
     };
   },
   PanelComponent: ({ elements, appState, updateData, app, data }) => {
-    const elementsMap = app.scene.getNonDeletedElementsMap();
     const { isCompact } = getStylesPanelInfo(app);
 
     return (
@@ -1766,7 +1743,8 @@ export const actionChangeTextAlign = register<TextAlign>({
                 }
                 return getEmbeddedTextStyle(element)?.textAlign ?? null;
               },
-              (element) => isTextElement(element) || hasEmbeddedTextStyle(element),
+              (element) =>
+                isTextElement(element) || hasEmbeddedTextStyle(element),
               (hasSelection) =>
                 hasSelection ? null : appState.currentItemTextAlign,
             )}
@@ -1790,20 +1768,16 @@ export const actionChangeVerticalAlign = register<VerticalAlign>({
   label: "Change vertical alignment",
   trackEvent: { category: "element" },
   perform: (elements, appState, value, app) => {
-    const nextElements = changeProperty(
-      elements,
-      appState,
-      (oldElement) => {
-        if (isTextElement(oldElement)) {
-          return newElementWith(
-            oldElement,
-            getTextElementStylePatch(oldElement, { verticalAlign: value }),
-          );
-        }
+    const nextElements = changeProperty(elements, appState, (oldElement) => {
+      if (isTextElement(oldElement)) {
+        return newElementWith(
+          oldElement,
+          getTextElementStylePatch(oldElement, { verticalAlign: value }),
+        );
+      }
 
-        return oldElement;
-      },
-    );
+      return oldElement;
+    });
     changeEmbeddedTextStyles(app, appState, () => ({
       verticalAlign: value,
     }));
@@ -1852,7 +1826,8 @@ export const actionChangeVerticalAlign = register<VerticalAlign>({
                 }
                 return getEmbeddedTextStyle(element)?.verticalAlign ?? null;
               },
-              (element) => isTextElement(element) || hasEmbeddedTextStyle(element),
+              (element) =>
+                isTextElement(element) || hasEmbeddedTextStyle(element),
               (hasSelection) => (hasSelection ? null : VERTICAL_ALIGN.MIDDLE),
             )}
             onChange={(value) => {

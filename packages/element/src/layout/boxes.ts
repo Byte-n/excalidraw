@@ -3,10 +3,7 @@ import { getCommonBounds } from "../bounds";
 import { createCalculationScene } from "../sceneOperations";
 import { isLinearElement } from "../typeChecks";
 
-import type {
-  ExcalidrawElement,
-  NonDeletedExcalidrawElement,
-} from "../types";
+import type { ExcalidrawElement, NonDeletedExcalidrawElement } from "../types";
 
 import type {
   LayoutBounds,
@@ -289,9 +286,7 @@ export const computeDistributePositions = (
     const start = center - sizeOf(element) / 2;
     positions.set(
       element.id,
-      axis === "x"
-        ? { x: start, y: element.y }
-        : { x: element.x, y: start },
+      axis === "x" ? { x: start, y: element.y } : { x: element.x, y: start },
     );
   });
   return positions;

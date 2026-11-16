@@ -279,12 +279,9 @@ describe("computeTableUniformScale: text modes and dedup", () => {
     const alreadyFixed = newElementWith(shape as ExcalidrawShapeElement, {
       textFitMode: "fixed",
     });
-    const rerun = computeTableUniformScale(
-      [table, alreadyFixed],
-      table.id,
-      2,
-      { persistTextModes: true },
-    )!;
+    const rerun = computeTableUniformScale([table, alreadyFixed], table.id, 2, {
+      persistTextModes: true,
+    })!;
     expect(updateOf(rerun, alreadyFixed.id).textFitMode).toBeUndefined();
   });
 
@@ -701,9 +698,10 @@ describe("computeTableUniformScale: minimum size clamp", () => {
       10,
     );
     // the text does not stop earlier than the table: same factor everywhere
-    expect(
-      updateOf(result, text.id).texts?.body?.style.fontSize,
-    ).toBeCloseTo(2 * floor, 10);
+    expect(updateOf(result, text.id).texts?.body?.style.fontSize).toBeCloseTo(
+      2 * floor,
+      10,
+    );
   });
 
   it("does not clamp an upscale above every floor", () => {

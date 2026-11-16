@@ -11,10 +11,7 @@ import {
 
 import { Scene } from "./Scene";
 import { applyTextRegionChange } from "./text/applyEdit";
-import {
-  getTextElementStylePatch,
-  getTextElementTextPatch,
-} from "./text/elementText";
+import { getTextElementStylePatch } from "./text/elementText";
 import { DEFAULT_BOUND_TEXT_LABEL_POSITION } from "./text/labelLayout";
 import { getTextBlock } from "./text/ops";
 import { isLinearElement } from "./typeChecks";

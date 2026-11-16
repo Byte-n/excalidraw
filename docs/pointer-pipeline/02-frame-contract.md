@@ -1,9 +1,6 @@
 # PR2：指针帧契约薄层
 
-> **状态**：未开始。
-> **依赖**：无；可与 PR1 并行。PR3 / PR4 / PR5 依赖本 PR。
-> **交付后的结果**：每帧指针解析结果落到唯一的 `PointerFrame`；容器 target 的 hover / cursor 已由 `applyPointerFrame` 分派；新 target kind 的 provider 注册口就位，但尚未接管行为。
-> **设计来源**：[pointer-affordance-unification.md](../pointer-affordance-unification.md) §3、[interaction-target-resolution.md](../interaction-target-resolution.md)。
+> **状态**：未开始。 **依赖**：无；可与 PR1 并行。PR3 / PR4 / PR5 依赖本 PR。 **交付后的结果**：每帧指针解析结果落到唯一的 `PointerFrame`；容器 target 的 hover / cursor 已由 `applyPointerFrame` 分派；新 target kind 的 provider 注册口就位，但尚未接管行为。 **设计来源**：[pointer-affordance-unification.md](../pointer-affordance-unification.md) §3、[interaction-target-resolution.md](../interaction-target-resolution.md)。
 
 ## 1. 目标
 
@@ -159,9 +156,9 @@ export type GestureOwner =
 
 export type PointerMode =
   | "selection" // 选择 / 套索：手柄、容器、元素都参与
-  | "arrow"     // 箭头 / 线工具：只解析连接目标，不解析选择手柄
-  | "shape"     // 矩形等创建工具：只做预设预览，不解析 target
-  | "other";    // 文本 / 橡皮 / 手型 / laser 等
+  | "arrow" // 箭头 / 线工具：只解析连接目标，不解析选择手柄
+  | "shape" // 矩形等创建工具：只做预设预览，不解析 target
+  | "other"; // 文本 / 橡皮 / 手型 / laser 等
 
 export type PointerFrameInput = {
   point: GlobalPoint;
@@ -497,8 +494,6 @@ export const isPointerPipelineShadowEnabled = () =>
 
 ## 实施记录（2026-11-14）
 
-- 实际改动：新增 `pointerFrame.ts`（target/phase/owner/mode、provider 注册表、
-  `resolvePointerFrame`、字段级比较）、`pointerState.ts`（`AppPointerState`）、
-  `pointerDispatch.ts`（`applyPointerFrame`）；容器交互改为 provider + 统一分派。
+- 实际改动：新增 `pointerFrame.ts`（target/phase/owner/mode、provider 注册表、 `resolvePointerFrame`、字段级比较）、`pointerState.ts`（`AppPointerState`）、 `pointerDispatch.ts`（`applyPointerFrame`）；容器交互改为 provider + 统一分派。
 - 与计划的偏差：`setFrame` 默认不请求重绘（临时影子期），后续 PR 按消费者逐步开启。
 - 测试：`pointer-frame.test.ts`（18 项）+ 容器分派扩展。

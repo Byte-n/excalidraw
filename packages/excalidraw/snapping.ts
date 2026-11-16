@@ -342,11 +342,9 @@ export const getVisibleGaps = (
   );
 
   const referenceBounds = getMaximumGroups(referenceElements, elementsMap).map(
-      (group) =>
-        getCommonBounds(group).map((bound) =>
-          round(bound),
-        ) as unknown as Bounds,
-    );
+    (group) =>
+      getCommonBounds(group).map((bound) => round(bound)) as unknown as Bounds,
+  );
 
   const horizontallySorted = referenceBounds.sort((a, b) => a[0] - b[0]);
 

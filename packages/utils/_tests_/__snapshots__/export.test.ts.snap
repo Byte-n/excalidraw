@@ -48,6 +48,7 @@ exports[`exportToSvg > with default arguments 1`] = `
   "editingElementTitle": null,
   "editingGroupId": null,
   "editingTextElement": null,
+  "editingTextRegion": null,
   "elementsToHighlight": null,
   "errorMessage": null,
   "exportBackground": true,

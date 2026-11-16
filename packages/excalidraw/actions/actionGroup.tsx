@@ -2,7 +2,6 @@ import { getNonDeletedElements } from "@excalidraw/element";
 
 import { newElementWith } from "@excalidraw/element";
 
-
 import {
   frameAndChildrenSelectedTogether,
   getContainingFrame,
@@ -32,7 +31,6 @@ import { CaptureUpdateAction } from "@excalidraw/element";
 
 import type {
   ExcalidrawElement,
-  ExcalidrawTextElement,
   OrderedExcalidrawElement,
 } from "@excalidraw/element/types";
 

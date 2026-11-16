@@ -23,7 +23,6 @@ import {
   isFrameLikeElement,
   isArrowElement,
   isExcalidrawElement,
-  getColorUpdate,
   isNonDeletedElement,
   isStickyNoteElement,
   isTextElement,
@@ -32,8 +31,7 @@ import {
   updateBoundElements,
 } from "@excalidraw/element";
 
-import {
-} from "@excalidraw/element";
+import {} from "@excalidraw/element";
 
 import { CaptureUpdateAction } from "@excalidraw/element";
 
@@ -85,8 +83,7 @@ export const actionPasteStyles = register({
       return { elements, captureUpdate: CaptureUpdateAction.EVENTUALLY };
     }
 
-    const selectedElements = getSelectedElements(elements, appState, {
-    });
+    const selectedElements = getSelectedElements(elements, appState, {});
     const selectedElementIds = selectedElements.map((element) => element.id);
     const elementsMap = arrayToMap(elements);
     const nextElements = relayoutStickyNotes(

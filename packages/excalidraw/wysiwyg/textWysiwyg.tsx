@@ -16,9 +16,8 @@ import { pointFrom, pointRotateRads, type Radians } from "@excalidraw/math";
 
 import { getTextFromElements } from "@excalidraw/element";
 
-import { getTextWidth } from "@excalidraw/element";
 import { getTextElementStyle, getTextElementText } from "@excalidraw/element";
-import type { TextBlockStyle } from "@excalidraw/element";
+
 import { getLineHeightInPx } from "@excalidraw/element";
 import { getLineWidth } from "@excalidraw/element";
 import { normalizeText } from "@excalidraw/element";
@@ -27,6 +26,8 @@ import {
   isContainerBackgroundText,
   resolveTableBackgroundTextFontWeight,
 } from "@excalidraw/element";
+
+import type { TextBlockStyle } from "@excalidraw/element";
 
 import type {
   ExcalidrawTextElement,
@@ -230,24 +231,6 @@ export const textWysiwyg = ({
     y: number;
   } | null = null;
 
-  const textPropertiesUpdated = (
-    updatedTextElement: ExcalidrawTextElement,
-    editable: HTMLTextAreaElement,
-  ) => {
-    if (!editable.style.fontFamily || !editable.style.fontSize) {
-      return false;
-    }
-    const currentFont = editable.style.fontFamily.replace(/"/g, "");
-    const style = getTextElementStyle(updatedTextElement);
-    if (getFontFamilyString(style) !== currentFont) {
-      return true;
-    }
-    if (`${style.fontSize}px` !== editable.style.fontSize) {
-      return true;
-    }
-    return false;
-  };
-
   let LAST_THEME = app.state.theme;
 
   const updateWysiwygStyle = () => {
@@ -261,7 +244,8 @@ export const textWysiwyg = ({
     if (!updatedTextElement) {
       return;
     }
-    const { textAlign, verticalAlign } = getTextElementStyle(updatedTextElement);
+    const { textAlign, verticalAlign } =
+      getTextElementStyle(updatedTextElement);
     const elementsMap = app.scene.getNonDeletedElementsMap();
     const coordX = updatedTextElement.x;
     const coordY = updatedTextElement.y;
@@ -324,10 +308,7 @@ export const textWysiwyg = ({
       angle: angle as Radians,
       font,
       height: updatedTextElement.height,
-      lineHeightPx: getLineHeightInPx(
-        textStyle.fontSize,
-        textStyle.lineHeight,
-      ),
+      lineHeightPx: getLineHeightInPx(textStyle.fontSize, textStyle.lineHeight),
       textAlign,
       width: updatedTextElement.width,
       x: coordX,
@@ -512,7 +493,6 @@ export const textWysiwyg = ({
       }
       const text = normalizeForEditor(normalizeText(textItem.value));
       if (!text) {
-        return;
       }
     };
 

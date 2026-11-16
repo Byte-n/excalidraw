@@ -1,5 +1,5 @@
 import { fireEvent, waitFor } from "@testing-library/react";
-import { act } from "react-dom/test-utils";
+import { act } from "react";
 
 import { FRAME_STYLE, TABLE_TITLE_OFFSET_Y } from "@excalidraw/common";
 

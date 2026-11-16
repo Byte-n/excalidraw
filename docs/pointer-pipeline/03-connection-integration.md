@@ -1,10 +1,6 @@
 # PR3：连接作为第一个消费者接入
 
-> **状态**：未开始。
-> **依赖**：PR1（几何模块 + 基线）、PR2（帧契约）。
-> **交付后的结果**：连接预览与落点共用 `resolveConnectionHit`；`suggestedBinding` 变为 frame 的派生镜像；6 个预览入口与 4 处激活条落点特例收口。
-> **拆分**：3a 非折线（直线 / 曲线 / 时序消息）、3b 折线（路由风险高）。**3a / 3b 各自独立 PR**，不得合并。
-> **设计来源**：[connection-snap-pipeline.md](../connection-snap-pipeline.md) §2–§5。
+> **状态**：未开始。 **依赖**：PR1（几何模块 + 基线）、PR2（帧契约）。 **交付后的结果**：连接预览与落点共用 `resolveConnectionHit`；`suggestedBinding` 变为 frame 的派生镜像；6 个预览入口与 4 处激活条落点特例收口。 **拆分**：3a 非折线（直线 / 曲线 / 时序消息）、3b 折线（路由风险高）。**3a / 3b 各自独立 PR**，不得合并。 **设计来源**：[connection-snap-pipeline.md](../connection-snap-pipeline.md) §2–§5。
 
 ## 1. 目标
 
@@ -250,8 +246,7 @@ const hit = shouldSnapToOutline
         reference: opts?.reference,
         arrow,
         zoom: opts?.zoom ?? 1,
-        isMidpointSnappingEnabled:
-          opts?.isMidpointSnappingEnabled ?? true,
+        isMidpointSnappingEnabled: opts?.isMidpointSnappingEnabled ?? true,
         gridSize: opts?.gridSize,
         angleLocked: opts?.angleLocked ?? false,
         elementsMap,
@@ -368,7 +363,11 @@ const axis = getSequenceMessageAxis(arrow, startOrEnd, elementsMap);
 if (axis) {
   const constrained = constrainSequenceMessagePoint(axis, pointer);
   const target = findSequenceMessageTarget(
-    axis, pointer, elements, elementsMap, zoom,
+    axis,
+    pointer,
+    elements,
+    elementsMap,
+    zoom,
   );
   const hit = target
     ? resolveConnectionHit(
@@ -385,9 +384,7 @@ if (axis) {
         () => null,
       )
     : null;
-  return hit
-    ? { element: target, focusPoint: hit.point }
-    : { element: null };
+  return hit ? { element: target, focusPoint: hit.point } : { element: null };
 }
 ```
 
@@ -551,11 +548,7 @@ PR3 可删除（确认无其他调用方）：
 
 ## 实施记录（2026-11-14）
 
-- 实际改动：新增 `pointerConnection.ts` provider 与 `connection/query.ts`；非折线 /
-  折线箭头端点统一走 `resolveConnectionHitForArrowEndpoint`；预览与落点共用
-  `ConnectionHit`；`suggestedBinding` 改为镜像（PR6 已删除）。
-- 与计划的偏差：`snapToMid` 在 3b 后无生产消费者（6b 删除）；折线保留
-  `avoidRectangularCorner`；多点箭头 landing 使用相邻点（start→1 / end→-2）。
-- 基线变化：非折线 286 条落点（①27 / ②184 / ③75），折线 155 条（①13 / ②123 / ③19），
-  未分类 0。
+- 实际改动：新增 `pointerConnection.ts` provider 与 `connection/query.ts`；非折线 / 折线箭头端点统一走 `resolveConnectionHitForArrowEndpoint`；预览与落点共用 `ConnectionHit`；`suggestedBinding` 改为镜像（PR6 已删除）。
+- 与计划的偏差：`snapToMid` 在 3b 后无生产消费者（6b 删除）；折线保留 `avoidRectangularCorner`；多点箭头 landing 使用相邻点（start→1 / end→-2）。
+- 基线变化：非折线 286 条落点（①27 / ②184 / ③75），折线 155 条（①13 / ②123 / ③19），未分类 0。
 - 测试：`connectionQuery`、`connectionPreview`、`elbowConnection`、落点基线。

@@ -70,7 +70,6 @@ const handleDegreeChange: DragInputCallbackType<AngleProps["property"]> = ({
       angle: nextAngle,
     });
     updateBindings(latestElement, scene, app.state);
-
   }
 };
 

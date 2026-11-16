@@ -237,5 +237,4 @@ describe("normalizeElementsOrder", () => {
       ["abcT_rect1", "abcT_rect3", "abcT_rect2"],
     );
   });
-
 });

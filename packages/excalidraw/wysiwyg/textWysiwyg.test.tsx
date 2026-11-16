@@ -5,12 +5,10 @@ import {
   LinearElementEditor,
   getLineHeightInPx,
   getLocalTextRegionLayout,
-  getOriginalContainerHeightFromCache,
   getSequenceLifelineDefaultSize,
   getTextBlock,
   getTextElementDisplayText,
   getTextElementStyle,
-  getTextElementText,
   getTextElementTextPatch,
   isSequenceLifelineElement,
   newElementWith,
@@ -22,9 +20,7 @@ import {
   colorToHex,
   KEYS,
   FONT_FAMILY,
-  TEXT_ALIGN,
   THEME,
-  VERTICAL_ALIGN,
   applyDarkModeFilter,
   arrayToMap,
   getLineHeight,
@@ -40,7 +36,6 @@ import type {
 } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
-import { exportToSvg } from "../scene/export";
 import { API } from "../_tests_/helpers/api";
 import { Keyboard, Pointer, UI } from "../_tests_/helpers/ui";
 import { getTextEditor, updateTextEditor } from "../_tests_/queries/dom";
@@ -48,7 +43,6 @@ import {
   GlobalTestState,
   act,
   render,
-  screen,
   unmountComponent,
 } from "../_tests_/test-utils";
 import {
@@ -97,24 +91,6 @@ const liveElement = <T extends ExcalidrawElement>(id: string) =>
       return live?.[prop];
     },
   });
-
-// radix 弹层需要 ResizeObserver（jsdom 没有，同 test-utils 的 togglePopover）
-const stubResizeObserver = () => {
-  (global as any).ResizeObserver = class ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
-};
-
-// T3 起桌面/平板为浮动栏：字号/文字对齐/垂直对齐在「文字属性」弹层，
-// 字体在字体弹层
-const openTextPropsPopup = () => {
-  stubResizeObserver();
-  fireEvent.click(
-    document.querySelector<HTMLButtonElement>("[aria-label='Text align']")!,
-  );
-};
 
 const exitTextEditorAndAssertSelection = async ({
   editor,
@@ -672,7 +648,6 @@ describe("textWysiwyg", () => {
   });
 
   describe("Test container-bound text", () => {
-    let rectangle: any;
     const { h } = window;
 
     beforeEach(async () => {
@@ -682,7 +657,6 @@ describe("textWysiwyg", () => {
       const container = createBoundTextContainer();
       API.setElements([container]);
       API.setSelectedElements([container]);
-      rectangle = liveElement(container.id);
     });
 
     it("should embed a label in a line when double clicked", async () => {
@@ -819,15 +793,17 @@ describe("textWysiwyg", () => {
 
       const value = new Array(1000).fill("1").join("\n");
 
-      // Composite containers defer geometry updates during live editing, so the
-      // container keeps its original height even when large text is pasted.
+      // Auto-fit containers grow live while editing, so pasting large text
+      // resizes the container before the edit is committed.
       await act(async () => {
         expect(() =>
           fireEvent.input(editor, { target: { value } }),
         ).not.toThrow();
       });
 
-      expect(diamond.height).toBe(75);
+      expect(liveElement<ExcalidrawElement>(diamond.id).height).toBeGreaterThan(
+        75,
+      );
 
       // Clearing text to simulate height decrease
       await act(async () => {
@@ -835,7 +811,7 @@ describe("textWysiwyg", () => {
       });
 
       // Adaptive text fit retains the original shape as its minimum size.
-      expect(diamond.height).toBe(75);
+      expect(liveElement<ExcalidrawElement>(diamond.id).height).toBe(75);
     });
 
     it("keeps the cube editor anchored while text grows and shrinks", async () => {
@@ -1457,7 +1433,6 @@ describe("textWysiwyg", () => {
         h.elements.filter((element) => element.type === "text"),
       ).toHaveLength(0);
     });
-
 
     it("should keep the text label at 0 degrees when used as an arrow label", async () => {
       const arrow = API.createElement({

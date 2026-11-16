@@ -192,10 +192,16 @@ export const startRegionTextEditing = (
     if (currentBlock) {
       liveStyle = currentBlock.style;
     }
-    applyTextRegionChange(app.scene, target.id, region, {
-      text: nextText,
-      style: liveStyle,
-    });
+    applyTextRegionChange(
+      app.scene,
+      target.id,
+      region,
+      {
+        text: nextText,
+        style: liveStyle,
+      },
+      { bumpVersion: true },
+    );
   };
 
   const commit = (nextText: string) => {

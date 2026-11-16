@@ -26,10 +26,10 @@ import type {
 } from "@excalidraw/element/types";
 import type { TextBlockMap } from "@excalidraw/element";
 
+import { buildTableCellTextBlock } from "./tableCellText";
+
 import type { AppState } from "../../types";
 import type App from "../App";
-
-import { buildTableCellTextBlock } from "./tableCellText";
 
 export type TableRangeClipboard = {
   table: ExcalidrawTableElement;

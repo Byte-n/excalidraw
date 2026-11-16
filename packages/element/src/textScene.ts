@@ -233,15 +233,11 @@ export const applyTextOperation = (
     }
 
     const text = updateText(operation, scene);
-    return finishSceneOperation(
-      elements,
-      scene.getElementsIncludingDeleted(),
-      {
-        domain: "text",
-        action: operation.action,
-        elementId: text.id,
-      },
-    );
+    return finishSceneOperation(elements, scene.getElementsIncludingDeleted(), {
+      domain: "text",
+      action: operation.action,
+      elementId: text.id,
+    });
   } finally {
     scene.destroy();
   }

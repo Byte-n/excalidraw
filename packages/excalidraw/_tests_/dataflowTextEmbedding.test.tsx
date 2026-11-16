@@ -145,7 +145,8 @@ describe("dataflow text embedding", () => {
     await doubleClickAndGetEditor(afterTitle, process.y + BODY_Y);
     expect(h.state.editingTextRegion?.target.region).toBe("body");
 
-    const body = "正文内容需要在数据流处理图形内部自动换行并撑高形状高度".repeat(4);
+    const body =
+      "正文内容需要在数据流处理图形内部自动换行并撑高形状高度".repeat(4);
     await submitText(body);
 
     const live = liveProcess(process.id);

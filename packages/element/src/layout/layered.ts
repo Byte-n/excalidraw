@@ -100,7 +100,10 @@ const getRankMap = (
   while (ready.length) {
     const id = ready.shift()!;
     for (const edge of forward.get(id) ?? []) {
-      ranks.set(edge.to, Math.max(ranks.get(edge.to) ?? 0, (ranks.get(id) ?? 0) + 1));
+      ranks.set(
+        edge.to,
+        Math.max(ranks.get(edge.to) ?? 0, (ranks.get(id) ?? 0) + 1),
+      );
       indegree.set(edge.to, (indegree.get(edge.to) ?? 0) - 1);
       if ((indegree.get(edge.to) ?? 0) === 0) {
         ready.push(edge.to);
@@ -131,7 +134,8 @@ export const layoutLayered = (
 
   const sortedNodes = [...nodes].sort(compareLayoutElements);
   const ranks = getRankMap(sortedNodes, edges, warnings);
-  const layerCount = Math.max(...sortedNodes.map((node) => ranks.get(node.id) ?? 0)) + 1;
+  const layerCount =
+    Math.max(...sortedNodes.map((node) => ranks.get(node.id) ?? 0)) + 1;
   const layers: ExcalidrawElement[][] = Array.from(
     { length: layerCount },
     () => [],
@@ -152,7 +156,9 @@ export const layoutLayered = (
     const columnHeights = layers.map((layer) =>
       layer.reduce(
         (height, node) =>
-          height + node.height + (node === layer[layer.length - 1] ? 0 : nodeGap),
+          height +
+          node.height +
+          (node === layer[layer.length - 1] ? 0 : nodeGap),
         0,
       ),
     );

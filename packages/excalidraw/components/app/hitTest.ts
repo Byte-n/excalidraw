@@ -12,7 +12,6 @@ import {
   isIframeLikeElement,
   isNonDeletedElement,
   isContainerBackgroundText,
-  isTextElement,
   isCursorInFrame,
   isTitledElement,
 } from "@excalidraw/element";
@@ -111,9 +110,7 @@ export const getElementsAtPosition = (
 
   const candidates = opts?.includeLockedElements
     ? app.scene.getNonDeletedElements()
-    : app.scene
-        .getNonDeletedElements()
-        .filter((element) => !element.locked);
+    : app.scene.getNonDeletedElements().filter((element) => !element.locked);
 
   const elements = candidates
     .filter(

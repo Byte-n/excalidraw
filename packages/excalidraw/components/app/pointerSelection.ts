@@ -45,7 +45,6 @@ import {
   isInitializedImageElement,
   isNonDeletedElement,
   isStickyNoteElement,
-  isShapeWithId,
   makeNextSelectedElementIds,
   transformElements,
   updateBoundElements,
@@ -73,7 +72,6 @@ import type {
   ExcalidrawLinearElement,
   ExcalidrawTableElement,
   NonDeleted,
-  ExcalidrawTextContainer,
 } from "@excalidraw/element/types";
 import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
 
@@ -1117,8 +1115,8 @@ export const handleTextOnPointerDown = (
   if (app.state.editingTextElement) {
     return;
   }
-  let sceneX = pointerDownState.origin.x;
-  let sceneY = pointerDownState.origin.y;
+  const sceneX = pointerDownState.origin.x;
+  const sceneY = pointerDownState.origin.y;
 
   // the click transitions into text editing either way, consuming (or
   // bypassing) whatever anchor was highlighted — don't leave it lingering

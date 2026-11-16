@@ -8,7 +8,6 @@ import {
   DEFAULT_FREEDRAW_STROKE_WIDTH,
   FONT_FAMILY,
   ROUNDNESS,
-  STICKY_NOTE_MAX_FONT_SIZE,
   DEFAULT_STICKY_NOTE_BG,
   STICKY_NOTE_INK,
   STICKY_NOTE_MIN_FONT_SIZE,
@@ -23,7 +22,6 @@ import {
   getLocalTextRegionLayout,
   getTableCellTextBaseStyle,
   getTextBlock,
-  getTextElementBaseFontSize,
   getTextElementStyle,
   getTextElementText,
   isSequenceLifelineElement,
@@ -1594,7 +1592,6 @@ describe("repairing bindings", () => {
       // endBinding: expect.any(Object),
     });
   });
-
 });
 
 describe("restoreLibraryItems", () => {

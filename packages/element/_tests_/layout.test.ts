@@ -73,7 +73,11 @@ const expectSceneError = (fn: () => unknown, code: string) => {
 
 const chain = () => {
   const first = connect(
-    [rect("a", 0, 0, 100, 60, 1), rect("b", 300, 200, 100, 60, 2), rect("c", 600, 400, 100, 60, 3)],
+    [
+      rect("a", 0, 0, 100, 60, 1),
+      rect("b", 300, 200, 100, 60, 2),
+      rect("c", 600, 400, 100, 60, 3),
+    ],
     "a",
     "b",
   );
@@ -221,9 +225,7 @@ describe("tree 布局", () => {
     expect(result.bounds.y).toBeCloseTo(50);
     expect(result.bounds.width).toBeGreaterThan(0);
     expect(result.bounds.height).toBeGreaterThan(0);
-    expect(byId(result.elements, childId).x).not.toBe(
-      byId(moved, childId).x,
-    );
+    expect(byId(result.elements, childId).x).not.toBe(byId(moved, childId).x);
   });
 
   it("没有脑图元素时给出 warning 且不改几何", () => {
@@ -375,10 +377,11 @@ describe("align / distribute", () => {
 
   it("元素数量不足或参数非法时抛错", () => {
     expectSceneError(
-      () => layoutElements([rect("a", 0, 0)], {
-        ids: ["a"],
-        algorithm: "align",
-      }),
+      () =>
+        layoutElements([rect("a", 0, 0)], {
+          ids: ["a"],
+          algorithm: "align",
+        }),
       "invalid_input",
     );
     expectSceneError(
@@ -404,7 +407,11 @@ describe("align / distribute", () => {
 describe("布局返回与身份", () => {
   it("未选中元素保持原始对象身份，bounds 只统计受影响元素", () => {
     const outside = rect("outside", 1000, 1000);
-    const elements = [rect("a", 0, 0, 100, 60, 1), rect("b", 0, 0, 100, 60, 2), outside];
+    const elements = [
+      rect("a", 0, 0, 100, 60, 1),
+      rect("b", 0, 0, 100, 60, 2),
+      outside,
+    ];
     const result = layoutElements(elements, {
       ids: ["a", "b"],
       algorithm: "row",

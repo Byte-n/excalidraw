@@ -1,9 +1,6 @@
 # 连接点与吸附统一：一期实施方案
 
-> 关联：[pointer-affordance-unification.md](pointer-affordance-unification.md)（指针归属，二期接入）、
-> 根目录 `TODO.md`「统一规划所有图形/图元的连接点与吸附策略」。
-> **执行入口**：[pointer-pipeline/README.md](pointer-pipeline/README.md)。本文档的几何设计由 PR1（`01-connection-geometry.md`）实现，
-> 由 PR3（`03-connection-integration.md`）接入；指针消费的统一由 PR2 / PR4 / PR5 承接。
+> 关联：[pointer-affordance-unification.md](pointer-affordance-unification.md)（指针归属，二期接入）、根目录 `TODO.md`「统一规划所有图形/图元的连接点与吸附策略」。 **执行入口**：[pointer-pipeline/README.md](pointer-pipeline/README.md)。本文档的几何设计由 PR1（`01-connection-geometry.md`）实现，由 PR3（`03-connection-integration.md`）接入；指针消费的统一由 PR2 / PR4 / PR5 承接。
 
 ## 0. 一期目标
 
@@ -16,8 +13,7 @@
 
 约束：
 
-- **数据结构不变**。`binding.attachPoint` 继续存「端点在未旋转包围盒里的归一化位置」，跟随继续刚性映射。
-  旧文件、board-import 不需要改动。
+- **数据结构不变**。`binding.attachPoint` 继续存「端点在未旋转包围盒里的归一化位置」，跟随继续刚性映射。旧文件、board-import 不需要改动。
 - **可绑定范围不变**。表格 / fragment 开放绑定移到二期（见 §7）。
 - 指针归属（A 层，`AffordanceProvider`）**不在一期**。一期只把同一功能的重复入口合并，不改事件分发顺序。
 
@@ -41,9 +37,7 @@ calculateAttachPointForNonElbowArrowBinding                   binding.ts:2062
   └─ 纯换算：全局点 → 比例。不吸附。
 ```
 
-`calculateAttachPointForNonElbowArrowBinding` 还被这些「点已经求好」的调用方直接使用，**它必须保持纯换算**：
-方向键微调（`keyboard.ts:210/225`）、yjs `createSceneConnectionEndpoint`（`element-factory.ts:63`）、
-类型转换重锚（`binding.ts:785`）、曲线判边（`binding.ts:1837`）。
+`calculateAttachPointForNonElbowArrowBinding` 还被这些「点已经求好」的调用方直接使用，**它必须保持纯换算**：方向键微调（`keyboard.ts:210/225`）、yjs `createSceneConnectionEndpoint`（`element-factory.ts:63`）、类型转换重锚（`binding.ts:785`）、曲线判边（`binding.ts:1837`）。
 
 ### 1.2 折线箭头
 
@@ -60,10 +54,7 @@ bindPointToSnapToElementOutline                               binding.ts:1086
 
 ### 1.3 时序消息
 
-`sequenceMessage.ts`（`getSequenceMessageAxis` / `constrainSequenceMessagePoint` / `findSequenceMessageTarget`，
-阈值 `SEQUENCE_MESSAGE_SNAP_DISTANCE = 12`）在另一端绑在激活条上时接管目标选择并把端点约束到水平轴。
-`App.quickCreate.resolveSequenceConnection` 另有一套（`SEQUENCE_CONNECTION_SNAP_DISTANCE = 12`、`INSIDE_TOLERANCE = 4`）。
-激活条落点 `getActivationBindingPoint` 分散在 `binding.ts:1385`、`:1813`、`utils.ts:533`、`interactiveScene.ts:744` 四处。
+`sequenceMessage.ts`（`getSequenceMessageAxis` / `constrainSequenceMessagePoint` / `findSequenceMessageTarget`，阈值 `SEQUENCE_MESSAGE_SNAP_DISTANCE = 12`）在另一端绑在激活条上时接管目标选择并把端点约束到水平轴。 `App.quickCreate.resolveSequenceConnection` 另有一套（`SEQUENCE_CONNECTION_SNAP_DISTANCE = 12`、`INSIDE_TOLERANCE = 4`）。激活条落点 `getActivationBindingPoint` 分散在 `binding.ts:1385`、`:1813`、`utils.ts:533`、`interactiveScene.ts:744` 四处。
 
 ### 1.4 预览入口（共 6 处）
 
@@ -91,12 +82,9 @@ bindPointToSnapToElementOutline                               binding.ts:1086
 
 **所有档位的落点都在 Γ 上，档位只决定取 Γ 上的哪一点。**
 
-Γ 与 `intersectElementWithLineSegment(E, …, gap)` 使用同一份外扩几何（`deconstructRectanguloidElement` 等现有分解
-加 offset、复合图形的 `getCompositeShapeGlobalHitPaths`），不另写一套轮廓。这样 ①②③ 档在圆角、尖角处落在同一条曲线上。
+Γ 与 `intersectElementWithLineSegment(E, …, gap)` 使用同一份外扩几何（`deconstructRectanguloidElement` 等现有分解加 offset、复合图形的 `getCompositeShapeGlobalHitPaths`），不另写一套轮廓。这样 ①②③ 档在圆角、尖角处落在同一条曲线上。
 
-由此得到**幂等性**：`resolve(resolve(p).point).point === resolve(p).point`。
-Γ 上的点再求一次，要么仍在推荐点半径内（回到同一推荐点），要么走 ② 档取 Γ 上最近点（就是它自己）。
-折线「从箭头读端点再求一次」、拖拽每帧写绑定后松手再求一次，都依赖这条性质。
+由此得到**幂等性**：`resolve(resolve(p).point).point === resolve(p).point`。 Γ 上的点再求一次，要么仍在推荐点半径内（回到同一推荐点），要么走 ② 档取 Γ 上最近点（就是它自己）。折线「从箭头读端点再求一次」、拖拽每帧写绑定后松手再求一次，都依赖这条性质。
 
 ### 2.2 三档
 
@@ -108,8 +96,7 @@ bindPointToSnapToElementOutline                               binding.ts:1086
 | ② 轮廓 `outline` | `p` 到可连轮廓距离 ≤ 轮廓带（外侧、内侧各自的宽度见下） | Γ 上离 `p` **最近**的点 | 实心小圆 |
 | ③ 内部 `interior` | `p` 在 `E` 内部更深处 | 由 `spec.interior` 决定：`ray` = 现有方向求交；`nearest` = 同 ② | 实心小圆 |
 
-`spec.interior = "none"`（frame）时内部深处**不是绑定候选**：不高亮、不给落点、松手不绑，候选让给下一个元素（见 §2.4）。
-不存在「高亮但没有落点」的状态。
+`spec.interior = "none"`（frame）时内部深处**不是绑定候选**：不高亮、不给落点、松手不绑，候选让给下一个元素（见 §2.4）。不存在「高亮但没有落点」的状态。
 
 只要 `E` 是当前绑定目标，就以空心小环显示**全部**推荐点。
 
@@ -118,13 +105,17 @@ bindPointToSnapToElementOutline                               binding.ts:1086
 集中在 `connection/thresholds.ts`：
 
 ```ts
-export const ANCHOR_RADIUS_PX = 14;        // 屏幕 px
-export const OUTLINE_INSIDE_BAND_PX = 10;  // 屏幕 px
+export const ANCHOR_RADIUS_PX = 14; // 屏幕 px
+export const OUTLINE_INSIDE_BAND_PX = 10; // 屏幕 px
 
 // 外侧轮廓带 = 可绑定范围，沿用现有函数（场景单位，低缩放放大），一期不改
-outsideBand = maxBindingDistance_simple(zoom)
-insideBand  = min(OUTLINE_INSIDE_BAND_PX / zoom, 0.25 * min(E.width, E.height))
-anchorRadius = min(ANCHOR_RADIUS_PX / zoom, outsideBand, 0.25 * min(E.width, E.height))
+outsideBand = maxBindingDistance_simple(zoom);
+insideBand = min(OUTLINE_INSIDE_BAND_PX / zoom, 0.25 * min(E.width, E.height));
+anchorRadius = min(
+  ANCHOR_RADIUS_PX / zoom,
+  outsideBand,
+  0.25 * min(E.width, E.height),
+);
 ```
 
 - 推荐点半径量的是「指针到轮廓上推荐点」的距离，高缩放下不会被 gap 吃掉；
@@ -140,8 +131,7 @@ pickConnectionTarget(point, elements, ctx) → { element, hit } | null
   逐个调用 resolveConnectionHit；第一个返回非 null 的胜出
 ```
 
-`bindingBorderTest` 里「frame 不测内部」（`collision.ts:331`）改为读 `spec.interior === "none"`，判据只留一份。
-一期可绑定范围不变，所以候选顺序和结果与现状一致；二期开放表格时只需注册 spec。
+`bindingBorderTest` 里「frame 不测内部」（`collision.ts:331`）改为读 `spec.interior === "none"`，判据只留一份。一期可绑定范围不变，所以候选顺序和结果与现状一致；二期开放表格时只需注册 spec。
 
 ### 2.5 开关与修饰键（语义沿用，不新增）
 
@@ -156,8 +146,7 @@ pickConnectionTarget(point, elements, ctx) → { element, hit } | null
 
 - 指针在图形**内部**靠近边中点时也会吸到推荐点（现在 `getSnapOutlineMidPoint` 在内部不吸附）；
 - 指针在外侧带内时，落点从「朝另一端的射线交点」变为「最近点」——这正是 G1；
-- 指针向内越过内侧带时，落点从最近点切到射线交点，可能换边。预览圆点同步跳变，所见即所得。
-  一期不加迟滞（迟滞需要状态，会破坏「同输入同结果」）；体验不佳再评估把 `interior` 默认改为 `nearest`。
+- 指针向内越过内侧带时，落点从最近点切到射线交点，可能换边。预览圆点同步跳变，所见即所得。一期不加迟滞（迟滞需要状态，会破坏「同输入同结果」）；体验不佳再评估把 `interior` 默认改为 `nearest`。
 
 ## 3. 图形声明：`ConnectionSpec`
 
@@ -198,8 +187,7 @@ export const getConnectionSpec = (el: ExcalidrawBindableElement): ConnectionSpec
 
 - `nearest` + 只有竖边 → 落点 = 指针 y（夹在条内）对应的贴边点；
 - 有参考点 → 只剩朝向侧的边，指针压在条中心也不会翻边；
-- **无参考点（悬停新建、pointerdown 起点）→ 取指针所在一侧**。悬停预览与 pointerdown 用同一个无参考点的查询，
-  所以悬停圆点与真实起点同侧。
+- **无参考点（悬停新建、pointerdown 起点）→ 取指针所在一侧**。悬停预览与 pointerdown 用同一个无参考点的查询，所以悬停圆点与真实起点同侧。
 
 ### 时序消息与本模块的关系
 
@@ -217,15 +205,13 @@ resolveConnectionHit(target, constrainedPoint, reference = 另一端) → 落点
 
 ### 推荐点与刚性跟随
 
-推荐点落定后同样存成 `attachPoint` 比例。边中点、随包围盒线性缩放的复合图形锚点在非等比缩放下仍落在推荐点上。
-带固定尺寸特征的图形（固定半径圆角、固定箭头头部）缩放后有亚像素到数像素的漂移，与现状一致，一期不处理。
+推荐点落定后同样存成 `attachPoint` 比例。边中点、随包围盒线性缩放的复合图形锚点在非等比缩放下仍落在推荐点上。带固定尺寸特征的图形（固定半径圆角、固定箭头头部）缩放后有亚像素到数像素的漂移，与现状一致，一期不处理。
 
 ### 曲线箭头
 
 端切线仍由 `normalFromAttachPoint` 按比例判边（`curveConnector.ts:92`），一期不改。
 
-- 矩形类目标：② 档最近点所在边与比例判出的边一致，端点与切线自洽；现有「贴边时沿法线外移一个 gap」的曲线专用分支
-  （`binding.ts:1835-1872`）被 ② 档覆盖，删除；
+- 矩形类目标：② 档最近点所在边与比例判出的边一致，端点与切线自洽；现有「贴边时沿法线外移一个 gap」的曲线专用分支（`binding.ts:1835-1872`）被 ② 档覆盖，删除；
 - 椭圆 / 菱形 / 复合图形：切线是轴对齐法线、落点在斜向轮廓上，二者有夹角。这在现有射线落点下已经存在，一期不扩大也不修。
 
 ## 4. 代码组织
@@ -245,19 +231,19 @@ packages/element/src/connection/
 ```ts
 type ConnectionQuery = {
   element: ExcalidrawBindableElement;
-  point: GlobalPoint;              // 端点位置（已做过网格 / 时序水平约束）
-  reference?: GlobalPoint;         // 箭头另一端；悬停新建时无
+  point: GlobalPoint; // 端点位置（已做过网格 / 时序水平约束）
+  reference?: GlobalPoint; // 箭头另一端；悬停新建时无
   arrow?: ExcalidrawLinearElement; // 用于 gap、折线 / 曲线分支；悬停新建时按当前工具的箭头类型给 gap
   zoom: AppState["zoom"];
-  anchorsEnabled: boolean;         // isMidpointSnappingEnabled && !grid && !angleLocked
+  anchorsEnabled: boolean; // isMidpointSnappingEnabled && !grid && !angleLocked
   angleLocked: boolean;
   elementsMap: ElementsMap;
 };
 
 type ConnectionHit = {
   tier: "anchor" | "outline" | "interior";
-  point: GlobalPoint;     // Γ 上的最终端点
-  anchorIndex?: number;   // tier = anchor 时
+  point: GlobalPoint; // Γ 上的最终端点
+  anchorIndex?: number; // tier = anchor 时
   anchors: GlobalPoint[]; // 供渲染空心环（轮廓上的点）
 };
 ```
@@ -278,24 +264,19 @@ type ConnectionHit = {
 | 折线落点 | `bindPointToSnapToElementOutline` 开头先判 ①②，未命中再走原有函数体 |
 | **不改** | `calculateAttachPointForNonElbowArrowBinding`（纯换算）及其直接调用方：方向键微调、yjs 非折线、重锚、曲线判边 |
 
-注意：`calculateAttachPointForElbowArrowBinding` 今天就带吸附，yjs 折线建连（`element-factory.ts:62`）和
-切换箭头类型（`actionProperties.tsx`）会随折线切换得到 ①② 档的新落点。这是预期变化，但要进基线对比（步骤 1）。
+注意：`calculateAttachPointForElbowArrowBinding` 今天就带吸附，yjs 折线建连（`element-factory.ts:62`）和切换箭头类型（`actionProperties.tsx`）会随折线切换得到 ①② 档的新落点。这是预期变化，但要进基线对比（步骤 1）。
 
 ### 预览 = 落点
 
 三条保证，缺一不可：
 
-1. **同一个查询构造**：预览和落定都经 `buildConnectionQuery` 得到 `point / reference / anchorsEnabled / angleLocked`，
-   网格、Shift、`pointerOffset`、时序水平约束只在这里处理一次；
+1. **同一个查询构造**：预览和落定都经 `buildConnectionQuery` 得到 `point / reference / anchorsEnabled / angleLocked`，网格、Shift、`pointerOffset`、时序水平约束只在这里处理一次；
 2. **同一个求点函数**：`resolveConnectionHit`；
 3. **幂等**（§2.1）：兜住折线从箭头读端点、每帧写绑定后松手重算这两种「拿落点再求一次」的路径。
 
-`appState.suggestedBinding` 由 `{ element, midPoint? }` 改为 `{ element, hit: ConnectionHit }`（内部字段，不持久化）。
-`hit` 每帧是新对象，`linearElementEditor.ts:494` 的 `isShallowEqual` 换成按 `element.id / tier / anchorIndex / point` 比较，
-避免每次 pointermove 都 setState。
+`appState.suggestedBinding` 由 `{ element, midPoint? }` 改为 `{ element, hit: ConnectionHit }`（内部字段，不持久化）。 `hit` 每帧是新对象，`linearElementEditor.ts:494` 的 `isShallowEqual` 换成按 `element.id / tier / anchorIndex / point` 比较，避免每次 pointermove 都 setState。
 
-6 个预览入口（§1.4）统一调用 `getConnectionPreview(app, point, arrow?)`；渲染器只按 `hit` 绘制：
-空心环 = `hit.anchors`，实心大圆 = 命中的推荐点，实心小圆 = ②③ 档落点。`renderSequenceActivationDot` 并入通用落点圆点。
+6 个预览入口（§1.4）统一调用 `getConnectionPreview(app, point, arrow?)`；渲染器只按 `hit` 绘制：空心环 = `hit.anchors`，实心大圆 = 命中的推荐点，实心小圆 = ②③ 档落点。`renderSequenceActivationDot` 并入通用落点圆点。
 
 ## 5. 实施步骤
 
@@ -303,16 +284,13 @@ type ConnectionHit = {
 
 ### 步骤 1：冻结现状
 
-- 新增 `packages/element/_tests_/connection.baseline.test.ts`：对矩形 / 菱形 / 椭圆 / 复合图形 / 文本 / 便签 / frame / 激活条，
-  在中心、四边中点附近、四角、边上任意点、内部浅处与深处、外部带内与带外采样；
-  **直线 / 曲线 / 折线各一份**，另加 Shift、网格、关闭中点吸附三种模式，快照当前落点。
+- 新增 `packages/element/_tests_/connection.baseline.test.ts`：对矩形 / 菱形 / 椭圆 / 复合图形 / 文本 / 便签 / frame / 激活条，在中心、四边中点附近、四角、边上任意点、内部浅处与深处、外部带内与带外采样； **直线 / 曲线 / 折线各一份**，另加 Shift、网格、关闭中点吸附三种模式，快照当前落点。
 - 同时快照不该变的路径：方向键微调、yjs `createSceneConnectionEndpoint`（折线 / 非折线）、切换箭头类型。
 
 ### 步骤 2：connection 模块（纯函数，无调用方）
 
 - 实现 §4 的文件与 §3 注册表；③ 档 `ray` 以注入方式委托现有函数。
-- 单测：每个家族的三档判定；`anchorsEnabled` / `angleLocked`；旋转元素；gap（文本为 0）；
-  zoom 0.25 / 1 / 4 下的阈值；小图形（边长 < 4 × 推荐点半径）仍能落到边上任意点。
+- 单测：每个家族的三档判定；`anchorsEnabled` / `angleLocked`；旋转元素；gap（文本为 0）； zoom 0.25 / 1 / 4 下的阈值；小图形（边长 < 4 × 推荐点半径）仍能落到边上任意点。
 - **幂等性质测试**：对每个家族 × 三种箭头沿网格扫描 `p`，断言 `resolve(resolve(p).point).point ≈ resolve(p).point`。
 - **Γ 一致性**：②③ 档落点到 `E` 的距离都等于 gap（含圆角、尖角）。
 - 静态约束：`resolve.ts` 不得 import 任何 `is*Element` 图形判断（grep 测试）。
@@ -343,23 +321,19 @@ type ConnectionHit = {
 
 ### 步骤 6：类型转换重锚
 
-`reanchorBindingsToOutline`：原端点若在旧图形某推荐点的容差内，则落到新图形最近的推荐点；否则维持现有射线重锚。
-补「矩形边中点连线 → 转星形后仍在推荐点上」用例。
+`reanchorBindingsToOutline`：原端点若在旧图形某推荐点的容差内，则落到新图形最近的推荐点；否则维持现有射线重锚。补「矩形边中点连线 → 转星形后仍在推荐点上」用例。
 
 ## 6. 测试与验收
 
-- **G2**：对每个家族 × 三种箭头 × 四种模式沿网格扫描，走真实的拖拽 → 松手流程，
-  断言 `预览 hit.point === 松手后 updateBoundPoint 解出的端点`（误差 < 0.01）。悬停新建单独一组：悬停圆点 === pointerdown 后的起点。
+- **G2**：对每个家族 × 三种箭头 × 四种模式沿网格扫描，走真实的拖拽 → 松手流程，断言 `预览 hit.point === 松手后 updateBoundPoint 解出的端点`（误差 < 0.01）。悬停新建单独一组：悬停圆点 === pointerdown 后的起点。
 - **G3**：推荐点半径内即使轮廓最近点更近也取推荐点；关闭中点吸附后不再取推荐点；小图形上推荐点不覆盖整条边。
 - **G1**：任意边上的随机点都能成为落点；落定后移动 / 缩放元素，端点仍在原比例位置。
 - **回归**：基线差异只出现在 §2.6 列出的三类；Shift、Alt、网格、文本 gap 0、方向键微调、yjs 非折线、旧文件加载与现状一致。
-- **时序图**：现有 `sequenceShape.test.ts`、`quickCreateHandles.test.tsx` 中激活条落点用例保持通过；
-  新增「悬停预览贴边 = 松手贴边」「指针压在条中心不翻边」用例。
+- **时序图**：现有 `sequenceShape.test.ts`、`quickCreateHandles.test.tsx` 中激活条落点用例保持通过；新增「悬停预览贴边 = 松手贴边」「指针压在条中心不翻边」用例。
 
 ## 7. 一期不做
 
-- **表格 / fragment 开放绑定**：依赖 §2.4 的候选层，另需核查行列增删、列宽拖动是否走 `updateBoundElements`、删除时清理
-  `boundElements`、复制粘贴重映射。一期只留好 `interior = "none"` 的注册位。
+- **表格 / fragment 开放绑定**：依赖 §2.4 的候选层，另需核查行列增删、列宽拖动是否走 `updateBoundElements`、删除时清理 `boundElements`、复制粘贴重映射。一期只留好 `interior = "none"` 的注册位。
 - A 层指针归属统一（`AffordanceProvider`）：二期按 `pointer-affordance-unification.md` 推进，`getConnectionPreview` 届时改为 provider。
 - 曲线箭头在非矩形图形上的端切线与落点夹角。
 - ②/③ 档边界的迟滞。

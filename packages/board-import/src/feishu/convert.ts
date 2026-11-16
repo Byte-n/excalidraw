@@ -275,7 +275,10 @@ export function convertBoard(nodes: LarkBoardNode[]): BoardConversion {
         const layout = getStickyNoteBodyLayout(withBody);
         byNodeId.set(
           node.raw.id,
-          push(layout ? { ...withBody, ...layout.container } : withBody, node.zIndex),
+          push(
+            layout ? { ...withBody, ...layout.container } : withBody,
+            node.zIndex,
+          ),
         );
         mappedIds.add(node.raw.id);
         break;

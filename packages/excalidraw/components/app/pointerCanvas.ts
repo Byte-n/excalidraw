@@ -384,7 +384,10 @@ export const handleCanvasDoubleClick = (
 
   const selectedElements = app.scene.getSelectedElements(app.state);
 
-  let { x: sceneX, y: sceneY } = viewportCoordsToSceneCoords(event, app.state);
+  const { x: sceneX, y: sceneY } = viewportCoordsToSceneCoords(
+    event,
+    app.state,
+  );
 
   if (selectedElements.length === 1 && isLinearElement(selectedElements[0])) {
     const selectedLinearElement: ExcalidrawLinearElement = selectedElements[0];

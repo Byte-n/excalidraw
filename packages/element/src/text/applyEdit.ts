@@ -1,5 +1,8 @@
 import { updateBoundElements } from "../binding";
-import { getCompositeShapeTextFitMode, isShapeElement } from "../compositeShape";
+import {
+  getCompositeShapeTextFitMode,
+  isShapeElement,
+} from "../compositeShape";
 import {
   fitSequenceFragmentOperatorFromTexts,
   refitSequenceFragmentRowBackgroundTexts,
@@ -12,6 +15,7 @@ import {
 import { relayoutMindmapScene } from "../mindmapScene";
 import { updateStickyNoteLayout } from "../stickyNote";
 import { applyTableTextLayout } from "../tableSceneGeometry";
+import { newElementWith } from "../mutateElement";
 import { getSequenceLifelineTextFitUpdates } from "../textElement";
 import { normalizeText } from "../textMeasurements";
 import {
@@ -49,6 +53,8 @@ export type TextRegionChange = Readonly<{
 export type ApplyTextRegionOptions = Readonly<{
   /** false 只写文本，跳过几何反馈（程序化只想改内容时使用）。 */
   reflow?: boolean;
+  /** 本地编辑写回时递增版本；纯场景操作由提交边界统一生成。 */
+  bumpVersion?: boolean;
 }>;
 
 const isSameStyle = (left: TextBlockStyle, right: TextBlockStyle) =>
@@ -73,19 +79,29 @@ const isSameBlock = (left: TextBlock | undefined, right: TextBlock) =>
   isSameStyle(left.style, right.style) &&
   isSamePlacement(left.placement, right.placement);
 
-/** 清空所有区域时整体替换元素：`mutateElement` 会忽略 undefined。 */
-const removeTextsProperty = (scene: Scene, element: ExcalidrawElement) => {
+/**
+ * 清空所有区域时整体替换元素：`mutateElement` 会忽略 undefined。
+ * 本地编辑需要递增版本，store 才会把这次替换识别为变更；纯场景操作
+ * 必须保留版本，由提交边界统一生成。
+ */
+const removeTextsProperty = (
+  scene: Scene,
+  element: ExcalidrawElement,
+  bumpVersion: boolean,
+) => {
   scene.captureTransactionPreImage(element);
   scene.replaceAllElements(
-    scene
-      .getElementsIncludingDeleted()
-      .map((candidate) =>
-        candidate.id === element.id
-          ? (Object.fromEntries(
-              Object.entries(candidate).filter(([key]) => key !== "texts"),
-            ) as ExcalidrawElement)
-          : candidate,
-      ),
+    scene.getElementsIncludingDeleted().map((candidate) => {
+      if (candidate.id !== element.id) {
+        return candidate;
+      }
+      const withoutTexts = Object.fromEntries(
+        Object.entries(candidate).filter(([key]) => key !== "texts"),
+      ) as ExcalidrawElement;
+      return bumpVersion
+        ? newElementWith(withoutTexts, {}, true)
+        : withoutTexts;
+    }),
   );
 };
 
@@ -95,6 +111,7 @@ const writeTextBlock = (
   element: ExcalidrawElement,
   region: TextRegionKey,
   block: TextBlock,
+  bumpVersion: boolean,
 ): boolean => {
   const current = getTextBlock(element.texts, region);
   if (isSameBlock(current, block) || (!block.text && !current)) {
@@ -106,7 +123,7 @@ const writeTextBlock = (
     : withoutTextBlock(element.texts, region);
 
   if (nextTexts === undefined) {
-    removeTextsProperty(scene, element);
+    removeTextsProperty(scene, element, bumpVersion);
   } else {
     scene.mutateElement(element, { texts: nextTexts });
   }
@@ -263,7 +280,13 @@ export const applyTextRegionChange = (
     ...(placement ? { placement } : {}),
   };
 
-  const didWrite = writeTextBlock(scene, element, region, nextBlock);
+  const didWrite = writeTextBlock(
+    scene,
+    element,
+    region,
+    nextBlock,
+    options?.bumpVersion ?? false,
+  );
   if (!didWrite) {
     return false;
   }

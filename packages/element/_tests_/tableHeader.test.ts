@@ -182,7 +182,7 @@ describe("resolveTableCellTextStyle", () => {
   });
 
   it("keeps the persisted block line height independent of size overrides", () => {
-    const base = fixture();
+    fixture();
     const style = getTableCellTextBaseStyle();
     expect(style.lineHeight).toBe(getLineHeight(style.fontFamily));
   });

@@ -80,12 +80,7 @@ export const prepareElementsForExport = (
 
   let exportingFrame: NonDeleted<ExcalidrawFrameLikeElement> | null = null;
   let exportedElements = isExportingSelection
-    ? getSelectedElements(
-        elements,
-        { selectedElementIds },
-        {
-        },
-      )
+    ? getSelectedElements(elements, { selectedElementIds }, {})
     : elements;
 
   if (isExportingSelection) {

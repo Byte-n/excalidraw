@@ -87,13 +87,13 @@ import {
   isElbowArrow,
 } from "./typeChecks";
 
-import type { TextBlockStyle, TextRegionLayout } from "./text/types";
-
 import { ShapeCache, toggleLinePolygonState } from "./shape";
 
 import { getLockedLinearCursorAlignSize } from "./sizeHelpers";
 
 import { isLineElement, isLinearElement } from "./typeChecks";
+
+import type { TextBlockStyle, TextRegionLayout } from "./text/types";
 
 import type { ConnectionHit } from "./connection/types";
 
@@ -1139,11 +1139,7 @@ export class LinearElementEditor {
       !segmentMidpoint &&
       labelLayout.text !== "" &&
       isArrowElement(element) &&
-      app.arrowText.isLabelGrabbable(
-        element,
-        scenePointer.x,
-        scenePointer.y,
-      )
+      app.arrowText.isLabelGrabbable(element, scenePointer.x, scenePointer.y)
     ) {
       labelGrabOffset = {
         x: scenePointer.x - (labelLayout.x + labelLayout.width / 2),

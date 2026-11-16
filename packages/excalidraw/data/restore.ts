@@ -30,7 +30,6 @@ import {
   STROKE_WIDTH_KEYS,
   type StrokeWidthKey,
   STICKY_NOTE_BACKGROUND_PICKS,
-  isTransparent,
 } from "@excalidraw/common";
 import {
   getNonDeletedElements,
@@ -63,15 +62,12 @@ import {
 } from "@excalidraw/element";
 import {
   DEFAULT_BOUND_TEXT_LABEL_POSITION,
-  getTextElementBaseFontSize,
-  getTextElementBaseFontSizePatch,
   normalizeText,
   parseTextRegionKey,
   withoutTextBlock,
   withTextBlock,
 } from "@excalidraw/element";
-import {
-} from "@excalidraw/element";
+import {} from "@excalidraw/element";
 import { isStickyNoteElement } from "@excalidraw/element";
 import {
   isSequenceFragmentElement,
@@ -109,7 +105,6 @@ import type {
   ExcalidrawMindmapNodeElement,
   ExcalidrawSelectionElement,
   ExcalidrawTableElement,
-  ExcalidrawTextElement,
   ElementBinding,
   NonDeletedSceneElementsMap,
   OrderedExcalidrawElement,
@@ -1090,7 +1085,9 @@ export const restoreElements = <T extends ExcalidrawElement>(
     refreshDimensions: !!opts.refreshDimensions,
   });
 
-  const repairedElements = syncInvalidIndices(restoreMindmaps(restoredElements));
+  const repairedElements = syncInvalidIndices(
+    restoreMindmaps(restoredElements),
+  );
 
   // NOTE (mtolmacs): Temporary fix for invalid/self-bound elbow arrows
   // Need to iterate again so we have attached text nodes in elementsMap

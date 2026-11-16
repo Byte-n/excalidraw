@@ -53,11 +53,7 @@ export type ShapeData =
   | SequenceShapeData
   | DataflowShapeData;
 
-export type ShapeElementType =
-  | "composite"
-  | "flow"
-  | "sequence"
-  | "dataflow";
+export type ShapeElementType = "composite" | "flow" | "sequence" | "dataflow";
 
 export type ExcalidrawDataflowElement = _ExcalidrawElementBase &
   Readonly<{
@@ -168,7 +164,7 @@ export type ExcalidrawFlowchartNodeElement =
 建议顺带收敛重复判断。优先把：
 
 ```ts
-type === "composite" || type === "flow" || type === "sequence"
+type === "composite" || type === "flow" || type === "sequence";
 ```
 
 改为 `isShapeElementType(type)`，并在 `family.ts` 导出统一的 `SHAPE_ELEMENT_TYPES`。需要 `assertNever` 的 switch 保留显式 case。
@@ -284,11 +280,11 @@ yarn workspace @excalidraw/board-import typecheck
 
 ## 8. 工作量估算
 
-| 阶段 | 粗估 |
-| --- | --- |
-| P1-1 类型与几何 | 0.5 人日 |
-| P1-2 通用能力接线 | 1.5 人日 |
-| P1-3 目录与 UI | 1 人日 |
-| P1-4 持久化与导入 | 0.5 人日 |
-| P1-5 测试与视觉验收 | 1 人日 |
-| 合计 | 约 4.5 人日 |
+| 阶段                | 粗估        |
+| ------------------- | ----------- |
+| P1-1 类型与几何     | 0.5 人日    |
+| P1-2 通用能力接线   | 1.5 人日    |
+| P1-3 目录与 UI      | 1 人日      |
+| P1-4 持久化与导入   | 0.5 人日    |
+| P1-5 测试与视觉验收 | 1 人日      |
+| 合计                | 约 4.5 人日 |

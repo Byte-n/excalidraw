@@ -859,7 +859,7 @@ exports[`Test Transform > should embed labels into containers when label provide
   "customData": undefined,
   "fillStyle": "solid",
   "groupIds": [],
-  "height": 1016,
+  "height": 155,
   "id": Any<String>,
   "index": "a2",
   "isDeleted": false,
@@ -875,7 +875,7 @@ exports[`Test Transform > should embed labels into containers when label provide
   "strokeColor": "#1e1e1e",
   "strokeStyle": "solid",
   "strokeWidth": 2,
-  "textFitMinHeight": 1016,
+  "textFitMinHeight": 155,
   "textFitMinWidth": 280,
   "texts": {
     "body": {
@@ -910,7 +910,7 @@ exports[`Test Transform > should embed labels into containers when label provide
   "customData": undefined,
   "fillStyle": "solid",
   "groupIds": [],
-  "height": 1319,
+  "height": 105,
   "id": Any<String>,
   "index": "a3",
   "isDeleted": false,
@@ -926,7 +926,7 @@ exports[`Test Transform > should embed labels into containers when label provide
   "strokeColor": "#1e1e1e",
   "strokeStyle": "solid",
   "strokeWidth": 2,
-  "textFitMinHeight": 1319,
+  "textFitMinHeight": 105,
   "textFitMinWidth": 300,
   "texts": {
     "body": {

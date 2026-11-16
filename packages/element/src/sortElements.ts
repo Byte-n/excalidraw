@@ -1,5 +1,3 @@
-import { arrayToMap } from "@excalidraw/common";
-
 import type { ExcalidrawElement } from "./types";
 
 const defragmentGroups = (elements: readonly ExcalidrawElement[]) => {

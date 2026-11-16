@@ -1,8 +1,8 @@
 import { getFontString, getLineHeight } from "@excalidraw/common";
 
-import type { ExcalidrawTextElement } from "../types";
-
 import { layoutTextBlock } from "./layout";
+
+import type { ExcalidrawTextElement } from "../types";
 
 import type { TextBlock, TextBlockStyle } from "./types";
 

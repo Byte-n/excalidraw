@@ -1,8 +1,6 @@
 import { pointFrom, pointRotateRads } from "@excalidraw/math";
 import { useMemo } from "react";
 
-import { isTextElement } from "@excalidraw/element";
-
 import { getCommonBounds } from "@excalidraw/element";
 
 import type {

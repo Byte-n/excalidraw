@@ -8,7 +8,6 @@ import {
 } from "@excalidraw/element";
 
 import type {
-  ExcalidrawElement,
   NonDeletedExcalidrawElement,
   NonDeletedSceneElementsMap,
 } from "@excalidraw/element/types";

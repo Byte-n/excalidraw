@@ -12,7 +12,6 @@ import {
 } from "@excalidraw/common";
 import {
   newTextElement,
-  isTextElement,
   embeddableURLValidator,
   maybeParseEmbedSrc,
   getEmbedLink,

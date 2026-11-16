@@ -23,7 +23,7 @@ import {
 import { makeNextSelectedElementIds } from "@excalidraw/element";
 import { sceneCoordsToViewportCoords } from "@excalidraw/common";
 import { pointFrom, pointRotateRads } from "@excalidraw/math";
-import type { LocalPoint } from "@excalidraw/math";
+
 import {
   DEFAULT_VERTICAL_ALIGN,
   TEXT_TO_CENTER_SNAP_THRESHOLD,
@@ -40,6 +40,8 @@ import {
   LinearElementEditor,
   newTextElement,
 } from "@excalidraw/element";
+
+import type { LocalPoint } from "@excalidraw/math";
 
 import type {
   ExcalidrawElement,
@@ -58,7 +60,6 @@ import { textWysiwyg } from "../../wysiwyg/textWysiwyg";
 import { withBatchedUpdates } from "../../reactUtils";
 
 import { isEmbeddedTextElement, startRegionTextEditing } from "./regionText";
-import { commitCanvasElementOperation } from "./sceneOperations";
 
 import type App from "../App";
 

@@ -1,6 +1,5 @@
 import { degreesToRadians, radiansToDegrees } from "@excalidraw/math";
 
-
 import { isInGroup } from "@excalidraw/element";
 
 import type { Degrees } from "@excalidraw/math";
@@ -54,7 +53,6 @@ const handleDegreeChange: DragInputCallbackType<
       scene.mutateElement(element, {
         angle: nextAngle,
       });
-
     }
 
     scene.triggerUpdate();
@@ -84,7 +82,6 @@ const handleDegreeChange: DragInputCallbackType<
     scene.mutateElement(latestElement, {
       angle: nextAngle,
     });
-
   }
   scene.triggerUpdate();
 };

@@ -277,5 +277,4 @@ describe("element locking", () => {
     expect(h.elements.length).toBe(2);
     expect(h.state.editingTextElement?.id).toBe(h.elements[1].id);
   });
-
 });

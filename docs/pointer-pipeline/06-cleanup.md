@@ -1,9 +1,6 @@
 # PR6：清理与收口
 
-> **状态**：未开始。
-> **依赖**：PR3（连接接入）、PR4（时序 affordance）、PR5（通用 hover）。可在三者全部合入后开始。
-> **交付后的结果**：旧落点函数、旧 hover 字段、旧预览分支全部删除；指针交互只有一条解析链、一份状态、一个 cursor 写者。
-> **原则**：先确认无消费者，再删除；每删一类单独 commit，保证可回滚。
+> **状态**：未开始。 **依赖**：PR3（连接接入）、PR4（时序 affordance）、PR5（通用 hover）。可在三者全部合入后开始。 **交付后的结果**：旧落点函数、旧 hover 字段、旧预览分支全部删除；指针交互只有一条解析链、一份状态、一个 cursor 写者。 **原则**：先确认无消费者，再删除；每删一类单独 commit，保证可回滚。
 
 ## 1. 目标
 
@@ -209,87 +206,32 @@ rg "cursor\.set" packages/excalidraw/components/app/pointerCanvas.ts packages/ex
 
 ## 实施记录（2026-11-14，6a：删除 suggestedBinding）
 
-- 实际改动：删除 `AppState["suggestedBinding"]`（类型 / 初始值 / appState 导出 /
-  Static·InteractiveCanvas props / LayerUI / actionDeselect / actionFinalize / keyboard /
-  lifecycle / pointerCanvas / pointerSelection / pointerSession 的全部写入与清理），
-  删除 `linearElementEditor` 返回对象与比较中的该字段。新增
-  `element/src/connection/preview.ts`：端点/折线点拖拽时把落点写成 gesture 帧
-  （`setConnectionPreviewFrame` / `clearConnectionPreviewFrame`），渲染器只读
-  `app.pointer.getFrame()` + scene 绘制 binding highlight。删除
-  `connection/suggestedBinding.ts`、`isSameSuggestedBinding`、`suggestedBindingForElbow`。
-- 与计划的偏差：预览帧 helper 放在 element 包（线性编辑器在 element 内，依赖方向
-  决定了不能放 pointerDispatch）；`handleHoverSelectedLinearElement` 不再在拖拽中把
-  `isDragging` 置 false（旧行为由镜像 setState 顺带覆盖，删除后需保留拖拽态）。
-  另含两个 PR5 回归修复（见 `30a39bf8`）：多选手柄优先于 linearHandle；armed 帧
-  复用上次 hover target，避免命中缓存污染导致 pointerup 误取消选择。
-- 基线变化：contextmenu / regression / utils export 快照仅删 `"suggestedBinding": null`
-  行；history 快照 63 行字段 + 5 个渲染计数 -1（删除仅为镜像的 setState）+ 1 个
-  skip 用例陈旧快照；`move.test` inline 计数 interactive 23→24、static 17→16
-  （预览帧显式重绘取代镜像 setState）。
-- 新增/调整测试：`connectionPreview.test.tsx` 改读 frame 的 connection target；
-  element 包 1841 项全绿；excalidraw 全量仅 3 个既有 animation 失败。
-- grep：生产/测试/快照无 `suggestedBinding`（CHANGELOG 历史文案与无关的
-  `suggestedBindings` 复数导出除外）。
+- 实际改动：删除 `AppState["suggestedBinding"]`（类型 / 初始值 / appState 导出 / Static·InteractiveCanvas props / LayerUI / actionDeselect / actionFinalize / keyboard / lifecycle / pointerCanvas / pointerSelection / pointerSession 的全部写入与清理），删除 `linearElementEditor` 返回对象与比较中的该字段。新增 `element/src/connection/preview.ts`：端点/折线点拖拽时把落点写成 gesture 帧（`setConnectionPreviewFrame` / `clearConnectionPreviewFrame`），渲染器只读 `app.pointer.getFrame()` + scene 绘制 binding highlight。删除 `connection/suggestedBinding.ts`、`isSameSuggestedBinding`、`suggestedBindingForElbow`。
+- 与计划的偏差：预览帧 helper 放在 element 包（线性编辑器在 element 内，依赖方向决定了不能放 pointerDispatch）；`handleHoverSelectedLinearElement` 不再在拖拽中把 `isDragging` 置 false（旧行为由镜像 setState 顺带覆盖，删除后需保留拖拽态）。另含两个 PR5 回归修复（见 `30a39bf8`）：多选手柄优先于 linearHandle；armed 帧复用上次 hover target，避免命中缓存污染导致 pointerup 误取消选择。
+- 基线变化：contextmenu / regression / utils export 快照仅删 `"suggestedBinding": null` 行；history 快照 63 行字段 + 5 个渲染计数 -1（删除仅为镜像的 setState）+ 1 个 skip 用例陈旧快照；`move.test` inline 计数 interactive 23→24、static 17→16 （预览帧显式重绘取代镜像 setState）。
+- 新增/调整测试：`connectionPreview.test.tsx` 改读 frame 的 connection target； element 包 1841 项全绿；excalidraw 全量仅 3 个既有 animation 失败。
+- grep：生产/测试/快照无 `suggestedBinding`（CHANGELOG 历史文案与无关的 `suggestedBindings` 复数导出除外）。
 - 遗留问题：6b 删除旧落点函数与渲染器重算，并跑最终验收。
 
 ## 实施记录（2026-11-14，6b：旧几何清理与终验）
 
-- 实际改动：删除 `utils.ts` 的 `getDiagonalsForBindableElement` / `getSnapOutlineMidPoint`
-  / `projectAttachPointOntoDiagonal`，删除 `binding.ts` 的 `snapToMid`（含激活条分支），
-  删除 `sequenceOutline.ts` 的 `getActivationBindingPoint` 与 `compositeShape.ts` 的
-  re-export；`getActivationAnchor` 仍被 `App.quickCreate` / `pointerSequence` 使用，保留。
-  `renderSequenceActivationDot` 重命名为 `renderLandingDot`（唯一实现，供悬停点 / 连接
-  落点 / 端点落点复用），渲染器不再有任何落点几何重算。
-- 与计划的偏差：`bindingGap.ts` 仅删除提到 `snapToMid` 的注释；`pointerCanvas.ts:194` 的
-  link hover cursor 只存在于 `!isInteractionEnabled()` 的 interactive-content 分支，
-  该分支不产生 frame，不构成第二写者。
-- 基线变化：无快照变化。`sequenceShape` 的激活条 y 夹取期望从 `[1,h-1]` 调整为
-  可连接段 `[5,h-5]`（与 PR1 的 `buildActivationPaths` 一致）。
-- 测试迁移：`compositeShapeCollision` / `sequenceShape` 改用
-  `resolveConnectionHitForArrowEndpoint`；`arrowBinding` 删除已废弃的对角线中点吸附用例。
-- 最终验收：element 1841 passed；excalidraw 2426 passed、仅 3 个既有 animation 失败；
-  yjs / math / common / utils 全绿；element / excalidraw / yjs / board-import typecheck
-  通过；改动文件 eslint 0 warning；`yarn test:code` 0 error、22 个既有 prettier 警告
-  （不在改动文件）。§5.3 三条 grep：`suggestedBinding` 无生产引用；旧落点符号 0；
-  `cursor.set` 仅剩非 frame 路径。
+- 实际改动：删除 `utils.ts` 的 `getDiagonalsForBindableElement` / `getSnapOutlineMidPoint` / `projectAttachPointOntoDiagonal`，删除 `binding.ts` 的 `snapToMid`（含激活条分支），删除 `sequenceOutline.ts` 的 `getActivationBindingPoint` 与 `compositeShape.ts` 的 re-export；`getActivationAnchor` 仍被 `App.quickCreate` / `pointerSequence` 使用，保留。 `renderSequenceActivationDot` 重命名为 `renderLandingDot`（唯一实现，供悬停点 / 连接落点 / 端点落点复用），渲染器不再有任何落点几何重算。
+- 与计划的偏差：`bindingGap.ts` 仅删除提到 `snapToMid` 的注释；`pointerCanvas.ts:194` 的 link hover cursor 只存在于 `!isInteractionEnabled()` 的 interactive-content 分支，该分支不产生 frame，不构成第二写者。
+- 基线变化：无快照变化。`sequenceShape` 的激活条 y 夹取期望从 `[1,h-1]` 调整为可连接段 `[5,h-5]`（与 PR1 的 `buildActivationPaths` 一致）。
+- 测试迁移：`compositeShapeCollision` / `sequenceShape` 改用 `resolveConnectionHitForArrowEndpoint`；`arrowBinding` 删除已废弃的对角线中点吸附用例。
+- 最终验收：element 1841 passed；excalidraw 2426 passed、仅 3 个既有 animation 失败； yjs / math / common / utils 全绿；element / excalidraw / yjs / board-import typecheck 通过；改动文件 eslint 0 warning；`yarn test:code` 0 error、22 个既有 prettier 警告（不在改动文件）。§5.3 三条 grep：`suggestedBinding` 无生产引用；旧落点符号 0； `cursor.set` 仅剩非 frame 路径。
 
 ## 实施记录（2026-11-14，容器 hover 快照收口）
 
-- 实际改动：新增 `pointerSnapshot.ts`（`PointerSnapshot`、hover 语义相等、从 frame
-  target 派生容器 hover）；`AppPointerState` 改为同步快照存储，`commit(frame)` 原子
-  替换 frame + hover，并对上一份快照做 diff；`setFrame` 保留为 frame-only 包装。
-  `ContainerInteractionProvider` 改为纯解析器（`id` + `getInteractionCandidate` +
-  `getCursor`），删除 `renderHover` / `clearHover` 与 `renderContainerInteractionHover`
-  / `clearContainerInteractionHover` / `dispatchContainerInteraction`。
-  `tableStructureHover` / `fragmentStructureHover` 从 `AppState` 整体删除：渲染器读
-  `app.pointer.getSnapshot().hover`，gesture / deselect / finalize 通过
-  `setTableHover` / `setFragmentHover` / `clearHover` 写同一份快照。
-- 与计划的偏差：`applyPointerFrame` 不再“先全量 clear 再写回”，hover 变化只补一次
-  `repaint.request`；`maybeUpdateTableStructureHoverOnPointerMove` 旧通道删除（容器
-  hover 只由 frame 产生，dispatch 不合格的流程不再显示结构 affordance）。
+- 实际改动：新增 `pointerSnapshot.ts`（`PointerSnapshot`、hover 语义相等、从 frame target 派生容器 hover）；`AppPointerState` 改为同步快照存储，`commit(frame)` 原子替换 frame + hover，并对上一份快照做 diff；`setFrame` 保留为 frame-only 包装。 `ContainerInteractionProvider` 改为纯解析器（`id` + `getInteractionCandidate` + `getCursor`），删除 `renderHover` / `clearHover` 与 `renderContainerInteractionHover` / `clearContainerInteractionHover` / `dispatchContainerInteraction`。 `tableStructureHover` / `fragmentStructureHover` 从 `AppState` 整体删除：渲染器读 `app.pointer.getSnapshot().hover`，gesture / deselect / finalize 通过 `setTableHover` / `setFragmentHover` / `clearHover` 写同一份快照。
+- 与计划的偏差：`applyPointerFrame` 不再“先全量 clear 再写回”，hover 变化只补一次 `repaint.request`；`maybeUpdateTableStructureHoverOnPointerMove` 旧通道删除（容器 hover 只由 frame 产生，dispatch 不合格的流程不再显示结构 affordance）。
 - 基线变化：contextmenu / history / regression 快照仅删除两个已移除的 AppState 字段。
-- 测试：新增“同一表格 body 连续移动 hover 不消失”回归用例；interaction-target 的
-  dispatch 用例改为断言 `getSnapshot()`；excalidraw typecheck 与目标测试全绿。
+- 测试：新增“同一表格 body 连续移动 hover 不消失”回归用例；interaction-target 的 dispatch 用例改为断言 `getSnapshot()`；excalidraw typecheck 与目标测试全绿。
 
 ## 实施记录（2026-11-14，剩余 hover 收口与画框标题画布化）
 
-- 实际改动：`PointerSnapshot.hover` 扩展为完整 hover 派生（elementId / elementIds /
-  frameToHighlight / cell / arrowTextAnchor / linkElementId / embedElementId /
-  transformHandle）；新增 `pointerHover.resolvePointerHover` 纯解析器，legacy
-  pointermove 与 frame dispatch 写同一份快照。`AppState` 删除
-  `hoveredElementId` / `hoveredElementIds` / `frameToHighlight` /
-  `highlightedTableCell` / `hoveredArrowTextAnchor` 及 `activeEmbeddable.state`
-  的 `"hover"`；`hitLinkElement` 字段删除，链接命中读快照。`AppPointerState` 增加
-  `subscribe` / `getHoverSnapshot` / `setFrameHighlight` / `setCellHover` /
-  `clearHoverAffordances`；`usePointerHover` 只订阅静态画布与 embed 需要的字段，
-  hover 不再进入 React 状态。
-- 画框标题：`frames.tsx` 不再渲染标题 DOM（仅保留重命名输入框）；新增
-  `renderer/frameName.ts` 计算屏幕固定尺寸的标题布局，交互层画布绘制字形与
-  ellipsis 文本；`frameNameBoundsCache` 改为纯布局测量，双击标题进入重命名。
-- 渲染/画布：静态画布通过 `pointerHover` 投影消费 hover；交互画布、便签悬停、
-  链接 tooltip、embed 悬停、变换读数全部读快照；`AppView` 的 selectedElements
-  按 appState 记忆，避免 hover-only render 让画布重绘。
-- 基线变化：移除 5 个 AppState 字段的全局快照；少量渲染计数随“hover 不再触发
-  React 渲染”调整（move / dragCreate / selection / history / regression）。
-- 测试：新增 `frameTitle.test.tsx`（画布标题无 DOM + 双击重命名）；
-  excalidraw / element typecheck 通过。
+- 实际改动：`PointerSnapshot.hover` 扩展为完整 hover 派生（elementId / elementIds / frameToHighlight / cell / arrowTextAnchor / linkElementId / embedElementId / transformHandle）；新增 `pointerHover.resolvePointerHover` 纯解析器，legacy pointermove 与 frame dispatch 写同一份快照。`AppState` 删除 `hoveredElementId` / `hoveredElementIds` / `frameToHighlight` / `highlightedTableCell` / `hoveredArrowTextAnchor` 及 `activeEmbeddable.state` 的 `"hover"`；`hitLinkElement` 字段删除，链接命中读快照。`AppPointerState` 增加 `subscribe` / `getHoverSnapshot` / `setFrameHighlight` / `setCellHover` / `clearHoverAffordances`；`usePointerHover` 只订阅静态画布与 embed 需要的字段， hover 不再进入 React 状态。
+- 画框标题：`frames.tsx` 不再渲染标题 DOM（仅保留重命名输入框）；新增 `renderer/frameName.ts` 计算屏幕固定尺寸的标题布局，交互层画布绘制字形与 ellipsis 文本；`frameNameBoundsCache` 改为纯布局测量，双击标题进入重命名。
+- 渲染/画布：静态画布通过 `pointerHover` 投影消费 hover；交互画布、便签悬停、链接 tooltip、embed 悬停、变换读数全部读快照；`AppView` 的 selectedElements 按 appState 记忆，避免 hover-only render 让画布重绘。
+- 基线变化：移除 5 个 AppState 字段的全局快照；少量渲染计数随“hover 不再触发 React 渲染”调整（move / dragCreate / selection / history / regression）。
+- 测试：新增 `frameTitle.test.tsx`（画布标题无 DOM + 双击重命名）； excalidraw / element typecheck 通过。

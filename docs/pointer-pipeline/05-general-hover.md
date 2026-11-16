@@ -1,9 +1,6 @@
 # PR5：通用 hover / cursor / transform / container 收口
 
-> **状态**：未开始。
-> **依赖**：PR2（帧契约）。PR3 / PR4 可并行，但本 PR 的优先级矩阵要等它们注册完 provider 后才能全量断言。
-> **交付后的结果**：pointermove 不再有十余个独立 hover / cursor 入口；每帧只解析一次、只写一次 cursor；`hoveredElementIds`、`frameToHighlight`、`highlightedTableCell`、`tableStructureHover`、`fragmentStructureHover`、`transformStatus` 都从 frame 派生。
-> **拆分为**：5a 画布核心（文本 / 线段 / 变换 / 复合控制 / 容器 / 链接）、5b 思维导图。
+> **状态**：未开始。 **依赖**：PR2（帧契约）。PR3 / PR4 可并行，但本 PR 的优先级矩阵要等它们注册完 provider 后才能全量断言。 **交付后的结果**：pointermove 不再有十余个独立 hover / cursor 入口；每帧只解析一次、只写一次 cursor；`hoveredElementIds`、`frameToHighlight`、`highlightedTableCell`、`tableStructureHover`、`fragmentStructureHover`、`transformStatus` 都从 frame 派生。 **拆分为**：5a 画布核心（文本 / 线段 / 变换 / 复合控制 / 容器 / 链接）、5b 思维导图。
 
 ## 1. 目标
 
@@ -370,15 +367,15 @@ expect(spy).toHaveBeenCalledTimes(1);
 
 在 PR2 矩阵上补：
 
-| 场景 | 期望 |
-| --- | --- |
-| 已选图形变换手柄 + 复合控制点 | `compositeControl` |
-| 已选文本自动缩放点 + 变换手柄 | `textHandle` |
-| 已选线段端点 + 变换手柄 | `linearHandle` |
-| 表格标题 grip | `containerControl`（titleGrip） |
-| 已选普通元素覆盖表格轨道 | `selectedElement` |
-| 未选普通元素覆盖表格轨道 | `containerControl` |
-| 锁定元素 | 不成为 target（保持现有） |
+| 场景                          | 期望                            |
+| ----------------------------- | ------------------------------- |
+| 已选图形变换手柄 + 复合控制点 | `compositeControl`              |
+| 已选文本自动缩放点 + 变换手柄 | `textHandle`                    |
+| 已选线段端点 + 变换手柄       | `linearHandle`                  |
+| 表格标题 grip                 | `containerControl`（titleGrip） |
+| 已选普通元素覆盖表格轨道      | `selectedElement`               |
+| 未选普通元素覆盖表格轨道      | `containerControl`              |
+| 锁定元素                      | 不成为 target（保持现有）       |
 
 ### 5.3 hover = down
 
@@ -440,59 +437,24 @@ expect(spy).toHaveBeenCalledTimes(1);
 
 ## 实施记录（2026-11-14）
 
-- 实际改动（5a-1）：新增 `pointerCursor.ts`（`getToolCursor` / `getElementHoverCursor` /
-  `getCursorForPointerTarget`）与 `pointerDerived.ts`（`clearPointerHover` /
-  `updateDerivedPointerState`）；`applyPointerFrame` 成为唯一 cursor 写者，并接管
-  `transformStatus`（每帧 set 或 clear 一次）。`pointerCanvas` 的选择态 hover 走帧分派后
-  提前返回；`hoveredElementId` 保留在 legacy 块原位置（frame-title DOM 桥，O4）。
-- 与计划的偏差：`transformStatus.setHoveredHandle` 改为返回 `boolean`；手柄不变但指针
-  移动时由 dispatch 补一次 repaint（读数气泡跟随指针）。`AppPointerState` 增加
-  `getLastHoverPoint()` 用于区分“指针真的动了”与 pointerdown/up 存的 armed 帧。
-  `embeds.tsx` 拆出只写状态的 `updateIframeLikeElementHover`；容器 handler 拆出
-  `renderContainerInteractionHover` / `getContainerProviderCursor`。
-- 基线变化：连接落点基线 0 变化。`selection` / `move` / `dragCreate` 的交互重绘计数
-  +1～+4：`refreshHover` 合成的 pointermove 无 `pointerType`，HEAD 因此漏判变换手柄；
-  帧分派规范化为 `mouse` 后能正确命中并绘制读数。元素快照无变化。
-- 新增/调整测试：`pointer-cursor.test.tsx`（8 项，cursor 优先级矩阵）；
-  `interaction-target.test.ts` 增加“非容器 target 也只写一次 cursor”断言。
-- 遗留问题：5a-2 的 pointerdown target switch / composite / transform 分支删除、表格
-  标题 grip 迁移仍未做；5b 思维导图 hover 仍由 `App.mindmap` 持有。
+- 实际改动（5a-1）：新增 `pointerCursor.ts`（`getToolCursor` / `getElementHoverCursor` / `getCursorForPointerTarget`）与 `pointerDerived.ts`（`clearPointerHover` / `updateDerivedPointerState`）；`applyPointerFrame` 成为唯一 cursor 写者，并接管 `transformStatus`（每帧 set 或 clear 一次）。`pointerCanvas` 的选择态 hover 走帧分派后提前返回；`hoveredElementId` 保留在 legacy 块原位置（frame-title DOM 桥，O4）。
+- 与计划的偏差：`transformStatus.setHoveredHandle` 改为返回 `boolean`；手柄不变但指针移动时由 dispatch 补一次 repaint（读数气泡跟随指针）。`AppPointerState` 增加 `getLastHoverPoint()` 用于区分“指针真的动了”与 pointerdown/up 存的 armed 帧。 `embeds.tsx` 拆出只写状态的 `updateIframeLikeElementHover`；容器 handler 拆出 `renderContainerInteractionHover` / `getContainerProviderCursor`。
+- 基线变化：连接落点基线 0 变化。`selection` / `move` / `dragCreate` 的交互重绘计数 +1 ～+4：`refreshHover` 合成的 pointermove 无 `pointerType`，HEAD 因此漏判变换手柄；帧分派规范化为 `mouse` 后能正确命中并绘制读数。元素快照无变化。
+- 新增/调整测试：`pointer-cursor.test.tsx`（8 项，cursor 优先级矩阵）； `interaction-target.test.ts` 增加“非容器 target 也只写一次 cursor”断言。
+- 遗留问题：5a-2 的 pointerdown target switch / composite / transform 分支删除、表格标题 grip 迁移仍未做；5b 思维导图 hover 仍由 `App.mindmap` 持有。
 
 ## 实施记录（2026-11-14，5a-2）
 
-- 实际改动：`pointerSession` 的 pointerdown 改为按 armed frame 的 `target.kind` 分派
-  （textHandle / containerControl-titleGrip|titleBar / compositeControl / transformHandle /
-  linearHandle），用 `skipSelectionDispatch` 表达「已武装、继续收尾但不进选择分派」。
-  `handleSelectionOnPointerDown` 删除 composite 与 transform/多选手柄解析，抽出
-  `beginCompositeControlGesture` / `beginTransformGesture` / `beginLinearPointGesture`。
-  表格标题 grip 走 `containerControl` target；新增 `hitIsContainerTitle`，避免已选标题
-  文本被解析成 `selectedElement` 而绕过标题手势。
-- 与计划的偏差：`titleBar` 与 `titleGrip` 共用入口（旧 handler 两者都处理）；
-  linearHandle 的 `continue` 分支显式补 `previousSelectedElementIds` 镜像；
-  多选含 mindmap 的 rotation 守卫仍只在 hover 侧（PR2 起如此，pointerdown 现在与
-  hover 一致）。非选择工具的旧 hover 块（pointerCanvas 的复合控制/变换手柄）
-  仍保留，待 PR6 清理。
+- 实际改动：`pointerSession` 的 pointerdown 改为按 armed frame 的 `target.kind` 分派（textHandle / containerControl-titleGrip|titleBar / compositeControl / transformHandle / linearHandle），用 `skipSelectionDispatch` 表达「已武装、继续收尾但不进选择分派」。 `handleSelectionOnPointerDown` 删除 composite 与 transform/多选手柄解析，抽出 `beginCompositeControlGesture` / `beginTransformGesture` / `beginLinearPointGesture`。表格标题 grip 走 `containerControl` target；新增 `hitIsContainerTitle`，避免已选标题文本被解析成 `selectedElement` 而绕过标题手势。
+- 与计划的偏差：`titleBar` 与 `titleGrip` 共用入口（旧 handler 两者都处理）； linearHandle 的 `continue` 分支显式补 `previousSelectedElementIds` 镜像；多选含 mindmap 的 rotation 守卫仍只在 hover 侧（PR2 起如此，pointerdown 现在与 hover 一致）。非选择工具的旧 hover 块（pointerCanvas 的复合控制/变换手柄）仍保留，待 PR6 清理。
 - 基线变化：无快照差异。
-- 新增/调整测试：`pointer-hover-down.test.tsx`（8 个 kind 的 hover = down）；
-  `interaction-target.test.ts` 补 §5.2 矩阵；`tableStructure.test.tsx` 的
-  「scale 手势绕过选择入口」用例改为断言 transformHandle 分派。
+- 新增/调整测试：`pointer-hover-down.test.tsx`（8 个 kind 的 hover = down）； `interaction-target.test.ts` 补 §5.2 矩阵；`tableStructure.test.tsx` 的「scale 手势绕过选择入口」用例改为断言 transformHandle 分派。
 - 遗留问题：5b 思维导图 hover 仍由 `App.mindmap` 持有。
 
 ## 实施记录（2026-11-14，5b）
 
-- 实际改动：`PointerTarget` 新增 `mindmapAddButton`（elementId + button），provider 纯读
-  命中 `App.mindmap.hitTestAddButton`，优先级在 transformHandle 之后、quickCreateHandle
-  之前；新增 `PointerMode = "mindmap"`，mindmap 工具只解析 element / selectedElement /
-  add-button，不走选择手柄。删除 `hoveredNodeId` / `hoveredAddButton` / `getHoveredNodeId`
-  / `getHoveredAddButton` / `handlePointerMove` 及 pointerCanvas 调用；渲染器改读 frame。
-  `hoveredElementIds` 的节点镜像由 `updateDerivedPointerState` 写；「+」按钮点击由
-  pointerdown target switch 调用 `handleAddButtonPointerDown(target)`。cursor：add-button
-  与折叠 affordance → POINTER，mindmap 工具节点保持工具光标。
-- 与计划的偏差：折叠 affordance 不是 target（不在 §4.1 列表），其命中在 cursor 写者内
-  查询 `hitTestCollapseAffordance`；pointerdown 时 armed 帧覆盖 hover 帧，命中回落到
-  `getLastHoverPoint()`，保持「悬停后不移动直接点击」的旧行为。view-mode 下 frame dispatch
-  被门控，思维导图节点悬停高亮不再显示（旧字段路径移除后的既有边界）。
+- 实际改动：`PointerTarget` 新增 `mindmapAddButton`（elementId + button），provider 纯读命中 `App.mindmap.hitTestAddButton`，优先级在 transformHandle 之后、quickCreateHandle 之前；新增 `PointerMode = "mindmap"`，mindmap 工具只解析 element / selectedElement / add-button，不走选择手柄。删除 `hoveredNodeId` / `hoveredAddButton` / `getHoveredNodeId` / `getHoveredAddButton` / `handlePointerMove` 及 pointerCanvas 调用；渲染器改读 frame。 `hoveredElementIds` 的节点镜像由 `updateDerivedPointerState` 写；「+」按钮点击由 pointerdown target switch 调用 `handleAddButtonPointerDown(target)`。cursor：add-button 与折叠 affordance → POINTER，mindmap 工具节点保持工具光标。
+- 与计划的偏差：折叠 affordance 不是 target（不在 §4.1 列表），其命中在 cursor 写者内查询 `hitTestCollapseAffordance`；pointerdown 时 armed 帧覆盖 hover 帧，命中回落到 `getLastHoverPoint()`，保持「悬停后不移动直接点击」的旧行为。view-mode 下 frame dispatch 被门控，思维导图节点悬停高亮不再显示（旧字段路径移除后的既有边界）。
 - 基线变化：无快照差异；补了 add-button 悬停进入/离开各一次交互重绘（同一按钮内移动不重绘）。
-- 新增/调整测试：`pointer-hover-down.test.tsx` 增加 mindmapAddButton hover = down、
-  add-button 重绘回归、mindmap 工具节点光标；mindmapCreation 等既有用例改读 frame。
+- 新增/调整测试：`pointer-hover-down.test.tsx` 增加 mindmapAddButton hover = down、 add-button 重绘回归、mindmap 工具节点光标；mindmapCreation 等既有用例改读 frame。
 - 遗留问题：PR6 清理旧字段与旧几何函数。

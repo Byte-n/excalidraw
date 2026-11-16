@@ -295,10 +295,7 @@ describe("浮动工具栏（T2 容器与定位）", () => {
     });
     API.setElements([shape]);
 
-    mouse.doubleClickAt(
-      shape.x + shape.width / 2,
-      shape.y + shape.height / 2,
-    );
+    mouse.doubleClickAt(shape.x + shape.width / 2, shape.y + shape.height / 2);
     expect(h.state.editingTextRegion?.target.elementId).toBe(shape.id);
     expect(h.state.editingTextElement).toBe(null);
     // 区域编辑保留元素选中态

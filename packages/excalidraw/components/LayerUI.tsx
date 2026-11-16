@@ -9,11 +9,7 @@ import {
   isShallowEqual,
 } from "@excalidraw/common";
 
-import {
-  getColorUpdate,
-  mutateElement,
-  normalizeStickyNoteStrokeColor,
-} from "@excalidraw/element";
+import { getColorUpdate, mutateElement } from "@excalidraw/element";
 
 import { showSelectedShapeActions } from "@excalidraw/element";
 

@@ -1,9 +1,6 @@
 # 指针交互管线与连接吸附：执行计划
 
-> **状态**：计划稿，尚未开始实施。
-> **基准**：`feat/sequence-diagram-p1-p2` @ `cbfe0fdc`（2026-11-13）。文中 `file:line` 均以此提交为准。
-> **适用范围**：画布指针的 hover / 按下 / 拖拽目标解析、连接点与落点几何、预览绘制、hover 状态组织。
-> **文档关系**：本文档是执行入口；[connection-snap-pipeline.md](../connection-snap-pipeline.md)、[pointer-affordance-unification.md](../pointer-affordance-unification.md)、[interaction-target-resolution.md](../interaction-target-resolution.md) 作为设计与现状参考。若执行细节与旧文档冲突，以本目录下的 PR 文档为准。
+> **状态**：计划稿，尚未开始实施。 **基准**：`feat/sequence-diagram-p1-p2` @ `cbfe0fdc`（2026-11-13）。文中 `file:line` 均以此提交为准。 **适用范围**：画布指针的 hover / 按下 / 拖拽目标解析、连接点与落点几何、预览绘制、hover 状态组织。 **文档关系**：本文档是执行入口；[connection-snap-pipeline.md](../connection-snap-pipeline.md)、[pointer-affordance-unification.md](../pointer-affordance-unification.md)、[interaction-target-resolution.md](../interaction-target-resolution.md) 作为设计与现状参考。若执行细节与旧文档冲突，以本目录下的 PR 文档为准。
 
 ## 1. 目标
 
@@ -180,7 +177,7 @@ type PointerTarget =
 ```ts
 type PointerPhase =
   | "hover"
-  | "armed"   // pointerdown，尚未超过拖拽阈值
+  | "armed" // pointerdown，尚未超过拖拽阈值
   | "gesture"; // 手势 owner 已确定
 
 type PointerFrame = {

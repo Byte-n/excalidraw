@@ -1,6 +1,5 @@
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
 import { arrayToMap } from "@excalidraw/common";
-import { pointFrom } from "@excalidraw/math";
 
 import type { ObservedAppState } from "@excalidraw/excalidraw/types";
 import type { LinearElementEditor } from "@excalidraw/element";

@@ -1,8 +1,8 @@
 import React from "react";
 
-import { Excalidraw } from "../index";
-
 import type { FractionalIndex } from "@excalidraw/element/types";
+
+import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
 import { act, fireEvent, render } from "./test-utils";

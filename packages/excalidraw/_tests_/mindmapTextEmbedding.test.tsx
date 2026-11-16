@@ -88,7 +88,8 @@ describe("mindmap text embedding", () => {
     expect(textElements()).toHaveLength(0);
     expect(
       nodes.every(
-        (node) => typeof node.texts?.body?.text === "string" && !!node.texts.body.text,
+        (node) =>
+          typeof node.texts?.body?.text === "string" && !!node.texts.body.text,
       ),
     ).toBe(true);
     const root = nodes.find((node) => node.role === "root")!;

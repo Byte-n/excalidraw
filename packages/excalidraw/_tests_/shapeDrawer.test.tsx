@@ -24,7 +24,6 @@ import type {
   ExcalidrawShapeElement,
   ExcalidrawStickyNoteElement,
   ExcalidrawTableElement,
-  ExcalidrawTextElement,
 } from "@excalidraw/element/types";
 
 import {

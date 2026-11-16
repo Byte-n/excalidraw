@@ -28,11 +28,7 @@ import { mutateElement } from "./mutateElement";
 import { syncMovedIndices } from "./fractionalIndex";
 import { getIndexedFrameChildren } from "./frameChildrenIndex";
 import { tableCellContainerRef } from "./tableContainer";
-import {
-  frameLikeContainerRef,
-  isFrameLikeElement,
-  isTextElement,
-} from "./typeChecks";
+import { frameLikeContainerRef, isFrameLikeElement } from "./typeChecks";
 
 import { getNonDeletedElements } from ".";
 

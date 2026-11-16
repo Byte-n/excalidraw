@@ -16,13 +16,12 @@ import {
   hasFrameBackground,
   hasStrokeColor,
   isStickyNoteElement,
-  isTextElement,
   normalizeStickyNoteBackgroundColor,
   normalizeStickyNoteStrokeColor,
 } from "@excalidraw/element";
 
 import type { ColorPaletteCustom } from "@excalidraw/common";
-import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
+import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { getSelectedElements } from "../scene";
 

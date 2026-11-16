@@ -372,5 +372,7 @@ const intersectionTest = (
       : hits.length > 0;
   };
 
-  return lassoSegments.some((lassoSegment) => intersects(element, lassoSegment));
+  return lassoSegments.some((lassoSegment) =>
+    intersects(element, lassoSegment),
+  );
 };

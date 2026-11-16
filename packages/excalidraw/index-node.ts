@@ -1,12 +1,12 @@
-import { getDefaultAppState } from "./appState";
-import { exportToCanvas } from "./scene/export";
-
 import {
   DEFAULT_TEXT_ALIGN,
   DEFAULT_VERTICAL_ALIGN,
   FONT_FAMILY,
   getLineHeight,
 } from "@excalidraw/common";
+
+import { getDefaultAppState } from "./appState";
+import { exportToCanvas } from "./scene/export";
 
 const fs = require("fs");
 

@@ -41,7 +41,6 @@ import { isLinearElementType } from "@excalidraw/element";
 import type {
   ExcalidrawBindableElement,
   ExcalidrawArrowElement,
-  ExcalidrawTextContainer,
   NonDeleted,
 } from "@excalidraw/element/types";
 

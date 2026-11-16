@@ -44,10 +44,7 @@ import {
 import { LinearElementEditor } from "./linearElementEditor";
 import { mutateElement, newElementWith } from "./mutateElement";
 import { getTextElementText } from "./text/elementText";
-import {
-  isBindableElement,
-  isTextElement,
-} from "./typeChecks";
+import { isBindableElement, isTextElement } from "./typeChecks";
 
 import { getNonDeletedGroupIds } from "./groups";
 

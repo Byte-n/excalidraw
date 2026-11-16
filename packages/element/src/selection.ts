@@ -1,12 +1,12 @@
 import { arrayToMap, isShallowEqual, type Bounds } from "@excalidraw/common";
 
-import { isSequenceFragmentElement } from "./compositeShape";
-
 import type {
   AppState,
   BoxSelectionMode,
   InteractiveCanvasAppState,
 } from "@excalidraw/excalidraw/types";
+
+import { isSequenceFragmentElement } from "./compositeShape";
 
 import { elementsOverlappingBBox, getElementAbsoluteCoords } from "./bounds";
 import { isElementInViewport } from "./sizeHelpers";

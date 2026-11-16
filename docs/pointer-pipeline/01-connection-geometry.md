@@ -1,9 +1,6 @@
 # PR1：连接几何与基线冻结
 
-> **状态**：未开始。
-> **依赖**：无。可与 PR2 并行开发。
-> **交付后的结果**：仓库里出现一个**无调用方**的纯几何模块 `packages/element/src/connection/`，以及一份覆盖现状落点的基线测试。生产行为零变化。
-> **设计来源**：[connection-snap-pipeline.md](../connection-snap-pipeline.md) §2–§4。
+> **状态**：未开始。 **依赖**：无。可与 PR2 并行开发。 **交付后的结果**：仓库里出现一个**无调用方**的纯几何模块 `packages/element/src/connection/`，以及一份覆盖现状落点的基线测试。生产行为零变化。 **设计来源**：[connection-snap-pipeline.md](../connection-snap-pipeline.md) §2–§4。
 
 ## 1. 目标
 
@@ -112,7 +109,7 @@ packages/element/src/bindingGap.ts
 ### 4.1 `thresholds.ts`
 
 ```ts
-export const ANCHOR_RADIUS_PX = 14;       // 屏幕 px
+export const ANCHOR_RADIUS_PX = 14; // 屏幕 px
 export const OUTLINE_INSIDE_BAND_PX = 10; // 屏幕 px
 
 export const getOutsideBand = (zoom: number, gap: number): number =>
@@ -143,8 +140,7 @@ export const getAnchorRadius = (
 
 `zoom` 取 `AppState["zoom"].value`；`zoom <= 0` 时按 1 处理。阈值函数是纯函数，PR1 单测覆盖 0.25 / 1 / 4。
 
-> 与 [connection-snap-pipeline.md §2.3](../connection-snap-pipeline.md) 的差异：`outsideBand` 至少取 `gap`。
-> 正常 gap 下数值完全一致；只有粗描边 / 大 gap 时才会放大，用于保证「Γ 上的点再求一次仍落回 Γ」（幂等性）。
+> 与 [connection-snap-pipeline.md §2.3](../connection-snap-pipeline.md) 的差异：`outsideBand` 至少取 `gap`。正常 gap 下数值完全一致；只有粗描边 / 大 gap 时才会放大，用于保证「Γ 上的点再求一次仍落回 Γ」（幂等性）。
 
 ### 4.2 `types.ts`
 
@@ -349,7 +345,9 @@ export const pickConnectionTarget = (
 ```ts
 const candidates = getAllHoveredElementAtPoint(point, elements, elementsMap)
   // 与 getHoveredElementForBinding 的「偏好小图形」一致：面积小的先试
-  .sort((a, b) => a.width ** 2 + a.height ** 2 - (b.width ** 2 + b.height ** 2));
+  .sort(
+    (a, b) => a.width ** 2 + a.height ** 2 - (b.width ** 2 + b.height ** 2),
+  );
 
 for (const element of candidates) {
   const hit = resolveConnectionHit({ ...query, element, point }, rayProject);
@@ -453,10 +451,6 @@ PR3 会改变落点（任意点、推荐点半径、内部档位）。没有 PR1
 
 ## 实施记录（2026-11-14）
 
-- 实际改动：新增 `element/src/bindingGap.ts`（纯搬迁）；新增 `connection/` 几何模块
-  （thresholds / types / spec / specs / outline / resolve / query）。三档解析统一为
-  anchor → outline → interior，`ConnectionHit` 同时驱动预览与落点。
-- 与计划的偏差：`nearestPointOnOutline` 改为线段精确投影 + 贝塞尔采样；激活条可连段
-  取 `[5, h-5]`（圆角内），而非字面的 `[1, h-1]`。
-- 测试：`connectionGeometry.test.ts`（23 项）、`connectionResolve.test.ts`（14 项，
-  含 8 家族 × 3 箭头 × 3 zoom 幂等性）；连接落点基线快照（1364 条）。
+- 实际改动：新增 `element/src/bindingGap.ts`（纯搬迁）；新增 `connection/` 几何模块（thresholds / types / spec / specs / outline / resolve / query）。三档解析统一为 anchor → outline → interior，`ConnectionHit` 同时驱动预览与落点。
+- 与计划的偏差：`nearestPointOnOutline` 改为线段精确投影 + 贝塞尔采样；激活条可连段取 `[5, h-5]`（圆角内），而非字面的 `[1, h-1]`。
+- 测试：`connectionGeometry.test.ts`（23 项）、`connectionResolve.test.ts`（14 项，含 8 家族 × 3 箭头 × 3 zoom 幂等性）；连接落点基线快照（1364 条）。

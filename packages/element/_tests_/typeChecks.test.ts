@@ -1,9 +1,8 @@
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
 
 import { newElementWith } from "../src/mutateElement";
-import { newElement } from "../src/newElement";
 import { Scene } from "../src/Scene";
-import { getFrameChildren, getFrameChildrenInsertionIndex } from "../src/frame";
+import { getFrameChildren } from "../src/frame";
 import {
   assertValidContainerRefs,
   frameLikeContainerRef,
@@ -21,7 +20,6 @@ import type {
   ExcalidrawTextElement,
   NonDeleted,
   NonDeletedExcalidrawElement,
-  SequenceShapeData,
 } from "../src/types";
 
 describe("Test TypeChecks", () => {
