@@ -154,7 +154,11 @@ describe("view mode", () => {
       expect(queryContainer(".excalidraw-wysiwyg")).toBe(null);
     });
     expect(h.elements.find((element) => element.id === text.id)).toMatchObject({
-      originalText: "committed before view mode",
+      texts: expect.objectContaining({
+        body: expect.objectContaining({
+          text: "committed before view mode",
+        }),
+      }),
     });
   });
 

@@ -7,6 +7,7 @@ import { showSelectedShapeActions } from "@excalidraw/element";
 // （bounds → linearElementEditor → index）产生的部分快照问题
 import { getCommonBounds } from "@excalidraw/element/bounds";
 import { getTableCellRangeBounds } from "@excalidraw/element/tableStruct";
+import { parseTextRegionKey } from "@excalidraw/element/text/keys";
 import { isTableElement } from "@excalidraw/element/typeChecks";
 
 import type { Bounds } from "@excalidraw/common";
@@ -90,6 +91,7 @@ export const FloatingShapeActions = () => {
     appState.croppingElementId ||
       appState.selectedLinearElement?.isEditing ||
       appState.editingTextElement ||
+      appState.editingTextRegion ||
       appState.tableCellSelection ||
       appState.tableRowColSelection ||
       getSelectedElements(elements, appState).length,
@@ -220,6 +222,16 @@ export const FloatingShapeActions = () => {
     if (element) {
       anchorBounds = getCommonBounds([element], elementsMap);
     }
+  } else if (appState.editingTextRegion) {
+    // 区域编辑态：选中的是宿主元素（整张表），锚点应贴着正在编辑的单元格
+    const target = appState.editingTextRegion.target;
+    const element = elementsMap.get(target.elementId);
+    const parsed = parseTextRegionKey(target.region);
+    if (element && isTableElement(element) && parsed?.kind === "cell") {
+      anchorBounds = cellSceneBounds(element.id, parsed.cellId, parsed.cellId);
+    } else if (element) {
+      anchorBounds = getCommonBounds([element], elementsMap);
+    }
   } else if (selectedElements.length) {
     anchorBounds = getCommonBounds(selectedElements, elementsMap);
   } else if (appState.editingTextElement) {
@@ -238,12 +250,7 @@ export const FloatingShapeActions = () => {
               containerRef.cellId,
             )
           : null;
-      const containerId =
-        editingText.type === "text" ? editingText.containerId : null;
-      const container = containerId ? elementsMap.get(containerId) : null;
-      anchorBounds =
-        cell ??
-        getCommonBounds(container ? [container] : [editingText], elementsMap);
+      anchorBounds = cell ?? getCommonBounds([editingText], elementsMap);
     }
   } else {
     const tableSelection = appState.tableCellSelection;

@@ -7,7 +7,7 @@ import {
   isLinearElement,
   isLineElement,
   isStickyNoteElement,
-  isTextBindableContainer,
+  getPrimaryTextRegion,
   isTextElement,
 } from "@excalidraw/element";
 
@@ -238,7 +238,7 @@ const getHints = ({
       if (
         !appState.newElement &&
         !appState.selectedElementsAreBeingDragged &&
-        isTextBindableContainer(selectedElements[0])
+        getPrimaryTextRegion(selectedElements[0]) !== null
       ) {
         const bindTextToElement = t("hints.bindTextToElement", {
           shortcut: getTaggedShortcutKey("Enter"),

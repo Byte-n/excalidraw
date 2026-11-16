@@ -1,7 +1,6 @@
 import { pointFrom, pointRotateRads } from "@excalidraw/math";
 
 import {
-  getBoundTextElement,
   getNonDeletedElements,
   isBindingElement,
   unbindBindingElement,
@@ -168,23 +167,6 @@ export const moveElement = (
     { informMutation: shouldInformMutation, isDragging: false },
   );
   updateBindings(latestElement, scene, appState);
-
-  const boundTextElement = getBoundTextElement(
-    originalElement,
-    originalElementsMap,
-  );
-  if (boundTextElement) {
-    const latestBoundTextElement = elementsMap.get(boundTextElement.id);
-    latestBoundTextElement &&
-      scene.mutateElement(
-        latestBoundTextElement,
-        {
-          x: boundTextElement.x + changeInX,
-          y: boundTextElement.y + changeInY,
-        },
-        { informMutation: shouldInformMutation, isDragging: false },
-      );
-  }
 
   if (isFrameLikeElement(originalElement)) {
     const originalChildren = getFrameChildren(

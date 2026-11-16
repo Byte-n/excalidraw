@@ -1,7 +1,6 @@
 import {
   DEFAULT_STICKY_NOTE_BG,
   DEFAULT_STICKY_NOTE_SIZE,
-  STICKY_NOTE_MIN_FONT_SIZE,
   STICKY_NOTE_MIN_SIZE,
   arrayToMap,
   getUpdatedTimestamp,
@@ -18,6 +17,7 @@ import {
 
 import { getGlobalAttachPointForBindableElement } from "../src/binding";
 import { distanceToElement } from "../src/distance";
+import { getTextBlock } from "../src/text/ops";
 
 import {
   convertToExcalidrawElements,
@@ -201,7 +201,7 @@ describe("Test Transform", () => {
     });
   });
 
-  it("should transform to text containers when label provided", () => {
+  it("should embed labels into containers when label provided", () => {
     const elements = [
       {
         type: "rectangle",
@@ -273,7 +273,10 @@ describe("Test Transform", () => {
       opts,
     );
 
-    expect(excalidrawElements.length).toBe(12);
+    expect(excalidrawElements.length).toBe(6);
+    excalidrawElements.forEach((ele) => {
+      expect(ele.type).not.toBe("text");
+    });
 
     excalidrawElements.forEach((ele) => {
       expect(ele).toMatchSnapshot({
@@ -331,7 +334,7 @@ describe("Test Transform", () => {
       opts,
     );
 
-    expect(excalidrawElements.length).toBe(8);
+    expect(excalidrawElements.length).toBe(4);
 
     excalidrawElements.forEach((ele) => {
       expect(ele).toMatchSnapshot({
@@ -379,7 +382,7 @@ describe("Test Transform", () => {
         elementsSkeleton,
         opts,
       );
-      expect(excalidrawElements.length).toBe(4);
+      expect(excalidrawElements.length).toBe(3);
 
       excalidrawElements.forEach((ele) => {
         expect(ele).toMatchObject({
@@ -454,13 +457,12 @@ describe("Test Transform", () => {
         opts,
       );
 
-      expect(excalidrawElements.length).toBe(4);
-      const [arrow, text, rectangle, ellipse] = excalidrawElements;
+      expect(excalidrawElements.length).toBe(3);
+      const [arrow, rectangle, ellipse] = excalidrawElements;
       expect(arrow).toMatchObject({
         type: "arrow",
         x: 255.5,
         y: 239,
-        boundElements: [{ id: text.id, type: "text" }],
         startBinding: {
           elementId: rectangle.id,
         },
@@ -469,13 +471,8 @@ describe("Test Transform", () => {
         },
       });
 
-      expect(text).toMatchObject({
-        x: 240,
-        y: 226.5,
-        type: "text",
-        text: "HELLO WORLD!!",
-        containerId: arrow.id,
-      });
+      expect(getTextBlock(arrow.texts, "label")?.text).toBe("HELLO WORLD!!");
+      expect(arrow.boundElements ?? []).toHaveLength(0);
 
       expect(rectangle).toMatchObject({
         x: 155,
@@ -537,14 +534,13 @@ describe("Test Transform", () => {
         opts,
       );
 
-      expect(excalidrawElements.length).toBe(4);
-      const [arrow, text1, text2, text3] = excalidrawElements;
+      expect(excalidrawElements.length).toBe(3);
+      const [arrow, text2, text3] = excalidrawElements;
 
       expect(arrow).toMatchObject({
         type: "arrow",
         x: 255.5,
         y: 239,
-        boundElements: [{ id: text1.id, type: "text" }],
         startBinding: {
           elementId: text2.id,
         },
@@ -553,13 +549,8 @@ describe("Test Transform", () => {
         },
       });
 
-      expect(text1).toMatchObject({
-        x: 240,
-        y: 226.5,
-        type: "text",
-        text: "HELLO WORLD!!",
-        containerId: arrow.id,
-      });
+      expect(getTextBlock(arrow.texts, "label")?.text).toBe("HELLO WORLD!!");
+      expect(arrow.boundElements ?? []).toHaveLength(0);
 
       expect(text2).toMatchObject({
         x: 185,
@@ -726,7 +717,7 @@ describe("Test Transform", () => {
         opts,
       );
 
-      expect(excalidrawElements.length).toBe(4);
+      expect(excalidrawElements.length).toBe(3);
 
       excalidrawElements.forEach((ele) => {
         expect(ele).toMatchSnapshot({
@@ -780,21 +771,17 @@ describe("Test Transform", () => {
         opts,
       );
 
-      expect(excalidrawElements.length).toBe(4);
-      const [, , arrow, text] = excalidrawElements;
+      expect(excalidrawElements.length).toBe(3);
+      const [, , arrow] = excalidrawElements;
       expect(arrow).toMatchObject({
         type: "arrow",
         x: 255.5,
         y: 239,
-        boundElements: [
-          {
-            id: text.id,
-            type: "text",
-          },
-        ],
         startBinding: null,
         endBinding: null,
       });
+      expect(getTextBlock(arrow.texts, "label")?.text).toBe("HELLO WORLD!!");
+      expect(arrow.boundElements ?? []).toHaveLength(0);
       expect(consoleErrorSpy).toHaveBeenCalledTimes(2);
       expect(consoleErrorSpy).toHaveBeenNthCalledWith(
         1,
@@ -1016,7 +1003,7 @@ describe("Test Transform", () => {
     ];
 
     const excalidrawElements = convertToExcalidrawElements(elements, opts);
-    expect(excalidrawElements.length).toBe(12);
+    expect(excalidrawElements.length).toBe(6);
     excalidrawElements.forEach((ele) => {
       expect(ele).toMatchSnapshot({
         seed: expect.any(Number),
@@ -1103,9 +1090,9 @@ describe("Test Transform", () => {
       ];
       const converted = convertToExcalidrawElements(elements);
 
-      expect(converted).toHaveLength(4);
+      expect(converted).toHaveLength(3);
       expect(converted.map((element) => element.created)).toEqual(
-        Array(4).fill(getUpdatedTimestamp()),
+        Array(3).fill(getUpdatedTimestamp()),
       );
     });
   });
@@ -1166,13 +1153,14 @@ describe("Test Transform", () => {
         opts,
       );
       const note = find<ExcalidrawStickyNoteElement>(elements, "stickynote");
-      const label = find<ExcalidrawTextElement>(elements, "text");
 
-      expect(label.strokeColor).toBe("#e03131");
+      expect(elements).toHaveLength(1);
       expect(note.strokeColor).toBe("#e03131");
+      expect(note.texts?.body?.text).toBe("hello");
+      expect(note.texts?.body?.style.color).toBeUndefined();
     });
 
-    it("binds a label whose font size becomes the note's ceiling", () => {
+    it("writes the label into texts.body instead of creating a text element", () => {
       const elements = convertToExcalidrawElements(
         [
           {
@@ -1186,15 +1174,13 @@ describe("Test Transform", () => {
         opts,
       );
       const note = find<ExcalidrawStickyNoteElement>(elements, "stickynote");
-      const label = find<ExcalidrawTextElement>(elements, "text");
 
-      expect(elements).toHaveLength(2);
-      expect(label.containerId).toBe(note.id);
-      expect(note.boundElements).toEqual([{ type: "text", id: label.id }]);
-      expect(label.baseFontSize).toBe(28);
-      expect(label.fontSize).toBe(28);
-      // the label is the note's visible text: it takes the note's stroke
-      expect(label.strokeColor).toBe("#1971c2");
+      expect(elements).toHaveLength(1);
+      expect(note.boundElements).toBe(null);
+      expect(note.texts?.body?.text).toBe("hello");
+      expect(note.texts?.body?.style.fontSize).toBe(28);
+      expect(note.texts?.body?.style.textAlign).toBe("center");
+      expect(note.texts?.body?.style.verticalAlign).toBe("middle");
       expect(note.height).toBe(DEFAULT_STICKY_NOTE_SIZE);
     });
 
@@ -1214,10 +1200,9 @@ describe("Test Transform", () => {
         opts,
       );
       const note = find<ExcalidrawStickyNoteElement>(elements, "stickynote");
-      const label = find<ExcalidrawTextElement>(elements, "text");
 
-      expect(label.fontSize).toBe(STICKY_NOTE_MIN_FONT_SIZE);
-      expect(label.baseFontSize).toBe(28);
+      expect(elements).toHaveLength(1);
+      expect(note.texts?.body?.style.fontSize).toBe(28);
       expect(note.baseHeight).toBe(DEFAULT_STICKY_NOTE_SIZE);
       expect(note.height).toBeGreaterThan(DEFAULT_STICKY_NOTE_SIZE);
     });
@@ -1311,7 +1296,6 @@ describe("table skeletons", () => {
       cellId: cellAt(table, 0, 1).id,
       role: "backgroundText",
     });
-    expect(bgText.containerId).toBe(null);
 
     const diamond = findShape(elements, "diamond");
     expect(diamond.containerRef).toEqual({
@@ -1425,7 +1409,7 @@ describe("table skeletons", () => {
     });
   });
 
-  it("keeps bound text free of tableCell refs", () => {
+  it("keeps the member label inside the member", () => {
     const elements = convertToExcalidrawElements(
       [
         {
@@ -1449,10 +1433,11 @@ describe("table skeletons", () => {
     );
 
     const owner = findShape(elements, "rectangle");
-    const label = find<ExcalidrawTextElement>(elements, "text");
     expect(owner.containerRef?.kind).toBe("tableCell");
-    expect(label.containerId).toBe("owner");
-    expect(label.containerRef).toBeUndefined();
+    expect(owner.texts?.body.text).toBe("label");
+    expect(elements.filter((element) => element.type === "text")).toHaveLength(
+      0,
+    );
   });
 
   it("passes a full table element through after validation", () => {

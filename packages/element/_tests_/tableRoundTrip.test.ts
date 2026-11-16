@@ -17,19 +17,14 @@ import {
 } from "@excalidraw/excalidraw/clipboard";
 
 import { convertToExcalidrawElements } from "../src/transform";
-import {
-  assertValidContainerRefs,
-  isTableElement,
-  isTableCellBackgroundText,
-  isTextElement,
-} from "../src/typeChecks";
+import { assertValidContainerRefs, isTableElement } from "../src/typeChecks";
 
 import type { ExcalidrawElement, ExcalidrawTableElement } from "../src/types";
 
 /**
  * A scene exercising every persisted relationship of the table container: a
- * frame wrapping a table, background text, multiple members in one cell, a
- * bound text inside a member, and a nested table with its own subtree.
+ * frame wrapping a table, background text, multiple members in one cell, and
+ * a nested table with its own subtree.
  */
 const buildScene = () => {
   const frame = API.createElement({
@@ -84,19 +79,11 @@ const buildScene = () => {
     y: 20,
     containerRef: tableCellRef(table, 1),
   });
-  const boundTextOwner = API.createElement({
+  const memberD = API.createElement({
     type: "rectangle",
     x: 10,
     y: 70,
-    boundElements: [{ type: "text", id: "bound-text" } as const],
     containerRef: tableCellRef(table, 2),
-  });
-  const boundText = API.createElement({
-    type: "text",
-    text: "bound",
-    x: 12,
-    y: 72,
-    containerId: boundTextOwner.id,
   });
   const nested = API.createElement({
     type: "table",
@@ -147,8 +134,7 @@ const buildScene = () => {
     memberA,
     memberB,
     memberC,
-    boundTextOwner,
-    boundText,
+    memberD,
     nested,
     nestedBackgroundText,
     nestedMember,
@@ -175,9 +161,6 @@ const expectStructureStable = (
       expect(element.table).toEqual((original as ExcalidrawTableElement).table);
     }
     expect(element.containerRef).toEqual(original.containerRef);
-    if (isTextElement(element) && isTableCellBackgroundText(element)) {
-      expect(element.containerId).toBe(null);
-    }
   }
 
   // the frame wrapper and the nested-table membership survive

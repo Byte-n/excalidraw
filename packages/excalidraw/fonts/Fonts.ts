@@ -6,9 +6,13 @@ import {
   getFontFamilyFallbacks,
   FONT_SIZES,
 } from "@excalidraw/common";
-import { getContainerElement } from "@excalidraw/element";
 import { charWidth } from "@excalidraw/element";
 import { containsCJK } from "@excalidraw/element";
+import {
+  getTextElementFont,
+  getTextElementStyle,
+  getTextElementText,
+} from "@excalidraw/element";
 
 import {
   FONT_METADATA,
@@ -22,10 +26,8 @@ import { ShapeCache } from "@excalidraw/element";
 
 import { isTextElement } from "@excalidraw/element";
 
-import type {
-  ExcalidrawElement,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { TextBlockStyle } from "@excalidraw/element";
 
 import type { ValueOf } from "@excalidraw/common/utility-types";
 
@@ -125,20 +127,14 @@ export class Fonts {
 
     let didUpdate = false;
 
-    const elementsMap = this.scene.getNonDeletedElementsMap();
-
     for (const element of this.scene.getNonDeletedElements()) {
       if (isTextElement(element)) {
         didUpdate = true;
         ShapeCache.delete(element);
 
         // clear the width cache, so that we don't perform subsequent wrapping based on the stale fallback font metrics
-        charWidth.clearCache(getFontString(element));
+        charWidth.clearCache(getTextElementFont(element));
 
-        const container = getContainerElement(element, elementsMap);
-        if (container) {
-          ShapeCache.delete(container);
-        }
       }
     }
 
@@ -217,7 +213,7 @@ export class Fonts {
   }
 
   private static async loadFontFaces(
-    fontFamilies: Array<ExcalidrawTextElement["fontFamily"]>,
+    fontFamilies: Array<TextBlockStyle["fontFamily"]>,
     charsPerFamily: Record<number, Set<string>>,
     ownerDocument: Document,
   ) {
@@ -247,7 +243,7 @@ export class Fonts {
   }
 
   private static *fontFacesLoader(
-    fontFamilies: Array<ExcalidrawTextElement["fontFamily"]>,
+    fontFamilies: Array<TextBlockStyle["fontFamily"]>,
     charsPerFamily: Record<number, Set<string>>,
     ownerDocument: Document,
   ): Generator<Promise<void | readonly [number, FontFace[]]>> {
@@ -420,11 +416,11 @@ export class Fonts {
    */
   private static getUniqueFamilies(
     elements: ReadonlyArray<ExcalidrawElement>,
-  ): Array<ExcalidrawTextElement["fontFamily"]> {
+  ): Array<TextBlockStyle["fontFamily"]> {
     return Array.from(
       elements.reduce((families, element) => {
         if (isTextElement(element)) {
-          families.add(element.fontFamily);
+          families.add(getTextElementStyle(element).fontFamily);
         }
         return families;
       }, new Set<number>()),
@@ -444,13 +440,15 @@ export class Fonts {
         continue;
       }
 
+      const { fontFamily } = getTextElementStyle(element);
+
       // gather unique codepoints only when inlining fonts
-      for (const char of element.originalText) {
-        if (!charsPerFamily[element.fontFamily]) {
-          charsPerFamily[element.fontFamily] = new Set();
+      for (const char of getTextElementText(element)) {
+        if (!charsPerFamily[fontFamily]) {
+          charsPerFamily[fontFamily] = new Set();
         }
 
-        charsPerFamily[element.fontFamily].add(char);
+        charsPerFamily[fontFamily].add(char);
       }
     }
 

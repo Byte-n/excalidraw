@@ -1,7 +1,6 @@
 import { arrayToMap, cloneJSON, randomId } from "@excalidraw/common";
 
 import { syncMovedIndices } from "./fractionalIndex";
-import { getBoundTextElement } from "./textElement";
 import { mutateElement } from "./mutateElement";
 import { getMindmapElementsForSelection } from "./mindmap";
 import { isSequenceFragmentElement } from "./compositeShape/sequenceOutline";
@@ -13,7 +12,6 @@ import {
 import { getIndexedFrameChildren } from "./frameChildrenIndex";
 
 import {
-  isBoundToContainer,
   isFrameLikeElement,
   isMindmapEdgeElement,
   isMindmapNodeElement,
@@ -27,7 +25,6 @@ import type {
   ExcalidrawTableElement,
   TableCellContainerRef,
   TableDataV1,
-  BackgroundTextStyle,
 } from "./types";
 
 /**
@@ -52,9 +49,6 @@ export const getTableContentClipRects = (
 ): readonly { x: number; y: number; width: number; height: number }[] => {
   const clips: { x: number; y: number; width: number; height: number }[] = [];
   let current: ExcalidrawElement | undefined = element;
-  if (isBoundToContainer(element)) {
-    current = elementsMap.get(element.containerId);
-  }
   const visited = new Set<string>();
   while (current?.containerRef?.elementId && !visited.has(current.id)) {
     visited.add(current.id);
@@ -92,31 +86,6 @@ export const getTableContentClipRects = (
   return clips;
 };
 
-export const getTableBackgroundTextStyle = (
-  element: ExcalidrawElement,
-  elementsMap: ElementsMap,
-): BackgroundTextStyle | undefined => {
-  const ref = element.containerRef;
-  if (!ref || ref.kind !== "tableCell") {
-    return undefined;
-  }
-  const table = elementsMap.get(ref.elementId);
-  if (!table || !isTableElement(table)) {
-    return undefined;
-  }
-  const cell = table.table.cells.find(
-    (candidate) => candidate.id === ref.cellId,
-  );
-  if (!cell) {
-    return undefined;
-  }
-  const row = table.table.rows.find((candidate) => candidate.id === cell.rowId);
-  const column = table.table.columns.find(
-    (candidate) => candidate.id === cell.columnId,
-  );
-  return row?.style?.backgroundText ?? column?.style?.backgroundText;
-};
-
 /** Same direct-parent relation, role and cell — no write, no history. */
 export const isSameTableCellRef = (
   element: ExcalidrawElement,
@@ -138,9 +107,7 @@ export const isElementInTableCellSubtree = (
   cellId: string,
   elementsMap: ElementsMap,
 ): boolean => {
-  let current: ExcalidrawElement | undefined = isBoundToContainer(element)
-    ? (elementsMap.get(element.containerId) as ExcalidrawElement | undefined)
-    : element;
+  let current: ExcalidrawElement | undefined = element;
   while (current) {
     if (isSameTableCellRef(current, tableId, cellId)) {
       return true;
@@ -194,10 +161,10 @@ const expandSemanticObjectsForCellDrop = (
 
 /**
  * Adds semantic objects to a table cell and appends them to the cell's
- * z-order tail. Bound text follows its host through `containerId` without a
- * ref of its own; mindmap subtrees are recorded on their root only; a frame
- * enters as a whole object — the frame itself records the cell while its
- * members keep pointing at it through their frameLike refs
+ * z-order tail. Cell text lives inline in each element's `texts` regions, so a
+ * host brings it along implicitly; mindmap subtrees are recorded on their root
+ * only; a frame enters as a whole object — the frame itself records the cell
+ * while its members keep pointing at it through their frameLike refs
  * (phase-1.md:21, :60, :127).
  *
  * @returns mutated allElements (same data structure)
@@ -221,11 +188,6 @@ export const addElementsToTableCell = <T extends ElementsMapOrArray>(
   const finalElementsToAdd = new Set<ExcalidrawElement>();
 
   for (const element of candidateElements) {
-    // bound text follows its host through `containerId` — it never records a
-    // spatial parent of its own (phase-1.md:66)
-    if (isBoundToContainer(element)) {
-      continue;
-    }
     // a member of a frame entering the cell inherits through that frame —
     // the frame records the cell, the member keeps its frameLike ref
     // (phase-1.md:21, :127)
@@ -262,13 +224,6 @@ export const addElementsToTableCell = <T extends ElementsMapOrArray>(
     }
 
     finalElementsToAdd.add(element);
-
-    const boundTextElement = getBoundTextElement(element, elementsMap);
-    if (boundTextElement && !finalElementsToAdd.has(boundTextElement)) {
-      // the bound text keeps `containerId` (no ref write), but must ride the
-      // z-order reorder together with its host
-      finalElementsToAdd.add(boundTextElement);
-    }
   }
 
   if (!finalElementsToAdd.size) {
@@ -278,9 +233,6 @@ export const addElementsToTableCell = <T extends ElementsMapOrArray>(
   let didChangeMembership = false;
 
   for (const element of finalElementsToAdd) {
-    if (isBoundToContainer(element)) {
-      continue;
-    }
     if (isSameTableCellRef(element, table.id, cellId)) {
       // membership unchanged — no write, no history entry
       continue;
@@ -340,8 +292,8 @@ export const addElementsToTableCell = <T extends ElementsMapOrArray>(
 /**
  * The one table a dropped selection currently belongs to — mirrors
  * `getCommonFrameId`: `null` when any element is not a direct cell member
- * (bound text inherits, so it does not veto; a frame placed in a cell is a
- * member through its own `tableCell` ref).
+ * (text regions live inside their host, so they do not veto; a frame placed in
+ * a cell is a member through its own `tableCell` ref).
  */
 export const getCommonTableCellId = (
   elements: readonly ExcalidrawElement[],
@@ -364,8 +316,9 @@ export const getCommonTableCellId = (
 };
 
 /**
- * Complete descendants of a table or frame, including nested containers and
- * bound text. Container operations treat the subtree as one unit.
+ * Complete descendants of a table or frame, including nested containers. Text
+ * lives in each element's `texts` regions, so the subtree needs no separate
+ * text elements. Container operations treat the subtree as one unit.
  */
 export const getContainerSubtreeElements = (
   allElements: readonly ExcalidrawElement[],
@@ -390,10 +343,6 @@ export const getContainerSubtreeElements = (
         continue;
       }
       subtreeIds.add(member.id);
-      const boundTextElement = getBoundTextElement(member, elementsMap);
-      if (boundTextElement) {
-        subtreeIds.add(boundTextElement.id);
-      }
       if (
         (isTableElement(member) ||
           isFrameLikeElement(member) ||
@@ -464,10 +413,10 @@ export const regenerateTableIds = (
 
 /**
  * Paste-time eligibility for a cell drop (the `tableCell` counterpart of
- * `filterElementsEligibleAsFrameChildren`): bound text follows its host; the
- * members of a table duplicated together with them ride that table's copy
- * instead of being re-parented into the target cell, and the members of a
- * frame in the batch ride the frame, which records the cell itself
+ * `filterElementsEligibleAsFrameChildren`): an element's `texts` regions travel
+ * with it; the members of a table duplicated together with them ride that
+ * table's copy instead of being re-parented into the target cell, and the
+ * members of a frame in the batch ride the frame, which records the cell itself
  * (phase-1.md:21, :69, :127).
  */
 export const filterElementsEligibleAsTableCellChildren = (
@@ -482,10 +431,6 @@ export const filterElementsEligibleAsTableCellChildren = (
   }
 
   return elements.filter((element) => {
-    if (isBoundToContainer(element)) {
-      // follows its host through `containerId`
-      return false;
-    }
     if (
       element.containerRef &&
       duplicatedContainers.has(element.containerRef.elementId)
@@ -514,9 +459,7 @@ export const getTableCellSnapScope = (
 
   for (const element of selectedElements) {
     const ref = element.containerRef;
-    // bound text and mindmap members inherit instead of carrying a ref, so
-    // they fall back to the global snap set
-    if (isBoundToContainer(element) || ref?.kind !== "tableCell") {
+    if (ref?.kind !== "tableCell") {
       return null;
     }
     if (!scope) {

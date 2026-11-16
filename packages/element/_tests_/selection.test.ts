@@ -6,29 +6,22 @@ import {
 } from "../src/selection";
 
 describe("frame selection", () => {
-  it("includes bound text through its selected frame child", () => {
+  it("includes elements inside the selected frame", () => {
     const frame = API.createElement({ type: "frame" });
     const owner = API.createElement({
       type: "rectangle",
       containerRef: { kind: "frameLike", elementId: frame.id },
-      boundElements: [{ type: "text", id: "label" }],
-    });
-    const label = API.createElement({
-      id: "label",
-      type: "text",
-      containerId: owner.id,
     });
 
     const selected = getSelectedElements(
-      [frame, owner, label],
+      [frame, owner],
       { selectedElementIds: { [frame.id]: true } },
-      { includeBoundTextElement: true, includeElementsInFrames: true },
+      { includeElementsInFrames: true },
     );
 
     expect(selected.map((element) => element.id)).toEqual([
       frame.id,
       owner.id,
-      label.id,
     ]);
   });
 });

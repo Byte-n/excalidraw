@@ -4,7 +4,13 @@ import {
 } from "@excalidraw/fractional-indexing";
 import { pointFrom } from "@excalidraw/math";
 
-import { ROUNDNESS } from "@excalidraw/common";
+import {
+  DEFAULT_FONT_FAMILY,
+  ROUNDNESS,
+  TEXT_ALIGN,
+  VERTICAL_ALIGN,
+  getLineHeight,
+} from "@excalidraw/common";
 
 import type { LocalPoint, Radians } from "@excalidraw/math";
 
@@ -13,12 +19,13 @@ import type { Mutable } from "@excalidraw/common/utility-types";
 
 import { isMindmapEdgeElement, isMindmapNodeElement } from "./typeChecks";
 
+import type { TextBlockStyle } from "./text/types";
+
 import type {
   BasicShapeData,
   ExcalidrawElement,
   ExcalidrawMindmapEdgeElement,
   ExcalidrawMindmapNodeElement,
-  ExcalidrawTextElement,
   FractionalIndex,
   ExcalidrawShapeElement,
   ElementsMap,
@@ -118,14 +125,29 @@ export const getMindmapShapeId = (node: ExcalidrawMindmapNodeElement) =>
   node.shape.id;
 
 /**
- * Whether the node's geometry is pinned by a table uniform-scale commit
- * (phase-1:113): relayouts keep its position, and its bound text follows the
- * fixed-fit pipeline (wrap/truncate to the current bounds) instead of growing
- * the node back. Unfrozen nodes keep the adaptive behavior unchanged.
+ * 节点几何是否被表格等比缩放提交固定（phase-1:113）：重排保持其位置，
+ * 正文在现有边界内换行/截断，不再把节点撑回原尺寸。未固定的节点保持
+ * 自适应行为。
  */
 export const isMindmapLayoutFrozen = (
   node: Pick<ExcalidrawMindmapNodeElement, "layoutFrozen">,
 ): boolean => node.layoutFrozen === true;
+
+/** 脑图节点正文的文本样式：根节点字号更大、加粗且反色。 */
+export const getMindmapNodeTextStyle = (
+  node: Pick<ExcalidrawMindmapNodeElement, "role">,
+): TextBlockStyle => {
+  const isRoot = node.role === "root";
+  return {
+    fontFamily: DEFAULT_FONT_FAMILY,
+    fontSize: isRoot ? MINDMAP_ROOT_FONT_SIZE : MINDMAP_NODE_FONT_SIZE,
+    fontWeight: isRoot ? MINDMAP_ROOT_FONT_WEIGHT : undefined,
+    lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+    textAlign: TEXT_ALIGN.CENTER,
+    verticalAlign: VERTICAL_ALIGN.MIDDLE,
+    color: isRoot ? MINDMAP_ROOT_TEXT_COLOR : MINDMAP_NODE_TEXT_COLOR,
+  };
+};
 
 const isMindmapEdgeRouting = (value: unknown): value is MindmapEdgeRouting =>
   value === "orthogonal" || value === "curved";
@@ -583,17 +605,6 @@ export const getMindmapNodeTheme = (
   };
 };
 
-const getMindmapBoundText = (
-  node: ExcalidrawMindmapNodeElement,
-  elementsById: ReadonlyMap<string, ExcalidrawElement>,
-): ExcalidrawTextElement | null => {
-  const binding = node.boundElements?.find((bound) => bound.type === "text");
-  const element = binding ? elementsById.get(binding.id) : undefined;
-  return element && element.type === "text" && !element.isDeleted
-    ? (element as ExcalidrawTextElement)
-    : null;
-};
-
 const roundnessEquals = (
   a: ExcalidrawMindmapNodeElement["roundness"],
   b: ExcalidrawMindmapNodeElement["roundness"],
@@ -601,52 +612,63 @@ const roundnessEquals = (
   a === b || (!!a && !!b && a.type === b.type && a.value === b.value);
 
 /**
- * 「与默认一致即未修改」比较门：逐属性对比节点/绑定文字/入边与指定位置的
+ * 「与默认一致即未修改」比较门：逐属性对比节点/正文/入边与指定位置的
  * 派生值。比较集 = 派生写入集；派生不写的属性（opacity 等）不参与判定。
- * 文字或边缺失时跳过对应比较（视为未被用户修改）。
+ * 正文或边缺失时跳过对应比较（视为未被用户修改）。
  */
 export const matchesMindmapNodeTheme = (
   node: ExcalidrawMindmapNodeElement,
-  text: ExcalidrawTextElement | null,
   edge: ExcalidrawMindmapEdgeElement | null,
   theme: MindmapNodeTheme,
-): boolean =>
-  node.shape.id === theme.shape &&
-  node.backgroundColor === theme.backgroundColor &&
-  node.strokeColor === theme.strokeColor &&
-  node.strokeWidth === theme.strokeWidth &&
-  roundnessEquals(node.roundness, theme.roundness) &&
-  (!text ||
-    (text.fontSize === theme.text.fontSize &&
-      (text.fontWeight ?? undefined) === (theme.text.fontWeight ?? undefined) &&
-      text.strokeColor === theme.text.strokeColor)) &&
-  (!theme.edge ||
-    !edge ||
-    (edge.strokeColor === theme.edge.strokeColor &&
-      edge.strokeWidth === theme.edge.strokeWidth));
+): boolean => {
+  const body = node.texts?.body;
+  return (
+    node.shape.id === theme.shape &&
+    node.backgroundColor === theme.backgroundColor &&
+    node.strokeColor === theme.strokeColor &&
+    node.strokeWidth === theme.strokeWidth &&
+    roundnessEquals(node.roundness, theme.roundness) &&
+    (!body ||
+      (body.style.fontSize === theme.text.fontSize &&
+        (body.style.fontWeight ?? undefined) ===
+          (theme.text.fontWeight ?? undefined) &&
+        (body.style.color ?? node.strokeColor) === theme.text.strokeColor)) &&
+    (!theme.edge ||
+      !edge ||
+      (edge.strokeColor === theme.edge.strokeColor &&
+        edge.strokeWidth === theme.edge.strokeWidth))
+  );
+};
 
 const applyMindmapTextTheme = (
-  text: ExcalidrawTextElement,
+  node: ExcalidrawMindmapNodeElement,
   theme: MindmapNodeTheme["text"],
-): ExcalidrawTextElement => {
-  if (
-    text.fontSize === theme.fontSize &&
-    text.strokeColor === theme.strokeColor &&
-    (text.fontWeight ?? undefined) === (theme.fontWeight ?? undefined)
-  ) {
-    return text;
+): ExcalidrawMindmapNodeElement => {
+  const body = node.texts?.body;
+  if (!body) {
+    return node;
   }
-  const next: Mutable<ExcalidrawTextElement> = {
-    ...text,
+  if (
+    body.style.fontSize === theme.fontSize &&
+    (body.style.color ?? node.strokeColor) === theme.strokeColor &&
+    (body.style.fontWeight ?? undefined) === (theme.fontWeight ?? undefined)
+  ) {
+    return node;
+  }
+  const style: Mutable<TextBlockStyle> = {
+    ...body.style,
     fontSize: theme.fontSize,
-    strokeColor: theme.strokeColor,
+    color: theme.strokeColor,
   };
   if (theme.fontWeight === undefined) {
-    delete next.fontWeight;
+    delete style.fontWeight;
   } else {
-    next.fontWeight = theme.fontWeight;
+    style.fontWeight = theme.fontWeight;
   }
-  return next;
+  return {
+    ...node,
+    texts: { ...node.texts, body: { ...body, style } },
+  };
 };
 
 /**
@@ -683,7 +705,7 @@ export const applyMindmapBranchTheme = (
     ) {
       continue;
     }
-    let node = element;
+    const node = element;
     if (before) {
       const oldNode = before.elements.get(nodeId);
       if (oldNode && isMindmapNodeElement(oldNode)) {
@@ -691,7 +713,6 @@ export const applyMindmapBranchTheme = (
         if (
           !matchesMindmapNodeTheme(
             oldNode,
-            getMindmapBoundText(oldNode, before.elements),
             before.index.edgeByChildId.get(nodeId) ?? null,
             oldTheme,
           )
@@ -701,28 +722,22 @@ export const applyMindmapBranchTheme = (
       }
     }
     const theme = getMindmapNodeTheme(index, nodeId, working);
-    const nextNode = withUpdates(node, {
-      shape:
-        node.shape.id === theme.shape
-          ? node.shape
-          : mindmapShapeData(theme.shape),
-      backgroundColor: theme.backgroundColor,
-      strokeColor: theme.strokeColor,
-      strokeWidth: theme.strokeWidth,
-      roundness: theme.roundness,
-    });
+    const nextNode = applyMindmapTextTheme(
+      withUpdates(node, {
+        shape:
+          node.shape.id === theme.shape
+            ? node.shape
+            : mindmapShapeData(theme.shape),
+        backgroundColor: theme.backgroundColor,
+        strokeColor: theme.strokeColor,
+        strokeWidth: theme.strokeWidth,
+        roundness: theme.roundness,
+      }),
+      theme.text,
+    );
     if (nextNode !== node) {
       working.set(nodeId, nextNode);
-      node = nextNode;
       changed = true;
-    }
-    const text = getMindmapBoundText(node, working);
-    if (text) {
-      const nextText = applyMindmapTextTheme(text, theme.text);
-      if (nextText !== text) {
-        working.set(text.id, nextText);
-        changed = true;
-      }
     }
     const edge = index.edgeByChildId.get(nodeId);
     if (edge && theme.edge) {
@@ -753,18 +768,7 @@ export const getMindmapElementsForSelection = (
   selectedElements: readonly ExcalidrawElement[],
 ): readonly ExcalidrawElement[] => {
   const selectedIds = new Set(selectedElements.map((element) => element.id));
-  const selectedNodes = selectedElements.flatMap((element) => {
-    if (isMindmapNodeElement(element)) {
-      return [element];
-    }
-    if (element.type === "text" && element.containerId) {
-      const container = elements.find(
-        (candidate) => candidate.id === element.containerId,
-      );
-      return container && isMindmapNodeElement(container) ? [container] : [];
-    }
-    return [];
-  });
+  const selectedNodes = selectedElements.filter(isMindmapNodeElement);
 
   if (!selectedNodes.length) {
     return selectedElements;
@@ -795,18 +799,14 @@ export const getMindmapElementsForSelection = (
         subtreeNodeIds.has(element.childId)
       );
     }
-    if (element.type === "text" && element.containerId) {
-      return subtreeNodeIds.has(element.containerId);
-    }
     return selectedIds.has(element.id);
   });
 };
 
 /**
- * 返回所有「被完整选中」的 graph 的全部成员元素 id（节点 + 边 + 绑定文本，
- * 含折叠隐藏元素）。判定与 App.mindmap.isCompleteMindmapSelection 一致：
- * 绑定文本随其容器一并视为选中。整图选中在交互画布上由共同虚线外框表达，
- * 逐元素的选中描边由调用方据此抑制。
+ * 返回所有「被完整选中」的 graph 的全部成员元素 id（节点 + 边，含折叠
+ * 隐藏元素）。整图选中在交互画布上由共同虚线外框表达，逐元素的选中描边
+ * 由调用方据此抑制。
  */
 export const getCompletelySelectedMindmapGraphElementIds = (
   elements: Iterable<ExcalidrawElement>,
@@ -839,23 +839,13 @@ export const getCompletelySelectedMindmapGraphElementIds = (
     let isComplete = true;
     for (const element of allElements) {
       const isGraphElement =
-        ((isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
-          element.graphId === graphId) ||
-        (element.type === "text" &&
-          !!element.containerId &&
-          nodeIds.has(element.containerId));
+        (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+        element.graphId === graphId;
       if (!isGraphElement) {
         continue;
       }
       graphElementIds.push(element.id);
-      if (
-        !selectedElementIds[element.id] &&
-        !(
-          element.type === "text" &&
-          !!element.containerId &&
-          selectedElementIds[element.containerId]
-        )
-      ) {
+      if (!selectedElementIds[element.id]) {
         isComplete = false;
         break;
       }
@@ -867,7 +857,7 @@ export const getCompletelySelectedMindmapGraphElementIds = (
   return suppressed;
 };
 
-/** 折叠是派生的可见性，不修改 isDeleted、透明度或文本绑定。 */
+/** 折叠是派生的可见性，不修改 isDeleted 或透明度。 */
 export const computeMindmapVisibility = (
   elements: readonly ExcalidrawElement[],
 ): {
@@ -936,12 +926,7 @@ export const computeMindmapVisibility = (
     collapsedCounts.set(id, (subtreeSize.get(id) ?? 1) - 1);
   }
   for (const element of elements) {
-    if (
-      (isMindmapEdgeElement(element) && hidden.has(element.childId)) ||
-      (element.type === "text" &&
-        element.containerId &&
-        hidden.has(element.containerId))
-    ) {
+    if (isMindmapEdgeElement(element) && hidden.has(element.childId)) {
       hidden.add(element.id);
     }
   }
@@ -960,8 +945,6 @@ export const isMindmapElementHidden = (
     ? element
     : isMindmapEdgeElement(element)
     ? elementsMap.get(element.childId)
-    : element.type === "text" && element.containerId
-    ? elementsMap.get(element.containerId)
     : undefined;
   if (!isMindmapNodeElement(node) || node.parentId === null) {
     return false;
@@ -1458,7 +1441,7 @@ export const navigateMindmap = (
   return siblings[position + (direction === "ArrowUp" ? -1 : 1)] ?? null;
 };
 
-/** 纯结构命令：先校验，再维护节点、绑定文字及连接线；不写场景或版本。 */
+/** 纯结构命令：先校验，再维护节点与连接线；不写场景或版本。 */
 export const applyMindmapTreeCommand = (
   elements: readonly ExcalidrawElement[],
   nodeId: string,
@@ -1637,12 +1620,7 @@ export const applyMindmapTreeCommand = (
     if (element.isDeleted) {
       return element;
     }
-    if (
-      deletedIds.has(element.id) ||
-      (element.type === "text" &&
-        element.containerId &&
-        deletedIds.has(element.containerId))
-    ) {
+    if (deletedIds.has(element.id)) {
       return withUpdates(element, { isDeleted: true });
     }
     return replacements.get(element.id) ?? element;

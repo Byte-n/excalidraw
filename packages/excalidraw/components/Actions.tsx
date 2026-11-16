@@ -782,10 +782,10 @@ export const FloatbarShapeActions = ({
     app,
   );
   const { container } = useExcalidrawContainer();
-  // 文本编辑态（含表格单元格背景文本、表格标题）：浮动栏按被编辑文本呈现，
+  // 文本编辑态（含表格单元格区域文本、表格标题）：浮动栏按被编辑文本呈现，
   // 作为文本属性的作用对象——单元格命令（选区模式/合并/拆分）与表格色板是
   // 单元格选区的操作，此时让位（否则输入单元格文字时看到的仍是单元格工具栏）
-  const editingText = appState.editingTextElement;
+  const editingText = appState.editingTextElement ?? appState.editingTextRegion;
   const tableSelected =
     !editingText &&
     (!!appState.tableCellSelection ||
@@ -1921,9 +1921,9 @@ export const MobileShapeActions = ({
     app,
   );
   const { container } = useExcalidrawContainer();
-  // 与浮动栏同一规则：文本编辑时（含单元格背景文本）底条按被编辑文本呈现，
+  // 与浮动栏同一规则：文本编辑时（含单元格区域文本）底条按被编辑文本呈现，
   // 单元格命令与表格色板让位给文本属性
-  const editingText = appState.editingTextElement;
+  const editingText = appState.editingTextElement ?? appState.editingTextRegion;
   const tableSelected =
     !editingText &&
     (!!appState.tableCellSelection ||

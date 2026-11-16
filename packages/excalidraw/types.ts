@@ -11,6 +11,7 @@ import type { LinearElementEditor } from "@excalidraw/element";
 
 import type { MaybeTransformHandleType } from "@excalidraw/element";
 import type { PreparedTableUniformScale } from "@excalidraw/element";
+import type { TextEditingSession } from "@excalidraw/element";
 
 import type {
   PointerType,
@@ -203,6 +204,8 @@ type _CommonCanvasAppState = {
   viewModeEnabled: AppState["viewModeEnabled"];
   openDialog: AppState["openDialog"];
   editingGroupId: AppState["editingGroupId"]; // TODO: move to interactive canvas if possible
+  /** 正在编辑的文本区域；渲染器据此跳过该区域的绘制。 */
+  editingTextRegion: AppState["editingTextRegion"];
   selectedElementIds: AppState["selectedElementIds"]; // TODO: move to interactive canvas if possible
   offsetLeft: AppState["offsetLeft"];
   offsetTop: AppState["offsetTop"];
@@ -263,6 +266,7 @@ export type InteractiveCanvasAppState = Readonly<
     snapLines: AppState["snapLines"];
     zenModeEnabled: AppState["zenModeEnabled"];
     editingTextElement: AppState["editingTextElement"];
+    editingTextRegion: AppState["editingTextRegion"];
     // Cropping
     isCropping: AppState["isCropping"];
     croppingElementId: AppState["croppingElementId"];
@@ -684,6 +688,11 @@ export interface AppState {
    * set when a new text is created or when an existing text is being edited
    */
   editingTextElement: ExcalidrawTextElement | null;
+  /**
+   * 正在编辑的元素内文本区域；非 null 时该区域不在画布上绘制，
+   * 由编辑控件接管显示。
+   */
+  editingTextRegion: TextEditingSession | null;
   activeTool: {
     /**
      * indicates a previous tool we should revert back to if we deselect the

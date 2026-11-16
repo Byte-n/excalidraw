@@ -25,6 +25,7 @@ import {
 } from "./heading";
 import { LinearElementEditor } from "./linearElementEditor";
 import { getTextAnchorRatios } from "./newElement";
+import { getTextElementStyle } from "./text/elementText";
 import { isArrowElement } from "./typeChecks";
 
 import type { Heading } from "./heading";
@@ -247,7 +248,7 @@ export const isEndpointBoundText = (
 export const getEndpointBoundTextDragAnchor = (
   newElement: ExcalidrawTextElement,
 ) => {
-  const anchorRatio = getTextAnchorRatios(newElement).x;
+  const anchorRatio = getTextAnchorRatios(getTextElementStyle(newElement)).x;
 
   return {
     anchorRatio,

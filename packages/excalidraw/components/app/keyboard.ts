@@ -21,12 +21,9 @@ import {
   isSimpleArrow,
   makeNextSelectedElementIds,
   maybeHandleArrowPointlikeDrag,
-  getContainerCenter,
-  getBoundTextElement,
   isImageElement,
   isShapeId,
   isTextElement,
-  isValidTextContainer,
   isLineElement,
   isLinearElement,
   isElbowArrow,
@@ -603,7 +600,6 @@ export const onKeyDown = (
   if (isArrowKey(event.key)) {
     let selectedElements = app.scene.getSelectedElements({
       selectedElementIds: app.state.selectedElementIds,
-      includeBoundTextElement: true,
       includeElementsInFrames: true,
     });
 
@@ -697,22 +693,19 @@ export const onKeyDown = (
         }
       } else if (
         isTextElement(selectedElement) ||
-        isValidTextContainer(selectedElement)
+        selectedElement.type === "composite" ||
+        selectedElement.type === "flow" ||
+        selectedElement.type === "sequence" ||
+        selectedElement.type === "dataflow" ||
+        selectedElement.type === "stickynote" ||
+        selectedElement.type === "mindmap-node" ||
+        selectedElement.type === "table" ||
+        isLinearElement(selectedElement)
       ) {
-        let container;
-        if (!isTextElement(selectedElement)) {
-          container = selectedElement as ExcalidrawTextContainer;
-        }
-        const midPoint = getContainerCenter(
-          selectedElement,
-          app.scene.getNonDeletedElementsMap(),
-        );
-        const sceneX = midPoint.x;
-        const sceneY = midPoint.y;
         app.startTextEditing({
-          sceneX,
-          sceneY,
-          container,
+          sceneX: selectedElement.x + selectedElement.width / 2,
+          sceneY: selectedElement.y + selectedElement.height / 2,
+          container: isTextElement(selectedElement) ? null : selectedElement,
         });
         event.preventDefault();
         return;
@@ -778,11 +771,7 @@ export const onKeyDown = (
 
     if (
       app.state.activeTool.type === "text" ||
-      selectedElements.find(
-        (element) =>
-          isTextElement(element) ||
-          getBoundTextElement(element, app.scene.getNonDeletedElementsMap()),
-      )
+      selectedElements.find((element) => isTextElement(element))
     ) {
       event.preventDefault();
       app.setState({ openPopup: "fontFamily" });

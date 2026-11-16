@@ -250,6 +250,7 @@ const getRelevantAppStateProps = (
   activeTool: appState.activeTool,
   openDialog: appState.openDialog,
   editingGroupId: appState.editingGroupId,
+  editingTextRegion: appState.editingTextRegion,
   selectedElementIds: appState.selectedElementIds,
   offsetLeft: appState.offsetLeft,
   offsetTop: appState.offsetTop,

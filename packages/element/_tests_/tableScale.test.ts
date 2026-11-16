@@ -1,5 +1,7 @@
 import { pointFrom, type LocalPoint } from "@excalidraw/math";
 
+import { getLineHeight } from "@excalidraw/common";
+
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
 
 import { newElementWith, type ElementUpdate } from "../src/mutateElement";
@@ -12,6 +14,7 @@ import {
   prepareTableUniformScale,
 } from "../src/tableScale";
 import { getIndexedTableChildren } from "../src/tableChildrenIndex";
+import { getMindmapNodeTextStyle } from "../src/mindmap";
 import { isTableElement } from "../src/typeChecks";
 
 import type {
@@ -41,22 +44,21 @@ type UpdateBag = {
   width?: number;
   height?: number;
   table?: TableDataV1;
-  fontSize?: number;
-  text?: string;
-  baseFontSize?: number | null;
   autoResize?: boolean;
   baseHeight?: number;
   textFitMode?: "auto" | "fixed";
   layoutFrozen?: boolean;
+  texts?: ExcalidrawElement["texts"];
   points?: readonly LocalPoint[];
   fixedSegments?: ExcalidrawElbowArrowElement["fixedSegments"];
   scale?: unknown;
   startBinding?: unknown;
   endBinding?: unknown;
-  containerId?: unknown;
 };
 
-type ScaleResult = NonNullable<ReturnType<typeof computeTableUniformScale>>;
+type ScaleResult =
+  | NonNullable<ReturnType<typeof computeTableUniformScale>>
+  | NonNullable<ReturnType<typeof computeTableAxisScale>>;
 
 const updateOf = (result: ScaleResult, elementId: string): UpdateBag =>
   result.updates.get(elementId) as UpdateBag;
@@ -231,7 +233,7 @@ describe("computeTableUniformScale: subtree members", () => {
       2,
     )!;
     const previewUpdate = updateOf(preview, backgroundText.id);
-    expect(previewUpdate.fontSize).toBe(20);
+    expect(previewUpdate.texts?.body?.style.fontSize).toBe(20);
     expect(previewUpdate.autoResize).toBeUndefined();
 
     const commit = computeTableUniformScale(
@@ -241,7 +243,7 @@ describe("computeTableUniformScale: subtree members", () => {
       { persistTextModes: true },
     )!;
     const commitUpdate = updateOf(commit, backgroundText.id);
-    expect(commitUpdate.fontSize).toBe(20);
+    expect(commitUpdate.texts?.body?.style.fontSize).toBe(20);
     expect(commitUpdate.autoResize).toBe(false);
     expect(commitUpdate.x).toBe(260);
     expect(commitUpdate.y).toBe(250);
@@ -249,7 +251,7 @@ describe("computeTableUniformScale: subtree members", () => {
 });
 
 describe("computeTableUniformScale: text modes and dedup", () => {
-  const makeShapeWithBoundText = () => {
+  const makeShape = () => {
     const table = makeNonUniformTable();
     const shape = API.createElement({
       type: "rectangle",
@@ -259,68 +261,31 @@ describe("computeTableUniformScale: text modes and dedup", () => {
       height: 30,
       containerRef: tableCellRef(table, cellIdAt(table, 0, 0), "content"),
     });
-    const boundText = API.createElement({
-      type: "text",
-      x: 110,
-      y: 60,
-      width: 30,
-      height: 16,
-      fontSize: 8,
-      containerId: shape.id,
-    });
-    return { table, shape, boundText };
+    return { table, shape };
   };
 
   it("switches composite shapes to fixed text fit only on persist", () => {
-    const { table, shape, boundText } = makeShapeWithBoundText();
+    const { table, shape } = makeShape();
 
-    const preview = computeTableUniformScale(
-      [table, shape, boundText],
-      table.id,
-      2,
-    )!;
+    const preview = computeTableUniformScale([table, shape], table.id, 2)!;
     expect(updateOf(preview, shape.id).textFitMode).toBeUndefined();
     expect(updateOf(preview, shape.id).width).toBe(80);
 
-    const commit = computeTableUniformScale(
-      [table, shape, boundText],
-      table.id,
-      2,
-      { persistTextModes: true },
-    )!;
+    const commit = computeTableUniformScale([table, shape], table.id, 2, {
+      persistTextModes: true,
+    })!;
     expect(updateOf(commit, shape.id).textFitMode).toBe("fixed");
 
     const alreadyFixed = newElementWith(shape as ExcalidrawShapeElement, {
       textFitMode: "fixed",
     });
     const rerun = computeTableUniformScale(
-      [table, alreadyFixed, boundText],
+      [table, alreadyFixed],
       table.id,
       2,
       { persistTextModes: true },
     )!;
     expect(updateOf(rerun, alreadyFixed.id).textFitMode).toBeUndefined();
-  });
-
-  it("transforms a bound text exactly once despite host and scan paths", () => {
-    const { table, shape, boundText } = makeShapeWithBoundText();
-
-    const commit = computeTableUniformScale(
-      [table, shape, boundText],
-      table.id,
-      2,
-      { persistTextModes: true },
-    )!;
-
-    // every subtree element exactly once: table + shape + bound text
-    expect(commit.updates.size).toBe(3);
-    const update = updateOf(commit, boundText.id);
-    // single application, not host-applied and scan-applied (which would be 32)
-    expect(update.fontSize).toBe(16);
-    expect(update.width).toBe(60);
-    // bound texts keep their autoResize and their container: no mode change
-    expect(update.autoResize).toBeUndefined();
-    expect(update.containerId).toBeUndefined();
   });
 
   it("keeps standalone text scaling without growing cells back", () => {
@@ -339,7 +304,7 @@ describe("computeTableUniformScale: text modes and dedup", () => {
       persistTextModes: true,
     })!;
     const update = updateOf(commit, text.id);
-    expect(update.fontSize).toBe(20);
+    expect(update.texts?.body?.style.fontSize).toBe(20);
     expect(update.width).toBe(100);
     expect(update.autoResize).toBe(false);
   });
@@ -476,7 +441,7 @@ describe("computeTableUniformScale: graphic element kinds", () => {
 });
 
 describe("computeTableUniformScale: sticky notes", () => {
-  const makeNoteWithLabel = () => {
+  const makeNote = () => {
     const table = makeNonUniformTable();
     const note = newElementWith(
       API.createElement({
@@ -486,63 +451,55 @@ describe("computeTableUniformScale: sticky notes", () => {
         width: 200,
         height: 200,
         containerRef: tableCellRef(table, cellIdAt(table, 0, 0), "content"),
+        texts: {
+          body: {
+            text: "便签",
+            style: {
+              fontFamily: 1,
+              fontSize: 40,
+              lineHeight: getLineHeight(1),
+              textAlign: "center",
+              verticalAlign: "middle",
+            },
+          },
+        },
       }),
       { baseHeight: 200 },
     );
-    const label = newElementWith(
-      API.createElement({
-        type: "text",
-        x: 20,
-        y: 20,
-        width: 100,
-        height: 50,
-        fontSize: 40,
-        containerId: note.id,
-      }),
-      { baseFontSize: 40 },
-    );
-    return { table, note, label };
+    return { table, note };
   };
 
   it("freezes the sticky layout on persist: baseHeight and font ceiling scale", () => {
-    const { table, note, label } = makeNoteWithLabel();
+    const { table, note } = makeNote();
 
-    const commit = computeTableUniformScale([table, note, label], table.id, 2, {
+    const commit = computeTableUniformScale([table, note], table.id, 2, {
       persistTextModes: true,
     })!;
     const noteUpdate = updateOf(commit, note.id);
     expect(noteUpdate.width).toBe(400);
     expect(noteUpdate.height).toBe(400);
     expect(noteUpdate.baseHeight).toBe(400);
-    const labelUpdate = updateOf(commit, label.id);
-    expect(labelUpdate.fontSize).toBe(80);
-    expect(labelUpdate.baseFontSize).toBe(80);
+    expect(noteUpdate.texts?.body?.style.fontSize).toBe(80);
     // no layout pass here — the frozen numbers are the whole update
-    expect(commit.updates.size).toBe(3);
+    expect(commit.updates.size).toBe(2);
   });
 
   it("leaves the frozen layout fields untouched for previews", () => {
-    const { table, note, label } = makeNoteWithLabel();
+    const { table, note } = makeNote();
 
-    const preview = computeTableUniformScale(
-      [table, note, label],
-      table.id,
-      2,
-    )!;
+    const preview = computeTableUniformScale([table, note], table.id, 2)!;
     const noteUpdate = updateOf(preview, note.id);
     expect(noteUpdate.width).toBe(400);
     expect(noteUpdate.baseHeight).toBeUndefined();
-    const labelUpdate = updateOf(preview, label.id);
-    expect(labelUpdate.fontSize).toBe(80);
-    expect(labelUpdate.baseFontSize).toBeUndefined();
+    expect(noteUpdate.texts).toBeUndefined();
   });
 });
 
 describe("computeTableUniformScale: mindmap subtrees", () => {
-  /** Root + child node + edge + the root's bound label, spread over cells. */
+  /** Root + child node + edge; the root carries its own body text. */
   const makeMindmapSubtree = () => {
     const table = makeNonUniformTable();
-    const root = API.createElement({
+    const rootNode = API.createElement({
       type: "mindmap-node",
       x: 110,
       y: 60,
@@ -557,6 +514,15 @@ describe("computeTableUniformScale: mindmap subtrees", () => {
       },
       containerRef: tableCellRef(table, cellIdAt(table, 0, 0), "content"),
     });
+    const root = {
+      ...rootNode,
+      texts: {
+        body: {
+          text: "脑图",
+          style: { ...getMindmapNodeTextStyle(rootNode), fontSize: 20 },
+        },
+      },
+    } as typeof rootNode;
     const child = API.createElement({
       type: "mindmap-node",
       x: 350,
@@ -591,27 +557,19 @@ describe("computeTableUniformScale: mindmap subtrees", () => {
         routing: "orthogonal" as const,
       },
     });
-    const label = API.createElement({
-      type: "text",
-      x: 120,
-      y: 70,
-      width: 80,
-      height: 20,
-      fontSize: 20,
-      containerId: root.id,
-    });
-    return { table, root, child, edge, label };
+    return { table, root, child, edge };
   };
 
-  it("scales nodes, edges and bound text, freezing the layout on persist", () => {
-    const { table, root, child, edge, label } = makeMindmapSubtree();
-    const elements = [table, root, child, edge, label];
+  it("scales nodes and edges, scaling the body font and freezing the layout on persist", () => {
+    const { table, root, child, edge } = makeMindmapSubtree();
+    const elements = [table, root, child, edge];
 
     const preview = computeTableUniformScale(elements, table.id, 2)!;
-    expect(preview.updates.size).toBe(5);
+    expect(preview.updates.size).toBe(4);
     const previewRoot = updateOf(preview, root.id);
     expect(previewRoot.x).toBe(120);
     expect(previewRoot.width).toBe(320);
+    expect(previewRoot.texts?.body?.style.fontSize).toBe(40);
     // the freeze is a mode switch: previews never write it
     expect(previewRoot.layoutFrozen).toBeUndefined();
 
@@ -623,6 +581,9 @@ describe("computeTableUniformScale: mindmap subtrees", () => {
     expect(rootUpdate.x).toBe(120);
     expect(rootUpdate.width).toBe(320);
     expect(rootUpdate.height).toBe(112);
+    expect(rootUpdate.texts?.body?.style.fontSize).toBe(40);
+    // 节点正文随节点本身缩放，不会再产生独立的文字子元素更新
+    expect(rootUpdate.texts?.body?.text).toBe("脑图");
     expect(updateOf(commit, child.id).layoutFrozen).toBe(true);
 
     // the edge keeps the same factor on its absolute frame and local path
@@ -635,15 +596,27 @@ describe("computeTableUniformScale: mindmap subtrees", () => {
       [160, 40],
       [320, 40],
     ]);
-    expect(updateOf(commit, label.id).fontSize).toBe(40);
+  });
+
+  it("keeps the body font unchanged under a single-axis stretch", () => {
+    const { table, root, child, edge } = makeMindmapSubtree();
+
+    const result = computeTableAxisScale(
+      [table, root, child, edge],
+      table.id,
+      1.5,
+      1,
+    )!;
+    expect(updateOf(result, root.id).texts).toBeUndefined();
+    expect(updateOf(result, root.id).width).toBe(240);
   });
 
   it("does not re-write the freeze marker on already frozen nodes", () => {
-    const { table, root, child, edge, label } = makeMindmapSubtree();
+    const { table, root, child, edge } = makeMindmapSubtree();
     const frozenRoot = newElementWith(root, { layoutFrozen: true });
 
     const commit = computeTableUniformScale(
-      [table, frozenRoot, child, edge, label],
+      [table, frozenRoot, child, edge],
       table.id,
       2,
       { persistTextModes: true },
@@ -728,7 +701,9 @@ describe("computeTableUniformScale: minimum size clamp", () => {
       10,
     );
     // the text does not stop earlier than the table: same factor everywhere
-    expect(updateOf(result, text.id).fontSize).toBeCloseTo(2 * floor, 10);
+    expect(
+      updateOf(result, text.id).texts?.body?.style.fontSize,
+    ).toBeCloseTo(2 * floor, 10);
   });
 
   it("does not clamp an upscale above every floor", () => {
@@ -815,18 +790,10 @@ describe("computeTableUniformScale: inputs", () => {
       y: 20,
       containerRef: tableCellRef(child, cellIdAt(child, 0, 0), "content"),
     });
-    const boundText = API.createElement({
-      type: "text",
-      x: 25,
-      y: 25,
-      fontSize: 8,
-      containerId: grandchild.id,
-    });
     const elements = [
       withIndex(parent, "a0"),
       withIndex(child, "a1"),
       withIndex(grandchild, "a2"),
-      withIndex(boundText, "a3"),
     ];
 
     const scene = new Scene(elements as NonDeletedExcalidrawElement[]);
@@ -906,7 +873,7 @@ describe("computeTableAxisScale", () => {
 
     // a single-axis stretch keeps every font size
     const textUpdate = axisUpdateOf(result, text.id);
-    expect(textUpdate.fontSize).toBeUndefined();
+    expect(textUpdate.texts).toBeUndefined();
     expect(textUpdate.width).toBe(text.width * 2);
     expect(textUpdate.height).toBe(text.height);
 

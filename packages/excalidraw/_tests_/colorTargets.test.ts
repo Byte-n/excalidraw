@@ -28,13 +28,8 @@ const appState = (overrides: Partial<AppState> = {}): AppState =>
 
 describe("resolveColorTarget", () => {
   const note = API.createElement({ type: "stickynote", id: "note" });
-  const label = API.createElement({
-    type: "text",
-    id: "label",
-    containerId: "note",
-  });
   const rectangle = API.createElement({ type: "rectangle", id: "rectangle" });
-  const elements = [note, label, rectangle];
+  const elements = [note, rectangle];
 
   it("follows the active tool when nothing is targeted", () => {
     const regular = resolveColorTarget(appState(), elements, "strokeColor");
@@ -95,17 +90,6 @@ describe("resolveColorTarget", () => {
     expect(target.presetColors).toBe(DEFAULT_ELEMENT_STROKE_PRESETS);
     // mixed 走常规选择器（含透明，供普通元素使用）
     expect(target.excludedColors).toBeUndefined();
-  });
-
-  it("treats the sticky label being edited as a sticky target even with no selection", () => {
-    // `handleTextWysiwyg` deselects while editing; `changeProperty` still
-    // targets the edited text explicitly
-    const target = resolveColorTarget(
-      appState({ editingTextElement: label }),
-      elements,
-      "strokeColor",
-    );
-    expect(target.kind).toBe("sticky");
   });
 
   it("normalizes transparent for the sticky defaults only", () => {

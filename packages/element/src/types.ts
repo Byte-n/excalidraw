@@ -15,6 +15,8 @@ import type {
   ValueOf,
 } from "@excalidraw/common/utility-types";
 
+import type { TextBlock, TextBlockMap } from "./text/types";
+
 export type ChartType = "bar" | "line" | "radar";
 export type FillStyle = "hachure" | "cross-hatch" | "solid" | "zigzag";
 export type FontFamilyKeys = keyof typeof FONT_FAMILY;
@@ -32,14 +34,9 @@ type VerticalAlignKeys = keyof typeof VERTICAL_ALIGN;
 export type VerticalAlign = typeof VERTICAL_ALIGN[VerticalAlignKeys];
 export type FractionalIndex = string & { _brand: "franctionalIndex" };
 
-/** Secondary text container slot. Absent means the container's primary text. */
-export type TextContainerSlot = "title";
-
 export type BoundElement = Readonly<{
   id: string;
-  type: "arrow" | "text" | "activation";
-  /** Present on a text binding that occupies a secondary container slot. */
-  slot?: TextContainerSlot;
+  type: "arrow" | "activation";
 }>;
 
 type _ExcalidrawElementBase = Readonly<{
@@ -76,6 +73,8 @@ type _ExcalidrawElementBase = Readonly<{
       Ordered from deepest to shallowest. */
   groupIds: readonly GroupId[];
   containerRef?: DirectContainerRef;
+  /** 元素自己拥有的文本区域；只有区域注册表声明过的 key 才合法。 */
+  texts?: TextBlockMap;
   /** other elements that are bound to this element */
   boundElements: readonly BoundElement[] | null;
   /** epoch (ms) timestamp of last element update */
@@ -104,25 +103,8 @@ export type TableCellContainerRef = Readonly<{
   role: "content" | "backgroundText";
 }>;
 
-/**
- * A sequence fragment's row background text: the fragment is a
- * single-column table, so each body row owns at most one background text.
- * The header row (`rows[0]`, the operator tab) never carries one.
- */
-export type FragmentRowContainerRef = Readonly<{
-  kind: "fragmentRow";
-  /** Direct parent container element id (the fragment element). */
-  elementId: string;
-  /** Body row of the parent fragment the element belongs to. */
-  rowId: string;
-  role: "backgroundText";
-}>;
-
 /** Direct spatial parent. Later container kinds extend this discriminated union. */
-export type DirectContainerRef =
-  | FrameLikeContainerRef
-  | TableCellContainerRef
-  | FragmentRowContainerRef;
+export type DirectContainerRef = FrameLikeContainerRef | TableCellContainerRef;
 
 export type BackgroundTextStyle = Readonly<{
   fontFamily?: string;
@@ -370,7 +352,7 @@ export type SequenceFragmentRow = Readonly<{
 
 /** Persisted fragment structure (operator title + rows). */
 export type SequenceFragmentData = Readonly<{
-  /** Tab title (alt / opt / loop / par / …); tab text is bound text today. */
+  /** Tab title (alt / opt / loop / par / …); tab text lives in `texts.body`. */
   operator?: string;
   /**
    * Rendered width of the operator tab. The tab grows with its label before
@@ -693,27 +675,12 @@ export type NonDeleted<TElement extends ExcalidrawElement> = TElement & {
 
 export type NonDeletedExcalidrawElement = NonDeleted<ExcalidrawElement>;
 
-export type ExcalidrawTextElement = _ExcalidrawElementBase &
+export type ExcalidrawTextElement = Merge<
+  _ExcalidrawElementBase,
   Readonly<{
     type: "text";
-    fontSize: number;
-    fontFamily: FontFamilyValues;
-    /**
-     * The font size the user picked, from which the layout derives `fontSize`.
-     * Today only sticky note labels have one: the auto-fit shrinks below it
-     * and never above it (compare `baseHeight`, which the note grows above).
-     * `null` for every other text. Read it through `getBaseFontSize` —
-     * generic binding repair can detach a label without clearing this, so
-     * the container decides its meaning.
-     */
-    baseFontSize: number | null;
-    text: string;
-    textAlign: TextAlign;
-    verticalAlign: VerticalAlign;
-    containerId: ExcalidrawTextContainer["id"] | null;
-    /** Present when this text occupies a secondary container slot. */
-    containerSlot?: TextContainerSlot;
-    originalText: string;
+    /** 文本元素的内容与样式；`body.text` 是源文本。 */
+    texts: Readonly<{ body: TextBlock }>;
     /**
      * If `true` the width will fit the text. If `false`, the text will
      * wrap to fit the width.
@@ -721,24 +688,8 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
      * @default true
      */
     autoResize: boolean;
-    /**
-     * Unitless line height (aligned to W3C). To get line height in px, multiply
-     *  with font size (using `getLineHeightInPx` helper).
-     */
-    lineHeight: number & { _brand: "unitlessLineHeight" };
-    /**
-     * CSS font weight (e.g. 600). Absent means the family default (400).
-     * Mindmap root labels use it for the inverted-color headline style.
-     */
-    fontWeight?: number;
-    /**
-     * Position of text bound to a linear element (such as an arrow),
-     * expressed as a normalized arc-length parameter (0–1) along the
-     * container's whole path. Independent of how the path is segmented,
-     * so it survives midpoint insertion and other geometry changes.
-     * */
-    labelPosition?: number | null;
-  }>;
+  }>
+>;
 
 export type ExcalidrawBindableElement =
   | ExcalidrawMindmapNodeElement
@@ -756,10 +707,6 @@ export type ExcalidrawTextContainer =
   | ExcalidrawShapeElement
   | ExcalidrawStickyNoteElement
   | ExcalidrawLinearElement;
-
-export type ExcalidrawTextElementWithContainer = {
-  containerId: ExcalidrawTextContainer["id"];
-} & ExcalidrawTextElement;
 
 export type AttachPoint = [number, number];
 

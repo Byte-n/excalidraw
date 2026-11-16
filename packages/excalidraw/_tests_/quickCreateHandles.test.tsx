@@ -425,8 +425,8 @@ describe("quick create handles", () => {
       isMindmapNodeElement,
     )! as NonDeletedExcalidrawElement;
     act(() => {
-      // 退出根节点文字编辑，让判定只落在元素类型上
-      h.app.setState({ editingTextElement: null });
+      // 退出根节点正文编辑，让判定只落在元素类型上
+      h.app.setState({ editingTextElement: null, editingTextRegion: null });
     });
     API.setSelectedElements([node]);
     expect(getQuickCreateHandles(h.app)).toHaveLength(0);

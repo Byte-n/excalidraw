@@ -15,7 +15,6 @@ import {
   hasBackground,
   hasFrameBackground,
   hasStrokeColor,
-  isStickyNoteBoundText,
   isStickyNoteElement,
   isTextElement,
   normalizeStickyNoteBackgroundColor,
@@ -86,12 +85,8 @@ const DEFAULT_KEYS: Record<
 const STICKY_NOTE_EXCLUDED_COLORS: readonly string[] = [
   COLOR_PALETTE.transparent,
 ];
-const isStickyNoteColorTarget = (
-  element: ExcalidrawElement,
-  elementsMap: ElementsMap,
-) =>
-  isStickyNoteElement(element) ||
-  (isTextElement(element) && isStickyNoteBoundText(element, elementsMap));
+const isStickyNoteColorTarget = (element: ExcalidrawElement) =>
+  isStickyNoteElement(element);
 
 /**
  * Who a stroke/background pick targets. Resolve it from the state an action
@@ -138,7 +133,7 @@ export const resolveColorTarget = (
     kind = appState.activeTool.type === "stickynote" ? "sticky" : "regular";
   } else {
     const stickyCount = targets.filter((element) =>
-      isStickyNoteColorTarget(element, elementsMap),
+      isStickyNoteColorTarget(element),
     ).length;
     kind =
       stickyCount === 0

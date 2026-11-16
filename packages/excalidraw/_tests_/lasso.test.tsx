@@ -1973,56 +1973,6 @@ describe("Box selection mode (through the lasso tool)", () => {
     expect(selectedIds()).toEqual(["rect"]);
   });
 
-  it("does not select a container whose label alone is enclosed", () => {
-    act(() => {
-      h.elements = [
-        API.createElement({
-          type: "rectangle",
-          id: "container",
-          x: 100,
-          y: 100,
-          width: 200,
-          height: 100,
-          boundElements: [{ type: "text", id: "label" }],
-        }),
-        API.createElement({
-          type: "text",
-          id: "label",
-          x: 140,
-          y: 130,
-          width: 80,
-          height: 25,
-          containerId: "container",
-        }),
-      ];
-    });
-
-    // NOTE: the lasso wraps around the label only, staying well inside the
-    // container it is bound to
-    const LASSO: GlobalPoint[] = (
-      [
-        [130, 120],
-        [230, 120],
-        [230, 165],
-        [130, 165],
-        [130, 120],
-      ] as [number, number][]
-    ).map(([x, y]) => pointFrom<GlobalPoint>(x, y));
-
-    expect(h.state.boxSelectionMode).toBe("contain");
-
-    drawLasso(LASSO);
-
-    expect(selectedIds()).toEqual([]);
-
-    // NOTE: reaching the label is enough to select the container in "overlap"
-    act(() => h.app.setState({ boxSelectionMode: "overlap" }));
-
-    drawLasso(LASSO);
-
-    expect(selectedIds()).toEqual(["container"]);
-  });
-
   describe("lasso enclosing a single member of a group", () => {
     const LASSO: GlobalPoint[] = (
       [

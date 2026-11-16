@@ -983,49 +983,6 @@ describe("inner box-selection", () => {
     ).toEqual([innerRect1.id, innerRect2.id]);
   });
 
-  it("ignores grouped bound text when checking box-selection containment", async () => {
-    const container = API.createElement({
-      type: "rectangle",
-      id: "container",
-      x: 50,
-      y: 50,
-      width: 50,
-      height: 50,
-      groupIds: ["A"],
-      boundElements: [{ type: "text", id: "bound-text" }],
-    });
-    const boundText = API.createElement({
-      type: "text",
-      id: "bound-text",
-      x: 50,
-      y: 50,
-      width: 50,
-      height: 20,
-      containerId: container.id,
-      groupIds: ["A"],
-    });
-    const rect = API.createElement({
-      type: "rectangle",
-      x: 150,
-      y: 150,
-      width: 50,
-      height: 50,
-      groupIds: ["A"],
-    });
-    API.setElements([container, boundText, rect]);
-
-    Keyboard.withModifierKeys({ ctrl: true }, () => {
-      mouse.downAt(40, 40);
-      mouse.move(-1000, -1000);
-      mouse.moveTo(rect.x + rect.width + 10, rect.y + rect.height + 10);
-      mouse.up();
-
-      expect(h.state.selectedElementIds[container.id]).toBe(true);
-      expect(h.state.selectedElementIds[rect.id]).toBe(true);
-      expect(h.state.selectedGroupIds).toEqual({ A: true });
-    });
-  });
-
   it("selecting & deselecting grouped elements visually nested inside another", async () => {
     const rect1 = API.createElement({
       type: "rectangle",

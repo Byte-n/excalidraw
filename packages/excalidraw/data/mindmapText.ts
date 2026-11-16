@@ -1,6 +1,5 @@
 import {
   buildMindmapGraphIndex,
-  getBoundTextElement,
   getMindmapSubtreeIds,
 } from "@excalidraw/element";
 
@@ -318,10 +317,8 @@ export const getMindmapTextTree = (
   if (!index.nodes.has(rootId)) {
     throw new MindmapTextError("Selected mindmap is no longer available");
   }
-  const elementMap = new Map(elements.map((element) => [element.id, element]));
   const visit = (id: string): MindmapTextNode => ({
-    text:
-      getBoundTextElement(index.nodes.get(id)!, elementMap)?.originalText ?? "",
+    text: index.nodes.get(id)!.texts?.body?.text ?? "",
     children: (index.childrenById.get(id) ?? []).map(visit),
   });
   const tree = visit(rootId);

@@ -55,7 +55,6 @@ import {
   pointInsideBounds,
 } from "./bounds";
 import {
-  hasBoundTextElement,
   isBindableElement,
   isFrameLikeElement,
   isFreeDrawElement,
@@ -69,8 +68,6 @@ import {
   deconstructLinearOrFreeDrawElement,
   deconstructRectanguloidElement,
 } from "./utils";
-
-import { getBoundTextElement } from "./textElement";
 
 import { LinearElementEditor } from "./linearElementEditor";
 
@@ -104,9 +101,8 @@ export const shouldTestInside = (element: ExcalidrawElement) => {
     return false;
   }
 
-  // Composite shapes are selectable from their full range regardless of
-  // background or bound text. Open shapes use their rectangular text area;
-  // closed shapes are further constrained by their actual outline below.
+  // 组合形状按其完整范围可选，不受背景填充左右；开放形状用矩形文本区，
+  // 闭合形状还会被下面的真实轮廓进一步约束。
   if (
     element.type === "composite" ||
     element.type === "flow" ||
@@ -122,7 +118,6 @@ export const shouldTestInside = (element: ExcalidrawElement) => {
     // low-contrast border) selects and moves the table, mirroring filled
     // shapes. Children hit-tested above the table keep their priority.
     isTableElement(element) ||
-    hasBoundTextElement(element) ||
     isIframeLikeElement(element) ||
     isTextElement(element);
 
@@ -292,34 +287,33 @@ export const hitElementBoundingBoxOnly = (
   elementsMap: ElementsMap,
 ) =>
   !hitElementItself(hitArgs) &&
-  // bound text is considered part of the element (even if it's outside the bounding box)
-  !hitElementBoundText(hitArgs.point, hitArgs.element, elementsMap) &&
+  // 线性元素的标签属于元素本身（即使落在包围盒外）
+  !hitElementLabel(hitArgs.point, hitArgs.element, elementsMap) &&
   hitElementBoundingBox(hitArgs.point, hitArgs.element, elementsMap);
 
-export const hitElementBoundText = (
+export const hitElementLabel = (
   point: GlobalPoint,
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
 ): boolean => {
-  const boundTextElementCandidate = getBoundTextElement(element, elementsMap);
-
-  if (!boundTextElementCandidate) {
-    return false;
+  // 线性元素的标签没有独立文字元素，直接命中区域布局
+  if (isLinearElement(element)) {
+    if (!element.texts?.label?.text) {
+      return false;
+    }
+    const layout = LinearElementEditor.getLabelSceneLayout(
+      element,
+      elementsMap,
+    );
+    return (
+      point[0] >= layout.x &&
+      point[0] <= layout.x + layout.width &&
+      point[1] >= layout.y &&
+      point[1] <= layout.y + layout.height
+    );
   }
-  const boundTextElement = isLinearElement(element)
-    ? {
-        ...boundTextElementCandidate,
-        // arrow's bound text accurate position is not stored in the element's property
-        // but rather calculated and returned from the following static method
-        ...LinearElementEditor.getBoundTextElementPosition(
-          element,
-          boundTextElementCandidate,
-          elementsMap,
-        ),
-      }
-    : boundTextElementCandidate;
 
-  return isPointInElement(point, boundTextElement, elementsMap);
+  return false;
 };
 
 const bindingBorderTest = (

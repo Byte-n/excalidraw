@@ -31,12 +31,10 @@ import {
   normalizeStickyNoteStrokeColor,
 } from "./stickyNote";
 import {
-  getBoundTextMaxHeight,
-  getBoundTextMaxWidth,
-  getDataflowProcessTitleLayout,
-  isDataflowTitleText,
-  truncateTextToBounds,
-} from "./textElement";
+  getTextElementFont,
+  getTextElementStyle,
+  getTextElementText,
+} from "./text/elementText";
 import { normalizeText, measureText } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
 
@@ -44,12 +42,10 @@ import { isLineElement } from "./typeChecks";
 import {
   assertShapeElementType,
   buildShapeData,
-  getCompositeShapeTextFitMode,
   isBasicShapeId,
   isCompositeShapeOpen,
   isDataflowShapeId,
   isFlowchartShapeId,
-  isShapeElement,
 } from "./compositeShape";
 import { DEFAULT_MINDMAP_EDGE_ROUTING, mindmapShapeData } from "./mindmap";
 import {
@@ -60,6 +56,8 @@ import {
 } from "./tableStruct";
 
 import type { TablePresetId } from "./tableStruct";
+
+import type { TextBlockStyle, UnitlessLineHeight } from "./text/types";
 
 import type {
   ExcalidrawElement,
@@ -73,7 +71,6 @@ import type {
   Arrowhead,
   ExcalidrawFreeDrawElement,
   FontFamilyValues,
-  ExcalidrawTextContainer,
   ExcalidrawFrameElement,
   ExcalidrawEmbeddableElement,
   ExcalidrawMagicFrameElement,
@@ -101,7 +98,6 @@ import type {
   ExcalidrawFlowElement,
   ExcalidrawSequenceElement,
   ExcalidrawDataflowElement,
-  TextContainerSlot,
   ExcalidrawSelectionElement,
   ExcalidrawTableElement,
 } from "./types";
@@ -550,8 +546,8 @@ export const newTableElement = (
  * `adjustXYWithRotation` in `getAdjustedDimensions`.
  */
 export const getTextAnchorRatios = (opts: {
-  textAlign: ExcalidrawTextElement["textAlign"];
-  verticalAlign: ExcalidrawTextElement["verticalAlign"];
+  textAlign: TextAlign;
+  verticalAlign: VerticalAlign;
 }) => ({
   x: opts.textAlign === "center" ? 0.5 : opts.textAlign === "right" ? 1 : 0,
   y:
@@ -565,8 +561,8 @@ export const getTextAnchorRatios = (opts: {
 /** computes element x/y offset based on textAlign/verticalAlign */
 const getTextElementPositionOffsets = (
   opts: {
-    textAlign: ExcalidrawTextElement["textAlign"];
-    verticalAlign: ExcalidrawTextElement["verticalAlign"];
+    textAlign: TextAlign;
+    verticalAlign: VerticalAlign;
   },
   metrics: {
     width: number;
@@ -584,30 +580,31 @@ const getTextElementPositionOffsets = (
 export const newTextElement = (
   opts: {
     text: string;
-    originalText?: string;
     fontSize?: number;
     fontFamily?: FontFamilyValues;
+    fontWeight?: number;
     textAlign?: TextAlign;
     verticalAlign?: VerticalAlign;
-    containerId?: ExcalidrawTextContainer["id"] | null;
-    containerSlot?: TextContainerSlot;
-    lineHeight?: ExcalidrawTextElement["lineHeight"];
+    lineHeight?: UnitlessLineHeight;
     autoResize?: ExcalidrawTextElement["autoResize"];
-    labelPosition?: ExcalidrawTextElement["labelPosition"];
-    baseFontSize?: ExcalidrawTextElement["baseFontSize"];
+    baseFontSize?: number;
   } & ElementConstructorOpts,
 ): NonDeleted<ExcalidrawTextElement> => {
   const fontFamily = opts.fontFamily || DEFAULT_FONT_FAMILY;
   const fontSize = opts.fontSize || DEFAULT_FONT_SIZE;
   const lineHeight = opts.lineHeight || getLineHeight(fontFamily);
   const text = normalizeText(opts.text);
-  const metrics = measureText(
-    text,
-    getFontString({ fontFamily, fontSize }),
-    lineHeight,
-  );
   const textAlign = opts.textAlign || DEFAULT_TEXT_ALIGN;
   const verticalAlign = opts.verticalAlign || DEFAULT_VERTICAL_ALIGN;
+  const style: TextBlockStyle = {
+    fontFamily,
+    fontSize,
+    lineHeight,
+    textAlign,
+    verticalAlign,
+    ...(opts.fontWeight !== undefined ? { fontWeight: opts.fontWeight } : {}),
+  };
+  const metrics = measureText(text, getFontString(style), lineHeight);
   const offsets = getTextElementPositionOffsets(
     { textAlign, verticalAlign },
     metrics,
@@ -615,22 +612,20 @@ export const newTextElement = (
 
   const textElementProps: NonDeleted<ExcalidrawTextElement> = {
     ..._newElementBase<ExcalidrawTextElement>("text", opts),
-    text,
-    fontSize,
-    baseFontSize: opts.baseFontSize ?? null,
-    fontFamily,
-    textAlign,
-    verticalAlign,
+    texts: {
+      body: {
+        text,
+        style,
+        ...(opts.baseFontSize !== undefined
+          ? { placement: { baseFontSize: opts.baseFontSize } }
+          : {}),
+      },
+    },
     x: opts.x - offsets.x,
     y: opts.y - offsets.y,
     width: metrics.width,
     height: metrics.height,
-    containerId: opts.containerId || null,
-    ...(opts.containerSlot ? { containerSlot: opts.containerSlot } : {}),
-    originalText: opts.originalText ?? text,
     autoResize: opts.autoResize ?? true,
-    lineHeight,
-    labelPosition: opts.labelPosition ?? null,
   };
 
   const textElement: NonDeleted<ExcalidrawTextElement> = newElementWith(
@@ -651,10 +646,11 @@ const getAdjustedDimensions = (
   width: number;
   height: number;
 } => {
+  const style = getTextElementStyle(element);
   let { width: nextWidth, height: nextHeight } = measureText(
     nextText,
-    getFontString(element),
-    element.lineHeight,
+    getTextElementFont(element),
+    style.lineHeight,
   );
 
   // wrapped text
@@ -662,21 +658,20 @@ const getAdjustedDimensions = (
     nextWidth = element.width;
   }
 
-  const { textAlign, verticalAlign } = element;
+  const { textAlign, verticalAlign } = style;
   let x: number;
   let y: number;
   if (
     textAlign === "center" &&
     verticalAlign === VERTICAL_ALIGN.MIDDLE &&
-    !element.containerId &&
     element.autoResize
   ) {
     const prevMetrics = measureText(
-      element.text,
-      getFontString(element),
-      element.lineHeight,
+      getTextElementText(element),
+      getTextElementFont(element),
+      style.lineHeight,
     );
-    const offsets = getTextElementPositionOffsets(element, {
+    const offsets = getTextElementPositionOffsets(style, {
       width: nextWidth - prevMetrics.width,
       height: nextHeight - prevMetrics.height,
     });
@@ -699,7 +694,7 @@ const getAdjustedDimensions = (
 
     // grow away from the edge(s) the alignment anchors the text to, so that
     // the anchor stays put as the text is edited. `verticalAlign` has no
-    // visual effect on unbound text, but standalone text bound to an arrow
+    // visual effect on plain text, but standalone text attached to an arrow
     // endpoint uses it to pin the side the arrow attaches to.
     [x, y] = adjustXYWithRotation(
       {
@@ -779,48 +774,14 @@ const adjustXYWithRotation = (
 
 export const refreshTextDimensions = (
   textElement: ExcalidrawTextElement,
-  container: ExcalidrawTextContainer | null,
   elementsMap: ElementsMap,
-  text = textElement.text,
+  text = getTextElementText(textElement),
 ) => {
   if (textElement.isDeleted) {
     return;
   }
-  if (container && isDataflowTitleText(container, textElement)) {
-    const layout = getDataflowProcessTitleLayout(container, textElement);
-    const dimensions = getAdjustedDimensions(
-      textElement,
-      elementsMap,
-      layout.text,
-    );
-    return {
-      text: layout.text,
-      ...dimensions,
-      width: layout.width,
-      height: layout.height,
-    };
-  }
-  if (container || !textElement.autoResize) {
-    const font = getFontString(textElement);
-    const maxWidth = container
-      ? getBoundTextMaxWidth(container, textElement)
-      : textElement.width;
-    text = wrapText(text, font, maxWidth);
-    if (
-      isShapeElement(container) &&
-      getCompositeShapeTextFitMode(container) === "fixed"
-    ) {
-      text = truncateTextToBounds(
-        text,
-        font,
-        textElement.lineHeight,
-        maxWidth,
-        getBoundTextMaxHeight(
-          container,
-          textElement as ExcalidrawTextElement & { containerId: string },
-        ),
-      );
-    }
+  if (!textElement.autoResize) {
+    text = wrapText(text, getTextElementFont(textElement), textElement.width);
   }
   const dimensions = getAdjustedDimensions(textElement, elementsMap, text);
   return { text, ...dimensions };

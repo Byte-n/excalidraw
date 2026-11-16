@@ -45,7 +45,7 @@ export const actionSelectAllElementsInFrame = register({
       const elementsInFrame = getFrameChildren(
         getNonDeletedElements(elements),
         selectedElement.id,
-      ).filter((element) => !(element.type === "text" && element.containerId));
+      );
 
       return {
         elements,

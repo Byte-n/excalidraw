@@ -7,11 +7,9 @@ import {
 } from "@excalidraw/common";
 import { isElementLink } from "@excalidraw/element";
 import { createPlaceholderEmbeddableLabel } from "@excalidraw/element";
-import { getBoundTextElements } from "@excalidraw/element";
 import {
   isEmbeddableElement,
   isIframeLikeElement,
-  isTextElement,
 } from "@excalidraw/element";
 import {
   elementOverlapsWithFrame,
@@ -413,17 +411,7 @@ const _renderStaticScene = ({
     .filter((el) => !isIframeLikeElement(el))
     .forEach((element) => {
       try {
-        if (
-          isTextElement(element) &&
-          element.containerId &&
-          elementsMap.has(element.containerId)
-        ) {
-          // will be rendered with the container
-          return;
-        }
-
         context.save();
-        const boundTextElements = getBoundTextElements(element, elementsMap);
 
         const renderState = getRenderState(element);
         clipElementToFrame(element, renderState);
@@ -437,18 +425,6 @@ const _renderStaticScene = ({
           appState,
           renderState,
         );
-
-        for (const boundTextElement of boundTextElements) {
-          renderElement(
-            boundTextElement,
-            elementsMap,
-            allElementsMap,
-            rc,
-            context,
-            renderConfig,
-            appState,
-          );
-        }
 
         context.restore();
 

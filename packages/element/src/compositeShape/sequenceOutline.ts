@@ -9,6 +9,7 @@ import { pointFrom, pointRotateRads } from "@excalidraw/math";
 
 import type { GlobalPoint, Radians } from "@excalidraw/math";
 
+import { parseTextRegionKey } from "../text/keys";
 import { getLineHeightInPx, measureText } from "../textMeasurements";
 import { wrapText } from "../textWrapping";
 
@@ -39,6 +40,7 @@ import type {
   SequenceFragmentRow,
   SequenceShapeData,
 } from "../types";
+import type { TextBlock, TextRegionKey } from "../text/types";
 import type { ShapeDraw } from "./registry";
 import type { TransformHandleDirection } from "../transformHandles";
 
@@ -458,6 +460,26 @@ export const getActivationAnchorAtSceneY = (
 };
 
 /**
+ * 归一化生命线的文本区域：只保留非空 `body`，其它 key 与空文本一并丢弃。
+ */
+export const normalizeSequenceLifelineTexts = <T extends ExcalidrawElement>(
+  element: T,
+): T => {
+  if (!isSequenceLifelineElement(element) || !element.texts) {
+    return element;
+  }
+  const body = element.texts.body;
+  if (!body?.text) {
+    const { texts: _texts, ...rest } = element;
+    return rest as T;
+  }
+  if (Object.keys(element.texts).length === 1) {
+    return element;
+  }
+  return { ...element, texts: { body } } as T;
+};
+
+/**
  * Enforces the lifeline invariants: `headHeight > 0` (validated at the
  * persistence boundary) and `height >= headHeight + SEQUENCE_MIN_POLE_LENGTH`.
  * Only `height` is touched; x/y/width/angle are preserved.
@@ -465,15 +487,16 @@ export const getActivationAnchorAtSceneY = (
 export const normalizeSequenceLifelineGeometry = <T extends ExcalidrawElement>(
   element: T,
 ): T => {
-  if (!isSequenceLifelineElement(element)) {
-    return element;
+  const normalized = normalizeSequenceLifelineTexts(element);
+  if (!isSequenceLifelineElement(normalized)) {
+    return normalized;
   }
   const minHeight =
-    element.shape.lifeline.headHeight + SEQUENCE_MIN_POLE_LENGTH;
-  if (element.height >= minHeight) {
-    return element;
+    normalized.shape.lifeline.headHeight + SEQUENCE_MIN_POLE_LENGTH;
+  if (normalized.height >= minHeight) {
+    return normalized;
   }
-  return { ...element, height: minHeight } as T;
+  return { ...normalized, height: minHeight } as T;
 };
 
 /** Default element size for a lifeline: head height plus the default pole. */
@@ -520,7 +543,7 @@ export const isPointInSequenceLifelineHead = (
 };
 
 /**
- * Bound text is vertically centered inside the shape's text bounds. For a
+ * Text is vertically centered inside the shape's text bounds. For a
  * single centered line at the sample label size (14px, default font) the
  * alphabetic baseline lands this far below the bounds' vertical center.
  * Derived from the shared text-layout helpers (`getLineHeightInPx`,
@@ -650,6 +673,27 @@ export const getSequenceLifelineTextFitHeight = (
     }
   }
   return high;
+};
+
+/**
+ * 生命线正文块按头部文本区宽度换行后的高度。宽度与头部当前高度无关，
+ * 因此可以反过来求头部应有的高度。
+ */
+export const getSequenceLifelineTextBlockHeight = (
+  element: SequenceLifelineElement,
+  block: Pick<TextBlock, "text" | "style">,
+): number => {
+  if (!block.text) {
+    return 0;
+  }
+  const bounds = getSequenceLifelineTextBounds(
+    element.shape.id,
+    element.width,
+    SEQUENCE_LIFELINE_HEAD_HEIGHTS[element.shape.id],
+  );
+  const font = getFontString(block.style);
+  const wrapped = wrapText(block.text, font, Math.max(bounds.width, 1));
+  return measureText(wrapped, font, block.style.lineHeight).height;
 };
 
 export type SequenceLifelineTextFit = {
@@ -1344,14 +1388,12 @@ const sequenceFragmentRowsUpdate = (
  *
  * The result also resizes the element by the header delta, because
  * `sum(rows.height) === element.height`. Callers apply it to the fragment and
- * then re-run the bound text layout (`redrawTextBoundingBox`).
+ * then re-run the fragment's text layout
+ * (`fitSequenceFragmentOperatorFromTexts`).
  */
 export const fitSequenceFragmentOperator = (
   element: ExcalidrawElement,
-  text: Pick<
-    ExcalidrawTextElement,
-    "originalText" | "fontSize" | "fontFamily" | "lineHeight" | "fontWeight"
-  >,
+  text: Pick<TextBlock, "text" | "style">,
 ): SequenceFragmentRowsUpdate | null => {
   const current = getSequenceFragmentRowsForEdit(element);
   if (!current?.rows.length) {
@@ -1361,14 +1403,14 @@ export const fitSequenceFragmentOperator = (
     SEQUENCE_FRAGMENT_TAB_WIDTH,
     element.width - SEQUENCE_FRAGMENT_TAB_MAX_RIGHT_INSET,
   );
-  const font = getFontString({
-    fontSize: text.fontSize,
-    fontFamily: text.fontFamily,
-    fontWeight: text.fontWeight,
-  });
+  const font = getFontString(text.style);
   // Hard line breaks are normalized to spaces: wrapping is automatic.
-  const singleLine = text.originalText.replace(/\s*[\r\n]+\s*/g, " ");
-  const naturalWidth = measureText(singleLine, font, text.lineHeight).width;
+  const singleLine = text.text.replace(/\s*[\r\n]+\s*/g, " ");
+  const naturalWidth = measureText(
+    singleLine,
+    font,
+    text.style.lineHeight,
+  ).width;
   const tabWidth = Math.min(
     maxTabWidth,
     Math.max(
@@ -1387,7 +1429,7 @@ export const fitSequenceFragmentOperator = (
   const textHeight = measureText(
     wrapText(singleLine, font, textWidth),
     font,
-    text.lineHeight,
+    text.style.lineHeight,
   ).height;
   const tabHeight = Math.max(
     SEQUENCE_FRAGMENT_TAB_HEIGHT,
@@ -1580,6 +1622,50 @@ const resolveSequenceFragmentRows = (
 };
 
 /**
+ * 归一化 fragment 的文本区域：只保留 `body`（operator 页签）与仍存在的正文行
+ * 的 `row:<rowId>`，表头行、未知行、空文本一并丢弃。
+ */
+export const normalizeSequenceFragmentTexts = <T extends ExcalidrawElement>(
+  element: T,
+): T => {
+  if (!isSequenceFragmentElement(element) || !element.texts) {
+    return element;
+  }
+  const rows = element.shape.fragment?.rows ?? [];
+  const headerId = rows[0]?.id;
+  const next: Partial<Record<TextRegionKey, TextBlock>> = {};
+  let changed = false;
+  for (const key of Object.keys(element.texts) as TextRegionKey[]) {
+    const block = element.texts[key];
+    const parsed = parseTextRegionKey(key);
+    if (!block || !block.text) {
+      changed = true;
+      continue;
+    }
+    if (parsed?.kind === "body") {
+      next.body = block;
+      continue;
+    }
+    if (
+      parsed?.kind === "row" &&
+      parsed.rowId !== headerId &&
+      rows.some((row) => row.id === parsed.rowId)
+    ) {
+      next[key] = block;
+      continue;
+    }
+    changed = true;
+  }
+  if (!changed) {
+    return element;
+  }
+  return {
+    ...element,
+    texts: Object.keys(next).length ? next : undefined,
+  } as T;
+};
+
+/**
  * Enforces the fragment invariants:
  * - rows exist (a fragment starts with a header row plus one body row);
  * - `sum(rows.height) === element.height`;
@@ -1590,35 +1676,36 @@ const resolveSequenceFragmentRows = (
 export const normalizeSequenceFragmentGeometry = <T extends ExcalidrawElement>(
   element: T,
 ): T => {
-  if (!isSequenceFragmentElement(element) || !(element.height > 0)) {
-    return element;
+  const normalized = normalizeSequenceFragmentTexts(element);
+  if (!isSequenceFragmentElement(normalized) || !(normalized.height > 0)) {
+    return normalized;
   }
-  const fragment = element.shape.fragment;
+  const fragment = normalized.shape.fragment;
   const baseRows = fragment?.rows?.length
     ? fragment.rows
-    : createSequenceFragmentInitialRows(element.height);
+    : createSequenceFragmentInitialRows(normalized.height);
   if (!baseRows.length) {
-    return element;
+    return normalized;
   }
-  const rows = resolveSequenceFragmentRows(baseRows, element.height);
+  const rows = resolveSequenceFragmentRows(baseRows, normalized.height);
   const previousRows = fragment?.rows ?? [];
-  const textFitMode = element.textFitMode ?? "fixed";
+  const textFitMode = normalized.textFitMode ?? "fixed";
   const unchanged =
     previousRows.length === rows.length &&
-    element.textFitMode === textFitMode &&
+    normalized.textFitMode === textFitMode &&
     rows.every(
       (row, index) =>
         row.id === previousRows[index].id &&
         Math.abs(row.height - previousRows[index].height) < 1e-6,
     );
   if (unchanged) {
-    return element;
+    return normalized;
   }
   return {
-    ...element,
+    ...normalized,
     textFitMode,
     shape: {
-      ...element.shape,
+      ...normalized.shape,
       fragment: { ...(fragment ?? {}), rows },
     },
   } as T;

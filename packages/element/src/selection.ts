@@ -12,7 +12,6 @@ import { elementsOverlappingBBox, getElementAbsoluteCoords } from "./bounds";
 import { isElementInViewport } from "./sizeHelpers";
 import { getMindmapHiddenElementIds } from "./mindmap";
 import {
-  isBoundToContainer,
   isContainerBackgroundText,
   isFrameLikeElement,
   isLinearElement,
@@ -20,7 +19,6 @@ import {
   isTextElement,
 } from "./typeChecks";
 import { getContainerSubtreeElements } from "./tableContainer";
-import { getBoundTextElement } from "./textElement";
 
 import { LinearElementEditor } from "./linearElementEditor";
 import { selectGroupsForSelectedElements } from "./groups";
@@ -38,7 +36,6 @@ import type {
 
 const shouldIgnoreElementFromSelection = (element: ExcalidrawElement) =>
   element.locked ||
-  isBoundToContainer(element) ||
   // a cell's background text is lowest-layer chrome: box selection must not
   // pick it up, or it would block marquee selections across the table
   // (phase-1.md:141) — it is reached through its cell's editor instead
@@ -177,7 +174,6 @@ export const getSelectedElements = (
   elements: ElementsMapOrArray,
   appState: Pick<InteractiveCanvasAppState, "selectedElementIds">,
   opts?: {
-    includeBoundTextElement?: boolean;
     includeElementsInFrames?: boolean;
   },
 ) => {
@@ -194,16 +190,6 @@ export const getSelectedElements = (
           "[NONDELETED][INVARIANT] getSelectedElements skipping deleted selected element which should not be in the selection",
         );
       }
-      continue;
-    }
-    if (
-      opts?.includeBoundTextElement &&
-      isBoundToContainer(element) &&
-      isNonDeletedElement(element) &&
-      appState.selectedElementIds[element?.containerId]
-    ) {
-      selectedElements.push(element as NonDeletedExcalidrawElement);
-      addedElements.add(element.id);
       continue;
     }
   }
@@ -224,16 +210,6 @@ export const getSelectedElements = (
         ).forEach((child) => {
           if (!child.isDeleted && !addedElements.has(child.id)) {
             addedElements.add(child.id);
-          }
-          if (opts.includeBoundTextElement) {
-            const boundText = getBoundTextElement(child, elementsMap);
-            if (
-              boundText &&
-              !boundText.isDeleted &&
-              !addedElements.has(boundText.id)
-            ) {
-              addedElements.add(boundText.id);
-            }
           }
         });
       }
@@ -262,9 +238,7 @@ export const getTargetElements = (
     // whatever shape is currently recognized instead of the tool defaults
     appState.newElement && appState.activeTool.type !== "autoshape"
     ? [appState.newElement]
-    : getSelectedElements(elements, appState, {
-        includeBoundTextElement: true,
-      });
+    : getSelectedElements(elements, appState);
 
 /**
  * returns prevState's selectedElementids if no change from previous, so as to
@@ -314,9 +288,7 @@ export const getSelectionStateForElements = (
         selectedElementIds: excludeElementsInFramesFromSelection(
           targetElements,
         ).reduce((acc: Record<ExcalidrawElement["id"], true>, element) => {
-          if (!isBoundToContainer(element)) {
-            acc[element.id] = true;
-          }
+          acc[element.id] = true;
           return acc;
         }, {}),
       },

@@ -1,7 +1,8 @@
-import { getFontString } from "@excalidraw/common";
-
 import {
   getTextAnchorRatios,
+  getTextElementFont,
+  getTextElementStyle,
+  getTextElementText,
   isExcalidrawElement,
   isNonDeletedElement,
   isSequenceFragmentElement,
@@ -31,17 +32,7 @@ export const actionTextAutoResize = register({
       return false;
     }
     const selected = selectedElements[0];
-    const container =
-      isTextElement(selected) && selected.containerId
-        ? elements.find((element) => element.id === selected.containerId)
-        : null;
-    return (
-      isTextElement(selected) &&
-      !selected.autoResize &&
-      // the fragment operator label is container-bound; its width belongs to
-      // the tab and the text mode must not switch
-      !isSequenceFragmentElement(container)
-    );
+    return isTextElement(selected) && !selected.autoResize;
   },
   perform: (elements, appState, targetElement, app) => {
     const selectedElements = getSelectedElements(elements, appState);
@@ -59,16 +50,17 @@ export const actionTextAutoResize = register({
       return false;
     }
 
+    const style = getTextElementStyle(target);
     const metrics = measureText(
-      target.originalText,
-      getFontString(target),
-      target.lineHeight,
+      getTextElementText(target),
+      getTextElementFont(target),
+      style.lineHeight,
     );
 
     // unwrapping resizes the box, so keep the point the text's alignment pins
     // — otherwise a right-aligned or centred text slides sideways, and one
     // bound to an arrow endpoint drags the arrow with it
-    const anchor = getTextAnchorRatios(target);
+    const anchor = getTextAnchorRatios(style);
 
     const resized = newElementWith(target, {
       autoResize: true,
@@ -76,7 +68,6 @@ export const actionTextAutoResize = register({
       height: metrics.height,
       x: target.x + (target.width - metrics.width) * anchor.x,
       y: target.y + (target.height - metrics.height) * anchor.y,
-      text: target.originalText,
     });
 
     // the anchor only pins one point of the box, so any other arrow bound to

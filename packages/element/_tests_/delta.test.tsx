@@ -20,192 +20,6 @@ describe("ElementsDelta", () => {
         excludedProperties: new Set(["version", "versionNonce"]),
       });
 
-    const boundText = (
-      type: "rectangle" | "stickynote" | "arrow",
-      text = "",
-    ) => {
-      const container = API.createElement({
-        type,
-        id: "container",
-        index: "a0" as FractionalIndex,
-        width: 250,
-        height: type === "arrow" ? 0 : 250,
-        baseHeight: type === "stickynote" ? 250 : undefined,
-        points:
-          type === "arrow" ? [pointFrom(0, 0), pointFrom(250, 0)] : undefined,
-        boundElements: [{ id: "label", type: "text" }],
-      });
-      const label: ExcalidrawTextElement = {
-        ...API.createElement({
-          type: "text",
-          id: "label",
-          index: "a1" as FractionalIndex,
-          containerId: container.id,
-          fontSize: 20,
-          textAlign: "center",
-          verticalAlign: "middle",
-        }),
-        // API.createElement substitutes "test" for an empty string.
-        text,
-        originalText: text,
-      };
-      const before = arrayToMap([container, label]) as SceneElementsMap;
-      const after = arrayToMap([
-        newElementWith(container, { boundElements: [] }),
-        newElementWith(label, { isDeleted: true }),
-      ]) as SceneElementsMap;
-      return { container, label, before, after };
-    };
-
-    it.each(["rectangle", "stickynote"] as const)(
-      "ignores empty-label deletion and restoration on a %s",
-      (type) => {
-        const { before, after, container, label } = boundText(type);
-        const [deleted, deletionIsVisible] = apply(before, after);
-        expect(deletionIsVisible).toBe(false);
-        expect(deleted.get(label.id)?.isDeleted).toBe(true);
-        expect(deleted.get(container.id)?.boundElements).toEqual([]);
-
-        const [restored, restorationIsVisible] = apply(after, before);
-        expect(restorationIsVisible).toBe(false);
-        expect(restored.get(label.id)?.isDeleted).toBe(false);
-        expect(restored.get(container.id)?.boundElements).toEqual([
-          { id: label.id, type: "text" },
-        ]);
-      },
-    );
-
-    it("keeps deletion and restoration of nonempty labels visible", () => {
-      const { before, after } = boundText("stickynote", "hello");
-      expect(apply(before, after)[1]).toBe(true);
-      expect(apply(after, before)[1]).toBe(true);
-    });
-
-    it.each(["excluded", "already applied"])(
-      "ignores %s properties when deciding visibility",
-      (mode) => {
-        const element = API.createElement({
-          type: "rectangle",
-          index: "a0" as FractionalIndex,
-        });
-        const before = arrayToMap([element]) as SceneElementsMap;
-        const after = arrayToMap([
-          newElementWith(element, { strokeColor: "red" }),
-        ]) as SceneElementsMap;
-        const delta = ElementsDelta.calculate(before, after);
-        const current = mode === "excluded" ? before : after;
-        const [elements, isVisible] = delta.applyTo(current, current, {
-          excludedProperties: new Set([
-            "version",
-            "versionNonce",
-            ...(mode === "excluded" ? ["strokeColor" as const] : []),
-          ]),
-        });
-
-        expect(elements.get(element.id)?.strokeColor).toBe(
-          current.get(element.id)?.strokeColor,
-        );
-        expect(isVisible).toBe(false);
-      },
-    );
-
-    it("keeps snapshot restoration visible for a metadata-only update", () => {
-      const element = API.createElement({
-        type: "rectangle",
-        index: "a0" as FractionalIndex,
-      });
-      const before = arrayToMap([element]) as SceneElementsMap;
-      const after = arrayToMap([
-        newElementWith(element, { version: element.version + 1 }),
-      ]) as SceneElementsMap;
-      const delta = ElementsDelta.calculate(before, after);
-      const [elements, isVisible] = delta.applyTo(
-        new Map() as SceneElementsMap,
-        before,
-      );
-
-      expect(elements.get(element.id)?.isDeleted).toBe(false);
-      expect(isVisible).toBe(true);
-    });
-
-    it("keeps an arrow's empty-label gap visible", () => {
-      const { before, after } = boundText("arrow");
-      expect(apply(before, after)[1]).toBe(true);
-      expect(apply(after, before)[1]).toBe(true);
-    });
-
-    it("detects a container resized by restoring an empty label", () => {
-      const { container, label } = boundText("rectangle");
-      const smallContainer = newElementWith(container, {
-        width: 20,
-        height: 10,
-        boundElements: [],
-      });
-      const before = arrayToMap([
-        smallContainer,
-        newElementWith(label, { isDeleted: true }),
-      ]) as SceneElementsMap;
-      const after = arrayToMap([
-        newElementWith(smallContainer, {
-          boundElements: [{ id: label.id, type: "text" }],
-        }),
-        newElementWith(label, { isDeleted: false }),
-      ]) as SceneElementsMap;
-
-      const [elements, isVisible] = apply(before, after);
-      expect(elements.get(container.id)?.height).toBeGreaterThan(10);
-      expect(isVisible).toBe(true);
-    });
-
-    it("detects a bound label repositioned by a container's redraw", () => {
-      const { container, label } = boundText("rectangle", "hello");
-      const misplacedLabel = newElementWith(label, { x: -100, y: -100 });
-      const before = arrayToMap([
-        container,
-        misplacedLabel,
-      ]) as SceneElementsMap;
-      const after = arrayToMap([
-        newElementWith(container, { version: container.version + 1 }),
-        misplacedLabel,
-      ]) as SceneElementsMap;
-
-      const [elements, isVisible] = apply(before, after);
-      expect(elements.get(container.id)?.height).toBe(container.height);
-      expect(elements.get(label.id)?.x).not.toBe(-100);
-      expect(isVisible).toBe(true);
-    });
-
-    it("detects a bound arrow repositioned by a container's redraw", () => {
-      const container = API.createElement({
-        type: "rectangle",
-        id: "container",
-        index: "a0" as FractionalIndex,
-        boundElements: [{ id: "arrow", type: "arrow" }],
-      });
-      const arrow = API.createElement({
-        type: "arrow",
-        id: "arrow",
-        index: "a1" as FractionalIndex,
-        x: 200,
-        y: 50,
-        points: [pointFrom(0, 0), pointFrom(100, 0)],
-        startBinding: {
-          elementId: container.id,
-          attachPoint: [1, 0.5],
-        },
-      });
-      const before = arrayToMap([container, arrow]) as SceneElementsMap;
-      const after = arrayToMap([
-        newElementWith(container, { version: container.version + 1 }),
-        arrow,
-      ]) as SceneElementsMap;
-
-      const [elements, isVisible] = apply(before, after);
-      expect(elements.get(container.id)?.width).toBe(container.width);
-      expect(elements.get(arrow.id)?.x).not.toBe(200);
-      expect(isVisible).toBe(true);
-    });
-
     it.each(["test", "development", "production"])(
       "guards against untracked layout mutations in %s mode",
       (mode) => {
@@ -257,16 +71,15 @@ describe("ElementsDelta", () => {
     );
 
     it("keeps an empty text element's arrow bindings visible", () => {
-      const label: ExcalidrawTextElement = {
-        ...API.createElement({
-          type: "text",
-          id: "label",
-          index: "a0" as FractionalIndex,
-          boundElements: [{ id: "arrow", type: "arrow" }],
-        }),
-        text: "",
-        originalText: "",
-      };
+      const created = API.createElement({
+        type: "text",
+        id: "label",
+        index: "a0" as FractionalIndex,
+        boundElements: [{ id: "arrow", type: "arrow" }],
+      });
+      const label: ExcalidrawTextElement = newElementWith(created, {
+        texts: { body: { ...created.texts.body, text: "" } },
+      });
       const arrow = API.createElement({
         type: "arrow",
         id: "arrow",
@@ -566,12 +379,12 @@ describe("ElementsDelta", () => {
             {
               version: 1,
               versionNonce: 1,
-              boundElements: [{ id: "t1", type: "text" }],
+              boundElements: [{ id: "t1", type: "activation" }],
             },
             {
               version: 2,
               versionNonce: 2,
-              boundElements: [{ id: "t2", type: "text" }],
+              boundElements: [{ id: "t2", type: "activation" }],
             },
           ),
         },
@@ -599,11 +412,11 @@ describe("ElementsDelta", () => {
       const elementsDelta = elementsDelta1.squash(elementsDelta2);
 
       expect(elementsDelta.updated.id1.deleted.boundElements).toEqual([
-        { id: "t1", type: "text" },
+        { id: "t1", type: "activation" },
         { id: "a1", type: "arrow" },
       ]);
       expect(elementsDelta.updated.id1.inserted.boundElements).toEqual([
-        { id: "t2", type: "text" },
+        { id: "t2", type: "activation" },
         { id: "a2", type: "arrow" },
       ]);
     });

@@ -1,6 +1,6 @@
-import { invariant, TABLE_CELL_TEXT_FONT_SIZE } from "@excalidraw/common";
+import { invariant } from "@excalidraw/common";
 
-import { newTableElement, newTextElement } from "./newElement";
+import { newTableElement } from "./newElement";
 import { getIndexedTableCellChildren } from "./tableChildrenIndex";
 import { getTableSubtreeElements } from "./tableContainer";
 import { normalizeText } from "./textMeasurements";
@@ -24,10 +24,16 @@ import {
 } from "./tableStruct";
 import {
   applyMemberTranslations,
+  applyTableTextLayout,
   collectCellMemberIds,
-  refitCellBackgroundTexts,
 } from "./tableSceneGeometry";
-import { isTableElement, isTextElement } from "./typeChecks";
+import {
+  getTableCellTextBaseStyle,
+  withoutTableTextCells,
+} from "./tableTextStyle";
+import { cellKey } from "./text/keys";
+import { getTextBlock, withoutTextBlock, withTextBlock } from "./text/ops";
+import { isTableElement } from "./typeChecks";
 import {
   CanvasSceneError,
   createCalculationScene,
@@ -50,6 +56,7 @@ import type {
   TableDataV1,
   TableStyle,
 } from "./types";
+import type { TextBlockMap } from "./text/types";
 
 export type TableTarget = Readonly<{ tableId: string }>;
 export type CellStylePatch = NullableStyle<TableCellData["style"]>;
@@ -87,11 +94,6 @@ export type TableOperationReferences = Extract<
   CanvasElementOperationReferences,
   { domain: "table" }
 >;
-
-const compareSlotIdentity = (
-  left: ExcalidrawElement,
-  right: ExcalidrawElement,
-) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
 
 /** 清除覆盖后由既有渲染继承链提供默认值，不持久化 null。 */
 const patchStyle = <T extends object>(
@@ -159,49 +161,15 @@ export const setTableSceneCellText = (
 ) => {
   const anchor = requireCell(table, cellId);
   const text = normalizeText(value);
-  let element = getIndexedTableCellChildren(
-    scene.getNonDeletedElementsMap(),
-    table.id,
-    anchor.id,
-    "backgroundText",
-  )
-    ?.filter(isTextElement)
-    .sort(compareSlotIdentity)[0];
-  if (element) {
-    scene.mutateElement(element, { text, originalText: text });
-  } else {
-    element = newTextElement({
-      x: table.x,
-      y: table.y,
-      text,
-      fontSize: TABLE_CELL_TEXT_FONT_SIZE,
-      // platform-document defaults: left/middle at 13px with the shared cell
-      // padding (applied at layout time, not stored here)
-      textAlign: "left",
-      verticalAlign: "middle",
-      autoResize: false,
-      containerRef: {
-        kind: "tableCell",
-        elementId: table.id,
-        cellId: anchor.id,
-        role: "backgroundText",
-      },
-    });
-    const content = getIndexedTableCellChildren(
-      scene.getNonDeletedElementsMap(),
-      table.id,
-      anchor.id,
-      "content",
-    )?.[0];
-    scene.insertElementsAtIndex(
-      [element],
-      content
-        ? scene.getElementIndex(content.id)
-        : scene.getElementIndex(table.id) + 1,
-    );
-  }
-  refitCellBackgroundTexts(scene, table, [anchor.id]);
-  return element;
+  const style =
+    getTextBlock(table.texts, cellKey(anchor.id))?.style ??
+    getTableCellTextBaseStyle();
+  scene.mutateElement(table, {
+    texts:
+      withTextBlock(table.texts, cellKey(anchor.id), { text, style }) ?? {},
+  });
+  applyTableTextLayout(scene, table);
+  return anchor.id;
 };
 
 /** 拒绝部分跨越第三个合并区域，端点本身的完整 span 计入矩形。 */
@@ -275,37 +243,29 @@ export const mergeTableSceneCells = (
   const merged = mergeTableCells(table.table, firstId, lastId);
   const anchor = selected[0].id;
   const elementsMap = scene.getNonDeletedElementsMap();
-  const backgrounds = selected.flatMap((cell) =>
-    (
-      getIndexedTableCellChildren(
-        elementsMap,
-        table.id,
-        cell.id,
-        "backgroundText",
-      ) ?? []
-    ).filter(isTextElement),
-  );
-  // 重复软引用按现有显示投影的稳定身份选择，避免拼接隐藏副本的内容。
-  const visibleBackgrounds = selected.flatMap((cell) =>
-    backgrounds
-      .filter(
-        (element) =>
-          element.containerRef?.kind === "tableCell" &&
-          element.containerRef.cellId === cell.id,
-      )
-      .sort(compareSlotIdentity)
-      .slice(0, 1),
-  );
-  const text = visibleBackgrounds
-    .filter((element) => element.originalText.length > 0)
-    .map((element) => element.originalText)
+
+  // 合并保留原流程的拼接语义：按格顺序收集可见文本，非空的以换行相连，
+  // 落到锚点；被覆盖格的文本键一并删除。
+  const textsInRange = selected
+    .filter((cell) => !cell.mergedInto)
+    .map((cell) => getTextBlock(table.texts, cellKey(cell.id)));
+  const text = textsInRange
+    .filter((block) => block && block.text.length > 0)
+    .map((block) => block!.text)
     .join("\n");
-  const retained =
-    visibleBackgrounds.find(
-      (element) =>
-        element.containerRef?.kind === "tableCell" &&
-        element.containerRef.cellId === anchor,
-    ) ?? visibleBackgrounds.find((element) => element.originalText.length > 0);
+  const anchorStyle =
+    textsInRange.find((block) => block)?.style ?? getTableCellTextBaseStyle();
+  let nextTexts = withoutTableTextCells(
+    table.texts,
+    selected.map((cell) => cell.id),
+  );
+  if (text) {
+    nextTexts = withTextBlock(nextTexts, cellKey(anchor), {
+      text,
+      style: anchorStyle,
+    });
+  }
+
   for (const cell of selected) {
     for (const member of getIndexedTableCellChildren(
       elementsMap,
@@ -322,25 +282,8 @@ export const mergeTableSceneCells = (
       }
     }
   }
-  for (const background of backgrounds) {
-    scene.mutateElement(
-      background,
-      background.id === retained?.id
-        ? {
-            text,
-            originalText: text,
-            containerRef: {
-              kind: "tableCell",
-              elementId: table.id,
-              cellId: anchor,
-              role: "backgroundText",
-            },
-          }
-        : { isDeleted: true, containerRef: undefined },
-    );
-  }
-  scene.mutateElement(table, { table: merged });
-  refitCellBackgroundTexts(scene, table, [anchor]);
+  scene.mutateElement(table, { table: merged, texts: nextTexts ?? {} });
+  applyTableTextLayout(scene, table);
   return anchor;
 };
 
@@ -362,7 +305,8 @@ export const splitTableSceneCells = (
     );
   }
   scene.mutateElement(table, { table: splitTableCells(table.table, anchors) });
-  refitCellBackgroundTexts(scene, table, anchors);
+  // 拆分后锚点保留文本，新露出的格从空文本开始。
+  applyTableTextLayout(scene, table);
 };
 
 const updateTableStructure = (
@@ -370,6 +314,7 @@ const updateTableStructure = (
   table: NonDeleted<ExcalidrawTableElement>,
   next: TableDataV1,
   axis: "row" | "column",
+  texts: TextBlockMap | undefined,
 ) => {
   applyMemberTranslations(
     scene,
@@ -381,14 +326,11 @@ const updateTableStructure = (
   );
   scene.mutateElement(table, {
     table: next,
+    texts: texts ?? {},
     width: getTableWidth(next),
     height: getTableHeight(next),
   });
-  refitCellBackgroundTexts(
-    scene,
-    table,
-    next.cells.filter((cell) => !cell.mergedInto).map((cell) => cell.id),
-  );
+  applyTableTextLayout(scene, table);
 };
 
 export const applyTableOperation = (
@@ -519,7 +461,7 @@ export const applyTableOperation = (
         } else {
           references.columnId = next.columns[operation.at].id;
         }
-        updateTableStructure(scene, table, next, axis);
+        updateTableStructure(scene, table, next, axis, table.texts);
         break;
       }
       case "deleteRow":
@@ -544,6 +486,24 @@ export const applyTableOperation = (
             ? removeRowFromTable(table.table, id)
             : removeColumnFromTable(table.table, id);
         const remapped = removal.remappedCellIds ?? new Map<string, string>();
+        // 文本键随单元格 id 一起迁移：被删除的格丢弃，重映射的锚点搬运。
+        let nextTexts = withoutTableTextCells(
+          table.texts,
+          removal.removedCellIds.filter((cellId) => !remapped.has(cellId)),
+        );
+        if (remapped.size) {
+          for (const [oldId, newId] of remapped) {
+            const block = getTextBlock(nextTexts, cellKey(oldId));
+            if (!block) {
+              continue;
+            }
+            nextTexts = withTextBlock(
+              withoutTextBlock(nextTexts, cellKey(oldId)),
+              cellKey(newId),
+              block,
+            );
+          }
+        }
         for (const [oldId, newId] of remapped) {
           for (const memberId of collectCellMemberIds(scene, table.id, [
             oldId,
@@ -574,7 +534,7 @@ export const applyTableOperation = (
             scene.mutateElement(member, { containerRef: undefined });
           }
         }
-        updateTableStructure(scene, table, removal.table, axis);
+        updateTableStructure(scene, table, removal.table, axis, nextTexts);
         if (axis === "row") {
           references.rowId = id;
         } else {

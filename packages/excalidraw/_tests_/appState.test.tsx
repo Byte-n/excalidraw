@@ -1,6 +1,7 @@
 import React from "react";
 
 import { EXPORT_DATA_TYPES, MIME_TYPES, VERSIONS } from "@excalidraw/common";
+import { getTextElementStyle } from "@excalidraw/element";
 
 import type { ExcalidrawTextElement } from "@excalidraw/element/types";
 
@@ -93,6 +94,8 @@ describe("appState", () => {
 
     mouse.clickAt(100, 100);
 
-    expect((h.elements[0] as ExcalidrawTextElement).fontSize).toBe(16);
+    expect(
+      getTextElementStyle(h.elements[0] as ExcalidrawTextElement).fontSize,
+    ).toBe(16);
   });
 });

@@ -2,11 +2,9 @@ import {
   buildMindmapGraphIndex,
   getMindmapCollapseAffordance,
   getMindmapHiddenElementIds,
-  getBoundTextElement,
   getTransformHandles,
   isMindmapNodeElement,
   newMindmapNodeElement,
-  newTextElement,
   newElement,
 } from "@excalidraw/element";
 
@@ -25,7 +23,7 @@ import { t } from "../i18n";
 import { getTextEditor, updateTextEditor } from "./queries/dom";
 import { Keyboard, Pointer, UI } from "./helpers/ui";
 import { API } from "./helpers/api";
-import { act, fireEvent, render, screen } from "./test-utils";
+import { act, fireEvent, render, screen, waitFor } from "./test-utils";
 
 const { h } = window;
 const fixture = () => {
@@ -41,36 +39,19 @@ const fixture = () => {
   ] as const;
   const elements: ExcalidrawElement[] = [];
   entries.forEach(([id, parentId, label], i) => {
-    const node = {
-      ...newMindmapNodeElement({
-        x: 100,
-        y: id === "foreign" ? 800 : 300,
-        graphId: id === "foreign" ? "foreign" : "graph",
-        ...(parentId
-          ? {
-              role: "node" as const,
-              parentId,
-              order: `a${i}` as FractionalIndex,
-            }
-          : { role: "root" as const, parentId: null, order: null }),
-      }),
-      id,
-    };
-    const text = {
-      ...newTextElement({
-        x: 0,
-        y: 0,
-        text: label,
-        containerId: id,
-        textAlign: "center",
-        verticalAlign: "middle",
-      }),
-      id: `${id}-text`,
-    };
-    elements.push(
-      { ...node, boundElements: [{ type: "text", id: text.id }] },
-      text,
-    );
+    const node = newMindmapNodeElement({
+      x: 100,
+      y: id === "foreign" ? 800 : 300,
+      graphId: id === "foreign" ? "foreign" : "graph",
+      ...(parentId
+        ? {
+            role: "node" as const,
+            parentId,
+            order: `a${i}` as FractionalIndex,
+          }
+        : { role: "root" as const, parentId: null, order: null }),
+    });
+    elements.push({ ...node, id, texts: API.mindmapBody(node, label) });
   });
   elements.push({
     ...newElement({
@@ -119,6 +100,15 @@ const openMenu = (id: string) => {
     }),
   );
 };
+const submitEditor = async (editor: HTMLTextAreaElement) => {
+  await waitFor(() => {
+    expect(editor.onblur).toEqual(expect.any(Function));
+    expect(editor.ownerDocument.activeElement).toBe(editor);
+  });
+  act(() => editor.blur());
+  expect(h.state.editingTextRegion).toBeNull();
+  expect(editor).not.toBeInTheDocument();
+};
 
 describe("Mindmap P02 树操作界面", () => {
   beforeEach(async () => {
@@ -166,9 +156,7 @@ describe("Mindmap P02 树操作界面", () => {
     Keyboard.keyPress("ArrowRight");
     expect(h.state.selectedElementIds).toEqual({ a: true });
     expect(
-      getMindmapHiddenElementIds(h.app.scene.getNonDeletedElements()).has(
-        "a1-text",
-      ),
+      getMindmapHiddenElementIds(h.app.scene.getNonDeletedElements()).has("a1"),
     ).toBe(true);
     fireEvent.keyDown(h.app.ownerDocument, { key: " ", repeat: true });
     expect(node("a").collapsed).toBe(true);
@@ -247,14 +235,13 @@ describe("Mindmap P02 树操作界面", () => {
   });
 
   it.each(["Delete", "Backspace"])(
-    "%s 删除叶子、文本和入边并原子撤销",
+    "%s 删除叶子节点、正文和入边并原子撤销",
     (key) => {
       select("a1");
       const before = snapshot();
       const count = API.getUndoStack().length;
       Keyboard.keyPress(key);
       expect(node("a1")).toBeNull();
-      expect(h.app.scene.getNonDeletedElement("a1-text")).toBeNull();
       expect(index().edgeByChildId.has("a1")).toBe(false);
       expect(h.state.selectedElementIds).toEqual({ a2: true });
       expectAtomic(before, count);
@@ -275,7 +262,7 @@ describe("Mindmap P02 树操作界面", () => {
       Keyboard.keyPress("Delete");
       expect(h.state.openDialog).toBeNull();
       expect(index().childrenById.get("root")).toEqual(["b", "c"]);
-      for (const id of ["a", "a1", "a2", "a-text", "a1-text", "a2-text"]) {
+      for (const id of ["a", "a1", "a2"]) {
         expect(h.app.scene.getNonDeletedElement(id)).toBeNull();
       }
       expect(node("rectangle")).toBe(rectangle);
@@ -383,7 +370,6 @@ describe("Mindmap P02 树操作界面", () => {
         (element) =>
           element.id !== "rectangle" &&
           element.id !== "foreign" &&
-          element.id !== "foreign-text" &&
           !hiddenIds.has(element.id),
       );
     const mouse = new Pointer("mouse");
@@ -404,7 +390,6 @@ describe("Mindmap P02 树操作界面", () => {
     Keyboard.keyPress("Backspace");
 
     expect(h.app.scene.getNonDeletedElement("root")).toBeNull();
-    expect(h.app.scene.getNonDeletedElement("a1-text")).toBeNull();
     expectAtomic(before, count);
   });
 
@@ -503,7 +488,6 @@ describe("Mindmap P02 树操作界面", () => {
     pressShift("Delete");
     expect(h.state.openDialog).toBeNull();
     expect(node(id)).toBeNull();
-    expect(h.app.scene.getNonDeletedElement(`${id}-text`)).toBeNull();
     expectAtomic(before, count);
   });
 
@@ -547,9 +531,7 @@ describe("Mindmap P02 树操作界面", () => {
       expect(node("a")).toBeNull();
       expect(index().nodes.size).toBe(6);
       for (const id of ["a1", "a2"]) {
-        expect(
-          getBoundTextElement(node(id), h.app.scene.getNonDeletedElementsMap()),
-        ).not.toBeNull();
+        expect(node(id).texts?.body?.text).toBeTruthy();
       }
       const saved = JSON.parse(
         serializeAsJSON(
@@ -586,10 +568,7 @@ describe("Mindmap P02 树操作界面", () => {
     });
     expect(node("a1").graphId).not.toBe("graph");
     expect(index(node("a1").graphId).nodes.size).toBe(1);
-    expect(
-      getBoundTextElement(node("a1"), h.app.scene.getNonDeletedElementsMap())
-        ?.originalText,
-    ).toBe("用户访谈");
+    expect(node("a1").texts?.body?.text).toBe("用户访谈");
     expectAtomic(promoted, count + 1);
     const saved = JSON.parse(
       serializeAsJSON(
@@ -665,7 +644,7 @@ describe("Mindmap P02 树操作界面", () => {
     fireEvent.click(screen.getByTestId("mindmapCreateChild"));
     let editor = await getTextEditor();
     updateTextEditor(editor, "新子节点");
-    Keyboard.exitTextEditor(editor);
+    await submitEditor(editor);
     expect(node("a").collapsed).toBe(false);
     expect(index().childrenById.get("a")).toHaveLength(3);
     expectAtomic(before, count);
@@ -673,7 +652,7 @@ describe("Mindmap P02 树操作界面", () => {
     fireEvent.click(screen.getByTestId("mindmapCreateSibling"));
     editor = await getTextEditor();
     updateTextEditor(editor, "新同级节点");
-    Keyboard.exitTextEditor(editor);
+    await submitEditor(editor);
     expect(index().childrenById.get("root")).toHaveLength(4);
   });
 

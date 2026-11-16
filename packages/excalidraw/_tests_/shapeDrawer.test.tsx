@@ -10,7 +10,9 @@ import {
 
 import {
   STICKY_NOTE_PRESETS,
+  cellKey,
   getCommonBounds,
+  getTextBlock,
   isShapeElement,
   isMindmapNodeElement,
   isTextElement,
@@ -19,6 +21,7 @@ import {
 import type {
   ExcalidrawElement,
   ExcalidrawSequenceElement,
+  ExcalidrawShapeElement,
   ExcalidrawStickyNoteElement,
   ExcalidrawTableElement,
   ExcalidrawTextElement,
@@ -392,12 +395,7 @@ describe("图形抽屉的单击放置", () => {
       strokeWidth: 1,
     });
     // the first row is seeded with the operator label and an auto-fitted tab
-    const label = live().find(
-      (element): element is ExcalidrawTextElement =>
-        isTextElement(element) && element.containerId === fragment.id,
-    );
-    expect(label?.text).toBe("Opt / Loop");
-    expect(label?.autoResize).toBe(true);
+    expect(fragment.texts?.body?.text).toBe("Opt / Loop");
     const fragmentShape = fragment.shape as Extract<
       ExcalidrawSequenceElement["shape"],
       { id: "sc-fragment" }
@@ -406,12 +404,11 @@ describe("图形抽屉的单击放置", () => {
     expect(fragmentShape.fragment?.rows[0].height).toBeGreaterThanOrEqual(
       36.272,
     );
-    // the condition preset also seeds its default row label
+    // the condition preset also seeds its default row text block
     expect(
-      live().some(
-        (element) => isTextElement(element) && element.text === "[Condition]",
-      ),
-    ).toBe(true);
+      fragment.texts?.[`row:${fragmentShape.fragment?.rows[1].id}`]?.text,
+    ).toBe("[Condition]");
+    expect(live().filter(isTextElement)).toEqual([]);
   });
 
   it("数据流图：点 df-* → 落一份 type=dataflow 的图形，尺寸/填色/线宽取预设", () => {
@@ -450,7 +447,7 @@ describe("图形抽屉的单击放置", () => {
     });
   });
 
-  it("数据流图：预设自带文本，df-process 标题栏与正文分槽", () => {
+  it("数据流图：预设文本直接写进元素区域，不产生文字元素", () => {
     expandGroup("dataflow");
 
     placeItem("df-process");
@@ -459,38 +456,31 @@ describe("图形抽屉的单击放置", () => {
 
     const shapeIdOf = (element: ExcalidrawElement) =>
       isShapeElement(element) ? element.shape.id : null;
-    const texts = live().filter(isTextElement);
     const process = live().find(
       (element) => shapeIdOf(element) === "df-process",
     )!;
-    const processTexts = texts.filter(
-      (text) => text.containerId === process.id,
-    );
-    const title = processTexts.find((text) => text.containerSlot === "title")!;
-    const body = processTexts.find((text) => !text.containerSlot)!;
-
-    expect(title.text).toBe("1.01.0");
-    expect(body.originalText).toBe(t("dataflowPreset.process"));
-    expect(process.boundElements).toEqual(
-      expect.arrayContaining([
-        { type: "text", id: title.id, slot: "title" },
-        { type: "text", id: body.id },
-      ]),
-    );
+    const processTexts = (process as ExcalidrawShapeElement).texts!;
+    expect(processTexts.title?.text).toBe("1.01.0");
+    expect(processTexts.title?.style.fontSize).toBe(13);
+    expect(processTexts.title?.style.textAlign).toBe("center");
+    expect(processTexts.title?.style.verticalAlign).toBe("middle");
+    expect(processTexts.body?.text).toBe(t("dataflowPreset.process"));
+    expect(process.boundElements ?? []).toEqual([]);
 
     const circle = live().find(
       (element) => shapeIdOf(element) === "df-process-circle",
     )!;
-    expect(
-      texts.find((text) => text.containerId === circle.id)?.originalText,
-    ).toBe(`1.0\n${t("dataflowPreset.process")}`);
+    expect((circle as ExcalidrawShapeElement).texts?.body?.text).toBe(
+      `1.0\n${t("dataflowPreset.process")}`,
+    );
 
     const store = live().find(
       (element) => shapeIdOf(element) === "df-store-left-label",
     )!;
-    expect(
-      texts.find((text) => text.containerId === store.id)?.originalText,
-    ).toBe(t("dataflowPreset.dataStore"));
+    expect((store as ExcalidrawShapeElement).texts?.body?.text).toBe(
+      t("dataflowPreset.dataStore"),
+    );
+    expect(live().filter(isTextElement)).toEqual([]);
   });
 
   it("时序图：组合片段 else 预设复用 sc-fragment，多一行并带 [Condition]/[Else] 文本", () => {
@@ -520,29 +510,12 @@ describe("图形抽屉的单击放置", () => {
     expect(rows[0].height).toBeCloseTo(36.272, 6);
     expect(rows[1].height).toBeCloseTo(rows[2].height, 6);
 
-    const texts = live().filter(isTextElement);
-    expect(texts.map((text) => text.text)).toEqual(
-      expect.arrayContaining(["Opt / Loop", "[Condition]", "[Else]"]),
-    );
-    // condition labels are row background texts, like table cell background
-    // text: bound to the row (single-column cell), not ordinary canvas text
-    const condition = texts.find((text) => text.text === "[Condition]")!;
-    const elseLabel = texts.find((text) => text.text === "[Else]")!;
-    expect(condition.containerId).toBeNull();
-    expect(elseLabel.containerId).toBeNull();
-    expect(condition.containerRef).toEqual({
-      kind: "fragmentRow",
-      elementId: fragment!.id,
-      rowId: rows[1].id,
-      role: "backgroundText",
-    });
-    expect(elseLabel.containerRef).toEqual({
-      kind: "fragmentRow",
-      elementId: fragment!.id,
-      rowId: rows[2].id,
-      role: "backgroundText",
-    });
-    expect(condition.y).toBeLessThan(elseLabel.y);
+    const texts = fragment!.texts ?? {};
+    expect(texts.body?.text).toBe("Opt / Loop");
+    expect(texts[`row:${rows[1].id}`]?.text).toBe("[Condition]");
+    expect(texts[`row:${rows[2].id}`]?.text).toBe("[Else]");
+    expect(live().filter(isTextElement)).toEqual([]);
+    expect(live().some((element) => element.boundElements?.length)).toBe(false);
   });
 
   it("基础图形：点 cube → 落一份 cube 复合图形", () => {
@@ -676,18 +649,20 @@ describe("图形抽屉的单击放置", () => {
     );
     expect(tables).toHaveLength(1);
 
-    // 泳道自带标签文字（标题带 + 每条泳道一个名字）
-    const labels = live().filter(
-      (element): element is ExcalidrawTextElement =>
-        element.type === "text" &&
-        element.containerRef?.kind === "tableCell" &&
-        element.containerRef.role === "backgroundText",
-    );
-    expect(labels.map((label) => label.originalText)).toEqual([
+    // 泳道自带标签文本块（标题带 + 每条泳道一个名字）
+    const labels = tables[0].table.cells
+      .filter((cell) => !cell.mergedInto)
+      .flatMap((cell) => {
+        const block = getTextBlock(tables[0].texts, cellKey(cell.id));
+        return block ? [block.text] : [];
+      });
+    expect(labels).toEqual([
       t("toolBar.swimlaneHorizontal"),
       t("toolBar.swimlane"),
       t("toolBar.swimlane"),
     ]);
+    // 没有独立的文字元素
+    expect(live().filter(isTextElement)).toHaveLength(0);
   });
 
   it("脑图：点 mindmap-down → 根节点 layoutDirection 为 top-to-bottom", () => {
@@ -724,16 +699,14 @@ describe("图形抽屉的拖入", () => {
 
     dragOut("swimlane-horizontal", dropClient.clientX, dropClient.clientY);
 
-    // 预览是整张表（表 + 三条标签），尚不入场景
+    // 预览是整张表（标签在表格自己的 texts 里），尚不入场景
     const preview = h.app.toolDrag.previewElements!;
     expect(preview).not.toBeNull();
-    expect(preview.length).toBe(4);
-    expect(preview.map((element) => element.type)).toEqual([
-      "table",
-      "text",
-      "text",
-      "text",
-    ]);
+    expect(preview.length).toBe(1);
+    expect(preview.map((element) => element.type)).toEqual(["table"]);
+    expect(
+      Object.keys((preview[0] as ExcalidrawTableElement).texts ?? {}),
+    ).toHaveLength(3);
     expect(live()).toHaveLength(0);
     expect(API.getUndoStack()).toHaveLength(0);
 
@@ -746,7 +719,7 @@ describe("图形抽屉的拖入", () => {
     // 预览清空，整张表落在松手处（包围盒中心对到指针）
     expect(h.app.toolDrag.previewElements).toBeNull();
     const dropped = live();
-    expect(dropped).toHaveLength(4);
+    expect(dropped).toHaveLength(1);
     const dropScene = viewportCoordsToSceneCoords(dropClient, h.state);
     const center = boundsCenter(dropped);
     expect(center.x).toBeCloseTo(dropScene.x);
@@ -766,10 +739,10 @@ describe("图形抽屉的拖入", () => {
 
     dragOut("mindmap-down", dropClient.clientX, dropClient.clientY);
 
-    // 整图：10 节点 + 10 绑定文本 + 9 连线
+    // 整图：10 节点（正文内嵌）+ 9 连线
     const preview = h.app.toolDrag.previewElements!;
     expect(preview.length).toBeGreaterThan(1);
-    expect(preview.length).toBe(29);
+    expect(preview.length).toBe(19);
     expect(live()).toHaveLength(0);
 
     fireEvent.pointerUp(GlobalTestState.interactiveCanvas, {
@@ -780,7 +753,7 @@ describe("图形抽屉的拖入", () => {
 
     expect(h.app.toolDrag.previewElements).toBeNull();
     const dropped = live();
-    expect(dropped).toHaveLength(29);
+    expect(dropped).toHaveLength(19);
     const dropScene = viewportCoordsToSceneCoords(dropClient, h.state);
     const center = boundsCenter(dropped);
     expect(center.x).toBeCloseTo(dropScene.x);

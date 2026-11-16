@@ -74,13 +74,20 @@ import {
 
 import { headingIsHorizontal, vectorToHeading } from "./heading";
 import { mutateElement } from "./mutateElement";
-import { getBoundTextElement, handleBindTextResize } from "./textElement";
+import {
+  getLinearLabelPosition,
+  getLinearLabelStyle,
+  layoutLinearLabel,
+} from "./text/labelLayout";
+import { withTextBlock } from "./text/ops";
 import {
   isArrowElement,
   isBindingElement,
   isCurvedArrow,
   isElbowArrow,
 } from "./typeChecks";
+
+import type { TextBlockStyle, TextRegionLayout } from "./text/types";
 
 import { ShapeCache, toggleLinePolygonState } from "./shape";
 
@@ -96,7 +103,6 @@ import type {
   NonDeleted,
   ExcalidrawLinearElement,
   ExcalidrawElement,
-  ExcalidrawTextElementWithContainer,
   ElementsMap,
   NonDeletedSceneElementsMap,
   ElementBinding,
@@ -142,16 +148,6 @@ type PointMoveOtherUpdates = {
   endBinding?: ElementBinding | null;
   moveMidPointsWithElement?: boolean | null;
 };
-
-const BoundTextPositionCache = new WeakMap<
-  ExcalidrawTextElementWithContainer,
-  {
-    containerVersion: ExcalidrawElement["version"];
-    textVersion: ExcalidrawElement["version"];
-    position: { x: number; y: number };
-    geometryKey: readonly unknown[];
-  }
->();
 
 /**
  * 时序消息端点跟着策略走：另一端绑在激活条上时，把指针投到消息轴上并按
@@ -663,12 +659,6 @@ export class LinearElementEditor {
       );
     }
 
-    // Attached text might need to update if arrow dimensions change
-    const boundTextElement = getBoundTextElement(element, elementsMap);
-    if (boundTextElement) {
-      handleBindTextResize(element, app.scene, false);
-    }
-
     // Update selected points for elbow arrows because elbow arrows add and
     // remove points as they route
     const newSelectedPointsIndices = elbowed
@@ -805,15 +795,12 @@ export class LinearElementEditor {
     elementsMap: ElementsMap,
     appState: InteractiveCanvasAppState,
   ): (GlobalPoint | null)[] => {
-    const boundText = getBoundTextElement(element, elementsMap);
-
-    // Since its not needed outside editor unless 2 pointer lines or bound text
+    // Since its not needed outside editor unless 2 pointer lines
     if (
       !isElbowArrow(element) &&
       !isCurvedArrow(element) &&
       !appState.selectedLinearElement?.isEditing &&
-      element.points.length > 2 &&
-      !boundText
+      element.points.length > 2
     ) {
       return [];
     }
@@ -1049,8 +1036,8 @@ export class LinearElementEditor {
   ): {
     didAddPoint: boolean;
     hitElement: NonDeleted<ExcalidrawElement> | null;
-    /** the pointer went down on the arrow's label, grabbing it for a drag */
-    hitBoundText: boolean;
+    /** 指针按在箭头标签上，已将其抓住准备拖动 */
+    hitLabel: boolean;
     linearElementEditor: LinearElementEditor | null;
   } {
     const appState = app.state;
@@ -1059,7 +1046,7 @@ export class LinearElementEditor {
     const ret: ReturnType<typeof LinearElementEditor["handlePointerDown"]> = {
       didAddPoint: false,
       hitElement: null,
-      hitBoundText: false,
+      hitLabel: false,
       linearElementEditor: null,
     };
 
@@ -1140,39 +1127,36 @@ export class LinearElementEditor {
       pointIndexUnderCursor,
     );
 
-    const boundTextElement = getBoundTextElement(element, elementsMap);
-    let boundTextGrabOffset: { x: number; y: number } | null = null;
+    const labelLayout = LinearElementEditor.getLabelLayout(
+      element,
+      elementsMap,
+    );
+    let labelGrabOffset: { x: number; y: number } | null = null;
     if (
       !clickedPointIsHandle &&
       // the segment midpoint knob keeps precedence over the label sitting
       // on top of it, so a labeled arrow can still be bent at its middle
       !segmentMidpoint &&
-      boundTextElement &&
+      labelLayout.text !== "" &&
       isArrowElement(element) &&
-      app.arrowText.isBoundTextGrabbable(
+      app.arrowText.isLabelGrabbable(
         element,
         scenePointer.x,
         scenePointer.y,
       )
     ) {
-      const { x: textX, y: textY } =
-        LinearElementEditor.getBoundTextElementPosition(
-          element,
-          boundTextElement,
-          elementsMap,
-        );
-      boundTextGrabOffset = {
-        x: scenePointer.x - (textX + boundTextElement.width / 2),
-        y: scenePointer.y - (textY + boundTextElement.height / 2),
+      labelGrabOffset = {
+        x: scenePointer.x - (labelLayout.x + labelLayout.width / 2),
+        y: scenePointer.y - (labelLayout.y + labelLayout.height / 2),
       };
     }
 
     // when the label grab wins (possible over a non-interactive elbow route
     // point), the click must not double as a point click
-    const clickedPointIndex = boundTextGrabOffset ? -1 : pointIndexUnderCursor;
-    ret.hitBoundText = !!boundTextGrabOffset;
+    const clickedPointIndex = labelGrabOffset ? -1 : pointIndexUnderCursor;
+    ret.hitLabel = !!labelGrabOffset;
 
-    if (clickedPointIndex >= 0 || segmentMidpoint || boundTextGrabOffset) {
+    if (clickedPointIndex >= 0 || segmentMidpoint || labelGrabOffset) {
       ret.hitElement = element;
     }
 
@@ -1218,7 +1202,7 @@ export class LinearElementEditor {
             x: scenePointer.x - targetPoint[0],
             y: scenePointer.y - targetPoint[1],
           }
-        : boundTextGrabOffset ?? { x: 0, y: 0 },
+        : labelGrabOffset ?? { x: 0, y: 0 },
     };
 
     return ret;
@@ -1917,11 +1901,9 @@ export class LinearElementEditor {
   }
 
   /**
-   * The point a bound text label is centered on — the middle of the linear
-   * element, whether that's an actual point or the midpoint of the middle
-   * segment.
+   * 箭头标签居中处的点：线性元素的中点，若中点是线段则为中间线段的中点。
    */
-  static getBoundTextElementCenter = (
+  static getLabelCenter = (
     element: ExcalidrawLinearElement,
     elementsMap: ElementsMap,
   ): GlobalPoint => {
@@ -1942,7 +1924,7 @@ export class LinearElementEditor {
     );
   };
 
-  static handleBoundTextDragging(
+  static handleLabelDragging(
     linearElementEditor: LinearElementEditor,
     scene: Scene,
     pointerX: number,
@@ -1953,8 +1935,8 @@ export class LinearElementEditor {
       linearElementEditor.elementId,
       elementsMap,
     );
-    const boundTextElement = getBoundTextElement(element, elementsMap);
-    if (!element || !isLinearElement(element) || !boundTextElement) {
+    const label = element?.texts?.label;
+    if (!element || !isLinearElement(element) || !label?.text) {
       return null;
     }
     const pointerGlobalPoint = pointFrom<GlobalPoint>(
@@ -1995,19 +1977,12 @@ export class LinearElementEditor {
       0,
       1,
     );
-    const pathPoint = LinearElementEditor.getPointAtPathParameter(
-      element,
-      labelPosition,
-      elementsMap,
-    );
-    if (!pathPoint) {
-      return null;
-    }
 
-    scene.mutateElement(boundTextElement, {
-      labelPosition,
-      x: pathPoint[0] - boundTextElement.width / 2,
-      y: pathPoint[1] - boundTextElement.height / 2,
+    scene.mutateElement(element, {
+      texts: withTextBlock(element.texts, "label", {
+        ...label,
+        placement: { labelPosition },
+      }),
     });
 
     return {
@@ -2047,192 +2022,88 @@ export class LinearElementEditor {
     return pathSegmentPointAtLength(segments[i], lengthFraction, lengths[i]);
   }
 
-  static getBoundTextElementPosition = (
+  /** 标签沿路径的锚点（场景坐标，已含元素旋转）。 */
+  static getLabelAnchor = (
     element: ExcalidrawLinearElement,
-    boundTextElement: ExcalidrawTextElementWithContainer,
     elementsMap: ElementsMap,
-  ): { x: number; y: number } => {
-    // 纯计算场景不会递增版本，缓存同时依赖实际几何与标签尺寸。
-    const geometryKey = [
-      element.points,
-      element.x,
-      element.y,
-      element.angle,
-      element.roundness,
-      boundTextElement.width,
-      boundTextElement.height,
-      boundTextElement.labelPosition,
-    ];
-    const cached = BoundTextPositionCache.get(boundTextElement);
-    if (
-      cached &&
-      cached.containerVersion === element.version &&
-      cached.textVersion === boundTextElement.version &&
-      geometryKey.every((value, index) =>
-        Object.is(value, cached.geometryKey[index]),
-      )
-    ) {
-      return cached.position;
-    }
-
-    const position = LinearElementEditor.computeBoundTextElementPosition(
-      element,
-      boundTextElement,
-      elementsMap,
+    labelPosition: number = getLinearLabelPosition(element),
+  ): GlobalPoint => {
+    const center = pointFrom<GlobalPoint>(
+      element.x + element.width / 2,
+      element.y + element.height / 2,
     );
-
-    BoundTextPositionCache.set(boundTextElement, {
-      containerVersion: element.version,
-      textVersion: boundTextElement.version,
-      geometryKey,
-      position,
-    });
-
-    return position;
-  };
-
-  private static computeBoundTextElementPosition = (
-    element: ExcalidrawLinearElement,
-    boundTextElement: ExcalidrawTextElementWithContainer,
-    elementsMap: ElementsMap,
-  ): { x: number; y: number } => {
     if (element.points.length < 2) {
-      return { x: boundTextElement.x, y: boundTextElement.y };
+      return center;
     }
-    if (isLinearElement(element) && boundTextElement.labelPosition != null) {
-      const pathPoint = LinearElementEditor.getPointAtPathParameter(
+    return (
+      LinearElementEditor.getPointAtPathParameter(
         element,
-        boundTextElement.labelPosition,
+        labelPosition,
         elementsMap,
-      );
-
-      if (pathPoint) {
-        return {
-          x: pathPoint[0] - boundTextElement.width / 2,
-          y: pathPoint[1] - boundTextElement.height / 2,
-        };
-      }
-    }
-
-    const center = LinearElementEditor.getBoundTextElementCenter(
-      element,
-      elementsMap,
+      ) ?? center
     );
-
-    return {
-      x: center[0] - boundTextElement.width / 2,
-      y: center[1] - boundTextElement.height / 2,
-    };
   };
 
-  static getMinMaxXYWithBoundText = (
+  /** 线性元素标签的区域布局（局部坐标 + 水平绘制角度）。 */
+  static getLabelLayout = (
+    element: ExcalidrawLinearElement,
+    elementsMap: ElementsMap | undefined,
+    options?: { defaultStyle?: TextBlockStyle },
+  ): TextRegionLayout => {
+    const style = getLinearLabelStyle(element, options?.defaultStyle);
+    return layoutLinearLabel({
+      element,
+      anchor: LinearElementEditor.getLabelAnchor(
+        element,
+        elementsMap ?? new Map(),
+      ),
+      style,
+    });
+  };
+
+  /** 标签的场景布局：左上角已绕元素中心旋转，文本角度保持水平。 */
+  static getLabelSceneLayout = (
     element: ExcalidrawLinearElement,
     elementsMap: ElementsMap,
+    options?: { defaultStyle?: TextBlockStyle },
+  ): TextRegionLayout => {
+    const layout = LinearElementEditor.getLabelLayout(
+      element,
+      elementsMap,
+      options,
+    );
+    const center = pointFrom<GlobalPoint>(
+      element.x + element.width / 2,
+      element.y + element.height / 2,
+    );
+    const [x, y] = pointRotateRads(
+      pointFrom<GlobalPoint>(element.x + layout.x, element.y + layout.y),
+      center,
+      element.angle,
+    );
+    return { ...layout, x, y };
+  };
+
+  static getMinMaxXYWithLabel = (
     elementBounds: Bounds,
-    boundTextElement: ExcalidrawTextElementWithContainer,
+    labelBounds: Bounds,
   ): [number, number, number, number, number, number] => {
-    let [x1, y1, x2, y2] = elementBounds;
+    const [x1, y1, x2, y2] = elementBounds;
     const cx = (x1 + x2) / 2;
     const cy = (y1 + y2) / 2;
-    const { x: boundTextX1, y: boundTextY1 } =
-      LinearElementEditor.getBoundTextElementPosition(
-        element,
-        boundTextElement,
-        elementsMap,
-      );
-    const boundTextX2 = boundTextX1 + boundTextElement.width;
-    const boundTextY2 = boundTextY1 + boundTextElement.height;
-    const centerPoint = pointFrom(cx, cy);
-
-    const topLeftRotatedPoint = pointRotateRads(
-      pointFrom(x1, y1),
-      centerPoint,
-      element.angle,
-    );
-    const topRightRotatedPoint = pointRotateRads(
-      pointFrom(x2, y1),
-      centerPoint,
-      element.angle,
-    );
-
-    const counterRotateBoundTextTopLeft = pointRotateRads(
-      pointFrom(boundTextX1, boundTextY1),
-      centerPoint,
-      -element.angle as Radians,
-    );
-    const counterRotateBoundTextTopRight = pointRotateRads(
-      pointFrom(boundTextX2, boundTextY1),
-      centerPoint,
-      -element.angle as Radians,
-    );
-    const counterRotateBoundTextBottomLeft = pointRotateRads(
-      pointFrom(boundTextX1, boundTextY2),
-      centerPoint,
-      -element.angle as Radians,
-    );
-    const counterRotateBoundTextBottomRight = pointRotateRads(
-      pointFrom(boundTextX2, boundTextY2),
-      centerPoint,
-      -element.angle as Radians,
-    );
-
-    if (
-      topLeftRotatedPoint[0] < topRightRotatedPoint[0] &&
-      topLeftRotatedPoint[1] >= topRightRotatedPoint[1]
-    ) {
-      x1 = Math.min(x1, counterRotateBoundTextBottomLeft[0]);
-      x2 = Math.max(
-        x2,
-        Math.max(
-          counterRotateBoundTextTopRight[0],
-          counterRotateBoundTextBottomRight[0],
-        ),
-      );
-      y1 = Math.min(y1, counterRotateBoundTextTopLeft[1]);
-
-      y2 = Math.max(y2, counterRotateBoundTextBottomRight[1]);
-    } else if (
-      topLeftRotatedPoint[0] >= topRightRotatedPoint[0] &&
-      topLeftRotatedPoint[1] > topRightRotatedPoint[1]
-    ) {
-      x1 = Math.min(x1, counterRotateBoundTextBottomRight[0]);
-      x2 = Math.max(
-        x2,
-        Math.max(
-          counterRotateBoundTextTopLeft[0],
-          counterRotateBoundTextTopRight[0],
-        ),
-      );
-      y1 = Math.min(y1, counterRotateBoundTextBottomLeft[1]);
-
-      y2 = Math.max(y2, counterRotateBoundTextTopRight[1]);
-    } else if (topLeftRotatedPoint[0] >= topRightRotatedPoint[0]) {
-      x1 = Math.min(x1, counterRotateBoundTextTopRight[0]);
-      x2 = Math.max(x2, counterRotateBoundTextBottomLeft[0]);
-      y1 = Math.min(y1, counterRotateBoundTextBottomRight[1]);
-
-      y2 = Math.max(y2, counterRotateBoundTextTopLeft[1]);
-    } else if (topLeftRotatedPoint[1] <= topRightRotatedPoint[1]) {
-      x1 = Math.min(
-        x1,
-        Math.min(
-          counterRotateBoundTextTopRight[0],
-          counterRotateBoundTextTopLeft[0],
-        ),
-      );
-
-      x2 = Math.max(x2, counterRotateBoundTextBottomRight[0]);
-      y1 = Math.min(y1, counterRotateBoundTextTopRight[1]);
-      y2 = Math.max(y2, counterRotateBoundTextBottomLeft[1]);
-    }
-
-    return [x1, y1, x2, y2, cx, cy];
+    return [
+      Math.min(x1, labelBounds[0]),
+      Math.min(y1, labelBounds[1]),
+      Math.max(x2, labelBounds[2]),
+      Math.max(y2, labelBounds[3]),
+      cx,
+      cy,
+    ];
   };
 
   static getElementAbsoluteCoords = (
     element: ExcalidrawLinearElement,
     elementsMap: ElementsMap,
-    includeBoundText: boolean = false,
   ): [number, number, number, number, number, number] => {
     const shape = ShapeCache.generateElementShape(element, null);
 
@@ -2246,17 +2117,6 @@ export class LinearElementEditor {
     const y2 = maxY + element.y;
     const cx = (x1 + x2) / 2;
     const cy = (y1 + y2) / 2;
-
-    const boundTextElement =
-      includeBoundText && getBoundTextElement(element, elementsMap);
-    if (boundTextElement) {
-      return LinearElementEditor.getMinMaxXYWithBoundText(
-        element,
-        elementsMap,
-        [x1, y1, x2, y2],
-        boundTextElement,
-      );
-    }
 
     return [x1, y1, x2, y2, cx, cy];
   };

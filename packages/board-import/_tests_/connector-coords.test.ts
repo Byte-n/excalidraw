@@ -103,17 +103,14 @@ test("父偏移非 0 曲线：中点由修正后的端点推导", () => {
   expectPoint(points[2], [100, 0]);
 });
 
-test("父偏移非 0 连线标签：落点等于绝对原点加沿路径比例取点", () => {
+test("父偏移非 0 连线标签：写入连线的 texts.label 并保留沿路径比例", () => {
   const { elements } = render([offsetSectionNode(), nestedCurveConnector()]);
-  const caption = elements.find(
-    (el) => el.type === "text" && el.text === "曲线标签",
-  );
-  if (!caption) {
-    throw new Error("caption not found");
-  }
-  expect(prop<string | null>(caption, "containerId")).toBe("nestedCurve");
-  expect(prop<number>(caption, "x")).toBeCloseTo(1086.5166, 3);
-  expect(prop<number>(caption, "y")).toBeCloseTo(7201.9443, 3);
+  const element = arrow(elements, "nestedCurve");
+  const texts = prop<{
+    label?: { text?: string; placement?: { labelPosition?: number } };
+  }>(element, "texts");
+  expect(texts?.label?.text).toBe("曲线标签");
+  expect(texts?.label?.placement?.labelPosition).toBeCloseTo(0.5, 3);
 });
 
 test("≥2 层父容器：绝对原点逐层累加", () => {

@@ -78,16 +78,19 @@ const mount = async (
 test("缺省独立文本首次 restore 只在 display 副本测量，不写回 canonical", async () => {
   const text = element("lazy-text", 0, {
     type: "text",
-    text: "第一行\n第二行",
-    originalText: "第一行\n第二行",
-    fontSize: 20,
-    fontFamily: 1,
-    baseFontSize: null,
-    textAlign: "left",
-    verticalAlign: "top",
-    containerId: null,
+    texts: {
+      body: {
+        text: "第一行\n第二行",
+        style: {
+          fontFamily: 1,
+          fontSize: 20,
+          lineHeight: 1.25,
+          textAlign: "left",
+          verticalAlign: "top",
+        },
+      },
+    },
     autoResize: true,
-    lineHeight: 1.25,
   });
   delete text.width;
   delete text.height;

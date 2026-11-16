@@ -32,7 +32,6 @@ import {
   assertValidContainerRefs,
   isExcalidrawElement,
   isFrameLikeElement,
-  isTextElement,
   validateContainerRef,
 } from "./typeChecks";
 import { getElementsInGroup } from "./groups";
@@ -88,7 +87,6 @@ const validateIndicesThrottled = throttle(
       validateFractionalIndices(elements, {
         // throw only in dev & test, to remain functional on `DEBUG_FRACTIONAL_INDICES`
         shouldThrow: isDevEnv() || isTestEnv(),
-        includeBoundTextValidation: true,
       });
     }
   },
@@ -99,7 +97,7 @@ const validateIndicesThrottled = throttle(
 const hashSelectionOpts = (
   opts: Parameters<InstanceType<typeof Scene>["getSelectedElements"]>[0],
 ) => {
-  const keys = ["includeBoundTextElement", "includeElementsInFrames"] as const;
+  const keys = ["includeElementsInFrames"] as const;
 
   type HashableKeys = Omit<typeof opts, "selectedElementIds" | "elements">;
 
@@ -228,7 +226,6 @@ export class Scene {
      */
     elements?: ElementsMapOrArray;
     // selection-related options
-    includeBoundTextElement?: boolean;
     includeElementsInFrames?: boolean;
   }): NonDeletedExcalidrawElement[] {
     const hash = hashSelectionOpts(opts);
@@ -477,22 +474,6 @@ export class Scene {
     return this.elements.findIndex((element) => element.id === elementId);
   }
 
-  getContainerElement = (
-    element:
-      | (ExcalidrawElement & {
-          containerId: ExcalidrawElement["id"] | null;
-        })
-      | null,
-  ) => {
-    if (!element) {
-      return null;
-    }
-    if (element.containerId) {
-      return this.getElement(element.containerId) || null;
-    }
-    return null;
-  };
-
   getElementsFromId = (id: string): ExcalidrawElement[] => {
     const elementsMap = this.getNonDeletedElementsMap();
     // first check if the id is an element
@@ -521,16 +502,6 @@ export class Scene {
     },
   ) {
     const elementsMap = this.getNonDeletedElementsMap();
-
-    if (isTextElement(element)) {
-      const containerId =
-        "containerId" in updates ? updates.containerId : element.containerId;
-      const containerRef =
-        "containerRef" in updates ? updates.containerRef : element.containerRef;
-      if (containerId && containerRef) {
-        throw new Error(`Bound text ${element.id} cannot have a containerRef`);
-      }
-    }
 
     if ("containerRef" in updates && updates.containerRef !== undefined) {
       validateContainerRef(

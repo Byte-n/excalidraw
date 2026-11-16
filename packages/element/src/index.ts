@@ -113,6 +113,7 @@ export * from "./tableOps";
 export * from "./tableRender";
 export * from "./tableScale";
 export * from "./tableStruct";
+export * from "./text";
 export * from "./textElement";
 export * from "./textMeasurements";
 export * from "./textWrapping";
@@ -130,6 +131,7 @@ export * from "./shapeScene";
 export * from "./connectorScene";
 export * from "./tableScene";
 export * from "./tableSceneGeometry";
+export * from "./tableTextStyle";
 export * from "./mindmapScene";
 
 export type {

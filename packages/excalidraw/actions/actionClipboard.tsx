@@ -59,7 +59,6 @@ export const actionCopy = register<ClipboardEvent | null>({
           );
           const selected = app.scene.getSelectedElements({
             selectedElementIds: appState.selectedElementIds,
-            includeBoundTextElement: true,
             includeElementsInFrames: true,
           });
           const rangeIds = new Set([
@@ -133,7 +132,6 @@ export const actionCopy = register<ClipboardEvent | null>({
     }
     let elementsToCopy = app.scene.getSelectedElements({
       selectedElementIds: appState.selectedElementIds,
-      includeBoundTextElement: true,
       includeElementsInFrames: true,
     });
     const selectedNode = app.mindmap.getSelectedNode();
@@ -287,7 +285,6 @@ export const actionCopyAsSvg = register({
 
       const selectedElements = app.scene.getSelectedElements({
         selectedElementIds: appState.selectedElementIds,
-        includeBoundTextElement: true,
         includeElementsInFrames: true,
       });
 
@@ -335,7 +332,6 @@ export const actionCopyAsPng = register({
     }
     const selectedElements = app.scene.getSelectedElements({
       selectedElementIds: appState.selectedElementIds,
-      includeBoundTextElement: true,
       includeElementsInFrames: true,
     });
 
@@ -391,7 +387,6 @@ export const copyText = register({
   perform: (elements, appState, _, app) => {
     const selectedElements = app.scene.getSelectedElements({
       selectedElementIds: appState.selectedElementIds,
-      includeBoundTextElement: true,
     });
 
     try {
@@ -409,9 +404,10 @@ export const copyText = register({
       app.scene
         .getSelectedElements({
           selectedElementIds: appState.selectedElementIds,
-          includeBoundTextElement: true,
         })
-        .some(isTextElement)
+        .some(
+          (element) => isTextElement(element) || !!element.texts?.body?.text,
+        )
     );
   },
   keywords: ["text", "clipboard", "copy"],

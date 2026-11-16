@@ -14,53 +14,23 @@ import {
 } from "@excalidraw/common";
 import { pointFrom, pointRotateRads, type Radians } from "@excalidraw/math";
 
-import {
-  getTextFromElements,
-  getMindmapShapeId,
-  originalContainerCache,
-  updateBoundElements,
-  updateOriginalContainerCache,
-} from "@excalidraw/element";
+import { getTextFromElements } from "@excalidraw/element";
 
-import { LinearElementEditor } from "@excalidraw/element";
-import { bumpVersion } from "@excalidraw/element";
-import {
-  getBoundTextElementId,
-  getContainerElement,
-  getTextElementAngle,
-  redrawTextBoundingBox,
-  getBoundTextMaxHeight,
-  getBoundTextMaxWidth,
-  getBoundTextContainerDimensions,
-  computeContainerDimensionForBoundText,
-  computeBoundTextPosition,
-  getBoundTextElement,
-  getCompositeShapeTextFitMode,
-  getSequenceLifelineTextFitUpdates,
-  isSequenceLifelineElement,
-  isShapeElement,
-} from "@excalidraw/element";
 import { getTextWidth } from "@excalidraw/element";
+import { getTextElementStyle, getTextElementText } from "@excalidraw/element";
+import type { TextBlockStyle } from "@excalidraw/element";
 import { getLineHeightInPx } from "@excalidraw/element";
 import { getLineWidth } from "@excalidraw/element";
 import { normalizeText } from "@excalidraw/element";
-import { wrapText } from "@excalidraw/element";
 import { getWrappedTextLines } from "@excalidraw/element";
 import {
-  isLinearElement,
-  isBoundToContainer,
-  isMindmapLayoutFrozen,
-  isStickyNoteElement,
   isContainerBackgroundText,
-  isTextElement,
   resolveTableBackgroundTextFontWeight,
 } from "@excalidraw/element";
 
 import type {
-  ExcalidrawTextElementWithContainer,
   ExcalidrawTextElement,
   NonDeleted,
-  ExcalidrawTextContainer,
 } from "@excalidraw/element/types";
 
 import { actionSaveToActiveFile } from "../actions";
@@ -85,7 +55,7 @@ import type { ParsedDataTranferList } from "../clipboard";
 import type App from "../components/App";
 import type { AppState } from "../types";
 
-const getTransform = (
+export const getTransform = (
   width: number,
   height: number,
   angle: number,
@@ -254,7 +224,7 @@ export const textWysiwyg = ({
     font: ReturnType<typeof getFontString>;
     height: number;
     lineHeightPx: number;
-    textAlign: ExcalidrawTextElement["textAlign"];
+    textAlign: TextBlockStyle["textAlign"];
     width: number;
     x: number;
     y: number;
@@ -268,13 +238,11 @@ export const textWysiwyg = ({
       return false;
     }
     const currentFont = editable.style.fontFamily.replace(/"/g, "");
-    if (
-      getFontFamilyString({ fontFamily: updatedTextElement.fontFamily }) !==
-      currentFont
-    ) {
+    const style = getTextElementStyle(updatedTextElement);
+    if (getFontFamilyString(style) !== currentFont) {
       return true;
     }
-    if (`${updatedTextElement.fontSize}px` !== editable.style.fontSize) {
+    if (`${style.fontSize}px` !== editable.style.fontSize) {
       return true;
     }
     return false;
@@ -293,310 +261,83 @@ export const textWysiwyg = ({
     if (!updatedTextElement) {
       return;
     }
-    const { textAlign, verticalAlign } = updatedTextElement;
+    const { textAlign, verticalAlign } = getTextElementStyle(updatedTextElement);
     const elementsMap = app.scene.getNonDeletedElementsMap();
-    if (updatedTextElement && isTextElement(updatedTextElement)) {
-      let coordX = updatedTextElement.x;
-      let coordY = updatedTextElement.y;
-      const container = getContainerElement<
-        NonDeleted<ExcalidrawTextElement>,
-        NonDeleted<ExcalidrawTextContainer>
-      >(updatedTextElement, app.scene.getNonDeletedElementsMap());
+    const coordX = updatedTextElement.x;
+    const coordY = updatedTextElement.y;
 
-      let width = updatedTextElement.width;
+    let width = updatedTextElement.width;
+    // 独立文字默认按元素高度排版
+    let height = updatedTextElement.height;
+    let maxWidth = updatedTextElement.width;
 
-      // set to element height by default since that's
-      // what is going to be used for unbounded text
-      let height = updatedTextElement.height;
+    const [viewportX, viewportY] = getViewportCoords(coordX, coordY);
 
-      let maxWidth = updatedTextElement.width;
-      let maxHeight = updatedTextElement.height;
+    if (!isContainerBackgroundText(updatedTextElement)) {
+      maxWidth = (appState.width - 8 - viewportX) / appState.zoom.value;
+      width = Math.min(width, maxWidth);
+      // add 5% buffer otherwise it causes wysiwyg to jump
+      height *= 1.05;
+    }
 
-      if (container && updatedTextElement.containerId) {
-        if (isLinearElement(container)) {
-          const boundTextCoords =
-            LinearElementEditor.getBoundTextElementPosition(
-              container,
-              updatedTextElement as ExcalidrawTextElementWithContainer,
-              elementsMap,
-            );
-          coordX = boundTextCoords.x;
-          coordY = boundTextCoords.y;
-        }
-        maxWidth = getBoundTextMaxWidth(container, updatedTextElement);
-        maxHeight = getBoundTextMaxHeight(
-          container,
-          updatedTextElement as ExcalidrawTextElementWithContainer,
-        );
+    const textStyle = getTextElementStyle(updatedTextElement);
+    const font = getFontString({
+      ...textStyle,
+      // table header rows render their background text at 600 even though
+      // the element itself carries no explicit weight; mirror that here so
+      // the editor matches the canvas
+      fontWeight: resolveTableBackgroundTextFontWeight(
+        updatedTextElement,
+        elementsMap,
+      ),
+    });
+    const angle = updatedTextElement.angle;
 
-        if (isStickyNoteElement(container)) {
-          // the sticky fit (App.updateElement) owns the note's height; the
-          // editor only mirrors the fitted label's position
-          const { x, y } = computeBoundTextPosition(
-            container,
-            updatedTextElement as ExcalidrawTextElementWithContainer,
-            elementsMap,
-          );
-          coordX = x;
-          coordY = y;
-        } else {
-          const propertiesUpdated = textPropertiesUpdated(
-            updatedTextElement,
-            editable,
-          );
-
-          let originalContainerData;
-          if (propertiesUpdated) {
-            originalContainerData = updateOriginalContainerCache(
-              container.id,
-              container.height,
-            );
-          } else {
-            originalContainerData = originalContainerCache[container.id];
-            if (!originalContainerData) {
-              originalContainerData = updateOriginalContainerCache(
-                container.id,
-                container.height,
-              );
-            }
-          }
-
-          const isComposite = isShapeElement(container);
-          // a table-scaled mindmap node keeps its frozen geometry
-          // (phase-1:113): the editor never grows or shrinks it back
-          const isAdaptive =
-            !isSingleLineBoundText &&
-            (!isComposite ||
-              getCompositeShapeTextFitMode(container) === "auto") &&
-            !(
-              container.type === "mindmap-node" &&
-              isMindmapLayoutFrozen(container)
-            );
-          let layoutContainer = container;
-
-          // Composite shapes use the same forward safe-area calculation as
-          // redraw/restore. Keep the editor positioned against the resized
-          // container in the same pass, so it cannot jump to (0, 0).
-          if (
-            isAdaptive &&
-            !isLinearElement(container) &&
-            isSequenceLifelineElement(container)
-          ) {
-            // Lifeline fit is fixed-width / head-height-only: call the same
-            // solver redraw uses so live typing and commit agree.
-            const lifelineUpdates = getSequenceLifelineTextFitUpdates(
-              container,
-              height,
-            );
-            if (lifelineUpdates) {
-              app.scene.mutateElement(container, lifelineUpdates);
-              updateBoundElements(container, app.scene);
-              layoutContainer = { ...container, ...lifelineUpdates };
-              maxWidth = getBoundTextMaxWidth(
-                layoutContainer,
-                updatedTextElement,
-              );
-              maxHeight = getBoundTextMaxHeight(
-                layoutContainer,
-                updatedTextElement as ExcalidrawTextElementWithContainer,
-              );
-            }
-          } else if (
-            isAdaptive &&
-            !isLinearElement(container) &&
-            (height > maxHeight + 1e-6 ||
-              (isComposite && width > maxWidth + 1e-6))
-          ) {
-            const dimensions = isComposite
-              ? getBoundTextContainerDimensions(container, width, height)
-              : {
-                  width: container.width,
-                  height: computeContainerDimensionForBoundText(
-                    height,
-                    container.type === "mindmap-node"
-                      ? getMindmapShapeId(container) === "pill"
-                        ? "ellipse"
-                        : getMindmapShapeId(container)
-                      : "stickynote",
-                  ),
-                };
-            if (isComposite) {
-              dimensions.width =
-                Math.abs(dimensions.width - Math.round(dimensions.width)) < 1e-6
-                  ? Math.round(dimensions.width)
-                  : dimensions.width;
-              dimensions.height =
-                Math.abs(dimensions.height - Math.round(dimensions.height)) <
-                1e-6
-                  ? Math.round(dimensions.height)
-                  : dimensions.height;
-            }
-            const updates = {
-              ...(isComposite && { width: dimensions.width }),
-              height: dimensions.height,
-              ...(isComposite && {
-                textFitMinWidth:
-                  container.textFitMinWidth ??
-                  (container.width > 0 ? container.width : dimensions.width),
-                textFitMinHeight:
-                  container.textFitMinHeight ??
-                  (container.height > 0 ? container.height : dimensions.height),
-              }),
-            };
-            if (
-              dimensions.width !== container.width ||
-              dimensions.height !== container.height
-            ) {
-              app.scene.mutateElement(container, updates);
-              updateBoundElements(container, app.scene);
-              layoutContainer = { ...container, ...updates };
-              maxWidth = getBoundTextMaxWidth(
-                layoutContainer,
-                updatedTextElement,
-              );
-              maxHeight = getBoundTextMaxHeight(
-                layoutContainer,
-                updatedTextElement as ExcalidrawTextElementWithContainer,
-              );
-            }
-          } else if (
-            isComposite &&
-            isAdaptive &&
-            !isLinearElement(container) &&
-            height < maxHeight - 1e-6
-          ) {
-            const dimensions = getBoundTextContainerDimensions(
-              container,
-              width,
-              height,
-            );
-            const updates = {
-              width: dimensions.width,
-              height: dimensions.height,
-            };
-            if (
-              dimensions.width !== container.width ||
-              dimensions.height !== container.height
-            ) {
-              app.scene.mutateElement(container, updates);
-              updateBoundElements(container, app.scene);
-              layoutContainer = { ...container, ...updates };
-              maxWidth = getBoundTextMaxWidth(
-                layoutContainer,
-                updatedTextElement,
-              );
-              maxHeight = getBoundTextMaxHeight(
-                layoutContainer,
-                updatedTextElement as ExcalidrawTextElementWithContainer,
-              );
-            }
-          } else if (
-            // autoshrink container height until original container height
-            // is reached when text is removed
-            isAdaptive &&
-            !isComposite &&
-            !isLinearElement(container) &&
-            container.height > originalContainerData.height &&
-            height < maxHeight
-          ) {
-            const targetContainerHeight = computeContainerDimensionForBoundText(
-              height,
-              container.type === "mindmap-node"
-                ? getMindmapShapeId(container) === "pill"
-                  ? "ellipse"
-                  : getMindmapShapeId(container)
-                : "stickynote",
-            );
-            app.scene.mutateElement(container, {
-              height: targetContainerHeight,
-            });
-            updateBoundElements(container, app.scene);
-          }
-          const { x, y } = computeBoundTextPosition(
-            layoutContainer,
-            updatedTextElement as ExcalidrawTextElementWithContainer,
-            elementsMap,
-          );
-          coordX = x;
-          coordY = y;
-        }
-      }
-      const [viewportX, viewportY] = getViewportCoords(coordX, coordY);
-
-      if (!container && !isContainerBackgroundText(updatedTextElement)) {
-        maxWidth = (appState.width - 8 - viewportX) / appState.zoom.value;
-        width = Math.min(width, maxWidth);
-      } else if (container) {
-        width += 0.5;
-      }
-
-      // Background text uses its measured box; keep the editor at that size.
-      if (!isContainerBackgroundText(updatedTextElement)) {
-        // add 5% buffer otherwise it causes wysiwyg to jump
-        height *= 1.05;
-      }
-
-      const font = getFontString({
-        ...updatedTextElement,
-        // table header rows render their background text at 600 even though
-        // the element itself carries no explicit weight; mirror that here so
-        // the editor matches the canvas
-        fontWeight: resolveTableBackgroundTextFontWeight(
-          updatedTextElement,
-          elementsMap,
-        ),
-      });
-      const angle = getTextElementAngle(updatedTextElement, container);
-
-      // Make sure text editor height doesn't go beyond viewport
-      const editorMaxHeight =
-        (appState.height - viewportY) / appState.zoom.value;
-      Object.assign(editable.style, {
-        font,
-        // must be defined *after* font ¯\_(ツ)_/¯
-        lineHeight: updatedTextElement.lineHeight,
-        width: `${width}px`,
-        height: `${height}px`,
-        left: `${viewportX}px`,
-        top: `${viewportY}px`,
-        transform: getTransform(
-          width,
-          height,
-          angle,
-          appState,
-          maxWidth,
-          editorMaxHeight,
-        ),
-        textAlign,
-        verticalAlign,
-        color: applyDarkModeFilter(
-          updatedTextElement.strokeColor,
-          appState.theme === THEME.DARK,
-        ),
-        opacity: updatedTextElement.opacity / 100,
-        maxHeight: `${editorMaxHeight}px`,
-      });
-      currentTextLayout = {
-        angle: angle as Radians,
-        font,
-        height: updatedTextElement.height,
-        lineHeightPx: getLineHeightInPx(
-          updatedTextElement.fontSize,
-          updatedTextElement.lineHeight,
-        ),
-        textAlign,
-        width: updatedTextElement.width,
-        x: coordX,
-        y: coordY,
-      };
-      editable.scrollTop = 0;
-      // For some reason updating font attribute doesn't set font family
-      // hence updating font family explicitly for test environment
-      if (isTestEnv()) {
-        editable.style.fontFamily = getFontFamilyString(updatedTextElement);
-      }
-
-      app.scene.mutateElement(updatedTextElement, { x: coordX, y: coordY });
+    // Make sure text editor height doesn't go beyond viewport
+    const editorMaxHeight = (appState.height - viewportY) / appState.zoom.value;
+    Object.assign(editable.style, {
+      font,
+      // must be defined *after* font ¯\_(ツ)_/¯
+      lineHeight: textStyle.lineHeight,
+      width: `${width}px`,
+      height: `${height}px`,
+      left: `${viewportX}px`,
+      top: `${viewportY}px`,
+      transform: getTransform(
+        width,
+        height,
+        angle,
+        appState,
+        maxWidth,
+        editorMaxHeight,
+      ),
+      textAlign,
+      verticalAlign,
+      color: applyDarkModeFilter(
+        updatedTextElement.strokeColor,
+        appState.theme === THEME.DARK,
+      ),
+      opacity: updatedTextElement.opacity / 100,
+      maxHeight: `${editorMaxHeight}px`,
+    });
+    currentTextLayout = {
+      angle: angle as Radians,
+      font,
+      height: updatedTextElement.height,
+      lineHeightPx: getLineHeightInPx(
+        textStyle.fontSize,
+        textStyle.lineHeight,
+      ),
+      textAlign,
+      width: updatedTextElement.width,
+      x: coordX,
+      y: coordY,
+    };
+    editable.scrollTop = 0;
+    // For some reason updating font attribute doesn't set font family
+    // hence updating font family explicitly for test environment
+    if (isTestEnv()) {
+      editable.style.fontFamily = getFontFamilyString(textStyle);
     }
   };
 
@@ -616,16 +357,9 @@ export const textWysiwyg = ({
 
   let whiteSpace = "pre";
   let wordBreak = "normal";
-  const isSingleLineBoundText = element.containerSlot === "title";
-  const normalizeForEditor = (value: string) =>
-    isSingleLineBoundText ? value.replace(/\s*[\r\n]+\s*/g, " ") : value;
+  const normalizeForEditor = (value: string) => value;
 
-  if (
-    !isSingleLineBoundText &&
-    (isBoundToContainer(element) ||
-      isContainerBackgroundText(element) ||
-      !element.autoResize)
-  ) {
+  if (isContainerBackgroundText(element) || !element.autoResize) {
     whiteSpace = "pre-wrap";
     wordBreak = "break-word";
   }
@@ -649,7 +383,7 @@ export const textWysiwyg = ({
     overflowWrap: "break-word",
     boxSizing: "content-box",
   });
-  editable.value = normalizeForEditor(element.originalText);
+  editable.value = normalizeForEditor(getTextElementText(element));
   updateWysiwygStyle();
 
   const getCaretIndexFromInitialSceneCoords = () => {
@@ -780,35 +514,6 @@ export const textWysiwyg = ({
       if (!text) {
         return;
       }
-      const container = getContainerElement(
-        element,
-        app.scene.getNonDeletedElementsMap(),
-      );
-
-      if (container) {
-        const boundTextElement = getBoundTextElement(
-          container,
-          app.scene.getNonDeletedElementsMap(),
-          element.containerSlot,
-        );
-        const font = getFontString({
-          fontSize:
-            isStickyNoteElement(container) && boundTextElement
-              ? boundTextElement.fontSize
-              : app.state.currentItemFontSize,
-          fontFamily:
-            isStickyNoteElement(container) && boundTextElement
-              ? boundTextElement.fontFamily
-              : app.state.currentItemFontFamily,
-        });
-        const maxWidth = getBoundTextMaxWidth(container, boundTextElement);
-        const { selectionStart, selectionEnd, value } = editable;
-        const nextText =
-          value.slice(0, selectionStart) + text + value.slice(selectionEnd);
-        const wrappedText = wrapText(nextText, font, maxWidth);
-        const width = Math.min(getTextWidth(wrappedText, font), maxWidth);
-        editable.style.width = `${width}px`;
-      }
     };
 
     editable.oninput = () => {
@@ -853,13 +558,6 @@ export const textWysiwyg = ({
       event.preventDefault();
       app.actionManager.executeAction(actionResetZoom);
       updateWysiwygStyle();
-    } else if (isSingleLineBoundText && event.key === KEYS.ENTER) {
-      if (event.isComposing || event.keyCode === 229) {
-        return;
-      }
-      event.preventDefault();
-      submittedViaKeyboard = true;
-      handleSubmit();
     } else if (actionDecreaseFontSize.keyTest(event)) {
       app.actionManager.executeAction(actionDecreaseFontSize);
     } else if (actionIncreaseFontSize.keyTest(event)) {
@@ -1014,44 +712,6 @@ export const textWysiwyg = ({
     // it'd get stuck in an infinite loop of blur→onSubmit after we re-focus the
     // wysiwyg on update
     cleanup();
-    const updateElement = app.scene.getElement(
-      element.id,
-    ) as ExcalidrawTextElement;
-    if (!updateElement) {
-      return;
-    }
-    const container = getContainerElement(
-      updateElement,
-      app.scene.getNonDeletedElementsMap(),
-    );
-
-    if (container) {
-      const slot = updateElement.containerSlot;
-      if (editable.value.trim()) {
-        const boundTextElementId = getBoundTextElementId(container, slot);
-        if (!boundTextElementId || boundTextElementId !== element.id) {
-          app.scene.mutateElement(container, {
-            boundElements: (container.boundElements || []).concat({
-              type: "text",
-              id: element.id,
-              ...(slot ? { slot } : {}),
-            }),
-          });
-        } else if (isLinearElement(container)) {
-          // updating an arrow label may change bounds, prevent stale cache:
-          bumpVersion(container);
-        }
-      } else {
-        app.scene.mutateElement(container, {
-          boundElements: container.boundElements?.filter(
-            (ele) => ele.id !== element.id,
-          ),
-        });
-      }
-
-      redrawTextBoundingBox(updateElement, container, app.scene);
-    }
-
     onSubmit({
       viaKeyboard: submittedViaKeyboard,
       nextOriginalText: editable.value,

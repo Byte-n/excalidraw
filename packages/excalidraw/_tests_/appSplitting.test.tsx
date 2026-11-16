@@ -1,6 +1,8 @@
 import React from "react";
 import { vi } from "vitest";
 
+import { getTextElementText } from "@excalidraw/element";
+
 import {
   isIframeLikeInteractive,
   handleIframeLikeElementHover,
@@ -38,7 +40,7 @@ describe("App controller boundaries", () => {
     expect(elements).toHaveLength(1);
     expect(elements[0].type).toBe("text");
     if (elements[0].type === "text") {
-      expect(elements[0].text).toBe("first\n\nsecond");
+      expect(getTextElementText(elements[0])).toBe("first\n\nsecond");
     }
 
     await act(async () => {

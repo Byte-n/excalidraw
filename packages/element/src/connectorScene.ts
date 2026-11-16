@@ -86,8 +86,7 @@ const endpointTarget = (
   if (
     !isBindableElement(target) ||
     target.type === "mindmap-node" ||
-    target.id === connector?.id ||
-    (target.type === "text" && target.containerId === connector?.id)
+    target.id === connector?.id
   ) {
     throw new CanvasSceneError("invalid_operation", "对象不能作为连线端点");
   }

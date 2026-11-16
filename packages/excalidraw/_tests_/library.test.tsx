@@ -75,16 +75,7 @@ describe("library items inserting", () => {
     const rectangle = API.createElement({
       id: "rectangle1",
       type: "rectangle",
-      boundElements: [
-        { type: "text", id: "text1" },
-        { type: "arrow", id: "arrow1" },
-      ],
-    });
-    const text = API.createElement({
-      id: "text1",
-      type: "text",
-      text: "ola",
-      containerId: "rectangle1",
+      boundElements: [{ type: "arrow", id: "arrow1" }],
     });
     const arrow = API.createElement({
       id: "arrow1",
@@ -99,7 +90,7 @@ describe("library items inserting", () => {
       {
         id: "libraryItem_id0",
         status: "unpublished",
-        elements: [rectangle, text, arrow],
+        elements: [rectangle, arrow],
         created: 0,
         name: "test",
       },
@@ -131,7 +122,6 @@ describe("library items inserting", () => {
 
     await waitFor(() => {
       const rectangle = h.elements.find((e) => isShapeWithId(e, "rectangle"))!;
-      const text = h.elements.find((e) => e.type === "text")!;
       const arrow = h.elements.find((e) => e.type === "arrow")!;
       expect(h.elements).toEqual(
         expect.arrayContaining([
@@ -140,14 +130,8 @@ describe("library items inserting", () => {
             shape: { id: "rectangle", schemaVersion: 1 },
             id: expect.not.stringMatching("rectangle1"),
             boundElements: expect.arrayContaining([
-              { type: "text", id: text.id },
               { type: "arrow", id: arrow.id },
             ]),
-          }),
-          expect.objectContaining({
-            type: "text",
-            id: expect.not.stringMatching("text1"),
-            containerId: rectangle.id,
           }),
           expect.objectContaining({
             type: "arrow",

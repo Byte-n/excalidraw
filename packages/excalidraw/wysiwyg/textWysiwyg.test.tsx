@@ -1,11 +1,19 @@
 import { queryByText } from "@testing-library/react";
 
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom, type LocalPoint } from "@excalidraw/math";
 import {
+  LinearElementEditor,
   getLineHeightInPx,
+  getLocalTextRegionLayout,
   getOriginalContainerHeightFromCache,
   getSequenceLifelineDefaultSize,
+  getTextBlock,
+  getTextElementDisplayText,
+  getTextElementStyle,
+  getTextElementText,
+  getTextElementTextPatch,
   isSequenceLifelineElement,
+  newElementWith,
   SEQUENCE_LIFELINE_HEAD_HEIGHTS,
 } from "@excalidraw/element";
 
@@ -18,12 +26,16 @@ import {
   THEME,
   VERTICAL_ALIGN,
   applyDarkModeFilter,
+  arrayToMap,
+  getLineHeight,
 } from "@excalidraw/common";
 
 import type {
+  ExcalidrawElement,
+  ExcalidrawLinearElement,
   ExcalidrawShapeElement,
+  ExcalidrawTextContainer,
   ExcalidrawTextElement,
-  ExcalidrawTextElementWithContainer,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
 
@@ -44,7 +56,7 @@ import {
   mockBoundingClientRect,
   restoreOriginalGetBoundingClientRect,
 } from "../_tests_/test-utils";
-import { actionBindText } from "../actions";
+import { actionSetCompositeShapeTextFitAuto } from "../actions/actionCompositeShapeTextFit";
 import { actionTextAutoResize } from "../actions/actionTextAutoResize";
 
 const { h } = window;
@@ -53,6 +65,38 @@ unmountComponent();
 
 const tab = "    ";
 const mouse = new Pointer("mouse");
+
+/**
+ * 图形家族的正文内嵌到元素自身的 `texts`；线条标签同样存放在 `texts.label`
+ * 里，由区域布局排版。
+ */
+const createBoundTextContainer = (
+  overrides: Partial<{
+    x: number;
+    y: number;
+    angle: number;
+    strokeWidth: number;
+    containerRef: ExcalidrawElement["containerRef"];
+  }> = {},
+) =>
+  API.createElement({
+    type: "line",
+    x: 10,
+    y: 20,
+    width: 90,
+    height: 75,
+    points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(90, 75)],
+    ...overrides,
+  });
+
+/** 始终读取场景里的最新元素，避免 fixture 在 replaceAllElements 后过期 */
+const liveElement = <T extends ExcalidrawElement>(id: string) =>
+  new Proxy({} as T, {
+    get(_target, prop) {
+      const live = h.elements.find((element) => element.id === id) as any;
+      return live?.[prop];
+    },
+  });
 
 // radix 弹层需要 ResizeObserver（jsdom 没有，同 test-utils 的 togglePopover）
 const stubResizeObserver = () => {
@@ -69,15 +113,6 @@ const openTextPropsPopup = () => {
   stubResizeObserver();
   fireEvent.click(
     document.querySelector<HTMLButtonElement>("[aria-label='Text align']")!,
-  );
-};
-
-const openFontPopup = () => {
-  stubResizeObserver();
-  fireEvent.click(
-    document.querySelector<HTMLButtonElement>(
-      "[data-testid='font-family-show-fonts']",
-    )!,
   );
 };
 
@@ -136,119 +171,50 @@ describe("textWysiwyg", () => {
       Keyboard.keyPress(KEYS.ENTER);
 
       expect(h.state.editingTextElement?.id).toBe(text.id);
+    });
+
+    it("should open the embedded body region on ENTER without creating text", () => {
+      const container = API.createElement({
+        type: "df-process",
+        width: 100,
+        height: 80,
+      });
+      API.setElements([container]);
+      API.setSelectedElements([container]);
+
+      Keyboard.keyPress(KEYS.ENTER);
+
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: container.id,
+        region: "body",
+      });
+      expect(h.state.editingTextElement).toBe(null);
       expect(
-        (h.state.editingTextElement as ExcalidrawTextElement).containerId,
-      ).toBe(null);
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     });
 
-    it("should prefer editing selected text element (bindable container present)", async () => {
+    it("should not create another text element when editing an embedded container twice", () => {
       const container = API.createElement({
-        type: "rectangle",
+        type: "df-process",
         width: 100,
-        boundElements: [],
+        height: 80,
       });
-      const textSize = 20;
-
-      const boundText = API.createElement({
-        type: "text",
-        text: "ola",
-        x: container.width / 2 - textSize / 2,
-        y: container.height / 2 - textSize / 2,
-        width: textSize,
-        height: textSize,
-        containerId: container.id,
-      });
-
-      const boundText2 = API.createElement({
-        type: "text",
-        text: "ola",
-        x: container.width / 2 - textSize / 2,
-        y: container.height / 2 - textSize / 2,
-        width: textSize,
-        height: textSize,
-        containerId: container.id,
-      });
-
-      API.setElements([container, boundText, boundText2]);
-
-      API.updateElement(container, {
-        boundElements: [{ type: "text", id: boundText.id }],
-      });
-
-      API.setSelectedElements([boundText2]);
-
-      Keyboard.keyPress(KEYS.ENTER);
-
-      expect(h.state.editingTextElement?.id).toBe(boundText2.id);
-    });
-
-    it("should not create bound text on ENTER if text exists at container center", () => {
-      const container = API.createElement({
-        type: "rectangle",
-        width: 100,
-      });
-      const textSize = 20;
-      const text = API.createElement({
-        type: "text",
-        text: "ola",
-        x: container.width / 2 - textSize / 2,
-        y: container.height / 2 - textSize / 2,
-        width: textSize,
-        height: textSize,
-        containerId: container.id,
-      });
-      API.updateElement(container, {
-        boundElements: [{ type: "text", id: text.id }],
-      });
-
-      API.setElements([container, text]);
-
+      API.setElements([container]);
       API.setSelectedElements([container]);
 
       Keyboard.keyPress(KEYS.ENTER);
-
-      expect(h.state.editingTextElement?.id).toBe(text.id);
-    });
-
-    it("should edit existing bound text on ENTER even if higher z-index unbound text exists at container center", () => {
-      const container = API.createElement({
-        type: "rectangle",
-        width: 100,
-        boundElements: [],
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
       });
-      const textSize = 20;
-
-      const boundText = API.createElement({
-        type: "text",
-        text: "ola",
-        x: container.width / 2 - textSize / 2,
-        y: container.height / 2 - textSize / 2,
-        width: textSize,
-        height: textSize,
-        containerId: container.id,
-      });
-
-      const boundText2 = API.createElement({
-        type: "text",
-        text: "ola",
-        x: container.width / 2 - textSize / 2,
-        y: container.height / 2 - textSize / 2,
-        width: textSize,
-        height: textSize,
-        containerId: container.id,
-      });
-
-      API.setElements([container, boundText, boundText2]);
-
-      API.updateElement(container, {
-        boundElements: [{ type: "text", id: boundText.id }],
-      });
-
-      API.setSelectedElements([container]);
 
       Keyboard.keyPress(KEYS.ENTER);
 
-      expect(h.state.editingTextElement?.id).toBe(boundText.id);
+      expect(h.state.editingTextRegion?.target.elementId).toBe(container.id);
+      expect(h.state.editingTextElement).toBe(null);
+      expect(
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     });
 
     it("should edit text under cursor when clicked with text tool", async () => {
@@ -284,7 +250,10 @@ describe("textWysiwyg", () => {
 
       const editor = await getTextEditor();
       const text = h.elements[0] as ExcalidrawTextElement;
-      const lineHeightPx = getLineHeightInPx(text.fontSize, text.lineHeight);
+      const lineHeightPx = getLineHeightInPx(
+        getTextElementStyle(text).fontSize,
+        getTextElementStyle(text).lineHeight,
+      );
 
       expect(editor).not.toBe(null);
       expect(text.y + lineHeightPx / 2).toBe(80);
@@ -358,67 +327,6 @@ describe("textWysiwyg", () => {
       });
     });
 
-    it("should edit selected bound text on single click", async () => {
-      const container = API.createElement({
-        type: "rectangle",
-        width: 160,
-        height: 70,
-        boundElements: [],
-      });
-      const text = API.createElement({
-        type: "text",
-        text: "Hello World!",
-        x: container.x + 20,
-        y: container.y + 20,
-        width: 120,
-        height: 25,
-        containerId: container.id,
-      });
-
-      API.setElements([container, text]);
-      API.updateElement(container, {
-        boundElements: [{ type: "text", id: text.id }],
-      });
-      API.setSelectedElements([container]);
-      UI.clickTool("selection");
-
-      mouse.clickAt(text.x + 26, text.y + 10);
-
-      const editor = await getTextEditor();
-
-      expect(editor).not.toBe(null);
-    });
-
-    it("should not edit selected bound text container when only the container was single-clicked", async () => {
-      const container = API.createElement({
-        type: "rectangle",
-        width: 160,
-        height: 70,
-        boundElements: [],
-      });
-      const text = API.createElement({
-        type: "text",
-        text: "Hello World!",
-        x: container.x + 20,
-        y: container.y + 20,
-        width: 120,
-        height: 25,
-        containerId: container.id,
-      });
-
-      API.setElements([container, text]);
-      API.updateElement(container, {
-        boundElements: [{ type: "text", id: text.id }],
-      });
-      API.setSelectedElements([container]);
-      UI.clickTool("selection");
-
-      mouse.clickAt(container.x + 5, container.y + 10);
-
-      expect(h.state.editingTextElement).toBe(null);
-      expect(await getTextEditor({ waitForEditor: false })).toBe(null);
-    });
-
     // FIXME too flaky. No one knows why.
     it.skip("should bump the version of a labeled arrow when the label is updated", async () => {
       const arrow = UI.createElement("arrow", {
@@ -464,18 +372,18 @@ describe("textWysiwyg", () => {
 
       const prevWidth = text.width;
       const prevHeight = text.height;
-      const prevText = text.text;
+      const prevText = getTextElementDisplayText(text);
 
       // text is wrapped
       UI.resize(text, "e", [-20, 0]);
       expect(text.width).not.toEqual(prevWidth);
       expect(text.height).not.toEqual(prevHeight);
-      expect(text.text).not.toEqual(prevText);
+      expect(getTextElementDisplayText(text)).not.toEqual(prevText);
       expect(text.autoResize).toBe(false);
 
       const wrappedWidth = text.width;
       const wrappedHeight = text.height;
-      const wrappedText = text.text;
+      const wrappedText = getTextElementDisplayText(text);
 
       // edit text
       UI.clickTool("selection");
@@ -517,11 +425,13 @@ describe("textWysiwyg", () => {
       Keyboard.exitTextEditor(editor);
       // restore after unwrapping
       UI.resize(text, "e", [40, 0]);
-      expect((h.elements[0] as ExcalidrawTextElement).text).toBe(originalText);
+      expect(
+        getTextElementDisplayText(h.elements[0] as ExcalidrawTextElement),
+      ).toBe(originalText);
 
       // wrap again and add a new line
       UI.resize(text, "e", [-30, 0]);
-      const wrappedText = text.text;
+      const wrappedText = getTextElementDisplayText(text);
       UI.clickTool("selection");
       mouse.doubleClickAt(text.x + text.width / 2, text.y + text.height / 2);
       updateTextEditor(editor, `${wrappedText}\nA new line!`);
@@ -534,7 +444,9 @@ describe("textWysiwyg", () => {
       // unwrap
       UI.resize(text, "e", [30, 0]);
       // expect the text to be restored the same
-      expect((h.elements[0] as ExcalidrawTextElement).text).toBe(originalText);
+      expect(
+        getTextElementDisplayText(h.elements[0] as ExcalidrawTextElement),
+      ).toBe(originalText);
     });
   });
 
@@ -701,20 +613,22 @@ describe("textWysiwyg", () => {
 
     it("should resize text via shortcuts while in wysiwyg", () => {
       textarea.value = "abc def";
-      const origFontSize = textElement.fontSize;
+      const origFontSize = getTextElementStyle(textElement).fontSize;
       fireEvent.keyDown(textarea, {
         key: KEYS.CHEVRON_RIGHT,
         ctrlKey: true,
         shiftKey: true,
       });
-      expect(textElement.fontSize).toBe(origFontSize * 1.1);
+      expect(getTextElementStyle(textElement).fontSize).toBe(
+        origFontSize * 1.1,
+      );
 
       fireEvent.keyDown(textarea, {
         key: KEYS.CHEVRON_LEFT,
         ctrlKey: true,
         shiftKey: true,
       });
-      expect(textElement.fontSize).toBe(origFontSize);
+      expect(getTextElementStyle(textElement).fontSize).toBe(origFontSize);
     });
 
     it("zooming via keyboard should zoom canvas", () => {
@@ -765,46 +679,39 @@ describe("textWysiwyg", () => {
       await render(<Excalidraw handleKeyboardGlobally={true} />);
       API.setElements([]);
 
-      rectangle = UI.createElement("rectangle", {
-        x: 10,
-        y: 20,
-        width: 90,
-        height: 75,
-      });
+      const container = createBoundTextContainer();
+      API.setElements([container]);
+      API.setSelectedElements([container]);
+      rectangle = liveElement(container.id);
     });
 
-    it("should bind text to container when double clicked inside filled container", async () => {
-      const rectangle = API.createElement({
-        type: "rectangle",
-        x: 10,
-        y: 20,
-        width: 90,
-        height: 75,
-        backgroundColor: "red",
-      });
-      API.setElements([rectangle]);
+    it("should embed a label in a line when double clicked", async () => {
+      const line = createBoundTextContainer();
+      API.setElements([line]);
 
       expect(h.elements.length).toBe(1);
-      expect(h.elements[0].id).toBe(rectangle.id);
+      expect(h.elements[0].id).toBe(line.id);
 
-      mouse.doubleClickAt(rectangle.x + 10, rectangle.y + 10);
-      expect(h.elements.length).toBe(2);
-
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.type).toBe("text");
-      expect(text.containerId).toBe(rectangle.id);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
+      mouse.doubleClickAt(line.x + 10, line.y + 10);
+      expect(h.elements.length).toBe(1);
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: line.id,
+        region: "label",
+      });
       mouse.down();
       const editor = await getTextEditor();
 
       updateTextEditor(editor, "Hello World!");
 
-      Keyboard.exitTextEditor(editor);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
+      const liveLine = liveElement<ExcalidrawLinearElement>(line.id);
+      expect(liveLine.texts?.label?.text).toBe("Hello World!");
+      expect(liveLine.texts?.label?.placement?.labelPosition).toBe(0.5);
+      expect(
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     });
 
     it("should not add bound text to a frame when its container is not a frame child", async () => {
@@ -815,25 +722,23 @@ describe("textWysiwyg", () => {
         width: 200,
         height: 200,
       });
-      const rectangle = API.createElement({
-        type: "rectangle",
-        x: 10,
-        y: 20,
-        width: 90,
-        height: 75,
-        backgroundColor: "red",
+      const line = createBoundTextContainer();
+      API.setElements([frame, line]);
+
+      mouse.doubleClickAt(line.x + 10, line.y + 10);
+
+      const liveLine = liveElement<ExcalidrawLinearElement>(line.id);
+      expect(liveLine.texts?.label).toBeUndefined();
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: line.id,
+        region: "label",
       });
-      API.setElements([frame, rectangle]);
-
-      mouse.doubleClickAt(rectangle.x + 10, rectangle.y + 10);
-
-      const text = h.elements[2] as ExcalidrawTextElementWithContainer;
-      expect(text.type).toBe("text");
-      expect(text.containerId).toBe(rectangle.id);
-      expect(text.containerRef?.elementId ?? null).toBe(null);
+      expect(
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     });
 
-    it("should bind text to a frame child container when single clicking its center", async () => {
+    it("should embed a label in a frame child container when single clicking its center", async () => {
       const frame = API.createElement({
         type: "frame",
         x: 0,
@@ -841,54 +746,57 @@ describe("textWysiwyg", () => {
         width: 200,
         height: 200,
       });
-      const rectangle = API.createElement({
-        type: "rectangle",
-        x: 10,
-        y: 20,
-        width: 90,
-        height: 75,
-        backgroundColor: "red",
+      const line = createBoundTextContainer({
         containerRef: { kind: "frameLike", elementId: frame.id },
       });
-      API.setElements([rectangle, frame]);
+      API.setElements([line, frame]);
 
       UI.clickTool("text");
-      mouse.clickAt(
-        rectangle.x + rectangle.width / 2,
-        rectangle.y + rectangle.height / 2,
-      );
+      mouse.clickAt(line.x + line.width / 2, line.y + line.height / 2);
 
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.type).toBe("text");
-      expect(text.containerId).toBe(rectangle.id);
-      expect(text.containerRef).toBeUndefined();
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: line.id,
+        region: "label",
+      });
+      expect(h.elements).toHaveLength(2);
+      expect(
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     });
 
-    it("should set the text element angle to same as container angle when binding to rotated container", async () => {
-      const rectangle = API.createElement({
-        type: "rectangle",
+    it("should keep the element angle when editing embedded text on a rotated shape", async () => {
+      const process = API.createElement({
+        type: "df-process",
+        x: 0,
+        y: 0,
         width: 90,
         height: 75,
         angle: 45,
       });
-      API.setElements([rectangle]);
-      mouse.doubleClickAt(rectangle.x + 10, rectangle.y + 10);
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.type).toBe("text");
-      expect(text.containerId).toBe(rectangle.id);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
-      expect(text.angle).toBe(rectangle.angle);
-      mouse.down();
+      API.setElements([process]);
+
+      act(() => {
+        h.app.startTextEditing({
+          sceneX: process.x + process.width / 2,
+          sceneY: process.y + process.height / 2,
+          container: process as unknown as ExcalidrawTextContainer,
+        });
+      });
+
+      expect(h.state.editingTextRegion?.target.region).toBe("body");
+      expect(h.state.editingTextElement).toBe(null);
+
       const editor = await getTextEditor();
-
       updateTextEditor(editor, "Hello World!");
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
 
-      Keyboard.exitTextEditor(editor);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
+      expect(process.angle).toBe(45);
+      expect(process.texts?.body?.text).toBe("Hello World!");
+      expect(
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     });
 
     it("should compute the container height correctly and not throw error when height is updated while editing the text", async () => {
@@ -943,22 +851,27 @@ describe("textWysiwyg", () => {
       Keyboard.keyPress(KEYS.ENTER);
 
       const editor = await getTextEditor();
+      const initialTop = parseFloat(editor.style.top);
+      const initialLeft = parseFloat(editor.style.left);
+
       await act(async () => {
         updateTextEditor(editor, new Array(20).fill("line").join("\n"));
       });
-      // Composite containers defer geometry updates during live editing, so the
-      // cube keeps its original height while the editor stays anchored to it.
+      // 内嵌正文在实时编辑期间不改变形状尺寸，编辑框始终锚定在元素的正文区域
       expect(cube.height).toBe(80);
-      expect(parseFloat(editor.style.left)).toBeGreaterThan(0);
-      expect(parseFloat(editor.style.top)).toBeGreaterThan(0);
+      expect(cube.width).toBe(120);
+      expect(await getTextEditor({ waitForEditor: false })).toBe(editor);
 
       await act(async () => {
         updateTextEditor(editor, "short");
       });
       expect(cube.height).toBe(80);
+      // 收缩回单行后编辑框回到初始锚点
+      expect(parseFloat(editor.style.left)).toBeCloseTo(initialLeft, 4);
+      expect(parseFloat(editor.style.top)).toBeCloseTo(initialTop, 4);
     });
 
-    it("keeps fixed composite shapes unchanged and renders an ellipsis", async () => {
+    it("keeps fixed composite shapes unchanged and truncates the embedded text", async () => {
       const cube = API.createElement({
         type: "cube",
         x: 100,
@@ -976,14 +889,23 @@ describe("textWysiwyg", () => {
       const editor = await getTextEditor();
       const originalText = new Array(40).fill("long label").join(" ");
       updateTextEditor(editor, originalText);
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
 
       expect(cube.width).toBe(120);
       expect(cube.height).toBe(80);
-      const boundText = h.elements.find(
-        (element) => element.type === "text" && element.containerId === cube.id,
-      ) as ExcalidrawTextElementWithContainer;
-      expect(boundText.originalText).toBe(originalText);
-      expect(boundText.text).toContain("…");
+      const live = h.elements.find(
+        (element) => element.id === cube.id,
+      ) as ExcalidrawShapeElement;
+      // 固定尺寸只截断显示，正文本身完整保留在 texts.body 中
+      expect(live.texts?.body?.text).toBe(originalText);
+      expect(getLocalTextRegionLayout(live, "body")!.text).toContain("…");
+      expect(
+        h.elements.some(
+          (element) => element.type === "text" && !element.isDeleted,
+        ),
+      ).toBe(false);
     });
 
     it("grows a lifeline head upward for a long label and shrinks it back", async () => {
@@ -1002,10 +924,19 @@ describe("textWysiwyg", () => {
       API.setAppState({ currentItemFontSize: 14 });
       Keyboard.keyPress(KEYS.ENTER);
 
+      // 生命线的标签走区域编辑，不创建绑定文字元素
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: lifeline.id,
+        region: "body",
+      });
+
       const editor = await getTextEditor();
       const longLabel = new Array(12).fill("lifeline label").join(" ");
       await act(async () => {
         updateTextEditor(editor, longLabel);
+      });
+      await act(async () => {
+        h.app.textWysiwygSubmitHandler?.();
       });
 
       const latest = () => {
@@ -1016,6 +947,12 @@ describe("textWysiwyg", () => {
         return element;
       };
       const grown = latest();
+      expect(grown.texts?.body?.text).toBe(longLabel);
+      expect(
+        h.elements.filter(
+          (element) => element.type === "text" && !element.isDeleted,
+        ),
+      ).toHaveLength(0);
       expect(grown.width).toBe(width);
       expect(grown.shape.lifeline.headHeight).toBeGreaterThan(baseHeadHeight);
       // The head bottom and the pole length stay fixed.
@@ -1028,8 +965,14 @@ describe("textWysiwyg", () => {
         4,
       );
 
+      // 提交后元素仍处于选中态，再次回车即可重新进入区域编辑
+      Keyboard.keyPress(KEYS.ENTER);
+      const secondEditor = await getTextEditor();
       await act(async () => {
-        updateTextEditor(editor, "Short");
+        updateTextEditor(secondEditor, "Short");
+      });
+      await act(async () => {
+        h.app.textWysiwygSubmitHandler?.();
       });
       expect(latest().shape.lifeline.headHeight).toBeCloseTo(baseHeadHeight, 4);
     });
@@ -1058,6 +1001,9 @@ describe("textWysiwyg", () => {
       await act(async () => {
         updateTextEditor(editor, originalText);
       });
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
 
       const latest = h.elements.find((item) => item.id === lifeline.id)!;
       if (!isSequenceLifelineElement(latest)) {
@@ -1066,11 +1012,57 @@ describe("textWysiwyg", () => {
       expect(latest.y).toBe(100);
       expect(latest.height).toBe(height);
       expect(latest.shape.lifeline.headHeight).toBe(baseHeadHeight);
-      const boundText = h.elements.find(
-        (item) => item.type === "text" && item.containerId === latest.id,
-      ) as ExcalidrawTextElementWithContainer;
-      expect(boundText.originalText).toBe(originalText);
-      expect(boundText.text).toContain("…");
+      // 源文本完整保留在 texts.body，显示层只做截断
+      expect(latest.texts?.body?.text).toBe(originalText);
+      expect(getLocalTextRegionLayout(latest, "body")!.text).toContain("…");
+      expect(
+        h.elements.filter(
+          (element) => element.type === "text" && !element.isDeleted,
+        ),
+      ).toHaveLength(0);
+    });
+
+    it("removes the lifeline body key when an empty label is submitted", async () => {
+      const id = "sc-lifeline-entity";
+      const { width, height } = getSequenceLifelineDefaultSize(id);
+      const lifeline = API.createElement({
+        type: id,
+        x: 100,
+        y: 100,
+        width,
+        height,
+        texts: {
+          body: {
+            text: "Label",
+            style: {
+              fontFamily: FONT_FAMILY.Virgil,
+              fontSize: 14,
+              lineHeight: getLineHeight(FONT_FAMILY.Virgil),
+              textAlign: "center" as const,
+              verticalAlign: "middle" as const,
+            },
+          },
+        },
+      });
+      API.setElements([lifeline]);
+      API.setSelectedElements([lifeline]);
+      Keyboard.keyPress(KEYS.ENTER);
+
+      const editor = await getTextEditor();
+      await act(async () => {
+        updateTextEditor(editor, "");
+      });
+      await act(async () => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
+
+      const latest = h.elements.find((item) => item.id === lifeline.id)!;
+      expect(latest.texts).toBeUndefined();
+      expect(
+        h.elements.filter(
+          (element) => element.type === "text" && !element.isDeleted,
+        ),
+      ).toHaveLength(0);
     });
 
     it("switches a lifeline to fixed fit after a manual head resize", async () => {
@@ -1094,7 +1086,7 @@ describe("textWysiwyg", () => {
         updateTextEditor(editor, "Label");
       });
       await act(async () => {
-        Keyboard.exitTextEditor(editor);
+        h.app.textWysiwygSubmitHandler?.();
       });
 
       const latest = () => {
@@ -1108,86 +1100,167 @@ describe("textWysiwyg", () => {
       const resized = latest();
       expect(resized.textFitMode).toBe("fixed");
       expect(resized.shape.lifeline.headHeight).toBeGreaterThan(baseHeadHeight);
+      // 标签布局按新的头部重新求解，仍在头部安全区内
+      expect(resized.texts?.body?.text).toBe("Label");
+      const region = getLocalTextRegionLayout(resized, "body")!;
+      expect(region.y).toBeGreaterThanOrEqual(0);
+      expect(region.y + region.height).toBeLessThanOrEqual(
+        resized.shape.lifeline.headHeight + 1e-6,
+      );
     });
 
-    it("should bind text to container when double clicked inside of the transparent container", async () => {
-      const rectangle = API.createElement({
-        type: "rectangle",
-        x: 10,
-        y: 20,
-        width: 90,
-        height: 75,
-        backgroundColor: "transparent",
+    it("opens the lifeline head region on double click and ignores the pole", async () => {
+      const id = "sc-lifeline-entity";
+      const { width, height } = getSequenceLifelineDefaultSize(id);
+      const lifeline = API.createElement({
+        type: id,
+        x: 100,
+        y: 100,
+        width,
+        height,
       });
-      API.setElements([rectangle]);
+      API.setElements([lifeline]);
 
-      mouse.doubleClickAt(rectangle.x + 10, rectangle.y + 10);
-      expect(h.elements.length).toBe(2);
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.type).toBe("text");
-      expect(text.containerId).toBe(rectangle.id);
+      mouse.doubleClickAt(
+        100 + width / 2,
+        100 + SEQUENCE_LIFELINE_HEAD_HEIGHTS[id] / 2,
+      );
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: lifeline.id,
+        region: "body",
+      });
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
+
+      mouse.doubleClickAt(100 + width / 2, 100 + height - 20);
+      expect(h.state.editingTextRegion).toBeNull();
+    });
+
+    it("re-grows a lifeline head when switching back to auto fit", () => {
+      const id = "sc-lifeline-entity";
+      const { width, height } = getSequenceLifelineDefaultSize(id);
+      const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
+      const lifeline = API.createElement({
+        type: id,
+        x: 100,
+        y: 100,
+        width,
+        height,
+        texts: {
+          body: {
+            text: new Array(12).fill("lifeline label").join(" "),
+            style: {
+              fontFamily: FONT_FAMILY.Virgil,
+              fontSize: 14,
+              lineHeight: getLineHeight(FONT_FAMILY.Virgil),
+              textAlign: "center" as const,
+              verticalAlign: "middle" as const,
+            },
+          },
+        },
+      });
+      API.setElements([lifeline]);
+      API.updateElement(lifeline as ExcalidrawShapeElement, {
+        textFitMode: "fixed",
+      });
+      API.setSelectedElements([lifeline]);
+
+      act(() => {
+        h.app.actionManager.executeAction(actionSetCompositeShapeTextFitAuto);
+      });
+
+      const latest = h.elements.find((element) => element.id === lifeline.id)!;
+      if (!isSequenceLifelineElement(latest)) {
+        throw new Error("Expected a sequence lifeline");
+      }
+      expect(latest.textFitMode).toBe("auto");
+      expect(latest.shape.lifeline.headHeight).toBeGreaterThan(baseHeadHeight);
+      expect(latest.width).toBe(width);
+      expect(latest.height - latest.shape.lifeline.headHeight).toBeCloseTo(
+        height - baseHeadHeight,
+        4,
+      );
+    });
+
+    it("should embed a label in an unfilled line when double clicked", async () => {
+      const line = createBoundTextContainer();
+      API.setElements([line]);
+
+      mouse.doubleClickAt(line.x + 10, line.y + 10);
+      expect(h.elements.length).toBe(1);
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: line.id,
+        region: "label",
+      });
       mouse.down();
       const editor = await getTextEditor();
 
       updateTextEditor(editor, "Hello World!");
-      Keyboard.exitTextEditor(editor);
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
 
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
+      expect(
+        liveElement<ExcalidrawLinearElement>(line.id).texts?.label?.text,
+      ).toBe("Hello World!");
     });
 
-    it("should bind text to container when clicked on container and enter pressed", async () => {
-      expect(h.elements.length).toBe(1);
-      expect(h.elements[0].id).toBe(rectangle.id);
+    it("should open the embedded region when Enter is pressed on a shape container", async () => {
+      const process = API.createElement({
+        type: "df-process",
+        x: 10,
+        y: 20,
+        width: 90,
+        height: 75,
+      });
+      API.setElements([process]);
+      API.setSelectedElements([process]);
 
       Keyboard.keyPress(KEYS.ENTER);
 
-      expect(h.elements.length).toBe(2);
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: process.id,
+        region: "body",
+      });
 
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.type).toBe("text");
-      expect(text.containerId).toBe(rectangle.id);
       const editor = await getTextEditor();
-
       updateTextEditor(editor, "Hello World!");
-      Keyboard.exitTextEditor(editor);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
+
+      expect(process.texts?.body?.text).toBe("Hello World!");
+      expect(
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     });
 
-    it("should bind text to container when double clicked on container stroke", async () => {
-      const rectangle = API.createElement({
-        type: "rectangle",
-        x: 10,
-        y: 20,
-        width: 90,
-        height: 75,
+    it("should embed a label in a line when double clicked near its stroke", async () => {
+      const line = createBoundTextContainer({
         strokeWidth: 4,
       });
-      API.setElements([rectangle]);
+      API.setElements([line]);
 
       expect(h.elements.length).toBe(1);
-      expect(h.elements[0].id).toBe(rectangle.id);
+      expect(h.elements[0].id).toBe(line.id);
 
-      mouse.doubleClickAt(rectangle.x + 2, rectangle.y + 2);
-      expect(h.elements.length).toBe(2);
-
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.type).toBe("text");
-      expect(text.containerId).toBe(rectangle.id);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
+      mouse.doubleClickAt(line.x + 2, line.y + 2);
+      expect(h.elements.length).toBe(1);
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: line.id,
+        region: "label",
+      });
       mouse.down();
       const editor = await getTextEditor();
       updateTextEditor(editor, "Hello World!");
 
-      Keyboard.exitTextEditor(editor);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
+      expect(
+        liveElement<ExcalidrawLinearElement>(line.id).texts?.label?.text,
+      ).toBe("Hello World!");
     });
 
     it("shouldn't bind to non-text-bindable containers", async () => {
@@ -1211,7 +1284,6 @@ describe("textWysiwyg", () => {
 
       expect(freedraw.boundElements).toBe(null);
       expect(h.elements[1].type).toBe("text");
-      expect((h.elements[1] as ExcalidrawTextElement).containerId).toBe(null);
     });
 
     ["freedraw", "line"].forEach((type: any) => {
@@ -1227,9 +1299,8 @@ describe("textWysiwyg", () => {
       });
     });
 
-    it("should bind text to container when triggered via context menu", async () => {
-      expect(h.elements.length).toBe(1);
-      expect(h.elements[0].id).toBe(rectangle.id);
+    it("does not bind text to a linear element via context menu", async () => {
+      API.setElements([]);
 
       UI.clickTool("text");
       mouse.clickAt(20, 30);
@@ -1239,13 +1310,16 @@ describe("textWysiwyg", () => {
         editor,
         "Excalidraw is an opensource virtual collaborative whiteboard",
       );
-      expect(h.elements.length).toBe(2);
-      expect(h.elements[1].type).toBe("text");
+      Keyboard.exitTextEditor(editor);
 
+      const textElement = h.elements[0] as ExcalidrawTextElement;
+      const line = createBoundTextContainer();
+      API.setElements([line, textElement]);
       API.setSelectedElements([
-        h.elements[0],
-        h.elements[1],
+        line,
+        textElement,
       ] as NonDeletedExcalidrawElement[]);
+
       fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
         button: 2,
         clientX: 20,
@@ -1253,128 +1327,40 @@ describe("textWysiwyg", () => {
       });
       UI.openContextMenuSubmenus();
       const contextMenu = UI.queryContextMenu();
-      fireEvent.click(
-        queryByText(contextMenu as HTMLElement, "Bind text to the container")!,
-      );
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: h.elements[1].id, type: "text" },
-      ]);
-      expect(text.containerId).toBe(rectangle.id);
-      expect(text.verticalAlign).toBe(VERTICAL_ALIGN.MIDDLE);
-      expect(text.textAlign).toBe(TEXT_ALIGN.CENTER);
-      expect(text.x).toBe(
-        h.elements[0].x + h.elements[0].width / 2 - text.width / 2,
-      );
-      expect(text.y).toBe(
-        h.elements[0].y + h.elements[0].height / 2 - text.height / 2,
-      );
+      expect(
+        queryByText(contextMenu as HTMLElement, "Bind text to the container"),
+      ).toBeNull();
+      expect(line.boundElements ?? []).toHaveLength(0);
     });
 
-    it("should update font family correctly on undo/redo by selecting bounded text when font family was updated", async () => {
-      expect(h.elements.length).toBe(1);
-
-      mouse.doubleClickAt(
-        rectangle.x + rectangle.width / 2,
-        rectangle.y + rectangle.height / 2,
-      );
-
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      const editor = await getTextEditor();
-
-      updateTextEditor(editor, "Hello World!");
-
-      Keyboard.exitTextEditor(editor);
-
-      expect(await getTextEditor({ waitForEditor: false })).toBe(null);
-
-      expect(h.state.editingTextElement).toBe(null);
-
-      expect(text.fontFamily).toEqual(FONT_FAMILY.Nunito);
-
-      openFontPopup();
-      fireEvent.click(screen.getByTitle("Comic Shanns"));
-
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).fontFamily,
-      ).toEqual(FONT_FAMILY["Comic Shanns"]);
-
-      //undo
-      Keyboard.withModifierKeys({ ctrl: true }, () => {
-        Keyboard.keyPress(KEYS.Z);
+    it("keeps an arrow label in texts and offers no unbind action", async () => {
+      const arrow = API.createElement({
+        type: "arrow",
+        x: 10,
+        y: 20,
+        width: 90,
+        height: 75,
       });
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).fontFamily,
-      ).toEqual(FONT_FAMILY.Nunito);
+      API.setElements([arrow]);
+      API.setSelectedElements([arrow]);
 
-      //redo
-      Keyboard.withModifierKeys({ ctrl: true, shift: true }, () => {
-        Keyboard.keyPress(KEYS.Z);
+      mouse.doubleClickAt(arrow.x + 10, arrow.y + 10);
+      expect(h.elements.length).toBe(1);
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: arrow.id,
+        region: "label",
       });
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).fontFamily,
-      ).toEqual(FONT_FAMILY["Comic Shanns"]);
-    });
-
-    it("should wrap text and vertcially center align once text submitted", async () => {
-      expect(h.elements.length).toBe(1);
-
-      Keyboard.keyDown(KEYS.ENTER);
-      let text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      let editor = await getTextEditor();
-
-      updateTextEditor(editor, "Hello World!");
-
-      Keyboard.exitTextEditor(editor);
-      text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.text).toBe("Hello\nWorld!");
-      expect(text.originalText).toBe("Hello World!");
-      expect(text.y).toBe(
-        rectangle.y + h.elements[0].height / 2 - text.height / 2,
-      );
-      expect(text.x).toBe(25);
-      expect(text.height).toBe(50);
-      expect(text.width).toBe(60);
-
-      // Edit and text by removing second line and it should
-      // still vertically align correctly
-      mouse.select(rectangle);
-      Keyboard.keyPress(KEYS.ENTER);
-
-      editor = await getTextEditor();
-      updateTextEditor(editor, "Hello");
-
-      Keyboard.exitTextEditor(editor);
-      text = h.elements[1] as ExcalidrawTextElementWithContainer;
-
-      expect(text.text).toBe("Hello");
-      expect(text.originalText).toBe("Hello");
-      expect(text.height).toBe(25);
-      expect(text.width).toBe(50);
-      expect(text.y).toBe(
-        rectangle.y + h.elements[0].height / 2 - text.height / 2,
-      );
-      expect(text.x).toBe(30);
-    });
-
-    it("should unbind bound text when unbind action from context menu is triggered", async () => {
-      expect(h.elements.length).toBe(1);
-      expect(h.elements[0].id).toBe(rectangle.id);
-
-      Keyboard.keyPress(KEYS.ENTER);
-
-      expect(h.elements.length).toBe(2);
-
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.containerId).toBe(rectangle.id);
 
       const editor = await getTextEditor();
-
       updateTextEditor(editor, "Hello World!");
-      Keyboard.exitTextEditor(editor);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
+
+      const liveArrow = liveElement<ExcalidrawLinearElement>(arrow.id);
+      expect(liveArrow.texts?.label?.text).toBe("Hello World!");
+      expect(liveArrow.boundElements ?? []).toHaveLength(0);
+
       mouse.reset();
       UI.clickTool("selection");
       mouse.clickAt(10, 20);
@@ -1387,686 +1373,91 @@ describe("textWysiwyg", () => {
       });
       UI.openContextMenuSubmenus();
       const contextMenu = UI.queryContextMenu();
-      fireEvent.click(queryByText(contextMenu as HTMLElement, "Unbind text")!);
-      expect(h.elements[0].boundElements).toEqual([]);
-      expect((h.elements[1] as ExcalidrawTextElement).containerId).toEqual(
-        null,
-      );
+      expect(queryByText(contextMenu as HTMLElement, "Unbind text")).toBeNull();
     });
 
-    it("shouldn't bind to container if container has bound text", async () => {
+    it("keeps a single label when editing an arrow twice", async () => {
+      const arrow = API.createElement({
+        type: "arrow",
+        x: 10,
+        y: 20,
+        width: 90,
+        height: 75,
+      });
+      API.setElements([arrow]);
+      API.setSelectedElements([arrow]);
+
+      mouse.doubleClickAt(arrow.x + 10, arrow.y + 10);
       expect(h.elements.length).toBe(1);
 
-      Keyboard.keyPress(KEYS.ENTER);
-
-      expect(h.elements.length).toBe(2);
-
-      // Bind first text
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.containerId).toBe(rectangle.id);
       const editor = await getTextEditor();
       updateTextEditor(editor, "Hello World!");
-      Keyboard.exitTextEditor(editor);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
-
-      mouse.select(rectangle);
-      Keyboard.keyPress(KEYS.ENTER);
-      expect(h.elements.length).toBe(2);
-
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: h.elements[1].id, type: "text" },
-      ]);
-      expect(text.containerId).toBe(rectangle.id);
-    });
-
-    it("should respect text alignment when resizing", async () => {
-      Keyboard.keyPress(KEYS.ENTER);
-
-      let editor = await getTextEditor();
-      updateTextEditor(editor, "Hello");
-      Keyboard.exitTextEditor(editor);
-
-      // should center align horizontally and vertically by default
-      UI.resize(rectangle, "ne", [rectangle.x + 100, rectangle.y - 100]);
-      expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-        [
-          85,
-          "5.00000",
-        ]
-      `);
-
-      mouse.select(rectangle);
-      Keyboard.keyPress(KEYS.ENTER);
-
-      editor = await getTextEditor();
-
-      editor.select();
-
-      openTextPropsPopup();
-      fireEvent.click(screen.getByTitle("Left"));
-      fireEvent.click(screen.getByTitle("Align bottom"));
-      Keyboard.exitTextEditor(editor);
-
-      // should left align horizontally and bottom vertically after resize
-      UI.resize(rectangle, "ne", [rectangle.x + 100, rectangle.y - 100]);
-      expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-        [
-          12,
-          68,
-        ]
-      `);
-
-      mouse.select(rectangle);
-      Keyboard.keyPress(KEYS.ENTER);
-      editor = await getTextEditor();
-
-      editor.select();
-
-      openTextPropsPopup();
-      fireEvent.click(screen.getByTitle("Right"));
-      fireEvent.click(screen.getByTitle("Align top"));
-
-      Keyboard.exitTextEditor(editor);
-
-      // should right align horizontally and top vertically after resize
-      UI.resize(rectangle, "ne", [rectangle.x + 100, rectangle.y - 100]);
-      expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-        [
-          "378.00000",
-          "-538.00000",
-        ]
-      `);
-    });
-
-    it("should always bind to selected container and insert it in correct position", async () => {
-      const rectangle2 = UI.createElement("rectangle", {
-        x: 5,
-        y: 10,
-        width: 120,
-        height: 100,
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
       });
+      expect(
+        liveElement<ExcalidrawLinearElement>(arrow.id).texts?.label?.text,
+      ).toBe("Hello World!");
 
-      API.setSelectedElements([rectangle]);
-      Keyboard.keyPress(KEYS.ENTER);
-
-      expect(h.elements.length).toBe(3);
-      expect(h.elements[1].type).toBe("text");
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.type).toBe("text");
-      expect(text.containerId).toBe(rectangle.id);
-      mouse.down();
-      const editor = await getTextEditor();
-
-      updateTextEditor(editor, "Hello World!");
-
-      Keyboard.exitTextEditor(editor);
-      expect(rectangle2.boundElements).toBeNull();
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
-    });
-
-    it("should scale font size correctly when resizing using shift", async () => {
-      Keyboard.keyPress(KEYS.ENTER);
-
-      const editor = await getTextEditor();
-      updateTextEditor(editor, "Hello");
-      Keyboard.exitTextEditor(editor);
-      const textElement = h.elements[1] as ExcalidrawTextElement;
-      expect(rectangle.width).toBe(90);
-      expect(rectangle.height).toBe(75);
-      expect(textElement.fontSize).toBe(20);
-
-      UI.resize(rectangle, "ne", [rectangle.x + 100, rectangle.y - 50], {
-        shift: true,
+      mouse.select(arrow);
+      mouse.doubleClickAt(arrow.x + 10, arrow.y + 10);
+      expect(h.elements.length).toBe(1);
+      const nextEditor = await getTextEditor();
+      updateTextEditor(nextEditor, "Updated");
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
       });
-      expect(rectangle.width).toBe(200);
-      expect(rectangle.height).toBe(166.66666666666669);
-      expect(textElement.fontSize).toBeCloseTo(45.58139534883721);
+      expect(
+        liveElement<ExcalidrawLinearElement>(arrow.id).texts?.label?.text,
+      ).toBe("Updated");
     });
 
-    it("should bind text correctly when container duplicated with alt-drag", async () => {
-      Keyboard.keyPress(KEYS.ENTER);
-
-      const editor = await getTextEditor();
-      updateTextEditor(editor, "Hello");
-      Keyboard.exitTextEditor(editor);
-      expect(h.elements.length).toBe(2);
-
-      mouse.select(rectangle);
-      Keyboard.withModifierKeys({ alt: true }, () => {
-        mouse.down(rectangle.x + 10, rectangle.y + 10);
-        mouse.up(rectangle.x + 10, rectangle.y + 10);
+    it("should not write whitespace-only text into the embedded body", async () => {
+      const process = API.createElement({
+        type: "df-process",
+        x: 10,
+        y: 20,
+        width: 90,
+        height: 75,
       });
-      expect(h.elements.length).toBe(4);
-      const duplicatedRectangle = h.elements[0];
-      const duplicatedText = h
-        .elements[1] as ExcalidrawTextElementWithContainer;
-      const originalRect = h.elements[2];
-      const originalText = h.elements[3] as ExcalidrawTextElementWithContainer;
-      expect(originalRect.boundElements).toStrictEqual([
-        { id: originalText.id, type: "text" },
-      ]);
+      API.setElements([process]);
+      API.setSelectedElements([process]);
 
-      expect(originalText.containerId).toBe(originalRect.id);
-
-      expect(duplicatedRectangle.boundElements).toStrictEqual([
-        { id: duplicatedText.id, type: "text" },
-      ]);
-
-      expect(duplicatedText.containerId).toBe(duplicatedRectangle.id);
-    });
-
-    it("undo should work", async () => {
-      Keyboard.keyPress(KEYS.ENTER);
-      const editor = await getTextEditor();
-      updateTextEditor(editor, "Hello");
-      Keyboard.exitTextEditor(editor);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: h.elements[1].id, type: "text" },
-      ]);
-      let text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      const originalRectX = rectangle.x;
-      const originalRectY = rectangle.y;
-      const originalTextX = text.x;
-      const originalTextY = text.y;
-      UI.resize(rectangle, "nw", [100, 50]);
-      // The NW handle crossed the right edge. Manual resizing fixes the
-      // container dimensions, so the overflowing label is truncated.
-      expect(rectangle.x).toBe(100);
-      expect(rectangle.y).toBe(60);
-      expect(rectangle.textFitMode).toBe("fixed");
-      expect(text.x).toBe(105);
-      expect(text.y).toBe(65);
-      expect(text.text).toBe("…");
-
-      Keyboard.withModifierKeys({ ctrl: true }, () => {
-        Keyboard.keyPress(KEYS.Z);
-      });
-      expect(rectangle.x).toBe(originalRectX);
-      expect(rectangle.y).toBe(originalRectY);
-      text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.x).toBe(originalTextX);
-      expect(text.y).toBe(originalTextY);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
-      expect(text.containerId).toBe(rectangle.id);
-    });
-
-    it("should not allow bound text with only whitespaces", async () => {
       Keyboard.keyPress(KEYS.ENTER);
       const editor = await getTextEditor();
 
       updateTextEditor(editor, "   ");
-      Keyboard.exitTextEditor(editor);
-      expect(rectangle.boundElements).toStrictEqual([]);
-      expect(h.elements[1]).toEqual(
-        expect.objectContaining({
-          isDeleted: true,
-        }),
-      );
-    });
-
-    it.each([
-      {
-        label: "container",
-        createElements: () => API.createTextContainer(),
-      },
-      {
-        label: "arrow",
-        createElements: () => API.createLabeledArrow(),
-      },
-    ])(
-      "should reselect $label after deleting bound text with escape",
-      async ({ createElements }) => {
-        const [selectedElement, text] = createElements();
-        API.setElements([selectedElement, text]);
-        API.setSelectedElements([selectedElement]);
-
-        Keyboard.keyPress(KEYS.ENTER);
-        const editor = await getTextEditor();
-
-        await exitTextEditorAndAssertSelection({
-          editor,
-          nextText: "",
-          selectedIds: [selectedElement.id],
-        });
-
-        expect(selectedElement.boundElements).toStrictEqual([]);
-        expect(h.elements[1]).toEqual(
-          expect.objectContaining({
-            isDeleted: true,
-          }),
-        );
-      },
-    );
-
-    it("should restore original container height and clear cache once text is unbind", async () => {
-      const container = API.createElement({
-        type: "rectangle",
-        height: 75,
-        width: 90,
-      });
-      const originalRectHeight = container.height;
-      expect(container.height).toBe(originalRectHeight);
-
-      const text = API.createElement({
-        type: "text",
-        text: "Online whiteboard collaboration made easy",
-      });
-
-      API.setElements([container, text]);
-      API.setSelectedElements([container, text]);
-      fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
-        button: 2,
-        clientX: 20,
-        clientY: 30,
-      });
-      UI.openContextMenuSubmenus();
-      let contextMenu = UI.queryContextMenu();
-
-      fireEvent.click(
-        queryByText(contextMenu as HTMLElement, "Bind text to the container")!,
-      );
-
-      expect((h.elements[1] as ExcalidrawTextElementWithContainer).text).toBe(
-        "Online\nwhiteboa\nrd\ncollabor\nation\nmade\neasy",
-      );
-      fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
-        button: 2,
-        clientX: 20,
-        clientY: 30,
-      });
-      UI.openContextMenuSubmenus();
-      contextMenu = UI.queryContextMenu();
-      fireEvent.click(queryByText(contextMenu as HTMLElement, "Unbind text")!);
-      expect(h.elements[0].boundElements).toEqual([]);
-      expect(getOriginalContainerHeightFromCache(container.id)).toBe(null);
-
-      expect(container.height).toBe(originalRectHeight);
-    });
-
-    it("should reset the container height cache when resizing", async () => {
-      Keyboard.keyPress(KEYS.ENTER);
-      expect(getOriginalContainerHeightFromCache(rectangle.id)).toBe(75);
-      let editor = await getTextEditor();
-      updateTextEditor(editor, "Hello");
-      Keyboard.exitTextEditor(editor);
-
-      UI.resize(rectangle, "ne", [rectangle.x + 100, rectangle.y - 100]);
-      expect(rectangle.height).toBeCloseTo(155, 8);
-      expect(getOriginalContainerHeightFromCache(rectangle.id)).toBe(null);
-
-      mouse.select(rectangle);
-      Keyboard.keyPress(KEYS.ENTER);
-
-      editor = await getTextEditor();
-
-      Keyboard.exitTextEditor(editor);
-      expect(rectangle.height).toBeCloseTo(155, 8);
-      // cache updated again
-      expect(getOriginalContainerHeightFromCache(rectangle.id)).toBeCloseTo(
-        155,
-        8,
-      );
-    });
-
-    it("should reset the container height cache when font properties updated", async () => {
-      Keyboard.keyPress(KEYS.ENTER);
-      expect(getOriginalContainerHeightFromCache(rectangle.id)).toBe(75);
-
-      const editor = await getTextEditor();
-      updateTextEditor(editor, "Hello World!");
-      Keyboard.exitTextEditor(editor);
-
-      mouse.select(rectangle);
-      Keyboard.keyPress(KEYS.ENTER);
-
-      openFontPopup();
-      fireEvent.click(screen.getByTitle("Comic Shanns"));
-
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).fontFamily,
-      ).toEqual(FONT_FAMILY["Comic Shanns"]);
-      expect(getOriginalContainerHeightFromCache(rectangle.id)).toBe(75);
-
-      openTextPropsPopup();
-      fireEvent.click(screen.getByTitle(/Very large/i));
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).fontSize,
-      ).toEqual(36);
-      expect(getOriginalContainerHeightFromCache(rectangle.id)).toBe(94);
-    });
-
-    it("should update line height when font family updated", async () => {
-      Keyboard.keyPress(KEYS.ENTER);
-      expect(getOriginalContainerHeightFromCache(rectangle.id)).toBe(75);
-
-      const editor = await getTextEditor();
-      updateTextEditor(editor, "Hello World!");
-      Keyboard.exitTextEditor(editor);
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).lineHeight,
-      ).toEqual(1.25);
-
-      mouse.select(rectangle);
-      Keyboard.keyPress(KEYS.ENTER);
-
-      openFontPopup();
-      fireEvent.click(screen.getByTitle("Comic Shanns"));
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).fontFamily,
-      ).toEqual(FONT_FAMILY["Comic Shanns"]);
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).lineHeight,
-      ).toEqual(1.25);
-
-      openFontPopup();
-      fireEvent.click(screen.getByTitle("Nunito"));
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).fontFamily,
-      ).toEqual(FONT_FAMILY.Nunito);
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).lineHeight,
-      ).toEqual(1.25);
-    });
-
-    describe("should align correctly", () => {
-      let editor: HTMLTextAreaElement;
-
-      beforeEach(async () => {
-        Keyboard.keyPress(KEYS.ENTER);
-        editor = await getTextEditor();
-        updateTextEditor(editor, "Hello");
-        Keyboard.exitTextEditor(editor);
-        mouse.select(rectangle);
-        Keyboard.keyPress(KEYS.ENTER);
-        editor = await getTextEditor();
-        editor.select();
-        openTextPropsPopup();
-      });
-
-      it("when top left", async () => {
-        fireEvent.click(screen.getByTitle("Left"));
-        fireEvent.click(screen.getByTitle("Align top"));
-        expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-          [
-            12,
-            22,
-          ]
-        `);
-      });
-
-      it("when top center", async () => {
-        fireEvent.click(screen.getByTitle("Center"));
-        fireEvent.click(screen.getByTitle("Align top"));
-        expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-          [
-            30,
-            22,
-          ]
-        `);
-      });
-
-      it("when top right", async () => {
-        fireEvent.click(screen.getByTitle("Right"));
-        fireEvent.click(screen.getByTitle("Align top"));
-
-        expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-          [
-            48,
-            22,
-          ]
-        `);
-      });
-
-      it("when center left", async () => {
-        fireEvent.click(screen.getByTitle("Center vertically"));
-        fireEvent.click(screen.getByTitle("Left"));
-        expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-          [
-            12,
-            45,
-          ]
-        `);
-      });
-
-      it("when center center", async () => {
-        fireEvent.click(screen.getByTitle("Center"));
-        fireEvent.click(screen.getByTitle("Center vertically"));
-
-        expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-          [
-            30,
-            45,
-          ]
-        `);
-      });
-
-      it("when center right", async () => {
-        fireEvent.click(screen.getByTitle("Right"));
-        fireEvent.click(screen.getByTitle("Center vertically"));
-
-        expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-          [
-            48,
-            45,
-          ]
-        `);
-      });
-
-      it("when bottom left", async () => {
-        fireEvent.click(screen.getByTitle("Left"));
-        fireEvent.click(screen.getByTitle("Align bottom"));
-
-        expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-          [
-            12,
-            68,
-          ]
-        `);
-      });
-
-      it("when bottom center", async () => {
-        fireEvent.click(screen.getByTitle("Center"));
-        fireEvent.click(screen.getByTitle("Align bottom"));
-        expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-          [
-            30,
-            68,
-          ]
-        `);
-      });
-
-      it("when bottom right", async () => {
-        fireEvent.click(screen.getByTitle("Right"));
-        fireEvent.click(screen.getByTitle("Align bottom"));
-        expect([h.elements[1].x, h.elements[1].y]).toMatchInlineSnapshot(`
-          [
-            48,
-            68,
-          ]
-        `);
-      });
-    });
-
-    it("should wrap text in a container when wrap text in container triggered from context menu", async () => {
-      UI.clickTool("text");
-      mouse.clickAt(20, 30);
-      const editor = await getTextEditor();
-
-      updateTextEditor(
-        editor,
-        "Excalidraw is an opensource virtual collaborative whiteboard",
-      );
-
-      editor.select();
-      openTextPropsPopup();
-      fireEvent.click(screen.getByTitle("Left"));
-
-      Keyboard.exitTextEditor(editor);
-
-      const textElement = h.elements[1] as ExcalidrawTextElement;
-      expect(textElement.width).toBe(600);
-      expect(textElement.height).toBe(25);
-      expect(textElement.textAlign).toBe(TEXT_ALIGN.LEFT);
-      expect((textElement as ExcalidrawTextElement).text).toBe(
-        "Excalidraw is an opensource virtual collaborative whiteboard",
-      );
-
-      API.setSelectedElements([textElement] as NonDeletedExcalidrawElement[]);
-
-      fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
-        button: 2,
-        clientX: 20,
-        clientY: 30,
-      });
-
-      UI.openContextMenuSubmenus();
-      const contextMenu = UI.queryContextMenu();
-      fireEvent.click(
-        queryByText(contextMenu as HTMLElement, "Wrap text in a container")!,
-      );
-      expect(h.elements.length).toBe(3);
-
-      expect(h.elements[1]).toEqual(
-        expect.objectContaining({
-          angle: 0,
-          backgroundColor: "transparent",
-          boundElements: [
-            {
-              id: h.elements[2].id,
-              type: "text",
-            },
-          ],
-          fillStyle: "solid",
-          groupIds: [],
-          height: 35,
-          isDeleted: false,
-          link: null,
-          locked: false,
-          opacity: 100,
-          roundness: null,
-          strokeColor: "#1f2329",
-          strokeStyle: "solid",
-          strokeWidth: 2,
-          type: "composite",
-          shape: { id: "rectangle", schemaVersion: 1 },
-          updated: 1,
-          version: 2,
-          width: 610,
-          x: 15,
-          y: 12.5,
-        }),
-      );
-      expect(h.elements[2] as ExcalidrawTextElement).toEqual(
-        expect.objectContaining({
-          text: "Excalidraw is an opensource virtual collaborative whiteboard",
-          verticalAlign: VERTICAL_ALIGN.MIDDLE,
-          textAlign: TEXT_ALIGN.CENTER,
-          boundElements: null,
-        }),
-      );
-    });
-
-    it("shouldn't bind to container if container has bound text not centered and text tool is used", async () => {
-      expect(h.elements.length).toBe(1);
-
-      Keyboard.keyPress(KEYS.ENTER);
-
-      expect(h.elements.length).toBe(2);
-
-      // Bind first text
-      let text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.containerId).toBe(rectangle.id);
-      let editor = await getTextEditor();
-      updateTextEditor(editor, "Hello!");
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).verticalAlign,
-      ).toBe(VERTICAL_ALIGN.MIDDLE);
-
-      openTextPropsPopup();
-      fireEvent.click(screen.getByTitle("Align bottom"));
-
-      Keyboard.exitTextEditor(editor);
-
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).verticalAlign,
-      ).toBe(VERTICAL_ALIGN.BOTTOM);
-      // Attempt to Bind 2nd text using text tool
-      UI.clickTool("text");
-      mouse.clickAt(
-        rectangle.x + rectangle.width / 2,
-        rectangle.y + rectangle.height / 2,
-      );
-      editor = await getTextEditor();
-      updateTextEditor(editor, "Excalidraw");
-      Keyboard.exitTextEditor(editor);
-
-      expect(h.elements.length).toBe(3);
-      expect(rectangle.boundElements).toStrictEqual([
-        { id: h.elements[1].id, type: "text" },
-      ]);
-      text = h.elements[2] as ExcalidrawTextElementWithContainer;
-      expect(text.containerId).toBe(null);
-      expect(text.text).toBe("Excalidraw");
-    });
-
-    it("should reset the text element angle to the container's when binding to rotated non-arrow container", async () => {
-      const text = API.createElement({
-        type: "text",
-        text: "Hello World!",
-        angle: 45,
-      });
-      const rectangle = API.createElement({
-        type: "rectangle",
-        width: 90,
-        height: 75,
-        angle: 30,
-      });
-
-      API.setElements([rectangle, text]);
-
-      API.setSelectedElements([rectangle, text]);
-
       act(() => {
-        h.app.actionManager.executeAction(actionBindText);
+        h.app.textWysiwygSubmitHandler?.();
       });
 
-      expect(text.angle).toBe(30);
-      expect(rectangle.angle).toBe(30);
+      expect(process.texts).toBeUndefined();
+      expect(
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     });
 
-    it("should reset the text element angle to 0 when binding to rotated arrow container", async () => {
-      const text = API.createElement({
-        type: "text",
-        text: "Hello World!",
-        angle: 45,
-      });
-      const arrow = API.createElement({
-        type: "arrow",
-        width: 90,
-        height: 75,
-        angle: 30,
-      });
+    it("should remove an empty arrow label without creating a text element", async () => {
+      const [selectedElement] = API.createLabeledArrow();
+      API.setElements([selectedElement]);
+      API.setSelectedElements([selectedElement]);
 
-      API.setElements([arrow, text]);
+      Keyboard.keyPress(KEYS.ENTER);
+      const editor = await getTextEditor();
 
-      API.setSelectedElements([arrow, text]);
-
-      act(() => {
-        h.app.actionManager.executeAction(actionBindText);
+      updateTextEditor(editor, "");
+      await act(async () => {
+        editor.blur();
       });
 
-      expect(text.angle).toBe(0);
-      expect(arrow.angle).toBe(30);
+      expect(await getTextEditor({ waitForEditor: false })).toBe(null);
+      expect(h.elements).toHaveLength(1);
+      expect(getTextBlock(h.elements[0].texts, "label")).toBeUndefined();
+      expect(
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     });
+
 
     it("should keep the text label at 0 degrees when used as an arrow label", async () => {
       const arrow = API.createElement({
@@ -2088,34 +1479,19 @@ describe("textWysiwyg", () => {
 
       updateTextEditor(editor, "Hello World!");
 
-      Keyboard.exitTextEditor(editor);
-
-      expect(h.elements[1].angle).toBe(0);
-    });
-
-    it("should keep the text label at the same degrees when used as a non-arrow label", async () => {
-      const rectangle = API.createElement({
-        type: "rectangle",
-        width: 90,
-        height: 75,
-        angle: 30,
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
       });
 
-      API.setElements([rectangle]);
-      API.setSelectedElements([rectangle]);
-
-      mouse.doubleClickAt(
-        rectangle.x + rectangle.width / 2,
-        rectangle.y + rectangle.height / 2,
+      const liveArrow = liveElement<ExcalidrawLinearElement>(arrow.id);
+      const layout = LinearElementEditor.getLabelSceneLayout(
+        liveArrow,
+        arrayToMap(h.elements),
       );
-
-      const editor = await getTextEditor();
-
-      updateTextEditor(editor, "Hello World!");
-
-      Keyboard.exitTextEditor(editor);
-
-      expect(h.elements[1].angle).toBe(30);
+      expect(layout.angle).toBe(0);
+      expect(
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     });
   });
 
@@ -2182,28 +1558,36 @@ describe("textWysiwyg", () => {
     });
 
     /**
-     * a fixed-width text wrapped onto two lines. `originalText`/`autoResize`
-     * are set after the fact — `API.createElement` accepts neither, and would
-     * otherwise leave an autogrowing element whose `originalText` still holds
-     * the line break.
+     * a fixed-width text wrapped onto two lines. 源文本不含换行，显示文本由
+     * 当前宽度换行得到；`API.createElement` 不接受 `autoResize`，因此事后
+     * 补上。
      */
     const wrappedText = (
-      overrides: Partial<ExcalidrawTextElement> = {},
-    ): ExcalidrawTextElement =>
-      ({
-        ...API.createElement({
-          type: "text",
-          id: "text",
-          x: 100,
-          y: 100,
-          width: 300,
-          height: 50,
-          text: "this is it my friends\nald aksdl askdlasdk",
-        }),
-        originalText: "this is it my friends ald aksdl askdlasdk",
-        autoResize: false,
+      overrides: {
+        textAlign?: ExcalidrawTextElement["texts"]["body"]["style"]["textAlign"];
+        verticalAlign?: ExcalidrawTextElement["texts"]["body"]["style"]["verticalAlign"];
+      } = {},
+    ): ExcalidrawTextElement => {
+      const element = API.createElement({
+        type: "text",
+        id: "text",
+        x: 100,
+        y: 100,
+        width: 300,
+        height: 50,
+        text: "this is it my friends\nald aksdl askdlasdk",
         ...overrides,
-      } as ExcalidrawTextElement);
+      });
+      return newElementWith(element, {
+        autoResize: false,
+        width: 300,
+        height: 50,
+        ...getTextElementTextPatch(
+          element,
+          "this is it my friends ald aksdl askdlasdk",
+        ),
+      });
+    };
 
     // unwrapping resizes the box, so whichever edge the alignment pins has to
     // stay put — otherwise the text slides out from under itself
@@ -2301,146 +1685,6 @@ describe("textWysiwyg", () => {
       Keyboard.undo();
 
       expect(h.elements.filter((el) => !el.isDeleted)).toHaveLength(0);
-    });
-  });
-
-  describe("dataflow df-process dual text slots", () => {
-    beforeEach(async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
-      API.setElements([]);
-    });
-
-    const createProcess = () =>
-      API.createElement({
-        type: "df-process",
-        x: 100,
-        y: 100,
-        width: 152,
-        height: 137,
-      });
-
-    it("creates a single-line title that truncates without resizing the container", async () => {
-      const process = createProcess();
-      API.setElements([process]);
-
-      mouse.doubleClickAt(process.x + process.width / 2, process.y + 14);
-      mouse.down();
-      const editor = await getTextEditor();
-      mouse.up();
-
-      updateTextEditor(
-        editor,
-        "A very long process title\nthat will certainly overflow the header",
-      );
-      Keyboard.exitTextEditor(editor);
-
-      const title = h.elements.find(
-        (element) =>
-          element.type === "text" && element.containerSlot === "title",
-      ) as ExcalidrawTextElementWithContainer;
-
-      expect(title).toBeDefined();
-      expect(title.containerId).toBe(process.id);
-      expect(process.boundElements).toContainEqual({
-        id: title.id,
-        type: "text",
-        slot: "title",
-      });
-      expect(title.text).toContain("…");
-      expect(title.text).not.toContain("\n");
-      expect(title.originalText).toBe(
-        "A very long process title that will certainly overflow the header",
-      );
-      expect(title.autoResize).toBe(false);
-      expect(title.height).toBeCloseTo(
-        getLineHeightInPx(title.fontSize, title.lineHeight),
-      );
-      expect(process.width).toBe(152);
-      expect(process.height).toBe(137);
-    });
-
-    it("commits the title on Enter instead of inserting a newline", async () => {
-      const process = createProcess();
-      API.setElements([process]);
-
-      mouse.doubleClickAt(process.x + process.width / 2, process.y + 14);
-      mouse.down();
-      const editor = await getTextEditor();
-      mouse.up();
-
-      updateTextEditor(editor, "Top");
-      fireEvent.keyDown(editor, { key: KEYS.ENTER });
-
-      expect(await getTextEditor({ waitForEditor: false })).toBe(null);
-      const title = h.elements.find(
-        (element) =>
-          element.type === "text" && element.containerSlot === "title",
-      ) as ExcalidrawTextElement;
-      expect(title.originalText).toBe("Top");
-      expect(title.text).toBe("Top");
-    });
-
-    it("renders the committed title", async () => {
-      const process = createProcess();
-      API.setElements([process]);
-
-      mouse.doubleClickAt(process.x + process.width / 2, process.y + 14);
-      mouse.down();
-      const editor = await getTextEditor();
-      mouse.up();
-
-      updateTextEditor(editor, "Top");
-      Keyboard.exitTextEditor(editor);
-
-      const svg = await exportToSvg(
-        h.app.scene.getNonDeletedElements(),
-        {
-          exportBackground: false,
-          viewBackgroundColor: h.state.viewBackgroundColor,
-        },
-        null,
-      );
-
-      expect(svg.textContent).toContain("Top");
-    });
-
-    it("edits the body independently and keeps the title", async () => {
-      const process = createProcess();
-      API.setElements([process]);
-
-      mouse.doubleClickAt(process.x + process.width / 2, process.y + 14);
-      mouse.down();
-      let editor = await getTextEditor();
-      mouse.up();
-      updateTextEditor(editor, "Title");
-      Keyboard.exitTextEditor(editor);
-
-      mouse.doubleClickAt(process.x + process.width / 2, process.y + 82);
-      mouse.down();
-      editor = await getTextEditor();
-      mouse.up();
-      updateTextEditor(editor, "Body\nlabel");
-      Keyboard.exitTextEditor(editor);
-
-      const texts = h.elements.filter(
-        (element) => element.type === "text" && !element.isDeleted,
-      ) as ExcalidrawTextElementWithContainer[];
-      const title = texts.find((text) => text.containerSlot === "title")!;
-      const body = texts.find((text) => !text.containerSlot)!;
-
-      expect(title.originalText).toBe("Title");
-      expect(body).toBeDefined();
-      expect(body.containerId).toBe(process.id);
-      expect(body.originalText).toBe("Body\nlabel");
-      expect(process.boundElements).toContainEqual({
-        id: title.id,
-        type: "text",
-        slot: "title",
-      });
-      expect(process.boundElements).toContainEqual({
-        id: body.id,
-        type: "text",
-      });
     });
   });
 });

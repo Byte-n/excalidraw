@@ -10,6 +10,7 @@ import {
   deriveStylesPanelMode,
   Emitter,
   getDateTime,
+  getLineHeight,
   getStrokeWidthByKey,
   IMAGE_RENDER_TIMEOUT,
   isDevEnv,
@@ -35,17 +36,14 @@ import {
   isImageElement,
   isSequenceFragmentElement,
   isTableElement,
-  isTextElement,
   isUsingAdaptiveRadius,
   makeNextSelectedElementIds,
   newElementWith,
-  newTextElement,
   normalizeSequenceFragmentGeometry,
-  redrawTextBoundingBox,
-  getSequenceFragmentTextBounds,
+  getSequenceFragmentOperatorTextFit,
   refitSequenceFragmentRowBackgroundTexts,
-  fitSequenceFragmentOperator,
   SEQUENCE_FRAGMENT_DEFAULT_OPERATOR,
+  withTextBlock,
   resolveElementRenderState,
   Scene,
   Store,
@@ -58,6 +56,7 @@ import {
   frameLikeContainerRef,
   type ApplyToOptions,
   type ElementUpdate,
+  type TextRegionKey,
 } from "@excalidraw/element";
 
 import type {
@@ -71,7 +70,6 @@ import type {
   ExcalidrawLinearElement,
   ExcalidrawMagicFrameElement,
   ExcalidrawTableElement,
-  ExcalidrawTextContainer,
   ExcalidrawTextElement,
   ExcalidrawTitledElement,
   FileId,
@@ -79,7 +77,6 @@ import type {
   MagicGenerationData,
   NonDeleted,
   NonDeletedExcalidrawElement,
-  TextContainerSlot,
 } from "@excalidraw/element/types";
 
 import type {
@@ -165,11 +162,12 @@ import {
   type InteractionState,
 } from "./app/pointerSession";
 import * as fragmentController from "./app/fragment";
-import { getSequenceFragmentRowTextInsertionIndex } from "./app/fragmentRowText";
+
 import { AppView } from "./app/render";
 import * as sceneController from "./app/scene";
 import * as tableController from "./app/table";
 import * as textController from "./app/text";
+import * as regionTextController from "./app/regionText";
 import { activeEyeDropperAtom } from "./EyeDropper";
 
 import { AppStateObserver, type OnStateChange } from "./AppStateObserver";
@@ -1496,17 +1494,14 @@ class App extends React.Component<AppProps, AppState> {
     });
   }
 
-  public getSelectedTextElement(
-    container?: ExcalidrawTextContainer | null,
-    slot?: TextContainerSlot,
-  ): NonDeleted<ExcalidrawTextElement> | null {
-    return textController.getSelectedTextElement(this, container, slot);
+  public getSelectedTextElement(): NonDeleted<ExcalidrawTextElement> | null {
+    return textController.getSelectedTextElement(this);
   }
 
   private getSelectedTextEditingContainerAtPosition(
     hitElement: NonDeletedExcalidrawElement | null,
     sceneCoords: { x: number; y: number },
-  ): ExcalidrawTextContainer | null | undefined {
+  ): ExcalidrawElement | null | undefined {
     return textController.getSelectedTextEditingContainerAtPosition(
       this,
       hitElement,
@@ -1549,7 +1544,6 @@ class App extends React.Component<AppProps, AppState> {
     y: number,
     opts?: (
       | {
-          includeBoundTextElement?: boolean;
           includeLockedElements?: boolean;
         }
       | {
@@ -1567,7 +1561,6 @@ class App extends React.Component<AppProps, AppState> {
     x: number,
     y: number,
     opts?: {
-      includeBoundTextElement?: boolean;
       includeLockedElements?: boolean;
     },
   ): NonDeleted<ExcalidrawElement>[] {
@@ -1864,6 +1857,24 @@ class App extends React.Component<AppProps, AppState> {
     return tableController.handleTableCellDoubleClick(this, sceneX, sceneY);
   };
 
+  /** 元素正文区域编辑入口：表格单元格等内嵌文本共用。 */
+  public startRegionTextEditing = (
+    element: ExcalidrawElement,
+    region: TextRegionKey,
+    opts?: {
+      initialCaretSceneCoords?: { x: number; y: number } | null;
+      autoSelect?: boolean;
+    },
+  ) =>
+    regionTextController.startRegionTextEditing(
+      this,
+      element as Parameters<
+        typeof regionTextController.startRegionTextEditing
+      >[1],
+      region,
+      opts,
+    );
+
   public selectTableCellAtPoint = (
     sceneCoords: { x: number; y: number },
     shiftKey: boolean,
@@ -2064,120 +2075,50 @@ class App extends React.Component<AppProps, AppState> {
     return true;
   };
 
-  /**
-   * The first row of a fragment is the operator tab row. A fragment that
-   * enters the scene without a label gets the sample "Opt / Loop" bound text,
-   * so the row reads as a label from the start and can be edited in place.
-   */
-  private createSequenceFragmentOperatorText = (
-    fragment: ExcalidrawElement,
-  ): ExcalidrawTextElement => {
-    const bounds = getSequenceFragmentTextBounds(
-      fragment.width,
-      fragment.height,
-    );
-    const text = newTextElement({
-      x: fragment.x + bounds.x,
-      y: fragment.y + bounds.y,
-      text: SEQUENCE_FRAGMENT_DEFAULT_OPERATOR,
-      fontSize: 14,
-      fontFamily: this.state.currentItemFontFamily,
-      strokeColor: fragment.strokeColor,
-      textAlign: "left",
-      verticalAlign: "top",
-      containerId: fragment.id,
-      // Bound text stays in auto-width mode; the tab owns the box width and
-      // the label wraps against its fitted content width.
-      autoResize: true,
-    });
-    redrawTextBoundingBox(text, fragment, this.scene);
-    return text;
-  };
-
   public insertNewElements = (elements: readonly ExcalidrawElement[]) => {
     if (!elements.length) {
       return;
     }
 
-    const incomingLabelContainers = new Set(
-      elements
-        .filter(
-          (element): element is ExcalidrawTextElement =>
-            isTextElement(element) &&
-            !element.isDeleted &&
-            !!element.containerId,
-        )
-        .map((element) => element.containerId as string),
-    );
-    const createdFragmentLabels: ExcalidrawTextElement[] = [];
-    // Normalize fragments (row data + fixed single-line tab text) and give a
-    // label-less fragment its default operator label. Labels are inserted
-    // right after their fragment below, not through the chunking path.
+    const incomingFragmentIds = new Set<string>();
+    // 片段：归一化行数据，缺省时写入 operator 页签文本块，并按页签文本适配宽度
     const preparedElements = elements.map((element) => {
       if (!isSequenceFragmentElement(element)) {
         return element;
       }
-      const fragment = normalizeSequenceFragmentGeometry(element);
-      const hasLabel =
-        incomingLabelContainers.has(fragment.id) ||
-        (fragment.boundElements ?? []).some((bound) => bound.type === "text");
-      if (hasLabel) {
-        // A pasted/imported fragment carries its label; re-fit the tab so a
-        // fragment without a persisted `operatorWidth` still sizes to its text.
-        const label = elements.find(
-          (candidate): candidate is ExcalidrawTextElement =>
-            isTextElement(candidate) &&
-            !candidate.isDeleted &&
-            candidate.containerId === fragment.id,
-        );
-        if (label && !label.autoResize) {
-          // the operator label has exactly one text mode: container-bound
-          Object.assign(label, { autoResize: true });
-        }
-        const fitted = label
-          ? fitSequenceFragmentOperator(fragment, label)
-          : null;
-        if (!fitted) {
-          return fragment;
-        }
-        const sized = newElementWith(fragment, {
-          height: fitted.height,
-          shape: fitted.shape,
+      let fragment = normalizeSequenceFragmentGeometry(element);
+      if (!fragment.texts?.body) {
+        const fontFamily = this.state.currentItemFontFamily;
+        fragment = newElementWith(fragment, {
+          texts: withTextBlock(fragment.texts, "body", {
+            text: SEQUENCE_FRAGMENT_DEFAULT_OPERATOR,
+            style: {
+              fontFamily,
+              fontSize: 14,
+              lineHeight: getLineHeight(fontFamily),
+              textAlign: "left",
+              verticalAlign: "top",
+            },
+          }),
         });
-        if (label) {
-          redrawTextBoundingBox(label, sized, this.scene);
-        }
-        return sized;
       }
-      const text = this.createSequenceFragmentOperatorText(fragment);
-      createdFragmentLabels.push(text);
-      const fitted = fitSequenceFragmentOperator(fragment, text);
-      const sized = fitted
+      const fitted = getSequenceFragmentOperatorTextFit(
+        fragment,
+        fragment.texts?.body,
+      );
+      return fitted
         ? newElementWith(fragment, {
             height: fitted.height,
             shape: fitted.shape,
           })
         : fragment;
-      if (fitted) {
-        redrawTextBoundingBox(text, sized, this.scene);
-      }
-      return newElementWith(sized, {
-        boundElements: [
-          ...(sized.boundElements ?? []),
-          { type: "text", id: text.id },
-        ],
-      });
     });
 
     const chunkedElements: ExcalidrawElement[][] = [];
-    const incomingFragmentIds = new Set<string>();
 
     for (const element of preparedElements) {
       if (isSequenceFragmentElement(element)) {
         incomingFragmentIds.add(element.id);
-      }
-      if (element.containerRef?.kind === "fragmentRow") {
-        incomingFragmentIds.add(element.containerRef.elementId);
       }
       const currentChunk = chunkedElements[chunkedElements.length - 1];
 
@@ -2203,11 +2144,6 @@ class App extends React.Component<AppProps, AppState> {
               frameId,
               containerRef.cellId,
             )
-          : frameId && containerRef?.kind === "fragmentRow"
-          ? getSequenceFragmentRowTextInsertionIndex(
-              this.scene.getElementsIncludingDeleted(),
-              frameId,
-            )
           : frameId
           ? getFrameChildrenInsertionIndex(
               this.scene.getElementsIncludingDeleted(),
@@ -2217,21 +2153,12 @@ class App extends React.Component<AppProps, AppState> {
       this.scene.insertElementsAtIndex(chunk, insertionIndex);
     }
 
-    for (const text of createdFragmentLabels) {
-      const fragmentIndex = this.scene.getElementIndex(text.containerId!);
-      this.scene.insertElementsAtIndex(
-        [text],
-        fragmentIndex < 0 ? null : fragmentIndex + 1,
-      );
-    }
-
-    // Normalization/operator fit above may have moved row boundaries; lay the
-    // incoming row background texts out against the live rows.
+    // 归一化/页签适配可能改变行边界，按行文本块撑高需要更多空间的行
     for (const fragmentId of incomingFragmentIds) {
       const fragment = this.scene.getNonDeletedElement(fragmentId);
       if (fragment && isSequenceFragmentElement(fragment)) {
         refitSequenceFragmentRowBackgroundTexts(this.scene, fragment, {
-          grow: false,
+          grow: true,
         });
       }
     }
@@ -2778,8 +2705,7 @@ class App extends React.Component<AppProps, AppState> {
     x: number,
     y: number,
     appState: AppState,
-    container?: ExcalidrawTextContainer | null,
-    slot?: TextContainerSlot,
+    container?: ExcalidrawElement | null,
   ) {
     return textController.getTextWysiwygSnappedToCenterPosition(
       this,
@@ -2787,7 +2713,6 @@ class App extends React.Component<AppProps, AppState> {
       y,
       appState,
       container,
-      slot,
     );
   }
 

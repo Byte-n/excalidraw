@@ -33,7 +33,19 @@ const clipboardJSON = JSON.stringify({
       backgroundColor: "#b2f2bb",
       fillStyle: "solid",
       strokeWidth: 2,
-      boundElements: [{ type: "text", id: "independent-text" }],
+      texts: {
+        body: {
+          text: "独立叶子根节点",
+          style: {
+            fontFamily: 2,
+            fontSize: 20,
+            lineHeight: 1.25,
+            textAlign: "center",
+            verticalAlign: "middle",
+            color: "#1e1e1e",
+          },
+        },
+      },
       version: 7,
       versionNonce: 1425250096,
       index: "a7",
@@ -51,45 +63,6 @@ const clipboardJSON = JSON.stringify({
       link: null,
       locked: false,
     },
-    {
-      id: "independent-text",
-      type: "text",
-      x: -598.0883525679529,
-      y: 391.67351304438347,
-      width: 160,
-      height: 25,
-      text: "独立叶子根节点",
-      originalText: "独立叶子根节点",
-      fontSize: 20,
-      fontFamily: 2,
-      textAlign: "center",
-      verticalAlign: "middle",
-      containerId: "independent",
-      lineHeight: 1.25,
-      version: 8,
-      versionNonce: 1604493776,
-      index: "aF",
-      isDeleted: false,
-      fillStyle: "solid",
-      strokeWidth: 2,
-      strokeStyle: "solid",
-      opacity: 100,
-      angle: 0,
-      strokeColor: "#1e1e1e",
-      backgroundColor: "transparent",
-      seed: 1,
-      groupIds: [],
-      containerRef: undefined,
-      roundness: null,
-      boundElements: [],
-      updated: 1790254727519,
-      created: null,
-      link: null,
-      locked: false,
-      autoResize: true,
-      labelPosition: null,
-      baseFontSize: null,
-    },
   ],
   files: {},
 });
@@ -104,18 +77,17 @@ describe("pasting a standalone mindmap pill", () => {
     });
   });
 
-  it("preserves the pasted node shape and its bound text", async () => {
+  it("preserves the pasted node shape and its body text", async () => {
     h.app.ownerDocument.dispatchEvent(
       createPasteEvent({ types: { "text/plain": clipboardJSON } }),
     );
 
     await waitFor(() => {
-      expect(h.app.scene.getNonDeletedElements()).toHaveLength(2);
+      expect(h.app.scene.getNonDeletedElements()).toHaveLength(1);
     });
 
     const elements = h.app.scene.getNonDeletedElements();
     const pastedNode = elements.find(isMindmapNodeElement);
-    const pastedText = elements.find(isTextElement);
 
     expect(pastedNode).toMatchObject({
       type: "mindmap-node",
@@ -127,18 +99,11 @@ describe("pasting a standalone mindmap pill", () => {
       width: 200,
       height: 64,
       backgroundColor: "#b2f2bb",
+      texts: { body: { text: "独立叶子根节点" } },
     });
     expect(pastedNode?.id).not.toBe("independent");
     expect(pastedNode?.graphId).not.toBe("independent");
-    expect(pastedText).toMatchObject({
-      type: "text",
-      text: "独立叶子根节点",
-      containerId: pastedNode?.id,
-    });
-    expect(pastedNode?.boundElements).toContainEqual({
-      type: "text",
-      id: pastedText?.id,
-    });
+    expect(elements.some(isTextElement)).toBe(false);
   });
 
   it("preserves the text shape and fontWeight through paste", async () => {
@@ -164,7 +129,20 @@ describe("pasting a standalone mindmap pill", () => {
                 backgroundColor: "transparent",
                 fillStyle: "solid",
                 strokeWidth: 1.5,
-                boundElements: [{ type: "text", id: "leaf-text" }],
+                texts: {
+                  body: {
+                    text: "下划线节点",
+                    style: {
+                      fontFamily: 1,
+                      fontSize: 16,
+                      fontWeight: 600,
+                      lineHeight: 1.25,
+                      textAlign: "center",
+                      verticalAlign: "middle",
+                      color: "#ffffff",
+                    },
+                  },
+                },
                 version: 1,
                 versionNonce: 1,
                 index: "a1",
@@ -181,43 +159,6 @@ describe("pasting a standalone mindmap pill", () => {
                 link: null,
                 locked: false,
               },
-              {
-                id: "leaf-text",
-                type: "text",
-                x: 0,
-                y: 0,
-                width: 40,
-                height: 25,
-                text: "下划线节点",
-                originalText: "下划线节点",
-                fontSize: 16,
-                fontWeight: 600,
-                fontFamily: 1,
-                textAlign: "center",
-                verticalAlign: "middle",
-                containerId: "leaf",
-                lineHeight: 1.25,
-                version: 1,
-                versionNonce: 2,
-                index: "a2",
-                isDeleted: false,
-                fillStyle: "solid",
-                strokeWidth: 1.5,
-                strokeStyle: "solid",
-                opacity: 100,
-                angle: 0,
-                strokeColor: "#ffffff",
-                backgroundColor: "transparent",
-                seed: 1,
-                groupIds: [],
-                roundness: null,
-                boundElements: [],
-                updated: 1,
-                created: 1,
-                link: null,
-                locked: false,
-                autoResize: true,
-              },
             ],
             files: {},
           }),
@@ -226,17 +167,17 @@ describe("pasting a standalone mindmap pill", () => {
     );
 
     await waitFor(() => {
-      expect(h.app.scene.getNonDeletedElements()).toHaveLength(2);
+      expect(h.app.scene.getNonDeletedElements()).toHaveLength(1);
     });
 
     const elements = h.app.scene.getNonDeletedElements();
     const pastedNode = elements.find(isMindmapNodeElement);
-    const pastedText = elements.find(isTextElement);
     expect(pastedNode).toMatchObject({
       shape: { id: "text", schemaVersion: 1 },
       strokeColor: "#0e8c7e",
       backgroundColor: "transparent",
+      texts: { body: { style: { fontWeight: 600 } } },
     });
-    expect(pastedText).toMatchObject({ fontWeight: 600 });
+    expect(elements.some(isTextElement)).toBe(false);
   });
 });

@@ -8,14 +8,12 @@ import type { GlobalPoint } from "@excalidraw/math";
 import {
   isFrameLikeElement,
   isTableElement,
-  isTextElement,
 } from "./typeChecks";
 import { isSequenceFragmentElement } from "./compositeShape";
 import { getElementsInGroup } from "./groups";
 import { syncMovedIndices } from "./fractionalIndex";
 import { getSelectedElements } from "./selection";
 import { getTableSubtreeElements } from "./tableContainer";
-import { getBoundTextElement, getContainerElement } from "./textElement";
 import { getHoveredElementForBinding } from "./collision";
 
 import { getNonDeletedElements } from ".";
@@ -32,9 +30,7 @@ import type {
 } from "./types";
 
 const getFrameId = (element: ExcalidrawElement, elementsMap: ElementsMap) =>
-  isTextElement(element) && element.containerId
-    ? elementsMap.get(element.containerId)?.containerRef?.elementId
-    : element.containerRef?.elementId;
+  element.containerRef?.elementId;
 
 const isOfTargetFrame = (
   element: ExcalidrawElement,
@@ -63,7 +59,6 @@ const getIndicesToMove = (
     elementsToBeMoved
       ? elementsToBeMoved
       : getSelectedElements(elements, appState, {
-          includeBoundTextElement: true,
           includeElementsInFrames: true,
         }),
   );
@@ -95,52 +90,6 @@ const toContiguousGroups = (array: number[]) => {
     (acc[cursor] || (acc[cursor] = [])).push(value);
     return acc;
   }, [] as number[][]);
-};
-
-/**
- * @returns index of target element, consindering tightly-bound elements
- * (currently non-linear elements bound to a container) as a one unit.
- * If no binding present, returns `undefined`.
- */
-const getTargetIndexAccountingForBinding = (
-  nextElement: ExcalidrawElement,
-  elements: readonly ExcalidrawElement[],
-  direction: "left" | "right",
-  scene: Scene,
-) => {
-  if ("containerId" in nextElement && nextElement.containerId) {
-    // TODO: why not to get the container from the nextElements?
-    const containerElement = scene.getElement(nextElement.containerId);
-    if (containerElement) {
-      return direction === "left"
-        ? Math.min(
-            elements.indexOf(containerElement),
-            elements.indexOf(nextElement),
-          )
-        : Math.max(
-            elements.indexOf(containerElement),
-            elements.indexOf(nextElement),
-          );
-    }
-  } else {
-    const boundElementId = nextElement.boundElements?.find(
-      (binding) => binding.type !== "arrow",
-    )?.id;
-    if (boundElementId) {
-      const boundTextElement = scene.getElement(boundElementId);
-      if (boundTextElement) {
-        return direction === "left"
-          ? Math.min(
-              elements.indexOf(boundTextElement),
-              elements.indexOf(nextElement),
-            )
-          : Math.max(
-              elements.indexOf(boundTextElement),
-              elements.indexOf(nextElement),
-            );
-      }
-    }
-  }
 };
 
 const getContiguousFrameRangeElements = (
@@ -189,16 +138,9 @@ export const moveArrowAboveBindable = (
     return elements;
   }
 
-  const boundTextElement = getBoundTextElement(hoveredElement, elementsMap);
-  const containerElement = isTextElement(hoveredElement)
-    ? getContainerElement(hoveredElement, elementsMap)
-    : null;
-
-  const bindableIds = [
-    hoveredElement.id,
-    boundTextElement?.id,
-    containerElement?.id,
-  ].filter((id): id is NonDeletedExcalidrawElement["id"] => !!id);
+  const bindableIds = [hoveredElement.id].filter(
+    (id): id is NonDeletedExcalidrawElement["id"] => !!id,
+  );
   const bindableIdx = elements.findIndex((el) => bindableIds.includes(el.id));
   const arrowIdx = elements.findIndex((el) => el.id === arrow.id);
 
@@ -267,14 +209,7 @@ const getTargetIndex = (
       // candidate element is a sibling in current editing group → return
       sourceElement?.groupIds.join("") === nextElement?.groupIds.join("")
     ) {
-      return (
-        getTargetIndexAccountingForBinding(
-          nextElement,
-          elements,
-          direction,
-          scene,
-        ) ?? candidateIndex
-      );
+      return candidateIndex;
     } else if (!nextElement?.groupIds.includes(appState.editingGroupId)) {
       // candidate element is outside current editing group → prevent
       return -1;
@@ -295,14 +230,7 @@ const getTargetIndex = (
   }
 
   if (!nextElement.groupIds.length) {
-    return (
-      getTargetIndexAccountingForBinding(
-        nextElement,
-        elements,
-        direction,
-        scene,
-      ) ?? candidateIndex
-    );
+    return candidateIndex;
   }
 
   const siblingGroupId = appState.editingGroupId
@@ -585,7 +513,6 @@ function shiftElementsAccountingForFrames(
 ) {
   const elementsToMove = arrayToMap(
     getSelectedElements(allElements, appState, {
-      includeBoundTextElement: true,
       includeElementsInFrames: true,
     }),
   );

@@ -61,7 +61,12 @@ describe("export", () => {
 
     await waitFor(() => {
       expect(h.elements).toEqual([
-        expect.objectContaining({ type: "text", text: "😀" }),
+        expect.objectContaining({
+          type: "text",
+          texts: expect.objectContaining({
+            body: expect.objectContaining({ text: "😀" }),
+          }),
+        }),
       ]);
     });
   });
@@ -78,7 +83,12 @@ describe("export", () => {
       decodeSvgBase64Payload({ svg: metadataElement.innerHTML }),
     );
     expect(decoded.elements).toEqual([
-      expect.objectContaining({ type: "text", text: "😀" }),
+      expect.objectContaining({
+        type: "text",
+        texts: expect.objectContaining({
+          body: expect.objectContaining({ text: "😀" }),
+        }),
+      }),
     ]);
   });
 

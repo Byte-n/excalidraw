@@ -122,8 +122,10 @@ export const AppView = ({ app }: { app: App }) => {
     editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
 
   // 编辑态快捷键提示：文字编辑器挂在思维导图节点上时，在节点下方提示
-  const editingTextContainer = app.state.editingTextElement?.containerId
-    ? app.scene.getNonDeletedElement(app.state.editingTextElement.containerId)
+  const editingTextContainer = app.state.editingTextRegion
+    ? app.scene.getNonDeletedElement(
+        app.state.editingTextRegion.target.elementId,
+      )
     : null;
   const mindmapEditingNode =
     editingTextContainer && isMindmapNodeElement(editingTextContainer)

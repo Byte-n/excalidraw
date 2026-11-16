@@ -13,7 +13,6 @@ export const actionAddToLibrary = register({
   perform: (elements, appState, _, app) => {
     const selectedElements = app.scene.getSelectedElements({
       selectedElementIds: appState.selectedElementIds,
-      includeBoundTextElement: true,
       includeElementsInFrames: true,
     });
 

@@ -51,7 +51,7 @@ describe("mindmap text formats", () => {
     },
   );
 
-  it("exports a node without a bound text element", () => {
+  it("exports a node without body text", () => {
     const root = newMindmapNodeElement({
       x: 0,
       y: 0,

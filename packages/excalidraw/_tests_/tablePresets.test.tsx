@@ -2,13 +2,12 @@ import { reseed } from "@excalidraw/common";
 
 import {
   TABLE_PRESET_TITLE_FILL,
+  cellKey,
   getTablePresetLabelCells,
+  getTextBlock,
 } from "@excalidraw/element";
 
-import type {
-  ExcalidrawTableElement,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+import type { ExcalidrawTableElement } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
 import { t } from "../i18n";
@@ -28,12 +27,15 @@ const tables = () =>
     (element): element is ExcalidrawTableElement => element.type === "table",
   );
 
+/** 表格自带的标签文本块（按格顺序）。 */
 const cellLabels = () =>
-  live().filter(
-    (element): element is ExcalidrawTextElement =>
-      element.type === "text" &&
-      element.containerRef?.kind === "tableCell" &&
-      element.containerRef.role === "backgroundText",
+  tables().flatMap((table) =>
+    table.table.cells
+      .filter((cell) => !cell.mergedInto)
+      .flatMap((cell) => {
+        const block = getTextBlock(table.texts, cellKey(cell.id));
+        return block ? [{ cellId: cell.id, ...block }] : [];
+      }),
   );
 
 /** 打开表格预设弹层（触发按钮沿用 `toolbar-<工具>` 的既有约定） */
@@ -170,7 +172,7 @@ describe("泳道预设的落地", () => {
     const table = tables()[0];
     const labels = cellLabels();
 
-    expect(labels.map((label) => label.originalText)).toEqual([
+    expect(labels.map((label) => label.text)).toEqual([
       t("toolBar.swimlaneHorizontal"),
       t("toolBar.swimlane"),
       t("toolBar.swimlane"),
@@ -180,27 +182,24 @@ describe("泳道预设的落地", () => {
     const cellIds = getTablePresetLabelCells("swimlane-horizontal").map(
       (cell) => cellIdAt(table, cell.rowIndex, cell.columnIndex),
     );
-    expect(
-      labels.map(
-        (label) =>
-          label.containerRef?.kind === "tableCell" && label.containerRef.cellId,
-      ),
-    ).toEqual(cellIds);
+    expect(labels.map((label) => label.cellId)).toEqual(cellIds);
     // 标题带的被覆盖格回锚点：标签和双击编辑挂在同一格
     expect(cellIdAt(table, 1, 0)).toBe(cellIdAt(table, 0, 0));
 
     // 18px、水平垂直居中：与样本的单元格文字一致
-    expect(labels.map((label) => label.fontSize)).toEqual([18, 18, 18]);
-    expect(labels.map((label) => label.textAlign)).toEqual([
+    expect(labels.map((label) => label.style.fontSize)).toEqual([18, 18, 18]);
+    expect(labels.map((label) => label.style.textAlign)).toEqual([
       "center",
       "center",
       "center",
     ]);
-    expect(labels.map((label) => label.verticalAlign)).toEqual([
+    expect(labels.map((label) => label.style.verticalAlign)).toEqual([
       "middle",
       "middle",
       "middle",
     ]);
+    // 没有独立的文字元素
+    expect(live().filter((element) => element.type === "text")).toHaveLength(0);
   });
 
   it("标题带的底纹是主题令牌，画布与弹层缩略图同色", async () => {
@@ -220,14 +219,15 @@ describe("泳道预设的落地", () => {
   it("表格与标签是一次可撤销的操作", async () => {
     await choosePreset("swimlane-horizontal");
     mouse.clickAt(300, 240);
-    expect(live()).toHaveLength(4);
+    expect(live()).toHaveLength(1);
     expect(API.getUndoStack()).toHaveLength(1);
 
     Keyboard.undo();
     expect(live()).toHaveLength(0);
 
     Keyboard.redo();
-    expect(live()).toHaveLength(4);
+    expect(live()).toHaveLength(1);
+    expect(cellLabels()).toHaveLength(3);
   });
 
   it("悬停预览画的是整张表（表 + 标签），且不推进 id 序列", async () => {
@@ -235,12 +235,11 @@ describe("泳道预设的落地", () => {
     mouse.moveTo(400, 300);
 
     const preview = h.app.createPreview.elements!;
-    expect(preview.map((element) => element.type)).toEqual([
-      "table",
-      "text",
-      "text",
-      "text",
-    ]);
+    expect(preview.map((element) => element.type)).toEqual(["table"]);
+    const previewTable = preview[0] as ExcalidrawTableElement;
+    expect(
+      previewTable.texts?.[cellKey(cellIdAt(previewTable, 0, 0)!)]?.text,
+    ).toBe(t("toolBar.swimlaneHorizontal"));
     // 鼠标点即表格左上角（与落地同一锚点）
     expect(preview[0]).toMatchObject({
       x: 400,

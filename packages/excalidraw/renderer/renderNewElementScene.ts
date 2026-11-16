@@ -1,10 +1,8 @@
 import { throttleRAF } from "@excalidraw/common";
 
 import {
-  getBoundTextElements,
   getTargetFrame,
   isInvisiblySmallElement,
-  isTextElement,
   renderElement,
   shouldApplyFrameClip,
 } from "@excalidraw/element";
@@ -121,11 +119,9 @@ const _renderNewElementScene = ({
 };
 
 /**
- * Paints the off-scene creation previews. They are not in the scene, so they
- * are merged into local copies of the element maps `renderElement` reads —
- * that is also how a preview's bound text (a mindmap node's label) resolves
- * its container. Painted in the static scene's order: skip a text whose
- * container is present, then draw the container followed by its bound text.
+ * 绘制离屏的创建预览。预览元素不在场景里，因此合并进 `renderElement` 读取的
+ * 元素表副本，让预览元素按其 id 解析到自身及相邻元素。绘制顺序与静态场景一致：
+ * 先画容器，再画它的 `texts` 区域。
  */
 const renderPreviewElements = (
   elements: readonly NonDeletedExcalidrawElement[],
@@ -161,10 +157,6 @@ const renderPreviewElements = (
   void elementsMap;
 
   for (const element of elements) {
-    if (isPreviewBoundText(element, previewMap)) {
-      // rendered with its container
-      continue;
-    }
     context.save();
     renderElement(
       element,
@@ -175,30 +167,9 @@ const renderPreviewElements = (
       renderConfig,
       appState,
     );
-    const boundTextElements = getBoundTextElements(element, mergedElementsMap);
-    for (const boundTextElement of boundTextElements) {
-      renderElement(
-        boundTextElement,
-        mergedElementsMap,
-        mergedAllElementsMap,
-        rc,
-        context,
-        renderConfig,
-        appState,
-      );
-    }
     context.restore();
   }
 };
-
-/** a preview text bound to a preview container — drawn with it, not on its own */
-const isPreviewBoundText = (
-  element: ExcalidrawElement,
-  previewMap: ReadonlyMap<string, NonDeletedExcalidrawElement>,
-) =>
-  isTextElement(element) &&
-  !!element.containerId &&
-  previewMap.has(element.containerId);
 
 export const renderNewElementSceneThrottled = throttleRAF(
   (config: NewElementSceneRenderConfig) => {

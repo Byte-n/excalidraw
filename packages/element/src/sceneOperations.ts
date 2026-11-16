@@ -10,14 +10,22 @@ import {
 } from "@excalidraw/common";
 
 import { Scene } from "./Scene";
-import { newTextElement } from "./newElement";
-import { getBoundTextElement, redrawTextBoundingBox } from "./textElement";
+import { isShapeElement } from "./compositeShape";
+import { getTextLayoutUpdates } from "./text/applyLayout";
+import {
+  getTextElementStylePatch,
+  getTextElementTextPatch,
+} from "./text/elementText";
+import { DEFAULT_BOUND_TEXT_LABEL_POSITION } from "./text/labelLayout";
+import { getTextBlock, withTextBlock, withoutTextBlock } from "./text/ops";
 import { normalizeText } from "./textMeasurements";
-import { isLinearElement, isTextElement } from "./typeChecks";
+import { isLinearElement } from "./typeChecks";
 
+import type { TextBlockStyle } from "./text/types";
 import type {
   ExcalidrawElement,
-  ExcalidrawTextContainer,
+  ExcalidrawShapeElement,
+  ExcalidrawLinearElement,
   ExcalidrawTextElement,
   FillStyle,
   FontFamilyValues,
@@ -251,101 +259,199 @@ export const applySceneTextStyle = (
   if (!style) {
     return;
   }
-  const fontFamily =
-    style.fontFamily === undefined
-      ? text.fontFamily
-      : style.fontFamily ?? DEFAULT_FONT_FAMILY;
-  scene.mutateElement(text, {
-    ...(style.fontSize !== undefined && {
-      fontSize: style.fontSize ?? DEFAULT_FONT_SIZE,
+  scene.mutateElement(
+    text,
+    getTextElementStylePatch(text, {
+      ...(style.fontSize !== undefined && {
+        fontSize: style.fontSize ?? DEFAULT_FONT_SIZE,
+      }),
+      ...(style.fontFamily !== undefined && {
+        fontFamily: style.fontFamily ?? DEFAULT_FONT_FAMILY,
+      }),
+      ...(style.textAlign !== undefined && {
+        textAlign: style.textAlign ?? DEFAULT_TEXT_ALIGN,
+      }),
+      ...(style.verticalAlign !== undefined && {
+        verticalAlign: style.verticalAlign ?? DEFAULT_VERTICAL_ALIGN,
+      }),
     }),
-    ...(style.fontFamily !== undefined && {
+  );
+  if (style.color !== undefined) {
+    scene.mutateElement(text, {
+      strokeColor: style.color ?? DEFAULT_ELEMENT_PROPS.strokeColor,
+    });
+  }
+};
+
+/** 图形正文没有既有 block 时的样式：居中、默认字体与字号。 */
+const DEFAULT_SHAPE_TEXT_STYLE: TextBlockStyle = {
+  fontFamily: DEFAULT_FONT_FAMILY,
+  fontSize: DEFAULT_FONT_SIZE,
+  lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+  textAlign: "center",
+  verticalAlign: "middle",
+};
+
+/** 文本样式补丁合并进区域样式；fontFamily 变化同步派生行高。 */
+const mergeShapeTextStyle = (
+  style: TextBlockStyle,
+  patch: SceneTextStyle,
+): TextBlockStyle => {
+  const fontFamily =
+    patch.fontFamily === undefined
+      ? style.fontFamily
+      : patch.fontFamily ?? DEFAULT_FONT_FAMILY;
+  return {
+    ...style,
+    ...(patch.fontSize !== undefined && {
+      fontSize: patch.fontSize ?? DEFAULT_FONT_SIZE,
+    }),
+    ...(patch.fontFamily !== undefined && {
       fontFamily,
       lineHeight: getLineHeight(fontFamily),
     }),
-    ...(style.color !== undefined && {
-      strokeColor: style.color ?? DEFAULT_ELEMENT_PROPS.strokeColor,
+    ...(patch.color !== undefined && {
+      color: patch.color ?? DEFAULT_ELEMENT_PROPS.strokeColor,
     }),
-    ...(style.textAlign !== undefined && {
-      textAlign: style.textAlign ?? DEFAULT_TEXT_ALIGN,
+    ...(patch.textAlign !== undefined && {
+      textAlign: patch.textAlign ?? DEFAULT_TEXT_ALIGN,
     }),
-    ...(style.verticalAlign !== undefined && {
-      verticalAlign: style.verticalAlign ?? DEFAULT_VERTICAL_ALIGN,
+    ...(patch.verticalAlign !== undefined && {
+      verticalAlign: patch.verticalAlign ?? DEFAULT_VERTICAL_ALIGN,
+    }),
+  };
+};
+
+const updateShapeLabel = (
+  container: ExcalidrawShapeElement,
+  value: string | undefined,
+  style: SceneTextStyle | undefined,
+  scene: Scene,
+) => {
+  const block = getTextBlock(container.texts, "body");
+
+  if (value === "") {
+    if (style) {
+      throw new CanvasSceneError("invalid_input", "文字样式需要非空标签");
+    }
+    if (block) {
+      const texts = withoutTextBlock(container.texts, "body");
+      if (texts === undefined) {
+        // `mutateElement` 忽略 undefined，清空区域需要整体替换元素
+        scene.replaceAllElements(
+          scene
+            .getElementsIncludingDeleted()
+            .map((element) =>
+              element.id === container.id
+                ? (Object.fromEntries(
+                    Object.entries(element).filter(([key]) => key !== "texts"),
+                  ) as ExcalidrawElement)
+                : element,
+            ),
+          { skipValidation: true },
+        );
+      } else {
+        scene.mutateElement(container, { texts });
+      }
+    }
+    return;
+  }
+
+  if (value === undefined && !block) {
+    if (style) {
+      throw new CanvasSceneError("invalid_input", "文字样式需要非空标签");
+    }
+    return;
+  }
+
+  const baseStyle = block?.style ?? DEFAULT_SHAPE_TEXT_STYLE;
+  scene.mutateElement(container, {
+    texts: withTextBlock(container.texts, "body", {
+      text: normalizeText(value ?? block?.text ?? ""),
+      style: style ? mergeShapeTextStyle(baseStyle, style) : baseStyle,
+    }),
+  });
+
+  const updated = scene.getNonDeletedElement(container.id);
+  if (updated && isShapeElement(updated)) {
+    const updates = getTextLayoutUpdates(updated);
+    if (updates) {
+      scene.mutateElement(updated, updates);
+    }
+  }
+};
+
+/** 线性元素标签：写入 `texts.label`，位置沿用既有 placement 或默认值。 */
+const updateLinearLabel = (
+  container: ExcalidrawLinearElement,
+  value: string | undefined,
+  style: SceneTextStyle | undefined,
+  scene: Scene,
+) => {
+  const block = getTextBlock(container.texts, "label");
+
+  if (value === "") {
+    if (style) {
+      throw new CanvasSceneError("invalid_input", "文字样式需要非空标签");
+    }
+    if (block) {
+      const texts = withoutTextBlock(container.texts, "label");
+      if (texts === undefined) {
+        scene.replaceAllElements(
+          scene
+            .getElementsIncludingDeleted()
+            .map((element) =>
+              element.id === container.id
+                ? (Object.fromEntries(
+                    Object.entries(element).filter(([key]) => key !== "texts"),
+                  ) as ExcalidrawElement)
+                : element,
+            ),
+          { skipValidation: true },
+        );
+      } else {
+        scene.mutateElement(container, { texts });
+      }
+    }
+    return;
+  }
+
+  if (value === undefined && !block) {
+    if (style) {
+      throw new CanvasSceneError("invalid_input", "文字样式需要非空标签");
+    }
+    return;
+  }
+
+  const baseStyle = block?.style ?? DEFAULT_SHAPE_TEXT_STYLE;
+  scene.mutateElement(container, {
+    texts: withTextBlock(container.texts, "label", {
+      text: normalizeText(value ?? block?.text ?? ""),
+      style: style ? mergeShapeTextStyle(baseStyle, style) : baseStyle,
+      placement: block?.placement ?? {
+        labelPosition: DEFAULT_BOUND_TEXT_LABEL_POSITION,
+      },
     }),
   });
 };
 
 export const updateSceneLabel = (
-  container: ExcalidrawTextContainer,
+  container: ExcalidrawShapeElement | ExcalidrawLinearElement,
   value: string | undefined,
   style: SceneTextStyle | undefined,
   scene: Scene,
 ) => {
-  let text: ExcalidrawTextElement | null = getBoundTextElement(
-    container,
-    scene.getNonDeletedElementsMap(),
-  );
-  if (value === "") {
-    if (style) {
-      throw new CanvasSceneError("invalid_input", "文字样式需要非空标签");
-    }
-    if (text) {
-      scene.mutateElement<ExcalidrawTextElement>(text, { isDeleted: true });
-      scene.mutateElement(container, {
-        boundElements: (container.boundElements ?? []).filter(
-          (ref) => ref.id !== text?.id,
-        ),
-      });
-    }
+  if (isLinearElement(container)) {
+    updateLinearLabel(container, value, style, scene);
     return;
   }
-  if (!text && value) {
-    text = newTextElement({
-      x: container.x,
-      y: container.y,
-      text: value,
-      containerId: container.id,
-      angle: isLinearElement(container) ? undefined : container.angle,
-    });
-    scene.mutateElement(container, {
-      boundElements: [
-        ...(container.boundElements ?? []).filter((ref) => ref.type !== "text"),
-        { type: "text", id: text.id },
-      ],
-    });
-    scene.replaceAllElements([...scene.getElementsIncludingDeleted(), text], {
-      skipValidation: true,
-    });
-  }
-  if (!text) {
-    if (style) {
-      throw new CanvasSceneError("invalid_input", "文字样式需要非空标签");
-    }
-    return;
-  }
-  if (value !== undefined) {
-    scene.mutateElement(text, {
-      text: normalizeText(value),
-      originalText: normalizeText(value),
-    });
-  }
-  applySceneTextStyle(text, style, scene);
-  redrawTextBoundingBox(text, container, scene);
+  updateShapeLabel(container, value, style, scene);
 };
 
-// 删除只墓碑目标及其真实绑定文字，保留 incident 连线及另一端。
+// 删除目标及其引用：连线绑定与 boundElements 一并清理。
 export const deleteSceneElements = (ids: ReadonlySet<string>, scene: Scene) => {
   const elements = scene.getElementsIncludingDeleted();
   const deleted = new Set(ids);
-  for (const element of elements) {
-    if (
-      isTextElement(element) &&
-      element.containerId &&
-      ids.has(element.containerId)
-    ) {
-      deleted.add(element.id);
-    }
-  }
   for (const element of elements) {
     if (element.isDeleted) {
       continue;

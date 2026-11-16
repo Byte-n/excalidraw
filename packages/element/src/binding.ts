@@ -59,14 +59,11 @@ import {
 import { LinearElementEditor } from "./linearElementEditor";
 import { mutateElement } from "./mutateElement";
 import { INVISIBLY_SMALL_ELEMENT_SIZE } from "./sizeHelpers";
-import { getBoundTextElement, handleBindTextResize } from "./textElement";
 import {
   isLinearElement,
   isBindableElement,
-  isBoundToContainer,
   isElbowArrow,
   isRectanguloidElement,
-  isTextElement,
 } from "./typeChecks";
 
 import { type CurveNormal } from "./curveConnector";
@@ -889,11 +886,6 @@ export const updateBoundElements = (
         !!startBindingElement &&
         startBindingElement?.id === endBindingElement?.id,
     });
-
-    const boundText = getBoundTextElement(element, elementsMap);
-    if (boundText && !boundText.isDeleted) {
-      handleBindTextResize(element, scene, false);
-    }
   };
 
   boundElementsVisitor(elementsMap, changedElement, visitor);
@@ -1969,13 +1961,6 @@ export const fixDuplicatedBindingsAfterDuplication = (
       }
     }
 
-    if ("containerId" in duplicateElement && duplicateElement.containerId) {
-      Object.assign(duplicateElement, {
-        containerId:
-          origIdToDuplicateId.get(duplicateElement.containerId) ?? null,
-      });
-    }
-
     if ("endBinding" in duplicateElement && duplicateElement.endBinding) {
       const newEndBindingId = origIdToDuplicateId.get(
         duplicateElement.endBinding.elementId,
@@ -2052,10 +2037,7 @@ const newBoundElements = (
         ({
           id: x.id,
           type: x.type,
-          ...(isTextElement(x) && x.containerSlot
-            ? { slot: x.containerSlot }
-            : {}),
-        } as ExcalidrawArrowElement | ExcalidrawTextElement),
+        } as NonNullable<ExcalidrawElement["boundElements"]>[number]),
     ),
   );
 
@@ -2065,18 +2047,13 @@ const newBoundElements = (
 export const bindingProperties: Set<BindableProp | BindingProp> = new Set([
   "boundElements",
   "containerRef",
-  "containerId",
   "startBinding",
   "endBinding",
 ]);
 
 export type BindableProp = "boundElements";
 
-export type BindingProp =
-  | "containerRef"
-  | "containerId"
-  | "startBinding"
-  | "endBinding";
+export type BindingProp = "containerRef" | "startBinding" | "endBinding";
 
 type BoundElementsVisitingFunc = (
   boundElement: ExcalidrawElement | undefined,
@@ -2124,11 +2101,6 @@ const bindableElementsVisitor = <T>(
     result.push(visit(elements.get(id), "containerRef", id));
   }
 
-  if (isBoundToContainer(element)) {
-    const id = element.containerId;
-    result.push(visit(elements.get(id), "containerId", id));
-  }
-
   if (isLinearElement(element)) {
     if (element.startBinding) {
       const id = element.startBinding.elementId;
@@ -2145,12 +2117,12 @@ const bindableElementsVisitor = <T>(
 };
 
 /**
- * Bound element containing bindings to `containerRef`, `containerId`, `startBinding` or `endBinding`.
+ * Bound element containing bindings to `containerRef`, `startBinding` or `endBinding`.
  */
 export class BoundElement {
   /**
    * Unbind the affected non deleted bindable elements (removing element from `boundElements`).
-   * - iterates non deleted bindable elements (`containerId` | `startBinding.elementId` | `endBinding.elementId`) of the current element
+   * - iterates non deleted bindable elements (`containerRef` | `startBinding.elementId` | `endBinding.elementId`) of the current element
    * - prepares updates to unbind each bindable element's `boundElements` from the current element
    */
   public static unbindAffected(
@@ -2190,7 +2162,7 @@ export class BoundElement {
 
   /**
    * Rebind the next affected non deleted bindable elements (adding element to `boundElements`).
-   * - iterates non deleted bindable elements (`containerId` | `startBinding.elementId` | `endBinding.elementId`) of the current element
+   * - iterates non deleted bindable elements (`containerRef` | `startBinding.elementId` | `endBinding.elementId`) of the current element
    * - prepares updates to rebind each bindable element's `boundElements` to the current element
    *
    * NOTE: rebind expects that affected elements were previously unbound with `BoundElement.unbindAffected`
@@ -2244,29 +2216,6 @@ export class BoundElement {
             ),
           });
         }
-
-        if (isTextElement(boundElement)) {
-          if (
-            !bindableElement.boundElements?.find(
-              (x) => x.type === "text" && x.slot === boundElement.containerSlot,
-            )
-          ) {
-            // rebind only if there is no other text bound to the same slot
-            updateElementWith(bindableElement, {
-              boundElements: newBoundElements(
-                bindableElement.boundElements,
-                new Set(),
-                new Array(boundElement),
-              ),
-            });
-          } else {
-            // unbind otherwise
-            updateElementWith(boundElement, {
-              containerId: null,
-              containerRef: bindableElement.containerRef,
-            } as ElementUpdate<ExcalidrawTextElement>);
-          }
-        }
       },
     );
   };
@@ -2308,11 +2257,6 @@ export class BindableElement {
             const updates =
               bindingProp === "containerRef"
                 ? { containerRef: undefined }
-                : bindingProp === "containerId"
-                ? {
-                    containerId: null,
-                    containerRef: bindableElement.containerRef,
-                  }
                 : { [bindingProp]: null };
             updateElementWith(
               boundElement,
@@ -2325,9 +2269,9 @@ export class BindableElement {
   }
 
   /**
-   * Rebind the affected non deleted bound elements (for now setting only `containerId`, as we cannot rebind arrows atm).
+   * Rebind the affected non deleted bound elements.
    * - iterates through non deleted `boundElements` of the current element
-   * - prepares updates to rebind each bound element to the current element or unbind it from `boundElements` in case of conflicts
+   * - drops references to deleted elements
    *
    * NOTE: rebind expects that affected elements were previously unbound with `BindaleElement.unbindAffected`
    */
@@ -2356,47 +2300,6 @@ export class BindableElement {
               new Set([boundElementId]),
             ),
           });
-          return;
-        }
-
-        if (isTextElement(boundElement)) {
-          const boundElements = bindableElement.boundElements?.slice() ?? [];
-          // check if this is the last element in the array for its slot, if
-          // not, there is a previously bound text in the same slot which
-          // should be unbound
-          if (
-            boundElements
-              .reverse()
-              .find(
-                (x) =>
-                  x.type === "text" && x.slot === boundElement.containerSlot,
-              )?.id === boundElement.id
-          ) {
-            if (boundElement.containerId !== bindableElement.id) {
-              // rebind if not bound already!
-              updateElementWith(boundElement, {
-                containerId: bindableElement.id,
-                containerRef: undefined,
-              } as ElementUpdate<ExcalidrawTextElement>);
-            }
-          } else {
-            if (boundElement.containerId !== null) {
-              // unbind if not unbound already
-              updateElementWith(boundElement, {
-                containerId: null,
-                containerRef: elements.get(boundElement.containerId)
-                  ?.containerRef,
-              } as ElementUpdate<ExcalidrawTextElement>);
-            }
-
-            // unbind from boundElements as the element got bound to some other element in the meantime
-            updateElementWith(bindableElement, {
-              boundElements: newBoundElements(
-                bindableElement.boundElements,
-                new Set([boundElement.id]),
-              ),
-            });
-          }
         }
       },
     );

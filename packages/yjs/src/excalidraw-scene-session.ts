@@ -145,23 +145,6 @@ export class ExcalidrawSceneSession<
     const assets = this.binding.getCanonical().assets;
     const changes: TElement[] = [];
     const reordering = new Set<string>();
-    const changedById = new Map<string, ReadonlySet<string>>();
-    for (const incoming of elements) {
-      const before = this.display.get(incoming.id);
-      if (!before) {
-        continue;
-      }
-      changedById.set(
-        incoming.id,
-        new Set(
-          [
-            ...new Set([...Object.keys(before), ...Object.keys(incoming)]),
-          ].filter(
-            (key) => !technical.has(key) && !equal(before[key], incoming[key]),
-          ),
-        ),
-      );
-    }
     for (const incoming of elements) {
       this.observeVersion(incoming);
       // 未关联图片属于本地 overlay，技术加载状态也不构成文档编辑。
@@ -191,11 +174,7 @@ export class ExcalidrawSceneSession<
       let changed = [...keys].filter(
         (key) => !technical.has(key) && !equal(before[key], incoming[key]),
       );
-      const shouldMaterialize = this.shouldMaterializeText(
-        incoming,
-        changed,
-        changedById,
-      );
+      const shouldMaterialize = this.shouldMaterializeText(incoming, changed);
       if (this.lazyTextDimensions.has(incoming.id) && !shouldMaterialize) {
         changed = changed.filter((key) => key !== "width" && key !== "height");
       } else if (shouldMaterialize) {
@@ -320,7 +299,6 @@ export class ExcalidrawSceneSession<
   private shouldMaterializeText(
     element: TElement,
     changed: readonly string[],
-    changedById: ReadonlyMap<string, ReadonlySet<string>>,
   ): boolean {
     if (element.type !== "text" || !this.lazyTextDimensions.has(element.id)) {
       return false;
@@ -337,24 +315,6 @@ export class ExcalidrawSceneSession<
       changed.some((key) => geometry.has(key))
     ) {
       return true;
-    }
-    if (typeof element.containerId === "string") {
-      const containerChanges = changedById.get(element.containerId);
-      if (
-        containerChanges &&
-        [
-          "x",
-          "y",
-          "width",
-          "height",
-          "angle",
-          "points",
-          "startBinding",
-          "endBinding",
-        ].some((key) => containerChanges.has(key))
-      ) {
-        return true;
-      }
     }
     return false;
   }

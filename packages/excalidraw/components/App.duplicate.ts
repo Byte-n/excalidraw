@@ -202,7 +202,6 @@ export class AppDuplicate {
       ? [...elementsToDuplicate]
       : this.app.scene.getSelectedElements({
           selectedElementIds: this.app.state.selectedElementIds,
-          includeBoundTextElement: true,
           includeElementsInFrames: true,
         });
     if (!elementsToDuplicate) {

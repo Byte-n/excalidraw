@@ -53,67 +53,8 @@ const defragmentGroups = (elements: readonly ExcalidrawElement[]) => {
   return sortedElements;
 };
 
-/**
- * In theory, when we have text elements bound to a container, they
- * should be right after the container element in the elements array.
- * However, this is not guaranteed due to old and potential future bugs.
- *
- * This function sorts containers and their bound texts together. It prefers
- * original z-index of container (i.e. it moves bound text elements after
- * containers).
- */
-export const normalizeBoundElementsOrder = <T extends ExcalidrawElement>(
-  elements: readonly T[],
-) => {
-  const elementsMap = arrayToMap(elements);
-
-  const sortedElements = new Set<T>();
-
-  for (const element of elements) {
-    if (sortedElements.has(element)) {
-      continue;
-    }
-
-    if (element.boundElements?.length) {
-      sortedElements.add(element);
-      for (const boundElement of element.boundElements) {
-        const child = elementsMap.get(boundElement.id);
-        if (child && boundElement.type === "text") {
-          sortedElements.add(child);
-        }
-      }
-      continue;
-    }
-
-    // if element has a container and container lists it, skip this element
-    // as it'll be taken care of by the container
-    if (
-      element.type === "text" &&
-      element.containerId &&
-      elementsMap
-        .get(element.containerId)
-        ?.boundElements?.some((el) => el.id === element.id)
-    ) {
-      continue;
-    }
-
-    sortedElements.add(element);
-  }
-
-  // if there's a bug which resulted in losing some of the elements, return
-  // original instead as that's better than losing data
-  if (sortedElements.size !== elements.length) {
-    console.error(
-      "normalizeBoundElementsOrder: lost some elements... bailing!",
-    );
-    return elements;
-  }
-
-  return [...sortedElements];
-};
-
 export const normalizeElementOrder = (
   elements: readonly ExcalidrawElement[],
 ) => {
-  return normalizeBoundElementsOrder(defragmentGroups(elements));
+  return defragmentGroups(elements);
 };

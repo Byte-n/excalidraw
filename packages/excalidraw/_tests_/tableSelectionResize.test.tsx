@@ -2,6 +2,7 @@ import { KEYS } from "@excalidraw/common";
 
 import {
   getCommonBounds,
+  getTextElementStyle,
   getTransformHandlesFromCoords,
   newElementWith,
 } from "@excalidraw/element";
@@ -171,18 +172,21 @@ describe("multi-selection resize containing a table", () => {
       width: 100,
       height: 100,
       containerRef: cellRef(table, 1),
+      texts: {
+        body: {
+          text: "note",
+          style: {
+            fontFamily: 1,
+            fontSize: 40,
+            lineHeight: 1.25,
+            textAlign: "left",
+            verticalAlign: "top",
+          } as any,
+          placement: { baseFontSize: 40 },
+        },
+      },
     });
     note = newElementWith(note, { baseHeight: 100 });
-    let label = API.createElement({
-      type: "text",
-      x: 310,
-      y: 120,
-      width: 50,
-      height: 50,
-      fontSize: 40,
-      containerId: note.id,
-    });
-    label = newElementWith(label, { baseFontSize: 40 });
     const outside = API.createElement({
       type: "rectangle",
       x: 0,
@@ -190,11 +194,11 @@ describe("multi-selection resize containing a table", () => {
       width: 10,
       height: 10,
     });
-    API.setElements([table, text, note, label, outside]);
-    selectElements([table, text, note, label, outside]);
+    API.setElements([table, text, note, outside]);
+    selectElements([table, text, note, outside]);
 
     const [cx, cy] = handleCenter(
-      getCommonBounds([table, text, note, label, outside]),
+      getCommonBounds([table, text, note, outside]),
       "se",
     );
     mouse.downAt(cx, cy);
@@ -205,18 +209,13 @@ describe("multi-selection resize containing a table", () => {
     const committedText = h.app.scene.getElement(
       text.id,
     ) as ExcalidrawTextElement;
-    expect(committedText.fontSize).toBeCloseTo(24, 6);
+    expect(getTextElementStyle(committedText).fontSize).toBeCloseTo(24, 6);
     expect(committedText.autoResize).toBe(false);
 
     const committedNote = h.app.scene.getElement(note.id)! as any;
     expect(committedNote.width).toBeCloseTo(120, 6);
     expect(committedNote.baseHeight).toBeCloseTo(120, 6);
-
-    const committedLabel = h.app.scene.getElement(
-      label.id,
-    ) as ExcalidrawTextElement;
-    expect(committedLabel.fontSize).toBeCloseTo(48, 6);
-    expect((committedLabel as any).baseFontSize).toBeCloseTo(48, 6);
+    expect(committedNote.texts.body.style.fontSize).toBeCloseTo(48, 6);
   });
 
   it("esc restores the scene and disarms the resize", async () => {

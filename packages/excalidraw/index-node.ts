@@ -1,6 +1,13 @@
 import { getDefaultAppState } from "./appState";
 import { exportToCanvas } from "./scene/export";
 
+import {
+  DEFAULT_TEXT_ALIGN,
+  DEFAULT_VERTICAL_ALIGN,
+  FONT_FAMILY,
+  getLineHeight,
+} from "@excalidraw/common";
+
 const fs = require("fs");
 
 const { registerFont, createCanvas } = require("canvas");
@@ -47,9 +54,19 @@ const elements = [
     strokeWidth: 1,
     opacity: 100,
     seed: 1683771448,
-    text: "test",
-    font: "20px Virgil",
-    baseline: 22,
+    texts: {
+      body: {
+        text: "test",
+        style: {
+          fontFamily: FONT_FAMILY.Virgil,
+          fontSize: 20,
+          lineHeight: getLineHeight(FONT_FAMILY.Virgil),
+          textAlign: DEFAULT_TEXT_ALIGN,
+          verticalAlign: DEFAULT_VERTICAL_ALIGN,
+        },
+      },
+    },
+    autoResize: true,
   },
 ];
 

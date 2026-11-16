@@ -6,8 +6,6 @@ import {
 } from "@excalidraw/fractional-indexing";
 
 import { mutateElement, newElementWith } from "./mutateElement";
-import { getBoundTextElementId } from "./textElement";
-import { hasBoundTextElement } from "./typeChecks";
 
 import { isNonDeletedElement } from ".";
 
@@ -50,12 +48,10 @@ export const validateFractionalIndices = (
   elements: readonly ExcalidrawElement[],
   {
     shouldThrow = false,
-    includeBoundTextValidation = false,
     ignoreLogs,
     reconciliationContext,
   }: {
     shouldThrow: boolean;
-    includeBoundTextValidation: boolean;
     ignoreLogs?: true;
     reconciliationContext?: {
       localElements: ReadonlyArray<ExcalidrawElement>;
@@ -66,8 +62,6 @@ export const validateFractionalIndices = (
   const errorMessages = [];
   const stringifyElement = (element: ExcalidrawElement | void) =>
     `${element?.index}:${element?.id}:${element?.type}:${element?.isDeleted}:${element?.version}:${element?.versionNonce}`;
-
-  const elementsMap = includeBoundTextValidation ? arrayToMap(elements) : null;
 
   const indices = elements.map((x) => x.index);
   for (const [i, index] of indices.entries()) {
@@ -82,32 +76,6 @@ export const validateFractionalIndices = (
           elements[i + 1],
         )}"`,
       );
-    }
-
-    // disabled by default, as we don't fix it
-    if (
-      includeBoundTextValidation &&
-      elementsMap &&
-      hasBoundTextElement(elements[i]) &&
-      isNonDeletedElement(elements[i])
-    ) {
-      const container = elements[i];
-      const boundTextElementId = getBoundTextElementId(container);
-      const text = boundTextElementId
-        ? elementsMap.get(boundTextElementId)
-        : null;
-
-      if (
-        text &&
-        isNonDeletedElement(text) &&
-        text.index! <= container.index!
-      ) {
-        errorMessages.push(
-          `Fractional indices invariant for bound elements has been compromised: "${stringifyElement(
-            text,
-          )}", "${stringifyElement(container)}"`,
-        );
-      }
     }
   }
 
@@ -193,15 +161,10 @@ export const syncMovedIndices = (
     });
 
     // ensure next indices are valid before mutation, throws on invalid ones
-    validateFractionalIndices(
-      elementsCandidates,
-      // we don't autofix invalid bound text indices, hence don't include it in the validation
-      {
-        includeBoundTextValidation: false,
-        shouldThrow: true,
-        ignoreLogs: true,
-      },
-    );
+    validateFractionalIndices(elementsCandidates, {
+      shouldThrow: true,
+      ignoreLogs: true,
+    });
 
     // split mutation so we don't end up in an incosistent state
     for (const [element, { index }] of elementsUpdates) {

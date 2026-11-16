@@ -9,12 +9,10 @@ import {
   colorToHex,
   COLOR_TOP_PICKS_SLOTS,
   type CombineBrandsIfNeeded,
-  DEFAULT_FONT_FAMILY,
   DEFAULT_FONT_SIZE,
   DEFAULT_STROKE_STREAMLINE,
   DEFAULT_TEXT_ALIGN,
   DEFAULT_VERTICAL_ALIGN,
-  FONT_FAMILY,
   ROUNDNESS,
   DEFAULT_SIDEBAR,
   DEFAULT_ELEMENT_PROPS,
@@ -43,7 +41,6 @@ import {
   repairMindmapElements,
   buildMindmapGraphIndex,
   layoutMindmap,
-  computeBoundTextPosition,
   assertShapeElementType,
   assertMindmapShapeData,
   assertValidTableData,
@@ -58,17 +55,22 @@ import {
 import { LinearElementEditor } from "@excalidraw/element";
 import {
   bumpVersion,
-  getStickyNoteLayout,
-  isStickyNoteBoundText,
+  getStickyNoteBodyLayout,
   normalizeStickyNote,
   normalizeStickyNoteBackgroundColor,
   normalizeStickyNoteFontSize,
   normalizeStickyNoteStrokeColor,
 } from "@excalidraw/element";
 import {
-  getBoundTextElement,
-  getContainerElement,
-  isDataflowTitleText,
+  DEFAULT_BOUND_TEXT_LABEL_POSITION,
+  getTextElementBaseFontSize,
+  getTextElementBaseFontSizePatch,
+  normalizeText,
+  parseTextRegionKey,
+  withoutTextBlock,
+  withTextBlock,
+} from "@excalidraw/element";
+import {
 } from "@excalidraw/element";
 import { isStickyNoteElement } from "@excalidraw/element";
 import {
@@ -76,7 +78,6 @@ import {
   normalizeSequenceFragmentGeometry,
   normalizeSequenceLifelineGeometry,
 } from "@excalidraw/element";
-import { detectLineHeight } from "@excalidraw/element";
 import {
   isArrowBoundToElement,
   isElbowArrow,
@@ -86,11 +87,7 @@ import {
   isUsingAdaptiveRadius,
 } from "@excalidraw/element";
 
-import {
-  normalizeBoundElementsOrder,
-  syncInvalidIndices,
-  syncMovedIndices,
-} from "@excalidraw/element";
+import { syncInvalidIndices } from "@excalidraw/element";
 
 import { refreshTextDimensions } from "@excalidraw/element";
 
@@ -100,6 +97,8 @@ import { isInvisiblySmallElement } from "@excalidraw/element";
 
 import type { LocalPoint, Radians } from "@excalidraw/math";
 
+import type { TextBlockStyle } from "@excalidraw/element";
+
 import type {
   ElementsMap,
   ElementsMapOrArray,
@@ -107,11 +106,11 @@ import type {
   ExcalidrawElbowArrowElement,
   ExcalidrawElement,
   ExcalidrawLinearElement,
+  ExcalidrawMindmapNodeElement,
   ExcalidrawSelectionElement,
+  ExcalidrawTableElement,
   ExcalidrawTextElement,
-  ExcalidrawTextElementWithContainer,
   ElementBinding,
-  FontFamilyValues,
   NonDeletedSceneElementsMap,
   OrderedExcalidrawElement,
   StrokeVariability,
@@ -142,6 +141,97 @@ type RestoredAppState = Omit<
 >;
 
 const MAX_LINEAR_PX = 75_000;
+
+/** 脑图节点正文：归一化文本；空文本不落 key；样式必须是对象。 */
+const normalizeMindmapNodeTexts = (
+  node: ExcalidrawMindmapNodeElement,
+): ExcalidrawMindmapNodeElement => {
+  const body = node.texts?.body;
+  if (!body) {
+    return node;
+  }
+  if (!body.style || typeof body.style !== "object") {
+    throw new Error("Unsupported mindmap node text style");
+  }
+  const text = normalizeText(body.text);
+  return text.trim()
+    ? {
+        ...node,
+        texts: withTextBlock(node.texts, "body", { ...body, text }),
+      }
+    : { ...node, texts: withoutTextBlock(node.texts, "body") };
+};
+
+/**
+ * 表格文本：只保留可见格的 `cell:<id>` 键与非空文本；覆盖格、未知格的键丢弃。
+ */
+const normalizeTableTexts = (
+  element: ExcalidrawTableElement,
+): ExcalidrawTableElement => {
+  if (!element.texts) {
+    return element;
+  }
+  const visible = new Set(
+    element.table.cells
+      .filter((cell) => !cell.mergedInto)
+      .map((cell) => cell.id),
+  );
+  let texts: ExcalidrawTableElement["texts"];
+  for (const key of Object.keys(
+    element.texts,
+  ) as (keyof typeof element.texts)[]) {
+    const block = element.texts[key];
+    const parsed = parseTextRegionKey(key);
+    if (!block || parsed?.kind !== "cell" || !visible.has(parsed.cellId)) {
+      continue;
+    }
+    if (!block.style || typeof block.style !== "object") {
+      throw new Error("Unsupported table cell text style");
+    }
+    const text = normalizeText(block.text);
+    if (!text.trim()) {
+      continue;
+    }
+    texts = withTextBlock(texts, key, { ...block, text });
+  }
+  if (!texts) {
+    const { texts: _texts, ...rest } = element;
+    return rest as ExcalidrawTableElement;
+  }
+  return { ...element, texts };
+};
+
+/**
+ * 线性元素标签：只保留 `label` 键与非空文本；沿路径位置归一化到 [0,1]，
+ * 非法的 placement 直接丢弃并回到默认位置。
+ */
+const normalizeLinearTexts = <T extends ExcalidrawLinearElement>(
+  element: T,
+): T => {
+  const label = element.texts?.label;
+  if (!label) {
+    return element;
+  }
+  if (!label.style || typeof label.style !== "object") {
+    throw new Error("Unsupported linear element label style");
+  }
+  const text = normalizeText(label.text);
+  if (!text.trim()) {
+    const { texts: _texts, ...rest } = element;
+    return rest as T;
+  }
+  const labelPosition = isFiniteNumber(label.placement?.labelPosition)
+    ? clamp(label.placement.labelPosition, 0, 1)
+    : DEFAULT_BOUND_TEXT_LABEL_POSITION;
+  return {
+    ...element,
+    texts: withTextBlock(undefined, "label", {
+      text,
+      style: label.style,
+      placement: { labelPosition },
+    }),
+  } as T;
+};
 
 // Last resort fix for extremely large linear elements (lines / arrows), which
 // would otherwise freeze the editor while rendering — e.g. a dotted or dashed
@@ -306,15 +396,6 @@ const restoreFreedrawStrokeOptions = (
   };
 };
 
-const getFontFamilyByName = (fontFamilyName: string): FontFamilyValues => {
-  if (Object.keys(FONT_FAMILY).includes(fontFamilyName)) {
-    return FONT_FAMILY[
-      fontFamilyName as keyof typeof FONT_FAMILY
-    ] as FontFamilyValues;
-  }
-  return DEFAULT_FONT_FAMILY;
-};
-
 const repairBinding = (
   binding: ElementBinding | null,
   targetElementsMap: Readonly<ElementsMap>,
@@ -352,6 +433,8 @@ const restoreElementWithProperties = <
   T extends Merge<
     Required<ExcalidrawElement>,
     Pick<ExcalidrawElement, "containerRef"> & {
+      /** 文本区域随元素一起读取，暂不单独归一化。 */
+      texts?: ExcalidrawElement["texts"];
       customData?: ExcalidrawElement["customData"];
       /** @deprecated */
       boundElementIds?: readonly ExcalidrawElement["id"][];
@@ -457,75 +540,48 @@ export const restoreElement = (
   element = { ...element };
 
   switch (element.type) {
-    case "text":
-      // temp fix: cleanup legacy obsidian-excalidraw attribute else it'll
-      // conflict when porting between the apps
-      delete (element as any).rawText;
-
-      let fontSize = element.fontSize;
-      let fontFamily = element.fontFamily;
-      if ("font" in element) {
-        const [fontPx, _fontFamily]: [string, string] = (
-          element as any
-        ).font.split(" ");
-        fontSize = parseFloat(fontPx);
-        fontFamily = getFontFamilyByName(_fontFamily);
+    case "text": {
+      const body = element.texts?.body;
+      if (!body || !body.style || typeof body.style !== "object") {
+        throw new Error("Unsupported text element text block");
       }
-      if (!isFiniteNumber(fontSize)) {
-        fontSize = DEFAULT_FONT_SIZE;
-      }
-      const text = (typeof element.text === "string" && element.text) || "";
-
-      // line-height might not be specified either when creating elements
-      // programmatically, or when importing old diagrams.
-      // For the latter we want to detect the original line height which
-      // will likely differ from our per-font fixed line height we now use,
-      // to maintain backward compatibility.
-      const lineHeight =
-        element.lineHeight ||
-        (element.height
-          ? // detect line-height from current element height and font-size
-            detectLineHeight(element)
-          : // no element height likely means programmatic use, so default
-            // to a fixed line height
-            getLineHeight(element.fontFamily));
-      element = restoreElementWithProperties(element, {
-        fontSize,
-        fontFamily,
-        text,
-        textAlign: element.textAlign || DEFAULT_TEXT_ALIGN,
-        verticalAlign: element.verticalAlign || DEFAULT_VERTICAL_ALIGN,
-        containerId: element.containerId ?? null,
-        originalText: element.originalText || text,
-        // A fragment's operator label always uses the container-bound
-        // auto-width mode: the tab, not the text element, owns the width.
-        autoResize: isSequenceFragmentElement(
-          element.containerId
-            ? targetElementsMap.get(element.containerId)
-            : undefined,
-        )
-          ? true
-          : element.autoResize ?? true,
-        lineHeight,
-        labelPosition: isFiniteNumber(element.labelPosition)
-          ? clamp(element.labelPosition, 0, 1)
-          : null,
-        // only meaningful for sticky note labels; reconciled against the
-        // container in `restoreStickyNotes` once bindings are repaired
-        baseFontSize: isFiniteNumber(element.baseFontSize)
-          ? normalizeStickyNoteFontSize(element.baseFontSize)
-          : null,
-      });
+      const text = normalizeText(
+        typeof body.text === "string" ? body.text : "",
+      );
+      const style: TextBlockStyle = {
+        fontFamily: body.style.fontFamily,
+        fontSize: isFiniteNumber(body.style.fontSize)
+          ? body.style.fontSize
+          : DEFAULT_FONT_SIZE,
+        ...(body.style.fontWeight !== undefined
+          ? { fontWeight: body.style.fontWeight }
+          : {}),
+        lineHeight:
+          body.style.lineHeight || getLineHeight(body.style.fontFamily),
+        textAlign: body.style.textAlign || DEFAULT_TEXT_ALIGN,
+        verticalAlign: body.style.verticalAlign || DEFAULT_VERTICAL_ALIGN,
+        ...(body.style.color !== undefined ? { color: body.style.color } : {}),
+      };
+      element = restoreElementWithProperties(
+        {
+          ...element,
+          texts: { body: { text, style } },
+        },
+        {
+          autoResize: element.autoResize ?? true,
+        },
+      );
 
       // if empty text, mark as deleted. We keep in array
       // for data integrity purposes (collab etc.)
       if (opts?.deleteInvisibleElements && !text && !element.isDeleted) {
         // TODO: we should not do this since it breaks sync / versioning when we exchange / apply just deltas and restore the elements (deletion isn't recorded)
-        element = { ...element, originalText: text, isDeleted: true };
+        element = { ...element, isDeleted: true };
         element = bumpVersion(element);
       }
 
       return element;
+    }
     case "freedraw": {
       const { points, pressures } = restoreFreedrawPoints(
         element.points,
@@ -597,7 +653,7 @@ export const restoreElement = (
         ...getSizeFromPoints(points),
       });
 
-      return handleOversizedLinearElements(restoredLine);
+      return handleOversizedLinearElements(normalizeLinearTexts(restoredLine));
     case "arrow": {
       const startArrowhead = element.startArrowhead ?? null;
       const endArrowhead =
@@ -653,7 +709,9 @@ export const restoreElement = (
         ),
       };
 
-      return handleOversizedLinearElements(normalizedRestoredElement);
+      return handleOversizedLinearElements(
+        normalizeLinearTexts(normalizedRestoredElement),
+      );
     }
 
     case "mindmap-node": {
@@ -676,7 +734,7 @@ export const restoreElement = (
         collapsed: element.collapsed === true,
         shape: element.shape,
       });
-      return {
+      return normalizeMindmapNodeTexts({
         ...restored,
         x: isFiniteNumber(restored.x) ? restored.x : 0,
         y: isFiniteNumber(restored.y) ? restored.y : 0,
@@ -689,7 +747,7 @@ export const restoreElement = (
             ? restored.height
             : 56,
         angle: 0 as Radians,
-      };
+      });
     }
     case "mindmap-edge": {
       const points = Array.isArray(element.points)
@@ -720,18 +778,20 @@ export const restoreElement = (
       assertValidTableData(element.table);
       // only bounded float drift between the element size and its rows and
       // columns is normalized here; gross inconsistencies throw
-      return normalizeTableDimensions(
-        restoreElementWithProperties(element, {
-          name: element.name ?? null,
-          table: element.table,
-        }),
+      return normalizeTableTexts(
+        normalizeTableDimensions(
+          restoreElementWithProperties(element, {
+            name: element.name ?? null,
+            table: element.table,
+          }),
+        ),
       );
     }
     case "iframe":
     case "embeddable":
       return restoreElementWithProperties(element, {});
-    case "stickynote":
-      return normalizeStickyNote(
+    case "stickynote": {
+      const restored = normalizeStickyNote(
         restoreElementWithProperties(element, {
           baseHeight:
             element.baseHeight ??
@@ -739,6 +799,33 @@ export const restoreElement = (
             element.height,
         }),
       );
+      const body = restored.texts?.body;
+      if (!body) {
+        return restored;
+      }
+      // 正文颜色跟随便签 ink：不保留 block 里自带的 color；
+      // 字号归一化后按 fit 重新求高度（不创建文字元素）
+      const style: TextBlockStyle = {
+        fontFamily: body.style.fontFamily,
+        fontSize: normalizeStickyNoteFontSize(body.style.fontSize),
+        ...(body.style.fontWeight !== undefined
+          ? { fontWeight: body.style.fontWeight }
+          : {}),
+        lineHeight: body.style.lineHeight,
+        textAlign: body.style.textAlign,
+        verticalAlign: body.style.verticalAlign,
+      };
+      const withBody = {
+        ...restored,
+        texts: withTextBlock(restored.texts, "body", {
+          ...body,
+          text: normalizeText(body.text),
+          style,
+        }),
+      };
+      const layout = getStickyNoteBodyLayout(withBody);
+      return layout ? { ...withBody, ...layout.container } : withBody;
+    }
     case "magicframe":
     case "frame":
       return restoreElementWithProperties(element, {
@@ -753,9 +840,8 @@ export const restoreElement = (
 };
 
 /**
- * Repairs container element's boundElements array by removing duplicates and
- * fixing containerId of bound elements if not present. Also removes any
- * bound elements that do not exist in the elements array.
+ * Repairs container element's boundElements array by removing duplicates. Also
+ * removes any bound elements that do not exist in the elements array.
  *
  * NOTE mutates elements.
  */
@@ -767,7 +853,7 @@ const repairContainerElement = (
     // copy because we're not cloning on restore, and we don't want to mutate upstream
     const boundElements = container.boundElements.slice();
 
-    // dedupe bindings & fix boundElement.containerId if not set already
+    // dedupe bindings
     const boundIds = new Set<ExcalidrawElement["id"]>();
     container.boundElements = boundElements.reduce(
       (
@@ -783,90 +869,12 @@ const repairContainerElement = (
           }
 
           acc.push(binding);
-
-          if (
-            isTextElement(boundElement) &&
-            // being slightly conservative here, preserving existing containerId
-            // if defined, lest boundElements is stale
-            !boundElement.containerId
-          ) {
-            (boundElement as Mutable<typeof boundElement>).containerId =
-              container.id;
-          }
         }
         return acc;
       },
       [],
     );
   }
-};
-
-/**
- * Repairs target bound element's container's boundElements array,
- * or removes contaienrId if container does not exist.
- *
- * NOTE mutates elements.
- */
-const repairBoundElement = (
-  boundElement: Mutable<ExcalidrawTextElement>,
-  elementsMap: Map<string, Mutable<ExcalidrawElement>>,
-) => {
-  const container = boundElement.containerId
-    ? elementsMap.get(boundElement.containerId)
-    : null;
-
-  (boundElement as Mutable<typeof boundElement>).angle = (
-    isLinearElement(container) ? 0 : container?.angle ?? 0
-  ) as Radians;
-
-  if (!container) {
-    boundElement.containerId = null;
-    return;
-  }
-
-  if (boundElement.isDeleted) {
-    return;
-  }
-
-  if (
-    container.boundElements &&
-    !container.boundElements.find((binding) => binding.id === boundElement.id)
-  ) {
-    // copy because we're not cloning on restore, and we don't want to mutate upstream
-    const boundElements = (
-      container.boundElements || (container.boundElements = [])
-    ).slice();
-    boundElements.push({ type: "text", id: boundElement.id });
-    container.boundElements = boundElements;
-  }
-};
-
-/**
- * Places bound text directly after its container while preserving the
- * container's fractional index.
- *
- * NOTE mutates indices of reordered bound text elements.
- */
-const repairBoundTextElementOrder = (
-  elements: readonly ExcalidrawElement[],
-) => {
-  const originalPositions = new Map(
-    elements.map((element, index) => [element.id, index]),
-  );
-  const normalizedElements = normalizeBoundElementsOrder(elements);
-  const reorderedBoundTextElements = normalizedElements.filter(
-    (element, index) =>
-      isTextElement(element) &&
-      element.containerId &&
-      originalPositions.get(element.id) !== index,
-  );
-
-  return reorderedBoundTextElements.length
-    ? syncMovedIndices(
-        normalizedElements,
-        arrayToMap(reorderedBoundTextElements),
-      )
-    : normalizedElements;
 };
 
 /** Preserve the preexisting recovery for a parent absent from restored input. */
@@ -881,18 +889,6 @@ const repairFrameMembership = (
   const parent = elementsMap.get(ref.elementId);
   if (!parent) {
     element.containerRef = undefined;
-    return;
-  }
-  // a row ref whose row vanished (or names the operator header) is dangling:
-  // drop it instead of failing scene validation
-  if (ref.kind === "fragmentRow" && isSequenceFragmentElement(parent)) {
-    const rows = parent.shape.fragment?.rows;
-    if (
-      !rows?.some((row) => row.id === ref.rowId) ||
-      ref.rowId === rows[0]?.id
-    ) {
-      element.containerRef = undefined;
-    }
   }
 };
 
@@ -907,48 +903,18 @@ const repairFrameMembership = (
  */
 const restoreStickyNotes = (
   elements: readonly ExcalidrawElement[],
-  elementsMap: ElementsMap,
   opts: { refreshDimensions: boolean },
 ) => {
+  if (!opts.refreshDimensions) {
+    return;
+  }
   for (const element of elements) {
-    if (!isTextElement(element) || element.isDeleted) {
+    if (!isStickyNoteElement(element) || element.isDeleted) {
       continue;
     }
-    if (isStickyNoteBoundText(element, elementsMap)) {
-      const container = elementsMap.get(element.containerId!);
-      // one ink per note: a transparent label takes the note's color;
-      // otherwise the label — the visible text — wins over a note that
-      // drifted (edit-mode coloring on older builds)
-      const strokeColor = normalizeStickyNoteStrokeColor(
-        isTransparent(element.strokeColor)
-          ? container?.strokeColor
-          : element.strokeColor,
-      );
-      Object.assign(element, {
-        baseFontSize: normalizeStickyNoteFontSize(
-          element.baseFontSize ?? element.fontSize,
-        ),
-        strokeColor,
-      });
-      if (container && container.strokeColor !== strokeColor) {
-        Object.assign(container, { strokeColor });
-      }
-    } else if (element.baseFontSize != null) {
-      Object.assign(element, { baseFontSize: null });
-    }
-  }
-
-  if (opts.refreshDimensions) {
-    for (const element of elements) {
-      if (!isStickyNoteElement(element) || element.isDeleted) {
-        continue;
-      }
-      const textElement = getBoundTextElement(element, elementsMap);
-      const layout = getStickyNoteLayout(element, textElement);
+    const layout = getStickyNoteBodyLayout(element);
+    if (layout) {
       Object.assign(element, layout.container);
-      if (textElement && layout.text) {
-        Object.assign(textElement, layout.text);
-      }
     }
   }
 };
@@ -977,23 +943,7 @@ const restoreMindmaps = (elements: readonly ExcalidrawElement[]) => {
       updated.set(element.id, element);
     }
   }
-  return repaired.map((element) => {
-    if (isTextElement(element) && element.containerId && !element.isDeleted) {
-      const container = updated.get(element.containerId);
-      if (isMindmapNodeElement(container) && !container.isDeleted) {
-        return {
-          ...element,
-          ...computeBoundTextPosition(
-            container,
-            element as ExcalidrawTextElementWithContainer,
-            updated,
-          ),
-          angle: 0 as Radians,
-        };
-      }
-    }
-    return updated.get(element.id)!;
-  });
+  return repaired.map((element) => updated.get(element.id)!);
 };
 
 export const restoreElements = <T extends ExcalidrawElement>(
@@ -1109,33 +1059,15 @@ export const restoreElements = <T extends ExcalidrawElement>(
   for (const element of restoredElements) {
     repairFrameMembership(element, restoredElementsMap);
 
-    if (isTextElement(element) && element.containerId) {
-      repairBoundElement(element, restoredElementsMap);
-    } else if (element.boundElements) {
+    if (element.boundElements) {
       repairContainerElement(element, restoredElementsMap);
     }
 
-    if (
-      opts.refreshDimensions &&
-      isTextElement(element) &&
-      // sticky labels are refitted together with their note below
-      !isStickyNoteBoundText(element, restoredElementsMap)
-    ) {
-      const container = getContainerElement(element, restoredElementsMap);
+    if (opts.refreshDimensions && isTextElement(element)) {
       Object.assign(
         element,
-        refreshTextDimensions(element, container, restoredElementsMap),
+        refreshTextDimensions(element, restoredElementsMap),
       );
-      if (container && isDataflowTitleText(container, element)) {
-        Object.assign(
-          element,
-          computeBoundTextPosition(
-            container,
-            element as ExcalidrawTextElementWithContainer,
-            restoredElementsMap,
-          ),
-        );
-      }
     }
 
     if (isLinearElement(element)) {
@@ -1154,13 +1086,11 @@ export const restoreElements = <T extends ExcalidrawElement>(
     }
   }
 
-  restoreStickyNotes(restoredElements, restoredElementsMap, {
+  restoreStickyNotes(restoredElements, {
     refreshDimensions: !!opts.refreshDimensions,
   });
 
-  const repairedElements = repairBoundTextElementOrder(
-    syncInvalidIndices(restoreMindmaps(restoredElements)),
-  );
+  const repairedElements = syncInvalidIndices(restoreMindmaps(restoredElements));
 
   // NOTE (mtolmacs): Temporary fix for invalid/self-bound elbow arrows
   // Need to iterate again so we have attached text nodes in elementsMap

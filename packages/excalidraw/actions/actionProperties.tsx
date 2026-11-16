@@ -48,15 +48,14 @@ import { LinearElementEditor } from "@excalidraw/element";
 import { newElementWith } from "@excalidraw/element";
 
 import {
-  getBoundTextElement,
-  getBaseFontSize,
-  getBaseFontSizeUpdate,
-  redrawTextBoundingBox,
+  refreshTextDimensions,
+  getTextElementStyle,
+  getTextElementStylePatch,
+  getTextElementText,
 } from "@excalidraw/element";
 
 import {
   isArrowElement,
-  isBoundToContainer,
   isElbowArrow,
   isLinearElement,
   isLineElement,
@@ -100,11 +99,25 @@ import type {
   VerticalAlign,
 } from "@excalidraw/element/types";
 
-import type { ElementUpdate, Scene } from "@excalidraw/element";
+import type {
+  ElementUpdate,
+  Scene,
+  TextBlockStyle,
+  TextRegionKey,
+} from "@excalidraw/element";
 
 import type { CaptureUpdateActionType } from "@excalidraw/element";
 
 import { trackEvent } from "../analytics";
+import {
+  applyEmbeddedTextLayout,
+  getEditingEmbeddedTextTarget,
+  getElementEmbeddedTextTarget,
+  getSelectedEmbeddedTextTargets,
+  getTextStyleTargetStyle,
+  updateEmbeddedTextStyles,
+} from "../components/app/textStyleTargets";
+
 import { RadioSelection } from "../components/RadioSelection";
 import { IconButton } from "../components/IconButton";
 import { ColorPicker } from "../components/ColorPicker/ColorPicker";
@@ -183,6 +196,8 @@ import {
 } from "./colorTargets";
 import { register } from "./register";
 
+import type { TextStyleTarget } from "../components/app/textStyleTargets";
+
 import type { AppClassProperties, AppState, Primitive } from "../types";
 
 const FONT_SIZE_RELATIVE_INCREASE_STEP = 0.1;
@@ -206,12 +221,9 @@ export const changeProperty = (
   elements: readonly ExcalidrawElement[],
   appState: AppState,
   callback: (element: NonDeletedExcalidrawElement) => ExcalidrawElement,
-  includeBoundText = false,
 ) => {
   const selectedElementIds = arrayToMap(
-    getSelectedElements(elements, appState, {
-      includeBoundTextElement: includeBoundText,
-    }),
+    getSelectedElements(elements, appState),
   );
 
   return elements.map((element) => {
@@ -282,25 +294,129 @@ export const getFormValue = function <T extends Primitive>(
   return ret;
 };
 
+/** 字体变化后按新的度量更新独立文字的尺寸与位置。 */
+const refreshTextElement = (
+  element: ExcalidrawTextElement,
+  scene: Scene,
+) => {
+  const latest = scene.getElement(element.id);
+  if (!latest || !isTextElement(latest)) {
+    return;
+  }
+  const refreshed = refreshTextDimensions(
+    latest,
+    scene.getNonDeletedElementsMap(),
+  );
+  if (refreshed) {
+    const { text: _displayText, ...dimensions } = refreshed;
+    scene.mutateElement(latest, dimensions);
+  }
+};
+
 const offsetElementAfterFontResize = (
   prevElement: ExcalidrawTextElement,
   nextElement: ExcalidrawTextElement,
   scene: Scene,
 ) => {
-  if (isBoundToContainer(nextElement) || !nextElement.autoResize) {
+  if (!nextElement.autoResize) {
     return nextElement;
   }
   return scene.mutateElement(nextElement, {
     x:
-      prevElement.textAlign === "left"
+      getTextElementStyle(prevElement).textAlign === "left"
         ? prevElement.x
         : prevElement.x +
           (prevElement.width - nextElement.width) /
-            (prevElement.textAlign === "center" ? 2 : 1),
+            (getTextElementStyle(prevElement).textAlign === "center" ? 2 : 1),
     // centering vertically is non-standard, but for Excalidraw I think
     // it makes sense
     y: prevElement.y + (prevElement.height - nextElement.height) / 2,
   });
+};
+
+/** 元素的正文样式；没有内嵌 block 时返回 null。 */
+const getEmbeddedTextStyle = (
+  element: ExcalidrawElement,
+): TextBlockStyle | null => {
+  const target = getElementEmbeddedTextTarget(element);
+  return target ? getTextStyleTargetStyle(element, target.region) : null;
+};
+
+const hasEmbeddedTextStyle = (element: ExcalidrawElement) =>
+  getEmbeddedTextStyle(element) !== null;
+
+/** 内嵌正文目标：正在编辑的区域优先，其后是选中元素。 */
+const getEmbeddedTextStyleTargets = (
+  app: AppClassProperties,
+  appState: AppState,
+): ReturnType<typeof getSelectedEmbeddedTextTargets> => {
+  const targets = getSelectedEmbeddedTextTargets(
+    app.scene.getNonDeletedElements(),
+    appState,
+  );
+  const editing = getEditingEmbeddedTextTarget(appState);
+  if (
+    !editing ||
+    targets.some(
+      (target) =>
+        target.elementId === editing.elementId &&
+        target.region === editing.region,
+    )
+  ) {
+    return targets;
+  }
+  return [editing, ...targets];
+};
+
+const hasStyleChange = (
+  current: TextBlockStyle,
+  next: Partial<TextBlockStyle>,
+) =>
+  (Object.keys(next) as (keyof TextBlockStyle)[]).some(
+    (key) => next[key] !== undefined && current[key] !== next[key],
+  );
+
+/**
+ * 把样式写进已存在的内嵌正文 block，并按正文重新求解 auto-fit 尺寸。
+ * 返回实际写入的目标；没有 block 的目标只保留 currentItem* 更新。
+ */
+const changeEmbeddedTextStyles = (
+  app: AppClassProperties,
+  appState: AppState,
+  getStyle: (current: TextBlockStyle) => Partial<TextBlockStyle> | null,
+): TextStyleTarget[] => {
+  const scene = app.scene;
+  const updates: {
+    elementId: string;
+    region: TextRegionKey;
+    style: Partial<TextBlockStyle>;
+  }[] = [];
+
+  for (const target of getEmbeddedTextStyleTargets(app, appState)) {
+    const element = scene.getNonDeletedElement(target.elementId);
+    if (!element) {
+      continue;
+    }
+    const current = getTextStyleTargetStyle(element, target.region);
+    if (!current) {
+      continue;
+    }
+    const style = getStyle(current);
+    if (!style || !hasStyleChange(current, style)) {
+      continue;
+    }
+    updates.push({ ...target, style });
+  }
+
+  if (!updateEmbeddedTextStyles(scene, updates)) {
+    return [];
+  }
+
+  for (const { elementId, region } of updates) {
+    applyEmbeddedTextLayout(scene, elementId, region);
+  }
+
+  return updates.map(({ elementId, region }) => ({ elementId, region }));
 };
 
 const changeFontSize = (
@@ -308,7 +424,8 @@ const changeFontSize = (
   appState: AppState,
   app: AppClassProperties,
   getNewFontSize: (element: ExcalidrawTextElement) => number,
-  fallbackValue?: ExcalidrawTextElement["fontSize"],
+  fallbackValue?: TextBlockStyle["fontSize"],
+  getNewEmbeddedFontSize?: (style: TextBlockStyle) => number,
 ) => {
   const newFontSizes = new Set<number>();
   const elementsMap = app.scene.getNonDeletedElementsMap();
@@ -320,13 +437,11 @@ const changeFontSize = (
       if (isTextElement(oldElement)) {
         const newFontSize = getNewFontSize(oldElement);
         newFontSizes.add(newFontSize);
-        const container = app.scene.getContainerElement(oldElement);
 
         let newElement: ExcalidrawTextElement = newElementWith(
           oldElement,
-          getBaseFontSizeUpdate(oldElement, newFontSize, elementsMap),
+          getTextElementStylePatch(oldElement, { fontSize: newFontSize }),
         );
-        redrawTextBoundingBox(newElement, container, app.scene);
 
         newElement = offsetElementAfterFontResize(
           oldElement,
@@ -338,17 +453,22 @@ const changeFontSize = (
       }
       return oldElement;
     },
-    true,
   );
 
   // Update arrow elements after text elements have been updated
-  getSelectedElements(elements, appState, {
-    includeBoundTextElement: true,
-  }).forEach((element) => {
+  getSelectedElements(elements, appState).forEach((element) => {
     if (isTextElement(element)) {
       updateBoundElements(element, app.scene);
     }
   });
+
+  if (getNewEmbeddedFontSize) {
+    changeEmbeddedTextStyles(app, appState, (style) => {
+      const newFontSize = getNewEmbeddedFontSize(style);
+      newFontSizes.add(newFontSize);
+      return { fontSize: newFontSize };
+    });
+  }
 
   return {
     elements: updatedElements,
@@ -424,6 +544,7 @@ export const actionChangeStrokeColor = register<
     }
     const isTextScene =
       appState.activeTool.type === "text" ||
+      !!appState.editingTextRegion ||
       (strokeTargets.length > 0 && strokeTargets.every(isTextElement));
     const isInk = target.kind === "sticky" || isTextScene;
     const label = isInk ? t("labels.fontColor") : t("labels.stroke");
@@ -542,9 +663,7 @@ export const actionChangeBackgroundColor = register<
       // a switch onto yellow and releases an untouched one when leaving. Ink
       // reconciliation stays with the stroke actions — a background pick
       // leaves unrelated notes untouched.
-      elements: syncStickyNoteInk(nextElements, elementsMap, {
-        reconcileInk: false,
-      }),
+      elements: syncStickyNoteInk(nextElements, elementsMap),
       appState: {
         ...appState,
         ...appStateUpdates,
@@ -1037,7 +1156,6 @@ export const actionChangeOpacity = register<ExcalidrawElement["opacity"]>({
           newElementWith(el, {
             opacity: value,
           }),
-        true,
       ),
       appState: { ...appState, currentItemOpacity: value },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
@@ -1071,101 +1189,88 @@ export const actionChangeOpacity = register<ExcalidrawElement["opacity"]>({
   },
 });
 
-export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
-  {
-    name: "changeFontSize",
-    label: "labels.fontSize",
-    trackEvent: false,
-    perform: (elements, appState, value, app) => {
-      return changeFontSize(
-        elements,
-        appState,
-        app,
-        () => {
-          invariant(value, "actionChangeFontSize: Expected a font size value");
-          return value;
-        },
-        value,
-      );
-    },
-    PanelComponent: ({ elements, appState, updateData, app, data }) => {
-      const { isCompact } = getStylesPanelInfo(app);
-
-      return (
-        <fieldset className="tb-group">
-          <legend className="tb-legend">{t("labels.fontSize")}</legend>
-          <div className="buttonList">
-            <RadioSelection
-              group="font-size"
-              options={[
-                {
-                  value: FONT_SIZES.sm,
-                  text: t("labels.small"),
-                  icon: FontSizeSmallIcon,
-                  testId: "fontSize-small",
-                },
-                {
-                  value: FONT_SIZES.md,
-                  text: t("labels.medium"),
-                  icon: FontSizeMediumIcon,
-                  testId: "fontSize-medium",
-                },
-                {
-                  value: FONT_SIZES.lg,
-                  text: t("labels.large"),
-                  icon: FontSizeLargeIcon,
-                  testId: "fontSize-large",
-                },
-                {
-                  value: FONT_SIZES.xl,
-                  text: t("labels.veryLarge"),
-                  icon: FontSizeExtraLargeIcon,
-                  testId: "fontSize-veryLarge",
-                },
-              ]}
-              value={getFormValue(
-                elements,
-                app,
-                (element) => {
-                  const elementsMap = app.scene.getNonDeletedElementsMap();
-                  if (isTextElement(element)) {
-                    return getBaseFontSize(element, elementsMap);
-                  }
-                  const boundTextElement = getBoundTextElement(
-                    element,
-                    elementsMap,
-                  );
-                  if (boundTextElement) {
-                    return getBaseFontSize(boundTextElement, elementsMap);
-                  }
-                  return null;
-                },
-                (element) =>
-                  isTextElement(element) ||
-                  getBoundTextElement(
-                    element,
-                    app.scene.getNonDeletedElementsMap(),
-                  ) !== null,
-                (hasSelection) =>
-                  hasSelection
-                    ? null
-                    : appState.currentItemFontSize || DEFAULT_FONT_SIZE,
-              )}
-              onChange={(value) => {
-                withCaretPositionPreservation(
-                  () => updateData(value),
-                  isCompact,
-                  !!appState.editingTextElement,
-                  data?.onPreventClose,
-                );
-              }}
-            />
-          </div>
-        </fieldset>
-      );
-    },
+export const actionChangeFontSize = register<TextBlockStyle["fontSize"]>({
+  name: "changeFontSize",
+  label: "labels.fontSize",
+  trackEvent: false,
+  perform: (elements, appState, value, app) => {
+    return changeFontSize(
+      elements,
+      appState,
+      app,
+      () => {
+        invariant(value, "actionChangeFontSize: Expected a font size value");
+        return value;
+      },
+      value,
+      () => value!,
+    );
   },
-);
+  PanelComponent: ({ elements, appState, updateData, app, data }) => {
+    const { isCompact } = getStylesPanelInfo(app);
+
+    return (
+      <fieldset className="tb-group">
+        <legend className="tb-legend">{t("labels.fontSize")}</legend>
+        <div className="buttonList">
+          <RadioSelection
+            group="font-size"
+            options={[
+              {
+                value: FONT_SIZES.sm,
+                text: t("labels.small"),
+                icon: FontSizeSmallIcon,
+                testId: "fontSize-small",
+              },
+              {
+                value: FONT_SIZES.md,
+                text: t("labels.medium"),
+                icon: FontSizeMediumIcon,
+                testId: "fontSize-medium",
+              },
+              {
+                value: FONT_SIZES.lg,
+                text: t("labels.large"),
+                icon: FontSizeLargeIcon,
+                testId: "fontSize-large",
+              },
+              {
+                value: FONT_SIZES.xl,
+                text: t("labels.veryLarge"),
+                icon: FontSizeExtraLargeIcon,
+                testId: "fontSize-veryLarge",
+              },
+            ]}
+            value={getFormValue(
+              elements,
+              app,
+              (element) => {
+                if (isTextElement(element)) {
+                  return getTextElementStyle(element).fontSize;
+                }
+                return getEmbeddedTextStyle(element)?.fontSize ?? null;
+              },
+              (element) =>
+                isTextElement(element) || hasEmbeddedTextStyle(element),
+              (hasSelection) =>
+                hasSelection
+                  ? null
+                  : appState.currentItemFontSize || DEFAULT_FONT_SIZE,
+            )}
+            onChange={(value) => {
+              withCaretPositionPreservation(
+                () => updateData(value),
+                isCompact,
+                !!appState.editingTextElement,
+                data?.onPreventClose,
+              );
+            }}
+          />
+        </div>
+      </fieldset>
+    );
+  },
+});
 
 export const actionDecreaseFontSize = register({
   name: "decreaseFontSize",
@@ -1173,13 +1278,22 @@ export const actionDecreaseFontSize = register({
   icon: fontSizeIcon,
   trackEvent: false,
   perform: (elements, appState, value, app) => {
-    return changeFontSize(elements, appState, app, (element) =>
-      Math.round(
-        // get previous value before relative increase (doesn't work fully
-        // due to rounding and float precision issues)
-        (1 / (1 + FONT_SIZE_RELATIVE_INCREASE_STEP)) *
-          getBaseFontSize(element, app.scene.getNonDeletedElementsMap()),
-      ),
+    return changeFontSize(
+      elements,
+      appState,
+      app,
+      (element) =>
+        Math.round(
+          // get previous value before relative increase (doesn't work fully
+          // due to rounding and float precision issues)
+          (1 / (1 + FONT_SIZE_RELATIVE_INCREASE_STEP)) *
+            getTextElementStyle(element).fontSize,
+        ),
+      undefined,
+      (style) =>
+        Math.round(
+          (1 / (1 + FONT_SIZE_RELATIVE_INCREASE_STEP)) * style.fontSize,
+        ),
     );
   },
   keyTest: (event) => {
@@ -1198,11 +1312,18 @@ export const actionIncreaseFontSize = register({
   icon: fontSizeIcon,
   trackEvent: false,
   perform: (elements, appState, value, app) => {
-    return changeFontSize(elements, appState, app, (element) =>
-      Math.round(
-        getBaseFontSize(element, app.scene.getNonDeletedElementsMap()) *
-          (1 + FONT_SIZE_RELATIVE_INCREASE_STEP),
-      ),
+    return changeFontSize(
+      elements,
+      appState,
+      app,
+      (element) =>
+        Math.round(
+          getTextElementStyle(element).fontSize *
+            (1 + FONT_SIZE_RELATIVE_INCREASE_STEP),
+        ),
+      undefined,
+      (style) =>
+        Math.round(style.fontSize * (1 + FONT_SIZE_RELATIVE_INCREASE_STEP)),
     );
   },
   keyTest: (event) => {
@@ -1256,7 +1377,6 @@ export const actionChangeFontFamily = register<{
 
           return element;
         },
-        true,
       );
 
       return {
@@ -1285,9 +1405,9 @@ export const actionChangeFontFamily = register<{
       nextFontFamily = currentHoveredFontFamily;
       nextCaptureUpdateAction = CaptureUpdateAction.EVENTUALLY;
 
-      const selectedTextElements = getSelectedElements(elements, appState, {
-        includeBoundTextElement: true,
-      }).filter((element) => isTextElement(element));
+      const selectedTextElements = getSelectedElements(elements, appState).filter(
+        (element) => isTextElement(element),
+      );
 
       // skip on hover re-render for more than 200 text elements or for text element with more than 5000 chars combined
       if (selectedTextElements.length > 200) {
@@ -1301,7 +1421,7 @@ export const actionChangeFontFamily = register<{
           textLengthAccumulator < 5000
         ) {
           const textElement = selectedTextElements[i] as ExcalidrawTextElement;
-          textLengthAccumulator += textElement?.originalText.length || 0;
+          textLengthAccumulator += getTextElementText(textElement).length || 0;
           i++;
         }
 
@@ -1320,10 +1440,7 @@ export const actionChangeFontFamily = register<{
     };
 
     if (nextFontFamily && !skipOnHoverRender) {
-      const elementContainerMapping = new Map<
-        ExcalidrawTextElement,
-        ExcalidrawElement | null
-      >();
+      const changedTextElements = new Set<ExcalidrawTextElement>();
       let uniqueChars = new Set<string>();
       let skipFontFaceCheck = false;
 
@@ -1350,42 +1467,31 @@ export const actionChangeFontFamily = register<{
           (oldElement) => {
             if (
               isTextElement(oldElement) &&
-              (oldElement.fontFamily !== nextFontFamily ||
+              (getTextElementStyle(oldElement).fontFamily !== nextFontFamily ||
                 currentItemFontFamily) // force update on selection
             ) {
               const newElement: ExcalidrawTextElement = newElementWith(
                 oldElement,
-                {
+                getTextElementStylePatch(oldElement, {
                   fontFamily: nextFontFamily,
                   lineHeight: getLineHeight(nextFontFamily!),
-                },
+                }),
               );
-
-              const cachedContainer =
-                cachedElements?.get(oldElement.containerId || "") || {};
-
-              const container = app.scene.getContainerElement(oldElement);
-
-              if (resetContainers && container && cachedContainer) {
-                // reset the container back to it's cached version
-                app.scene.mutateElement(container, { ...cachedContainer });
-              }
 
               if (!skipFontFaceCheck) {
                 uniqueChars = new Set([
                   ...uniqueChars,
-                  ...Array.from(newElement.originalText),
+                  ...Array.from(getTextElementText(newElement)),
                 ]);
               }
 
-              elementContainerMapping.set(newElement, container);
+              changedTextElements.add(newElement);
 
               return newElement;
             }
 
             return oldElement;
           },
-          true,
         ),
       });
 
@@ -1398,34 +1504,29 @@ export const actionChangeFontFamily = register<{
 
       if (skipFontFaceCheck || ownerDocument.fonts.check(fontString, chars)) {
         // we either skip the check (have at least one font face loaded) or do the check and find out all the font faces have loaded
-        for (const [element, container] of elementContainerMapping) {
-          // trigger synchronous redraw
-          redrawTextBoundingBox(element, container, app.scene);
+        for (const element of changedTextElements) {
+          // trigger synchronous dimension refresh
+          refreshTextElement(element, app.scene);
         }
       } else {
         // otherwise try to load all font faces for the given chars and redraw elements once our font faces loaded
         ownerDocument.fonts.load(fontString, chars).then((fontFaces) => {
-          for (const [element, container] of elementContainerMapping) {
+          for (const element of changedTextElements) {
             // use latest element state to ensure we don't have closure over an old instance in order to avoid possible race conditions (i.e. font faces load out-of-order while rapidly switching fonts)
-            const latestElement = app.scene.getElement(element.id);
-            const latestContainer = container
-              ? app.scene.getElement(container.id)
-              : null;
-
-            if (latestElement) {
-              // trigger async redraw
-              redrawTextBoundingBox(
-                latestElement as ExcalidrawTextElement,
-                latestContainer,
-                app.scene,
-              );
-            }
+            refreshTextElement(element, app.scene);
           }
 
           // trigger update once we've mutated all the elements, which also updates our cache
           app.fonts.onLoaded(fontFaces);
         });
       }
+    }
+
+    if (nextFontFamily && !skipOnHoverRender) {
+      changeEmbeddedTextStyles(app, appState, () => ({
+        fontFamily: nextFontFamily!,
+        lineHeight: getLineHeight(nextFontFamily!),
+      }));
     }
 
     return result;
@@ -1448,17 +1549,11 @@ export const actionChangeFontFamily = register<{
           app,
           (element) => {
             if (isTextElement(element)) {
-              return element.fontFamily;
+              return getTextElementStyle(element).fontFamily;
             }
-            const boundTextElement = getBoundTextElement(element, elementsMap);
-            if (boundTextElement) {
-              return boundTextElement.fontFamily;
-            }
-            return null;
+            return getEmbeddedTextStyle(element)?.fontFamily ?? null;
           },
-          (element) =>
-            isTextElement(element) ||
-            getBoundTextElement(element, elementsMap) !== null,
+          (element) => isTextElement(element) || hasEmbeddedTextStyle(element),
           (hasSelection) =>
             hasSelection
               ? null
@@ -1566,9 +1661,7 @@ export const actionChangeFontFamily = register<{
                 ),
               );
             } else {
-              const selectedElements = getSelectedElements(elements, appState, {
-                includeBoundTextElement: true,
-              });
+              const selectedElements = getSelectedElements(elements, appState);
 
               for (const element of selectedElements) {
                 cachedElementsRef.current.set(
@@ -1610,28 +1703,23 @@ export const actionChangeTextAlign = register<TextAlign>({
   label: "Change text alignment",
   trackEvent: false,
   perform: (elements, appState, value, app) => {
-    return {
-      elements: changeProperty(
-        elements,
-        appState,
-        (oldElement) => {
-          if (isTextElement(oldElement)) {
-            const newElement: ExcalidrawTextElement = newElementWith(
-              oldElement,
-              { textAlign: value },
-            );
-            redrawTextBoundingBox(
-              newElement,
-              app.scene.getContainerElement(oldElement),
-              app.scene,
-            );
-            return newElement;
-          }
+    const nextElements = changeProperty(
+      elements,
+      appState,
+      (oldElement) => {
+        if (isTextElement(oldElement)) {
+          return newElementWith(
+            oldElement,
+            getTextElementStylePatch(oldElement, { textAlign: value }),
+          );
+        }
 
-          return oldElement;
-        },
-        true,
-      ),
+        return oldElement;
+      },
+    );
+    changeEmbeddedTextStyles(app, appState, () => ({ textAlign: value }));
+    return {
+      elements: nextElements,
       appState: {
         ...appState,
         currentItemTextAlign: value,
@@ -1674,20 +1762,11 @@ export const actionChangeTextAlign = register<TextAlign>({
               app,
               (element) => {
                 if (isTextElement(element)) {
-                  return element.textAlign;
+                  return getTextElementStyle(element).textAlign;
                 }
-                const boundTextElement = getBoundTextElement(
-                  element,
-                  elementsMap,
-                );
-                if (boundTextElement) {
-                  return boundTextElement.textAlign;
-                }
-                return null;
+                return getEmbeddedTextStyle(element)?.textAlign ?? null;
               },
-              (element) =>
-                isTextElement(element) ||
-                getBoundTextElement(element, elementsMap) !== null,
+              (element) => isTextElement(element) || hasEmbeddedTextStyle(element),
               (hasSelection) =>
                 hasSelection ? null : appState.currentItemTextAlign,
             )}
@@ -1711,29 +1790,25 @@ export const actionChangeVerticalAlign = register<VerticalAlign>({
   label: "Change vertical alignment",
   trackEvent: { category: "element" },
   perform: (elements, appState, value, app) => {
+    const nextElements = changeProperty(
+      elements,
+      appState,
+      (oldElement) => {
+        if (isTextElement(oldElement)) {
+          return newElementWith(
+            oldElement,
+            getTextElementStylePatch(oldElement, { verticalAlign: value }),
+          );
+        }
+
+        return oldElement;
+      },
+    );
+    changeEmbeddedTextStyles(app, appState, () => ({
+      verticalAlign: value,
+    }));
     return {
-      elements: changeProperty(
-        elements,
-        appState,
-        (oldElement) => {
-          if (isTextElement(oldElement)) {
-            const newElement: ExcalidrawTextElement = newElementWith(
-              oldElement,
-              { verticalAlign: value },
-            );
-
-            redrawTextBoundingBox(
-              newElement,
-              app.scene.getContainerElement(oldElement),
-              app.scene,
-            );
-            return newElement;
-          }
-
-          return oldElement;
-        },
-        true,
-      ),
+      elements: nextElements,
       appState: {
         ...appState,
       },
@@ -1772,24 +1847,12 @@ export const actionChangeVerticalAlign = register<VerticalAlign>({
               elements,
               app,
               (element) => {
-                if (isTextElement(element) && element.containerId) {
-                  return element.verticalAlign;
+                if (isTextElement(element)) {
+                  return getTextElementStyle(element).verticalAlign;
                 }
-                const boundTextElement = getBoundTextElement(
-                  element,
-                  app.scene.getNonDeletedElementsMap(),
-                );
-                if (boundTextElement) {
-                  return boundTextElement.verticalAlign;
-                }
-                return null;
+                return getEmbeddedTextStyle(element)?.verticalAlign ?? null;
               },
-              (element) =>
-                isTextElement(element) ||
-                getBoundTextElement(
-                  element,
-                  app.scene.getNonDeletedElementsMap(),
-                ) !== null,
+              (element) => isTextElement(element) || hasEmbeddedTextStyle(element),
               (hasSelection) => (hasSelection ? null : VERTICAL_ALIGN.MIDDLE),
             )}
             onChange={(value) => {

@@ -1,9 +1,7 @@
 import {
   getCommonFrameId,
   getFrameChildrenInsertionIndex,
-  getContainerElement,
   isElementInViewport,
-  isTextElement,
 } from "@excalidraw/element";
 
 import { arrayToMap, memoize, toBrandedType } from "@excalidraw/common";
@@ -136,13 +134,7 @@ export class Renderer {
       };
       for (const [id, offset] of offsets) {
         const element = elementsMap.get(id);
-        // A bound label's own offset is ignored, and it needs no entry of
-        // its own: the static renderer draws it with its container and skips
-        // its entry, so its document visibility can stay as it is.
-        if (
-          !element ||
-          (isTextElement(element) && getContainerElement(element, elementsMap))
-        ) {
+        if (!element) {
           continue;
         }
         update(element, isVisible(element, offset));

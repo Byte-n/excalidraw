@@ -141,15 +141,18 @@ describe("convert element type keeps bound arrows attached", () => {
       y: 100,
       width: 200,
       height: 160,
-    });
-    const text = API.createElement({
-      type: "text",
-      x: 180,
-      y: 170,
-      width: 20,
-      height: 20,
-      text: "A",
-      containerId: shape.id,
+      texts: {
+        body: {
+          text: "A",
+          style: {
+            fontFamily: 1,
+            fontSize: 20,
+            lineHeight: 1.25,
+            textAlign: "center",
+            verticalAlign: "middle",
+          } as any,
+        },
+      },
     });
     const arrow = API.createElement({
       type: "arrow",
@@ -167,12 +170,8 @@ describe("convert element type keeps bound arrows attached", () => {
     API.setElements([
       {
         ...shape,
-        boundElements: [
-          { id: text.id, type: "text" },
-          { id: arrow.id, type: "arrow" },
-        ],
+        boundElements: [{ id: arrow.id, type: "arrow" }],
       },
-      text,
       arrow,
     ]);
     API.setSelectedElements([h.elements[0] as NonDeletedExcalidrawElement]);
@@ -185,18 +184,16 @@ describe("convert element type keeps bound arrows attached", () => {
     });
 
     const converted = h.app.scene.getNonDeletedElement(shape.id);
-    const boundText = h.app.scene.getNonDeletedElement(text.id);
     const boundArrow = h.app.scene.getNonDeletedElement(arrow.id);
     expect(converted).toMatchObject({
       id: shape.id,
       type: shapeElementType(target as ShapeId),
       shape: { id: target, schemaVersion: 1 },
       boundElements: expect.arrayContaining([
-        { id: text.id, type: "text" },
         { id: arrow.id, type: "arrow" },
       ]),
     });
-    expect(boundText).toMatchObject({ containerId: shape.id });
+    expect(converted?.texts?.body?.text).toBe("A");
     expect(boundArrow).toMatchObject({ endBinding: { elementId: shape.id } });
     if (converted?.type === "composite") {
       if (converted.shape.id === "triangle") {

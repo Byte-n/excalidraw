@@ -3,8 +3,10 @@ import rough from "roughjs/bin/rough";
 
 import * as Element from "@excalidraw/element";
 import {
+  DEFAULT_FONT_FAMILY,
   DEFAULT_REDUCED_GLOBAL_ALPHA,
   ELEMENT_READY_TO_ERASE_OPACITY,
+  getLineHeight,
 } from "@excalidraw/common";
 import { pointFrom, type LocalPoint } from "@excalidraw/math";
 
@@ -827,194 +829,6 @@ describe("render override geometry", () => {
     expect(visibleWith(new Map())).toEqual([b, d]);
   });
 
-  it("does not rebuild the visible set for a translated arrow whose label is off-screen", () => {
-    const arrow = API.createElement({
-      type: "arrow",
-      id: "arrow",
-      x: -1000,
-      y: 100,
-      width: 1100,
-      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(1100, 0)],
-      boundElements: [{ id: "label", type: "text" }],
-    });
-    const label = API.createElement({
-      type: "text",
-      id: "label",
-      x: -500,
-      y: 90,
-      width: 50,
-      text: "label",
-      containerId: arrow.id,
-    });
-    const { renderer, appState, elementsMap, visibleWith } = setup([
-      arrow,
-      label,
-    ]);
-    const documentVisible = renderer.getRenderableElements({
-      ...appState,
-      selectedElements: [],
-    }).visibleElements;
-    expect(documentVisible).toEqual([arrow]);
-    const walk = vi.spyOn(elementsMap, "values");
-    for (const x of [10, 20, 30]) {
-      expect(visibleWith(new Map([[arrow.id, { offset: { x, y: 0 } }]]))).toBe(
-        documentVisible,
-      );
-    }
-    expect(walk).not.toHaveBeenCalled();
-  });
-
-  it.each(["rectangle", "arrow"] as const)(
-    "culls a %s by its container offset; its label needs no entry of its own",
-    (type) => {
-      const container = API.createElement({
-        type,
-        id: "a",
-        x: 900,
-        y: 100,
-        width: 100,
-        points:
-          type === "arrow"
-            ? [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(100, 0)]
-            : undefined,
-        boundElements: [{ id: "label", type: "text" }],
-      });
-      const label = API.createElement({
-        type: "text",
-        id: "label",
-        x: 750,
-        y: 110,
-        width: 400,
-        text: "label",
-        containerId: container.id,
-      });
-      const { renderer, appState, visibleWith } = setup([container, label]);
-      const visible = visibleWith;
-      expect(visible(new Map())).toEqual([]);
-      // The container comes into view through its offset; the label is drawn
-      // with it, so its own (document, off-screen) entry stays out and any
-      // offset targeting it directly is ignored.
-      expect(
-        visible(new Map([[container.id, { offset: { x: -500, y: 0 } }]])),
-      ).toEqual([container]);
-      expect(
-        visible(
-          new Map([
-            [container.id, { offset: { x: -500, y: 0 } }],
-            [label.id, { offset: { x: 2000, y: 0 } }],
-          ]),
-        ),
-      ).toEqual([container]);
-      expect(
-        visible(new Map([[label.id, { offset: { x: -800, y: 0 } }]])),
-      ).toEqual([]);
-      expect(
-        visible(
-          new Map([
-            [container.id, { offset: { x: -2000, y: 0 } }],
-            [label.id, { offset: { x: -800, y: 0 } }],
-          ]),
-        ),
-      ).toEqual([]);
-      expect(
-        renderer.getRenderableElements({ ...appState, selectedElements: [] })
-          .visibleElements,
-      ).toEqual([]);
-    },
-  );
-
-  it.each(["arrow", "rectangle", "ellipse", "diamond", "stickynote"] as const)(
-    "moves a %s label with its container while keeping label opacity independent",
-    (type) => {
-      const frame = API.createElement({
-        type: "frame",
-        id: "frame",
-        width: 500,
-        height: 500,
-        opacity: 50,
-      });
-      const container = API.createElement({
-        type,
-        id: "container",
-        x: 50,
-        y: 100,
-        width: 200,
-        height: 100,
-        containerRef: { kind: "frameLike", elementId: frame.id },
-        points:
-          type === "arrow"
-            ? [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 0)]
-            : undefined,
-        boundElements: [{ id: "label", type: "text" }],
-      });
-      const label = API.createElement({
-        type: "text",
-        id: "label",
-        text: "Label",
-        x: 100,
-        y: 140,
-        width: 50,
-        height: 25,
-        opacity: 70,
-        containerId: container.id,
-        containerRef: { kind: "frameLike", elementId: frame.id },
-      });
-      const { context, draw } = setup([container, label, frame]);
-      draw(new Map());
-      const bitmap = Element.elementWithCanvasCache.get(label)!;
-      expect(bitmap).toBeDefined();
-      const original = JSON.stringify([container, label, frame]);
-      const paints: { x: number; y: number; alpha: number }[] = [];
-      const drawImage = vi.mocked(context.drawImage).getMockImplementation()!;
-      vi.spyOn(context, "drawImage").mockImplementation((...args) => {
-        const [source, x, y] = args;
-        if (source === bitmap.canvas) {
-          const t = context.getTransform();
-          paints.push({
-            x: t.a * x + t.c * y + t.e,
-            y: t.b * x + t.d * y + t.f,
-            alpha: context.globalAlpha,
-          });
-        }
-        drawImage.call(context, ...args);
-      });
-      const offset = { x: 20, y: 10 };
-      draw(new Map());
-      draw(new Map([[container.id, { offset }]]));
-      draw(
-        new Map([
-          [container.id, { offset }],
-          [label.id, { offset }],
-        ]),
-      );
-      draw(
-        new Map([
-          [container.id, { offset, opacity: 10 }],
-          [label.id, { offset: { x: 1000, y: -1000 }, opacity: 40 }],
-        ]),
-      );
-      draw(new Map([[label.id, { offset: { x: 1000, y: -1000 } }]]));
-      draw(new Map());
-      expect(paints).toHaveLength(6);
-      const [baseline] = paints;
-      expect(baseline.alpha).toBe(0.35);
-      const translated = {
-        x: baseline.x + offset.x,
-        y: baseline.y + offset.y,
-        alpha: baseline.alpha,
-      };
-      expect(paints.slice(1)).toEqual([
-        translated,
-        translated,
-        { ...translated, alpha: 0.2 },
-        baseline,
-        baseline,
-      ]);
-      expect(Element.elementWithCanvasCache.get(label)).toBe(bitmap);
-      expect(JSON.stringify([container, label, frame])).toBe(original);
-    },
-  );
-
   it("keeps offsets on unbound text independent", () => {
     const label = API.createElement({
       type: "text",
@@ -1114,31 +928,35 @@ describe("render override geometry", () => {
     });
   });
 
-  it.each([
-    [0, 80],
-    [80, 0],
-    [30, 80],
-    [80, 80],
-  ])(
-    "keeps the label gap with its arrow (arrow %s, ignored label %s)",
-    (arrowX, labelX) => {
+  it.each([0, 80, 30])(
+    "keeps the label gap with its arrow (arrow %s)",
+    (arrowX) => {
       const arrow = API.createElement({
         type: "arrow",
         id: "arrow",
         x: 50,
         y: 100,
         points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(300, 0)],
-        boundElements: [{ id: "label", type: "text" }],
+        texts: {
+          label: {
+            text: "Label",
+            style: {
+              fontFamily: DEFAULT_FONT_FAMILY,
+              fontSize: 20,
+              lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+              textAlign: "center",
+              verticalAlign: "middle",
+            },
+            placement: { labelPosition: 0.5 },
+          },
+        },
       });
-      const label = API.createElement({
-        type: "text",
-        id: "label",
-        containerId: arrow.id,
-        text: "Label",
-        width: 50,
-        height: 25,
-      });
-      const { context, draw } = setup([arrow, label]);
+      const elementsMap = new Map([[arrow.id, arrow]]);
+      const layout = Element.LinearElementEditor.getLabelSceneLayout(
+        arrow,
+        elementsMap,
+      );
+      const { context, draw } = setup([arrow]);
       const holes: number[] = [];
       // The label hole is now a rounded rect (traceLabelHole → roundRect with
       // a rect fallback) using 8px horizontal padding. Force the rect fallback
@@ -1148,7 +966,7 @@ describe("render override geometry", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (context as any).roundRect = undefined;
       const isHole = (width: number) =>
-        width > label.width && width < label.width * 10;
+        width > layout.width && width < layout.width * 10;
       const rect = vi.mocked(context.rect).getMockImplementation()!;
       vi.spyOn(context, "rect").mockImplementation((x, y, width, height) => {
         if (isHole(width)) {
@@ -1159,12 +977,7 @@ describe("render override geometry", () => {
       });
       try {
         draw(new Map());
-        draw(
-          new Map([
-            [arrow.id, { offset: { x: arrowX, y: 0 } }],
-            [label.id, { offset: { x: labelX, y: 0 } }],
-          ]),
-        );
+        draw(new Map([[arrow.id, { offset: { x: arrowX, y: 0 } }]]));
         expect(holes).toHaveLength(2);
         expect(holes[1] - holes[0]).toBeCloseTo(arrowX, 8);
       } finally {

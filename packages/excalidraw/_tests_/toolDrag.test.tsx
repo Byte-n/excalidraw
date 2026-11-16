@@ -91,8 +91,12 @@ describe("dragging a tool out of the toolbar", () => {
     expect(note.y + note.height / 2).toBeCloseTo(center.y);
     expect(note.width).toBe(DEFAULT_STICKY_NOTE_SIZE);
     expect(note.baseHeight).toBe(DEFAULT_STICKY_NOTE_SIZE);
-    // The drop is recorded while its label is being edited.
-    expect(h.state.editingTextElement).not.toBeNull();
+    // The drop is recorded while its body region is being edited.
+    expect(h.state.editingTextRegion?.target).toEqual({
+      elementId: note.id,
+      region: "body",
+    });
+    expect(h.state.editingTextElement).toBeNull();
     expect(API.getUndoStack()).toHaveLength(1);
     // back on the selection tool (the editor owns the selection meanwhile,
     // as on the click path)

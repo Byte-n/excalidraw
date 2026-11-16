@@ -1,7 +1,6 @@
 import {
   isBindableElement,
   isBindingElement,
-  isBoundToContainer,
   isMindmapEdgeElement,
   isMindmapNodeElement,
   mutateElement,
@@ -48,15 +47,7 @@ export const eraseElements = (app: PointerEraseApp) => {
   const protectedIds = new Set<string>();
   for (const id of app.elementsPendingErasure) {
     const element = app.scene.getElement(id);
-    const container =
-      element?.type === "text" && element.containerId
-        ? app.scene.getElement(element.containerId)
-        : null;
-    if (
-      isMindmapNodeElement(element) ||
-      isMindmapEdgeElement(element) ||
-      isMindmapNodeElement(container)
-    ) {
+    if (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) {
       protectedIds.add(id);
     }
   }
@@ -116,9 +107,7 @@ export const eraseElements = (app: PointerEraseApp) => {
     if (
       app.elementsPendingErasure.has(element.id) ||
       (element.containerRef?.elementId &&
-        app.elementsPendingErasure.has(element.containerRef?.elementId)) ||
-      (isBoundToContainer(element) &&
-        app.elementsPendingErasure.has(element.containerId))
+        app.elementsPendingErasure.has(element.containerRef?.elementId))
     ) {
       didChange = true;
       return newElementWith(element, { isDeleted: true });

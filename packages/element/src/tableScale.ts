@@ -11,10 +11,14 @@ import {
 
 import { getIndexedTableChildren } from "./tableChildrenIndex";
 import { getTableHeight, getTableWidth } from "./tableStruct";
+import { getTextElementStyle } from "./text/elementText";
+import { parseTextRegionKey } from "./text/keys";
+import { withTextBlock } from "./text/ops";
 import { isElbowArrow, isMindmapEdgeElement } from "./typeChecks";
 import { isSequenceFragmentElement, isShapeElement } from "./compositeShape";
 
 import type { ElementUpdate } from "./mutateElement";
+import type { TextBlockMap, TextBlockStyle, TextRegionKey } from "./text/types";
 import type {
   ElementsMapOrArray,
   ExcalidrawElbowArrowElement,
@@ -37,8 +41,8 @@ import type {
  *   fonts stay untouched (the same rule as row/column resizing).
  *
  * The result is a pure update bag per element id — applying it to the scene,
- * keeping the undo entry atomic, and re-laying out bound text inside its
- * container are the caller's job. No scene, mutation, or binding module is
+ * keeping the undo entry atomic, and re-laying out the `texts` regions inside
+ * their host are the caller's job. No scene, mutation, or binding module is
  * imported on purpose: this file is data-only.
  */
 
@@ -106,7 +110,7 @@ export type TableAxisScaleResult = {
  * keep the two in sync.
  */
 const getStickyNoteScaleFloor = (
-  label: Pick<ExcalidrawTextElement, "fontSize" | "fontFamily"> | undefined,
+  label: Pick<TextBlockStyle, "fontSize" | "fontFamily"> | undefined,
 ): { width: number; height: number } => {
   if (!label) {
     return { width: STICKY_NOTE_MIN_SIZE, height: STICKY_NOTE_MIN_SIZE };
@@ -168,19 +172,7 @@ const getDirectTableCellChildren = (
 ): ExcalidrawElement[] => {
   const indexed = getIndexedTableChildren(elements, tableId);
   if (indexed) {
-    const children = indexed.filter((element) => !element.isDeleted);
-    iterateCollection(elements, (element) => {
-      const ref = element.containerRef;
-      if (
-        !element.isDeleted &&
-        ref?.kind === "fragmentRow" &&
-        ref.elementId === tableId &&
-        !children.some((child) => child.id === element.id)
-      ) {
-        children.push(element);
-      }
-    });
-    return children;
+    return indexed.filter((element) => !element.isDeleted);
   }
 
   const children: ExcalidrawElement[] = [];
@@ -188,7 +180,7 @@ const getDirectTableCellChildren = (
     const ref = element.containerRef;
     if (
       !element.isDeleted &&
-      (ref?.kind === "tableCell" || ref?.kind === "fragmentRow") &&
+      ref?.kind === "tableCell" &&
       ref.elementId === tableId
     ) {
       children.push(element);
@@ -201,8 +193,6 @@ type TableSubtree = {
   /** Table first, then descendants in scene order; ids unique. */
   ordered: ExcalidrawElement[];
   byId: Map<string, ExcalidrawElement>;
-  /** containerId -> the host's bound text (first in scene order wins). */
-  boundTexts: Map<string, ExcalidrawTextElement>;
 };
 
 export type PreparedTableUniformScale = {
@@ -222,14 +212,13 @@ export type PreparedTableUniformScale = {
 
 /**
  * Walks the table's semantic subtree: cell children recursively through
- * nested tables, then bound texts, which inherit their host's membership via
- * `containerId` (they hold no `containerRef`, so the cell index cannot see
- * them), then mindmap edges whose two endpoint nodes are both members — an
- * edge carries the dragged-in node's `containerRef` only when it was derived
+ * nested tables, then mindmap edges whose two endpoint nodes are both members —
+ * an edge carries the dragged-in node's `containerRef` only when it was derived
  * after the drag, so membership follows the graph relation instead
  * (phase-1:113 semantic-subtree traversal). Every element is visited exactly
- * once — the id set is the single source of membership, so bound texts
- * reached through their host are never transformed twice.
+ * once — the id set is the single source of membership, and text lives inline
+ * in each element's `texts` regions, so no text element can be transformed
+ * twice.
  */
 const collectTableSubtree = (
   elements: ElementsMapOrArray,
@@ -253,22 +242,9 @@ const collectTableSubtree = (
     }
   }
 
-  const boundTexts = new Map<string, ExcalidrawTextElement>();
   const pendingEdges: ExcalidrawElement[] = [];
   iterateCollection(elements, (element) => {
     if (element.isDeleted || byId.has(element.id)) {
-      return;
-    }
-    if (
-      element.type === "text" &&
-      element.containerId &&
-      byId.has(element.containerId)
-    ) {
-      byId.set(element.id, element);
-      ordered.push(element);
-      if (!boundTexts.has(element.containerId)) {
-        boundTexts.set(element.containerId, element);
-      }
       return;
     }
     if (isMindmapEdgeElement(element)) {
@@ -289,7 +265,7 @@ const collectTableSubtree = (
     }
   }
 
-  return { ordered, byId, boundTexts };
+  return { ordered, byId };
 };
 
 /**
@@ -303,8 +279,8 @@ const collectTableSubtree = (
  * - composite shapes with an explicit adaptive-text minimum
  *   (`textFitMinWidth`/`textFitMinHeight`): those preserved dimensions;
  * - everything: `MIN_WIDTH_OR_HEIGHT` so no element degenerates to zero;
- * - texts: `MIN_FONT_SIZE` per font size — a uniform-only floor, since
- *   single-axis stretches keep fonts untouched.
+ * - texts and mindmap bodies: `MIN_FONT_SIZE` per font size — a uniform-only
+ *   floor, since single-axis stretches keep fonts untouched.
  *
  * `minScale` (uniform) is the largest floor of both axes plus the font
  * floor; the per-axis values gate a single-axis stretch on its own axis.
@@ -341,13 +317,43 @@ const getSubtreeMinScales = (
       for (const row of element.table.rows) {
         considerHeight(MIN_TABLE_ROW_HEIGHT / row.height);
       }
+      for (const key of Object.keys(element.texts ?? {})) {
+        const block = element.texts?.[key as TextRegionKey];
+        if (!block) {
+          continue;
+        }
+        const floor = MIN_FONT_SIZE / block.style.fontSize;
+        if (Number.isFinite(floor) && floor > fontFloor) {
+          fontFloor = floor;
+        }
+      }
     } else if (element.type === "text") {
-      const floor = MIN_FONT_SIZE / element.fontSize;
+      const floor = MIN_FONT_SIZE / getTextElementStyle(element).fontSize;
       if (Number.isFinite(floor) && floor > fontFloor) {
         fontFloor = floor;
       }
+    } else if (isSequenceFragmentElement(element)) {
+      // 片段的页签/行文本随整块等比缩放，字号同样有下限
+      for (const key of Object.keys(element.texts ?? {}) as TextRegionKey[]) {
+        const block = element.texts?.[key];
+        if (!block) {
+          continue;
+        }
+        const floor = MIN_FONT_SIZE / block.style.fontSize;
+        if (Number.isFinite(floor) && floor > fontFloor) {
+          fontFloor = floor;
+        }
+      }
+    } else if (element.type === "mindmap-node") {
+      const fontSize = element.texts?.body?.style.fontSize;
+      if (fontSize) {
+        const floor = MIN_FONT_SIZE / fontSize;
+        if (Number.isFinite(floor) && floor > fontFloor) {
+          fontFloor = floor;
+        }
+      }
     } else if (element.type === "stickynote") {
-      const floor = getStickyNoteScaleFloor(subtree.boundTexts.get(element.id));
+      const floor = getStickyNoteScaleFloor(element.texts?.body?.style);
       considerWidth(floor.width / element.width);
       considerHeight(floor.height / element.height);
     } else if (isShapeElement(element)) {
@@ -404,9 +410,7 @@ type TableElementUpdate = {
   width?: number;
   height?: number;
   table?: TableDataV1;
-  fontSize?: number;
-  text?: string;
-  baseFontSize?: number | null;
+  texts?: ExcalidrawElement["texts"];
   autoResize?: boolean;
   baseHeight?: number;
   textFitMode?: "auto" | "fixed";
@@ -431,11 +435,9 @@ const computeElementScaleUpdate = (
   anchor: { x: number; y: number },
   {
     persistTextModes,
-    hostsById,
     scaleFonts,
   }: {
     persistTextModes: boolean;
-    hostsById: Map<string, ExcalidrawElement>;
     /** fonts follow the factor only under a uniform scale */
     scaleFonts: boolean;
   },
@@ -459,29 +461,45 @@ const computeElementScaleUpdate = (
   }
 
   if (element.type === "text") {
+    const style = getTextElementStyle(element);
+    const placement = element.texts.body.placement;
     if (scaleFonts) {
-      update.fontSize = element.fontSize * scaleX;
+      update.texts = {
+        body: {
+          ...element.texts.body,
+          style: { ...style, fontSize: style.fontSize * scaleX },
+          ...(persistTextModes && placement
+            ? {
+                placement: {
+                  ...placement,
+                  ...(placement.baseFontSize !== undefined
+                    ? { baseFontSize: placement.baseFontSize * scaleX }
+                    : {}),
+                },
+              }
+            : {}),
+        },
+      };
     }
-    // standalone texts (and cell background texts, which are unbound too)
-    // freeze their box so the scaled text does not grow the cell back;
-    // bound texts keep their `autoResize` and their container
-    if (persistTextModes && !element.containerId && element.autoResize) {
+    // 独立文字固定包围盒，缩放后文字不会把单元格重新撑大
+    if (persistTextModes && element.autoResize) {
       update.autoResize = false;
-    }
-    if (
-      persistTextModes &&
-      scaleFonts &&
-      typeof element.baseFontSize === "number" &&
-      hostsById.get(element.containerId ?? "")?.type === "stickynote"
-    ) {
-      // frozen sticky-note layout: the label's font ceiling scales with the
-      // note so later edits do not relayout it back to the old size
-      update.baseFontSize = element.baseFontSize * scaleX;
     }
   }
 
   if (element.type === "stickynote" && persistTextModes) {
     update.baseHeight = element.baseHeight * scaleY;
+    // 便签正文内嵌在元素自身：字号 ceiling 随等比缩放同步放大，
+    // 单向拉伸只改几何。
+    if (scaleFonts && element.texts?.body) {
+      update.texts = withTextBlock(element.texts, "body", {
+        ...element.texts.body,
+        style: {
+          ...element.texts.body.style,
+          fontSize: element.texts.body.style.fontSize * scaleX,
+        },
+      });
+    }
   }
 
   if (
@@ -492,6 +510,50 @@ const computeElementScaleUpdate = (
     (element.textFitMode ?? "auto") !== "fixed"
   ) {
     update.textFitMode = "fixed";
+  }
+
+  if (element.type === "mindmap-node" && element.texts?.body && scaleFonts) {
+    // 正文随节点等比缩放；单向拉伸只改几何，不动字号。
+    update.texts = withTextBlock(element.texts, "body", {
+      ...element.texts.body,
+      style: {
+        ...element.texts.body.style,
+        fontSize: element.texts.body.style.fontSize * scaleX,
+      },
+    });
+  }
+
+  if (isSequenceFragmentElement(element) && element.texts && scaleFonts) {
+    // 片段的页签/行文本随整块等比缩放；单向拉伸只改几何，不动字号。
+    let texts: TextBlockMap | undefined = element.texts;
+    for (const key of Object.keys(element.texts) as TextRegionKey[]) {
+      const block = element.texts[key];
+      const parsed = parseTextRegionKey(key);
+      if (!block || (parsed?.kind !== "body" && parsed?.kind !== "row")) {
+        continue;
+      }
+      texts = withTextBlock(texts, key, {
+        ...block,
+        style: { ...block.style, fontSize: block.style.fontSize * scaleX },
+      });
+    }
+    update.texts = texts ?? element.texts;
+  }
+
+  if (element.type === "table" && element.texts && scaleFonts) {
+    // 单元格文本随整表等比缩放；单向拉伸只改几何，不动字号。
+    let texts: TextBlockMap | undefined = element.texts;
+    for (const key of Object.keys(element.texts) as TextRegionKey[]) {
+      const block = element.texts[key];
+      if (!block || parseTextRegionKey(key)?.kind !== "cell") {
+        continue;
+      }
+      texts = withTextBlock(texts, key, {
+        ...block,
+        style: { ...block.style, fontSize: block.style.fontSize * scaleX },
+      });
+    }
+    update.texts = texts ?? element.texts;
   }
 
   if (
@@ -544,8 +606,8 @@ const computeElementScaleUpdate = (
  * Nested tables are enumerated once through their parent's cell children and
  * scale exactly once; their rows, columns and descendants are computed under
  * the same factors. Updates are keyed by element id with every id appearing
- * at most once, so applying them cannot double-transform a bound text
- * reached through both its host and a scan.
+ * at most once, so applying them cannot transform an element's `texts` regions
+ * twice.
  *
  * Each axis clamps independently at its own floor, so a single-axis stretch
  * never stops on the other axis's floors. Fonts stay untouched: the factor
@@ -585,7 +647,6 @@ export const computeTableAxisScale = (
       element.id,
       computeElementScaleUpdate(element, clampedScaleX, clampedScaleY, base, {
         persistTextModes,
-        hostsById: subtree.byId,
         scaleFonts: false,
       }),
     );
@@ -623,7 +684,6 @@ export const computeTableUniformScale = (
       element.id,
       computeElementScaleUpdate(element, clampedScale, clampedScale, base, {
         persistTextModes,
-        hostsById: subtree.byId,
         scaleFonts: true,
       }),
     );

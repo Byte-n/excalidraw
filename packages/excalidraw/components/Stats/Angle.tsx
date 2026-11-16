@@ -1,7 +1,6 @@
 import { degreesToRadians, radiansToDegrees } from "@excalidraw/math";
 
-import { getBoundTextElement } from "@excalidraw/element";
-import { isArrowElement, isElbowArrow } from "@excalidraw/element";
+import { isElbowArrow } from "@excalidraw/element";
 
 import { updateBindings } from "@excalidraw/element";
 
@@ -51,11 +50,6 @@ const handleDegreeChange: DragInputCallbackType<AngleProps["property"]> = ({
       });
       updateBindings(latestElement, scene, app.state);
 
-      const boundTextElement = getBoundTextElement(latestElement, elementsMap);
-      if (boundTextElement && !isArrowElement(latestElement)) {
-        scene.mutateElement(boundTextElement, { angle: nextAngle });
-      }
-
       return;
     }
 
@@ -77,10 +71,6 @@ const handleDegreeChange: DragInputCallbackType<AngleProps["property"]> = ({
     });
     updateBindings(latestElement, scene, app.state);
 
-    const boundTextElement = getBoundTextElement(latestElement, elementsMap);
-    if (boundTextElement && !isArrowElement(latestElement)) {
-      scene.mutateElement(boundTextElement, { angle: nextAngle });
-    }
   }
 };
 

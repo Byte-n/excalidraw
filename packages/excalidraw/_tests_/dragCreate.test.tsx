@@ -273,15 +273,17 @@ describe("Test dragCreate", () => {
       const stickyNote = h.elements.find(
         (element) => element.type === "stickynote",
       );
-      const boundText = h.elements.find((element) => element.type === "text");
 
       expect(stickyNote).toBeDefined();
-      expect(boundText).toEqual(
-        expect.objectContaining({
-          containerId: stickyNote?.id,
-        }),
+      // 便签正文已内嵌：编辑的是便签自己的 body 区域，不再创建绑定文字
+      expect(h.elements.find((element) => element.type === "text")).toBe(
+        undefined,
       );
-      expect(h.state.editingTextElement?.id).toBe(boundText?.id);
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: stickyNote!.id,
+        region: "body",
+      });
+      expect(h.state.editingTextElement).toBeNull();
       expect(h.state.activeTool.type).toBe("selection");
       expect(h.state.activeTool.locked).toBe(false);
     });

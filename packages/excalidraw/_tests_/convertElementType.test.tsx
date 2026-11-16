@@ -2,7 +2,6 @@ import { ROUNDNESS } from "@excalidraw/common";
 import {
   isMindmapEdgeElement,
   isMindmapNodeElement,
-  isTextElement,
 } from "@excalidraw/element";
 
 import type { FractionalIndex } from "@excalidraw/element/types";
@@ -68,6 +67,7 @@ describe("convert element type", () => {
         shape: { id: "rectangle", schemaVersion: 1 },
         collapsed: false,
       },
+      texts: API.mindmapBody({ role: "root" }, "Root"),
     });
     const child = API.createElement({
       type: "mindmap-node",
@@ -90,13 +90,7 @@ describe("convert element type", () => {
         routing: "orthogonal",
       },
     });
-    const text = API.createElement({
-      type: "text",
-      id: "root-text",
-      text: "Root",
-      containerId: root.id,
-    });
-    API.setElements([root, child, edge, text]);
+    API.setElements([root, child, edge]);
     API.setSelectedElements([root]);
 
     act(() => {
@@ -121,8 +115,10 @@ describe("convert element type", () => {
       shape: { id: "rectangle", schemaVersion: 1 },
     });
     expect(h.app.scene.getNonDeletedElement("edge")?.type).toBe("line");
-    const rootText = h.app.scene.getNonDeletedElement("root-text");
-    expect(isTextElement(rootText) && rootText.containerId).toBe("root");
+    // 转换保留节点正文
+    expect(h.app.scene.getNonDeletedElement("root")?.texts?.body?.text).toBe(
+      "Root",
+    );
   });
 
   it("promotes a converted node's children to the original parent", () => {

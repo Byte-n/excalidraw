@@ -7,12 +7,10 @@ import { getFrameChildren, getFrameChildrenInsertionIndex } from "../src/frame";
 import {
   assertValidContainerRefs,
   frameLikeContainerRef,
-  hasBoundTextElement,
   isBindableElement,
   isEligibleFrameChildType,
   isFlowchartNodeElement,
   isLinearElement,
-  isTextBindableContainer,
   isTextElement,
 } from "../src/typeChecks";
 
@@ -35,7 +33,6 @@ describe("Test TypeChecks", () => {
     });
 
     expect(isBindableElement(dataflow)).toBe(true);
-    expect(isTextBindableContainer(dataflow)).toBe(true);
     expect(isFlowchartNodeElement(dataflow)).toBe(false);
     expect(isEligibleFrameChildType("dataflow")).toBe(true);
   });
@@ -137,7 +134,7 @@ describe("Test TypeChecks", () => {
     expect(frame.isDeleted).toBe(false);
   });
 
-  it("rejects a deleted parent and a second parent on bound text", () => {
+  it("rejects a deleted parent", () => {
     const deletedFrame = API.createElement({ type: "frame", isDeleted: true });
     const child = API.createElement({ type: "rectangle" });
     const scene = new Scene([deletedFrame, child]);
@@ -147,20 +144,6 @@ describe("Test TypeChecks", () => {
         containerRef: { kind: "frameLike", elementId: deletedFrame.id },
       }),
     ).toThrow("Invalid frame-like container reference");
-
-    const frame = API.createElement({ type: "frame" });
-    const owner = API.createElement({
-      type: "rectangle",
-      containerRef: { kind: "frameLike", elementId: frame.id },
-    });
-    const label = API.createElement({
-      type: "text",
-      containerId: owner.id,
-      containerRef: { kind: "frameLike", elementId: frame.id },
-    });
-    expect(() => assertValidContainerRefs([frame, owner, label])).toThrow(
-      "cannot have a containerRef",
-    );
   });
 
   describe("tableCell container refs", () => {
@@ -336,83 +319,6 @@ describe("Test TypeChecks", () => {
     });
   });
 
-  describe("fragmentRow container refs", () => {
-    const makeFragment = () => {
-      const shape: SequenceShapeData = {
-        id: "sc-fragment",
-        schemaVersion: 1,
-        fragment: {
-          rows: [
-            { id: "header", height: 36.272 },
-            { id: "body", height: 203.728 },
-          ],
-        },
-      };
-      return newElement({
-        type: "sequence",
-        x: 0,
-        y: 0,
-        width: 400,
-        height: 240,
-        shape,
-      });
-    };
-    const rowText = (fragment: ExcalidrawElement, rowId: string) => ({
-      ...API.createElement({ type: "text" }),
-      containerRef: {
-        kind: "fragmentRow" as const,
-        elementId: fragment.id,
-        rowId,
-        role: "backgroundText" as const,
-      },
-    });
-
-    it("accepts a text background member on a body row", () => {
-      const fragment = makeFragment();
-      expect(() =>
-        assertValidContainerRefs([fragment, rowText(fragment, "body")]),
-      ).not.toThrow();
-    });
-
-    it("rejects the header row, missing rows, non-text and duplicates", () => {
-      const fragment = makeFragment();
-      expect(() =>
-        assertValidContainerRefs([fragment, rowText(fragment, "header")]),
-      ).toThrow("Invalid fragment row container reference");
-      expect(() =>
-        assertValidContainerRefs([fragment, rowText(fragment, "missing")]),
-      ).toThrow("Invalid fragment row container reference");
-      expect(() =>
-        assertValidContainerRefs([
-          fragment,
-          {
-            ...API.createElement({ type: "rectangle" }),
-            containerRef: {
-              kind: "fragmentRow",
-              elementId: fragment.id,
-              rowId: "body",
-              role: "backgroundText",
-            },
-          },
-        ]),
-      ).toThrow("must be a text element");
-      expect(() =>
-        assertValidContainerRefs([
-          fragment,
-          rowText(fragment, "body"),
-          rowText(fragment, "body"),
-        ]),
-      ).toThrow("already has background text");
-    });
-
-    it("rejects a parent that is not a fragment", () => {
-      const rectangle = API.createElement({ type: "rectangle" });
-      expect(() =>
-        assertValidContainerRefs([rectangle, rowText(rectangle, "body")]),
-      ).toThrow("Invalid fragment row container reference");
-    });
-  });
-
   describe("frame-like in table cells (phase-1.md:60)", () => {
     const tableCellRef = (
       table: ExcalidrawTableElement,
@@ -538,81 +444,6 @@ describe("Test TypeChecks", () => {
     expect(
       getFrameChildren(scene.getElementsIncludingDeleted(), frame.id),
     ).toEqual([first, second]);
-  });
-
-  it("inserts a frame child after its owner's bound text", () => {
-    const frame = API.createElement({ type: "frame" });
-    const owner = API.createElement({
-      type: "rectangle",
-      containerRef: { kind: "frameLike", elementId: frame.id },
-    });
-    const label = API.createElement({ type: "text", containerId: owner.id });
-
-    expect(
-      getFrameChildrenInsertionIndex([frame, owner, label], frame.id),
-    ).toBe(3);
-  });
-
-  describe("Test hasBoundTextElement", () => {
-    it("should return true for text bindable containers with bound text", () => {
-      expect(
-        hasBoundTextElement(
-          API.createElement({
-            type: "rectangle",
-            boundElements: [{ type: "text", id: "text-id" }],
-          }),
-        ),
-      ).toBeTruthy();
-
-      expect(
-        hasBoundTextElement(
-          API.createElement({
-            type: "ellipse",
-            boundElements: [{ type: "text", id: "text-id" }],
-          }),
-        ),
-      ).toBeTruthy();
-
-      expect(
-        hasBoundTextElement(
-          API.createElement({
-            type: "arrow",
-            boundElements: [{ type: "text", id: "text-id" }],
-          }),
-        ),
-      ).toBeTruthy();
-    });
-
-    it("should return false for text bindable containers without bound text", () => {
-      expect(
-        hasBoundTextElement(
-          API.createElement({
-            type: "freedraw",
-            boundElements: [{ type: "arrow", id: "arrow-id" }],
-          }),
-        ),
-      ).toBeFalsy();
-    });
-
-    it("should return false for non text bindable containers", () => {
-      expect(
-        hasBoundTextElement(
-          API.createElement({
-            type: "freedraw",
-            boundElements: [{ type: "text", id: "text-id" }],
-          }),
-        ),
-      ).toBeFalsy();
-    });
-
-    expect(
-      hasBoundTextElement(
-        API.createElement({
-          type: "image",
-          boundElements: [{ type: "text", id: "text-id" }],
-        }),
-      ),
-    ).toBeFalsy();
   });
 });
 

@@ -1,11 +1,10 @@
 import {
   CaptureUpdateAction,
-  getBoundTextElement,
   getCompositeShapeTextFitMode,
+  getSequenceLifelineTextBlockHeight,
+  getSequenceLifelineTextFitUpdates,
   isSequenceLifelineElement,
   isShapeElement,
-  isValidTextContainer,
-  redrawTextBoundingBox,
 } from "@excalidraw/element";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
@@ -21,10 +20,7 @@ type CompositeShapeTextFitMode = "auto" | "fixed";
 const getSelectedTextFitShapes = (
   elements: readonly ExcalidrawElement[],
   appState: Pick<AppState, "selectedElementIds">,
-) =>
-  getSelectedElements(elements, appState).filter(
-    (element) => isShapeElement(element) && isValidTextContainer(element),
-  );
+) => getSelectedElements(elements, appState).filter(isShapeElement);
 
 const setTextFitMode = (
   mode: CompositeShapeTextFitMode,
@@ -33,7 +29,7 @@ const setTextFitMode = (
   app: AppClassProperties,
 ) => {
   const selectedShapes = getSelectedTextFitShapes(elements, appState);
-  const elementsMap = app.scene.getNonDeletedElementsMap();
+
   let changed = false;
 
   selectedShapes.forEach((shape) => {
@@ -56,9 +52,18 @@ const setTextFitMode = (
     });
 
     const latestShape = app.scene.getElement(shape.id) || shape;
-    const boundText = getBoundTextElement(latestShape, elementsMap);
-    if (boundText) {
-      redrawTextBoundingBox(boundText, latestShape, app.scene);
+    if (isSequenceLifelineElement(latestShape)) {
+      // 生命线的正文在 `texts.body`：切回自动适配时按正文块重新求解头高
+      const body = latestShape.texts?.body;
+      if (mode === "auto" && body) {
+        const fit = getSequenceLifelineTextFitUpdates(
+          latestShape,
+          getSequenceLifelineTextBlockHeight(latestShape, body),
+        );
+        if (fit) {
+          app.scene.mutateElement(latestShape, fit);
+        }
+      }
     }
   });
 

@@ -18,10 +18,9 @@ import {
   buildMindmapGraphIndex,
   CaptureUpdateAction,
   getCommonBounds,
+  getLineHeightInPx,
   getMindmapShapeId,
   mindmapShapeData,
-  getBoundTextElement,
-  handleBindTextResize,
   isMindmapEdgeElement,
   isMindmapNodeElement,
   isShapeElement,
@@ -31,6 +30,7 @@ import {
   getMindmapCollapseAffordance,
   getMindmapAddButtonAffordances,
   getMindmapNodeTheme,
+  layoutTextRegionsLocal,
   MINDMAP_SIBLING_DISTANCE,
   MINDMAP_LEVEL_DISTANCE,
   navigateMindmap,
@@ -47,7 +47,6 @@ import type { LocalPoint } from "@excalidraw/math";
 import type {
   ExcalidrawElement,
   ExcalidrawMindmapNodeElement,
-  ExcalidrawTextContainer,
   FractionalIndex,
   NonDeletedExcalidrawElement,
   MindmapLayoutDirection,
@@ -101,7 +100,6 @@ type MindmapDragSession = {
   dropIndex: ReturnType<typeof buildMindmapGraphIndex> | null;
   dropNodes: readonly ExcalidrawMindmapNodeElement[];
   nextSiblingById: ReadonlyMap<string, string | null>;
-  sourceLabel: NonDeletedExcalidrawElement | null;
   sourceEdge: NonDeletedExcalidrawElement | null;
 };
 
@@ -165,9 +163,9 @@ const relayoutAfterStyleActions = new Set<ActionName>([
 ]);
 
 /**
- * The mindmap node a pointer frame target points at (a bound text maps to its
- * container). Pure read shared by the renderer / hover derivation so the frame
- * is the only hover source (05-general-hover.md §4.8).
+ * The mindmap node a pointer frame target points at. Pure read shared by the
+ * renderer / hover derivation so the frame is the only hover source
+ * (05-general-hover.md §4.8).
  */
 export const getMindmapNodeIdFromPointerTarget = (
   app: Pick<App, "scene">,
@@ -182,23 +180,15 @@ export const getMindmapNodeIdFromPointerTarget = (
     return null;
   }
   const element = app.scene.getNonDeletedElement(target.elementId);
-  if (!element) {
-    return null;
-  }
-  const node =
-    element.type === "text" && element.containerId
-      ? app.scene.getNonDeletedElement(element.containerId)
-      : element;
-  return node && isMindmapNodeElement(node) ? node.id : null;
+  return element && isMindmapNodeElement(element) ? element.id : null;
 };
 
 /**
  * Owns the first phase of mindmap interaction. Structural writes go through
- * the existing Scene/Store path; the controller only keeps transient typing
- * state for nodes that have not received their first label yet.
+ * the existing Scene/Store path; node labels live in `texts.body` and are
+ * edited through the region editor.
  */
 export class AppMindmap {
-  private readonly pendingTextNodeIds = new Set<string>();
   private consumedSpace = false;
   private dragSession: MindmapDragSession | null = null;
   private dragOpacityApplied = false;
@@ -209,11 +199,14 @@ export class AppMindmap {
   constructor(private readonly app: App) {}
 
   clear = () => {
-    this.pendingTextNodeIds.clear();
     this.consumedSpace = false;
     this.blockedTouchPointerDown = null;
     this.cancelDrag();
   };
+
+  /** 节点正文或绑定文字编辑中：节点交互让位给编辑器。 */
+  private isEditingText = () =>
+    !!this.app.state.editingTextElement || !!this.app.state.editingTextRegion;
 
   /**
    * 当前应挂「+」按钮的节点：单选、可编辑、无遮挡 UI。渲染与命中共用此判定，
@@ -305,7 +298,7 @@ export class AppMindmap {
     if (
       !this.app.isInteractionEnabled() ||
       this.app.state.viewModeEnabled ||
-      this.app.state.editingTextElement
+      this.isEditingText()
     ) {
       return false;
     }
@@ -420,7 +413,7 @@ export class AppMindmap {
     if (
       !this.app.isInteractionEnabled() ||
       this.app.state.viewModeEnabled ||
-      this.app.state.editingTextElement
+      this.isEditingText()
     ) {
       return false;
     }
@@ -443,24 +436,19 @@ export class AppMindmap {
   };
 
   handlePointerDown = (pointerDownState: PointerDownState) => {
-    if (this.app.state.editingTextElement) {
+    if (this.isEditingText()) {
       return;
     }
     // 折叠 affordance 已在 preparePointerDown 中处理
     if (this.cancelledPointerDown === pointerDownState) {
       return;
     }
-    const pointerHit =
+    const hit =
       pointerDownState.hit.element ??
       this.app.getElementAtPosition(
         pointerDownState.origin.x,
         pointerDownState.origin.y,
-        { includeBoundTextElement: true },
       );
-    const hit =
-      pointerHit?.type === "text" && pointerHit.containerId
-        ? this.app.scene.getNonDeletedElement(pointerHit.containerId)
-        : pointerHit;
     if (hit && isMindmapNodeElement(hit)) {
       this.selectNode(hit);
       return;
@@ -990,33 +978,41 @@ export class AppMindmap {
         context.fill();
         context.stroke();
       });
-    preview.forEach((element) => {
-      if (element.type !== "text") {
+    // 预览节点沿用正式渲染的正文布局：位置、对齐与主题色同源
+    preview.filter(isMindmapNodeElement).forEach((element) => {
+      const layout = layoutTextRegionsLocal(element).find(
+        (region) => region.key === "body",
+      );
+      if (!layout || !layout.lines.length) {
         return;
       }
-      context.fillStyle = element.strokeColor;
+      const lineHeightPx = getLineHeightInPx(
+        layout.fontSize,
+        layout.lineHeight,
+      );
+      const x =
+        element.x +
+        layout.x +
+        (layout.textAlign === "center"
+          ? layout.width / 2
+          : layout.textAlign === "right"
+          ? layout.width
+          : 0);
+      context.fillStyle = layout.color;
       context.font = getFontString({
-        fontSize: element.fontSize,
-        fontFamily: element.fontFamily,
-        fontWeight: element.fontWeight,
+        fontSize: layout.fontSize,
+        fontFamily: layout.fontFamily,
+        ...(layout.fontWeight !== undefined
+          ? { fontWeight: layout.fontWeight }
+          : {}),
       });
       context.textBaseline = "top";
       context.textAlign =
-        element.textAlign === "center" || element.textAlign === "right"
-          ? element.textAlign
+        layout.textAlign === "center" || layout.textAlign === "right"
+          ? layout.textAlign
           : "left";
-      const x =
-        element.textAlign === "center"
-          ? element.x + element.width / 2
-          : element.textAlign === "right"
-          ? element.x + element.width
-          : element.x;
-      element.text.split("\n").forEach((line, i) => {
-        context.fillText(
-          line,
-          x,
-          element.y + i * element.fontSize * element.lineHeight,
-        );
+      layout.lines.forEach((line, index) => {
+        context.fillText(line, x, element.y + layout.y + index * lineHeightPx);
       });
     });
     context.globalAlpha = 1;
@@ -1042,13 +1038,7 @@ export class AppMindmap {
     if (this.app.state.activeTool.type !== "mindmap") {
       return false;
     }
-    const hit = this.app.getElementAtPosition(sceneX, sceneY, {
-      includeBoundTextElement: true,
-    });
-    const node =
-      hit?.type === "text" && hit.containerId
-        ? this.app.scene.getNonDeletedElement(hit.containerId)
-        : hit;
+    const node = this.app.getElementAtPosition(sceneX, sceneY);
     if (!node || !isMindmapNodeElement(node)) {
       return false;
     }
@@ -1176,7 +1166,7 @@ export class AppMindmap {
     }
     if (
       event.type !== "keydown" ||
-      this.app.state.editingTextElement ||
+      this.isEditingText() ||
       this.app.state.openDialog ||
       this.app.state.contextMenu
     ) {
@@ -1303,22 +1293,12 @@ export class AppMindmap {
       return null;
     }
     const root = roots[0];
-    const elementsMap = this.app.scene.getNonDeletedElementsMap();
     if (
-      selected.some((element) => {
-        if (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) {
-          return element.graphId !== root.graphId;
-        }
-        const container =
-          element.type === "text" && element.containerId
-            ? elementsMap.get(element.containerId)
-            : null;
-        return (
-          !container ||
-          !isMindmapNodeElement(container) ||
-          container.graphId !== root.graphId
-        );
-      })
+      selected.some(
+        (element) =>
+          !(isMindmapNodeElement(element) || isMindmapEdgeElement(element)) ||
+          element.graphId !== root.graphId,
+      )
     ) {
       return null;
     }
@@ -1497,16 +1477,6 @@ export class AppMindmap {
         previous.get(element.id) !== element
       ) {
         graphIds.add(element.graphId);
-      } else if (
-        element.type === "text" &&
-        !element.isDeleted &&
-        element.containerId &&
-        previous.get(element.id) !== element
-      ) {
-        const container = previous.get(element.containerId);
-        if (isMindmapNodeElement(container)) {
-          graphIds.add(container.graphId);
-        }
       }
     });
     return graphIds.size
@@ -1517,29 +1487,19 @@ export class AppMindmap {
       : result;
   };
 
-  /** Returns all nodes and bound labels for the graphs represented by a selection. */
+  /** Returns the nodes of the graphs represented by a selection. */
   getLockableMindmapElements = (
     selectedElements = this.app.scene.getSelectedElements({
       selectedElementIds: this.app.state.selectedElementIds,
-      includeBoundTextElement: true,
       includeElementsInFrames: true,
     }),
   ): readonly NonDeletedExcalidrawElement[] => {
     const graphIds = new Set(
-      selectedElements.flatMap((element) => {
-        if (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) {
-          return [element.graphId];
-        }
-        if (element.type === "text" && element.containerId) {
-          const container = this.app.scene.getNonDeletedElement(
-            element.containerId,
-          );
-          return container && isMindmapNodeElement(container)
-            ? [container.graphId]
-            : [];
-        }
-        return [];
-      }),
+      selectedElements.flatMap((element) =>
+        isMindmapNodeElement(element) || isMindmapEdgeElement(element)
+          ? [element.graphId]
+          : [],
+      ),
     );
     if (!graphIds.size) {
       return [];
@@ -1548,26 +1508,13 @@ export class AppMindmap {
       .getNonDeletedElements()
       .filter(
         (element) =>
-          (isMindmapNodeElement(element) && graphIds.has(element.graphId)) ||
-          (element.type === "text" &&
-            !!element.containerId &&
-            isMindmapNodeElement(
-              this.app.scene.getNonDeletedElement(element.containerId),
-            ) &&
-            graphIds.has(
-              (
-                this.app.scene.getNonDeletedElement(element.containerId) as
-                  | ExcalidrawMindmapNodeElement
-                  | undefined
-              )?.graphId ?? "",
-            )),
+          isMindmapNodeElement(element) && graphIds.has(element.graphId),
       );
   };
 
   hasLockedMindmapGraph = (
     selectedElements = this.app.scene.getSelectedElements({
       selectedElementIds: this.app.state.selectedElementIds,
-      includeBoundTextElement: true,
       includeElementsInFrames: true,
     }),
   ) => {
@@ -1592,7 +1539,7 @@ export class AppMindmap {
       !this.hasLockedMindmapGraph([node]) &&
       !this.app.state.viewModeEnabled &&
       this.app.isInteractionEnabled() &&
-      !this.app.state.editingTextElement &&
+      !this.isEditingText() &&
       !this.app.scene.getMindmapHiddenElementIds().has(node.id)
     );
   };
@@ -1612,7 +1559,7 @@ export class AppMindmap {
     if (
       !this.app.isInteractionEnabled() ||
       this.app.state.viewModeEnabled ||
-      this.app.state.editingTextElement
+      this.isEditingText()
     ) {
       return null;
     }
@@ -1622,14 +1569,10 @@ export class AppMindmap {
     }
     const selected = this.app.scene.getSelectedElements({ selectedElementIds });
     const nodes = selected.filter(isMindmapNodeElement);
-    const hit = pointerDownState.hit.element;
+    const hitNode = pointerDownState.hit.element;
     // A drag must be anchored by this pointer-down hit. Using only the
     // current selection would let a blank-space box selection inherit a stale
     // mindmap selection when the pointer later crosses a node.
-    const hitNode =
-      hit?.type === "text" && hit.containerId
-        ? this.app.scene.getNonDeletedElement(hit.containerId)
-        : hit;
     if (!hitNode || !isMindmapNodeElement(hitNode)) {
       return null;
     }
@@ -1691,17 +1634,6 @@ export class AppMindmap {
       });
       selected.forEach((element) => elementIds.add(element.id));
     }
-    // Bound labels move with their container even when they are hidden by a
-    // collapsed branch or omitted from the selected-elements list.
-    this.app.scene.getNonDeletedElements().forEach((element) => {
-      if (
-        element.type === "text" &&
-        element.containerId &&
-        elementIds.has(element.containerId)
-      ) {
-        elementIds.add(element.id);
-      }
-    });
     const copyMode =
       !hasOrdinarySelection &&
       graphIds.length === 1 &&
@@ -1725,7 +1657,7 @@ export class AppMindmap {
   /**
    * Normalizes an area-selection result per Mindmap graph. A collapsed selected
    * parent implicitly selects its hidden descendants. Each graph is either
-   * fully selected (including edges and bound labels) or removed entirely.
+   * fully selected (nodes and edges) or removed entirely.
    */
   normalizeMindmapSelection = (
     selectedElementIds: Readonly<Record<string, true>>,
@@ -1734,7 +1666,6 @@ export class AppMindmap {
     const nextSelectedElementIds: Record<string, true> = {
       ...selectedElementIds,
     };
-    const elementsMap = this.app.scene.getNonDeletedElementsMap();
     const graphIds = new Set<string>();
     elements.forEach((element) => {
       if (!selectedElementIds[element.id]) {
@@ -1742,11 +1673,6 @@ export class AppMindmap {
       }
       if (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) {
         graphIds.add(element.graphId);
-      } else if (element.type === "text" && element.containerId) {
-        const container = elementsMap.get(element.containerId);
-        if (container && isMindmapNodeElement(container)) {
-          graphIds.add(container.graphId);
-        }
       }
     });
 
@@ -1767,14 +1693,10 @@ export class AppMindmap {
           );
         }
       });
-      const graphNodeIds = new Set(graphNodes.map((node) => node.id));
       const relatedElements = elements.filter(
         (element) =>
-          ((isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
-            element.graphId === graphId) ||
-          (element.type === "text" &&
-            !!element.containerId &&
-            graphNodeIds.has(element.containerId)),
+          (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+          element.graphId === graphId,
       );
 
       relatedElements.forEach((element) => {
@@ -1791,7 +1713,7 @@ export class AppMindmap {
     return nextSelectedElementIds;
   };
 
-  /** Whether every selected Mindmap graph is complete, including edges/text. */
+  /** Whether every selected Mindmap graph is complete, including edges. */
   isCompleteMindmapSelection = (
     selectedElementIds = this.app.state.selectedElementIds,
   ) => {
@@ -1809,30 +1731,15 @@ export class AppMindmap {
     if (!graphIds.size) {
       return false;
     }
-    return [...graphIds].every((graphId) => {
-      const nodeIds = new Set(
-        elements
-          .filter(isMindmapNodeElement)
-          .filter((element) => element.graphId === graphId)
-          .map((element) => element.id),
-      );
-      return elements
+    return [...graphIds].every((graphId) =>
+      elements
         .filter(
           (element) =>
-            ((isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
-              element.graphId === graphId) ||
-            (element.type === "text" &&
-              !!element.containerId &&
-              nodeIds.has(element.containerId)),
+            (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+            element.graphId === graphId,
         )
-        .every(
-          (element) =>
-            selected.has(element.id) ||
-            (element.type === "text" &&
-              !!element.containerId &&
-              selected.has(element.containerId)),
-        );
-    });
+        .every((element) => selected.has(element.id)),
+    );
   };
 
   private getSubtreeIds = (
@@ -1898,11 +1805,6 @@ export class AppMindmap {
           )
         : [],
       nextSiblingById,
-      sourceLabel:
-        elements.find(
-          (element) =>
-            element.type === "text" && element.containerId === source?.id,
-        ) ?? null,
       sourceEdge:
         elements.find(
           (element) =>
@@ -2022,15 +1924,7 @@ export class AppMindmap {
       x: source.x + session.offset.x,
       y: source.y + session.offset.y,
     };
-    const label = session.sourceLabel;
     const preview: ExcalidrawElement[] = [previewNode];
-    if (label) {
-      preview.push({
-        ...label,
-        x: label.x + session.offset.x,
-        y: label.y + session.offset.y,
-      });
-    }
     if (session.target) {
       const parent = this.app.scene.getNonDeletedElement(
         session.target.parentId,
@@ -2310,7 +2204,7 @@ export class AppMindmap {
       const root = index.nodes.get(index.rootId)!;
       if (
         this.app.state.viewModeEnabled ||
-        this.app.state.editingTextElement ||
+        this.isEditingText() ||
         !this.app.isInteractionEnabled() ||
         this.hasLockedMindmapGraph([
           this.app.scene.getNonDeletedElement(root.id)!,
@@ -2356,11 +2250,7 @@ export class AppMindmap {
     if (!node || !isMindmapNodeElement(node) || !this.canEditNode(nodeId)) {
       return false;
     }
-    const boundText = getBoundTextElement(
-      node,
-      this.app.scene.getNonDeletedElementsMap(),
-    );
-    if (boundText?.originalText === title) {
+    if ((node.texts?.body?.text ?? "") === title) {
       return false;
     }
     const result = applyMindmapOperation(
@@ -2529,24 +2419,6 @@ export class AppMindmap {
     }
   };
 
-  /** Called by App after the shared text editor has committed its value. */
-  handleTextSubmit = (textElement: NonDeletedExcalidrawElement): boolean => {
-    if (textElement.type !== "text" || !textElement.containerId) {
-      return false;
-    }
-    const container = this.app.scene.getNonDeletedElement(
-      textElement.containerId,
-    );
-    if (!container || !isMindmapNodeElement(container)) {
-      return false;
-    }
-
-    const isNewNode = this.pendingTextNodeIds.delete(container.id);
-    handleBindTextResize(container, this.app.scene, "se", false, false);
-    this.layoutGraph(container.graphId);
-    return isNewNode;
-  };
-
   createChild = (nodeId: string) => {
     const node = this.app.scene.getNonDeletedElement(nodeId);
     if (node && isMindmapNodeElement(node)) {
@@ -2564,7 +2436,7 @@ export class AppMindmap {
   importTextTree = (tree: MindmapTextNode): boolean => {
     if (
       this.app.state.viewModeEnabled ||
-      this.app.state.editingTextElement ||
+      this.isEditingText() ||
       !this.app.isInteractionEnabled()
     ) {
       this.notifyUnsupportedOperation();
@@ -2659,7 +2531,6 @@ export class AppMindmap {
   startRootEditing = (rootId: string): void => {
     const root = this.app.scene.getNonDeletedElement(rootId);
     if (root && isMindmapNodeElement(root)) {
-      this.pendingTextNodeIds.add(root.id);
       this.startNodeEditing(root);
     }
   };
@@ -2724,7 +2595,6 @@ export class AppMindmap {
       elements: this.getLaidOutElements(result.elements, [parent.graphId]),
       captureUpdate: CaptureUpdateAction.EVENTUALLY,
     });
-    this.pendingTextNodeIds.add(node.id);
     this.startNodeEditing(node);
   }
 
@@ -2732,7 +2602,6 @@ export class AppMindmap {
   convertToShape = (nextType: "rectangle" | "diamond" | "ellipse"): boolean => {
     const selectedElements = this.app.scene.getSelectedElements({
       selectedElementIds: this.app.state.selectedElementIds,
-      includeBoundTextElement: true,
       includeElementsInFrames: true,
     });
     if (this.hasLockedMindmapGraph(selectedElements)) {
@@ -2740,18 +2609,7 @@ export class AppMindmap {
       return false;
     }
     const selectedIds = new Set(selectedElements.map((element) => element.id));
-    const selectedNodes = selectedElements.flatMap((element) => {
-      if (isMindmapNodeElement(element)) {
-        return [element];
-      }
-      if (element.type === "text" && element.containerId) {
-        const container = this.app.scene.getNonDeletedElement(
-          element.containerId,
-        );
-        return container && isMindmapNodeElement(container) ? [container] : [];
-      }
-      return [];
-    });
+    const selectedNodes = selectedElements.filter(isMindmapNodeElement);
     if (!selectedNodes.length) {
       return false;
     }
@@ -2930,24 +2788,13 @@ export class AppMindmap {
     if (!current || !isMindmapNodeElement(current)) {
       return;
     }
-    // 等待选中状态更新，避免共享编辑器取到上一个节点的绑定文字。
+    // 等待选中状态更新，再打开节点的正文区域编辑。
     this.selectNode(current, () => {
       this.app.startTextEditing({
         sceneX: current.x + current.width / 2,
         sceneY: current.y + current.height / 2,
-        container: current as ExcalidrawTextContainer,
+        container: current,
       });
-    });
-  }
-
-  private layoutGraph(graphId: string) {
-    // 布局和派生连接线随文字提交一并进入历史，不能作为 NEVER 更新排除。
-    this.app.updateScene({
-      elements: this.getLaidOutElements(
-        this.app.scene.getElementsIncludingDeleted(),
-        [graphId],
-      ),
-      captureUpdate: CaptureUpdateAction.EVENTUALLY,
     });
   }
 
@@ -3042,21 +2889,12 @@ export class AppMindmap {
 
   private getGraphElementIds = (graphId: string) => {
     const elements = this.app.scene.getNonDeletedElements();
-    const nodeIds = new Set(
-      elements
-        .filter(isMindmapNodeElement)
-        .filter((node) => node.graphId === graphId)
-        .map((node) => node.id),
-    );
     return new Set(
       elements
         .filter(
           (element) =>
-            ((isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
-              element.graphId === graphId) ||
-            (element.type === "text" &&
-              !!element.containerId &&
-              nodeIds.has(element.containerId)),
+            (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+            element.graphId === graphId,
         )
         .map((element) => element.id),
     );
@@ -3065,11 +2903,7 @@ export class AppMindmap {
   private getMindmapNodeFromPointerDown = (
     pointerDownState: PointerDownState,
   ) => {
-    const pointerHit = pointerDownState.hit.element;
-    const hit =
-      pointerHit?.type === "text" && pointerHit.containerId
-        ? this.app.scene.getNonDeletedElement(pointerHit.containerId)
-        : pointerHit;
+    const hit = pointerDownState.hit.element;
     return hit && isMindmapNodeElement(hit) ? hit : null;
   };
 
@@ -3082,20 +2916,13 @@ export class AppMindmap {
     return this.app.scene
       .getSelectedElements({
         selectedElementIds: this.app.state.selectedElementIds,
-        includeBoundTextElement: true,
         includeElementsInFrames: true,
       })
       .some(this.isMindmapRelatedElement);
   };
 
   private isMindmapRelatedElement = (element: NonDeletedExcalidrawElement) =>
-    isMindmapNodeElement(element) ||
-    isMindmapEdgeElement(element) ||
-    (element.type === "text" &&
-      !!element.containerId &&
-      isMindmapNodeElement(
-        this.app.scene.getNonDeletedElement(element.containerId),
-      ));
+    isMindmapNodeElement(element) || isMindmapEdgeElement(element);
 
   shouldBlockNativeAction = (name: ActionName) => {
     if (name === "clearCanvas") {

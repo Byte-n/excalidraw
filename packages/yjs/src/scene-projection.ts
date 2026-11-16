@@ -31,28 +31,13 @@ export function projectExcalidrawDisplayElements<
       continue;
     }
     const parent = byId.get(ref.elementId);
-    let valid =
-      !!parent &&
-      !parent.isDeleted &&
-      !(element.type === "text" && element.containerId);
+    let valid = !!parent && !parent.isDeleted;
     if (ref.kind === "frameLike") {
       valid =
         valid &&
         !!parent &&
         ["frame", "magicframe"].includes(parent.type) &&
         !["frame", "magicframe"].includes(element.type);
-    } else if (ref.kind === "fragmentRow") {
-      const shape = parent?.shape as
-        | { id?: string; fragment?: { rows?: readonly { id: string }[] } }
-        | undefined;
-      const rows = shape?.id === "sc-fragment" ? shape.fragment?.rows : null;
-      valid =
-        valid &&
-        parent?.type === "sequence" &&
-        element.type === "text" &&
-        !!rows?.length &&
-        rows[0].id !== ref.rowId &&
-        rows.some((row) => row.id === ref.rowId);
     } else {
       const table = parent?.table;
       valid =
@@ -81,18 +66,11 @@ export function projectExcalidrawDisplayElements<
     if (
       element.isDeleted ||
       !ref ||
-      !(
-        (ref.kind === "tableCell" && ref.role === "backgroundText") ||
-        (ref.kind === "fragmentRow" && ref.role === "backgroundText")
-      )
+      !(ref.kind === "tableCell" && ref.role === "backgroundText")
     ) {
       continue;
     }
-    const slot = JSON.stringify(
-      ref.kind === "fragmentRow"
-        ? ["row", ref.elementId, ref.rowId]
-        : ["cell", ref.elementId, ref.cellId],
-    );
+    const slot = JSON.stringify(["cell", ref.elementId, ref.cellId]);
     if (occupied.has(slot)) {
       detach(element);
     } else {

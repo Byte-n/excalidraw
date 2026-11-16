@@ -42,7 +42,7 @@ import {
   SEQUENCE_MIN_POLE_LENGTH,
   clampSequenceActivationLocalY,
   getCompositeShapeTextFitMode,
-  fitSequenceFragmentOperator,
+  getSequenceFragmentOperatorTextFit,
   getSequenceFragmentResize,
   getSequenceLifelineActivationCenter,
   getSequenceLifelineActivationLocalY,
@@ -53,16 +53,7 @@ import {
   normalizeSequenceFragmentGeometry,
   refitSequenceFragmentRowBackgroundTexts,
 } from "./compositeShape";
-import {
-  getBoundTextElement,
-  getBoundTextElementId,
-  getContainerElement,
-  redrawTextBoundingBox,
-  handleBindTextResize,
-  getBoundTextMaxWidth,
-  computeBoundTextPosition,
-  isValidTextContainer,
-} from "./textElement";
+import { getTextBlock } from "./text/ops";
 import {
   getMinTextElementWidth,
   measureText,
@@ -73,16 +64,27 @@ import { wrapText } from "./textWrapping";
 import {
   isArrowElement,
   isBindingElement,
-  isBoundToContainer,
   isElbowArrow,
   isFrameLikeElement,
   isFreeDrawElement,
   isImageElement,
   isLinearElement,
+  isMindmapNodeElement,
   isStickyNoteElement,
   isTableElement,
   isTextElement,
 } from "./typeChecks";
+import { isMindmapLayoutFrozen } from "./mindmap";
+import { getPositionAfterHeightChange } from "./sizeHelpers";
+import { getTextLayoutUpdates } from "./text/applyLayout";
+import {
+  getTextElementFont,
+  getTextElementStyle,
+  getTextElementStylePatch,
+  getTextElementText,
+} from "./text/elementText";
+import { withTextBlock } from "./text/ops";
+import { getTextRegion } from "./text/regions";
 import {
   computeTableAxisScale,
   computeTableUniformScale,
@@ -116,7 +118,6 @@ import type {
   NonDeletedExcalidrawElement,
   NonDeleted,
   ExcalidrawElement,
-  ExcalidrawTextElementWithContainer,
   ExcalidrawImageElement,
   ElementsMap,
   ExcalidrawElbowArrowElement,
@@ -553,7 +554,6 @@ const resizeSequenceActivation = (
     height: next.height,
     shape,
   });
-  handleBindTextResize(element, scene, handleDirection);
   // 绑在激活条上的消息跟着端点走
   updateBoundElements(element, scene);
 };
@@ -590,7 +590,6 @@ const resizeSequenceLifeline = (
       textFitMode: "fixed" as const,
     }),
   });
-  handleBindTextResize(element, scene, handleDirection);
   // Attached activations follow the resized pole.
   updateBoundElements(element, scene);
 };
@@ -640,8 +639,6 @@ const rotateSingleElement = (
     }
     angle = normalizeRadians(angle as Radians);
   }
-  const boundTextElementId = getBoundTextElementId(element);
-
   let update: ElementUpdate<NonDeletedExcalidrawElement> = {
     angle,
   };
@@ -660,37 +657,6 @@ const rotateSingleElement = (
   }
 
   scene.mutateElement(element, update);
-
-  if (boundTextElementId) {
-    const textElement =
-      scene.getElement<ExcalidrawTextElementWithContainer>(boundTextElementId);
-
-    if (textElement && !isLinearElement(element)) {
-      const { x, y } = computeBoundTextPosition(
-        element,
-        textElement,
-        scene.getNonDeletedElementsMap(),
-      );
-      scene.mutateElement(textElement, {
-        angle,
-        x,
-        y,
-      });
-    }
-  }
-
-  const titleText = getBoundTextElement(
-    element,
-    scene.getNonDeletedElementsMap(),
-    "title",
-  );
-  if (titleText && !isLinearElement(element)) {
-    redrawTextBoundingBox(
-      titleText,
-      scene.getNonDeletedElement(element.id) ?? element,
-      scene,
-    );
-  }
 
   if (isSequenceFragmentElement(element)) {
     const live = scene.getNonDeletedElement(element.id);
@@ -757,16 +723,10 @@ export const measureFontSizeFromWidth = (
   nextWidth: number,
 ): { size: number } | null => {
   // We only use width to scale font on resize
-  let width = element.width;
+  const width = element.width;
 
-  const hasContainer = isBoundToContainer(element);
-  if (hasContainer) {
-    const container = getContainerElement(element, elementsMap);
-    if (container) {
-      width = getBoundTextMaxWidth(container, element);
-    }
-  }
-  const nextFontSize = element.fontSize * (nextWidth / width);
+  const nextFontSize =
+    getTextElementStyle(element).fontSize * (nextWidth / width);
   if (nextFontSize < MIN_FONT_SIZE) {
     return null;
   }
@@ -810,7 +770,7 @@ export const resizeSingleTextElement = (
     );
 
     scene.mutateElement(element, {
-      fontSize: metrics.size,
+      ...getTextElementStylePatch(element, { fontSize: metrics.size }),
       width: metricsWidth,
       height: nextHeight,
       x: newOrigin.x,
@@ -820,26 +780,18 @@ export const resizeSingleTextElement = (
   }
 
   if (transformHandleType === "e" || transformHandleType === "w") {
-    const minWidth = getMinTextElementWidth(
-      getFontString({
-        fontSize: element.fontSize,
-        fontFamily: element.fontFamily,
-      }),
-      element.lineHeight,
-    );
+    const style = getTextElementStyle(element);
+    const font = getTextElementFont(element);
+    const minWidth = getMinTextElementWidth(font, style.lineHeight);
 
     const newWidth = Math.max(minWidth, nextWidth);
 
     const text = wrapText(
-      element.originalText,
-      getFontString(element),
+      getTextElementText(element),
+      font,
       Math.abs(newWidth),
     );
-    const metrics = measureText(
-      text,
-      getFontString(element),
-      element.lineHeight,
-    );
+    const metrics = measureText(text, font, style.lineHeight);
 
     const newHeight = metrics.height;
 
@@ -862,7 +814,6 @@ export const resizeSingleTextElement = (
       height: Math.abs(metrics.height),
       x: newOrigin.x,
       y: newOrigin.y,
-      text,
       autoResize: false,
     };
 
@@ -936,30 +887,6 @@ const rotateMultipleElements = (
             unbindBindingElement(element, "end", scene);
           }
         }
-      }
-
-      const boundText = getBoundTextElement(element, elementsMap);
-      if (boundText && !isLinearElement(element)) {
-        const { x, y } = computeBoundTextPosition(
-          element,
-          boundText,
-          elementsMap,
-        );
-
-        scene.mutateElement(boundText, {
-          x,
-          y,
-          angle: normalizeRadians((centerAngle + origAngle) as Radians),
-        });
-      }
-
-      const titleText = getBoundTextElement(element, elementsMap, "title");
-      if (titleText && !isLinearElement(element)) {
-        redrawTextBoundingBox(
-          titleText,
-          scene.getNonDeletedElement(element.id) ?? element,
-          scene,
-        );
       }
     }
   }
@@ -1247,26 +1174,45 @@ export const resizeSingleElement = (
   nextHeight = Math.abs(nextHeight);
 
   const elementsMap = scene.getNonDeletedElementsMap();
-  const boundTextElement = getBoundTextElement(latestElement, elementsMap);
+  const linearLabel = isLinearElement(latestElement)
+    ? latestElement.texts?.label
+    : null;
+  const mindmapBody = isMindmapNodeElement(latestElement)
+    ? latestElement.texts?.body
+    : null;
   const isResizingStickyNote = isStickyNoteElement(latestElement);
   let minSize: { width: number; height: number } | undefined;
   if (isResizingStickyNote) {
-    // A note must fit one line at its label's font ceiling.
-    minSize = boundTextElement
+    // A note must fit one line at its body's font ceiling.
+    const bodyStyle = latestElement.texts?.body?.style;
+    minSize = bodyStyle
       ? getStickyNoteMinSize({
-          fontSize: boundTextElement.baseFontSize ?? boundTextElement.fontSize,
-          fontFamily: boundTextElement.fontFamily,
+          fontSize: bodyStyle.fontSize,
+          fontFamily: bodyStyle.fontFamily,
         })
       : { width: STICKY_NOTE_MIN_SIZE, height: STICKY_NOTE_MIN_SIZE };
-  } else if (boundTextElement && !shouldMaintainAspectRatio) {
+  } else if (mindmapBody && !shouldMaintainAspectRatio) {
+    // 脑图节点正文与内嵌文本同一约束：至少放得下一行。
     minSize = {
       width: getApproxMinLineWidth(
-        getFontString(boundTextElement),
-        boundTextElement.lineHeight,
+        getFontString(mindmapBody.style),
+        mindmapBody.style.lineHeight,
       ),
       height: getApproxMinLineHeight(
-        boundTextElement.fontSize,
-        boundTextElement.lineHeight,
+        mindmapBody.style.fontSize,
+        mindmapBody.style.lineHeight,
+      ),
+    };
+  } else if (linearLabel?.text && !shouldMaintainAspectRatio) {
+    // 线性元素的标签至少放得下一行
+    minSize = {
+      width: getApproxMinLineWidth(
+        getFontString(linearLabel.style),
+        linearLabel.style.lineHeight,
+      ),
+      height: getApproxMinLineHeight(
+        linearLabel.style.fontSize,
+        linearLabel.style.lineHeight,
       ),
     };
   }
@@ -1285,34 +1231,22 @@ export const resizeSingleElement = (
     }
   }
 
-  let boundTextFont: { fontSize?: number } = {};
-  if (boundTextElement && !isResizingStickyNote) {
-    const stateOfBoundTextElementAtResize = originalElementsMap.get(
-      boundTextElement.id,
-    ) as typeof boundTextElement | undefined;
-    if (stateOfBoundTextElementAtResize) {
-      boundTextFont = {
-        fontSize: stateOfBoundTextElementAtResize.fontSize,
-      };
-    }
-    if (shouldMaintainAspectRatio) {
-      const updatedElement = {
-        ...latestElement,
-        width: nextWidth,
-        height: nextHeight,
-      };
-
-      const nextFont = measureFontSizeFromWidth(
-        boundTextElement,
-        elementsMap,
-        getBoundTextMaxWidth(updatedElement, boundTextElement),
-      );
-      if (nextFont === null) {
+  let linearLabelFont: { fontSize?: number } = {};
+  let mindmapFontSize: number | undefined;
+  if (mindmapBody && shouldMaintainAspectRatio) {
+    // 正文安全区宽度与实际节点同比例变化，字号按该比例缩放。
+    const currentWidth = getTextRegion(latestElement, "body")?.bounds.width;
+    const nextRegionWidth = getTextRegion(
+      { ...latestElement, width: nextWidth, height: nextHeight },
+      "body",
+    )?.bounds.width;
+    if (currentWidth && nextRegionWidth) {
+      const nextFontSize =
+        mindmapBody.style.fontSize * (nextRegionWidth / currentWidth);
+      if (nextFontSize < MIN_FONT_SIZE) {
         return;
       }
-      boundTextFont = {
-        fontSize: nextFont.size,
-      };
+      mindmapFontSize = nextFontSize;
     }
   }
 
@@ -1386,15 +1320,15 @@ export const resizeSingleElement = (
 
   if (
     isArrowElement(latestElement) &&
-    boundTextElement &&
+    linearLabel?.text &&
     shouldMaintainAspectRatio
   ) {
     const fontSize =
-      (Math.abs(nextWidth) / latestElement.width) * boundTextElement.fontSize;
+      (Math.abs(nextWidth) / latestElement.width) * linearLabel.style.fontSize;
     if (fontSize < MIN_FONT_SIZE) {
       return;
     }
-    boundTextFont.fontSize = fontSize;
+    linearLabelFont.fontSize = fontSize;
   }
 
   if (
@@ -1408,8 +1342,14 @@ export const resizeSingleElement = (
       width: Math.abs(nextWidth),
       height: Math.abs(nextHeight),
       ...rescaledPoints,
+      ...(mindmapBody &&
+        mindmapFontSize !== undefined && {
+          texts: withTextBlock(latestElement.texts, "body", {
+            ...mindmapBody,
+            style: { ...mindmapBody.style, fontSize: mindmapFontSize },
+          }),
+        }),
       ...(isShapeElement(latestElement) &&
-        isValidTextContainer(latestElement) &&
         getCompositeShapeTextFitMode(latestElement) === "auto" &&
         (Math.abs(nextWidth) !== latestElement.width ||
           Math.abs(nextHeight) !== latestElement.height) && {
@@ -1456,19 +1396,48 @@ export const resizeSingleElement = (
         bindings: false,
       });
     } else {
-      if (boundTextElement && boundTextFont != null) {
-        scene.mutateElement(boundTextElement, {
-          fontSize: boundTextFont.fontSize,
+      if (linearLabel?.text && linearLabelFont.fontSize !== undefined) {
+        scene.mutateElement(latestElement, {
+          texts: withTextBlock(latestElement.texts, "label", {
+            ...linearLabel,
+            style: {
+              ...linearLabel.style,
+              fontSize: linearLabelFont.fontSize,
+            },
+          }),
         });
       }
-      handleBindTextResize(
-        latestElement,
-        scene,
-        handleDirection,
-        shouldMaintainAspectRatio,
-        shouldResizeFromCenter,
-        flipFactorY < 0,
-      );
+    }
+
+    // 脑图节点在缩放后按正文重新适配放不下的那一维；冻结节点保持几何。
+    if (
+      isMindmapNodeElement(latestElement) &&
+      latestElement.texts?.body &&
+      !isMindmapLayoutFrozen(latestElement)
+    ) {
+      const textUpdates = getTextLayoutUpdates(latestElement);
+      if (textUpdates) {
+        const nextHeight = textUpdates.height ?? latestElement.height;
+        const resizeFromTop =
+          handleDirection === "n" ||
+          handleDirection === "ne" ||
+          handleDirection === "nw";
+        const flippedVertically = flipFactorY < 0;
+        scene.mutateElement(latestElement, {
+          ...textUpdates,
+          ...(nextHeight > latestElement.height && {
+            ...getPositionAfterHeightChange(
+              latestElement,
+              nextHeight,
+              shouldResizeFromCenter
+                ? "center"
+                : resizeFromTop !== flippedVertically
+                ? "bottom"
+                : "top",
+            ),
+          }),
+        });
+      }
     }
 
     // Fragment rows follow the box: the bottom edge changes only the last row
@@ -1496,21 +1465,18 @@ export const resizeSingleElement = (
     }
 
     // A narrower/wider fragment changes the tab's max width: re-fit the
-    // operator label so it wraps (or unwraps) into the new room.
+    // operator text block so it wraps (or unwraps) into the new room.
     const resizedFragment = scene.getNonDeletedElement(latestElement.id);
     if (
       resizedFragment &&
       isSequenceFragmentElement(resizedFragment) &&
       Math.abs(origElement.width - resizedFragment.width) > 1e-6
     ) {
-      const label = getBoundTextElement(
+      const fit = getSequenceFragmentOperatorTextFit(
         resizedFragment,
-        scene.getNonDeletedElementsMap(),
+        getTextBlock(resizedFragment.texts, "body"),
       );
-      const fit = label
-        ? fitSequenceFragmentOperator(resizedFragment, label)
-        : null;
-      if (fit && label) {
+      if (fit) {
         const heightDelta = fit.height - resizedFragment.height;
         const angle = resizedFragment.angle ?? 0;
         scene.mutateElement(resizedFragment, {
@@ -1524,10 +1490,6 @@ export const resizeSingleElement = (
               }
             : {}),
         });
-        const updated = scene.getNonDeletedElement(resizedFragment.id);
-        if (updated) {
-          redrawTextBoundingBox(label, updated, scene);
-        }
       }
     }
 
@@ -1657,38 +1619,7 @@ const getNextMultipleWidthAndHeightFromPointer = (
     (el) => originalElementsMap.get(el.id)!,
   );
 
-  // getCommonBoundingBox() uses getBoundTextElement() which returns null for
-  // original elements from pointerDownState, so we have to find and add these
-  // bound text elements manually. Additionally, the coordinates of bound text
-  // elements aren't always up to date.
-  const boundTextElements = originalElementsArray.reduce((acc, orig) => {
-    if (!isLinearElement(orig)) {
-      return acc;
-    }
-    const textId = getBoundTextElementId(orig);
-    if (!textId) {
-      return acc;
-    }
-    const text = originalElementsMap.get(textId) ?? null;
-    if (!isBoundToContainer(text)) {
-      return acc;
-    }
-    return [
-      ...acc,
-      {
-        ...text,
-        ...LinearElementEditor.getBoundTextElementPosition(
-          orig,
-          text,
-          elementsMap,
-        ),
-      },
-    ];
-  }, [] as ExcalidrawTextElementWithContainer[]);
-
-  const originalBoundingBox = getCommonBoundingBox(
-    originalElementsArray.map((orig) => orig).concat(boundTextElements),
-  );
+  const originalBoundingBox = getCommonBoundingBox(originalElementsArray);
 
   const { minX, minY, maxX, maxY, midX, midY } = originalBoundingBox;
   const width = maxX - minX;
@@ -1836,35 +1767,7 @@ export const resizeMultipleElements = (
   if (originalBoundingBox) {
     boundingBox = originalBoundingBox;
   } else {
-    const boundTextElements = targetElements.reduce((acc, { orig }) => {
-      if (!isLinearElement(orig)) {
-        return acc;
-      }
-      const textId = getBoundTextElementId(orig);
-      if (!textId) {
-        return acc;
-      }
-      const text = originalElementsMap!.get(textId) ?? null;
-      if (!isBoundToContainer(text)) {
-        return acc;
-      }
-      return [
-        ...acc,
-        {
-          ...text,
-          ...LinearElementEditor.getBoundTextElementPosition(
-            orig,
-            text,
-            elementsMap,
-          ),
-        },
-      ];
-    }, [] as ExcalidrawTextElementWithContainer[]);
-
-    boundingBox = getCommonBoundingBox([
-      ...targetElements.map(({ orig }) => orig),
-      ...boundTextElements,
-    ]);
+    boundingBox = getCommonBoundingBox(targetElements.map(({ orig }) => orig));
   }
   const { minX, minY, maxX, maxY, midX, midY } = boundingBox;
   const width = maxX - minX;
@@ -2070,9 +1973,9 @@ export const resizeMultipleElements = (
         Pick<ExcalidrawElement, "x" | "y" | "width" | "height" | "angle">
       > & {
         points?: ExcalidrawLinearElement["points"];
-        fontSize?: ExcalidrawTextElement["fontSize"];
+        texts?: ExcalidrawElement["texts"];
         scale?: ExcalidrawImageElement["scale"];
-        boundTextFontSize?: ExcalidrawTextElement["fontSize"];
+        embeddedTextFontSize?: number;
         startBinding?: ExcalidrawElbowArrowElement["startBinding"];
         endBinding?: ExcalidrawElbowArrowElement["endBinding"];
         fixedSegments?: ExcalidrawElbowArrowElement["fixedSegments"];
@@ -2081,11 +1984,6 @@ export const resizeMultipleElements = (
     }[] = [];
 
     for (const { orig, latest } of targetElements) {
-      // bounded text elements are updated along with their container elements
-      if (isTextElement(orig) && isBoundToContainer(orig)) {
-        continue;
-      }
-
       // subtree members are transformed by their table's update bag, never
       // by the generic loop (P01.2)
       if (tableSubtreeIds.has(orig.id)) {
@@ -2142,7 +2040,6 @@ export const resizeMultipleElements = (
         angle,
         ...rescaledPoints,
         ...(isShapeElement(latest) &&
-          isValidTextContainer(latest) &&
           getCompositeShapeTextFitMode(latest) === "auto" &&
           (width !== latest.width || height !== latest.height) && {
             textFitMode: "fixed",
@@ -2199,23 +2096,52 @@ export const resizeMultipleElements = (
         if (!metrics) {
           return;
         }
-        update.fontSize = metrics.size;
+        update.texts = getTextElementStylePatch(orig, {
+          fontSize: metrics.size,
+        }).texts;
       }
 
-      const boundTextElement = originalElementsMap.get(
-        getBoundTextElementId(orig) ?? "",
-      ) as ExcalidrawTextElementWithContainer | undefined;
-
-      // sticky notes derive their label's size from the layout below
-      if (boundTextElement && !isStickyNoteElement(orig)) {
+      // 线性元素标签：等比缩放跟随整体比例，单向拉伸保持字号不变
+      const linearLabel = isLinearElement(orig) ? orig.texts?.label : null;
+      if (linearLabel?.text) {
         if (keepAspectRatio) {
-          const newFontSize = boundTextElement.fontSize * scale;
+          const newFontSize = linearLabel.style.fontSize * scale;
           if (newFontSize < MIN_FONT_SIZE) {
             return;
           }
-          update.boundTextFontSize = newFontSize;
+          update.embeddedTextFontSize = newFontSize;
         } else {
-          update.boundTextFontSize = boundTextElement.fontSize;
+          update.embeddedTextFontSize = linearLabel.style.fontSize;
+        }
+      }
+
+      // 脑图正文：等比缩放跟随整体比例，单向拉伸保持字号不变
+      const mindmapBody = isMindmapNodeElement(orig) ? orig.texts?.body : null;
+      if (mindmapBody) {
+        if (keepAspectRatio) {
+          const newFontSize = mindmapBody.style.fontSize * scale;
+          if (newFontSize < MIN_FONT_SIZE) {
+            return;
+          }
+          update.embeddedTextFontSize = newFontSize;
+        } else {
+          update.embeddedTextFontSize = mindmapBody.style.fontSize;
+        }
+      }
+
+      // 组合片段的 operator 页签文本：等比缩放跟随整体比例
+      const fragmentBody = isSequenceFragmentElement(orig)
+        ? orig.texts?.body
+        : null;
+      if (fragmentBody) {
+        if (keepAspectRatio) {
+          const newFontSize = fragmentBody.style.fontSize * scale;
+          if (newFontSize < MIN_FONT_SIZE) {
+            return;
+          }
+          update.embeddedTextFontSize = newFontSize;
+        } else {
+          update.embeddedTextFontSize = fragmentBody.style.fontSize;
         }
       }
 
@@ -2256,28 +2182,12 @@ export const resizeMultipleElements = (
         updateBoundElements(element as NonDeletedExcalidrawElement, scene, {
           simultaneouslyUpdated: elementsToUpdate,
         });
-        // sticky notes relayout from their mode fields, which stay
-        // unpublished until pointer up — their label follows the scaled
-        // geometry instead, as in the single-table gesture
-        if (
-          !isStickyNoteElement(element) &&
-          (getBoundTextElement(element, elementsMap) ||
-            getBoundTextElement(element, elementsMap, "title"))
-        ) {
-          handleBindTextResize(
-            element as NonDeletedExcalidrawElement,
-            scene,
-            handleDirection,
-            keepAspectRatio,
-            shouldResizeFromCenter,
-            false,
-          );
-        }
         if (isSequenceFragmentElement(element)) {
           const liveFragment = scene.getNonDeletedElement(id);
           if (liveFragment) {
             refitSequenceFragmentRowBackgroundTexts(scene, liveFragment, {
               grow: false,
+              fontScale: keepAspectRatio ? scale : 1,
             });
           }
         }
@@ -2286,11 +2196,47 @@ export const resizeMultipleElements = (
 
     for (const {
       element,
-      update: { boundTextFontSize, ...update },
+      update: { embeddedTextFontSize, ...update },
     } of elementsAndUpdates) {
       const { angle } = update;
 
-      scene.mutateElement(element, update);
+      const embeddedTexts =
+        embeddedTextFontSize !== undefined && isLinearElement(element)
+          ? element.texts?.label
+            ? withTextBlock(element.texts, "label", {
+                ...element.texts.label,
+                style: {
+                  ...element.texts.label.style,
+                  fontSize: embeddedTextFontSize,
+                },
+              })
+            : undefined
+          : embeddedTextFontSize !== undefined && element.texts?.body
+          ? withTextBlock(element.texts, "body", {
+              ...element.texts.body,
+              style: {
+                ...element.texts.body.style,
+                fontSize: embeddedTextFontSize,
+              },
+            })
+          : undefined;
+
+      scene.mutateElement(element, {
+        ...update,
+        ...(embeddedTexts === undefined ? {} : { texts: embeddedTexts }),
+      });
+
+      // 脑图正文写入后按内容补齐尺寸；冻结节点保持缩放后的几何。
+      if (
+        isMindmapNodeElement(element) &&
+        element.texts?.body &&
+        !isMindmapLayoutFrozen(element)
+      ) {
+        const textUpdates = getTextLayoutUpdates(element);
+        if (textUpdates) {
+          scene.mutateElement(element, textUpdates);
+        }
+      }
 
       if (isStickyNoteElement(element)) {
         // the content correction runs before the (single) arrow pass, which
@@ -2325,26 +2271,6 @@ export const resizeMultipleElements = (
             unbindBindingElement(element, "end", scene);
           }
         }
-      }
-
-      const boundTextElement = getBoundTextElement(element, elementsMap);
-      if (
-        boundTextElement &&
-        boundTextFontSize &&
-        !isStickyNoteElement(element)
-      ) {
-        scene.mutateElement(boundTextElement, {
-          fontSize: boundTextFontSize,
-          angle: isLinearElement(element) ? undefined : angle,
-        });
-        handleBindTextResize(
-          element,
-          scene,
-          handleDirection,
-          true,
-          shouldResizeFromCenter,
-          flipByY,
-        );
       }
     }
 

@@ -1,10 +1,11 @@
 import { vi } from "vitest";
+import { act } from "@testing-library/react";
 
 import { ROUNDNESS, KEYS, arrayToMap, cloneJSON } from "@excalidraw/common";
 
 import { pointFrom, type Radians } from "@excalidraw/math";
 
-import { getBoundTextElementPosition } from "@excalidraw/element";
+import { LinearElementEditor } from "@excalidraw/element";
 import { getElementAbsoluteCoords } from "@excalidraw/element";
 import { newLinearElement } from "@excalidraw/element";
 
@@ -14,7 +15,6 @@ import type {
   ExcalidrawElement,
   ExcalidrawImageElement,
   ExcalidrawLinearElement,
-  ExcalidrawTextElementWithContainer,
   FileId,
 } from "@excalidraw/element/types";
 
@@ -863,54 +863,34 @@ describe("mutliple elements", () => {
     });
 
     Keyboard.keyPress(KEYS.ENTER);
-    let editor = await getTextEditor();
+    const editor = await getTextEditor();
     fireEvent.input(editor, { target: { value: "arrow" } });
-    Keyboard.exitTextEditor(editor);
-
-    const rectangle = UI.createElement("rectangle", {
-      x: 0,
-      y: 100,
-      width: 100,
-      height: 100,
+    await act(async () => {
+      editor.blur();
     });
 
-    Keyboard.keyPress(KEYS.ENTER);
-    editor = await getTextEditor();
-    fireEvent.input(editor, { target: { value: "rect\ntext" } });
-    Keyboard.exitTextEditor(editor);
-
-    mouse.select([arrow, rectangle]);
+    mouse.select([arrow]);
     API.executeAction(actionFlipHorizontal);
     API.executeAction(actionFlipVertical);
 
-    const arrowText = h.elements[1] as ExcalidrawTextElementWithContainer;
-    const arrowTextPos = getBoundTextElementPosition(
-      arrow.get(),
-      arrowText,
+    const liveArrow = h.app.scene.getNonDeletedElement(
+      arrow.id,
+    ) as ExcalidrawLinearElement;
+    const labelLayout = LinearElementEditor.getLabelSceneLayout(
+      liveArrow,
       arrayToMap(h.elements),
-    )!;
-    const rectText = h.elements[3] as ExcalidrawTextElementWithContainer;
+    );
 
     expect(arrow.x).toBeCloseTo(180);
-    expect(arrow.y).toBeCloseTo(200);
+    expect(arrow.y).toBeCloseTo(80);
     expect(arrow.points[1][0]).toBeCloseTo(-180);
     expect(arrow.points[1][1]).toBeCloseTo(-80);
 
-    expect(arrowTextPos.x - (arrow.x - arrow.width)).toBeCloseTo(
-      arrow.x - (arrowTextPos.x + arrowText.width),
+    expect(labelLayout.x - (arrow.x - arrow.width)).toBeCloseTo(
+      arrow.x - (labelLayout.x + labelLayout.width),
     );
-    expect(arrowTextPos.y - (arrow.y - arrow.height)).toBeCloseTo(
-      arrow.y - (arrowTextPos.y + arrowText.height),
-    );
-
-    expect(rectangle.x).toBeCloseTo(80);
-    expect(rectangle.y).toBeCloseTo(0);
-
-    expect(rectText.x - rectangle.x).toBeCloseTo(
-      rectangle.x + rectangle.width - (rectText.x + rectText.width),
-    );
-    expect(rectText.y - rectangle.y).toBeCloseTo(
-      rectangle.y + rectangle.height - (rectText.y + rectText.height),
+    expect(labelLayout.y - (arrow.y - arrow.height)).toBeCloseTo(
+      arrow.y - (labelLayout.y + labelLayout.height),
     );
   });
 });

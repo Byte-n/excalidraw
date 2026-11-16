@@ -12,7 +12,6 @@ import type {
   ExcalidrawElement,
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
-  ExcalidrawTextElement,
   NonDeleted,
   NonDeletedExcalidrawElement,
   Ordered,
@@ -44,12 +43,9 @@ import {
 } from "./binding";
 import { LinearElementEditor } from "./linearElementEditor";
 import { mutateElement, newElementWith } from "./mutateElement";
-import { getBoundTextElementId, redrawTextBoundingBox } from "./textElement";
+import { getTextElementText } from "./text/elementText";
 import {
-  hasBoundTextElement,
-  isArrowElement,
   isBindableElement,
-  isBoundToContainer,
   isTextElement,
 } from "./typeChecks";
 
@@ -1015,7 +1011,9 @@ export class AppStateDelta implements DeltaContainer<AppState> {
 }
 
 type ElementPartial<TElement extends ExcalidrawElement = ExcalidrawElement> =
-  Omit<Partial<Ordered<TElement>>, "id" | "updated" | "seed">;
+  TElement extends unknown
+    ? Omit<Partial<Ordered<TElement>>, "id" | "updated" | "seed">
+    : never;
 
 export type ApplyToOptions = {
   excludedProperties?: Set<keyof ElementPartial>;
@@ -1271,7 +1269,10 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
       const inversedDeltas: Record<string, Delta<ElementPartial>> = {};
 
       for (const [id, { inserted, deleted }] of Object.entries(deltas)) {
-        inversedDeltas[id] = Delta.create({ ...inserted }, { ...deleted });
+        inversedDeltas[id] = Delta.create<ElementPartial>(
+          { ...inserted },
+          { ...deleted },
+        );
       }
 
       return inversedDeltas;
@@ -1469,9 +1470,6 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
         const next = nextElements.get(id);
         for (const element of [previous, next]) {
           if (element) {
-            if (isTextElement(element) && element.containerId) {
-              idsToCheck.add(element.containerId);
-            }
             for (const binding of element.boundElements ?? []) {
               idsToCheck.add(binding.id);
             }
@@ -1821,9 +1819,8 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
       }
       if (
         isTextElement(element) &&
-        !element.text.trim() &&
-        !element.boundElements?.length &&
-        !isArrowElement(elements.get(element.containerId ?? ""))
+        !getTextElementText(element).trim() &&
+        !element.boundElements?.length
       ) {
         return null;
       }
@@ -1837,22 +1834,8 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
       return before !== after;
     }
 
-    const visibleBindings = (
-      element: OrderedExcalidrawElement,
-      elements: ReadonlyMap<string, OrderedExcalidrawElement>,
-    ) =>
-      (element.boundElements ?? [])
-        .filter((binding) => {
-          const label = elements.get(binding.id);
-          return (
-            binding.type !== "text" ||
-            isArrowElement(element) ||
-            !label ||
-            !isTextElement(label) ||
-            !!label.text.trim()
-          );
-        })
-        .map(({ id, type }) => `${type}:${id}`);
+    const visibleBindings = (element: OrderedExcalidrawElement) =>
+      (element.boundElements ?? []).map(({ id, type }) => `${type}:${id}`);
 
     return Delta.getDifferences(before, after).some((key) => {
       switch (key) {
@@ -1865,8 +1848,8 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
           return false;
         case "boundElements":
           return !isShallowEqual(
-            visibleBindings(before, previousElements),
-            visibleBindings(after, nextElements),
+            visibleBindings(before),
+            visibleBindings(after),
           );
         default:
           return true;
@@ -2016,18 +1999,6 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
 
     BoundElement.unbindAffected(nextElements, prevElement(), updater);
     BoundElement.rebindAffected(nextElements, nextElement(), updater);
-
-    BindableElement.unbindAffected(
-      nextElements,
-      prevElement(),
-      (element, updates) => {
-        // we cannot rebind arrows with bindable element so we don't unbind them at all during rebind (we still need to unbind them on removal)
-        // TODO: #7348 add startBinding / endBinding to the `BoundElement` context so that we could rebind arrows and remove this condition
-        if (isTextElement(element)) {
-          updater(element, updates);
-        }
-      },
-    );
     BindableElement.rebindAffected(nextElements, nextElement(), updater);
   }
 
@@ -2041,8 +2012,6 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
       // so we are creating a temp scene just to query and mutate elements
       const tempScene = new Scene(nextElements, { skipValidation: true });
 
-      ElementsDelta.redrawTextBoundingBoxes(tempScene, changedElements);
-
       // needs ordered nextElements to avoid z-index binding issues
       ElementsDelta.redrawBoundArrows(tempScene, changedElements);
     } catch (e) {
@@ -2053,54 +2022,6 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
       }
     } finally {
       return nextElements;
-    }
-  }
-
-  private static redrawTextBoundingBoxes(
-    scene: Scene,
-    changed: Map<string, OrderedExcalidrawElement>,
-  ) {
-    const elements = scene.getNonDeletedElementsMap();
-    const boxesToRedraw = new Map<
-      string,
-      { container: OrderedExcalidrawElement; boundText: ExcalidrawTextElement }
-    >();
-
-    for (const element of changed.values()) {
-      if (isBoundToContainer(element)) {
-        const { containerId } = element as ExcalidrawTextElement;
-        const container = containerId ? elements.get(containerId) : undefined;
-
-        if (container) {
-          boxesToRedraw.set(container.id, {
-            container,
-            boundText: element as ExcalidrawTextElement,
-          });
-        }
-      }
-
-      if (hasBoundTextElement(element)) {
-        const boundTextElementId = getBoundTextElementId(element);
-        const boundText = boundTextElementId
-          ? elements.get(boundTextElementId)
-          : undefined;
-
-        if (boundText) {
-          boxesToRedraw.set(element.id, {
-            container: element,
-            boundText: boundText as ExcalidrawTextElement,
-          });
-        }
-      }
-    }
-
-    for (const { container, boundText } of boxesToRedraw.values()) {
-      if (container.isDeleted || boundText.isDeleted) {
-        // skip redraw if one of them is deleted, as it would not result in a meaningful redraw
-        continue;
-      }
-
-      redrawTextBoundingBox(boundText, container, scene);
     }
   }
 
@@ -2167,7 +2088,12 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
     inserted: ElementPartial,
   ): [ElementPartial, ElementPartial] {
     try {
-      Delta.diffArrays(deleted, inserted, "boundElements", (x) => x.id);
+      Delta.diffArrays(
+        deleted as Partial<OrderedExcalidrawElement>,
+        inserted as Partial<OrderedExcalidrawElement>,
+        "boundElements",
+        (x) => x.id,
+      );
 
       // don't diff the points as:
       // - we can't ensure the multiplayer order consistency without fractional index on each point

@@ -61,10 +61,9 @@ import {
   SEQUENCE_MIN_ACTIVATION_OFFSET,
   getSequenceFragmentResize,
   getSequenceFragmentRowLayout,
-  getSequenceFragmentRowBounds,
-  getSequenceFragmentRowBackgroundTextLayout,
+  getSequenceFragmentOperatorTextFit,
   refitSequenceFragmentRowBackgroundTexts,
-  fragmentRowContainerRef,
+  normalizeSequenceFragmentTexts,
   getSequenceFragmentRowPaths,
   getSequenceFragmentTabPath,
   getSequenceFragmentTextBounds,
@@ -116,13 +115,23 @@ import {
 } from "../src/resizeElements";
 import { generateRoughOptions } from "../src/shape";
 import { isQuickCreateTargetElement } from "../src/quickCreate";
+import {
+  getTextElementStyle,
+  getTextElementText,
+} from "../src/text/elementText";
 import { getLineHeightInPx } from "../src/textMeasurements";
+import {
+  getLocalTextRegionLayout,
+  getTextRegions,
+  withTextBlock,
+} from "../src/text";
 import { isBindableElement } from "../src/typeChecks";
 import { getTransformHandles } from "../src/transformHandles";
 import { getTransformStatusReadout } from "../src/transformStatus";
 import { convertToExcalidrawElements } from "../src/transform";
 
 import type { SequenceLifelineId } from "../src/compositeShape";
+import type { TextBlockStyle } from "../src/text/types";
 import type {
   ElementsMap,
   ExcalidrawBindableElement,
@@ -732,7 +741,7 @@ describe("sequence lifeline default creation", () => {
   });
 
   it("grows the head upward for a long label while keeping the pole", () => {
-    const [element] = convertToExcalidrawElements([
+    const elements = convertToExcalidrawElements([
       {
         type: "sc-lifeline-entity",
         x: 0,
@@ -742,9 +751,15 @@ describe("sequence lifeline default creation", () => {
         },
       },
     ]);
+    // label 直接写进元素自身的文本区域，没有绑定文字元素
+    expect(elements).toHaveLength(1);
+    const [element] = elements;
     if (!isSequenceLifelineElement(element)) {
       throw new Error("Expected a sequence lifeline");
     }
+    expect(element.texts?.body?.text).toBe(
+      "一个非常非常长的生命线标签，用来验证自动适配只撑高头部而不拉长杆",
+    );
     const baseHeadHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"];
     expect(getCompositeShapeTextFitMode(element)).toBe("auto");
     expect(element.width).toBe(
@@ -762,6 +777,39 @@ describe("sequence lifeline default creation", () => {
       SEQUENCE_DEFAULT_POLE_LENGTH,
       6,
     );
+    // 撑高后的头部能完整放下换行后的文本
+    const layout = getLocalTextRegionLayout(element, "body");
+    expect(layout?.lines.length).toBeGreaterThan(1);
+    expect(layout!.text).not.toContain("…");
+  });
+
+  it("keeps a single-line skeleton label inside the sampled head", () => {
+    const [element] = convertToExcalidrawElements([
+      {
+        type: "sc-lifeline-entity",
+        x: 0,
+        y: 0,
+        label: { text: "用户", fontSize: 14 },
+      },
+    ]);
+    if (!isSequenceLifelineElement(element)) {
+      throw new Error("Expected a sequence lifeline");
+    }
+    expect(element.texts?.body).toMatchObject({
+      text: "用户",
+      style: {
+        fontFamily: DEFAULT_FONT_FAMILY,
+        fontSize: 14,
+        textAlign: "center",
+        verticalAlign: "middle",
+      },
+    });
+    expect(element.shape.lifeline.headHeight).toBeCloseTo(
+      SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"],
+      6,
+    );
+    expect(element.textFitMinWidth).toBeUndefined();
+    expect(element.textFitMinHeight).toBeUndefined();
   });
 });
 
@@ -854,7 +902,7 @@ describe("sequence label text area", () => {
     "%s renders its label baseline on the measured sample line",
     (id) => {
       const { width, height } = elementSize(id, 80);
-      const [element, text] = convertToExcalidrawElements([
+      const elements = convertToExcalidrawElements([
         {
           type: id,
           x: 0,
@@ -864,20 +912,30 @@ describe("sequence label text area", () => {
           label: { text: "标签", fontSize: 14 },
         },
       ]);
-      if (element.type !== "sequence" || !text || text.type !== "text") {
-        throw new Error("Expected a bound-text sequence element");
+      // 标签内嵌在生命线自身，不再产生绑定文字元素
+      expect(elements).toHaveLength(1);
+      const [element] = elements;
+      if (!isSequenceLifelineElement(element)) {
+        throw new Error("Expected a sequence lifeline");
       }
-      const lineHeightPx = getLineHeightInPx(text.fontSize, text.lineHeight);
+      const layout = getLocalTextRegionLayout(element, "body");
+      if (!layout) {
+        throw new Error("Expected a lifeline body region");
+      }
+      expect(layout.lines).toEqual(["标签"]);
+      const lineHeightPx = getLineHeightInPx(
+        layout.fontSize,
+        layout.lineHeight,
+      );
       const baseline =
-        text.y -
-        element.y +
+        layout.y +
         getTextVerticalOffset(
-          text.verticalAlign,
-          text.height,
+          layout.verticalAlign,
+          layout.height,
           1,
           lineHeightPx,
         ) +
-        getVerticalOffset(text.fontFamily, text.fontSize, lineHeightPx);
+        getVerticalOffset(layout.fontFamily, layout.fontSize, lineHeightPx);
       const headHeight = SEQUENCE_LIFELINE_HEAD_HEIGHTS[id];
       expect(
         Math.abs(baseline - measuredBaseline(id, headHeight)),
@@ -893,6 +951,25 @@ describe("sequence label text area", () => {
         "sc-lifeline-entity",
         width,
         SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"],
+      ),
+    );
+  });
+
+  it.each(LIFELINE_IDS)("%s registers only a fixed head body region", (id) => {
+    const { width, height } = elementSize(id, 80);
+    const element = makeElement(id, width, height);
+    const regions = getTextRegions(element);
+    expect(regions.map((region) => region.key)).toEqual(["body"]);
+    expect(regions[0]).toMatchObject({
+      wrap: "wrap",
+      fit: "fixed",
+      editable: true,
+    });
+    expect(regions[0].bounds).toEqual(
+      getSequenceLifelineTextBounds(
+        id,
+        width,
+        SEQUENCE_LIFELINE_HEAD_HEIGHTS[id],
       ),
     );
   });
@@ -1236,7 +1313,10 @@ describe("sequence fragment rows", () => {
       fontSize: 14,
       fontFamily: DEFAULT_FONT_FAMILY,
     });
-    const fit = fitSequenceFragmentOperator(fragment, text);
+    const fit = fitSequenceFragmentOperator(fragment, {
+      text: getTextElementText(text),
+      style: getTextElementStyle(text),
+    });
     if (!fit) {
       throw new Error("Expected an operator fit");
     }
@@ -1260,7 +1340,10 @@ describe("sequence fragment rows", () => {
       fontSize: 14,
       fontFamily: DEFAULT_FONT_FAMILY,
     });
-    const fit = fitSequenceFragmentOperator(fragment, text);
+    const fit = fitSequenceFragmentOperator(fragment, {
+      text: getTextElementText(text),
+      style: getTextElementStyle(text),
+    });
     if (!fit) {
       throw new Error("Expected an operator fit");
     }
@@ -1575,8 +1658,8 @@ describe("sequence clamping to the element box", () => {
     expect(narrow.y + narrow.height).toBeLessThanOrEqual(20 + 1e-6);
   });
 
-  it("renders the fragment tab label on the measured sample line", () => {
-    const [element, text] = convertToExcalidrawElements([
+  it("writes the fragment label into texts.body", () => {
+    const [element] = convertToExcalidrawElements([
       {
         type: "sc-fragment",
         x: 0,
@@ -1586,19 +1669,31 @@ describe("sequence clamping to the element box", () => {
         label: { text: "Opt / Loop", fontSize: 14 },
       },
     ]);
-    if (element.type !== "sequence" || !text || text.type !== "text") {
-      throw new Error("Expected a bound-text fragment element");
+    if (element.type !== "sequence" || !isSequenceFragmentElement(element)) {
+      throw new Error("Expected a fragment element");
     }
-    const lineHeightPx = getLineHeightInPx(text.fontSize, text.lineHeight);
+    expect(element.texts?.body?.text).toBe("Opt / Loop");
+    expect(element.texts?.body?.style).toMatchObject({
+      fontSize: 14,
+      fontFamily: DEFAULT_FONT_FAMILY,
+      textAlign: "left",
+      verticalAlign: "top",
+    });
+    const layout = getLocalTextRegionLayout(element, "body")!;
+    const lineHeightPx = getLineHeightInPx(layout.fontSize, layout.lineHeight);
     const baseline =
-      text.y -
-      element.y +
-      getTextVerticalOffset(text.verticalAlign, text.height, 1, lineHeightPx) +
-      getVerticalOffset(text.fontFamily, text.fontSize, lineHeightPx);
+      layout.y +
+      getTextVerticalOffset(
+        layout.verticalAlign,
+        layout.height,
+        1,
+        lineHeightPx,
+      ) +
+      getVerticalOffset(layout.fontFamily, layout.fontSize, lineHeightPx);
     // the single line is vertically centered in the sample tab
     const expectedBaseline =
       (SEQUENCE_FRAGMENT_TAB_HEIGHT - lineHeightPx) / 2 +
-      getVerticalOffset(text.fontFamily, text.fontSize, lineHeightPx);
+      getVerticalOffset(layout.fontFamily, layout.fontSize, lineHeightPx);
     expect(Math.abs(baseline - expectedBaseline)).toBeLessThan(0.5);
   });
 
@@ -2019,7 +2114,7 @@ describe("activation lifeline binding", () => {
   });
 });
 
-describe("sequence fragment row background texts", () => {
+describe("sequence fragment text regions", () => {
   const HEADER = 36.272;
   const BODY_A = 90;
   const BODY_B = 240 - HEADER - BODY_A;
@@ -2039,96 +2134,81 @@ describe("sequence fragment row background texts", () => {
     ) as ExcalidrawShapeElement & {
       shape: Extract<SequenceShapeData, { id: "sc-fragment" }>;
     };
-  const makeRowText = (
-    fragment: ExcalidrawShapeElement,
-    rowId: string,
+  const STYLE: TextBlockStyle = {
+    fontFamily: DEFAULT_FONT_FAMILY,
+    fontSize: 13,
+    lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+    textAlign: "left",
+    verticalAlign: "top",
+  };
+  const withRowText = (
+    fragment: ReturnType<typeof makeFragment>,
+    key: "body" | `row:${string}`,
     text: string,
-    verticalAlign: "top" | "middle" = "top",
   ) =>
-    newTextElement({
-      x: fragment.x,
-      y: fragment.y,
-      text,
-      fontSize: 13,
-      fontFamily: DEFAULT_FONT_FAMILY,
-      lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
-      textAlign: "left",
-      verticalAlign,
-      autoResize: false,
-      containerRef: fragmentRowContainerRef(fragment.id, rowId),
+    ({
+      ...fragment,
+      texts: withTextBlock(fragment.texts, key, { text, style: STYLE }),
+    } as ReturnType<typeof makeFragment>);
+
+  it("exposes the operator tab plus one padded region per body row", () => {
+    const fragment = makeFragment();
+    const regions = getTextRegions(fragment);
+    expect(regions.map((region) => region.key)).toEqual([
+      "body",
+      "row:row-a",
+      "row:row-b",
+    ]);
+    expect(regions[0].bounds).toEqual(
+      getSequenceFragmentTextBounds(
+        fragment.width,
+        fragment.height,
+        fragment.shape.fragment,
+      ),
+    );
+    expect(regions[1]).toMatchObject({
+      bounds: {
+        x: TABLE_CELL_TEXT_PADDING_X,
+        y: HEADER + TABLE_CELL_TEXT_PADDING_Y,
+        width: 400 - TABLE_CELL_TEXT_PADDING_X * 2,
+        height: BODY_A - TABLE_CELL_TEXT_PADDING_Y * 2,
+      },
+      wrap: "wrap",
+      fit: "fixed",
+      editable: true,
     });
-
-  it("derives a single-column cell bounds per row", () => {
-    const fragment = makeFragment();
-    expect(
-      getSequenceFragmentRowBounds(
-        fragment.width,
-        fragment.height,
-        fragment.shape.fragment,
-        "row-a",
-      ),
-    ).toEqual({ x: 0, y: HEADER, width: 400, height: BODY_A });
-    expect(
-      getSequenceFragmentRowBounds(
-        fragment.width,
-        fragment.height,
-        fragment.shape.fragment,
-        "missing",
-      ),
-    ).toBeNull();
   });
 
-  it("lays the text out with table cell padding, fixed top-left", () => {
-    const fragment = makeFragment();
-    const text = {
-      ...makeRowText(fragment, "row-a", "hello"),
-      textAlign: "center" as const,
-      verticalAlign: "middle" as const,
-    };
-    const bounds = getSequenceFragmentRowBounds(
-      fragment.width,
-      fragment.height,
-      fragment.shape.fragment,
-      "row-a",
-    )!;
-    const layout = getSequenceFragmentRowBackgroundTextLayout(
-      text,
-      fragment,
-      bounds,
-    );
-    expect(layout.text).toBe("hello");
-    // alignment is owned by the fragment: top-left regardless of the text
-    expect(layout.textAlign).toBe("left");
-    expect(layout.verticalAlign).toBe("top");
-    expect(layout.x).toBe(fragment.x + TABLE_CELL_TEXT_PADDING_X);
-    expect(layout.y).toBe(fragment.y + HEADER + TABLE_CELL_TEXT_PADDING_Y);
-    expect(layout.width).toBeLessThanOrEqual(
-      400 - TABLE_CELL_TEXT_PADDING_X * 2,
-    );
-    expect(layout.angle).toBe(0);
-  });
-
-  it("grows the wrapped row, the fragment, and shifts the lower row text", () => {
-    const fragment = makeFragment();
-    const longText = makeRowText(
-      fragment,
-      "row-a",
+  it("lays row text out top-left and truncates it to the fixed row height", () => {
+    const fragment = withRowText(
+      makeFragment(),
+      "row:row-a",
       "A condition label that wraps onto many lines inside the row width ".repeat(
         6,
       ),
     );
-    const lowerText = makeRowText(fragment, "row-b", "lower");
-    const lowerBefore = getSequenceFragmentRowBackgroundTextLayout(
-      lowerText,
-      fragment,
-      getSequenceFragmentRowBounds(
-        fragment.width,
-        fragment.height,
-        fragment.shape.fragment,
-        "row-b",
-      )!,
+    const layout = getLocalTextRegionLayout(fragment, "row:row-a")!;
+    expect(layout.x).toBe(TABLE_CELL_TEXT_PADDING_X);
+    expect(layout.y).toBe(HEADER + TABLE_CELL_TEXT_PADDING_Y);
+    expect(layout.textAlign).toBe("left");
+    expect(layout.verticalAlign).toBe("top");
+    expect(layout.maxHeight).toBe(BODY_A - TABLE_CELL_TEXT_PADDING_Y * 2);
+    expect(layout.height).toBeLessThanOrEqual(layout.maxHeight!);
+  });
+
+  it("grows the wrapped row, the fragment, and shifts the later rows", () => {
+    const fragment = withRowText(
+      makeFragment(),
+      "row:row-a",
+      "A condition label that wraps onto many lines inside the row width ".repeat(
+        6,
+      ),
     );
-    const scene = new Scene([fragment, longText, lowerText]);
+    const lowerBefore = getLocalTextRegionLayout(
+      withRowText(fragment, "row:row-b", "lower"),
+      "row:row-b",
+    )!;
+    const scene = new Scene([fragment]);
 
     refitSequenceFragmentRowBackgroundTexts(scene, fragment, { grow: true });
 
@@ -2141,45 +2221,118 @@ describe("sequence fragment row background texts", () => {
       live.height,
       6,
     );
-    const liveLower = scene.getNonDeletedElement(lowerText.id)!;
-    expect(liveLower.y).toBeCloseTo(lowerBefore.y + (live.height - 240), 6);
-    const liveText = scene.getNonDeletedElement(longText.id)!;
-    expect(liveText.height).toBeLessThanOrEqual(rows[1].height);
+    const lowerAfter = getLocalTextRegionLayout(
+      withRowText(live, "row:row-b", "lower"),
+      "row:row-b",
+    )!;
+    expect(lowerAfter.y).toBeCloseTo(lowerBefore.y + (live.height - 240), 6);
   });
 
-  it("does not grow rows when grow is off, only re-lays the text", () => {
-    const fragment = makeFragment();
-    const text = {
-      ...makeRowText(fragment, "row-a", "hello"),
-      y: fragment.y,
-    };
-    const scene = new Scene([fragment, text]);
+  it("does not grow rows when grow is off", () => {
+    const fragment = withRowText(makeFragment(), "row:row-a", "hello");
+    const scene = new Scene([fragment]);
     refitSequenceFragmentRowBackgroundTexts(scene, fragment, { grow: false });
-    const live = scene.getNonDeletedElement(fragment.id)!;
-    expect(live.height).toBe(240);
-    const liveText = scene.getNonDeletedElement(text.id)!;
-    expect(liveText.y).toBe(fragment.y + HEADER + TABLE_CELL_TEXT_PADDING_Y);
+    expect(scene.getNonDeletedElement(fragment.id)!.height).toBe(240);
+  });
+
+  it("scales row block font sizes with the font scale", () => {
+    const fragment = withRowText(makeFragment(), "row:row-a", "hello");
+    const scene = new Scene([fragment]);
+    refitSequenceFragmentRowBackgroundTexts(scene, fragment, {
+      grow: false,
+      fontScale: 2,
+    });
+    const live = scene.getNonDeletedElement(fragment.id) as typeof fragment;
+    expect(live.texts?.["row:row-a"]?.style.fontSize).toBe(26);
   });
 
   it("rotates with its fragment", () => {
-    const baseFragment = makeFragment();
     const fragment = {
-      ...baseFragment,
+      ...withRowText(makeFragment(), "row:row-a", "hello"),
       angle: (Math.PI / 2) as Radians,
     };
-    const text = makeRowText(fragment, "row-a", "hello");
-    const bounds = getSequenceFragmentRowBounds(
-      fragment.width,
-      fragment.height,
-      fragment.shape.fragment,
-      "row-a",
-    )!;
-    const layout = getSequenceFragmentRowBackgroundTextLayout(
-      text,
-      fragment,
-      bounds,
-    );
+    const layout = getLocalTextRegionLayout(fragment, "row:row-a")!;
     expect(layout.angle).toBeCloseTo(Math.PI / 2, 6);
-    expect(Number.isFinite(layout.x) && Number.isFinite(layout.y)).toBe(true);
+  });
+
+  it("drops header, unknown and empty keys when normalized", () => {
+    const fragment = makeFragment();
+    const dirty = {
+      ...fragment,
+      texts: {
+        body: { text: "Opt / Loop", style: STYLE },
+        "row:header": { text: "header", style: STYLE },
+        "row:missing": { text: "missing", style: STYLE },
+        "row:row-a": { text: "", style: STYLE },
+        "row:row-b": { text: "keep", style: STYLE },
+      },
+    } as typeof fragment;
+    expect(
+      Object.keys(normalizeSequenceFragmentTexts(dirty).texts ?? {}),
+    ).toEqual(["body", "row:row-b"]);
+  });
+
+  it("keeps text keys across row insert, move and resize", () => {
+    const fragment = withRowText(
+      withRowText(withRowText(makeFragment(), "body", "Opt"), "row:row-a", "A"),
+      "row:row-b",
+      "B",
+    );
+    const withUpdate = (update: {
+      height: number;
+      shape: ReturnType<typeof makeFragment>["shape"];
+    }) =>
+      ({
+        ...fragment,
+        height: update.height,
+        shape: update.shape,
+      } as typeof fragment);
+    const updateTexts = (candidate: typeof fragment) =>
+      Object.keys(candidate.texts ?? {});
+
+    const inserted = insertSequenceFragmentRow(fragment, 1);
+    if (!inserted) {
+      throw new Error("Expected a fragment row insertion");
+    }
+    expect(updateTexts(withUpdate(inserted))).toEqual([
+      "body",
+      "row:row-a",
+      "row:row-b",
+    ]);
+
+    const moved = moveSequenceFragmentRow(fragment, "row-a", 2);
+    if (!moved) {
+      throw new Error("Expected a fragment row move");
+    }
+    expect(updateTexts(withUpdate(moved))).toEqual([
+      "body",
+      "row:row-a",
+      "row:row-b",
+    ]);
+
+    const resized = resizeSequenceFragmentRow(fragment, "row-a", 120);
+    if (!resized) {
+      throw new Error("Expected a fragment row resize");
+    }
+    expect(updateTexts(withUpdate(resized))).toEqual([
+      "body",
+      "row:row-a",
+      "row:row-b",
+    ]);
+  });
+
+  it("fits the operator tab from the body text block", () => {
+    const fragment = normalizeFragment(makeElement("sc-fragment", 400, 240));
+    const fit = getSequenceFragmentOperatorTextFit(fragment, {
+      text: "Opt / Loop".repeat(30),
+      style: STYLE,
+    });
+    if (!fit) {
+      throw new Error("Expected an operator fit");
+    }
+    expect(fit.shape.fragment?.operatorWidth).toBeCloseTo(
+      400 - SEQUENCE_FRAGMENT_TAB_MAX_RIGHT_INSET,
+      6,
+    );
   });
 });

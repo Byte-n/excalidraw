@@ -835,7 +835,6 @@ function test(
       expect(() =>
         validateFractionalIndices(elements, {
           shouldThrow: true,
-          includeBoundTextValidation: true,
           ignoreLogs: true,
         }),
       ).toThrowError(InvalidFractionalIndexError);
@@ -853,7 +852,6 @@ function test(
     expect(() =>
       validateFractionalIndices(syncedElements, {
         shouldThrow: true,
-        includeBoundTextValidation: true,
         ignoreLogs: true,
       }),
     ).not.toThrowError(InvalidFractionalIndexError);

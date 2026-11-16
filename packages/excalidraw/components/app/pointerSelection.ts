@@ -16,7 +16,6 @@ import {
   newFreeDrawElement,
   newArrowElement,
   newLinearElement,
-  hasBoundTextElement,
   isPathALoop,
   bindOrUnbindBindingElement,
   isPointInElement,
@@ -47,8 +46,6 @@ import {
   isNonDeletedElement,
   isStickyNoteElement,
   isShapeWithId,
-  getContainerCenter,
-  getTextContainerSlotAtPosition,
   makeNextSelectedElementIds,
   transformElements,
   updateBoundElements,
@@ -562,7 +559,7 @@ export const beginLinearPointGesture = (
   if (ret.hitElement) {
     pointerDownState.hit.element = ret.hitElement;
   }
-  pointerDownState.hit.arrowLabel = ret.hitBoundText;
+  pointerDownState.hit.arrowLabel = ret.hitLabel;
   if (ret.linearElementEditor) {
     app.setState({ selectedLinearElement: ret.linearElementEditor });
   }
@@ -1148,32 +1145,21 @@ export const handleTextOnPointerDown = (
       arrowEndpoint,
     });
   } else {
-    const element = app.getElementAtPosition(sceneX, sceneY, {
-      includeBoundTextElement: true,
-    });
-
-    // FIXME
     let container = app.getTextBindableContainerAtPosition(sceneX, sceneY);
-
-    if (hasBoundTextElement(element)) {
-      container = element as NonDeleted<ExcalidrawTextContainer>;
-      const labelCenter = app.arrowText.getLabelCenter(element);
-      if (labelCenter) {
-        sceneX = labelCenter.x;
-        sceneY = labelCenter.y;
-      } else if (isShapeWithId(element, "df-process")) {
-        const slot = getTextContainerSlotAtPosition(element, sceneX, sceneY);
-        const center = getContainerCenter(
-          element,
-          app.scene.getNonDeletedElementsMap(),
-          slot ?? undefined,
-        );
-        sceneX = center.x;
-        sceneY = center.y;
-      } else {
-        sceneX = element.x + element.width / 2;
-        sceneY = element.y + element.height / 2;
-      }
+    // 没有标签的线性元素只在指针吸附到中点时才成为标签目标；
+    // 偏离中点的点击仍然落下普通文字（例如关闭端点绑定时的端点旁文字）
+    if (
+      container &&
+      isLinearElement(container) &&
+      !container.texts?.label?.text &&
+      !app.getTextWysiwygSnappedToCenterPosition(
+        sceneX,
+        sceneY,
+        app.state,
+        container,
+      )
+    ) {
+      container = null;
     }
     app.startTextEditing({
       sceneX,

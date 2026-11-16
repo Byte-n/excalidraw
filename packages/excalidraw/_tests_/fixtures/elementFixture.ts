@@ -61,15 +61,18 @@ export const rectangleWithLinkFixture: ExcalidrawElement = {
 export const textFixture: ExcalidrawElement = {
   ...elementBase,
   type: "text",
-  fontSize: 20,
-  baseFontSize: null,
-  fontFamily: DEFAULT_FONT_FAMILY,
   strokeColor: "#1e1e1e",
-  text: "original text",
-  originalText: "original text",
-  textAlign: "left",
-  verticalAlign: "top",
-  containerId: null,
-  lineHeight: 1.25 as any,
-  autoResize: false,
+  texts: {
+    body: {
+      text: "original text",
+      style: {
+        fontFamily: DEFAULT_FONT_FAMILY,
+        fontSize: 20,
+        textAlign: "left",
+        verticalAlign: "top",
+        lineHeight: 1.25 as any,
+      },
+    },
+  },
+  autoResize: true,
 };

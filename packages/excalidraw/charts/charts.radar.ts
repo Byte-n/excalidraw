@@ -7,11 +7,7 @@ import {
   getLineHeight,
 } from "@excalidraw/common";
 
-import {
-  measureText,
-  newLinearElement,
-  newTextElement,
-} from "@excalidraw/element";
+import { measureText, newLinearElement } from "@excalidraw/element";
 
 import type { LocalPoint } from "@excalidraw/math";
 
@@ -26,6 +22,7 @@ import {
 import {
   createRadarAxisLabels,
   createSeriesLegend,
+  createChartTextElement,
   getBackgroundColor,
   getColorOffset,
   getRadarDimensions,
@@ -91,11 +88,12 @@ export const renderRadarChart = (
     ? measureText(titleText, titleFontString, titleLineHeight)
     : null;
   const title = titleText
-    ? newTextElement({
+    ? createChartTextElement({
         backgroundColor,
         ...commonProps,
         text: titleText,
-        originalText: spreadsheet.title ?? titleText,
+        sourceText: spreadsheet.title ?? titleText,
+        autoResize: false,
         x: x + chartWidth / 2,
         y: axisLabelTopY - RADAR_LABEL_OFFSET - titleTextMetrics!.height / 2,
         fontFamily: titleFontFamily,

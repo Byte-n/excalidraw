@@ -290,19 +290,9 @@ describe("table structure ids", () => {
       nested,
       0,
     );
-    const boundText = {
-      ...newTextElement({ x: 20, y: 20, text: "label" }),
-      id: "bound-1",
-      containerId: "member-1",
-    };
-    const memberWithBoundText = {
-      ...member,
-      boundElements: [{ id: "bound-1", type: "text" as const }],
-    };
     const elementsMap = asMap([
       table,
-      memberWithBoundText,
-      boundText,
+      member,
       backgroundText,
       nested,
       nestedMember,
@@ -317,7 +307,6 @@ describe("table structure ids", () => {
     expect(subtree).toEqual(
       expect.arrayContaining([
         "member-1",
-        "bound-1",
         "bg-1",
         "nested-1",
         "nested-member-1",

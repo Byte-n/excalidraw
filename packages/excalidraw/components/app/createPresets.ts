@@ -3,12 +3,12 @@ import {
   DEFAULT_STICKY_NOTE_PRESET_SIZE,
   FRAME_STYLE,
   KEYS,
-  VERTICAL_ALIGN,
   getGridPoint,
 } from "@excalidraw/common";
 
 import {
   TABLE_SWIMLANE_LABEL_FONT_SIZE,
+  cellKey,
   getStickyNoteCreationInk,
   getTableCellIdAt,
   getTablePresetLabelCells,
@@ -19,6 +19,7 @@ import {
   newMagicFrameElement,
   newStickyNoteElement,
   newTableElement,
+  withTextBlock,
 } from "@excalidraw/element";
 
 import type {
@@ -41,7 +42,7 @@ import {
 } from "../shapePresetDefaults";
 
 import { attachDataflowPresetTexts } from "./dataflowPresetText";
-import { buildTableCellBackgroundText } from "./tableCellText";
+import { buildTableCellTextBlock } from "./tableCellText";
 
 import type { ShapePresetDefault } from "../shapePresetDefaults";
 import type App from "../App";
@@ -346,15 +347,12 @@ const TABLE_PRESET_TITLE_KEYS: Record<
 };
 
 /**
- * 表格预设的完整装配：**表格 + 自带标签文字**（`plain` 只有表格本身）。
+ * 表格预设的完整装配：**表格 + 自带标签文本块**（`plain` 只有表格本身）。
+ * 标签直接写进 `texts[cell:<id>]`，不再造文字元素——落地点开就是格区域编辑。
  *
  * 标签文案走 i18n 且按调用时求值——语言可以在会话中切换，模块级常量会把当时
  * 的语言冻住（同 `getMindmapPresetTree`）。格位来自元素层的
- * `getTablePresetLabelCells`，文字居中、竖排换行、竖向居中都由单元格布局算，
- * 因此标签与「双击单元格敲出来的文字」是同一类元素，落地点开就能改。
- *
- * `labelIdentity` 与表格的 `identity` 分开给：预览要求**每个**元素都有固定
- * 身份（一个都不能漏，否则照样推进共享的 id 序列），建表时一个都不给。
+ * `getTablePresetLabelCells`，居中、竖排换行、竖向居中都由单元格布局算。
  *
  * 网格自己的 id 也从表格身份派生（`gridRandomizer`）——行列与单元格同样消耗
  * 共享的随机序列，只固定元素身份是不够的。
@@ -365,7 +363,6 @@ export const createTablePresetDrafts = (
   at: { x: number; y: number },
   containerRef?: DirectContainerRef,
   identity?: CreationIdentity,
-  labelIdentity: (index: number) => CreationIdentity = () => ({}),
 ): NonDeleted<ExcalidrawNonSelectionElement>[] => {
   const table = newTableElement({
     type: "table",
@@ -383,35 +380,33 @@ export const createTablePresetDrafts = (
     return [table];
   }
 
-  // 标签在表格进场景之前装配：布局只需要行列样式，给一份只含这张表的映射
-  const elementsMap = new Map([[table.id, table]]);
-
-  return [
-    table,
-    ...getTablePresetLabelCells(presetId).map((cell, index) => {
-      const cellId = getTableCellIdAt(
-        table.table,
-        cell.rowIndex,
-        cell.columnIndex,
+  const texts = getTablePresetLabelCells(presetId).reduce((acc, cell) => {
+    const cellId = getTableCellIdAt(
+      table.table,
+      cell.rowIndex,
+      cell.columnIndex,
+    );
+    if (!cellId) {
+      throw new Error(
+        `Table preset ${presetId} has no cell at (${cell.rowIndex}, ${cell.columnIndex})`,
       );
-      if (!cellId) {
-        throw new Error(
-          `Table preset ${presetId} has no cell at (${cell.rowIndex}, ${cell.columnIndex})`,
-        );
-      }
-      return buildTableCellBackgroundText(app, table, cellId, {
+    }
+    return withTextBlock(
+      acc,
+      cellKey(cellId),
+      buildTableCellTextBlock(app, {
         text:
           cell.kind === "title"
             ? t(TABLE_PRESET_TITLE_KEYS[presetId])
             : t("toolBar.swimlane"),
-        elementsMap,
         fontSize: TABLE_SWIMLANE_LABEL_FONT_SIZE,
         textAlign: "center",
-        verticalAlign: VERTICAL_ALIGN.MIDDLE,
-        identity: labelIdentity(index),
-      });
-    }),
-  ];
+        verticalAlign: "middle",
+      }),
+    );
+  }, table.texts);
+
+  return [texts ? { ...table, texts } : table];
 };
 
 /**
@@ -438,10 +433,6 @@ export const buildPresetPreviewElements = (
       at,
       containerRef,
       { id: PREVIEW_ELEMENT_ID, seed: PREVIEW_ELEMENT_SEED },
-      (index) => ({
-        id: `${PREVIEW_ELEMENT_ID}:label:${index}`,
-        seed: PREVIEW_ELEMENT_SEED + index + 1,
-      }),
     );
   }
 
@@ -473,15 +464,9 @@ export const buildPresetPreviewElements = (
   }
 
   // 预览与落地必须逐项一致：数据流预设自带文本，预览也要画出来
-  const { container, texts } = attachDataflowPresetTexts(
-    app,
-    element,
-    (index) => ({
-      id: `${PREVIEW_ELEMENT_ID}:text:${index}`,
-      seed: PREVIEW_ELEMENT_SEED + index + 1,
-    }),
-  );
-  return [container, ...texts] as NonDeleted<ExcalidrawNonSelectionElement>[];
+  return [
+    attachDataflowPresetTexts(app, element),
+  ] as NonDeleted<ExcalidrawNonSelectionElement>[];
 };
 
 /**

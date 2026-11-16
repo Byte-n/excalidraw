@@ -1,4 +1,7 @@
 import { convertBoard } from "../src/index.js";
+import { getTextElementText } from "@excalidraw/element";
+
+import type { ExcalidrawTextElement } from "@excalidraw/element/types";
 
 import {
   connectorNode,
@@ -182,22 +185,33 @@ test("z_index 缺失归零：排在显式非零之前", () => {
   ).toBe(true);
 });
 
-test("扁平文本字段进入元素", () => {
+test("扁平文本字段写入元素自身的 texts.body", () => {
   const { elements } = convertBoard([shapeNode({ id: "s" })]);
-  const text = find(elements, "s#text");
-  expect(text.type).toBe("text");
-  expect(text.text).toBe("开始");
-  expect(prop<number>(text, "fontSize")).toBe(14);
-  expect(prop<string>(text, "textAlign")).toBe("center");
-  expect(prop<string>(text, "verticalAlign")).toBe("middle");
-  expect(prop<string | null>(text, "containerId")).toBe("s");
+  expect(elements.some((element) => element.id === "s#text")).toBe(false);
+  const body = prop<{
+    body?: {
+      text: string;
+      style: {
+        fontSize: number;
+        textAlign: string;
+        verticalAlign: string;
+      };
+    };
+  }>(find(elements, "s"), "texts").body!;
+  expect(body.text).toBe("开始");
+  expect(body.style.fontSize).toBe(14);
+  expect(body.style.textAlign).toBe("center");
+  expect(body.style.verticalAlign).toBe("middle");
 });
 
 test("rich_text 按段落拼合为多行纯文本并计入 richTextFlattened", () => {
   const { elements, richTextFlattened } = convertBoard([
     richTextNode({ id: "r" }),
   ]);
-  expect(find(elements, "r#text").text).toBe("第一行\n第二行");
+  expect(elements.some((element) => element.id === "r#text")).toBe(false);
+  expect(
+    prop<{ body?: { text: string } }>(find(elements, "r"), "texts").body?.text,
+  ).toBe("第一行\n第二行");
   expect(richTextFlattened).toBe(1);
 });
 
@@ -263,6 +277,16 @@ test("mind_map 两套层级：画布 parentId 与树 edge", () => {
   expect(prop<string>(child, "role")).toBe("node");
   expect(prop<string | null>(child, "parentId")).toBe("mmRoot");
   expect(prop<string>(root, "graphId")).toBe(prop<string>(child, "graphId"));
+  // 正文内嵌到节点自身，不再产生独立的文字元素
+  expect(elements.some((el) => el.id === "mmRoot#text")).toBe(false);
+  const rootBody = prop<{
+    body?: { text: string; style: { fontSize: number } };
+  }>(root, "texts").body!;
+  expect(rootBody.text).toBe("中心主题");
+  expect(rootBody.style.fontSize).toBe(24);
+  expect(prop<{ body?: { text: string } }>(child, "texts").body?.text).toBe(
+    "分支",
+  );
   // 思维导图树
   expect(child.containerRef).toEqual({ kind: "frameLike", elementId: "sec" });
   const edge = find(elements, "mmL1#edge");
@@ -333,14 +357,20 @@ test("连线 turning_points 与 captions 标签进入元素", () => {
     [70, 40],
     [100, 0],
   ]);
-  const caption = elements.find(
-    (el) => el.type === "text" && el.text === "连接线标签文本",
-  );
-  if (!caption) {
-    throw new Error("caption not found");
-  }
-  expect(prop<string | null>(caption, "containerId")).toBe("c3");
-  expect(prop<number>(caption, "labelPosition")).toBeCloseTo(0.447, 3);
+  const connector = find(elements, "c3");
+  const texts = prop<{
+    label?: { text?: string; placement?: { labelPosition?: number } };
+  }>(connector, "texts");
+  expect(texts?.label?.text).toBe("连接线标签文本");
+  expect(texts?.label?.placement?.labelPosition).toBeCloseTo(0.447, 3);
+  expect(
+    elements.some(
+      (el) =>
+        el.type === "text" &&
+        getTextElementText(el as unknown as ExcalidrawTextElement) ===
+          "连接线标签文本",
+    ),
+  ).toBe(false);
 });
 
 test("sticky_note 填充色与文本，不携带协作身份", () => {
@@ -350,7 +380,11 @@ test("sticky_note 填充色与文本，不携带协作身份", () => {
   expect(note.backgroundColor).toBe("#f6c8c8");
   // user_id 属协作身份信息，不写入场景。
   expect(note).not.toHaveProperty("user_id");
-  expect(find(elements, "s#text").text).toBe("便签文本");
+  // 正文内嵌到便签自身，不再产生独立的文字元素
+  expect(elements.some((el) => el.id === "s#text")).toBe(false);
+  expect(prop<{ body?: { text: string } }>(note, "texts").body?.text).toBe(
+    "便签文本",
+  );
 });
 
 test("paint 点序列进入元素", () => {

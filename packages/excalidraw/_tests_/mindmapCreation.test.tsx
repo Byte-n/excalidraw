@@ -1,6 +1,5 @@
 import {
   buildMindmapGraphFromTree,
-  getBoundTextElement,
   getMindmapAddButtonAffordances,
   getMindmapLayoutConfig,
   getTransformHandles,
@@ -71,14 +70,19 @@ describe("mindmap creation tool", () => {
       ),
     );
   const getBoundText = (node: ExcalidrawElement) =>
-    getBoundTextElement(node, h.app.scene.getNonDeletedElementsMap());
+    isMindmapNodeElement(node) ? node.texts?.body?.text : undefined;
+  const getEditingNodeId = () => h.state.editingTextRegion!.target.elementId;
+  const textElements = () =>
+    h.app.scene
+      .getNonDeletedElements()
+      .filter((element) => element.type === "text");
   const blurEditor = async (editor: HTMLTextAreaElement) => {
     await waitFor(() => {
       expect(editor.onblur).toEqual(expect.any(Function));
       expect(editor.ownerDocument.activeElement).toBe(editor);
     });
     act(() => editor.blur());
-    expect(h.state.editingTextElement).toBeNull();
+    expect(h.state.editingTextRegion).toBeNull();
     expect(editor).not.toBeInTheDocument();
   };
   // 「+」按钮是画布覆盖层（非 DOM）：按几何中心模拟指针点击
@@ -99,9 +103,13 @@ describe("mindmap creation tool", () => {
     UI.clickTool("mindmap");
     new Pointer("mouse").clickAt(300, 240);
 
-    // 建图后立刻进入根节点编辑，占位文字即预设根标签
+    // 建图后立刻进入根节点正文编辑，占位文字即预设根标签
     const editor = await getTextEditor();
     expect(editor.value).toBe(t("mindmapPreset.root"));
+    expect(h.state.editingTextRegion?.target).toEqual({
+      elementId: getEditingNodeId(),
+      region: "body",
+    });
 
     const nodes = getNodes();
     const root = nodes.find((node) => node.role === "root")!;
@@ -119,18 +127,14 @@ describe("mindmap creation tool", () => {
         2,
       );
     }
-    // 每个节点都有绑定文本，根标签用预设占位文字
-    expect(
-      h.app.scene
-        .getNonDeletedElements()
-        .filter((element) => element.type === "text"),
-    ).toHaveLength(10);
-    expect(getBoundText(root)?.originalText).toBe(t("mindmapPreset.root"));
-    expect(root.boundElements).toEqual(
+    // 正文内嵌在节点上：不存在绑定文字元素，根标签用预设占位文字
+    expect(textElements()).toHaveLength(0);
+    expect(getBoundText(root)).toBe(t("mindmapPreset.root"));
+    expect(root.boundElements ?? []).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ type: "text" })]),
     );
 
-    Keyboard.exitTextEditor(editor);
+    await blurEditor(editor);
     // 一次点击 = 一整张图 = 一步历史
     Keyboard.undo();
     expect(getNodes()).toHaveLength(0);
@@ -140,65 +144,75 @@ describe("mindmap creation tool", () => {
     expect(getEdges()).toHaveLength(9);
   });
 
-  describe.each(["blur", "Escape"] as const)(
-    "提交预设根节点为空（%s）",
-    (submitWith) => {
-      it.each([
-        { name: "清空占位文字", values: [""] as string[] },
-        { name: "输入后清空", values: ["临时内容", ""] },
-        { name: "仅含空白", values: [" \n  "] },
-      ])(
-        "$name：保留整张导图与连线，并支持一步撤销重做",
-        async ({ values }) => {
-          await renderScene();
-          UI.clickTool("mindmap");
-          new Pointer("mouse").clickAt(300, 240);
-          const editor = await getTextEditor();
-          const textElement = h.state.editingTextElement!;
-          const rootId = textElement.containerId!;
-          const nodeIds = getNodes().map((node) => node.id);
-          const edgeIds = getEdges().map((edge) => edge.id);
-          const historyLength = API.getUndoStack().length;
+  describe.each(["blur"] as const)("提交预设根节点为空（%s）", (submitWith) => {
+    it.each([
+      { name: "清空占位文字", values: [""] as string[] },
+      { name: "输入后清空", values: ["临时内容", ""] },
+      { name: "仅含空白", values: [" \n  "] },
+    ])("$name：保留整张导图与连线，并支持一步撤销重做", async ({ values }) => {
+      await renderScene();
+      UI.clickTool("mindmap");
+      new Pointer("mouse").clickAt(300, 240);
+      const editor = await getTextEditor();
+      const rootId = getEditingNodeId();
+      const nodeIds = getNodes().map((node) => node.id);
+      const edgeIds = getEdges().map((edge) => edge.id);
+      const historyLength = API.getUndoStack().length;
 
-          for (const value of values) {
-            updateTextEditor(editor, value);
-          }
-          if (submitWith === "blur") {
-            await blurEditor(editor);
-          } else {
-            Keyboard.exitTextEditor(editor);
-          }
+      for (const value of values) {
+        updateTextEditor(editor, value);
+      }
+      if (submitWith === "blur") {
+        await blurEditor(editor);
+      } else {
+        await blurEditor(editor);
+      }
 
-          // 节点与连线都保留，只丢弃清空的标签文字
-          expect(getNodes().map((node) => node.id)).toEqual(nodeIds);
-          expect(getEdges().map((edge) => edge.id)).toEqual(edgeIds);
-          expect(h.app.scene.getElement(textElement.id)?.isDeleted).toBe(true);
-          expect(
-            getBoundText(getNodes().find((node) => node.id === rootId)!),
-          ).toBeNull();
-          expect(API.getUndoStack()).toHaveLength(historyLength + 1);
+      // 节点与连线都保留，只丢弃清空的正文
+      expect(getNodes().map((node) => node.id)).toEqual(nodeIds);
+      expect(getEdges().map((edge) => edge.id)).toEqual(edgeIds);
+      expect(textElements()).toHaveLength(0);
+      expect(
+        getBoundText(getNodes().find((node) => node.id === rootId)!),
+      ).toBeUndefined();
+      expect(API.getUndoStack()).toHaveLength(historyLength + 1);
 
-          // 撤销恢复占位标签；整张图与连线仍在
-          Keyboard.undo();
-          expect(
-            getBoundText(getNodes().find((node) => node.id === rootId)!)
-              ?.originalText,
-          ).toBe(t("mindmapPreset.root"));
-          expect(getNodes().map((node) => node.id)).toEqual(nodeIds);
-          expect(getEdges().map((edge) => edge.id)).toEqual(edgeIds);
-          Keyboard.redo();
-          expect(
-            getBoundText(getNodes().find((node) => node.id === rootId)!),
-          ).toBeNull();
-        },
+      // 撤销恢复占位标签；整张图与连线仍在
+      Keyboard.undo();
+      expect(getBoundText(getNodes().find((node) => node.id === rootId)!)).toBe(
+        t("mindmapPreset.root"),
       );
-    },
-  );
+      expect(getNodes().map((node) => node.id)).toEqual(nodeIds);
+      expect(getEdges().map((edge) => edge.id)).toEqual(edgeIds);
+      Keyboard.redo();
+      expect(
+        getBoundText(getNodes().find((node) => node.id === rootId)!),
+      ).toBeUndefined();
+    });
+  });
+
+  it("Escape 取消节点编辑时不写入正文", async () => {
+    await renderScene(soloFixture());
+    UI.clickTool("mindmap");
+    const root = getNodes()[0];
+    const original = getBoundText(root);
+    const historyLength = API.getUndoStack().length;
+    new Pointer("mouse").doubleClickAt(
+      root.x + root.width / 2,
+      root.y + root.height / 2,
+    );
+    const editor = await getTextEditor();
+    updateTextEditor(editor, "不会提交");
+    Keyboard.exitTextEditor(editor);
+    expect(h.state.editingTextRegion).toBeNull();
+    expect(getBoundText(getNodes()[0])).toBe(original);
+    expect(API.getUndoStack()).toHaveLength(historyLength);
+  });
 
   describe.each(["Tab", "Enter", "button"] as const)(
     "%s 创建的空子节点",
     (createWith) => {
-      describe.each(["blur", "Escape"] as const)("%s 提交", (submitWith) => {
+      describe.each(["blur"] as const)("%s 提交", (submitWith) => {
         it.each([
           { name: "始终为空", values: [] as string[] },
           { name: "输入后清空", values: ["临时内容", ""] },
@@ -220,8 +234,7 @@ describe("mindmap creation tool", () => {
             }
             const editor = await getTextEditor();
             expect(editor.value).toBe("");
-            const textElement = h.state.editingTextElement!;
-            const nodeId = textElement.containerId!;
+            const nodeId = getEditingNodeId();
             expect(nodeId).toBe(getNodes()[1].id);
             const nodeIds = getNodes().map((node) => node.id);
             const edges = getEdges().map(({ id, parentId, childId }) => ({
@@ -238,24 +251,18 @@ describe("mindmap creation tool", () => {
             if (submitWith === "blur") {
               await blurEditor(editor);
             } else {
-              Keyboard.exitTextEditor(editor);
+              await blurEditor(editor);
             }
 
-            expect(h.state.editingTextElement).toBeNull();
+            expect(h.state.editingTextRegion).toBeNull();
             expect(getNodes().map((node) => node.id)).toEqual(nodeIds);
             expect(getEdges()).toEqual(
               edges.map((edge) => expect.objectContaining(edge)),
             );
-            expect(h.app.scene.getElement(textElement.id)?.isDeleted).toBe(
-              true,
-            );
+            expect(textElements()).toHaveLength(0);
             expect(
-              getNodes().find((node) => node.id === nodeId)?.boundElements,
-            ).not.toEqual(
-              expect.arrayContaining([
-                expect.objectContaining({ type: "text" }),
-              ]),
-            );
+              getBoundText(getNodes().find((node) => node.id === nodeId)!),
+            ).toBeUndefined();
             expect(API.getUndoStack()).toHaveLength(historyLength + 1);
 
             Keyboard.undo();
@@ -285,14 +292,14 @@ describe("mindmap creation tool", () => {
       Keyboard.keyPress("Tab");
       const editor = await getTextEditor();
       updateTextEditor(editor, "原有节点");
-      Keyboard.exitTextEditor(editor);
+      await blurEditor(editor);
       API.setSelectedElements([getNodes()[1]]);
     });
 
     describe.each(["Tab", "Enter", "button"] as const)(
       "%s 继续创建节点",
       (createWith) => {
-        describe.each(["blur", "Escape"] as const)("%s 提交", (submitWith) => {
+        describe.each(["blur"] as const)("%s 提交", (submitWith) => {
           it.each(["", "新增节点\n第二行\n第三行"])(
             "文字为 %j 时，单步撤销重做恢复节点、连线和原有布局",
             async (value) => {
@@ -310,12 +317,12 @@ describe("mindmap creation tool", () => {
                 Keyboard.keyPress(createWith);
               }
               const editor = await getTextEditor();
-              const nodeId = h.state.editingTextElement!.containerId!;
+              const nodeId = getEditingNodeId();
               updateTextEditor(editor, value);
               if (submitWith === "blur") {
                 await blurEditor(editor);
               } else {
-                Keyboard.exitTextEditor(editor);
+                await blurEditor(editor);
               }
 
               expect(getNodes()).toHaveLength(3);
@@ -339,11 +346,10 @@ describe("mindmap creation tool", () => {
       },
     );
 
-    it("布局移动已有节点、文字和连线时递增版本，不改变未移动元素", async () => {
+    it("布局移动已有节点和连线时递增版本，不改变未移动元素", async () => {
       const [root, child] = getNodes();
-      const text = getBoundText(child)!;
       const edge = getEdges()[0];
-      const moved = [child, text, edge].map(({ id, version, y }) => ({
+      const moved = [child, edge].map(({ id, version, y }) => ({
         id,
         version,
         y,
@@ -352,7 +358,7 @@ describe("mindmap creation tool", () => {
       Keyboard.keyPress("Enter");
       const editor = await getTextEditor();
       updateTextEditor(editor, "兄弟节点");
-      Keyboard.exitTextEditor(editor);
+      await blurEditor(editor);
 
       for (const previous of moved) {
         const next = h.app.scene.getNonDeletedElement(previous.id)!;
@@ -368,7 +374,7 @@ describe("mindmap creation tool", () => {
       Keyboard.keyPress("Enter");
       let editor = await getTextEditor();
       updateTextEditor(editor, "兄弟节点");
-      Keyboard.exitTextEditor(editor);
+      await blurEditor(editor);
       const before = getSceneSnapshot();
       const historyLength = API.getUndoStack().length;
       const child = getNodes()[1];
@@ -400,8 +406,7 @@ describe("mindmap creation tool", () => {
 
     it("重复提交相同布局不改变已有连线和其他节点的版本或引用", async () => {
       const [root, child] = getNodes();
-      const text = getBoundText(child)!;
-      const unchanged = [child, text, ...getEdges()].map((element) => ({
+      const unchanged = [child, ...getEdges()].map((element) => ({
         element,
         version: element.version,
       }));
@@ -412,7 +417,7 @@ describe("mindmap creation tool", () => {
         root.y + root.height / 2,
       );
       const editor = await getTextEditor();
-      Keyboard.exitTextEditor(editor);
+      await blurEditor(editor);
 
       expect(getSceneSnapshot()).toEqual(before);
       for (const { element, version } of unchanged) {
@@ -428,7 +433,7 @@ describe("mindmap creation tool", () => {
       Keyboard.keyPress("Enter");
       const editor = await getTextEditor();
       updateTextEditor(editor, "兄弟节点");
-      Keyboard.exitTextEditor(editor);
+      await blurEditor(editor);
 
       const siblingBefore = getNodes()[2];
       const before = getSceneSnapshot();
@@ -455,7 +460,7 @@ describe("mindmap creation tool", () => {
       Keyboard.keyPress("Enter");
       const editor = await getTextEditor();
       updateTextEditor(editor, "兄弟节点");
-      Keyboard.exitTextEditor(editor);
+      await blurEditor(editor);
 
       const siblingBefore = getNodes()[2];
       const historyLength = API.getUndoStack().length;
@@ -492,7 +497,7 @@ describe("mindmap creation tool", () => {
       Keyboard.keyPress("Enter");
       const editor = await getTextEditor();
       updateTextEditor(editor, "兄弟节点");
-      Keyboard.exitTextEditor(editor);
+      await blurEditor(editor);
 
       const siblingBefore = getNodes()[2];
       const siblingBeforeY = siblingBefore.y;
@@ -546,7 +551,7 @@ describe("mindmap creation tool", () => {
       Keyboard.keyPress("Enter");
       let editor = await getTextEditor();
       updateTextEditor(editor, "被撤销的节点");
-      Keyboard.exitTextEditor(editor);
+      await blurEditor(editor);
       const removedNodeId = getNodes()[2].id;
       const removedEdgeId = getEdges().find(
         (edge) => edge.childId === removedNodeId,
@@ -558,7 +563,7 @@ describe("mindmap creation tool", () => {
       Keyboard.keyPress("Enter");
       editor = await getTextEditor();
       updateTextEditor(editor, "新分支");
-      Keyboard.exitTextEditor(editor);
+      await blurEditor(editor);
       expect(getEdges().some((edge) => edge.id === removedEdgeId)).toBe(false);
       expect(getNodes().some((node) => node.id === removedNodeId)).toBe(false);
       const branch = getSceneSnapshot();
@@ -599,7 +604,7 @@ describe("mindmap creation tool", () => {
         API.setSelectedElements([getNodes()[0]]);
         Keyboard.keyPress("Tab");
         const editor = await getTextEditor();
-        Keyboard.exitTextEditor(editor);
+        await blurEditor(editor);
       }
 
       const nodeId = getNodes()[kind === "root" ? 0 : 1].id;
@@ -614,14 +619,14 @@ describe("mindmap creation tool", () => {
       expect(editor.value).toBe("");
       updateTextEditor(editor, "新内容");
       await blurEditor(editor);
-      expect(getBoundText(node())?.originalText).toBe("新内容");
+      expect(getBoundText(node())).toBe("新内容");
       expect(getNodes().map((element) => element.id)).toEqual(nodeIds);
 
       Keyboard.undo();
       expect(getNodes().map((element) => element.id)).toEqual(nodeIds);
-      expect(getBoundText(node())).toBeNull();
+      expect(getBoundText(node())).toBeUndefined();
       Keyboard.redo();
-      expect(getBoundText(node())?.originalText).toBe("新内容");
+      expect(getBoundText(node())).toBe("新内容");
       expect(getEdges()).toHaveLength(kind === "root" ? 0 : 1);
     },
   );
@@ -635,24 +640,24 @@ describe("mindmap creation tool", () => {
 
     for (const nodeId of nodeIds) {
       const node = () => getNodes().find((element) => element.id === nodeId)!;
-      const originalText = getBoundText(node())!.originalText;
+      const originalText = getBoundText(node())!;
       pointer.doubleClickAt(
         node().x + node().width / 2,
         node().y + node().height / 2,
       );
       const editor = await getTextEditor();
-      expect(h.state.editingTextElement?.containerId).toBe(nodeId);
+      expect(getEditingNodeId()).toBe(nodeId);
       expect(editor.value).toBe(originalText);
       updateTextEditor(editor, "");
       await blurEditor(editor);
-      expect(getBoundText(node())).toBeNull();
+      expect(getBoundText(node())).toBeUndefined();
       expect(getNodes().map((element) => element.id)).toEqual(nodeIds);
       expect(getEdges().map((edge) => edge.id)).toEqual(edgeIds);
 
       Keyboard.undo();
-      expect(getBoundText(node())?.originalText).toBe(originalText);
+      expect(getBoundText(node())).toBe(originalText);
       Keyboard.redo();
-      expect(getBoundText(node())).toBeNull();
+      expect(getBoundText(node())).toBeUndefined();
       expect(getNodes().map((element) => element.id)).toEqual(nodeIds);
       expect(getEdges().map((edge) => edge.id)).toEqual(edgeIds);
     }

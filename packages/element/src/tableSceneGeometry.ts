@@ -1,36 +1,25 @@
-import {
-  getFontString,
-  TABLE_CELL_TEXT_PADDING_X,
-  TABLE_CELL_TEXT_PADDING_Y,
-} from "@excalidraw/common";
-
-import { getBoundTextElement } from "./textElement";
 import { getIndexedTableCellChildren } from "./tableChildrenIndex";
 import { isSequenceFragmentElement } from "./compositeShape/sequenceOutline";
-import {
-  getTableBackgroundTextStyle,
-  getTableSubtreeElements,
-} from "./tableContainer";
+import { getTableSubtreeElements } from "./tableContainer";
 import { getMemberTranslationsForRows } from "./tableOps";
-import { resolveTableBackgroundTextFontWeight } from "./tableRender";
-import { getTableCellBounds, getTableHeight } from "./tableStruct";
 import {
-  isTableElement,
-  isFrameLikeElement,
-  isTextElement,
-} from "./typeChecks";
-import { measureText } from "./textMeasurements";
-import { wrapText } from "./textWrapping";
+  getTableCellTextPadding,
+  resolveTableCellTextStyle,
+} from "./tableTextStyle";
+import { getTableCellBounds, getTableHeight } from "./tableStruct";
+import { getTextBlock } from "./text/ops";
+import { layoutTextBlock } from "./text/layout";
+import { cellKey } from "./text/keys";
+import { isTableElement, isFrameLikeElement } from "./typeChecks";
 
 import type { Scene } from "./Scene";
 import type {
   ExcalidrawElement,
   ExcalidrawTableElement,
-  ExcalidrawTextElement,
-  ElementsMap,
   NonDeleted,
   TableDataV1,
 } from "./types";
+import type { TextBlockMap } from "./text/types";
 
 export const collectCellMemberIds = (
   scene: Scene,
@@ -59,10 +48,6 @@ export const collectCellMemberIds = (
         )) {
           ids.add(descendant.id);
         }
-      }
-      const boundText = getBoundTextElement(member, elementsMap);
-      if (boundText) {
-        ids.add(boundText.id);
       }
     }
   }
@@ -96,14 +81,6 @@ export const buildMemberDeltas = (
     }
   }
 
-  const elementsMap = scene.getNonDeletedElementsMap();
-  for (const [memberId, delta] of deltas) {
-    const member = elementsMap.get(memberId);
-    const boundText = member ? getBoundTextElement(member, elementsMap) : null;
-    if (boundText && !deltas.has(boundText.id)) {
-      deltas.set(boundText.id, delta);
-    }
-  }
   return deltas;
 };
 
@@ -147,88 +124,40 @@ export const applyMemberTranslations = (
   return movedAny;
 };
 
-export const getCellBackgroundTextLayout = (
-  text: ExcalidrawTextElement,
-  table: ExcalidrawTableElement,
-  bounds: NonNullable<ReturnType<typeof getTableCellBounds>>,
-  elementsMap: ElementsMap,
-) => {
-  const style = getTableBackgroundTextStyle(text, elementsMap);
-  // an explicit style override is a single number applied to both axes
-  const paddingX = style?.padding ?? TABLE_CELL_TEXT_PADDING_X;
-  const paddingY = style?.padding ?? TABLE_CELL_TEXT_PADDING_Y;
-  const availableWidth = Math.max(bounds.width - paddingX * 2, 1);
-  // measurement must use the same weight the renderer derives (header band
-  // gets 600), otherwise wrapped width and row growth disagree with painting
-  const font = getFontString({
-    fontSize: text.fontSize,
-    fontFamily: text.fontFamily,
-    fontWeight: resolveTableBackgroundTextFontWeight(text, elementsMap),
-  });
-  const wrapped = wrapText(text.originalText, font, availableWidth);
-  const measured = measureText(wrapped, font, text.lineHeight);
-  const width = Math.min(measured.width, availableWidth);
-  const height = measured.height;
-  const horizontalAlign = style?.horizontalAlign ?? text.textAlign;
-  const verticalAlign = style?.verticalAlign ?? text.verticalAlign;
-  const freeWidth = Math.max(0, bounds.width - paddingX * 2 - width);
-  const freeHeight = Math.max(0, bounds.height - paddingY * 2 - height);
-  return {
-    text: wrapped,
-    width,
-    height,
-    textAlign: horizontalAlign,
-    verticalAlign,
-    x:
-      table.x +
-      bounds.x +
-      paddingX +
-      (horizontalAlign === "center"
-        ? freeWidth / 2
-        : horizontalAlign === "right"
-        ? freeWidth
-        : 0),
-    y:
-      table.y +
-      bounds.y +
-      paddingY +
-      (verticalAlign === "middle"
-        ? freeHeight / 2
-        : verticalAlign === "bottom"
-        ? freeHeight
-        : 0),
-  };
-};
-
-export const refitCellBackgroundTexts = (
-  scene: Scene,
-  table: NonDeleted<ExcalidrawTableElement>,
-  cellIds: readonly string[],
-): void => {
-  const elementsMap = scene.getNonDeletedElementsMap();
-  const textsByCell = new Map<string, ExcalidrawTextElement[]>();
+/**
+ * 表格文本布局：按每个可见格的区域算所需高度，返回「被撑高的末行 → 新行高」。
+ * 合并格只撑它跨度的最后一行，与既有行增长语义一致；宽度不参与求解。
+ */
+export const getTableTextLayout = (
+  table: Pick<ExcalidrawTableElement, "table">,
+  blockMap: TextBlockMap | undefined,
+): Map<string, number> => {
   const requiredHeights = new Map<string, number>();
-  for (const cellId of cellIds) {
-    const texts = getIndexedTableCellChildren(
-      elementsMap,
-      table.id,
-      cellId,
-      "backgroundText",
-    );
-    if (!texts?.length) {
+  for (const cell of table.table.cells) {
+    if (cell.mergedInto) {
       continue;
     }
-    const bounds = getTableCellBounds(table.table, cellId);
+    const block = getTextBlock(blockMap, cellKey(cell.id));
+    if (!block?.text) {
+      continue;
+    }
+    const bounds = getTableCellBounds(table.table, cell.id);
     if (!bounds) {
       continue;
     }
-    const cell = table.table.cells.find((candidate) => candidate.id === cellId);
-    if (!cell) {
-      continue;
-    }
-    const startRow = table.table.rows.findIndex(
-      (candidate) => candidate.id === cell.rowId,
-    );
+    const style = resolveTableCellTextStyle(table.table, cell, block.style);
+    const padding = getTableCellTextPadding(table.table, cell);
+    const layout = layoutTextBlock({
+      text: block.text,
+      fontSize: style.fontSize,
+      fontFamily: style.fontFamily,
+      fontWeight: style.fontWeight,
+      lineHeight: style.lineHeight,
+      maxWidth: Math.max(1, bounds.width - padding.x * 2),
+      wrap: "wrap",
+      growWidth: false,
+    });
+    const startRow = table.table.rows.findIndex((row) => row.id === cell.rowId);
     const spanRows = table.table.rows.slice(
       startRow,
       startRow + (cell.rowSpan ?? 1),
@@ -237,79 +166,50 @@ export const refitCellBackgroundTexts = (
     if (!row) {
       continue;
     }
-    const backgroundTexts = texts.filter(isTextElement);
-    textsByCell.set(cellId, backgroundTexts);
-    for (const backgroundText of backgroundTexts) {
-      const layout = getCellBackgroundTextLayout(
-        backgroundText,
-        table,
-        bounds,
-        elementsMap,
-      );
-      const paddingY =
-        getTableBackgroundTextStyle(backgroundText, elementsMap)?.padding ??
-        TABLE_CELL_TEXT_PADDING_Y;
-      requiredHeights.set(
-        row.id,
-        Math.max(
-          requiredHeights.get(row.id) ?? 0,
-          layout.height + paddingY * 2 - (bounds.height - row.height),
-        ),
-      );
-    }
+    const required =
+      layout.height + padding.y * 2 - (bounds.height - row.height);
+    requiredHeights.set(
+      row.id,
+      Math.max(requiredHeights.get(row.id) ?? 0, required),
+    );
   }
+  return requiredHeights;
+};
 
+/**
+ * 按区域文本撑高表格的最后一行，并平移后续行的成员。只增长、不收缩；
+ * 返回是否有行被撑高。
+ */
+export const applyTableTextLayout = (
+  scene: Scene,
+  table: NonDeleted<ExcalidrawTableElement>,
+): boolean => {
+  const requiredHeights = getTableTextLayout(table, table.texts);
   const rowsNeedGrowth = table.table.rows.some((row) => {
     const requiredHeight = requiredHeights.get(row.id);
     return requiredHeight !== undefined && requiredHeight > row.height;
   });
-  if (rowsNeedGrowth) {
-    const nextTable: TableDataV1 = {
-      ...table.table,
-      rows: table.table.rows.map((row) => {
-        const requiredHeight = requiredHeights.get(row.id);
-        return requiredHeight !== undefined && requiredHeight > row.height
-          ? { ...row, height: requiredHeight }
-          : row;
-      }),
-    };
-    const translations = getMemberTranslationsForRows(table.table, nextTable);
-    applyMemberTranslations(scene, table, "row", translations);
-    scene.mutateElement(
-      table,
-      {
-        table: nextTable,
-        height: getTableHeight(nextTable),
-      },
-      { informMutation: false, isDragging: true },
-    );
+  if (!rowsNeedGrowth) {
+    return false;
   }
-
-  const currentTable = scene.getNonDeletedElement(table.id);
-  if (!currentTable || !isTableElement(currentTable)) {
-    return;
-  }
-  const currentElementsMap = scene.getNonDeletedElementsMap();
-  for (const [cellId, backgroundTexts] of textsByCell) {
-    const bounds = getTableCellBounds(currentTable.table, cellId);
-    if (!bounds) {
-      continue;
-    }
-    for (const backgroundText of backgroundTexts) {
-      const liveText = currentElementsMap.get(backgroundText.id);
-      if (!liveText || !isTextElement(liveText)) {
-        continue;
-      }
-      scene.mutateElement(
-        liveText,
-        getCellBackgroundTextLayout(
-          liveText,
-          currentTable,
-          bounds,
-          currentElementsMap,
-        ),
-        { informMutation: false, isDragging: true },
-      );
-    }
-  }
+  const nextTable: TableDataV1 = {
+    ...table.table,
+    rows: table.table.rows.map((row) => {
+      const requiredHeight = requiredHeights.get(row.id);
+      return requiredHeight !== undefined && requiredHeight > row.height
+        ? { ...row, height: requiredHeight }
+        : row;
+    }),
+  };
+  const translations = getMemberTranslationsForRows(table.table, nextTable);
+  applyMemberTranslations(scene, table, "row", translations);
+  scene.mutateElement(
+    table,
+    {
+      table: nextTable,
+      height: getTableHeight(nextTable),
+    },
+    { informMutation: false, isDragging: true },
+  );
+  return true;
 };

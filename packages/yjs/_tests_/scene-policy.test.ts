@@ -31,7 +31,21 @@ const failure = (run: () => void) => {
 };
 
 const text = (id: string, content: string) =>
-  element(id, 0, { type: "text", text: content, originalText: content });
+  element(id, 0, {
+    type: "text",
+    texts: {
+      body: {
+        text: content,
+        style: {
+          fontFamily: 1,
+          fontSize: 20,
+          lineHeight: 1.25,
+          textAlign: "left",
+          verticalAlign: "top",
+        },
+      },
+    },
+  });
 const image = (id: string, fileId: string) =>
   element(id, 0, {
     type: "image",
@@ -151,7 +165,7 @@ describe("场景门槛", () => {
         ),
       ).code,
     ).toBe("invalid_scene");
-    // 文本内容与 originalText 允许出现 data: 前缀，用户文本不参与该判定。
+    // 文本内容允许出现 data: 前缀，用户文本不参与该判定。
     expect(() =>
       assertScenePolicy(scene([text("a", "data:image/png")]), scenePolicy()),
     ).not.toThrow();

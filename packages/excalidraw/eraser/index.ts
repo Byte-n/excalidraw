@@ -1,9 +1,7 @@
 import { arrayToMap, easeOut, THEME } from "@excalidraw/common";
 
 import {
-  computeBoundTextPosition,
   doBoundsIntersect,
-  getBoundTextElement,
   getElementBounds,
   getElementLineSegments,
   getFreedrawOutlineAsSegments,
@@ -25,8 +23,6 @@ import {
 import { getElementsInGroup } from "@excalidraw/element";
 
 import { shouldTestInside } from "@excalidraw/element";
-import { hasBoundTextElement, isBoundToContainer } from "@excalidraw/element";
-import { getBoundTextElementId } from "@excalidraw/element";
 
 import type { Bounds } from "@excalidraw/common";
 
@@ -128,18 +124,6 @@ export class EraserTrail extends AnimatedTrail {
             this.groupsToErase.delete(shallowestGroupId);
           }
 
-          if (isBoundToContainer(element)) {
-            this.elementsToErase.delete(element.containerId);
-          }
-
-          if (hasBoundTextElement(element)) {
-            const boundText = getBoundTextElementId(element);
-
-            if (boundText) {
-              this.elementsToErase.delete(boundText);
-            }
-          }
-
           this.elementsToErase.delete(element.id);
         }
       } else if (!restoreToErase && !this.elementsToErase.has(element.id)) {
@@ -163,18 +147,6 @@ export class EraserTrail extends AnimatedTrail {
               this.elementsToErase.add(elementInGroup.id);
             }
             this.groupsToErase.add(shallowestGroupId);
-          }
-
-          if (hasBoundTextElement(element)) {
-            const boundText = getBoundTextElementId(element);
-
-            if (boundText) {
-              this.elementsToErase.add(boundText);
-            }
-          }
-
-          if (isBoundToContainer(element)) {
-            this.elementsToErase.add(element.containerId);
           }
 
           this.elementsToErase.add(element.id);
@@ -265,8 +237,6 @@ const eraserTest = (
     return false;
   }
 
-  const boundTextElement = getBoundTextElement(element, elementsMap);
-
   if (isArrowElement(element) || (isLineElement(element) && !element.polygon)) {
     const tolerance = Math.max(
       element.strokeWidth,
@@ -288,17 +258,6 @@ const eraserTest = (
 
   return (
     intersectElementWithLineSegment(element, elementsMap, pathSegment, 0, true)
-      .length > 0 ||
-    (!!boundTextElement &&
-      intersectElementWithLineSegment(
-        {
-          ...boundTextElement,
-          ...computeBoundTextPosition(element, boundTextElement, elementsMap),
-        },
-        elementsMap,
-        pathSegment,
-        0,
-        true,
-      ).length > 0)
+      .length > 0
   );
 };

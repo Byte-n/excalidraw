@@ -33,7 +33,6 @@ export const actionSelectAll = register({
       .filter(
         (element) =>
           !element.isDeleted &&
-          !(isTextElement(element) && element.containerId) &&
           !element.locked,
       )
       .reduce((map: Record<ExcalidrawElement["id"], true>, element) => {

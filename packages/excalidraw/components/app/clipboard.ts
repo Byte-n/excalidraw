@@ -12,13 +12,11 @@ import {
 } from "@excalidraw/common";
 import {
   newTextElement,
-  isBoundToContainer,
   isTextElement,
   embeddableURLValidator,
   maybeParseEmbedSrc,
   getEmbedLink,
-  getContainerElement,
-  redrawTextBoundingBox,
+  getTextElementTextPatch,
   getVisibleSceneBounds,
   wrapText,
   normalizeText,
@@ -57,6 +55,10 @@ import { tryParseSpreadsheet } from "../../charts";
 import { isSidebarDockedAtom } from "../Sidebar/Sidebar";
 
 import { pasteTableRangeIntoCell, pasteTSVIntoCell } from "./tableClipboard";
+import {
+  applyEmbeddedTextLayout,
+  getElementEmbeddedTextTarget,
+} from "./textStyleTargets";
 
 import type App from "../App";
 import type { ClipboardData, PastedMixedContent } from "../../clipboard";
@@ -466,15 +468,20 @@ export const addElementsFromPasteOrLibrary = (
 
   app.scene.replaceAllElements(nextElements);
 
-  duplicatedElements.forEach((newElement) => {
-    if (isTextElement(newElement) && isBoundToContainer(newElement)) {
-      const container = getContainerElement(
-        newElement,
-        app.scene.getElementsMapIncludingDeleted(),
-      );
-      redrawTextBoundingBox(newElement, container, app.scene);
+  // 粘贴含内嵌正文的形状时按新文本重新求解 auto-fit 尺寸
+  for (const element of duplicatedElements) {
+    if (
+      element.type !== "composite" &&
+      element.type !== "flow" &&
+      element.type !== "dataflow"
+    ) {
+      continue;
     }
-  });
+    const target = getElementEmbeddedTextTarget(element);
+    if (target) {
+      applyEmbeddedTextLayout(app.scene, element.id, target.region);
+    }
+  }
 
   // paste event may not fire FontFace loadingdone event in Safari, hence loading font faces manually
   if (isSafari) {
@@ -656,12 +663,15 @@ export const addTextFromPaste = (
           x: startX,
           y: startY,
           text,
-          originalText,
           lineHeight,
           autoResize: !isTextUnwrapped,
           containerRef,
         });
-        acc.push(element);
+        acc.push(
+          isTextUnwrapped
+            ? { ...element, ...getTextElementTextPatch(element, originalText) }
+            : element,
+        );
         currentY += element.height + LINE_GAP;
       } else {
         const prevLine = lines[idx - 1]?.trim();

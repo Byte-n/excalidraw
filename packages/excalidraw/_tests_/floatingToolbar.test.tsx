@@ -269,7 +269,7 @@ describe("浮动工具栏（T2 容器与定位）", () => {
     expect(bar.style.top).toBe(`${edited.y - FLOATBAR_GAP}px`);
   });
 
-  it("图形文本编辑态：锚定容器图形本身，而非其中的文本", async () => {
+  it("图形文本编辑态：锚定容器图形本身，而非其中的文本区域", async () => {
     await render(<Excalidraw handleKeyboardGlobally />);
     act(() => {
       API.setAppState({ width: 800, height: 600 });
@@ -280,31 +280,36 @@ describe("浮动工具栏（T2 容器与定位）", () => {
       y: 200,
       width: 100,
       height: 60,
-      boundElements: [],
+      texts: {
+        body: {
+          text: "ola",
+          style: {
+            fontFamily: 1,
+            fontSize: 20,
+            lineHeight: 1.25,
+            textAlign: "center",
+            verticalAlign: "middle",
+          } as any,
+        },
+      },
     });
-    const boundText = API.createElement({
-      type: "text",
-      text: "ola",
-      x: 310,
-      y: 220,
-      width: 40,
-      height: 20,
-      containerId: shape.id,
-    });
-    API.setElements([shape, boundText]);
-    API.updateElement(shape, {
-      boundElements: [{ type: "text", id: boundText.id }],
-    });
+    API.setElements([shape]);
 
-    mouse.doubleClickOn(boundText);
-    expect(h.state.editingTextElement?.id).toBe(boundText.id);
-    expect(h.state.selectedElementIds).toEqual({});
+    mouse.doubleClickAt(
+      shape.x + shape.width / 2,
+      shape.y + shape.height / 2,
+    );
+    expect(h.state.editingTextRegion?.target.elementId).toBe(shape.id);
+    expect(h.state.editingTextElement).toBe(null);
+    // 区域编辑保留元素选中态
+    expect(h.state.selectedElementIds).toEqual({ [shape.id]: true });
 
     const bar = queryFloatbar()!;
     expect(bar.getAttribute("aria-label")).toBe("Selected element properties");
-    // 锚定图形的包围盒（300,200,100×60）——输入时图形尺寸会随文本变化
-    expect(bar.style.left).toBe("350px");
-    expect(bar.style.top).toBe(`${200 - FLOATBAR_GAP}px`);
+    // 锚定图形的包围盒——输入时图形尺寸会随文本变化
+    const edited = h.app.scene.getNonDeletedElement(shape.id)!;
+    expect(bar.style.left).toBe(`${edited.x + edited.width / 2}px`);
+    expect(bar.style.top).toBe(`${edited.y - FLOATBAR_GAP}px`);
   });
 
   it("全锁定选区：浮动栏内联「已锁定 + 解锁」，解锁后恢复属性面板", async () => {
@@ -708,11 +713,11 @@ describe("浮动工具栏（T2 容器与定位）", () => {
       const table = createTable();
       selectCell(table, 0);
 
-      // Enter = 编辑所选单元格的背景文本
+      // Enter = 编辑所选单元格的区域文本
       act(() => {
         Keyboard.keyPress(KEYS.ENTER);
       });
-      expect(h.state.editingTextElement).not.toBeNull();
+      expect(h.state.editingTextRegion?.target.elementId).toBe(table.id);
 
       const bar = queryFloatbar()!;
       // 文本属性接管：字体/对齐 + 文本色板（描边色域）

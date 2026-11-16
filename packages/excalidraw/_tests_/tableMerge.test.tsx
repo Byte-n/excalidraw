@@ -1,9 +1,13 @@
 import { act } from "react-dom/test-utils";
 
-import type {
-  ExcalidrawTableElement,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+import {
+  cellKey,
+  getTableCellTextBaseStyle,
+  getTextBlock,
+  withTextBlock,
+} from "@excalidraw/element";
+
+import type { ExcalidrawTableElement } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
 
@@ -26,47 +30,24 @@ describe("table cell merge", () => {
   });
 
   it("joins background text and remaps members in one scene operation", () => {
-    const table = API.createElement({
+    const base = API.createElement({
       type: "table",
       x: 100,
       y: 100,
       rowCount: 2,
       columnCount: 2,
     });
-    const firstId = table.table.cells[0].id;
-    const secondId = table.table.cells[1].id;
-    const first = API.createElement({
-      type: "text",
-      x: 100,
-      y: 100,
-      width: 160,
-      height: 56,
-      text: "first",
-      originalText: "first",
-      autoResize: false,
-      containerRef: {
-        kind: "tableCell",
-        elementId: table.id,
-        cellId: firstId,
-        role: "backgroundText",
-      },
-    } as any);
-    const second = API.createElement({
-      type: "text",
-      x: 260,
-      y: 100,
-      width: 160,
-      height: 56,
-      text: "second",
-      originalText: "second",
-      autoResize: false,
-      containerRef: {
-        kind: "tableCell",
-        elementId: table.id,
-        cellId: secondId,
-        role: "backgroundText",
-      },
-    } as any);
+    const firstId = base.table.cells[0].id;
+    const secondId = base.table.cells[1].id;
+    const style = getTableCellTextBaseStyle();
+    const table = {
+      ...base,
+      texts: withTextBlock(
+        withTextBlock(base.texts, cellKey(firstId), { text: "first", style }),
+        cellKey(secondId),
+        { text: "second", style },
+      ),
+    };
     const shape = API.createElement({
       type: "rectangle",
       x: 275,
@@ -80,7 +61,7 @@ describe("table cell merge", () => {
         role: "content",
       },
     });
-    API.setElements([table, first, second, shape]);
+    API.setElements([table, shape]);
     act(() =>
       h.app.setState({
         tableCellSelection: {
@@ -98,16 +79,10 @@ describe("table cell merge", () => {
     expect(
       current.table.cells.find((cell) => cell.id === secondId)?.mergedInto,
     ).toBe(firstId);
-    expect(
-      (
-        h.elements.find(
-          (element) => element.id === first.id,
-        ) as ExcalidrawTextElement
-      ).originalText,
-    ).toBe("first\nsecond");
-    expect(
-      h.elements.find((element) => element.id === second.id)?.isDeleted,
-    ).toBe(true);
+    expect(getTextBlock(current.texts, cellKey(firstId))?.text).toBe(
+      "first\nsecond",
+    );
+    expect(getTextBlock(current.texts, cellKey(secondId))).toBeUndefined();
     expect(
       h.elements.find((element) => element.id === shape.id)?.containerRef,
     ).toMatchObject({ cellId: firstId });
@@ -115,18 +90,14 @@ describe("table cell merge", () => {
     expect(
       h.elements.find((element) => element.id === shape.id)?.containerRef,
     ).toMatchObject({ cellId: firstId });
-    const splitText = h.elements.find(
-      (element) => element.id === first.id,
-    ) as ExcalidrawTextElement;
     const splitTable = h.elements.find(
       (element): element is ExcalidrawTableElement => element.id === table.id,
     )!;
-    expect(splitText.width).toBeGreaterThan(0);
-    expect(splitText.x + splitText.width).toBeLessThanOrEqual(
-      splitTable.x + splitTable.table.columns[0].width,
+    // 拆分后锚点保留文本，新格从空开始
+    expect(getTextBlock(splitTable.texts, cellKey(firstId))?.text).toBe(
+      "first\nsecond",
     );
-    expect(splitText.x).toBe(112);
-    expect(splitText.originalText).toBe("first\nsecond");
+    expect(getTextBlock(splitTable.texts, cellKey(secondId))).toBeUndefined();
   });
 
   it("keeps a shift-click range within one table", () => {

@@ -20,7 +20,6 @@ export const actionToggleCropEditor = register({
   perform(elements, appState, _, app) {
     const selectedElement = app.scene.getSelectedElements({
       selectedElementIds: appState.selectedElementIds,
-      includeBoundTextElement: true,
     })[0] as ExcalidrawImageElement;
 
     return {

@@ -1,30 +1,20 @@
 import {
   getActiveTextElement,
-  applyShapeOperation,
-  applyConnectorOperation,
-  isShapeElement,
   isSequenceFragmentElement,
-  fitSequenceFragmentOperator,
-  redrawTextBoundingBox,
-  getBoundTextElement,
   frameLikeContainerRef,
   isContainerBackgroundText,
-  isFragmentRowBackgroundText,
-  isTableCellBackgroundText,
   isTextElement,
-  isValidTextContainer,
+  hitElementLabel,
   isShapeWithId,
-  getTextContainerSlotAtPosition,
-  refitSequenceFragmentRowBackgroundTexts,
+  getSequenceFragmentRowIndexAt,
+  getSequenceFragmentRowLayout,
+  getTextRegionAtPosition,
+  textRegionKey,
 } from "@excalidraw/element";
 
 import { flushSync } from "react-dom";
 import {
-  getContainerElement,
-  getContainerCenter,
-  getStickyNoteLayout,
   isNonDeletedElement,
-  isStickyNoteElement,
   newElementWith,
   refreshTextDimensions,
   updateBoundElements,
@@ -32,32 +22,33 @@ import {
 } from "@excalidraw/element";
 import { makeNextSelectedElementIds } from "@excalidraw/element";
 import { sceneCoordsToViewportCoords } from "@excalidraw/common";
+import { pointFrom, pointRotateRads } from "@excalidraw/math";
+import type { LocalPoint } from "@excalidraw/math";
 import {
   DEFAULT_VERTICAL_ALIGN,
-  VERTICAL_ALIGN,
   TEXT_TO_CENTER_SNAP_THRESHOLD,
-  getFontString,
+  VERTICAL_ALIGN,
   getLineHeight,
 } from "@excalidraw/common";
 
 import {
-  DEFAULT_BOUND_TEXT_LABEL_POSITION,
-  getApproxMinLineWidth,
-  getApproxMinLineHeight,
   getLineHeightInPx,
+  getTextElementStyle,
+  getTextElementText,
+  getTextElementTextPatch,
   isLinearElement,
+  LinearElementEditor,
   newTextElement,
 } from "@excalidraw/element";
 
 import type {
   ExcalidrawElement,
-  ExcalidrawTextContainer,
+  ExcalidrawSequenceElement,
   ExcalidrawTextElement,
   NonDeleted,
   NonDeletedExcalidrawElement,
-  TextContainerSlot,
 } from "@excalidraw/element/types";
-import type { ArrowEndpoint } from "@excalidraw/element";
+import type { ArrowEndpoint, TextRegionKey } from "@excalidraw/element";
 import type { Radians } from "@excalidraw/math";
 
 import { actionTextAutoResize } from "../../actions/actionTextAutoResize";
@@ -66,42 +57,89 @@ import { isPointHittingTextAutoResizeHandle } from "../../textAutoResizeHandle";
 import { textWysiwyg } from "../../wysiwyg/textWysiwyg";
 import { withBatchedUpdates } from "../../reactUtils";
 
-import * as tableController from "./table";
-import * as fragmentController from "./fragment";
+import { isEmbeddedTextElement, startRegionTextEditing } from "./regionText";
 import { commitCanvasElementOperation } from "./sceneOperations";
 
 import type App from "../App";
 
 import type { AppState } from "../../types";
 
+/** 组合片段按场景点选中的文本区域：正文行取 `row:<rowId>`，表头落到页签。 */
+const getFragmentTextRegionAtPosition = (
+  fragment: ExcalidrawSequenceElement,
+  sceneX: number,
+  sceneY: number,
+): TextRegionKey => {
+  if (!isSequenceFragmentElement(fragment)) {
+    return "body";
+  }
+  const [, localY] = pointRotateRads(
+    pointFrom(
+      sceneX - fragment.x - fragment.width / 2,
+      sceneY - fragment.y - fragment.height / 2,
+    ),
+    pointFrom(0, 0),
+    -fragment.angle as Radians,
+  );
+  const rowIndex = getSequenceFragmentRowIndexAt(
+    fragment.height,
+    fragment.shape.fragment,
+    localY + fragment.height / 2,
+  );
+  if (rowIndex < 1) {
+    return "body";
+  }
+  const rows = getSequenceFragmentRowLayout(
+    fragment.height,
+    fragment.shape.fragment,
+  ).rows;
+  return rows[rowIndex] ? textRegionKey.row(rows[rowIndex].id) : "body";
+};
+
+/** 场景点转换到元素局部坐标（先平移到元素左上角，再反向旋转）。 */
+const getLocalPoint = (
+  element: ExcalidrawElement,
+  sceneX: number,
+  sceneY: number,
+): LocalPoint => {
+  const [x, y] = pointRotateRads(
+    pointFrom(
+      sceneX - element.x - element.width / 2,
+      sceneY - element.y - element.height / 2,
+    ),
+    pointFrom(0, 0),
+    -element.angle as Radians,
+  );
+  return pointFrom(x + element.width / 2, y + element.height / 2);
+};
+
 export const getTextWysiwygSnappedToCenterPosition = (
   app: App,
   x: number,
   y: number,
   appState: AppState,
-  container?: ExcalidrawTextContainer | null,
-  slot?: TextContainerSlot,
+  container?: ExcalidrawElement | null,
 ) => {
-  if (container) {
-    let elementCenterX = container.x + container.width / 2;
-    let elementCenterY = container.y + container.height / 2;
-    const elementCenter = getContainerCenter(
+  if (!container) {
+    return;
+  }
+  let elementCenterX = container.x + container.width / 2;
+  let elementCenterY = container.y + container.height / 2;
+  if (isLinearElement(container)) {
+    const center = LinearElementEditor.getLabelCenter(
       container,
       app.scene.getNonDeletedElementsMap(),
-      slot,
     );
-    if (elementCenter) {
-      elementCenterX = elementCenter.x;
-      elementCenterY = elementCenter.y;
-    }
-    const distanceToCenter = Math.hypot(x - elementCenterX, y - elementCenterY);
-    if (distanceToCenter < TEXT_TO_CENTER_SNAP_THRESHOLD) {
-      const { x: viewportX, y: viewportY } = sceneCoordsToViewportCoords(
-        { sceneX: elementCenterX, sceneY: elementCenterY },
-        appState,
-      );
-      return { viewportX, viewportY, elementCenterX, elementCenterY };
-    }
+    elementCenterX = center[0];
+    elementCenterY = center[1];
+  }
+  const distanceToCenter = Math.hypot(x - elementCenterX, y - elementCenterY);
+  if (distanceToCenter < TEXT_TO_CENTER_SNAP_THRESHOLD) {
+    const { x: viewportX, y: viewportY } = sceneCoordsToViewportCoords(
+      { sceneX: elementCenterX, sceneY: elementCenterY },
+      appState,
+    );
+    return { viewportX, viewportY, elementCenterX, elementCenterY };
   }
 };
 
@@ -118,213 +156,45 @@ export const handleTextWysiwyg = (
 ) => {
   const elementsMap = app.scene.getElementsMapIncludingDeleted();
 
-  /**
-   * The fragment's first row is the operator tab: widen the tab to the label
-   * before wrapping it, and grow the header row (and the element) by the
-   * resulting line count. The bound text is laid out again against the
-   * resized tab so the editor and canvas agree.
-   */
-  const refitFragmentOperator = (
-    fragmentId: string,
-    textId: string,
-    fallbackText: ExcalidrawTextElement,
-    redraw = true,
-  ) => {
-    const fragment = app.scene.getNonDeletedElement(fragmentId);
-    const liveText = app.scene.getNonDeletedElement(textId);
-    const text = liveText ?? fallbackText;
-    if (
-      !fragment ||
-      !isSequenceFragmentElement(fragment) ||
-      !isTextElement(text)
-    ) {
-      return;
-    }
-    if (liveText && isTextElement(liveText) && !liveText.autoResize) {
-      // the operator label has exactly one text mode: container-bound
-      app.scene.mutateElement(liveText, { autoResize: true });
-    }
-    const fit = fitSequenceFragmentOperator(fragment, text);
-    if (!fit) {
-      return;
-    }
-    const heightDelta = fit.height - fragment.height;
-    if (
-      Math.abs(heightDelta) > 1e-6 ||
-      fit.shape.fragment?.operatorWidth !==
-        fragment.shape.fragment?.operatorWidth
-    ) {
-      // A grown header expands the box downward from its local top edge; on a
-      // rotated fragment the unrotated x/y must be compensated so the visual
-      // top-left stays put instead of drifting around the new center.
-      const angle = fragment.angle ?? 0;
-      app.scene.mutateElement(fragment, {
-        height: fit.height,
-        shape: fit.shape,
-        ...(heightDelta !== 0 && angle
-          ? {
-              x: fragment.x + (Math.sin(angle) * heightDelta) / 2,
-              y: fragment.y + ((Math.cos(angle) - 1) * heightDelta) / 2,
-            }
-          : {}),
-      });
-    }
-    // the header row may have changed height: body rows (and their background
-    // texts) move with it
-    const fittedFragment = app.scene.getNonDeletedElement(fragment.id);
-    if (fittedFragment && isSequenceFragmentElement(fittedFragment)) {
-      refitSequenceFragmentRowBackgroundTexts(app.scene, fittedFragment, {
-        grow: false,
-      });
-    }
-    if (!redraw) {
-      return;
-    }
-    const liveFragment = app.scene.getNonDeletedElement(fragment.id);
-    if (
-      liveFragment &&
-      liveText &&
-      isTextElement(liveText) &&
-      isSequenceFragmentElement(liveFragment)
-    ) {
-      redrawTextBoundingBox(liveText, liveFragment, app.scene);
-    }
-  };
-
   const updateElement = (nextOriginalText: string, isDeleted: boolean) => {
-    // The fragment's first row is an operator label: hard line breaks are
-    // normalized to spaces, automatic wrapping is driven by the tab width.
-    if (
-      element.containerId &&
-      isSequenceFragmentElement(elementsMap.get(element.containerId))
-    ) {
-      nextOriginalText = nextOriginalText.replace(/\s*[\r\n]+\s*/g, " ");
-    }
     const latestTextElement = app.scene.getElement(
       element.id,
     ) as ExcalidrawTextElement | null;
     if (!latestTextElement || !isTextElement(latestTextElement)) {
       return;
     }
-    const container = getContainerElement(latestTextElement, elementsMap);
-    if (
-      latestTextElement.containerSlot === "title" &&
-      container &&
-      isShapeWithId(container, "df-process")
-    ) {
-      nextOriginalText = nextOriginalText.replace(/\s*[\r\n]+\s*/g, " ");
-      app.scene.mutateElement(latestTextElement, {
-        originalText: nextOriginalText,
-        isDeleted,
-      });
-      if (!isDeleted) {
-        redrawTextBoundingBox(latestTextElement, container, app.scene);
-      }
-      return;
-    }
-    // When a composite/linear container's bound text is submitted empty or as
-    // whitespace, the text must be deleted. handleSubmit has already detached
-    // the text from the container's boundElements, so the composite/connector
-    // label-update path below cannot rediscover the text to delete it — it looks
-    // the bound text up via the (now-empty) boundElements. Mark the text deleted
-    // directly instead, without refreshing dimensions (the text is going away,
-    // and composite geometry is owned by the shape model).
-    if (
-      container &&
-      (isShapeElement(container) || isLinearElement(container)) &&
-      isDeleted
-    ) {
-      app.scene.replaceAllElements([
-        ...app.scene.getElementsIncludingDeleted().map((_element) =>
-          _element.id === latestTextElement.id && isTextElement(_element)
-            ? newElementWith(_element, {
-                originalText: nextOriginalText,
-                isDeleted: true,
-              })
-            : _element,
-        ),
-      ]);
-      if (isSequenceFragmentElement(container)) {
-        refitFragmentOperator(
-          container.id,
-          latestTextElement.id,
-          { ...latestTextElement, originalText: "" },
-          false,
-        );
-      }
-      return;
-    }
-    if (
-      container &&
-      (isShapeElement(container) || isLinearElement(container)) &&
-      (nextOriginalText || isDeleted) &&
-      (nextOriginalText !== latestTextElement.originalText || isDeleted)
-    ) {
-      const input = app.scene.getElementsIncludingDeleted();
-      const result = isShapeElement(container)
-        ? applyShapeOperation(input, {
-            action: "update",
-            target: { elementId: container.id },
-            text: isDeleted ? "" : nextOriginalText,
-          })
-        : applyConnectorOperation(input, {
-            action: "update",
-            target: { elementId: container.id },
-            label: isDeleted ? "" : nextOriginalText,
-          });
-      commitCanvasElementOperation(app.scene, result);
-      if (isSequenceFragmentElement(container)) {
-        refitFragmentOperator(container.id, latestTextElement.id, {
-          ...latestTextElement,
-          originalText: nextOriginalText,
-        });
-      }
-      return;
-    }
-    const stickyContainer =
-      container && isStickyNoteElement(container) ? container : null;
-    const stickyLayout = stickyContainer
-      ? getStickyNoteLayout(stickyContainer, latestTextElement, {
-          originalText: nextOriginalText,
-        })
-      : null;
 
     app.scene.replaceAllElements([
       ...app.scene.getElementsIncludingDeleted().map((_element) => {
-        if (
-          stickyLayout &&
-          _element.id === stickyContainer?.id &&
-          isStickyNoteElement(_element)
-        ) {
-          return newElementWith(_element, stickyLayout.container);
-        }
         if (_element.id === latestTextElement.id && isTextElement(_element)) {
+          const textPatch = getTextElementTextPatch(_element, nextOriginalText);
+          let layoutPatch: {
+            width?: number;
+            height?: number;
+            x?: number;
+            y?: number;
+          } = {};
+          // 单元格背景文字由表格布局管理尺寸，其余独立文字按内容重排
+          if (!isContainerBackgroundText(_element)) {
+            const refreshed = refreshTextDimensions(
+              _element,
+              elementsMap,
+              nextOriginalText,
+            );
+            if (refreshed) {
+              const { text: _displayText, ...dimensions } = refreshed;
+              layoutPatch = dimensions;
+            }
+          }
           return newElementWith(_element, {
-            originalText: nextOriginalText,
+            ...textPatch,
+            ...layoutPatch,
             isDeleted: isDeleted ?? _element.isDeleted,
-            ...(isContainerBackgroundText(_element)
-              ? {}
-              : stickyLayout?.text ??
-                refreshTextDimensions(
-                  _element,
-                  getContainerElement(_element, elementsMap),
-                  elementsMap,
-                  nextOriginalText,
-                )),
           });
         }
         return _element;
       }),
     ]);
-
-    if (stickyContainer) {
-      const latestContainer = app.scene.getNonDeletedElement(
-        stickyContainer.id,
-      );
-      if (latestContainer) {
-        updateBoundElements(latestContainer, app.scene);
-      }
-    }
   };
 
   app.textWysiwygSubmitHandler = textWysiwyg({
@@ -345,29 +215,17 @@ export const handleTextWysiwyg = (
         updateBoundElements(element, app.scene);
       }
     }),
-    onTextLayoutReady: withBatchedUpdates(() => {
-      if (isTableCellBackgroundText(element)) {
-        tableController.refitTableCellBackgroundText(app, element.id);
-      } else if (isFragmentRowBackgroundText(element)) {
-        fragmentController.refitFragmentRowBackgroundText(app, element.id);
-      }
-    }),
     onSubmit: withBatchedUpdates(({ viaKeyboard, nextOriginalText }) => {
       app.textWysiwygSubmitHandler = null;
       const isDeleted = !nextOriginalText.trim();
       updateElement(nextOriginalText, isDeleted);
-      if (isTableCellBackgroundText(element)) {
-        tableController.refitTableCellBackgroundText(app, element.id);
-      } else if (isFragmentRowBackgroundText(element)) {
-        fragmentController.refitFragmentRowBackgroundText(app, element.id);
-      }
-      const didCreateMindmapNode = app.mindmap.handleTextSubmit(element);
       const elementIdToSelect =
         viaKeyboard &&
         !app.isToolLocked() &&
         app.state.activeTool.type !== "autoshape" &&
-        !isContainerBackgroundText(element)
-          ? element.containerId || (!isDeleted ? element.id : null)
+        !isContainerBackgroundText(element) &&
+        !isDeleted
+          ? element.id
           : null;
 
       if (elementIdToSelect) {
@@ -386,7 +244,7 @@ export const handleTextWysiwyg = (
       if (isDeleted) {
         fixBindingsAfterDeletion(app.scene.getNonDeletedElements(), [element]);
       }
-      if (!isDeleted || isExistingElement || didCreateMindmapNode) {
+      if (!isDeleted || isExistingElement) {
         app.store.scheduleCapture();
       }
       flushSync(() => {
@@ -404,7 +262,7 @@ export const handleTextWysiwyg = (
     autoSelect: !app.editorInterface.isTouchScreen,
   });
   app.deselectElements();
-  updateElement(element.originalText, false);
+  updateElement(getTextElementText(element), false);
 };
 
 export type TextApp = Pick<
@@ -418,12 +276,12 @@ export type TextApp = Pick<
 >;
 
 export const isEditingTextContent = (app: Pick<TextApp, "state">) =>
-  !!app.state.editingTextElement || isTextElement(app.state.newElement);
+  !!app.state.editingTextElement ||
+  !!app.state.editingTextRegion ||
+  isTextElement(app.state.newElement);
 
 export const getSelectedTextElement = (
   app: TextApp,
-  container?: ExcalidrawTextContainer | null,
-  slot?: TextContainerSlot,
 ): NonDeleted<ExcalidrawTextElement> | null => {
   const selectedElements = app.scene.getSelectedElements(app.state);
   if (selectedElements.length !== 1) {
@@ -431,17 +289,7 @@ export const getSelectedTextElement = (
   }
 
   const selectedElement = selectedElements[0]!;
-  if (isTextElement(selectedElement)) {
-    return selectedElement;
-  }
-  if (!container) {
-    return null;
-  }
-  return getBoundTextElement(
-    selectedElement,
-    app.scene.getNonDeletedElementsMap(),
-    slot,
-  ) as NonDeleted<ExcalidrawTextElement> | null;
+  return isTextElement(selectedElement) ? selectedElement : null;
 };
 
 export const getTextElementAtPosition = (
@@ -449,19 +297,21 @@ export const getTextElementAtPosition = (
   x: number,
   y: number,
 ): NonDeleted<ExcalidrawTextElement> | null => {
-  const element = app.getElementAtPosition(x, y, {
-    includeBoundTextElement: true,
-  });
+  const element = app.getElementAtPosition(x, y);
   return element && isTextElement(element) && !element.isDeleted
     ? element
     : null;
 };
 
+/**
+ * 单击已选中的区域文本元素（形状、便签、脑图节点、表格、片段、生命线，
+ * 或命中了标签的线性元素）时进入区域编辑；其余返回 null / undefined。
+ */
 export const getSelectedTextEditingContainerAtPosition = (
   app: TextApp,
   hitElement: NonDeletedExcalidrawElement | null,
   sceneCoords: { x: number; y: number },
-): ExcalidrawTextContainer | null | undefined => {
+): ExcalidrawElement | null | undefined => {
   const selectedElements = app.scene.getSelectedElements(app.state);
   if (
     selectedElements.length !== 1 ||
@@ -475,18 +325,17 @@ export const getSelectedTextEditingContainerAtPosition = (
   if (isTextElement(selectedElement)) {
     return null;
   }
-  if (!isValidTextContainer(selectedElement)) {
-    return undefined;
+  // 线性元素的标签没有独立文字元素，命中标签布局即进入编辑
+  if (isLinearElement(selectedElement)) {
+    return hitElementLabel(
+      pointFrom(sceneCoords.x, sceneCoords.y),
+      selectedElement,
+      app.scene.getNonDeletedElementsMap(),
+    )
+      ? selectedElement
+      : undefined;
   }
-
-  const hitTextElement = getTextElementAtPosition(
-    app,
-    sceneCoords.x,
-    sceneCoords.y,
-  );
-  return hitTextElement?.containerId === selectedElement.id
-    ? selectedElement
-    : undefined;
+  return isEmbeddedTextElement(selectedElement) ? selectedElement : undefined;
 };
 
 export const isHittingTextAutoResizeHandle = (
@@ -495,20 +344,6 @@ export const isHittingTextAutoResizeHandle = (
   point: Readonly<{ x: number; y: number }>,
 ): boolean => {
   const activeTextElement = getActiveTextElement(selectedElements, app.state);
-  // A fragment operator label is fixed to the container-bound mode; its
-  // width is owned by the tab and the reset handle must never appear.
-  if (
-    activeTextElement?.containerId &&
-    isSequenceFragmentElement(
-      app.scene.getNonDeletedElement(activeTextElement.containerId),
-    )
-  ) {
-    return false;
-  }
-  // Dataflow title text is a fixed single-line slot; it never resizes.
-  if (activeTextElement?.containerSlot === "title") {
-    return false;
-  }
   return !!(
     activeTextElement &&
     !activeTextElement.isDeleted &&
@@ -561,7 +396,7 @@ export const startTextEditing = (
     sceneY: number;
     /** whether to attempt to insert at element center if applicable */
     insertAtParentCenter?: boolean;
-    container?: ExcalidrawTextContainer | null;
+    container?: ExcalidrawElement | null;
     autoEdit?: boolean;
     initialCaretSceneCoords?: { x: number; y: number };
     /**
@@ -571,8 +406,6 @@ export const startTextEditing = (
     arrowEndpoint?: ArrowEndpoint | null;
   },
 ) => {
-  let shouldBindToContainer = false;
-
   // Resolved here rather than by the caller so that the stroke width the
   // binding gap derives from (see `getBindingGap`) is, by construction, the
   // one the text is created with below.
@@ -594,109 +427,61 @@ export const startTextEditing = (
     sceneY = arrowEndpointBinding.anchor[1];
   }
 
-  const containerSlot =
-    container && !isLinearElement(container)
-      ? getTextContainerSlotAtPosition(container, sceneX, sceneY)
-      : null;
-  if (
-    container &&
-    insertAtParentCenter &&
-    (containerSlot === "title" || isShapeWithId(container, "df-process"))
-  ) {
-    const center = getContainerCenter(
-      container,
-      app.scene.getNonDeletedElementsMap(),
-      containerSlot ?? undefined,
-    );
-    sceneX = center.x;
-    sceneY = center.y;
+  // 区域文本容器（形状家族、便签、脑图节点、表格、片段、生命线）与线性元素
+  // 的标签都直接进入区域编辑，不创建文字元素
+  if (container) {
+    if (isNonDeletedElement(container)) {
+      if (isLinearElement(container)) {
+        startRegionTextEditing(app, container, "label", {
+          initialCaretSceneCoords,
+          autoSelect: true,
+        });
+        return;
+      }
+      if (isEmbeddedTextElement(container)) {
+        // 数据流处理图形的标题栏是独立区域，其余家族只有正文；
+        // 组合片段按命中的行选择 `row:<rowId>`，表头落到 operator 页签
+        const region: TextRegionKey =
+          isShapeWithId(container, "df-process") &&
+          getTextRegionAtPosition(
+            container,
+            getLocalPoint(container, sceneX, sceneY),
+          ) === "title"
+            ? "title"
+            : isSequenceFragmentElement(container)
+            ? getFragmentTextRegionAtPosition(container, sceneX, sceneY)
+            : "body";
+        startRegionTextEditing(app, container, region, {
+          initialCaretSceneCoords,
+          autoSelect: true,
+        });
+      }
+    }
+    return;
   }
 
-  let parentCenterPosition =
-    insertAtParentCenter &&
-    app.getTextWysiwygSnappedToCenterPosition(
-      sceneX,
-      sceneY,
-      app.state,
-      container,
-      containerSlot ?? undefined,
-    );
-  if (container && parentCenterPosition) {
-    const boundTextElementToContainer = getBoundTextElement(
-      container,
-      app.scene.getNonDeletedElementsMap(),
-      containerSlot ?? undefined,
-    );
-    if (!boundTextElementToContainer) {
-      shouldBindToContainer = true;
-    }
-  }
   const existingTextElement = arrowEndpointBinding
     ? null
-    : app.getSelectedTextElement(container, containerSlot ?? undefined) ||
-      (container && isLinearElement(container)
-        ? getBoundTextElement(container, app.scene.getNonDeletedElementsMap())
-        : null) ||
+    : app.getSelectedTextElement() ||
       app.getTextElementAtPosition(sceneX, sceneY);
 
-  const fontFamily =
-    existingTextElement?.fontFamily || app.state.currentItemFontFamily;
+  const fontFamily = existingTextElement
+    ? getTextElementStyle(existingTextElement).fontFamily
+    : app.state.currentItemFontFamily;
 
-  const lineHeight =
-    existingTextElement?.lineHeight || getLineHeight(fontFamily);
+  const lineHeight = existingTextElement
+    ? getTextElementStyle(existingTextElement).lineHeight
+    : getLineHeight(fontFamily);
   const fontSize = app.state.currentItemFontSize;
 
-  if (
-    !existingTextElement &&
-    shouldBindToContainer &&
-    container &&
-    !isLinearElement(container) &&
-    !isStickyNoteElement(container)
-  ) {
-    const fontString = {
-      fontSize,
-      fontFamily,
-    };
-    const minWidth = getApproxMinLineWidth(
-      getFontString(fontString),
-      lineHeight,
-    );
-    const minHeight = getApproxMinLineHeight(fontSize, lineHeight);
-    const newHeight = Math.max(container.height, minHeight);
-    const newWidth = Math.max(container.width, minWidth);
-    app.scene.mutateElement(container, {
-      height: newHeight,
-      width: newWidth,
-    });
-    if (isShapeWithId(container, "df-process")) {
-      const center = getContainerCenter(
-        container,
-        app.scene.getNonDeletedElementsMap(),
-        containerSlot ?? undefined,
-      );
-      sceneX = center.x;
-      sceneY = center.y;
-    } else {
-      sceneX = container.x + newWidth / 2;
-      sceneY = container.y + newHeight / 2;
-    }
-    if (parentCenterPosition) {
-      parentCenterPosition = app.getTextWysiwygSnappedToCenterPosition(
-        sceneX,
-        sceneY,
-        app.state,
-        container,
-        containerSlot ?? undefined,
-      );
-    }
-  }
+  const parentCenterPosition =
+    insertAtParentCenter &&
+    app.getTextWysiwygSnappedToCenterPosition(sceneX, sceneY, app.state);
 
   const textCreationGridPoint = app.getTextCreationGridPoint(sceneX, sceneY);
 
   const newTextElementPosition = arrowEndpointBinding
-    ? // the anchor is dictated by the arrow, so neither the grid nor the
-      // caret-centering fudge may nudge it
-      { x: sceneX, y: sceneY }
+    ? { x: sceneX, y: sceneY }
     : parentCenterPosition
     ? {
         x: parentCenterPosition.elementCenterX,
@@ -707,8 +492,7 @@ export const startTextEditing = (
         x: textCreationGridPoint?.x ?? sceneX,
         y:
           textCreationGridPoint === null
-            ? // Free text starts from a point cursor, so center the first line box on it.
-              sceneY - getLineHeightInPx(fontSize, lineHeight) / 2
+            ? sceneY - getLineHeightInPx(fontSize, lineHeight) / 2
             : textCreationGridPoint.y,
       }
     : {
@@ -721,25 +505,12 @@ export const startTextEditing = (
     y: newTextElementPosition.y,
   });
 
-  // container has higher priority. Only add to frame if container is in the same frame.
-  const frameId =
-    topLayerFrame &&
-    (!shouldBindToContainer ||
-      !container ||
-      container.containerRef?.elementId === topLayerFrame.id)
-      ? topLayerFrame.id
-      : null;
-
   const element =
     existingTextElement ||
     newTextElement({
       x: newTextElementPosition.x,
       y: newTextElementPosition.y,
-      // a note's stroke color is its text color: the label inherits it
-      strokeColor:
-        shouldBindToContainer && isStickyNoteElement(container)
-          ? container.strokeColor
-          : app.state.currentItemStrokeColor,
+      strokeColor: app.state.currentItemStrokeColor,
       backgroundColor: app.state.currentItemBackgroundColor,
       fillStyle: app.state.currentItemFillStyle,
       strokeWidth: app.getCurrentItemStrokeWidth("text"),
@@ -747,10 +518,6 @@ export const startTextEditing = (
       opacity: app.state.currentItemOpacity,
       text: "",
       fontSize,
-      baseFontSize:
-        shouldBindToContainer && isStickyNoteElement(container)
-          ? fontSize
-          : null,
       fontFamily,
       textAlign:
         arrowEndpointBinding?.textAlign ??
@@ -758,48 +525,16 @@ export const startTextEditing = (
       verticalAlign:
         arrowEndpointBinding?.verticalAlign ??
         (parentCenterPosition ? VERTICAL_ALIGN.MIDDLE : DEFAULT_VERTICAL_ALIGN),
-      containerId: shouldBindToContainer ? container?.id : undefined,
-      containerSlot: shouldBindToContainer
-        ? containerSlot ?? undefined
-        : undefined,
-      autoResize: shouldBindToContainer && containerSlot ? false : undefined,
-      labelPosition:
-        shouldBindToContainer && container && isLinearElement(container)
-          ? DEFAULT_BOUND_TEXT_LABEL_POSITION
-          : null,
-      groupIds: container?.groupIds ?? [],
+      groupIds: [],
       lineHeight,
-      angle: container
-        ? isLinearElement(container)
-          ? (0 as Radians)
-          : container.angle
-        : (0 as Radians),
-      containerRef: shouldBindToContainer
-        ? undefined
-        : frameLikeContainerRef(frameId),
+      angle: 0 as Radians,
+      containerRef: frameLikeContainerRef(topLayerFrame?.id),
     });
 
-  if (!existingTextElement && shouldBindToContainer && container) {
-    app.scene.mutateElement(container, {
-      boundElements: (container.boundElements || []).concat({
-        type: "text",
-        id: element.id,
-        ...(containerSlot ? { slot: containerSlot } : {}),
-      }),
-    });
-  }
   app.setState({ editingTextElement: element });
 
   if (!existingTextElement) {
-    if (container && shouldBindToContainer) {
-      const containerIndex = app.scene.getElementIndex(container.id);
-      // TODO should use insertNewElement, after we update it to handle
-      // elements with containerId + containerRef at the same time (containerId
-      // should take precedence when it comes to z-index)
-      app.scene.insertElementsAtIndex([element], containerIndex + 1);
-    } else {
-      app.insertNewElement(element);
-    }
+    app.insertNewElement(element);
   }
 
   if (arrowEndpoint && arrowEndpointBinding) {
@@ -810,7 +545,7 @@ export const startTextEditing = (
     );
   }
 
-  if (autoEdit || existingTextElement || container) {
+  if (autoEdit || existingTextElement) {
     app.handleTextWysiwyg(element, {
       isExistingElement: !!existingTextElement,
       initialCaretSceneCoords: existingTextElement

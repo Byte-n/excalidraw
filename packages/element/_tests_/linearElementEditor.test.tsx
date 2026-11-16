@@ -5,9 +5,11 @@ import { vi } from "vitest";
 
 import {
   CURSOR_TYPE,
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_SIZE,
   ROUNDNESS,
-  VERTICAL_ALIGN,
   KEYS,
+  getLineHeight,
   reseed,
   arrayToMap,
 } from "@excalidraw/common";
@@ -32,14 +34,13 @@ import {
 
 import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
 
-import { hasBoundingBox, wrapText } from "../src";
-import * as textElementUtils from "../src/textElement";
-import { getBoundTextElementPosition, getBoundTextMaxWidth } from "../src";
+import { hasBoundingBox } from "../src";
 import { LinearElementEditor } from "../src";
 import { newArrowElement } from "../src";
 import { isCurvedArrow } from "../src/typeChecks";
 import { transformElements } from "../src/resizeElements";
 import { getLinearElementPathSegments } from "../src/utils";
+import { getTextBlock } from "../src/text/ops";
 import {
   distanceToElement,
   generateRoughOptions,
@@ -57,7 +58,6 @@ import type {
   ExcalidrawArrowElement,
   ExcalidrawElement,
   ExcalidrawLinearElement,
-  ExcalidrawTextElementWithContainer,
   FontString,
   NonDeleted,
   NonDeletedExcalidrawElement,
@@ -356,47 +356,6 @@ describe("Test Linear Elements", () => {
 
     expect(h.state.selectedLinearElement?.isEditing).toBe(true);
     expect(h.state.selectedLinearElement?.elementId).toEqual(h.elements[0].id);
-  });
-
-  it("should allow editing an arrow from the context menu when its bound text appears earlier in the elements array", () => {
-    const arrow = createTwoPointerLinearElement("arrow");
-
-    const textElement = API.createElement({
-      type: "text",
-      x: 0,
-      y: 0,
-      text: "abc",
-      containerId: arrow.id,
-      width: 30,
-      height: 20,
-    });
-    const updatedArrow = {
-      ...arrow,
-      boundElements: [{ type: "text" as const, id: textElement.id }],
-    };
-
-    // text element intentionally placed before its container in the array
-    API.setElements([textElement, updatedArrow]);
-
-    fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
-      button: 2,
-      clientX: midpoint[0],
-      clientY: midpoint[1],
-    });
-    const contextMenu = UI.queryContextMenu();
-    fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
-      button: 2,
-      clientX: midpoint[0],
-      clientY: midpoint[1],
-    });
-    UI.openContextMenuSubmenus();
-
-    expect(() =>
-      fireEvent.click(queryByText(contextMenu as HTMLElement, "Edit arrow")!),
-    ).not.toThrow();
-
-    expect(h.state.selectedLinearElement?.isEditing).toBe(true);
-    expect(h.state.selectedLinearElement?.elementId).toEqual(updatedArrow.id);
   });
 
   it("should enter line editor via enter (line)", () => {
@@ -1139,889 +1098,172 @@ describe("Test Linear Elements", () => {
     });
   });
 
-  describe("Test bound text element", () => {
+  describe("Test linear element label", () => {
     const DEFAULT_TEXT = "Online whiteboard collaboration made easy";
-
-    const createBoundTextElement = (
-      text: string,
-      container: ExcalidrawLinearElement,
-    ) => {
-      const textElement = API.createElement({
-        type: "text",
-        x: 0,
-        y: 0,
-        text: wrapText(text, font, getBoundTextMaxWidth(container, null)),
-        containerId: container.id,
-        width: 30,
-        height: 20,
-      }) as ExcalidrawTextElementWithContainer;
-
-      container = {
-        ...container,
-        boundElements: (container.boundElements || []).concat({
-          type: "text",
-          id: textElement.id,
-        }),
-      };
-
-      const elements: ExcalidrawElement[] = [];
-      h.elements.forEach((element) => {
-        if (element.id === container.id) {
-          elements.push(container);
-        } else {
-          elements.push(element);
-        }
-      });
-      const updatedTextElement = { ...textElement, originalText: text };
-      API.setElements([...elements, updatedTextElement]);
-      return { textElement: updatedTextElement, container };
+    const labelStyle = {
+      fontFamily: DEFAULT_FONT_FAMILY,
+      fontSize: DEFAULT_FONT_SIZE,
+      lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+      textAlign: "center" as const,
+      verticalAlign: "middle" as const,
     };
 
-    describe("Test getBoundTextElementPosition", () => {
-      it("should return correct position for 2 pointer arrow", () => {
-        createTwoPointerLinearElement("arrow");
-        const arrow = h.elements[0] as ExcalidrawLinearElement;
-        const { textElement, container } = createBoundTextElement(
-          DEFAULT_TEXT,
-          arrow,
-        );
-        const position = LinearElementEditor.getBoundTextElementPosition(
-          container,
-          textElement,
-          arrayToMap(h.elements),
-        );
-        expect(position).toMatchInlineSnapshot(`
-          {
-            "x": 25,
-            "y": 10,
-          }
-        `);
-      });
+    const withLabel = (
+      element: ExcalidrawLinearElement,
+      text = DEFAULT_TEXT,
+      labelPosition = 0.5,
+    ): ExcalidrawLinearElement => {
+      const next = {
+        ...element,
+        texts: {
+          label: {
+            text,
+            style: labelStyle,
+            placement: { labelPosition },
+          },
+        },
+      } as ExcalidrawLinearElement;
+      API.setElements([next]);
+      return next;
+    };
 
-      it("should return correct position for arrow with odd points", () => {
-        createThreePointerLinearElement("arrow", {
-          type: ROUNDNESS.PROPORTIONAL_RADIUS,
-        });
-        const arrow = h.elements[0] as ExcalidrawLinearElement;
-        const { textElement, container } = createBoundTextElement(
-          DEFAULT_TEXT,
-          arrow,
-        );
+    const getLabelLayout = (
+      element: ExcalidrawLinearElement,
+      elementsMap = arrayToMap(h.elements),
+    ) => LinearElementEditor.getLabelSceneLayout(element, elementsMap);
 
-        const position = LinearElementEditor.getBoundTextElementPosition(
-          container,
-          textElement,
-          arrayToMap(h.elements),
-        );
-        expect(position).toMatchInlineSnapshot(`
-          {
-            "x": 75,
-            "y": 60,
-          }
-        `);
-      });
-
-      it("should return correct position for arrow with even points", () => {
-        createThreePointerLinearElement("arrow", {
-          type: ROUNDNESS.PROPORTIONAL_RADIUS,
-        });
-        const arrow = h.elements[0] as ExcalidrawLinearElement;
-        const { textElement, container } = createBoundTextElement(
-          DEFAULT_TEXT,
-          arrow,
-        );
-        enterLineEditingMode(container);
-        // This is the expected midpoint for line with round edge
-        // hence hardcoding it so if later some bug is introduced
-        // this will fail and we can fix it
-        const firstSegmentMidpoint = pointFrom<GlobalPoint>(
-          55.9697848965255,
-          47.442326230998205,
-        );
-        // drag line from first segment midpoint
-        drag(
-          firstSegmentMidpoint,
-          pointFrom(
-            firstSegmentMidpoint[0] + delta,
-            firstSegmentMidpoint[1] + delta,
-          ),
-        );
-
-        const position = LinearElementEditor.getBoundTextElementPosition(
-          container,
-          textElement,
-          arrayToMap(h.elements),
-        );
-        expect(position).toMatchInlineSnapshot(`
-          {
-            "x": "86.17325",
-            "y": "76.11480",
-          }
-        `);
-      });
-    });
-
-    describe("Test getPointAtPathParameter", () => {
-      it("should survive midpoint insertion", () => {
-        const arrow = API.createElement({
-          type: "arrow",
-          x: 0,
-          y: 0,
-          width: 100,
-          height: 0,
-          points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(100, 0)],
-          roundness: null,
-        });
-        API.setElements([arrow]);
-
-        const before = LinearElementEditor.getPointAtPathParameter(
-          arrow,
-          0.25,
-          arrayToMap(h.elements),
-        )!;
-        expect(before[0]).toBeCloseTo(25);
-        expect(before[1]).toBeCloseTo(0);
-
-        // inserting a midpoint re-segments the path but must not move the
-        // point at the same normalized arc-length parameter
-        act(() => {
-          h.app.scene.mutateElement(arrow, {
-            points: [
-              pointFrom<LocalPoint>(0, 0),
-              pointFrom<LocalPoint>(50, 0),
-              pointFrom<LocalPoint>(100, 0),
-            ],
-          });
-        });
-
-        const after = LinearElementEditor.getPointAtPathParameter(
-          arrow,
-          0.25,
-          arrayToMap(h.elements),
-        )!;
-        expect(after[0]).toBeCloseTo(before[0]);
-        expect(after[1]).toBeCloseTo(before[1]);
-      });
-
-      it("should use the unrounded logical path of elbow arrows", () => {
-        const arrow = API.createElement({
-          type: "arrow",
-          x: 0,
-          y: 0,
-          width: 100,
-          height: 100,
-          points: [
-            pointFrom<LocalPoint>(0, 0),
-            pointFrom<LocalPoint>(100, 0),
-            pointFrom<LocalPoint>(100, 100),
-          ],
-          elbowed: true,
-        });
-        API.setElements([arrow]);
-        const elementsMap = arrayToMap(h.elements);
-
-        // Until mixed paths are supported, elbow arrows are treated as the
-        // straight segments between their logical points.
-        const segments = getLinearElementPathSegments(arrow, elementsMap);
-        expect(segments).toHaveLength(2);
-        for (let i = 1; i < segments.length; i++) {
-          const prevEnd = segments[i - 1][segments[i - 1].length - 1];
-          expect(segments[i][0][0]).toBeCloseTo(prevEnd[0]);
-          expect(segments[i][0][1]).toBeCloseTo(prevEnd[1]);
-        }
-
-        const expectedPoints = [
-          pointFrom<GlobalPoint>(0, 0),
-          pointFrom<GlobalPoint>(50, 0),
-          pointFrom<GlobalPoint>(100, 0),
-          pointFrom<GlobalPoint>(100, 50),
-          pointFrom<GlobalPoint>(100, 100),
-        ];
-        for (const [index, parameter] of [0, 0.25, 0.5, 0.75, 1].entries()) {
-          const point = LinearElementEditor.getPointAtPathParameter(
-            arrow,
-            parameter,
-            elementsMap,
-          );
-          expect(point).toEqual(expectedPoints[index]);
-        }
-      });
-    });
-
-    it("should match styles for text editor", async () => {
+    it("keeps the label in texts.label without creating a text element", async () => {
       createTwoPointerLinearElement("arrow");
-      Keyboard.keyPress(KEYS.ENTER);
-      const editor = await getTextEditor();
-      expect(editor).toMatchSnapshot();
-    });
-
-    it("should bind text to arrow when double clicked", async () => {
-      createTwoPointerLinearElement("arrow");
-      const arrow = h.elements[0] as ExcalidrawLinearElement;
-
-      expect(h.elements.length).toBe(1);
-      expect(h.elements[0].id).toBe(arrow.id);
       mouse.doubleClickAt(midpoint[0], midpoint[1]);
-      expect(h.elements.length).toBe(2);
-
-      const text = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(text.type).toBe("text");
-      expect(text.containerId).toBe(arrow.id);
-      mouse.down();
       const editor = await getTextEditor();
+      fireEvent.input(editor, { target: { value: DEFAULT_TEXT } });
+      act(() => editor.blur());
 
-      fireEvent.change(editor, {
-        target: { value: DEFAULT_TEXT },
-      });
-
-      Keyboard.exitTextEditor(editor);
-      expect(arrow.boundElements).toStrictEqual([
-        { id: text.id, type: "text" },
-      ]);
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).text,
-      ).toMatchSnapshot();
+      expect(h.elements).toHaveLength(1);
+      const arrow = h.elements[0] as ExcalidrawLinearElement;
+      expect(arrow.texts?.label?.text).toBe(DEFAULT_TEXT);
+      expect(arrow.texts?.label?.placement?.labelPosition).toBe(0.5);
+      expect(arrow.boundElements ?? []).toHaveLength(0);
+      expect(h.elements.filter((el) => el.type === "text")).toHaveLength(0);
     });
 
-    it("should bind text to arrow when clicked on arrow and enter pressed", async () => {
+    it("creates and edits the label with Enter on a selected arrow", async () => {
+      createTwoPointerLinearElement("arrow");
+      Keyboard.keyPress(KEYS.ENTER);
+      const editor = await getTextEditor();
+      fireEvent.input(editor, { target: { value: DEFAULT_TEXT } });
+      act(() => editor.blur());
+      expect(h.elements).toHaveLength(1);
+      expect(getTextBlock(h.elements[0].texts, "label")?.text).toBe(
+        DEFAULT_TEXT,
+      );
+    });
+
+    it("removes the label when submitted empty", async () => {
       const arrow = createTwoPointerLinearElement("arrow");
-
-      expect(h.elements.length).toBe(1);
-      expect(h.elements[0].id).toBe(arrow.id);
-
-      Keyboard.keyPress(KEYS.ENTER);
-
-      expect(h.elements.length).toBe(2);
-
-      const textElement = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(textElement.type).toBe("text");
-      expect(textElement.containerId).toBe(arrow.id);
+      withLabel(arrow, DEFAULT_TEXT);
+      mouse.doubleClickAt(midpoint[0], midpoint[1]);
       const editor = await getTextEditor();
-
-      fireEvent.change(editor, {
-        target: { value: DEFAULT_TEXT },
-      });
-      Keyboard.exitTextEditor(editor);
-      expect(arrow.boundElements).toStrictEqual([
-        { id: textElement.id, type: "text" },
-      ]);
+      fireEvent.input(editor, { target: { value: "   " } });
+      act(() => editor.blur());
       expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).text,
-      ).toMatchSnapshot();
+        (h.elements[0] as ExcalidrawLinearElement).texts?.label,
+      ).toBeUndefined();
     });
 
-    it("should not bind text to line when double clicked", async () => {
-      const line = createTwoPointerLinearElement("line");
-
-      expect(h.elements.length).toBe(1);
-      mouse.doubleClickAt(line.x, line.y);
-      expect(h.elements.length).toBe(1);
+    it("places the label at the path anchor, keeping it horizontal", () => {
+      const arrow = createTwoPointerLinearElement("arrow");
+      const labeled = withLabel(arrow, DEFAULT_TEXT, 0.5);
+      const layout = getLabelLayout(labeled);
+      expect(layout.angle).toBe(0);
+      expect(layout.x + layout.width / 2).toBeCloseTo(midpoint[0], 5);
+      expect(layout.y + layout.height / 2).toBeCloseTo(midpoint[1], 5);
     });
 
-    // TODO fix #7029 and rewrite this test
-    it.todo(
-      "should not rotate the bound text and update position of bound text and bounding box correctly when arrow rotated",
-    );
-
-    it("should resize and position the bound text and bounding box correctly when 3 pointer arrow element resized", () => {
-      createThreePointerLinearElement("arrow", {
-        type: ROUNDNESS.PROPORTIONAL_RADIUS,
+    it("keeps a rotated arrow's label upright at the rotated anchor", () => {
+      const arrow = API.createElement({
+        type: "arrow",
+        x: 20,
+        y: 20,
+        width: 40,
+        height: 20,
+        angle: Math.PI / 2,
+        points: [pointFrom(0, 0), pointFrom(40, 20)],
       });
-
-      const arrow = h.elements[0] as ExcalidrawLinearElement;
-
-      const { textElement, container } = createBoundTextElement(
-        DEFAULT_TEXT,
-        arrow,
-      );
-      expect(container.width).toBe(70);
-      expect(container.height).toBe(50);
-      expect(
-        getBoundTextElementPosition(
-          container,
-          textElement,
-          arrayToMap(h.elements),
-        ),
-      ).toMatchInlineSnapshot(`
-        {
-          "x": 75,
-          "y": 60,
-        }
-      `);
-      expect(textElement.text).toMatchSnapshot();
-      expect(
-        LinearElementEditor.getElementAbsoluteCoords(
-          container,
-          h.app.scene.getNonDeletedElementsMap(),
-          true,
-        ),
-      ).toMatchInlineSnapshot(`
-        [
-          20,
-          20,
-          105,
-          80,
-          "55.52876",
-          45,
-        ]
-      `);
-
-      // 连接线不再有变换手柄：原用例拖的是 "ne" 手柄（位移 +300/+200），这里
-      // 直接调用手柄拖拽落地的入口，指针终点取同一个位移。
-      const [bx1, by1, bx2, by2] = LinearElementEditor.getElementAbsoluteCoords(
-        container,
-        h.app.scene.getNonDeletedElementsMap(),
-        true,
-      );
-      act(() => {
-        transformElements(
-          // 按下瞬间的原元素快照，与 PointerDownState.originalElements 同形
-          new Map([
-            [
-              container.id,
-              { ...container } as NonDeleted<ExcalidrawLinearElement>,
-            ],
-          ]),
-          "ne",
-          [container as NonDeletedExcalidrawElement],
-          h.app.scene,
-          false,
-          false,
-          false,
-          bx2 + 300,
-          by1 + 200,
-          (bx1 + bx2) / 2,
-          (by1 + by2) / 2,
-        );
-      });
-
-      expect({ width: container.width, height: container.height })
-        .toMatchInlineSnapshot(`
-          {
-            "height": 150,
-            "width": "380.01702",
-          }
-        `);
-
-      expect(
-        getBoundTextElementPosition(
-          container,
-          textElement,
-          arrayToMap(h.elements),
-        ),
-      ).toMatchInlineSnapshot(`
-        {
-          "x": "285.01702",
-          "y": 45,
-        }
-      `);
-      expect(
-        (h.elements[1] as ExcalidrawTextElementWithContainer).text,
-      ).toMatchSnapshot();
-      expect(
-        LinearElementEditor.getElementAbsoluteCoords(
-          container,
-          h.app.scene.getNonDeletedElementsMap(),
-          true,
-        ),
-      ).toMatchInlineSnapshot(`
-        [
-          20,
-          45,
-          "515.01702",
-          220,
-          "212.87785",
-          145,
-        ]
-      `);
-    });
-
-    it("should resize and position the bound text correctly when 2 pointer linear element resized", () => {
-      createTwoPointerLinearElement("arrow");
-
-      const arrow = h.elements[0] as ExcalidrawLinearElement;
-      const { textElement, container } = createBoundTextElement(
-        DEFAULT_TEXT,
-        arrow,
-      );
-      expect(container.width).toBe(40);
+      API.setElements([arrow]);
+      const labeled = withLabel(arrow, DEFAULT_TEXT, 0.25);
       const elementsMap = arrayToMap(h.elements);
-      expect(getBoundTextElementPosition(container, textElement, elementsMap))
-        .toMatchInlineSnapshot(`
-          {
-            "x": 25,
-            "y": 10,
-          }
-        `);
-      expect(textElement.text).toMatchSnapshot();
-      const points = LinearElementEditor.getPointsGlobalCoordinates(
-        container,
+      const layout = getLabelLayout(labeled, elementsMap);
+      expect(layout.angle).toBe(0);
+      const pathPoint = LinearElementEditor.getPointAtPathParameter(
+        labeled,
+        0.25,
         elementsMap,
-      );
-
-      // Drag from last point
-      drag(points[1], pointFrom(points[1][0] + 300, points[1][1]));
-
-      expect({ width: container.width, height: container.height })
-        .toMatchInlineSnapshot(`
-          {
-            "height": 130,
-            "width": 340,
-          }
-        `);
-
-      expect(getBoundTextElementPosition(container, textElement, elementsMap))
-        .toMatchInlineSnapshot(`
-          {
-            "x": 75,
-            "y": -5,
-          }
-        `);
-      expect(textElement.text).toMatchSnapshot();
+      )!;
+      expect(layout.x + layout.width / 2).toBeCloseTo(pathPoint[0], 5);
+      expect(layout.y + layout.height / 2).toBeCloseTo(pathPoint[1], 5);
     });
 
-    it("should not render vertical align tool when element selected", () => {
-      createTwoPointerLinearElement("arrow");
-      const arrow = h.elements[0] as ExcalidrawLinearElement;
-
-      createBoundTextElement(DEFAULT_TEXT, arrow);
-      API.setSelectedElements([arrow] as NonDeletedExcalidrawElement[]);
-
-      expect(queryByTestId(container, "align-top")).toBeNull();
-      expect(queryByTestId(container, "align-middle")).toBeNull();
-      expect(queryByTestId(container, "align-bottom")).toBeNull();
-    });
-
-    it("should wrap the bound text when arrow bound container moves", async () => {
-      const rect = UI.createElement("rectangle", {
-        x: 400,
-        width: 200,
-        height: 500,
+    it("drags the label along the arrow and persists the new position", () => {
+      const arrow = API.createElement({
+        type: "arrow",
+        x: p1[0],
+        y: p1[1],
+        width: p2[0] - p1[0],
+        height: 0,
+        points: [pointFrom(0, 0), pointFrom(p2[0] - p1[0], 0)],
       });
-      const arrow = UI.createElement("arrow", {
-        x: -10,
-        y: 250,
-        width: 410,
-        height: 1,
-      });
-
-      mouse.select(arrow);
-      Keyboard.keyPress(KEYS.ENTER);
-      const editor = await getTextEditor();
-      fireEvent.change(editor, { target: { value: DEFAULT_TEXT } });
-      Keyboard.exitTextEditor(editor);
-
-      const textElement = h.elements[2] as ExcalidrawTextElementWithContainer;
-
-      expect(arrow.endBinding?.elementId).toBe(rect.id);
-      // 端点贴在矩形轮廓外一个 binding gap 处；gap = BASE_BINDING_GAP(5) +
-      // 矩形 strokeWidth/2（binding.ts 的 getBindingGap），预设图形默认 strokeWidth
-      // 现为 thin(1)（旧 medium(2)），gap 6 → 5.5，端点半像素内移，宽 404 → 404.5
-      expect(arrow.width).toBeCloseTo(404.5);
-      expect(rect.x).toBe(400);
-      expect(rect.y).toBe(0);
-      expect(
-        wrapText(
-          textElement.originalText,
-          font,
-          getBoundTextMaxWidth(arrow, null),
-        ),
-      ).toMatchSnapshot();
-      const handleBindTextResizeSpy = vi.spyOn(
-        textElementUtils,
-        "handleBindTextResize",
+      API.setElements([arrow]);
+      withLabel(arrow, "label\nlabel", 0.5);
+      const beforeLayout = LinearElementEditor.getLabelSceneLayout(
+        h.elements[0] as ExcalidrawLinearElement,
+        arrayToMap(h.elements),
       );
-
-      mouse.select(rect);
-      mouse.downAt(rect.x, rect.y);
-      mouse.moveTo(200, 0);
-      mouse.upAt(200, 0);
-      // 上面那次 nw 拖拽把矩形宽度 200 → 400：初始 gap 烘进归一化 attachPoint
-      // （x_norm = -gap/宽度），因此随宽度翻倍而翻倍 —— 旧 gap6→12、新 gap5.5→11，
-      // 端点 x 188 → 189，宽 198 → 199
-      expect(arrow.width).toBeCloseTo(199);
-      expect(rect.x).toBe(200);
-      expect(rect.y).toBe(0);
-      expect(handleBindTextResizeSpy).toHaveBeenCalledWith(
-        h.elements[0],
-        h.app.scene,
-        "nw",
-        false,
-        false,
-        false,
+      expect(beforeLayout.x + beforeLayout.width / 2).toBeCloseTo(
+        midpoint[0],
+        5,
       );
-      expect(
-        wrapText(
-          textElement.originalText,
-          font,
-          getBoundTextMaxWidth(arrow, null),
-        ),
-      ).toMatchSnapshot();
-    });
-
-    it("should not render horizontal align tool when element selected", () => {
-      createTwoPointerLinearElement("arrow");
-      const arrow = h.elements[0] as ExcalidrawLinearElement;
-
-      createBoundTextElement(DEFAULT_TEXT, arrow);
-      API.setSelectedElements([arrow] as NonDeletedExcalidrawElement[]);
-
-      expect(queryByTestId(container, "align-left")).toBeNull();
-      expect(queryByTestId(container, "align-horizontal-center")).toBeNull();
-      expect(queryByTestId(container, "align-right")).toBeNull();
-    });
-
-    it("should update label coords when a label binded via context menu is unbinded", async () => {
-      createTwoPointerLinearElement("arrow");
-      const text = API.createElement({
-        type: "text",
-        text: "Hello Excalidraw",
-      });
-      expect(text.x).toBe(0);
-      expect(text.y).toBe(0);
-
-      API.setElements([h.elements[0], text]);
-
-      const container = h.elements[0];
-      API.setSelectedElements([
-        container,
-        text,
-      ] as NonDeletedExcalidrawElement[]);
-      fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
-        button: 2,
-        clientX: 20,
-        clientY: 30,
-      });
-      UI.openContextMenuSubmenus();
-      let contextMenu = UI.queryContextMenu();
-
-      fireEvent.click(
-        queryByText(contextMenu as HTMLElement, "Bind text to the container")!,
-      );
-      expect(container.boundElements).toStrictEqual([
-        { id: h.elements[1].id, type: "text" },
-      ]);
-      expect(text.containerId).toBe(container.id);
-      expect(text.verticalAlign).toBe(VERTICAL_ALIGN.MIDDLE);
-
       mouse.reset();
-      mouse.clickAt(
-        container.x + container.width / 2,
-        container.y + container.height / 2,
-      );
-      mouse.down();
-      mouse.up();
-      API.setSelectedElements([
-        h.elements[0],
-        h.elements[1],
-      ] as NonDeletedExcalidrawElement[]);
-
-      fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
-        button: 2,
-        clientX: 20,
-        clientY: 30,
+      mouse.clickAt(p1[0], p1[1]);
+      expect(h.state.selectedLinearElement?.elementId).toBe(arrow.id);
+      act(() => {
+        LinearElementEditor.handleLabelDragging(
+          {
+            elementId: arrow.id,
+            pointerOffset: { x: 0, y: 0 },
+          } as LinearElementEditor,
+          h.app.scene,
+          midpoint[0] + 10,
+          midpoint[1],
+        );
       });
-      UI.openContextMenuSubmenus();
-      contextMenu = UI.queryContextMenu();
-      fireEvent.click(queryByText(contextMenu as HTMLElement, "Unbind text")!);
-      expect(container.boundElements).toEqual([]);
-      expect(text).toEqual(
-        expect.objectContaining({
-          containerId: null,
-          width: 160,
-          height: 25,
-          x: -40,
-          y: 7.5,
-        }),
-      );
+      const labelPosition = (h.elements[0] as ExcalidrawLinearElement).texts
+        ?.label?.placement?.labelPosition;
+      expect(labelPosition).toBeCloseTo(0.75, 5);
+      expect(
+        (h.elements[0] as ExcalidrawLinearElement).texts?.label?.text,
+      ).toBe("label\nlabel");
     });
 
-    it("should not update label position when arrow dragged", () => {
-      createTwoPointerLinearElement("arrow");
-      let arrow = h.elements[0] as ExcalidrawLinearElement;
-      createBoundTextElement(DEFAULT_TEXT, arrow);
-      let label = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(arrow.x).toBe(20);
-      expect(arrow.y).toBe(20);
-      expect(label.x).toBe(0);
-      expect(label.y).toBe(0);
+    it("gives the segment midpoint handle precedence over the label", () => {
+      const arrow = API.createElement({
+        type: "arrow",
+        x: p1[0],
+        y: p1[1],
+        width: p2[0] - p1[0],
+        height: 0,
+        points: [pointFrom(0, 0), pointFrom(p2[0] - p1[0], 0)],
+      });
+      API.setElements([arrow]);
+      withLabel(arrow, "label", 0.5);
       mouse.reset();
-      mouse.select(arrow);
-      mouse.select(label);
-      mouse.downAt(arrow.x, arrow.y);
-      mouse.moveTo(arrow.x + 20, arrow.y + 30);
-      mouse.up(arrow.x + 20, arrow.y + 30);
-
-      arrow = h.elements[0] as ExcalidrawLinearElement;
-      label = h.elements[1] as ExcalidrawTextElementWithContainer;
-      expect(arrow.x).toBe(80);
-      expect(arrow.y).toBe(100);
-      expect(label.x).toBe(0);
-      expect(label.y).toBe(0);
-    });
-
-    describe("dragging the label along the arrow", () => {
-      // a tall label, so its lower half is beyond the arrow's hit threshold:
-      // there the pointer is over the label but not over the arrow's path
-      const createArrowWithTallLabel = () => {
-        const arrow = API.createElement({
-          type: "arrow",
-          x: p1[0],
-          y: p1[1],
-          width: p2[0] - p1[0],
-          height: 0,
-          points: [pointFrom(0, 0), pointFrom(p2[0] - p1[0], 0)],
-        });
-        const label = {
-          ...API.createElement({
-            type: "text",
-            text: "label",
-            containerId: arrow.id,
-            width: 30,
-            height: 60,
-          }),
-          labelPosition: 0.5,
-        } as ExcalidrawTextElementWithContainer;
-
-        return {
-          label,
-          arrow: {
-            ...arrow,
-            boundElements: [{ type: "text", id: label.id } as const],
-          },
-        };
-      };
-
-      // covers the label and the arrow's segment midpoint handle, but not the
-      // arrow's start point, so the arrow can still be selected by clicking it
-      const createOccluder = () =>
-        API.createElement({
-          type: "rectangle",
-          x: 30,
-          y: 5,
-          width: 30,
-          height: 50,
-          backgroundColor: "#ff0000",
-          fillStyle: "solid",
-        });
-
-      // inside the label, off the arrow's path
-      const labelOnlyPoint = pointFrom<GlobalPoint>(40, 45);
-
-      it("treats a point handle under the label as the handle, on hover and on pointer down", () => {
-        const arrow = API.createElement({
-          type: "arrow",
-          x: p1[0],
-          y: p1[1],
-          width: p2[0] - p1[0],
-          height: 0,
-          points: [pointFrom(0, 0), pointFrom(p2[0] - p1[0], 0)],
-        });
-        const label = {
-          ...API.createElement({
-            type: "text",
-            text: "label",
-            containerId: arrow.id,
-            width: 30,
-            height: 30,
-          }),
-          // centered on the end point
-          labelPosition: 1,
-        } as ExcalidrawTextElementWithContainer;
-        API.setElements([
-          {
-            ...arrow,
-            boundElements: [{ type: "text", id: label.id } as const],
-          },
-          label,
-        ]);
-
-        mouse.reset();
-        mouse.clickAt(p1[0], p1[1]);
-        expect(h.state.selectedLinearElement?.elementId).toBe(arrow.id);
-
-        // inside the label and within the end point's handle radius, but
-        // farther from the arrow's path than the arrow's own hit threshold
-        const point = pointFrom<GlobalPoint>(p2[0], p2[1] + 9);
-
-        mouse.moveTo(point[0], point[1]);
-        expect(h.state.selectedLinearElement?.hoverPointIndex).toBe(1);
-        expect(GlobalTestState.interactiveCanvas.style.cursor).toBe(
-          CURSOR_TYPE.POINTER,
-        );
-
-        drag(point, pointFrom<GlobalPoint>(point[0] + 40, point[1]));
-
-        expect(
-          (h.elements[1] as ExcalidrawTextElementWithContainer).labelPosition,
-        ).toBe(1);
-        expect(
-          (h.elements[0] as ExcalidrawLinearElement).points[1][0],
-        ).toBeCloseTo(p2[0] - p1[0] + 40);
-      });
-
-      it("keeps the arrow selected when a point handle is grabbed beyond the arrow's tip", () => {
-        const arrow = API.createElement({
-          type: "arrow",
-          x: p1[0],
-          y: p1[1],
-          width: p2[0] - p1[0],
-          height: 0,
-          points: [pointFrom(0, 0), pointFrom(p2[0] - p1[0], 0)],
-        });
-        API.setElements([arrow]);
-
-        mouse.reset();
-        mouse.clickAt(p1[0], p1[1]);
-        expect(h.state.selectedLinearElement?.elementId).toBe(arrow.id);
-
-        // past the end point along the arrow: inside the handle radius, but
-        // outside the arrow's own hit area
-        const point = pointFrom<GlobalPoint>(p2[0] + 9, p2[1]);
-
-        mouse.moveTo(point[0], point[1]);
-        expect(h.state.selectedLinearElement?.hoverPointIndex).toBe(1);
-
-        drag(point, pointFrom<GlobalPoint>(point[0] + 40, point[1]));
-
-        expect(h.state.selectionElement).toBeNull();
-        expect(h.state.selectedElementIds[arrow.id]).toBe(true);
-        expect(h.state.selectedLinearElement?.elementId).toBe(arrow.id);
-        expect(
-          (h.elements[0] as ExcalidrawLinearElement).points[1][0],
-        ).toBeCloseTo(p2[0] - p1[0] + 40);
-      });
-
-      it("grabs the label when the covering element is below the arrow", () => {
-        const { arrow, label } = createArrowWithTallLabel();
-        API.setElements([createOccluder(), arrow, label]);
-
-        mouse.reset();
-        mouse.clickAt(p1[0], p1[1]);
-        expect(h.state.selectedLinearElement?.elementId).toBe(arrow.id);
-
-        drag(labelOnlyPoint, pointFrom<GlobalPoint>(50, 45));
-
-        expect(
-          (h.elements[2] as ExcalidrawTextElementWithContainer).labelPosition,
-        ).toBeCloseTo(0.75);
-      });
-
-      it("does not grab the label when it is covered by an element above the arrow", () => {
-        const { arrow, label } = createArrowWithTallLabel();
-        API.setElements([arrow, label, createOccluder()]);
-
-        mouse.reset();
-        mouse.clickAt(p1[0], p1[1]);
-        expect(h.state.selectedLinearElement?.elementId).toBe(arrow.id);
-
-        drag(labelOnlyPoint, pointFrom<GlobalPoint>(50, 45));
-
-        expect(
-          (h.elements[1] as ExcalidrawTextElementWithContainer).labelPosition,
-        ).toBe(0.5);
-      });
-
-      it("grabs an elbow arrow's label lying over an intermediate route point", () => {
-        const arrow = API.createElement({
-          type: "arrow",
-          x: 0,
-          y: 0,
-          width: 100,
-          height: 100,
-          points: [
-            pointFrom<LocalPoint>(0, 0),
-            pointFrom<LocalPoint>(100, 0),
-            pointFrom<LocalPoint>(100, 100),
-          ],
-          elbowed: true,
-        });
-        const label = {
-          ...API.createElement({
-            type: "text",
-            text: "label",
-            containerId: arrow.id,
-            width: 30,
-            height: 30,
-          }),
-          // the arc-length middle of this symmetric elbow sits on the
-          // rounded corner, right next to the route point at (100, 0)
-          labelPosition: 0.5,
-        } as ExcalidrawTextElementWithContainer;
-        API.setElements([
-          {
-            ...arrow,
-            boundElements: [{ type: "text", id: label.id } as const],
-          },
-          label,
-        ]);
-
-        mouse.reset();
-        mouse.clickAt(0, 0);
-        expect(h.state.selectedLinearElement?.elementId).toBe(arrow.id);
-
-        // inside the label AND within the hit radius of the route point at
-        // (100, 0) — pre-fix the route point swallowed this pointerdown and
-        // the label never moved
-        const grabPoint = pointFrom<GlobalPoint>(97, 3);
-
-        drag(
-          grabPoint,
-          pointFrom<GlobalPoint>(grabPoint[0] - 40, grabPoint[1]),
-        );
-
-        expect(
-          (h.elements[1] as ExcalidrawTextElementWithContainer).labelPosition,
-        ).not.toBe(0.5);
-      });
-
-      it("gives the segment midpoint handle precedence over the label on top of it", () => {
-        const { arrow, label } = createArrowWithTallLabel();
-        API.setElements([arrow, label]);
-
-        mouse.reset();
-        mouse.clickAt(p1[0], p1[1]);
-        expect(h.state.selectedLinearElement?.elementId).toBe(arrow.id);
-        expect((h.elements[0] as ExcalidrawLinearElement).points.length).toBe(
-          2,
-        );
-
-        // the label sits centered on the midpoint knob; dragging there must
-        // bend the arrow, not slide the label
-        drag(midpoint, pointFrom<GlobalPoint>(midpoint[0], midpoint[1] + 40));
-
-        expect((h.elements[0] as ExcalidrawLinearElement).points.length).toBe(
-          3,
-        );
-        expect(
-          (h.elements[1] as ExcalidrawTextElementWithContainer).labelPosition,
-        ).toBe(0.5);
-      });
-
-      it("leaves the segment midpoint handle grabbable under a covered label", () => {
-        const { arrow, label } = createArrowWithTallLabel();
-        API.setElements([arrow, label, createOccluder()]);
-
-        mouse.reset();
-        mouse.clickAt(p1[0], p1[1]);
-        expect(h.state.selectedLinearElement?.elementId).toBe(arrow.id);
-        expect((h.elements[0] as ExcalidrawLinearElement).points.length).toBe(
-          2,
-        );
-
-        // the midpoint handle sits under the label, which is itself covered
-        drag(midpoint, pointFrom<GlobalPoint>(midpoint[0], midpoint[1] + 40));
-
-        expect(
-          h.state.selectedLinearElement?.initialState.segmentMidpoint.value,
-        ).not.toBeNull();
-        expect((h.elements[0] as ExcalidrawLinearElement).points.length).toBe(
-          3,
-        );
-        expect(
-          (h.elements[1] as ExcalidrawTextElementWithContainer).labelPosition,
-        ).toBe(0.5);
-      });
+      mouse.clickAt(p1[0], p1[1]);
+      drag(midpoint, pointFrom<GlobalPoint>(midpoint[0], midpoint[1] + 40));
+      expect((h.elements[0] as ExcalidrawLinearElement).points.length).toBe(3);
+      expect(
+        (h.elements[0] as ExcalidrawLinearElement).texts?.label?.placement
+          ?.labelPosition,
+      ).toBe(0.5);
     });
   });
 

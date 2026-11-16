@@ -53,7 +53,6 @@ const populateElements = (
     x?: number;
     width?: number;
     height?: number;
-    containerId?: string;
     containerRef?: ExcalidrawElement["containerRef"];
     index?: ExcalidrawElement["index"];
   }[],
@@ -71,12 +70,11 @@ const populateElements = (
       x = 100,
       width = 100,
       height = 100,
-      containerId = null,
       containerRef,
       type,
     }) => {
       const element = API.createElement({
-        type: type ?? (containerId ? "text" : "rectangle"),
+        type: type ?? "rectangle",
         id,
         isDeleted,
         x,
@@ -84,7 +82,6 @@ const populateElements = (
         width,
         height,
         groupIds,
-        containerId,
         containerRef,
       });
       if (isSelected) {
@@ -94,23 +91,7 @@ const populateElements = (
     },
   );
 
-  // initialize `boundElements` on containers, if applicable
-  API.setElements(
-    newElements.map((element, index, elements) => {
-      const nextElement = elements[index + 1];
-      if (
-        nextElement &&
-        "containerId" in nextElement &&
-        element.id === nextElement.containerId
-      ) {
-        return {
-          ...element,
-          boundElements: [{ type: "text", id: nextElement.id }],
-        };
-      }
-      return element;
-    }),
-  );
+  API.setElements(newElements);
 
   act(() => {
     h.setState({
@@ -144,7 +125,6 @@ const assertZindex = ({
     isDeleted?: true;
     isSelected?: true;
     groupIds?: string[];
-    containerId?: string;
     containerRef?: ExcalidrawElement["containerRef"];
     type?: ExcalidrawElementType;
   }[];
@@ -251,20 +231,6 @@ describe("z-index manipulation", () => {
         [actionSendBackward, ["D", "E", "F", "A", "B", "C", "G"]],
         // noop
         [actionSendBackward, ["D", "E", "F", "A", "B", "C", "G"]],
-      ],
-    });
-
-    // elements should not duplicate
-    assertZindex({
-      elements: [
-        { id: "A", containerId: "C" },
-        { id: "B" },
-        { id: "C", isSelected: true },
-      ],
-      operations: [
-        [actionSendBackward, ["A", "C", "B"]],
-        // noop
-        [actionSendBackward, ["A", "C", "B"]],
       ],
     });
 
@@ -1158,75 +1124,6 @@ describe("z-index manipulation", () => {
       "D",
     ]);
   });
-
-  it("text-container binding should be atomic", () => {
-    assertZindex({
-      elements: [
-        { id: "A", isSelected: true },
-        { id: "B" },
-        { id: "C", containerId: "B" },
-      ],
-      operations: [
-        [actionBringForward, ["B", "C", "A"]],
-        [actionSendBackward, ["A", "B", "C"]],
-      ],
-    });
-
-    assertZindex({
-      elements: [
-        { id: "A" },
-        { id: "B", isSelected: true },
-        { id: "C", containerId: "B" },
-      ],
-      operations: [
-        [actionSendBackward, ["B", "C", "A"]],
-        [actionBringForward, ["A", "B", "C"]],
-      ],
-    });
-
-    assertZindex({
-      elements: [
-        { id: "A", isSelected: true, groupIds: ["g1"] },
-        { id: "B", groupIds: ["g1"] },
-        { id: "C", containerId: "B", groupIds: ["g1"] },
-      ],
-      appState: {
-        editingGroupId: "g1",
-      },
-      operations: [
-        [actionBringForward, ["B", "C", "A"]],
-        [actionSendBackward, ["A", "B", "C"]],
-      ],
-    });
-
-    assertZindex({
-      elements: [
-        { id: "A", groupIds: ["g1"] },
-        { id: "B", groupIds: ["g1"], isSelected: true },
-        { id: "C", containerId: "B", groupIds: ["g1"] },
-      ],
-      appState: {
-        editingGroupId: "g1",
-      },
-      operations: [
-        [actionSendBackward, ["B", "C", "A"]],
-        [actionBringForward, ["A", "B", "C"]],
-      ],
-    });
-
-    assertZindex({
-      elements: [
-        { id: "A", groupIds: ["g1"] },
-        { id: "B", isSelected: true, groupIds: ["g1"] },
-        { id: "C" },
-        { id: "D", containerId: "C" },
-      ],
-      appState: {
-        editingGroupId: "g1",
-      },
-      operations: [[actionBringForward, ["A", "B", "C", "D"]]],
-    });
-  });
 });
 
 describe("z-indexing with frames", () => {
@@ -1238,42 +1135,6 @@ describe("z-indexing with frames", () => {
   // F#   ... frame element
   // F#_# ... frame child of F# (rectangle)
   // R#   ... unrelated element (rectangle)
-
-  it("keeps bound text with its host when moving a frame child", () => {
-    assertZindex({
-      elements: [
-        {
-          id: "F1_1",
-          containerRef: { kind: "frameLike", elementId: "F1" },
-          isSelected: true,
-        },
-        { id: "T1", containerId: "F1_1" },
-        { id: "F1_2", containerRef: { kind: "frameLike", elementId: "F1" } },
-        { id: "F1", type: "frame" },
-        { id: "R1" },
-      ],
-      operations: [
-        [actionBringForward, ["F1_2", "F1_1", "T1", "F1", "R1"]],
-        [actionBringToFront, ["F1_2", "F1", "F1_1", "T1", "R1"]],
-        [actionSendToBack, ["F1_1", "T1", "F1_2", "F1", "R1"]],
-      ],
-    });
-  });
-
-  it("moves a frame and its bound text as one layer range", () => {
-    assertZindex({
-      elements: [
-        { id: "F1_1", containerRef: { kind: "frameLike", elementId: "F1" } },
-        { id: "T1", containerId: "F1_1" },
-        { id: "F1", type: "frame", isSelected: true },
-        { id: "R1" },
-      ],
-      operations: [
-        [actionBringForward, ["R1", "F1_1", "T1", "F1"]],
-        [actionSendToBack, ["F1_1", "T1", "F1", "R1"]],
-      ],
-    });
-  });
 
   it("moving whole frame by one (normalized)", () => {
     // normalized frame order

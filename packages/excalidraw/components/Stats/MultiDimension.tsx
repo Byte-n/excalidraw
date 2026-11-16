@@ -11,7 +11,6 @@ import {
 } from "@excalidraw/element";
 import {
   getStickyNoteResizeIntent,
-  isStickyNoteBoundText,
   isStickyNoteElement,
   updateStickyNoteLayout,
 } from "@excalidraw/element";
@@ -19,9 +18,11 @@ import {
   rescalePointsInElement,
   resizeSingleElement,
 } from "@excalidraw/element";
-import { getBoundTextElement, handleBindTextResize } from "@excalidraw/element";
-
 import { isTextElement } from "@excalidraw/element";
+import {
+  getTextElementStyle,
+  getTextElementStylePatch,
+} from "@excalidraw/element";
 
 import { getCommonBounds } from "@excalidraw/utils";
 
@@ -75,7 +76,11 @@ const getResizedUpdates = (
     y,
     ...rescalePointsInElement(origElement, nextWidth, nextHeight, false),
     ...(isTextElement(origElement)
-      ? { fontSize: origElement.fontSize * scale }
+      ? {
+          ...getTextElementStylePatch(origElement, {
+            fontSize: getTextElementStyle(origElement).fontSize * scale,
+          }),
+        }
       : {}),
   };
 };
@@ -91,15 +96,6 @@ const resizeElementInGroup = (
   scene: Scene,
 ) => {
   const elementsMap = scene.getNonDeletedElementsMap();
-
-  if (
-    isTextElement(latestElement) &&
-    isStickyNoteBoundText(latestElement, elementsMap)
-  ) {
-    // a group unit lists the note's label too; the note's layout owns it
-    // entirely (a direct scale here would overwrite the fitted size)
-    return;
-  }
 
   const updates = getResizedUpdates(anchorX, anchorY, scale, origElement);
 
@@ -120,26 +116,6 @@ const resizeElementInGroup = (
     return;
   }
 
-  const boundTextElement = getBoundTextElement(
-    origElement,
-    originalElementsMap,
-  );
-  if (boundTextElement) {
-    const newFontSize = boundTextElement.fontSize * scale;
-    updateBoundElements(latestElement, scene);
-    const latestBoundTextElement = elementsMap.get(boundTextElement.id);
-    if (latestBoundTextElement && isTextElement(latestBoundTextElement)) {
-      scene.mutateElement(latestBoundTextElement, {
-        fontSize: newFontSize,
-      });
-      handleBindTextResize(
-        latestElement,
-        scene,
-        property === "width" ? "e" : "s",
-        true,
-      );
-    }
-  }
 };
 
 const resizeGroup = (

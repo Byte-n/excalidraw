@@ -24,20 +24,19 @@ import { clamp } from "@excalidraw/math";
 import { updateBoundElements } from "./binding";
 import { newElementWith } from "./mutateElement";
 import { getPositionAfterHeightChange } from "./sizeHelpers";
-import { computeBoundTextPosition, getBoundTextElement } from "./textElement";
-import { measureText } from "./textMeasurements";
+import { withTextBlock } from "./text/ops";
+import { getLineHeightInPx, measureText } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
-import { isStickyNoteElement, isTextElement } from "./typeChecks";
+import { isStickyNoteElement } from "./typeChecks";
 
 import type { Scene } from "./Scene";
+import type { TextBlockStyle } from "./text/types";
 import type { VerticalResizeAnchor } from "./sizeHelpers";
 import type { TransformHandleDirection } from "./transformHandles";
 import type {
   ElementsMap,
   ExcalidrawElement,
   ExcalidrawStickyNoteElement,
-  ExcalidrawTextElement,
-  ExcalidrawTextElementWithContainer,
   NonDeletedExcalidrawElement,
 } from "./types";
 
@@ -85,22 +84,14 @@ export const normalizeStickyNoteBackgroundColor = (
  * through this instead of re-deriving the rule.
  */
 /**
- * The element a color pick on `element` lands on. A note's label has no fill
- * of its own, so a background pick on the label — the styles panel while
- * editing it — goes to the note; everything else colors itself.
+ * The element a color pick on `element` lands on. 便签正文内嵌在元素自身，
+ * 没有独立的标签元素，因此颜色永远落在元素本身。
  */
 export const getColorTargetElement = (
   element: ExcalidrawElement,
   property: "strokeColor" | "backgroundColor",
   elementsMap: ElementsMap,
 ): ExcalidrawElement => {
-  if (
-    property === "backgroundColor" &&
-    isTextElement(element) &&
-    isStickyNoteBoundText(element, elementsMap)
-  ) {
-    return elementsMap.get(element.containerId!) ?? element;
-  }
   return element;
 };
 
@@ -114,18 +105,6 @@ export const getColorUpdate = (
     return property === "backgroundColor"
       ? { backgroundColor: normalizeStickyNoteBackgroundColor(color) }
       : { strokeColor: normalizeStickyNoteStrokeColor(color) };
-  }
-  if (
-    property === "strokeColor" &&
-    isTextElement(element) &&
-    isStickyNoteBoundText(element, elementsMap)
-  ) {
-    const container = elementsMap.get(element.containerId!);
-    return {
-      strokeColor: isTransparent(color)
-        ? normalizeStickyNoteStrokeColor(container?.strokeColor)
-        : color,
-    };
   }
   return property === "backgroundColor"
     ? { backgroundColor: color }
@@ -204,38 +183,18 @@ export const findStickyNotePreset = (
 };
 
 /**
- * A note's ink is one color: the container's `strokeColor` — the seed for a
- * new label and what the creation-date footer paints with — and its label's.
- * Run after a property write to copy the side that changed onto the other;
- * when both changed, or neither (data that drifted), the label wins: it is
- * the text the user styled. A transparent label always takes the note's
- * color. Returns the same array when nothing needs to change.
- *
- * The default yellow paper carries its own ink: a background switch onto it
- * forces both sides to `STICKY_NOTE_YELLOW_INK`, and a switch away releases a
- * still-untouched one back to the default ink. An explicit ink pick on a
- * yellow note (no background change in the same pass) is left alone.
+ * 便签纸面与 Ink 的配对：默认黄色纸面配 `STICKY_NOTE_YELLOW_INK`，
+ * 切走时把仅由纸面带来的 Ink 还原成默认色。无变化时返回原数组。
  */
 export const syncStickyNoteInk = <T extends ExcalidrawElement>(
   elements: readonly T[],
   prevElementsMap: ElementsMap,
-  opts?: {
-    /**
-     * Also reconcile a note's ink with its label's (stroke picks, paste
-     * styles). Paper pairing (the yellow ink) always runs; background picks
-     * pass `false` so unrelated notes keep their identity.
-     */
-    reconcileInk?: boolean;
-  },
 ): readonly T[] => {
-  const reconcileInk = opts?.reconcileInk ?? true;
-  const elementsMap = arrayToMap(elements);
   const inkById = new Map<string, string>();
   for (const container of elements) {
     if (!isStickyNoteElement(container) || container.isDeleted) {
       continue;
     }
-    const label = getBoundTextElement(container, elementsMap);
     const prevContainer = prevElementsMap.get(container.id);
     if (
       prevContainer &&
@@ -244,43 +203,11 @@ export const syncStickyNoteInk = <T extends ExcalidrawElement>(
     ) {
       if (isDefaultYellowStickyNote(container.backgroundColor)) {
         inkById.set(container.id, STICKY_NOTE_YELLOW_INK);
-        if (label) {
-          inkById.set(label.id, STICKY_NOTE_YELLOW_INK);
-        }
       } else if (
-        container.strokeColor.toLowerCase() === STICKY_NOTE_YELLOW_INK &&
-        (!label || label.strokeColor.toLowerCase() === STICKY_NOTE_YELLOW_INK)
+        container.strokeColor.toLowerCase() === STICKY_NOTE_YELLOW_INK
       ) {
         inkById.set(container.id, STICKY_NOTE_INK);
-        if (label) {
-          inkById.set(label.id, STICKY_NOTE_INK);
-        }
       }
-      continue;
-    }
-    if (!reconcileInk) {
-      continue;
-    }
-    if (!label || label.strokeColor === container.strokeColor) {
-      continue;
-    }
-    const containerChanged =
-      prevElementsMap.get(container.id)?.strokeColor !== container.strokeColor;
-    const labelChanged =
-      prevElementsMap.get(label.id)?.strokeColor !== label.strokeColor;
-    if (
-      isTransparent(label.strokeColor) ||
-      (containerChanged && !labelChanged)
-    ) {
-      inkById.set(
-        label.id,
-        normalizeStickyNoteStrokeColor(container.strokeColor),
-      );
-    } else {
-      inkById.set(
-        container.id,
-        normalizeStickyNoteStrokeColor(label.strokeColor),
-      );
     }
   }
   if (!inkById.size) {
@@ -292,24 +219,6 @@ export const syncStickyNoteInk = <T extends ExcalidrawElement>(
       ? element
       : (newElementWith(element as ExcalidrawElement, { strokeColor }) as T);
   });
-};
-
-/**
- * The other half of a note's ink: its label for a note, the note for its
- * label, `null` when the element is neither. For writers that have no before/
- * after pair to compare, which `syncStickyNoteInk` needs.
- */
-export const getStickyNoteInkCounterpart = (
-  element: ExcalidrawElement,
-  elementsMap: ElementsMap,
-): ExcalidrawElement | null => {
-  if (isStickyNoteElement(element)) {
-    return getBoundTextElement(element, elementsMap);
-  }
-  if (isTextElement(element) && isStickyNoteBoundText(element, elementsMap)) {
-    return elementsMap.get(element.containerId!) ?? null;
-  }
-  return null;
 };
 
 /**
@@ -394,45 +303,6 @@ export const normalizeStickyNoteFontSize = (fontSize: number) => {
   return Math.min(STICKY_NOTE_MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, fontSize));
 };
 
-/** whether the text element is the label of a sticky note */
-export const isStickyNoteBoundText = (
-  textElement: ExcalidrawTextElement,
-  elementsMap: ElementsMap,
-) => {
-  return (
-    !!textElement.containerId &&
-    isStickyNoteElement(elementsMap.get(textElement.containerId))
-  );
-};
-
-/**
- * The font size the user picked: the ceiling the auto-fit shrinks from for a
- * sticky note label, plain `fontSize` for any other text.
- *
- * Container-aware on purpose — generic binding repair (duplication, history)
- * rewrites `containerId` without touching the ceiling, so a numeric
- * `baseFontSize` alone does not prove the text is still sticky-bound.
- */
-export const getBaseFontSize = (
-  textElement: ExcalidrawTextElement,
-  elementsMap: ElementsMap,
-) => {
-  return isStickyNoteBoundText(textElement, elementsMap)
-    ? textElement.baseFontSize ?? textElement.fontSize
-    : textElement.fontSize;
-};
-
-/** the update that applies a user-picked font size (see `getBaseFontSize`) */
-export const getBaseFontSizeUpdate = (
-  textElement: ExcalidrawTextElement,
-  fontSize: number,
-  elementsMap: ElementsMap,
-): { fontSize: number } | { baseFontSize: number } => {
-  return isStickyNoteBoundText(textElement, elementsMap)
-    ? { baseFontSize: normalizeStickyNoteFontSize(fontSize) }
-    : { fontSize };
-};
-
 /**
  * The creation-date label: absolute, so painting needs no clock and exports
  * don't go stale. Chinese format "M月D日", with the year prepended when the
@@ -500,7 +370,7 @@ export const getStickyNoteFooter = (
 export const getStickyNoteMinSize = ({
   fontSize,
   fontFamily,
-}: Pick<ExcalidrawTextElement, "fontSize" | "fontFamily">) => {
+}: Pick<TextBlockStyle, "fontSize" | "fontFamily">) => {
   const lineHeightPx = Math.ceil(
     normalizeStickyNoteFontSize(fontSize) * getLineHeight(fontFamily),
   );
@@ -546,18 +416,15 @@ export type StickyNoteLayout = {
     ExcalidrawStickyNoteElement,
     "x" | "y" | "width" | "height" | "baseHeight"
   >;
-  text: Pick<
-    ExcalidrawTextElement,
-    | "text"
-    | "fontSize"
-    | "baseFontSize"
-    | "width"
-    | "height"
-    | "x"
-    | "y"
-    | "angle"
-  > | null;
 };
+
+export type StickyNoteLayoutText = Readonly<{
+  /** 源文本；换行结果由布局派生 */
+  text: string;
+  /** 用户设定的字号上限；fit 的搜索起点 */
+  baseFontSize: number;
+  style: TextBlockStyle;
+}>;
 
 type FontFit = {
   text: string;
@@ -565,9 +432,6 @@ type FontFit = {
   width: number;
   height: number;
 };
-
-// `computeBoundTextPosition` only consults the map for arrow containers
-const NO_ELEMENTS: ElementsMap = new Map();
 
 const getStickyNoteBaseWidth = (container: ExcalidrawStickyNoteElement) => {
   return Math.max(container.width, STICKY_NOTE_MIN_SIZE);
@@ -657,14 +521,14 @@ const fitStickyNoteFont = (
 };
 
 /**
- * The single source of truth for a sticky note's geometry: wraps the label at
- * the note's width, fits the font under the ceiling, grows the note past
- * `baseHeight` only when the text still overflows at the minimum size, and
- * positions the label inside. Pure — returns the updates for both elements.
+ * The single source of truth for a sticky note's geometry: wraps the body at
+ * the note's width, fits the font under the ceiling, and grows the note past
+ * `baseHeight` only when the text still overflows at the minimum size.
+ * Pure — returns the updates for the container.
  */
 export const getStickyNoteLayout = (
   container: ExcalidrawStickyNoteElement,
-  textElement: ExcalidrawTextElement | null,
+  textElement: StickyNoteLayoutText | null,
   opts: StickyNoteLayoutOpts = {},
 ): StickyNoteLayout => {
   const baseWidth = getStickyNoteBaseWidth(container);
@@ -683,18 +547,17 @@ export const getStickyNoteLayout = (
         height: baseHeight,
         baseHeight,
       },
-      text: null,
     };
   }
 
-  const originalText = opts.originalText ?? textElement.originalText;
+  const originalText = opts.originalText ?? textElement.text;
   const baseFontSize = normalizeStickyNoteFontSize(
-    opts.baseFontSize ?? textElement.baseFontSize ?? textElement.fontSize,
+    opts.baseFontSize ?? textElement.baseFontSize,
   );
   const fontSizeMin = Math.min(STICKY_NOTE_MIN_FONT_SIZE, baseFontSize);
   const maxWidth = Math.max(baseWidth - STICKY_NOTE_PADDING * 2, 1);
   const maxHeight = Math.max(baseHeight - STICKY_NOTE_BODY_INSET_Y, 0);
-  const { fontFamily, lineHeight } = textElement;
+  const { fontFamily, lineHeight } = textElement.style;
 
   const fit = (fontSize: number): FontFit => {
     const font = getFontString({ fontFamily, fontSize });
@@ -718,43 +581,111 @@ export const getStickyNoteLayout = (
         fontSizeMin,
         maxWidth,
         maxHeight,
-        warmStart: textElement.fontSize,
+        warmStart: baseFontSize,
       });
 
   const height = isBlank
     ? baseHeight
     : Math.max(baseHeight, fitted.height + STICKY_NOTE_BODY_INSET_Y);
-  const nextContainer = {
-    ...getPositionAfterHeightChange(container, height, anchor),
-    width: baseWidth,
-    height,
-    baseHeight,
-  };
-  const { x, y } = computeBoundTextPosition(
-    { ...container, ...nextContainer },
-    {
-      ...textElement,
-      text: fitted.text,
-      fontSize: fitted.fontSize,
-      width: fitted.width,
-      height: fitted.height,
-    } as ExcalidrawTextElementWithContainer,
-    NO_ELEMENTS,
-  );
 
   return {
-    container: nextContainer,
-    text: {
-      text: fitted.text,
-      fontSize: fitted.fontSize,
-      baseFontSize,
-      width: fitted.width,
-      height: fitted.height,
-      x,
-      y,
-      angle: container.angle,
+    container: {
+      ...getPositionAfterHeightChange(container, height, anchor),
+      width: baseWidth,
+      height,
+      baseHeight,
     },
   };
+};
+
+export type StickyNoteTextFit = Readonly<{
+  text: string;
+  lines: readonly string[];
+  fontSize: number;
+  width: number;
+  height: number;
+  lineHeightPx: number;
+}>;
+
+/**
+ * 便签正文的纯布局：在 `maxWidth × maxHeight` 内换行并逐步缩小字号，
+ * 与 `getStickyNoteLayout` 共用同一套 fit 算法。空文本按用户设定的字号
+ * 返回一行空行。
+ */
+export const getStickyNoteTextFit = (
+  originalText: string,
+  style: Pick<TextBlockStyle, "fontFamily" | "fontSize" | "lineHeight">,
+  maxWidth: number,
+  maxHeight: number,
+): StickyNoteTextFit => {
+  const baseFontSize = normalizeStickyNoteFontSize(style.fontSize);
+  const fontSizeMin = Math.min(STICKY_NOTE_MIN_FONT_SIZE, baseFontSize);
+  const { fontFamily, lineHeight } = style;
+
+  const fit = (fontSize: number): FontFit => {
+    const font = getFontString({ fontFamily, fontSize });
+    const text = wrapText(originalText, font, maxWidth);
+    return { text, fontSize, ...measureText(text, font, lineHeight) };
+  };
+
+  const fitted: FontFit = !originalText.trim()
+    ? {
+        text: "",
+        fontSize: baseFontSize,
+        ...measureText(
+          "",
+          getFontString({ fontFamily, fontSize: baseFontSize }),
+          lineHeight,
+        ),
+      }
+    : fitStickyNoteFont(fit, {
+        baseFontSize,
+        fontSizeMin,
+        maxWidth,
+        maxHeight,
+        warmStart: baseFontSize,
+      });
+
+  return {
+    text: fitted.text,
+    lines: fitted.text.split("\n"),
+    fontSize: fitted.fontSize,
+    width: fitted.width,
+    height: fitted.height,
+    lineHeightPx: getLineHeightInPx(fitted.fontSize, lineHeight),
+  };
+};
+
+/**
+ * 便签内嵌正文的合成文本视图：只用于 `getStickyNoteLayout` 计算。
+ * 不插入场景、不消耗 id/seed；字号取用户设定的 ceiling，`fontSize`
+ * 同时作为 fit 搜索的热启动值（与 `texts` 区域布局的口径一致）。
+ */
+export const getStickyNoteBodyTextView = (
+  container: ExcalidrawStickyNoteElement,
+): StickyNoteLayoutText | null => {
+  const block = container.texts?.body;
+  if (!block) {
+    return null;
+  }
+  const { style } = block;
+  return {
+    text: block.text,
+    baseFontSize: style.fontSize,
+    style,
+  };
+};
+
+/**
+ * 便签内嵌正文按 fit 求解的完整布局；没有 `texts.body` 时返回 null。
+ * 返回的 `container` 只含几何字段，调用方负责合并进元素。
+ */
+export const getStickyNoteBodyLayout = (
+  container: ExcalidrawStickyNoteElement,
+  opts?: StickyNoteLayoutOpts,
+): StickyNoteLayout | null => {
+  const textView = getStickyNoteBodyTextView(container);
+  return textView ? getStickyNoteLayout(container, textView, opts) : null;
 };
 
 /**
@@ -785,10 +716,7 @@ export const getStickyNoteResizeIntent = (
   const origSticky = isStickyNoteElement(origContainer)
     ? origContainer
     : container;
-  const origText = getBoundTextElement(origSticky, originalElementsMap);
-  const ceiling = origText
-    ? origText.baseFontSize ?? origText.fontSize
-    : undefined;
+  const ceiling = origSticky.texts?.body?.style.fontSize;
 
   if (flip) {
     return { baseHeight: origSticky.baseHeight, baseFontSize: ceiling };
@@ -829,26 +757,33 @@ export const updateStickyNoteLayout = (
   container: ExcalidrawStickyNoteElement,
   scene: Scene,
   {
-    text,
     bindings,
     ...layoutOpts
   }: StickyNoteLayoutOpts & {
-    /** the label to lay out when it is an uncommitted clone (font actions clone before install) */
-    text?: ExcalidrawTextElement | null;
     bindings?:
       | { simultaneouslyUpdated?: readonly NonDeletedExcalidrawElement[] }
       | false;
   } = {},
 ): StickyNoteLayout => {
-  const elementsMap = scene.getNonDeletedElementsMap();
-  const textElement =
-    text === undefined ? getBoundTextElement(container, elementsMap) : text;
+  const bodyBlock = container.texts?.body;
+  const textElement = bodyBlock ? getStickyNoteBodyTextView(container) : null;
   const layout = getStickyNoteLayout(container, textElement, layoutOpts);
+  // 比例缩放意图直接写回 block 的字号 ceiling，高度仍由 layout 的 fit 结果决定
+  const nextTexts =
+    bodyBlock && layoutOpts.baseFontSize !== undefined
+      ? withTextBlock(container.texts, "body", {
+          ...bodyBlock,
+          style: {
+            ...bodyBlock.style,
+            fontSize: normalizeStickyNoteFontSize(layoutOpts.baseFontSize),
+          },
+        })
+      : undefined;
 
-  scene.mutateElement(container, layout.container);
-  if (textElement && layout.text) {
-    scene.mutateElement(textElement, layout.text);
-  }
+  scene.mutateElement(container, {
+    ...layout.container,
+    ...(nextTexts ? { texts: nextTexts } : null),
+  });
   if (bindings !== false && !container.isDeleted) {
     updateBoundElements(
       container as NonDeletedExcalidrawElement,
@@ -861,49 +796,29 @@ export const updateStickyNoteLayout = (
 };
 
 const STICKY_NOTE_LAYOUT_INPUTS = {
-  container: ["x", "y", "width", "baseHeight", "angle"],
-  text: [
-    "originalText",
-    "baseFontSize",
-    "fontFamily",
-    "lineHeight",
-    "textAlign",
-    "verticalAlign",
-  ],
+  // `texts` 覆盖内嵌正文：text/style 变化后不能复用旧布局
+  container: ["x", "y", "width", "baseHeight", "angle", "texts"],
 } as const;
 
 const hasStickyNoteLayoutInputChanged = (
   container: ExcalidrawStickyNoteElement,
-  textElement: ExcalidrawTextElement | null,
   prevElementsMap: ElementsMap,
 ) => {
   const prevContainer = prevElementsMap.get(container.id);
-  const prevText = textElement ? prevElementsMap.get(textElement.id) : null;
-  if (
-    !prevContainer ||
-    (textElement && !prevText) ||
-    (!textElement &&
-      prevContainer.boundElements?.some(({ type }) => type === "text"))
-  ) {
+  if (!prevContainer) {
     return true;
   }
-  return (
-    STICKY_NOTE_LAYOUT_INPUTS.container.some(
-      (key) => (prevContainer as any)[key] !== container[key],
-    ) ||
-    (!!textElement &&
-      STICKY_NOTE_LAYOUT_INPUTS.text.some(
-        (key) => (prevText as any)[key] !== textElement[key],
-      ))
+  return STICKY_NOTE_LAYOUT_INPUTS.container.some(
+    (key) => (prevContainer as any)[key] !== container[key],
   );
 };
 
 /**
  * Applies `getStickyNoteLayout` inside an immutable elements array (property
- * actions, paste styles, restore): the notes among `affectedIds` — or the
- * notes whose labels are — get both halves merged into their clones. Elements
- * that need no change keep their identity and version; when `prevElementsMap`
- * is given, notes whose layout inputs did not change skip the fit entirely.
+ * actions, paste styles, restore): the notes among `affectedIds` get their
+ * geometry merged into their clones. Elements that need no change keep their
+ * identity and version; when `prevElementsMap` is given, notes whose layout
+ * inputs did not change skip the fit entirely.
  * Bound arrows are the caller's job once the result is installed.
  */
 export const relayoutStickyNotes = <T extends ExcalidrawElement>(
@@ -923,11 +838,6 @@ export const relayoutStickyNotes = <T extends ExcalidrawElement>(
     }
     if (isStickyNoteElement(element)) {
       containerIds.add(element.id);
-    } else if (isTextElement(element) && element.containerId) {
-      const container = elementsMap.get(element.containerId);
-      if (container && !container.isDeleted && isStickyNoteElement(container)) {
-        containerIds.add(container.id);
-      }
     }
   }
   if (!containerIds.size) {
@@ -937,27 +847,19 @@ export const relayoutStickyNotes = <T extends ExcalidrawElement>(
   const replacements = new Map<ExcalidrawElement["id"], T>();
   for (const id of containerIds) {
     const container = elementsMap.get(id) as ExcalidrawStickyNoteElement;
-    const textElement = getBoundTextElement(container, elementsMap);
     if (
       opts?.prevElementsMap &&
-      !hasStickyNoteLayoutInputChanged(
-        container,
-        textElement,
-        opts.prevElementsMap,
-      )
+      !hasStickyNoteLayoutInputChanged(container, opts.prevElementsMap)
     ) {
       continue;
     }
-    const layout = getStickyNoteLayout(container, textElement);
+    const layout = getStickyNoteLayout(
+      container,
+      getStickyNoteBodyTextView(container),
+    );
     const nextContainer = newElementWith(container, layout.container);
     if (nextContainer !== container) {
       replacements.set(id, nextContainer as unknown as T);
-    }
-    if (textElement && layout.text) {
-      const nextText = newElementWith(textElement, layout.text);
-      if (nextText !== textElement) {
-        replacements.set(textElement.id, nextText as unknown as T);
-      }
     }
   }
   if (!replacements.size) {

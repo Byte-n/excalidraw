@@ -31,8 +31,6 @@ import {
   actionToggleGridMode,
   actionToggleStats,
   actionToggleZenMode,
-  actionUnbindText,
-  actionBindText,
   actionUngroup,
   actionLink,
   actionToggleElementLock,
@@ -55,7 +53,6 @@ import {
   actionTablePasteFormat,
   actionTableCenterContent,
 } from "../../actions";
-import { actionWrapTextInContainer } from "../../actions/actionBoundText";
 import { actionPaste } from "../../actions/actionClipboard";
 import { actionCopyElementLink } from "../../actions/actionElementLink";
 import { actionUnlockAllElements } from "../../actions/actionElementLock";
@@ -235,9 +232,6 @@ export const getTextSubmenu = (): ContextMenuSubmenu =>
     actionTextAutoResize,
     actionSetCompositeShapeTextFitAuto,
     actionSetCompositeShapeTextFitFixed,
-    actionUnbindText,
-    actionBindText,
-    actionWrapTextInContainer,
   ]);
 
 export const getTableSubmenu = (): ContextMenuSubmenu =>

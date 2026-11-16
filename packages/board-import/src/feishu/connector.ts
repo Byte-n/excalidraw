@@ -8,12 +8,14 @@ import {
   DEFAULT_FONT_FAMILY,
   DEFAULT_FONT_SIZE,
   ROUNDNESS,
+  getLineHeight,
 } from "@excalidraw/common";
 
-import { newArrowElement, newTextElement } from "@excalidraw/element";
+import { newArrowElement } from "@excalidraw/element";
 
 import type { LocalPoint } from "@excalidraw/math";
 
+import type { TextBlockStyle } from "@excalidraw/element";
 import type {
   ElementBinding,
   ExcalidrawElement,
@@ -38,10 +40,15 @@ export interface ResolvedEndpoint {
 export interface BuiltConnector {
   arrow: ExcalidrawElement;
   binding?: { start?: ElementBinding; end?: ElementBinding };
-  caption?: Draft;
   /** 端点箭头发生回落的次数（`single_arrow` 等）。 */
   downgraded: number;
 }
+
+type ConnectorCaption = {
+  text: string;
+  style: TextBlockStyle;
+  labelPosition: number;
+};
 
 export function buildConnector(
   node: ResolvedNode,
@@ -99,8 +106,21 @@ export function buildConnector(
     binding.end = end.binding;
   }
 
+  const caption = buildConnectorCaption(node, onRichText);
+
   const built: BuiltConnector = {
-    arrow,
+    arrow: caption
+      ? {
+          ...arrow,
+          texts: {
+            label: {
+              text: caption.text,
+              style: caption.style,
+              placement: { labelPosition: caption.labelPosition },
+            },
+          },
+        }
+      : arrow,
     downgraded:
       (startHead.downgraded ? 1 : 0) +
       (endHead.downgraded ? 1 : 0) +
@@ -108,10 +128,6 @@ export function buildConnector(
   };
   if (binding.start || binding.end) {
     built.binding = binding;
-  }
-  const caption = buildConnectorCaption(node, origin, points, onRichText);
-  if (caption) {
-    built.caption = caption;
   }
   return built;
 }
@@ -208,37 +224,31 @@ function buildConnectorPoints(
   return [start, end];
 }
 
-// 连线标签：沿路径比例取点，映射为绑定到连线的文本元素。
+// 连线标签：沿路径比例定位，直接写入连线的 texts.label。
 function buildConnectorCaption(
   node: ResolvedNode,
-  origin: { x: number; y: number },
-  points: LocalPoint[],
   onRichText: () => void,
-): Draft | undefined {
+): ConnectorCaption | undefined {
   const data = node.raw.connector?.captions?.data;
   if (!Array.isArray(data) || data.length === 0) {
     return undefined;
   }
-  // 仅首条标签落地为元素；其余仍参与富文本压平计数以保持统计一致。
+  // 仅首条标签落地为区域文本；其余仍参与富文本压平计数以保持统计一致。
   const projected = data.map((caption) => projectText(caption, onRichText));
   const text = projected[0];
   if (!text || text.text === "") {
     return undefined;
   }
-  const ratio = clamp01(node.raw.connector?.caption_position ?? 0.5);
-  const first = points[0] ?? localPoint(0, 0);
-  const last = points[points.length - 1] ?? localPoint(0, 0);
-  const element = newTextElement({
+  const fontFamily = DEFAULT_FONT_FAMILY;
+  return {
     text: text.text,
-    fontSize: text.fontSize ?? DEFAULT_FONT_SIZE,
-    fontFamily: DEFAULT_FONT_FAMILY,
-    textAlign: mapTextAlign(text.horizontalAlign),
-    verticalAlign: mapVerticalAlign(text.verticalAlign),
-    containerId: node.raw.id,
-    labelPosition: ratio,
-    x: origin.x + first[0] + (last[0] - first[0]) * ratio,
-    y: origin.y + first[1] + (last[1] - first[1]) * ratio,
-    ...identity(`${node.raw.id}#caption`, 0),
-  });
-  return { el: element, zKey: node.zIndex + 0.1 };
+    style: {
+      fontFamily,
+      fontSize: text.fontSize ?? DEFAULT_FONT_SIZE,
+      lineHeight: getLineHeight(fontFamily),
+      textAlign: mapTextAlign(text.horizontalAlign),
+      verticalAlign: mapVerticalAlign(text.verticalAlign),
+    },
+    labelPosition: clamp01(node.raw.connector?.caption_position ?? 0.5),
+  };
 }

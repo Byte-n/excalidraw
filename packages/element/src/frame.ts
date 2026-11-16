@@ -25,13 +25,11 @@ import {
   boundsContainBounds,
 } from "./bounds";
 import { mutateElement } from "./mutateElement";
-import { getBoundTextElement, getContainerElement } from "./textElement";
 import { syncMovedIndices } from "./fractionalIndex";
 import { getIndexedFrameChildren } from "./frameChildrenIndex";
 import { tableCellContainerRef } from "./tableContainer";
 import {
   frameLikeContainerRef,
-  isBoundToContainer,
   isFrameLikeElement,
   isTextElement,
 } from "./typeChecks";
@@ -63,7 +61,7 @@ export const bindElementsToFramesAfterDuplication = (
   >;
 
   for (const element of origElements) {
-    if (element.containerRef?.elementId && !isBoundToContainer(element)) {
+    if (element.containerRef?.elementId) {
       // Preserve the parent relationship when the containing frame is cloned.
       const nextElementId = origIdToDuplicateId.get(element.id);
       const nextParentId = origIdToDuplicateId.get(
@@ -87,15 +85,6 @@ export const bindElementsToFramesAfterDuplication = (
                 containerRef.cellId) as string,
               containerRef.role,
             ),
-          });
-        } else if (containerRef.kind === "fragmentRow") {
-          mutateElement(nextElement, nextElementMap, {
-            containerRef: {
-              kind: "fragmentRow",
-              elementId: nextParentId,
-              rowId: containerRef.rowId,
-              role: containerRef.role,
-            },
           });
         } else {
           mutateElement(nextElement, nextElementMap, {
@@ -412,9 +401,7 @@ export const getElementsInResizingFrame = (
     }
   }
 
-  return [...nextElementsInFrame].filter((element) => {
-    return !(isTextElement(element) && element.containerId);
-  });
+  return [...nextElementsInFrame];
 };
 
 export const getElementsInNewFrame = (
@@ -477,9 +464,7 @@ export const getContainingFrame = (
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
 ) => {
-  const owner = isBoundToContainer(element)
-    ? elementsMap.get(element.containerId)
-    : element;
+  const owner = element;
   let parent = owner?.containerRef?.elementId
     ? elementsMap.get(owner.containerRef.elementId)
     : null;
@@ -614,7 +599,6 @@ export const addElementsToFrame = <T extends ElementsMapOrArray>(
     }
   }
 
-  // - add bound text elements if not already in the array
   // - keep elements already in the frame so mixed selections can be reordered
   //   together
   for (const element of omitGroupsContainingFrameLikes(
@@ -631,17 +615,9 @@ export const addElementsToFrame = <T extends ElementsMapOrArray>(
     }
 
     finalElementsToAdd.add(element);
-
-    const boundTextElement = getBoundTextElement(element, elementsMap);
-    if (boundTextElement && !finalElementsToAdd.has(boundTextElement)) {
-      finalElementsToAdd.add(boundTextElement);
-    }
   }
 
   for (const element of finalElementsToAdd) {
-    if (isBoundToContainer(element)) {
-      continue;
-    }
     // we don't always need to update the element if it's already in the frame,
     // but we still need to accumulate in finalElementsToAdd so we potentially
     // reorder them if added together
@@ -797,20 +773,11 @@ export const removeElementsFromFrame = (
         toRemoveElementsByFrame.get(element.containerRef?.elementId) || [];
       arr.push(element);
 
-      const boundTextElement = getBoundTextElement(element, elementsMap);
-      if (boundTextElement) {
-        _elementsToRemove.set(boundTextElement.id, boundTextElement);
-        arr.push(boundTextElement);
-      }
-
       toRemoveElementsByFrame.set(element.containerRef?.elementId, arr);
     }
   }
 
   for (const [, element] of _elementsToRemove) {
-    if (isBoundToContainer(element)) {
-      continue;
-    }
     mutateElement(element, elementsMap, {
       containerRef: undefined,
     });
@@ -875,9 +842,7 @@ export const updateFrameMembershipOfSelectedElements = <
       // re-judged only by an explicit drop, handled by the cell commit in
       // the caller (`updateTableCellMembershipOfSelectedElements`). Frames
       // must not absorb tableCell chains via `getContainingFrame` ascent.
-      // A fragmentRow ref is row chrome and follows the same rule.
-      element.containerRef?.kind === "tableCell" ||
-      element.containerRef?.kind === "fragmentRow"
+      element.containerRef?.kind === "tableCell"
     ) {
       return;
     }
@@ -948,9 +913,7 @@ export const getTargetFrame = (
   elementsMap: ElementsMap,
   appState: StaticCanvasAppState,
 ) => {
-  const _element = isTextElement(element)
-    ? getContainerElement(element, elementsMap) || element
-    : element;
+  const _element = element;
 
   // if the element and its containing frame are both selected, then
   // the containing frame is the target frame
@@ -986,9 +949,7 @@ export const isElementInFrame = (
     return false;
   }
 
-  const _element = isTextElement(element)
-    ? getContainerElement(element, allElementsMap) || element
-    : element;
+  const _element = element;
 
   const setGroupsInFrame = (isInFrame: boolean) => {
     if (opts?.checkedGroups) {

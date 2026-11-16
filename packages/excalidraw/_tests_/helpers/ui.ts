@@ -35,7 +35,6 @@ import type {
   ExcalidrawEllipseElement,
   ExcalidrawDiamondElement,
   ExcalidrawTextContainer,
-  ExcalidrawTextElementWithContainer,
   ExcalidrawImageElement,
   ElementsMap,
 } from "@excalidraw/element/types";
@@ -629,13 +628,7 @@ export class UI {
       editor.blur();
     });
 
-    return isTextElement(element)
-      ? element
-      : proxy(
-          h.elements[
-            h.elements.length - 1
-          ] as ExcalidrawTextElementWithContainer,
-        );
+    return proxy(element);
   }
 
   static updateInput = (input: HTMLInputElement, value: string | number) => {

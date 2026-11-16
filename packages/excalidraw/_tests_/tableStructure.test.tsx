@@ -6,6 +6,14 @@ import {
 } from "@excalidraw/common";
 import { getTransformHandles } from "@excalidraw/element";
 import * as Element from "@excalidraw/element";
+import {
+  cellKey,
+  getLocalTextRegionLayout,
+  getTableCellTextBaseStyle,
+  getTextBlock,
+  getTextElementStyle,
+  withTextBlock,
+} from "@excalidraw/element";
 import { act } from "react-dom/test-utils";
 import { vi } from "vitest";
 
@@ -84,6 +92,22 @@ const getTable = () =>
 
 const live = <T extends { id: string }>(element: T): T =>
   h.elements.find((element2) => element2.id === element.id) as unknown as T;
+
+/** 给表格写入一格文本块（用于检查结构变化后的区域布局）。 */
+const setCellText = (
+  table: ExcalidrawTableElement,
+  cellIndex: number,
+  text: string,
+  fontSize = 20,
+) => {
+  API.updateElement(table, {
+    texts: withTextBlock(
+      table.texts,
+      cellKey(table.table.cells[cellIndex].id),
+      { text, style: { ...getTableCellTextBaseStyle(), fontSize } },
+    ),
+  });
+};
 
 const createFixture = () => {
   const table = API.createElement({ type: "table", x: 200, y: 200 });
@@ -926,8 +950,8 @@ describe("table row/column structure", () => {
     );
 
     it("resizes one row and shifts all following rows", async () => {
-      const { table, content0, backgroundText0, content2, snapshot } =
-        createFixture();
+      const { table, content0, content2, snapshot } = createFixture();
+      setCellText(table, 0, "a");
       // the separator between the first and the second row
       const separator = { x: table.x + 100, y: table.y + ROW_HEIGHT };
       mouseMove(separator.x, separator.y);
@@ -950,10 +974,13 @@ describe("table row/column structure", () => {
       expect(resized.height).toBe(3 * ROW_HEIGHT + 24);
       // members of the grown row do not move and do not scale
       expect(live(content0).y).toBe(snapshot.content0Y);
-      const text = live(backgroundText0 as unknown as ExcalidrawTextElement);
-      expect(text.fontSize).toBe(20);
-      expect(text.width).toBeLessThan(COLUMN_WIDTH);
-      expect(text.height).toBeLessThan(ROW_HEIGHT + 24);
+      const layout = getLocalTextRegionLayout(
+        resized,
+        cellKey(resized.table.cells[0].id),
+      )!;
+      expect(layout.fontSize).toBe(20);
+      expect(layout.width).toBeLessThan(COLUMN_WIDTH);
+      expect(layout.height).toBeLessThan(ROW_HEIGHT + 24);
       // every later row, including its content, follows the moved boundary
       expect(live(content2).y).toBe(snapshot.content2Y + 24);
 
@@ -1005,13 +1032,10 @@ describe("table row/column structure", () => {
     });
 
     it("resizes one column and shifts all following columns", async () => {
-      const { table, backgroundText0, snapshot } = createFixture();
+      const { table, snapshot } = createFixture();
       const originalText =
         "A longer background label that needs to wrap when its column changes width";
-      API.updateElement(backgroundText0 as unknown as ExcalidrawTextElement, {
-        originalText,
-        text: originalText,
-      });
+      setCellText(table, 0, originalText);
       const laterColumnContent = API.createElement({
         type: "rectangle",
         x: table.x + 2 * COLUMN_WIDTH + 10,
@@ -1038,12 +1062,19 @@ describe("table row/column structure", () => {
       await nextFrame();
       mouseUp(separator.x + 40, separator.y);
 
-      const text = live(backgroundText0 as unknown as ExcalidrawTextElement);
-      expect(text.width).toBeLessThanOrEqual(COLUMN_WIDTH + 40);
-      expect(text.originalText).toBe(originalText);
-      expect(text.text).toContain("\n");
-      expect(text.height).toBeGreaterThan(ROW_HEIGHT);
-      expect(text.fontSize).toBe(20);
+      const layout = getLocalTextRegionLayout(
+        getTable(),
+        cellKey(getTable().table.cells[0].id),
+      )!;
+      expect(layout.width).toBeLessThanOrEqual(COLUMN_WIDTH + 40);
+      // 原始文本不变，显示文本按新列宽换行
+      expect(
+        getTextBlock(getTable().texts, cellKey(getTable().table.cells[0].id))
+          ?.text,
+      ).toBe(originalText);
+      expect(layout.lines.length).toBeGreaterThan(1);
+      expect(layout.height).toBeGreaterThan(ROW_HEIGHT);
+      expect(layout.fontSize).toBe(20);
       expect(getTable().table.columns[1].width).toBe(COLUMN_WIDTH);
       expect(getTable().table.columns[2].width).toBe(COLUMN_WIDTH);
       expect(getTable().width).toBe(3 * COLUMN_WIDTH + 40);
@@ -1428,7 +1459,7 @@ describe("table row/column structure", () => {
           tableY: table.y,
           tableWidth: table.width,
           tableHeight: table.height,
-          textFontSize: text.fontSize,
+          textFontSize: getTextElementStyle(text).fontSize,
           textAutoResize: text.autoResize,
         },
       };
@@ -1553,10 +1584,9 @@ describe("table row/column structure", () => {
         5,
       );
       expect(committed.table.columns[0].width).toBeCloseTo(COLUMN_WIDTH * s, 5);
-      expect((live(text) as ExcalidrawTextElement).fontSize).toBeCloseTo(
-        snapshot.textFontSize * s,
-        5,
-      );
+      expect(
+        getTextElementStyle(live(text) as ExcalidrawTextElement).fontSize,
+      ).toBeCloseTo(snapshot.textFontSize * s, 5);
     });
 
     it("stretches one axis from a side frame and keeps every font size", async () => {
@@ -1585,7 +1615,9 @@ describe("table row/column structure", () => {
         5,
       );
       const committedText = live(text) as ExcalidrawTextElement;
-      expect(committedText.fontSize).toBe(snapshot.textFontSize);
+      expect(getTextElementStyle(committedText).fontSize).toBe(
+        snapshot.textFontSize,
+      );
       // geometry changed, so the commit still freezes the text mode
       expect(committedText.autoResize).toBe(false);
     });
@@ -1726,7 +1758,7 @@ describe("table row/column structure", () => {
           (target.y - 200) / snapshot.tableHeight) /
         2;
       const previewText = live(text) as ExcalidrawTextElement;
-      expect(previewText.fontSize).toBeCloseTo(20 * s, 5);
+      expect(getTextElementStyle(previewText).fontSize).toBeCloseTo(20 * s, 5);
       expect(previewText.autoResize).toBe(true);
       expect(getTable().table.rows[0].height).toBeCloseTo(ROW_HEIGHT * s, 5);
 
@@ -1735,7 +1767,7 @@ describe("table row/column structure", () => {
       const committed = live(text) as ExcalidrawTextElement;
       const committedTable = getTable();
       // the commit recomputes from the snapshot at the final factor
-      expect(committed.fontSize).toBeCloseTo(20 * s, 5);
+      expect(getTextElementStyle(committed).fontSize).toBeCloseTo(20 * s, 5);
       expect(committed.autoResize).toBe(false);
       expect(committedTable.table.rows[0].height).toBeCloseTo(
         ROW_HEIGHT * s,
@@ -1797,9 +1829,9 @@ describe("table row/column structure", () => {
 
       mouseUp(originalCorner.x, originalCorner.y);
       expect(getTable().width).toBe(snapshot.tableWidth);
-      expect((live(text) as ExcalidrawTextElement).fontSize).toBe(
-        snapshot.textFontSize,
-      );
+      expect(
+        getTextElementStyle(live(text) as ExcalidrawTextElement).fontSize,
+      ).toBe(snapshot.textFontSize);
       expect(h.history.undoStack.length).toBe(undoCount);
     });
 
@@ -1837,7 +1869,7 @@ describe("table row/column structure", () => {
       mouseUp(handle.x + 96, handle.y + 42);
 
       const restoredText = live(text) as ExcalidrawTextElement;
-      expect(restoredText.fontSize).toBe(20);
+      expect(getTextElementStyle(restoredText).fontSize).toBe(20);
       expect(restoredText.autoResize).toBe(snapshot.textAutoResize);
       expect(getTable().table.rows[0].height).toBe(ROW_HEIGHT);
       expect(h.history.undoStack.length).toBe(undoCount);

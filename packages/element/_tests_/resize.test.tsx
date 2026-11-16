@@ -8,7 +8,10 @@ import {
 import { Excalidraw } from "@excalidraw/excalidraw";
 import {
   type Bounds,
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_SIZE,
   KEYS,
+  getLineHeight,
   getSizeFromPoints,
   reseed,
   arrayToMap,
@@ -36,12 +39,22 @@ import {
   resizeSingleElement,
 } from "../src/resizeElements";
 import { distanceToElement } from "../src/distance";
+import { newTextElement } from "../src/newElement";
+import { Scene } from "../src/Scene";
 import { getLinearElementPathSegments } from "../src/utils";
 import { LinearElementEditor } from "../src/linearElementEditor";
 import { getCommonBounds, getElementPointsCoords } from "../src/bounds";
-import { getBoundTextContainerDimensions } from "../src/textElement";
+import { getCompositeShapeDimensionsForText } from "../src/compositeShape/textLayout";
+import {
+  getTextElementDisplayText,
+  getTextElementStyle,
+} from "../src/text/elementText";
+import { withTextBlock } from "../src/text/ops";
+import { getLocalTextRegionLayout } from "../src/text/regionLayout";
 
+import type { TextBlockStyle } from "../src/text/types";
 import type {
+  ExcalidrawElement,
   ExcalidrawElbowArrowElement,
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
@@ -52,6 +65,40 @@ unmountComponent();
 
 const { h } = window;
 const mouse = new Pointer("mouse");
+
+/** 形状正文的默认样式：跟随绘制工具的字体与字号，居中排布。 */
+const bodyStyle: TextBlockStyle = {
+  fontFamily: DEFAULT_FONT_FAMILY,
+  fontSize: DEFAULT_FONT_SIZE,
+  lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+  textAlign: "center",
+  verticalAlign: "middle",
+};
+
+/** 正文现在是元素自身的 `texts.body`，不再是独立绑定文字元素。 */
+const setBodyText = (element: ExcalidrawElement, text: string) => {
+  act(() => {
+    h.app.scene.mutateElement(element, {
+      texts: withTextBlock(element.texts, "body", { text, style: bodyStyle }),
+    });
+  });
+};
+
+const getBodyLocalLayout = (element: ExcalidrawElement) => {
+  const layout = getLocalTextRegionLayout(element, "body");
+  if (!layout) {
+    throw new Error("expected the element to expose a body text region");
+  }
+  return layout;
+};
+
+/** 文本块在元素局部坐标里居中：位置由区域布局派生，缩放/翻转后不漂移。 */
+const expectBodyCentered = (element: ExcalidrawElement) => {
+  const layout = getBodyLocalLayout(element);
+  expect(layout.x + layout.width / 2).toBeCloseTo(element.width / 2);
+  expect(layout.y + layout.height / 2).toBeCloseTo(element.height / 2);
+  expect(layout.angle).toBeCloseTo(element.angle);
+};
 
 const getBoundsFromPoints = (
   element: ExcalidrawLinearElement | ExcalidrawFreeDrawElement,
@@ -240,46 +287,42 @@ describe("generic element", () => {
   //   expect(arrow.width + arrow.endBinding!.gap).toBeCloseTo(80, 0);
   // });
 
-  it("resizes with a label", async () => {
+  it("resizes with body text", () => {
     const rectangle = UI.createElement("rectangle", {
       width: 200,
       height: 100,
     });
-    const label = await UI.editText(rectangle, "Hello world");
+    setBodyText(rectangle.get(), "Hello world");
+
     UI.resize(rectangle, "se", [50, 50]);
 
-    expect(label.x + label.width / 2).toBeCloseTo(
-      rectangle.x + rectangle.width / 2,
-    );
-    expect(label.y + label.height / 2).toBeCloseTo(
-      rectangle.y + rectangle.height / 2,
-    );
-    expect(label.angle).toBeCloseTo(rectangle.angle);
-    expect(label.fontSize).toEqual(20);
+    expectBodyCentered(rectangle.get());
+    expect(rectangle.texts?.body).toEqual({
+      text: "Hello world",
+      style: bodyStyle,
+    });
 
     UI.resize(rectangle, "w", [190, 0]);
 
-    expect(label.x + label.width / 2).toBeCloseTo(
-      rectangle.x + rectangle.width / 2,
-    );
-    expect(label.y + label.height / 2).toBeCloseTo(
-      rectangle.y + rectangle.height / 2,
-    );
-    expect(label.angle).toBeCloseTo(rectangle.angle);
-    expect(label.fontSize).toEqual(20);
+    expectBodyCentered(rectangle.get());
+    expect(rectangle.texts?.body).toEqual({
+      text: "Hello world",
+      style: bodyStyle,
+    });
+    expect(getBodyLocalLayout(rectangle.get()).fontSize).toBe(20);
   });
 
   describe.each(["rectangle", "ellipse", "diamond"] as const)(
-    "%s with a label",
+    "%s with body text",
     (type) => {
       it.each([false, true])(
         "flips horizontally while resizing (proportional: %s)",
-        async (proportional) => {
+        (proportional) => {
           const container = UI.createElement(type, {
             width: 200,
             height: 100,
           });
-          const label = await UI.editText(container, "Hello");
+          setBodyText(container.get(), "Hello");
 
           UI.resize(container, proportional ? "se" : "e", [-500, 0], {
             shift: proportional,
@@ -289,71 +332,66 @@ describe("generic element", () => {
           expect(container.y).toBeCloseTo(0);
           expect(container.width).toBeCloseTo(300);
           expect(container.height).toBeCloseTo(proportional ? 150 : 100);
-          expect(label.x + label.width / 2).toBeCloseTo(
-            container.x + container.width / 2,
-            0,
-          );
-          expect(label.y + label.height / 2).toBeCloseTo(
-            container.y + container.height / 2,
-            0,
-          );
-          expect(label.angle).toBe(0);
-          if (proportional) {
-            expect(label.fontSize).toBeGreaterThan(20);
-          } else {
-            expect(label.fontSize).toBe(20);
-          }
+          expect(container.angle).toBe(0);
+
+          expectBodyCentered(container.get());
+          // 正文样式不随形状缩放：仍是一行 20px 的字
+          const layout = getBodyLocalLayout(container.get());
+          expect(layout.fontSize).toBe(20);
+          expect(layout.lines).toEqual(["Hello"]);
+          expect(container.texts?.body).toEqual({
+            text: "Hello",
+            style: bodyStyle,
+          });
         },
       );
     },
   );
 
   it.each<{ handle: TransformHandleDirection; move: [number, number] }>([
-    { handle: "n", move: [0, 100] },
-    { handle: "s", move: [0, -100] },
+    { handle: "n", move: [0, 20] },
+    { handle: "s", move: [0, -20] },
   ])(
-    "resizes from center with multi-line label from $handle handle",
-    async ({ handle, move }) => {
+    "resizes from center with multi-line body text from $handle handle",
+    ({ handle, move }) => {
       const rectangle = UI.createElement("rectangle", {
         width: 200,
-        height: 100, // height not enough for label fit, so it will be resized
+        height: 100, // height not enough for the text, so it will be resized
       });
+      setBodyText(rectangle.get(), "hello\nhello\nhello\nhello\nhello");
 
-      const label = await UI.editText(
-        rectangle,
-        "hello\nhello\nhello\nhello\nhello",
-      );
       const initCenterY = rectangle.y + rectangle.height / 2;
-      const minContainerHeight = getBoundTextContainerDimensions(
+      const textLayout = getBodyLocalLayout(rectangle.get());
+      const minContainerHeight = getCompositeShapeDimensionsForText(
         rectangle.get(),
-        label.width,
-        label.height,
+        textLayout.width,
+        textLayout.height,
       ).height;
 
       UI.resize(rectangle, handle, move, {
         alt: true,
       });
-      const newCenterY = rectangle.y + rectangle.height / 2;
-      expect(newCenterY).toBeCloseTo(initCenterY);
+
+      expect(rectangle.y + rectangle.height / 2).toBeCloseTo(initCenterY);
       expect(rectangle.height).toBeLessThan(minContainerHeight);
       expect(rectangle.textFitMode).toBe("fixed");
+      expectBodyCentered(rectangle.get());
     },
   );
 
-  it("keeps the flipped corner anchored while fixed text stays within the shape", async () => {
+  it("keeps the flipped corner anchored while fixed text stays within the shape", () => {
     const rectangle = UI.createElement("rectangle", {
       width: 200,
       height: 200,
     });
-    const label = await UI.editText(rectangle, "first second third fourth");
+    setBodyText(rectangle.get(), "first second third fourth");
     const originalElements = arrayToMap(
       h.app.scene.getNonDeletedElements().map((element) => ({ ...element })),
     );
     const originalRectangle = originalElements.get(rectangle.id)!;
-    let minHeight = 0;
 
     // One SE drag crosses the top edge. Once the shape is manually resized,
-    // its dimensions remain fixed while the label is truncated.
+    // its dimensions follow the drag while the body text is truncated to fit.
     for (const nextHeight of [-10, -40, -80, -200]) {
       act(() => {
         resizeSingleElement(
@@ -369,15 +407,22 @@ describe("generic element", () => {
 
       expect(rectangle.x).toBe(originalRectangle.x);
       expect(rectangle.y + rectangle.height).toBe(originalRectangle.y);
-      expect(label.y).toBeGreaterThan(rectangle.y);
-      expect(label.y + label.height).toBeLessThan(
-        rectangle.y + rectangle.height,
-      );
-      if (nextHeight === -10) {
-        minHeight = rectangle.height;
-      }
-      expect(rectangle.height).toBe(Math.max(minHeight, -nextHeight));
+      // 正文不再给容器兜底高度：形状完全跟随拖拽的尺寸
+      expect(rectangle.height).toBe(-nextHeight);
       expect(rectangle.textFitMode).toBe("fixed");
+      expect(rectangle.texts?.body).toEqual({
+        text: "first second third fourth",
+        style: bodyStyle,
+      });
+      expectBodyCentered(rectangle.get());
+
+      const layout = getBodyLocalLayout(rectangle.get());
+      // 宽度始终被换行/截断收进形状；高度够放一行时也收在形状内
+      expect(layout.width).toBeLessThanOrEqual(rectangle.width);
+      expect(
+        layout.height <= rectangle.height || layout.lines.length === 1,
+      ).toBe(true);
+      expect(layout.fontSize).toBe(20);
     }
   });
 });
@@ -606,7 +651,7 @@ describe("arrow element", () => {
         pointFrom(200, 120),
       ],
     });
-    const label = await UI.editText(arrow, "Hello");
+    await UI.editText(arrow, "Hello");
     const elementsMap = arrayToMap(h.elements);
 
     // independently locate the arc-length midpoint by densely sampling the
@@ -640,16 +685,18 @@ describe("arrow element", () => {
     // the label defaults to the arc-length midpoint of the arrow's path and
     // keeps that normalized position through resizes
     const expectLabelAtPathMidpoint = () => {
-      const labelPos = LinearElementEditor.getBoundTextElementPosition(
-        arrow,
-        label,
+      const latest = h.app.scene.getNonDeletedElement(
+        arrow.id,
+      ) as ExcalidrawLinearElement;
+      const layout = LinearElementEditor.getLabelSceneLayout(
+        latest,
         elementsMap,
       );
-      const centerX = labelPos.x + label.width / 2;
-      const centerY = labelPos.y + label.height / 2;
+      const centerX = layout.x + layout.width / 2;
+      const centerY = layout.y + layout.height / 2;
       const pathMidpoint = sampledPathMidpoint();
 
-      expect(label.labelPosition).toBe(0.5);
+      expect(latest.texts?.label?.placement?.labelPosition).toBe(0.5);
       expect(centerX).toBeCloseTo(pathMidpoint[0], 0);
       expect(centerY).toBeCloseTo(pathMidpoint[1], 0);
       expect(
@@ -677,15 +724,25 @@ describe("arrow element", () => {
       });
     };
 
+    const labelState = () => {
+      const latest = h.app.scene.getNonDeletedElement(
+        arrow.id,
+      ) as ExcalidrawLinearElement;
+      return {
+        layout: LinearElementEditor.getLabelSceneLayout(latest, elementsMap),
+        fontSize: latest.texts?.label?.style.fontSize,
+      };
+    };
+
     resizeByDrag("se", 50, 30);
     expectLabelAtPathMidpoint();
-    expect(label.angle).toBeCloseTo(0);
-    expect(label.fontSize).toEqual(20);
+    expect(labelState().layout.angle).toBeCloseTo(0);
+    expect(labelState().fontSize).toEqual(20);
 
     resizeByDrag("w", 20, 0);
     expectLabelAtPathMidpoint();
-    expect(label.angle).toBeCloseTo(0);
-    expect(label.fontSize).toEqual(20);
+    expect(labelState().layout.angle).toBeCloseTo(0);
+    expect(labelState().fontSize).toEqual(20);
 
     const { x, width, height } = arrow;
     const latestArrow = h.app.scene.getNonDeletedElement(arrow.id)!;
@@ -703,8 +760,8 @@ describe("arrow element", () => {
     });
     expect(getBoundsFromPoints(arrow)[2]).toBeCloseTo(x);
     expect(arrow.width).toBeCloseTo(2 * width);
-    expect(label.fontSize).toBeCloseTo(40);
-    expect(label.angle).toBeCloseTo(0);
+    expect(labelState().fontSize).toBeCloseTo(40);
+    expect(labelState().layout.angle).toBeCloseTo(0);
     expectLabelAtPathMidpoint();
   });
 
@@ -770,7 +827,8 @@ describe("text element", () => {
   it("resizes", async () => {
     const text = UI.createElement("text");
     await UI.editText(text, "hello\nworld");
-    const { width, height, fontSize } = text;
+    const { width, height } = text;
+    const fontSize = getTextElementStyle(text).fontSize;
     const scale = 40 / height + 1;
     UI.resize(text, "se", [30, 40]);
 
@@ -779,14 +837,15 @@ describe("text element", () => {
     expect(text.width).toBeCloseTo(width * scale);
     expect(text.height).toBeCloseTo(height * scale);
     expect(text.angle).toBeCloseTo(0);
-    expect(text.fontSize).toBeCloseTo(fontSize * scale);
+    expect(getTextElementStyle(text).fontSize).toBeCloseTo(fontSize * scale);
   });
 
   // TODO enable this test after adding single text element flipping
   it.skip("flips while resizing", async () => {
     const text = UI.createElement("text");
     await UI.editText(text, "hello\nworld");
-    const { width, height, fontSize } = text;
+    const { width, height } = text;
+    const fontSize = getTextElementStyle(text).fontSize;
     const scale = 100 / width - 1;
     UI.resize(text, "nw", [100, 80]);
 
@@ -795,14 +854,15 @@ describe("text element", () => {
     expect(text.width).toBeCloseTo(width * scale);
     expect(text.height).toBeCloseTo(height * scale);
     expect(text.angle).toBeCloseTo(0);
-    expect(text.fontSize).toBeCloseTo(fontSize * scale);
+    expect(getTextElementStyle(text).fontSize).toBeCloseTo(fontSize * scale);
   });
 
   // TODO enable this test after fixing text resizing from center
   it.skip("resizes from center", async () => {
     const text = UI.createElement("text");
     await UI.editText(text, "hello\nworld");
-    const { x, y, width, height, fontSize } = text;
+    const { x, y, width, height } = text;
+    const fontSize = getTextElementStyle(text).fontSize;
     const scale = 80 / height + 1;
     UI.resize(text, "nw", [-25, -40], { alt: true });
 
@@ -811,7 +871,7 @@ describe("text element", () => {
     expect(text.width).toBeCloseTo(width * scale);
     expect(text.height).toBeCloseTo(height * scale);
     expect(text.angle).toBeCloseTo(0);
-    expect(text.fontSize).toBeCloseTo(fontSize * scale);
+    expect(getTextElementStyle(text).fontSize).toBeCloseTo(fontSize * scale);
   });
 
   // it("resizes with bound arrow", async () => {
@@ -843,120 +903,131 @@ describe("text element", () => {
   it("updates font size via keyboard", async () => {
     const text = UI.createElement("text");
     await UI.editText(text, "abc");
-    const { fontSize } = text;
+    const fontSize = getTextElementStyle(text).fontSize;
     mouse.select(text);
 
     Keyboard.withModifierKeys({ shift: true, ctrl: true }, () => {
       Keyboard.keyDown(KEYS.CHEVRON_RIGHT);
-      expect(text.fontSize).toBe(fontSize * 1.1);
+      expect(getTextElementStyle(text).fontSize).toBe(fontSize * 1.1);
 
       Keyboard.keyDown(KEYS.CHEVRON_LEFT);
-      expect(text.fontSize).toBe(fontSize);
+      expect(getTextElementStyle(text).fontSize).toBe(fontSize);
     });
   });
 
   // text can be resized from sides
-  it("can be resized from e", async () => {
-    const text = UI.createElement("text");
-    await UI.editText(text, "Excalidraw\nEditor");
+  const createTextInScene = (source: string) => {
+    const text = newTextElement({ x: 0, y: 0, text: source });
+    const scene = new Scene([text], { skipValidation: true });
+    const original = { ...text };
+    const resize = (
+      handle: "e" | "w",
+      width: number,
+      height: number,
+    ) =>
+      resizeSingleElement(
+        width,
+        height,
+        text,
+        original,
+        arrayToMap([original]),
+        scene,
+        handle,
+      );
+    return { text, resize };
+  };
 
+  it("can be resized from e", () => {
+    const { text, resize } = createTextInScene("Excalidraw\nEditor");
     const width = text.width;
     const height = text.height;
 
-    UI.resize(text, "e", [30, 0]);
+    resize("e", width + 30, height);
     expect(text.width).toBe(width + 30);
     expect(text.height).toBe(height);
 
-    UI.resize(text, "e", [-30, 0]);
+    resize("e", width, height);
     expect(text.width).toBe(width);
     expect(text.height).toBe(height);
   });
 
-  it("can be resized from w", async () => {
-    const text = UI.createElement("text");
-    await UI.editText(text, "Excalidraw\nEditor");
-
+  it("can be resized from w", () => {
+    const { text, resize } = createTextInScene("Excalidraw\nEditor");
     const width = text.width;
     const height = text.height;
 
-    UI.resize(text, "w", [-50, 0]);
+    resize("w", width + 50, height);
     expect(text.width).toBe(width + 50);
     expect(text.height).toBe(height);
 
-    UI.resize(text, "w", [50, 0]);
+    resize("w", width, height);
     expect(text.width).toBe(width);
     expect(text.height).toBe(height);
   });
 
-  it("wraps when width is narrower than texts inside", async () => {
-    const text = UI.createElement("text");
-    await UI.editText(text, "Excalidraw\nEditor");
-
+  it("wraps when width is narrower than texts inside", () => {
+    const { text, resize } = createTextInScene("Excalidraw\nEditor");
     const prevWidth = text.width;
     const prevHeight = text.height;
-    const prevText = text.text;
+    const prevText = getTextElementDisplayText(text);
 
-    UI.resize(text, "w", [50, 0]);
+    resize("w", prevWidth - 50, prevHeight);
     expect(text.width).toBe(prevWidth - 50);
     expect(text.height).toBeGreaterThan(prevHeight);
-    expect(text.text).not.toEqual(prevText);
+    expect(getTextElementDisplayText(text)).not.toEqual(prevText);
     expect(text.autoResize).toBe(false);
 
-    UI.resize(text, "w", [-50, 0]);
+    resize("w", prevWidth, prevHeight);
     expect(text.width).toBe(prevWidth);
     expect(text.height).toEqual(prevHeight);
-    expect(text.text).toEqual(prevText);
+    expect(getTextElementDisplayText(text)).toEqual(prevText);
     expect(text.autoResize).toBe(false);
 
-    UI.resize(text, "e", [-20, 0]);
+    resize("e", prevWidth - 20, prevHeight);
     expect(text.width).toBe(prevWidth - 20);
     expect(text.height).toBeGreaterThan(prevHeight);
-    expect(text.text).not.toEqual(prevText);
+    expect(getTextElementDisplayText(text)).not.toEqual(prevText);
     expect(text.autoResize).toBe(false);
 
-    UI.resize(text, "e", [20, 0]);
+    resize("e", prevWidth, prevHeight);
     expect(text.width).toBe(prevWidth);
     expect(text.height).toEqual(prevHeight);
-    expect(text.text).toEqual(prevText);
+    expect(getTextElementDisplayText(text)).toEqual(prevText);
     expect(text.autoResize).toBe(false);
   });
 
-  it("keeps properties when wrapped", async () => {
-    const text = UI.createElement("text");
-    await UI.editText(text, "Excalidraw\nEditor");
+  it("keeps properties when wrapped", () => {
+    const { text, resize } = createTextInScene("Excalidraw\nEditor");
+    const alignment = getTextElementStyle(text).textAlign;
+    const fontSize = getTextElementStyle(text).fontSize;
+    const fontFamily = getTextElementStyle(text).fontFamily;
 
-    const alignment = text.textAlign;
-    const fontSize = text.fontSize;
-    const fontFamily = text.fontFamily;
-
-    UI.resize(text, "e", [-60, 0]);
-    expect(text.textAlign).toBe(alignment);
-    expect(text.fontSize).toBe(fontSize);
-    expect(text.fontFamily).toBe(fontFamily);
+    resize("e", text.width - 60, text.height);
+    expect(getTextElementStyle(text).textAlign).toBe(alignment);
+    expect(getTextElementStyle(text).fontSize).toBe(fontSize);
+    expect(getTextElementStyle(text).fontFamily).toBe(fontFamily);
     expect(text.autoResize).toBe(false);
 
-    UI.resize(text, "e", [60, 0]);
-    expect(text.textAlign).toBe(alignment);
-    expect(text.fontSize).toBe(fontSize);
-    expect(text.fontFamily).toBe(fontFamily);
+    resize("e", text.width + 60, text.height);
+    expect(getTextElementStyle(text).textAlign).toBe(alignment);
+    expect(getTextElementStyle(text).fontSize).toBe(fontSize);
+    expect(getTextElementStyle(text).fontFamily).toBe(fontFamily);
     expect(text.autoResize).toBe(false);
   });
 
-  it("has a minimum width when wrapped", async () => {
-    const text = UI.createElement("text");
-    await UI.editText(text, "Excalidraw\nEditor");
-
+  it("has a minimum width when wrapped", () => {
+    const { text, resize } = createTextInScene("Excalidraw\nEditor");
     const width = text.width;
 
-    UI.resize(text, "e", [-width, 0]);
+    resize("e", 0, text.height);
     expect(text.width).not.toEqual(0);
-    UI.resize(text, "e", [width - text.width, 0]);
+    resize("e", width, text.height);
     expect(text.width).toEqual(width);
     expect(text.autoResize).toBe(false);
 
-    UI.resize(text, "w", [width, 0]);
+    resize("w", width * 2, text.height);
     expect(text.width).not.toEqual(0);
-    UI.resize(text, "w", [text.width - width, 0]);
+    resize("w", width, text.height);
     expect(text.width).toEqual(width);
     expect(text.autoResize).toBe(false);
   });
@@ -1053,13 +1124,13 @@ describe("image element", () => {
 });
 
 describe("multiple selection", () => {
-  it("keeps a flipped text container anchored when its label requires extra height", async () => {
+  it("keeps a flipped text container anchored when its body text no longer fits", () => {
     const rectangle = UI.createElement("rectangle", {
       position: 0,
       width: 200,
       height: 35,
     });
-    const label = await UI.editText(rectangle, "hello");
+    setBodyText(rectangle.get(), "hello");
     const other = UI.createElement("rectangle", {
       x: 300,
       y: 0,
@@ -1067,22 +1138,28 @@ describe("multiple selection", () => {
     });
     const originalHeight = rectangle.height;
 
-    // Halve the selection and flip vertically while keeping the label fitted.
+    // Halve the selection and flip vertically: the container is not grown to
+    // fit the text, it simply follows the selection's scale.
     UI.resize([rectangle, other], "se", [-200, -150], { shift: true });
 
-    expect(label.fontSize).toBeCloseTo(10);
-    expect(label.text).toBe("hello");
     expect(rectangle.height).toBeCloseTo(originalHeight / 2);
     expect(rectangle.y + rectangle.height).toBeCloseTo(0);
+    expect(rectangle.texts?.body).toEqual({
+      text: "hello",
+      style: bodyStyle,
+    });
+    expect(rectangle.textFitMode).toBe("fixed");
+    expectBodyCentered(rectangle.get());
+    expect(getBodyLocalLayout(rectangle.get()).fontSize).toBe(20);
   });
 
-  it("resizes with generic elements", async () => {
+  it("resizes with generic elements", () => {
     const rectangle = UI.createElement("rectangle", {
       position: 0,
       width: 100,
       height: 80,
     });
-    const rectLabel = await UI.editText(rectangle, "hello\nworld");
+    setBodyText(rectangle.get(), "hello\nworld");
     const diamond = UI.createElement("diamond", {
       x: 140,
       y: 40,
@@ -1113,16 +1190,13 @@ describe("multiple selection", () => {
     expect(rectangle.height).toBeCloseTo(80 * scale);
     expect(rectangle.angle).toEqual(0);
 
-    expect(rectLabel.type).toEqual("text");
-    expect(rectLabel.containerId).toEqual(rectangle.id);
-    expect(rectLabel.x + rectLabel.width / 2).toBeCloseTo(
-      rectangle.x + rectangle.width / 2,
-    );
-    expect(rectLabel.y + rectLabel.height / 2).toBeCloseTo(
-      rectangle.y + rectangle.height / 2,
-    );
-    expect(rectLabel.angle).toEqual(0);
-    expect(rectLabel.fontSize).toBeCloseTo(20 * scale, -1);
+    expect(rectangle.texts?.body).toEqual({
+      text: "hello\nworld",
+      style: bodyStyle,
+    });
+    expectBodyCentered(rectangle.get());
+    // 正文样式不随选区缩放一起放大
+    expect(getBodyLocalLayout(rectangle.get()).fontSize).toBe(20);
 
     expect(diamond.x).toBeCloseTo(140 * scale);
     expect(diamond.y).toBeCloseTo(40 * scale);
@@ -1322,7 +1396,7 @@ describe("multiple selection", () => {
       width: 220,
       height: 0,
     });
-    const topArrowLabel = await UI.editText(topArrow.get(), "lorem ipsum");
+    await UI.editText(topArrow.get(), "lorem ipsum");
 
     UI.clickTool("text");
     UI.openToolbarPopup("Text align");
@@ -1333,27 +1407,35 @@ describe("multiple selection", () => {
       width: 220,
       height: 0,
     });
-    const bottomArrowLabel = await UI.editText(
-      bottomArrow.get(),
-      "dolor\nsit amet",
-    );
+    await UI.editText(bottomArrow.get(), "dolor\nsit amet");
 
+    const elementsMap = arrayToMap(h.elements);
+    const topArrowBefore = h.app.scene.getNonDeletedElement(
+      topArrow.id,
+    ) as ExcalidrawLinearElement;
     const selectionWidth = 220;
-    const selectionTop = 20 - topArrowLabel.height / 2;
+    const selectionTop =
+      20 -
+      LinearElementEditor.getLabelSceneLayout(topArrowBefore, elementsMap)
+        .height /
+        2;
     const move = [80, 0] as [number, number];
     const scale = move[0] / selectionWidth + 1;
-    const elementsMap = arrayToMap(h.elements);
     UI.resize([topArrow.get(), bottomArrow.get()], "se", move, {
       shift: true,
     });
-    const topArrowLabelPos = LinearElementEditor.getBoundTextElementPosition(
-      topArrow,
-      topArrowLabel,
+    const topArrowAfter = h.app.scene.getNonDeletedElement(
+      topArrow.id,
+    ) as ExcalidrawLinearElement;
+    const bottomArrowAfter = h.app.scene.getNonDeletedElement(
+      bottomArrow.id,
+    ) as ExcalidrawLinearElement;
+    const topArrowLabelLayout = LinearElementEditor.getLabelSceneLayout(
+      topArrowAfter,
       elementsMap,
     );
-    const bottomArrowLabelPos = LinearElementEditor.getBoundTextElementPosition(
-      bottomArrow,
-      bottomArrowLabel,
+    const bottomArrowLabelLayout = LinearElementEditor.getLabelSceneLayout(
+      bottomArrowAfter,
       elementsMap,
     );
 
@@ -1365,13 +1447,13 @@ describe("multiple selection", () => {
       [300, 0],
     ]);
 
-    expect(topArrowLabelPos.x + topArrowLabel.width / 2).toBeCloseTo(
+    expect(topArrowLabelLayout.x + topArrowLabelLayout.width / 2).toBeCloseTo(
       topArrow.width / 2,
     );
-    expect(topArrowLabelPos.y + topArrowLabel.height / 2).toBeCloseTo(
+    expect(topArrowLabelLayout.y + topArrowLabelLayout.height / 2).toBeCloseTo(
       topArrow.y,
     );
-    expect(topArrowLabel.fontSize).toBeCloseTo(20 * scale);
+    expect(topArrowAfter.texts?.label?.style.fontSize).toBeCloseTo(20 * scale);
 
     expect(bottomArrow.x).toBeCloseTo(0);
     expect(bottomArrow.y).toBeCloseTo(
@@ -1383,13 +1465,15 @@ describe("multiple selection", () => {
       [300, 0],
     ]);
 
-    expect(bottomArrowLabelPos.x + bottomArrowLabel.width / 2).toBeCloseTo(
-      bottomArrow.width / 2,
+    expect(
+      bottomArrowLabelLayout.x + bottomArrowLabelLayout.width / 2,
+    ).toBeCloseTo(bottomArrow.width / 2);
+    expect(
+      bottomArrowLabelLayout.y + bottomArrowLabelLayout.height / 2,
+    ).toBeCloseTo(bottomArrow.y);
+    expect(bottomArrowAfter.texts?.label?.style.fontSize).toBeCloseTo(
+      28 * scale,
     );
-    expect(bottomArrowLabelPos.y + bottomArrowLabel.height / 2).toBeCloseTo(
-      bottomArrow.y,
-    );
-    expect(bottomArrowLabel.fontSize).toBeCloseTo(28 * scale);
   });
 
   it("resizes with text elements", async () => {
@@ -1414,12 +1498,12 @@ describe("multiple selection", () => {
 
     expect(topText.x).toBeCloseTo(0);
     expect(topText.y).toBeCloseTo(-selectionHeight * (scale - 1));
-    expect(topText.fontSize).toBeCloseTo(20 * scale);
+    expect(getTextElementStyle(topText).fontSize).toBeCloseTo(20 * scale);
     expect(topText.angle).toEqual(0);
 
     expect(bottomText.x).toBeCloseTo(40 * scale);
     expect(bottomText.y).toBeCloseTo(40 - (selectionHeight - 40) * (scale - 1));
-    expect(bottomText.fontSize).toBeCloseTo(28 * scale);
+    expect(getTextElementStyle(bottomText).fontSize).toBeCloseTo(28 * scale);
     expect(bottomText.angle).toEqual(0);
   });
 
@@ -1533,7 +1617,7 @@ describe("multiple selection", () => {
       height: 80,
       angle: Math.PI / 6,
     });
-    const rectLabel = await UI.editText(rectangle, "hello\nworld");
+    setBodyText(rectangle.get(), "hello\nworld");
 
     const boundArrow = UI.createElement("arrow", {
       x: 380,
@@ -1541,7 +1625,7 @@ describe("multiple selection", () => {
       width: -60,
       height: -80,
     });
-    const arrowLabel = await UI.editText(boundArrow, "test");
+    await UI.editText(boundArrow, "test");
 
     const selectionWidth = 380;
     const move = [-800, 0] as [number, number];
@@ -1554,9 +1638,11 @@ describe("multiple selection", () => {
     // 这条用例考察的是"翻转"在等比缩放下的表现，自由缩放下的翻转另有用例。
     UI.resize([line, image, rectangle, boundArrow], "se", move);
     const lineNewBounds = getBoundsFromPoints(line);
-    const arrowLabelPos = LinearElementEditor.getBoundTextElementPosition(
-      boundArrow,
-      arrowLabel,
+    const boundArrowAfter = h.app.scene.getNonDeletedElement(
+      boundArrow.id,
+    ) as ExcalidrawLinearElement;
+    const arrowLabelLayout = LinearElementEditor.getLabelSceneLayout(
+      boundArrowAfter,
       elementsMap,
     );
 
@@ -1585,14 +1671,13 @@ describe("multiple selection", () => {
     expect(rectangle.height).toBeCloseTo(80 * scaleY);
     expect(rectangle.angle).toEqual((Math.PI * 11) / 6);
 
-    expect(rectLabel.x + rectLabel.width / 2).toBeCloseTo(
-      rectangle.x + rectangle.width / 2,
-    );
-    expect(rectLabel.y + rectLabel.height / 2).toBeCloseTo(
-      rectangle.y + rectangle.height / 2,
-    );
-    expect(rectLabel.angle).toBeCloseTo(rectangle.angle);
-    expect(rectLabel.fontSize).toBeCloseTo(20 * scaleY);
+    expect(rectangle.texts?.body).toEqual({
+      text: "hello\nworld",
+      style: bodyStyle,
+    });
+    expectBodyCentered(rectangle.get());
+    // 正文样式不随翻转/缩放变化：字号仍是 20
+    expect(getBodyLocalLayout(rectangle.get()).fontSize).toBe(20);
 
     expect(boundArrow.x).toBeCloseTo(380 * scaleX);
     expect(boundArrow.y).toBeCloseTo(240 * scaleY);
@@ -1603,14 +1688,16 @@ describe("multiple selection", () => {
     expect(boundArrow.points[1][0]).toBeCloseTo(62.92895733671111, 6);
     expect(boundArrow.points[1][1]).toBeCloseTo(-86.46566327389695, 6);
 
-    expect(arrowLabelPos.x + arrowLabel.width / 2).toBeCloseTo(
+    expect(arrowLabelLayout.x + arrowLabelLayout.width / 2).toBeCloseTo(
       boundArrow.x + boundArrow.points[1][0] / 2,
     );
-    expect(arrowLabelPos.y + arrowLabel.height / 2).toBeCloseTo(
+    expect(arrowLabelLayout.y + arrowLabelLayout.height / 2).toBeCloseTo(
       boundArrow.y + boundArrow.points[1][1] / 2,
     );
-    expect(arrowLabel.angle).toEqual(0);
-    expect(arrowLabel.fontSize).toBeCloseTo(20 * scaleY);
+    expect(arrowLabelLayout.angle).toEqual(0);
+    expect(boundArrowAfter.texts?.label?.style.fontSize).toBeCloseTo(
+      20 * scaleY,
+    );
   });
 
   it("scales a rotated element along its own axes when not locked", async () => {

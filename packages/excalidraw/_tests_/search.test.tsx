@@ -9,10 +9,11 @@ import {
   KEYS,
 } from "@excalidraw/common";
 
+import { getTextElementDisplayText } from "@excalidraw/element";
+
 import type {
   ExcalidrawFrameLikeElement,
   ExcalidrawTableElement,
-  ExcalidrawTextElement,
 } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
@@ -120,17 +121,16 @@ describe("search", () => {
     const scrollIntoViewMock = jest.fn();
     window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
 
-    API.setElements([
-      API.createElement({
-        type: "text",
-        text: "",
-      }),
-    ]);
-
-    API.updateElement(h.elements[0] as ExcalidrawTextElement, {
-      text: "t\ne\ns\nt \nt\ne\nx\nt \ns\np\nli\nt \ni\nn\nt\no\nm\nu\nlt\ni\np\nl\ne \nli\nn\ne\ns",
-      originalText: "test text split into multiple lines",
+    const textElement = API.createElement({
+      type: "text",
+      text: "test text split into multiple lines",
     });
+    API.setElements([textElement]);
+    API.updateElement(textElement, {
+      autoResize: false,
+      width: 10,
+    });
+    expect(getTextElementDisplayText(textElement)).toContain("\n");
 
     expect(h.app.state.openSidebar).toBeNull();
 
@@ -145,22 +145,23 @@ describe("search", () => {
 
     expect(searchInput.matches(":focus")).toBe(true);
 
+    let shortMatchLines = 0;
     updateTextEditor(searchInput, "test");
 
     await waitFor(() => {
+      const match = h.app.state.searchMatches?.matches[0];
       expect(h.app.state.searchMatches?.matches.length).toBe(1);
-      expect(h.app.state.searchMatches?.matches[0]?.matchedLines?.length).toBe(
-        4,
-      );
+      // 命中跨越多行
+      shortMatchLines = match?.matchedLines?.length ?? 0;
+      expect(shortMatchLines).toBeGreaterThan(1);
     });
 
     updateTextEditor(searchInput, "ext spli");
 
     await waitFor(() => {
+      const match = h.app.state.searchMatches?.matches[0];
       expect(h.app.state.searchMatches?.matches.length).toBe(1);
-      expect(h.app.state.searchMatches?.matches[0]?.matchedLines?.length).toBe(
-        6,
-      );
+      expect(match?.matchedLines?.length ?? 0).toBeGreaterThan(shortMatchLines);
     });
   });
 

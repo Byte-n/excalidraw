@@ -1,4 +1,4 @@
-import { newMindmapNodeElement, newTextElement } from "@excalidraw/element";
+import { newMindmapNodeElement } from "@excalidraw/element";
 import { vi } from "vitest";
 
 import type {
@@ -45,19 +45,8 @@ const fixture = () => {
           : { role: "root" as const, parentId: null, order: null }),
       }),
       id,
-      boundElements: [{ type: "text" as const, id: `${id}-text` }],
     };
-    elements.push(node, {
-      ...newTextElement({
-        x: node.x + 12,
-        y: node.y + 12,
-        text: title,
-        containerId: id,
-        textAlign: "center",
-        verticalAlign: "middle",
-      }),
-      id: `${id}-text`,
-    });
+    elements.push({ ...node, texts: API.mindmapBody(node, title) });
   }
   return restoreElements(elements, null, { repairBindings: true });
 };

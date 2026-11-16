@@ -2,15 +2,18 @@ import { exportToCanvas, exportToSvg } from "@excalidraw/utils";
 
 import { newElementWith, type ElementUpdate } from "@excalidraw/element";
 import { newElement } from "@excalidraw/element";
+import { LinearElementEditor } from "@excalidraw/element";
 import { getTableCellBounds } from "@excalidraw/element";
 
 import {
   applyDarkModeFilter,
   BOUND_TEXT_PADDING,
+  DEFAULT_FONT_FAMILY,
   FONT_FAMILY,
   FRAME_STYLE,
   TABLE_STYLE,
   TABLE_TITLE_OFFSET_Y,
+  getLineHeight,
 } from "@excalidraw/common";
 
 import { pointFrom } from "@excalidraw/math";
@@ -154,9 +157,12 @@ describe("exportToSvg", () => {
           ...textFixture,
           height: ELEMENT_HEIGHT,
           width: ELEMENT_WIDTH,
-          text: "中国你好！这是一个测试。中国你好！日本こんにちは！これはテストです。한국 안녕하세요! 이것은 테스트입니다.",
-          originalText:
-            "中国你好！这是一个测试。中国你好！日本こんにちは！これはテストです。한국 안녕하세요! 이것은 테스트입니다.",
+          texts: {
+            body: {
+              ...(textFixture as ExcalidrawTextElement).texts.body,
+              text: "中国你好！这是一个测试。中国你好！日本こんにちは！これはテストです。한국 안녕하세요! 이것은 테스트입니다.",
+            },
+          },
           index: "a4" as FractionalIndex,
         } as NonDeleted<ExcalidrawTextElement>,
       ],
@@ -281,19 +287,23 @@ describe("exportToSvg", () => {
       width: 200,
       height: 0,
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 0)],
-      boundElements: [{ type: "text", id: "label-11439" }],
-    });
-    const label = API.createElement({
-      type: "text",
-      id: "label-11439",
-      text: "label",
-      width: 50,
-      height: 20,
-      containerId: "arrow-11439",
+      texts: {
+        label: {
+          text: "label",
+          style: {
+            fontFamily: DEFAULT_FONT_FAMILY,
+            fontSize: 20,
+            lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+            textAlign: "center",
+            verticalAlign: "middle",
+          },
+          placement: { labelPosition: 0.5 },
+        },
+      },
     });
 
     const svgElement = await exportUtils.exportToSvg(
-      [arrow, label] as NonDeletedExcalidrawElement[],
+      [arrow] as NonDeletedExcalidrawElement[],
       DEFAULT_OPTIONS,
       null,
     );
@@ -318,19 +328,27 @@ describe("exportToSvg", () => {
       width: 200,
       height: 0,
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(200, 0)],
-      boundElements: [{ type: "text", id: "label-hole" }],
+      texts: {
+        label: {
+          text: "label",
+          style: {
+            fontFamily: DEFAULT_FONT_FAMILY,
+            fontSize: 20,
+            lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+            textAlign: "center",
+            verticalAlign: "middle",
+          },
+          placement: { labelPosition: 0.5 },
+        },
+      },
     });
-    const label = API.createElement({
-      type: "text",
-      id: "label-hole",
-      text: "label",
-      width: 50,
-      height: 20,
-      containerId: "arrow-hole",
-    });
+    const layout = LinearElementEditor.getLabelSceneLayout(
+      arrow,
+      new Map([[arrow.id, arrow]]),
+    );
 
     const svgElement = await exportUtils.exportToSvg(
-      [arrow, label] as NonDeletedExcalidrawElement[],
+      [arrow] as NonDeletedExcalidrawElement[],
       { ...DEFAULT_OPTIONS, exportPadding: 0 },
       null,
     );
@@ -347,20 +365,56 @@ describe("exportToSvg", () => {
     // the label sits centered on the arrow's midpoint; the hole is its box
     // grown by the padding on every side, in the mask's (arrow-relative)
     // coordinates
-    const labelLeft = arrow.x + arrow.width / 2 - label.width / 2;
-    const labelTop = arrow.y - label.height / 2;
     expect(Number(hole.getAttribute("x"))).toBe(
-      offsetX + labelLeft - arrow.x - BOUND_TEXT_PADDING,
+      offsetX + layout.x - arrow.x - BOUND_TEXT_PADDING,
     );
     expect(Number(hole.getAttribute("y"))).toBe(
-      offsetY + labelTop - arrow.y - BOUND_TEXT_PADDING,
+      offsetY + layout.y - arrow.y - BOUND_TEXT_PADDING,
     );
     expect(Number(hole.getAttribute("width"))).toBe(
-      label.width + BOUND_TEXT_PADDING * 2,
+      layout.width + BOUND_TEXT_PADDING * 2,
     );
     expect(Number(hole.getAttribute("height"))).toBe(
-      label.height + BOUND_TEXT_PADDING * 2,
+      layout.height + BOUND_TEXT_PADDING * 2,
     );
+  });
+
+  it("renders a lifeline label stored in texts.body as SVG text", async () => {
+    const lifeline = API.createElement({
+      type: "sequence",
+      shape: {
+        id: "sc-lifeline-entity",
+        schemaVersion: 1,
+        lifeline: { headHeight: 68.272 },
+      },
+      x: 100,
+      y: 100,
+      width: 64,
+      height: 428.272,
+      texts: {
+        body: {
+          text: "用户",
+          style: {
+            fontFamily: DEFAULT_FONT_FAMILY,
+            fontSize: 14,
+            lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+            textAlign: "center" as const,
+            verticalAlign: "middle" as const,
+          },
+        },
+      },
+    });
+
+    const svgElement = await exportUtils.exportToSvg(
+      [lifeline],
+      DEFAULT_OPTIONS,
+      null,
+    );
+
+    const textNodes = Array.from(svgElement.querySelectorAll("text"));
+    expect(textNodes.map((node) => node.textContent)).toEqual(["用户"]);
+    expect(Number(textNodes[0].getAttribute("x"))).not.toBeNaN();
+    expect(Number(textNodes[0].getAttribute("y"))).not.toBeNaN();
   });
 });
 
@@ -384,21 +438,27 @@ describe("exportToCanvas", () => {
       width: 300,
       height: 0,
       points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(300, 0)],
-      boundElements: [{ type: "text", id: "label-11591" }],
+      texts: {
+        label: {
+          text: "label",
+          style: {
+            fontFamily: DEFAULT_FONT_FAMILY,
+            fontSize: 20,
+            lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+            textAlign: "center",
+            verticalAlign: "middle",
+          },
+          placement: { labelPosition: 0.5 },
+        },
+      },
     });
-    const label = API.createElement({
-      type: "text",
-      id: "label-11591",
-      text: "label",
-      x: 75,
-      y: -10,
-      width: 50,
-      height: 20,
-      containerId: "arrow-11591",
-    });
+    const layout = LinearElementEditor.getLabelSceneLayout(
+      arrow,
+      new Map([[arrow.id, arrow]]),
+    );
 
     const canvas = await exportToCanvas({
-      elements: [rectangle, arrow, label],
+      elements: [rectangle, arrow],
       files: null,
       appState: { exportBackground: true, viewBackgroundColor: "#ffffff" },
     });
@@ -417,8 +477,8 @@ describe("exportToCanvas", () => {
       ),
     ).toBe(true);
 
-    const holeWidth = label.width + BOUND_TEXT_PADDING * 2;
-    const holeHeight = label.height + BOUND_TEXT_PADDING * 2;
+    const holeWidth = layout.width + BOUND_TEXT_PADDING * 2;
+    const holeHeight = layout.height + BOUND_TEXT_PADDING * 2;
     expect(
       events.filter(
         (event: any) =>

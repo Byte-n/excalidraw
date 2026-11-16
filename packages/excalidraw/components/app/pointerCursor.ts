@@ -158,7 +158,7 @@ const getLinearHoverCursor = (
   if (isHoveringAPointHandle || segmentMidPointHoveredCoords) {
     return CURSOR_TYPE.POINTER;
   }
-  if (app.arrowText.isBoundTextGrabbable(element, point.x, point.y)) {
+  if (app.arrowText.isLabelGrabbable(element, point.x, point.y)) {
     return CURSOR_TYPE.GRAB;
   }
   if (

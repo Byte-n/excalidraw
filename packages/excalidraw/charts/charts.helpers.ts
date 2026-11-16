@@ -14,6 +14,7 @@ import {
 
 import {
   getApproxMinLineWidth,
+  getTextElementTextPatch,
   measureText,
   newElement,
   newLinearElement,
@@ -21,10 +22,9 @@ import {
   wrapText,
 } from "@excalidraw/element";
 
-import type {
-  ChartType,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+import type { UnitlessLineHeight } from "@excalidraw/element";
+
+import type { ChartType } from "@excalidraw/element/types";
 import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 
 import {
@@ -66,6 +66,20 @@ import type {
 } from "./charts.types";
 
 const bgColors = getAllColorsSpecificShade(DEFAULT_CHART_COLOR_INDEX);
+
+/**
+ * 图表标签按排版好的显示文本测量尺寸，源文本只落在 `texts.body`；
+ * 固定宽度渲染时会按同一宽度重新换行。
+ */
+export const createChartTextElement = (
+  opts: Parameters<typeof newTextElement>[0] & { sourceText?: string },
+) => {
+  const { sourceText, ...rest } = opts;
+  const element = newTextElement(rest);
+  return sourceText !== undefined && sourceText !== rest.text
+    ? { ...element, ...getTextElementTextPatch(element, sourceText) }
+    : element;
+};
 
 const getSpreadsheetDimensionCount = (spreadsheet: Spreadsheet) =>
   spreadsheet.labels?.length ?? spreadsheet.series[0]?.values.length ?? 0;
@@ -340,11 +354,12 @@ export const createRadarAxisLabels = (
         ? -BAR_GAP / 3
         : 0;
 
-    return newTextElement({
+    return createChartTextElement({
       backgroundColor,
       ...commonProps,
       text: displayLabel,
-      originalText: label,
+      sourceText: label,
+      autoResize: false,
       x: anchorX,
       y: anchorY + yNudge,
       fontFamily,
@@ -448,10 +463,10 @@ export const createSeriesLegend = (
 
     // label in default (black) color
     legendElements.push(
-      newTextElement({
+      createChartTextElement({
         ...commonProps,
         text: item.displayLabel,
-        originalText: item.label,
+        sourceText: item.label,
         autoResize: false,
         x: cursorX + RADAR_LEGEND_SWATCH_SIZE + RADAR_LEGEND_TEXT_GAP,
         y: legendY,
@@ -473,7 +488,7 @@ const ellipsifyTextToWidth = (
   text: string,
   maxWidth: number,
   fontString: ReturnType<typeof getFontString>,
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  lineHeight: UnitlessLineHeight,
 ) => {
   if (measureText(text, fontString, lineHeight).width <= maxWidth) {
     return text;
@@ -495,7 +510,7 @@ const wrapOrEllipsifyTextToWidth = (
   text: string,
   maxWidth: number,
   fontString: ReturnType<typeof getFontString>,
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  lineHeight: UnitlessLineHeight,
 ) => {
   if (measureText(text, fontString, lineHeight).width <= maxWidth) {
     return { wrapped: false, text };
@@ -549,7 +564,7 @@ const getCartesianAxisLabelSpec = (
   maxLabelWidth: number,
   maxRotatedWidth: number,
   fontString: ReturnType<typeof getFontString>,
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  lineHeight: UnitlessLineHeight,
 ): CartesianAxisLabelSpec => {
   const minWidth = Math.max(
     CARTESIAN_LABEL_MIN_WIDTH,
@@ -721,11 +736,11 @@ export const chartXLabels = (
         CARTESIAN_LABEL_AXIS_CLEARANCE +
         (labelSpec.rotatedHeight - labelSpec.metrics.height) / 2;
 
-      return newTextElement({
+      return createChartTextElement({
         backgroundColor,
         ...commonProps,
         text: labelSpec.text,
-        originalText: labelSpec.wrapped ? label : labelSpec.text,
+        sourceText: labelSpec.wrapped ? label : labelSpec.text,
         autoResize: !labelSpec.wrapped,
         x: centerX,
         y: labelY,

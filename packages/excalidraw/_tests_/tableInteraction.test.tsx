@@ -1,7 +1,10 @@
 import { CURSOR_TYPE, KEYS } from "@excalidraw/common";
 
 import {
+  cellKey,
   getCommonBounds,
+  getLocalTextRegionLayout,
+  getTextBlock,
   getTransformHandlesFromCoords,
 } from "@excalidraw/element";
 
@@ -11,10 +14,7 @@ import { vi } from "vitest";
 
 import type { Radians } from "@excalidraw/math";
 
-import type {
-  ExcalidrawTableElement,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+import type { ExcalidrawTableElement } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
 
@@ -28,6 +28,7 @@ import {
   GlobalTestState,
   render,
   unmountComponent,
+  waitFor,
 } from "./test-utils";
 
 unmountComponent();
@@ -64,6 +65,14 @@ const doubleClickAt = (clientX: number, clientY: number) => {
   });
 };
 
+/** 区域编辑器在失焦时提交（Escape 是取消）。 */
+const submitEditor = async (editor: HTMLTextAreaElement) => {
+  await waitFor(() => {
+    expect(editor.onblur).toEqual(expect.any(Function));
+  });
+  act(() => editor.blur());
+};
+
 const getTable = () =>
   h.elements.find(
     (element): element is ExcalidrawTableElement =>
@@ -81,14 +90,14 @@ const nextFrame = () =>
       }),
   );
 
-const getBackgroundTexts = () =>
-  h.elements.filter(
-    (element): element is ExcalidrawTextElement =>
-      element.type === "text" &&
-      !element.isDeleted &&
-      element.containerRef?.kind === "tableCell" &&
-      element.containerRef.role === "backgroundText",
-  );
+/** 当前编辑的单元格区域 key（无会话时为 null）。 */
+const editingCellKey = () => {
+  const region = h.state.editingTextRegion;
+  return region?.target.region ?? null;
+};
+
+const cellLayout = (table: ExcalidrawTableElement, cellId: string) =>
+  getLocalTextRegionLayout(table, cellKey(cellId));
 
 /** cell center in scene coords for an unrotated table at (tableX, tableY) */
 const cellCenter = (
@@ -354,7 +363,9 @@ describe("table tool", () => {
       Keyboard.keyPress(KEYS.ENTER);
       const editor = await getTextEditor();
       expect(editor).toBeTruthy();
-      expect(getBackgroundTexts()).toHaveLength(1);
+      expect(h.state.editingTextElement).toBeNull();
+      expect(editingCellKey()).toBe(cellKey(table.table.cells[4].id));
+      expect(getTable().texts).toBeUndefined();
 
       Keyboard.exitTextEditor(editor);
       Keyboard.keyPress(KEYS.ESCAPE);
@@ -458,40 +469,29 @@ describe("table tool", () => {
 
       const editor = await getTextEditor();
       expect(editor.style.whiteSpace).toBe("pre-wrap");
-      const texts = getBackgroundTexts();
-      expect(texts).toHaveLength(1);
-      const text = texts[0];
-      expect(h.state.editingTextElement?.id).toBe(text.id);
-      expect(text.containerRef).toEqual({
-        kind: "tableCell",
-        elementId: table.id,
-        cellId: table.table.cells[0].id,
-        role: "backgroundText",
-      });
-      expect(text.containerId).toBeNull();
-      expect(text.autoResize).toBe(false);
-      expect(text.width).toBeLessThan(160);
-      // factory default: left-aligned with the 12px cell padding,
-      // vertically centered in the 56px row
-      expect(text.x).toBe(12);
-      expect(text.y + text.height / 2).toBe(28);
-      expect(editor.style.width).toBe(`${text.width}px`);
-      expect(editor.style.height).toBe(`${text.height}px`);
-      // directly above the table
-      expect(h.elements.map((element) => element.id).indexOf(text.id)).toBe(
-        h.elements.map((element) => element.id).indexOf(table.id) + 1,
-      );
+      expect(h.state.editingTextElement).toBeNull();
+      expect(editingCellKey()).toBe(cellKey(table.table.cells[0].id));
+      // the editor spans the cell's padded text region
+      expect(editor.style.width).toBe("136px");
 
       updateTextEditor(editor, "hello");
-      Keyboard.exitTextEditor(editor);
+      await submitEditor(editor);
 
-      const committed = getBackgroundTexts()[0];
-      expect(committed.id).toBe(text.id);
-      expect(committed.text).toBe("hello");
-      expect(committed.autoResize).toBe(false);
-      expect(committed.width).toBeLessThan(160);
-      expect(committed.x).toBe(12);
-      expect(committed.y + committed.height / 2).toBe(28);
+      const text = getTextBlock(
+        getTable().texts,
+        cellKey(table.table.cells[0].id),
+      )!;
+      expect(text.text).toBe("hello");
+      const layout = cellLayout(getTable(), table.table.cells[0].id)!;
+      expect(layout.width).toBeLessThan(160);
+      // factory default: left-aligned with the 12px cell padding,
+      // vertically centered in the 56px row
+      expect(layout.x).toBe(12);
+      expect(layout.y + layout.height / 2).toBe(28);
+      // no separate text element joins the scene
+      expect(
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
     });
 
     it("marks the edited cell and its row/column rails with the accent color", async () => {
@@ -533,12 +533,12 @@ describe("table tool", () => {
       doubleClickAt(center.x, center.y);
 
       const editor = await getTextEditor();
-      const text = getBackgroundTexts()[0];
-      expect(text.width).toBeLessThan(edgeTable.table.columns[0].width);
-      expect(editor.style.width).toBe(`${text.width}px`);
+      const layout = cellLayout(edgeTable, edgeTable.table.cells[0].id)!;
+      expect(layout.width).toBeLessThan(edgeTable.table.columns[0].width);
+      expect(editor.style.width).toBe(`${layout.maxWidth}px`);
     });
 
-    it("grows the table row while typing and keeps the text box inside it", async () => {
+    it("grows the table row on commit and keeps the text inside it", async () => {
       const initialHeight = table.table.rows[0].height;
       const center = cellCenter(table, 0, 0);
       doubleClickAt(center.x, center.y);
@@ -547,18 +547,24 @@ describe("table tool", () => {
         editor,
         "A long cell label that wraps onto several lines and must stay visible while it is being edited.",
       );
+      await submitEditor(editor);
 
-      const duringEdit = getTable();
-      expect(duringEdit.table.rows[0].height).toBeGreaterThan(initialHeight);
-      const text = getBackgroundTexts()[0];
-      expect(text.height).toBeLessThanOrEqual(duringEdit.table.rows[0].height);
-      expect(text.width).toBeLessThanOrEqual(duringEdit.table.columns[0].width);
-      expect(editor.style.width).toBe(`${text.width}px`);
-      expect(editor.style.height).toBe(`${text.height}px`);
-
-      Keyboard.exitTextEditor(editor);
-      expect(getTable().table.rows[0].height).toBe(
-        duringEdit.table.rows[0].height,
+      const committedTable = getTable();
+      expect(committedTable.table.rows[0].height).toBeGreaterThan(
+        initialHeight,
+      );
+      const layout = cellLayout(
+        committedTable,
+        committedTable.table.cells[0].id,
+      )!;
+      expect(layout.height).toBeLessThanOrEqual(
+        committedTable.table.rows[0].height,
+      );
+      expect(layout.width).toBeLessThanOrEqual(
+        committedTable.table.columns[0].width,
+      );
+      expect(committedTable.height).toBe(
+        committedTable.table.rows.reduce((sum, row) => sum + row.height, 0),
       );
     });
 
@@ -587,49 +593,61 @@ describe("table tool", () => {
       const editor = await getTextEditor();
       updateTextEditor(editor, "hello");
 
-      const text = getBackgroundTexts()[0];
-      expect(text.textAlign).toBe("right");
-      expect(text.verticalAlign).toBe("bottom");
-      expect(text.x + text.width).toBe(160 - 4);
-      expect(text.y + text.height).toBe(table.table.rows[0].height - 4);
-      expect(editor.style.width).toBe(`${text.width}px`);
-      expect(editor.style.height).toBe(`${text.height}px`);
+      const committed = getTable();
+      const layout = cellLayout(committed, committed.table.cells[0].id)!;
+      expect(layout.textAlign).toBe("right");
+      expect(layout.verticalAlign).toBe("bottom");
+      expect(layout.x + layout.width).toBe(160 - 4);
+      expect(layout.y + layout.height).toBe(committed.table.rows[0].height - 4);
 
-      Keyboard.exitTextEditor(editor);
+      await submitEditor(editor);
       doubleClickAt(center.x, center.y);
       const reopened = await getTextEditor();
-      expect(reopened.style.width).toBe(`${text.width}px`);
-      expect(reopened.style.height).toBe(`${text.height}px`);
+      // 重新打开时编辑框仍按当前格区域定位（4px 内边距）
+      expect(reopened.style.width).toBe("152px");
+      expect(reopened.style.height).toBe(`${layout.height * 1.05}px`);
       Keyboard.exitTextEditor(reopened);
     });
 
-    it("re-opens the same element instead of creating a second background text", async () => {
+    it("re-opens the same cell region instead of creating a second text", async () => {
       const center = cellCenter(table, 0, 0);
       doubleClickAt(center.x, center.y);
       const editor = await getTextEditor();
       updateTextEditor(editor, "hello");
-      Keyboard.exitTextEditor(editor);
+      await submitEditor(editor);
 
-      const before = getBackgroundTexts();
-      expect(before).toHaveLength(1);
+      const block = getTextBlock(
+        getTable().texts,
+        cellKey(table.table.cells[0].id),
+      );
+      expect(block?.text).toBe("hello");
+      expect(
+        Object.keys(getTable().texts ?? {}).filter((key) =>
+          key.startsWith("cell:"),
+        ),
+      ).toHaveLength(1);
 
       doubleClickAt(center.x, center.y);
       await getTextEditor();
-      expect(h.state.editingTextElement?.id).toBe(before[0].id);
-      expect(getBackgroundTexts()).toHaveLength(1);
+      expect(editingCellKey()).toBe(cellKey(table.table.cells[0].id));
+      expect(
+        Object.keys(getTable().texts ?? {}).filter((key) =>
+          key.startsWith("cell:"),
+        ),
+      ).toHaveLength(1);
       Keyboard.exitTextEditor(await getTextEditor());
     });
 
-    it("deletes the element when committed empty", async () => {
+    it("clears the region when committed empty", async () => {
       const center = cellCenter(table, 2, 2);
       doubleClickAt(center.x, center.y);
       const editor = await getTextEditor();
-      Keyboard.exitTextEditor(editor);
+      await submitEditor(editor);
 
-      expect(getBackgroundTexts()).toHaveLength(0);
+      expect(getTable().texts).toBeUndefined();
     });
 
-    it("inserts below the cell's content and after the table for empty cells", async () => {
+    it("writes cell regions without adding elements to the scene", async () => {
       const content = API.createElement({
         type: "rectangle",
         x: 10,
@@ -650,31 +668,35 @@ describe("table tool", () => {
       doubleClickAt(first.x, first.y);
       const editor = await getTextEditor();
       updateTextEditor(editor, "a");
-      Keyboard.exitTextEditor(editor);
+      await submitEditor(editor);
 
-      // the background text sits between the table and the cell's content
-      const types = () => h.elements.map((element) => element.type);
-      expect(types()).toEqual(["table", "text", "composite"]);
+      // 文本写进表格区域，场景元素仍只有表格与正文成员
+      expect(h.elements.map((element) => element.type)).toEqual([
+        "table",
+        "composite",
+      ]);
+      expect(
+        getTextBlock(getTable().texts, cellKey(table.table.cells[0].id))?.text,
+      ).toBe("a");
 
-      // an empty cell inserts right after the table
+      // 空单元格同样只写区域键
       const second = cellCenter(table, 2, 1);
       doubleClickAt(second.x, second.y);
       const editor2 = await getTextEditor();
       updateTextEditor(editor2, "b");
-      Keyboard.exitTextEditor(editor2);
+      await submitEditor(editor2);
 
-      const elements = h.elements;
-      expect(elements.map((element) => element.type)).toEqual([
+      expect(h.elements.map((element) => element.type)).toEqual([
         "table",
-        "text",
-        "text",
         "composite",
       ]);
-      const [firstText, secondText] = elements.filter(
-        (element) => element.type === "text",
+      const texts = getTable().texts;
+      expect(getTextBlock(texts, cellKey(table.table.cells[0].id))?.text).toBe(
+        "a",
       );
-      expect((firstText as any).text).toBe("b");
-      expect((secondText as any).text).toBe("a");
+      expect(getTextBlock(texts, cellKey(table.table.cells[7].id))?.text).toBe(
+        "b",
+      );
     });
 
     it("does not block selecting content above it", async () => {

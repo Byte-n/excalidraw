@@ -19,7 +19,6 @@ import {
   TOUCH_CTX_MENU_TIMEOUT,
   TOOL_TYPE,
   getGridPoint,
-  getFontString,
   tupleToCoors,
   viewportCoordsToSceneCoords,
   updateObject,
@@ -72,6 +71,8 @@ import {
   isElementInFrame,
   hitElementBoundingBoxOnly,
   getMinTextElementWidth,
+  getTextElementFont,
+  getTextElementStyle,
   getElementsInGroup,
   isSelectedViaGroup,
   selectGroupsForSelectedElements,
@@ -82,9 +83,7 @@ import {
   handleFocusPointDrag,
   handleFocusPointPointerUp,
   getUncroppedWidthAndHeight,
-  getBoundTextElement,
   getCompositeShapeControlPoints,
-  redrawTextBoundingBox,
   updateBoundElements,
   updateCompositeShapeControlPoint,
   getBindingGap,
@@ -1117,13 +1116,7 @@ export const maybeOpenContextMenuAfterPointerDownOnTouchDevices = (
       app.interactionState.invalidateContextMenu = true;
     } else {
       const scenePoint = viewportCoordsToSceneCoords(event, app.state);
-      const hit = app.getElementAtPosition(scenePoint.x, scenePoint.y, {
-        includeBoundTextElement: true,
-      });
-      const node =
-        hit?.type === "text" && hit.containerId
-          ? app.scene.getNonDeletedElement(hit.containerId)
-          : hit;
+      const node = app.getElementAtPosition(scenePoint.x, scenePoint.y);
       const canOpenMindmapMenu =
         app.editorInterface.formFactor === "desktop" ||
         !isMindmapNodeElement(node) ||
@@ -1562,13 +1555,6 @@ export const onPointerMoveFromPointerDownHandler = (
                 app.scene.mutateElement(arrow, bindingUpdates);
               }
             }
-          }
-          const boundText = getBoundTextElement(
-            element,
-            app.scene.getNonDeletedElementsMap(),
-          );
-          if (boundText) {
-            redrawTextBoundingBox(boundText, element, app.scene);
           }
           updateBoundElements(element, app.scene);
           control.hasChanged = true;
@@ -2418,7 +2404,7 @@ export const onPointerUpFromPointerDownHandler = (
         app.actionManager.executeAction(actionFinalize, "ui", {
           event: childEvent,
           sceneCoords,
-          hitBoundText: pointerDownState.hit.arrowLabel,
+          hitLabel: pointerDownState.hit.arrowLabel,
         });
         if (editingLinearElement !== app.state.selectedLinearElement) {
           clearConnectionPreviewFrame(app);
@@ -2466,7 +2452,7 @@ export const onPointerUpFromPointerDownHandler = (
         app.actionManager.executeAction(actionFinalize, "ui", {
           event: childEvent,
           sceneCoords,
-          hitBoundText: pointerDownState.hit.arrowLabel,
+          hitLabel: pointerDownState.hit.arrowLabel,
         });
       }
 
@@ -2675,12 +2661,10 @@ export const onPointerUpFromPointerDownHandler = (
     }
 
     if (isTextElement(newElement)) {
+      const style = getTextElementStyle(newElement);
       const minWidth = getMinTextElementWidth(
-        getFontString({
-          fontSize: newElement.fontSize,
-          fontFamily: newElement.fontFamily,
-        }),
-        newElement.lineHeight,
+        getTextElementFont(newElement),
+        style.lineHeight,
       );
 
       if (newElement.width < minWidth) {

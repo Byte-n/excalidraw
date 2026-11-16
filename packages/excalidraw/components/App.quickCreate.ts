@@ -1414,7 +1414,7 @@ export class AppQuickCreate {
    *   不是在距图形边 22px 处。不排除的话，任何带连线的图形（流程图节点就是）四边
    *   被连线穿过的那些手柄全成死的，用一次功能后副本上朝回指的那个手柄也立刻死。
    * - 源元素绑定的元素（`source.boundElements` 命中）——上面那条的特例（源图形的
-   *   出边箭头、绑定文字），但按绑定关系判更稳：万一有非 arrow 的绑定元素同样排除。
+   *   出边箭头），但按绑定关系判更稳：万一有非 arrow 的绑定元素同样排除。
    * - 锁定元素——`getElementAtPosition` 默认不命中锁定元素（与选择路径同一口径：
    *   不传 includeLockedElements 时点击也选不中它），所以锁定元素不算「压着」，
    *   手柄照常可用（让位也没意义：这个手势换不来选中）。
@@ -1428,7 +1428,7 @@ export class AppQuickCreate {
     if (!under || under.id === source.id || isLinearElement(under)) {
       return false;
     }
-    // 源自己的绑定元素（出边箭头、绑定文字）
+    // 源自己的绑定元素（出边箭头）
     if (source.boundElements?.some((bound) => bound.id === under.id)) {
       return false;
     }

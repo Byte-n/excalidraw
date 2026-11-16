@@ -29,22 +29,19 @@ import {
   getTableSubtreeElements,
   regenerateTableIds,
 } from "./tableContainer";
+import { remapTableTexts } from "./tableTextStyle";
 
 import { normalizeElementOrder } from "./sortElements";
 
 import { bumpVersion } from "./mutateElement";
 
 import {
-  hasBoundTextElement,
   isArrowElement,
-  isBoundToContainer,
   isFrameLikeElement,
   isMindmapEdgeElement,
   isMindmapNodeElement,
   isTableElement,
 } from "./typeChecks";
-
-import { getBoundTextElement, getContainerElement } from "./textElement";
 
 import { fixDuplicatedBindingsAfterDuplication } from "./binding";
 
@@ -246,7 +243,7 @@ export const duplicateElements = (
   // -------------------------------------------------------------------------
 
   // Used for the heavy lifing of copying a single element, a group of elements
-  // an element with bound text etc.
+  // an element with embedded text etc.
   const copyElements = <T extends ExcalidrawElement | ExcalidrawElement[]>(
     element: T,
   ): T extends ExcalidrawElement[]
@@ -410,10 +407,7 @@ export const duplicateElements = (
         return (
           el.id === tableId ||
           (el.containerRef?.kind === "tableCell" &&
-            el.containerRef.elementId === tableId) ||
-          (isBoundToContainer(el) &&
-            elementsMap.get(el.containerId)?.containerRef?.elementId ===
-              tableId)
+            el.containerRef.elementId === tableId)
         );
       });
 
@@ -442,63 +436,13 @@ export const duplicateElements = (
       );
 
       const targetIndex = findLastIndex(elementsWithDuplicates, (el) => {
-        return (
-          el.containerRef?.elementId === frameId ||
-          el.id === frameId ||
-          (isBoundToContainer(el) &&
-            elementsMap.get(el.containerId)?.containerRef?.elementId ===
-              frameId)
-        );
+        return el.containerRef?.elementId === frameId || el.id === frameId;
       });
 
       insertBeforeOrAfterIndex(
         targetIndex,
         copyElements([...frameChildren, element]),
       );
-      continue;
-    }
-
-    // text container
-    // -------------------------------------------------------------------------
-
-    if (hasBoundTextElement(element)) {
-      const boundTextElement = getBoundTextElement(element, elementsMap);
-
-      const targetIndex = findLastIndex(elementsWithDuplicates, (el) => {
-        return (
-          el.id === element.id ||
-          ("containerId" in el && el.containerId === element.id)
-        );
-      });
-
-      if (boundTextElement) {
-        insertBeforeOrAfterIndex(
-          targetIndex,
-          copyElements([element, boundTextElement]),
-        );
-      } else {
-        insertBeforeOrAfterIndex(targetIndex, copyElements(element));
-      }
-
-      continue;
-    }
-
-    if (isBoundToContainer(element)) {
-      const container = getContainerElement(element, elementsMap);
-
-      const targetIndex = findLastIndex(elementsWithDuplicates, (el) => {
-        return el.id === element.id || el.id === container?.id;
-      });
-
-      if (container) {
-        insertBeforeOrAfterIndex(
-          targetIndex,
-          copyElements([container, element]),
-        );
-      } else {
-        insertBeforeOrAfterIndex(targetIndex, copyElements(element));
-      }
-
       continue;
     }
 
@@ -528,7 +472,10 @@ export const duplicateElements = (
     const duplicate = duplicatedElements[i];
     if (isTableElement(original) && isTableElement(duplicate)) {
       const { table, cellIdMap } = regenerateTableIds(duplicate.table);
-      Object.assign(duplicate, { table });
+      Object.assign(duplicate, {
+        table,
+        texts: remapTableTexts(duplicate.texts, cellIdMap),
+      });
       for (const [origCellId, nextCellId] of cellIdMap) {
         tableCellIdMap.set(origCellId, nextCellId);
       }
@@ -645,7 +592,7 @@ export const duplicateElements = (
 /**
  * Folds the elements returned by the host (`props.onDuplicate`) back into the
  * duplicates the editor created, so that everything that follows (frame
- * assignment, bound text redraw, selection, alt-drag handover) can keep
+ * assignment, text region relayout, selection, alt-drag handover) can keep
  * working with the editor's own objects, whether the host mutated the
  * duplicates or returned new objects for them.
  *
@@ -657,7 +604,7 @@ export const duplicateElements = (
  *   ever merged into. Since the merge goes around `mutateElement`, what may
  *   have been cached for the duplicate by then is invalidated here.
  * - A duplicate missing from the returned array (or returned as deleted) is
- *   vetoed. So is the bound text of a vetoed container. What the remaining
+ *   vetoed. What the remaining
  *   duplicates reference of the vetoed ones is cleared, as if those were never
  *   part of the duplication (see `fixDuplicatedBindingsAfterDuplication`).
  * - Any other returned element is used as is (existing elements must not be
@@ -719,13 +666,6 @@ export const reconcileDuplicatedElements = <
 
   const isVetoed = (id: ExcalidrawElement["id"]) =>
     duplicatesMap.has(id) && !survivedIds.has(id);
-
-  for (const id of survivedIds) {
-    const duplicate = duplicatesMap.get(id)!;
-    if (isBoundToContainer(duplicate) && isVetoed(duplicate.containerId)) {
-      survivedIds.delete(id);
-    }
-  }
 
   const elements: ExcalidrawElement[] = [];
 

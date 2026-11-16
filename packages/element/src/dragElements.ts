@@ -2,7 +2,6 @@ import {
   type Bounds,
   TEXT_AUTOWRAP_THRESHOLD,
   getGridPoint,
-  getFontString,
   DRAGGING_THRESHOLD,
 } from "@excalidraw/common";
 
@@ -32,7 +31,10 @@ import {
 } from "./compositeShape";
 
 import { getPerfectElementSize } from "./sizeHelpers";
-import { getBoundTextElement } from "./textElement";
+import {
+  getTextElementFont,
+  getTextElementStyle,
+} from "./text/elementText";
 import { getMinTextElementWidth } from "./textMeasurements";
 import {
   isArrowElement,
@@ -178,20 +180,6 @@ export const dragSelectedElements = (
         elementsToUpdateIds,
       );
 
-      // skip arrow labels since we calculate its position during render
-      const textElement = getBoundTextElement(
-        element,
-        scene.getNonDeletedElementsMap(),
-      );
-      if (textElement) {
-        updateElementCoords(
-          pointerDownState,
-          textElement,
-          scene,
-          adjustedOffset,
-          elementsToUpdateIds,
-        );
-      }
       updateBoundElements(element, scene, {
         simultaneouslyUpdatedElementIds: elementsToUpdateIds,
       });
@@ -389,11 +377,8 @@ export const dragNewTextElement = ({
     // a centred box grows on both sides, so it widens at twice the reach
     anchorRatio === 0.5 ? reach * 2 : reach,
     getMinTextElementWidth(
-      getFontString({
-        fontSize: newElement.fontSize,
-        fontFamily: newElement.fontFamily,
-      }),
-      newElement.lineHeight,
+      getTextElementFont(newElement),
+      getTextElementStyle(newElement).lineHeight,
     ),
   );
 

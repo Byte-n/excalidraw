@@ -150,7 +150,6 @@ export function buildStandaloneText(
     fontFamily: DEFAULT_FONT_FAMILY,
     textAlign: mapTextAlign(text.horizontalAlign),
     verticalAlign: mapVerticalAlign(text.verticalAlign),
-    containerId: null,
     autoResize: false,
     x: node.x,
     y: node.y,
@@ -165,25 +164,4 @@ export function buildStandaloneText(
     width: node.width,
     height: node.height,
   };
-}
-
-// 形状 / 便签 / 思维导图节点内嵌文本：containerId 指向容器，容器侧登记
-// boundElements。
-export function buildBoundText(
-  id: string,
-  text: ProjectedText,
-  containerNode: ResolvedNode,
-): ExcalidrawTextElement {
-  const anchor = containerAnchor(containerNode, text);
-  return newTextElement({
-    text: text.text,
-    fontSize: text.fontSize ?? DEFAULT_FONT_SIZE,
-    fontFamily: DEFAULT_FONT_FAMILY,
-    textAlign: mapTextAlign(text.horizontalAlign),
-    verticalAlign: mapVerticalAlign(text.verticalAlign),
-    containerId: containerNode.raw.id,
-    x: anchor.x,
-    y: anchor.y,
-    ...identity(id, 0),
-  });
 }

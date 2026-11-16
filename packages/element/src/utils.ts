@@ -13,6 +13,7 @@ import {
   pointDistance,
   pointFrom,
   pointFromArray,
+  pointRotateRads,
   rectangle,
   type GlobalPoint,
 } from "@excalidraw/math";
@@ -190,15 +191,24 @@ export function getLinearElementPathSegments(
   // joints can be incorporated once the path model supports mixed straight
   // and curved segments.
   if (isElbowArrow(element)) {
+    // 肘形箭头的逻辑路径同样是场景坐标，并按元素角度绕中心旋转，
+    // 与标签沿路径取点的口径保持一致。
+    const center = pointFrom<GlobalPoint>(
+      element.x + element.width / 2,
+      element.y + element.height / 2,
+    );
+    const toGlobal = (point: LocalPoint) =>
+      pointRotateRads<GlobalPoint>(
+        pointFrom<GlobalPoint>(element.x + point[0], element.y + point[1]),
+        center,
+        element.angle,
+      );
     return element.points
       .slice(1)
       .map((point, index) =>
         lineSegment<GlobalPoint>(
-          pointFrom<GlobalPoint>(
-            element.x + element.points[index][0],
-            element.y + element.points[index][1],
-          ),
-          pointFrom<GlobalPoint>(element.x + point[0], element.y + point[1]),
+          toGlobal(element.points[index]),
+          toGlobal(point),
         ),
       );
   }

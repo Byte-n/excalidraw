@@ -1,6 +1,11 @@
-import { getGridPoint } from "@excalidraw/common";
+import {
+  TABLE_CELL_TEXT_FONT_SIZE,
+  getGridPoint,
+  getLineHeight,
+} from "@excalidraw/common";
 
 import {
+  SEQUENCE_FRAGMENT_DEFAULT_OPERATOR,
   buildMindmapGraphFromTree,
   createSequenceFragmentInitialRows,
   getCommonBounds,
@@ -8,6 +13,8 @@ import {
   isSequenceFragmentElement,
   isShapeElement,
   isStickyNoteElement,
+  textRegionKey,
+  withTextBlock,
 } from "@excalidraw/element";
 
 import type {
@@ -24,7 +31,6 @@ import {
   newCreationDraft,
   PRESET_SIZES,
 } from "./createPresets";
-import { buildFragmentRowBackgroundText } from "./fragmentRowText";
 import { attachDataflowPresetTexts } from "./dataflowPresetText";
 
 import type { CreationSpec, FragmentPreset } from "../presetCatalog";
@@ -112,9 +118,9 @@ const FRAGMENT_ROW_LABELS: Record<FragmentPreset, readonly string[]> = {
 };
 
 /**
- * 组合片段预设的装配：按预设铺好初始行，并在每个条件行放一条默认背景文本
- * （`[Condition]` / `[Else]`）。文本绑定到行（`fragmentRow` ref），换行会撑高
- * 该行，行为与表格单元格背景文本一致；首行仍只有 operator 页签标签。
+ * 组合片段预设的装配：按预设铺好初始行，operator 页签与每个条件行各写一条
+ * 文本区域（`body` / `row:<rowId>`），不放任何文字元素。行文本换行会撑高
+ * 该行，行为与表格单元格背景文本一致。
  */
 const buildSequenceFragmentPresetElements = (
   app: App,
@@ -126,8 +132,7 @@ const buildSequenceFragmentPresetElements = (
     return [fragment];
   }
   const bodyRows = preset === "condition-else" ? 2 : 1;
-  // Fixed identity for previews: row ids must not advance the shared random
-  // sequence either (same reason as the text elements below).
+  // 预览用固定行 id，避免推进共享的随机序列
   const rows = createSequenceFragmentInitialRows(fragment.height, bodyRows).map(
     (row, index) =>
       identity?.id === undefined
@@ -145,20 +150,37 @@ const buildSequenceFragmentPresetElements = (
     seeded.height,
     seeded.shape.fragment,
   );
+  const fontFamily = app.state.currentItemFontFamily;
+  const lineHeight = getLineHeight(fontFamily);
+  let texts = withTextBlock(seeded.texts, "body", {
+    text: SEQUENCE_FRAGMENT_DEFAULT_OPERATOR,
+    style: {
+      fontFamily,
+      fontSize: 14,
+      lineHeight,
+      textAlign: "left",
+      verticalAlign: "top",
+    },
+  });
   const labels = FRAGMENT_ROW_LABELS[preset];
-  const texts = layout.rows.slice(1).flatMap((row, index) => {
+  for (let index = 0; index < layout.rows.length - 1; index++) {
     const label = labels[index];
     if (!label) {
-      return [];
+      continue;
     }
-    return [
-      buildFragmentRowBackgroundText(app, seeded, row.id, {
-        text: label,
-        identity: deriveIdentity(identity, index + 1),
-      }),
-    ];
-  });
-  return [seeded, ...texts];
+    texts = withTextBlock(texts, textRegionKey.row(layout.rows[index + 1].id), {
+      text: label,
+      style: {
+        fontFamily,
+        fontSize: TABLE_CELL_TEXT_FONT_SIZE,
+        lineHeight,
+        textAlign: "left",
+        verticalAlign: "top",
+        color: app.state.currentItemStrokeColor,
+      },
+    });
+  }
+  return [{ ...seeded, texts }];
 };
 
 /**
@@ -211,13 +233,8 @@ export const buildPresetElementsAt = (
       if (!isShapeElement(element)) {
         return { elements: [element] };
       }
-      // 数据流预设自带文本；身份逐条派生，预览不得推进共享序列
-      const { container, texts } = attachDataflowPresetTexts(
-        app,
-        element,
-        (index) => deriveIdentity(identity, index + 1),
-      );
-      return { elements: [container, ...texts] };
+      // 数据流预设自带文本，直接写进元素自身的区域
+      return { elements: [attachDataflowPresetTexts(app, element)] };
     }
     case "sticky": {
       const draft = newCreationDraft(
@@ -281,7 +298,6 @@ export const buildPresetElementsAt = (
           at,
           containerRef,
           identity,
-          (index) => deriveIdentity(identity, index),
         ),
       };
     }

@@ -45,10 +45,8 @@ import {
 import { getMindmapShapeId } from "./mindmap";
 import { ShapeCache } from "./shape";
 import { LinearElementEditor } from "./linearElementEditor";
-import { getBoundTextElement, getContainerElement } from "./textElement";
 import {
   isArrowElement,
-  isBoundToContainer,
   isCurvedArrow,
   isFrameLikeElement,
   isFreeDrawElement,
@@ -74,7 +72,6 @@ import type {
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
   ExcalidrawRectanguloidElement,
-  ExcalidrawTextElementWithContainer,
   NonDeleted,
   NonDeletedExcalidrawElement,
 } from "./types";
@@ -122,13 +119,7 @@ export class ElementBounds {
         ? ElementBounds.nonRotatedBoundsCache.get(element)
         : ElementBounds.boundsCache.get(element);
 
-    if (
-      cachedBounds?.version &&
-      cachedBounds.version === element.version &&
-      // we don't invalidate cache when we update containers and not labels,
-      // which is causing problems down the line. Fix TBA.
-      !isBoundToContainer(element)
-    ) {
+    if (cachedBounds?.version && cachedBounds.version === element.version) {
       return cachedBounds.bounds;
     }
 
@@ -283,35 +274,11 @@ export class ElementBounds {
 export const getElementAbsoluteCoords = (
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
-  includeBoundText: boolean = false,
 ): [number, number, number, number, number, number] => {
   if (isFreeDrawElement(element)) {
     return getFreeDrawElementAbsoluteCoords(element);
   } else if (isLinearElement(element)) {
-    return LinearElementEditor.getElementAbsoluteCoords(
-      element,
-      elementsMap,
-      includeBoundText,
-    );
-  } else if (isTextElement(element)) {
-    const container = elementsMap
-      ? getContainerElement(element, elementsMap)
-      : null;
-    if (isLinearElement(container)) {
-      const { x, y } = LinearElementEditor.getBoundTextElementPosition(
-        container,
-        element as ExcalidrawTextElementWithContainer,
-        elementsMap,
-      );
-      return [
-        x,
-        y,
-        x + element.width,
-        y + element.height,
-        x + element.width / 2,
-        y + element.height / 2,
-      ];
-    }
+    return LinearElementEditor.getElementAbsoluteCoords(element, elementsMap);
   }
   return [
     element.x,
@@ -344,7 +311,7 @@ export const getElementSelectionFrameCoords = (
       element.y + element.height / 2,
     ];
   }
-  return getElementAbsoluteCoords(element, elementsMap, true);
+  return getElementAbsoluteCoords(element, elementsMap);
 };
 
 /*
@@ -434,19 +401,6 @@ export const getElementLineSegments = (
     const rotatedSides = getRotatedSides(sides, center, element.angle);
     return [...rotatedSides, ...cornerSegments];
   } else if (shape.type === "polygon") {
-    if (isTextElement(element)) {
-      const container = getContainerElement(element, elementsMap);
-      if (container && isLinearElement(container)) {
-        const segments: LineSegment<GlobalPoint>[] = [
-          lineSegment(pointFrom(x1, y1), pointFrom(x2, y1)),
-          lineSegment(pointFrom(x2, y1), pointFrom(x2, y2)),
-          lineSegment(pointFrom(x2, y2), pointFrom(x1, y2)),
-          lineSegment(pointFrom(x1, y2), pointFrom(x1, y1)),
-        ];
-        return segments;
-      }
-    }
-
     const points = shape.data as GlobalPoint[];
     const segments: LineSegment<GlobalPoint>[] = [];
     for (let i = 0; i < points.length; i++) {
@@ -493,7 +447,7 @@ const _isRectanguloidElement = (
       element.type === "embeddable" ||
       element.type === "frame" ||
       element.type === "magicframe" ||
-      (element.type === "text" && !element.containerId))
+      element.type === "text")
   );
 };
 
@@ -1069,7 +1023,17 @@ const getLinearElementRotatedBounds = (
   cy: number,
   elementsMap: ElementsMap,
 ): Bounds => {
-  const boundTextElement = getBoundTextElement(element, elementsMap);
+  const labelLayout = element.texts?.label?.text
+    ? LinearElementEditor.getLabelSceneLayout(element, elementsMap)
+    : null;
+  const labelBounds: Bounds | null = labelLayout
+    ? [
+        labelLayout.x,
+        labelLayout.y,
+        labelLayout.x + labelLayout.width,
+        labelLayout.y + labelLayout.height,
+      ]
+    : null;
 
   if (element.points.length < 2) {
     const [pointX, pointY] = element.points[0];
@@ -1079,20 +1043,13 @@ const getLinearElementRotatedBounds = (
       element.angle,
     );
 
-    let coords: Bounds = [x, y, x, y];
-    if (boundTextElement) {
-      const coordsWithBoundText = LinearElementEditor.getMinMaxXYWithBoundText(
-        element,
-        elementsMap,
-        [x, y, x, y],
-        boundTextElement,
+    const coords: Bounds = [x, y, x, y];
+    if (labelBounds) {
+      const union = LinearElementEditor.getMinMaxXYWithLabel(
+        coords,
+        labelBounds,
       );
-      coords = [
-        coordsWithBoundText[0],
-        coordsWithBoundText[1],
-        coordsWithBoundText[2],
-        coordsWithBoundText[3],
-      ];
+      return [union[0], union[1], union[2], union[3]];
     }
     return coords;
   }
@@ -1108,20 +1065,13 @@ const getLinearElementRotatedBounds = (
       element.angle,
     );
   const res = getMinMaxXYFromCurvePathOps(ops, transformXY);
-  let coords: Bounds = [res[0], res[1], res[2], res[3]];
-  if (boundTextElement) {
-    const coordsWithBoundText = LinearElementEditor.getMinMaxXYWithBoundText(
-      element,
-      elementsMap,
+  const coords: Bounds = [res[0], res[1], res[2], res[3]];
+  if (labelBounds) {
+    const union = LinearElementEditor.getMinMaxXYWithLabel(
       coords,
-      boundTextElement,
+      labelBounds,
     );
-    coords = [
-      coordsWithBoundText[0],
-      coordsWithBoundText[1],
-      coordsWithBoundText[2],
-      coordsWithBoundText[3],
-    ];
+    return [union[0], union[1], union[2], union[3]];
   }
   return coords;
 };
@@ -1468,7 +1418,7 @@ export const elementsOverlappingBBox = <T extends ExcalidrawElement>({
     }
 
     // Track only selectable top-level group members, so ignored elements such
-    // as bound text and locked elements don't affect group selection.
+    // as locked elements don't affect group selection.
     const groupId = element.groupIds.at(-1);
     if (groupId) {
       if (!groups[groupId]) {
@@ -1478,7 +1428,21 @@ export const elementsOverlappingBBox = <T extends ExcalidrawElement>({
     }
 
     const strokeWidth = element.strokeWidth;
+    // 元素包围盒是否需要并入标签布局包围盒
     let labelAABB: Bounds | null = null;
+    if (isLinearElement(element) && element.texts?.label?.text) {
+      const labelLayout = LinearElementEditor.getLabelSceneLayout(
+        element,
+        elementsMap,
+      );
+      labelAABB = [
+        labelLayout.x,
+        labelLayout.y,
+        labelLayout.x + labelLayout.width,
+        labelLayout.y + labelLayout.height,
+      ];
+    }
+
     let elementAABB = getElementBounds(element, elementsMap);
 
     elementAABB = [
@@ -1487,23 +1451,6 @@ export const elementsOverlappingBBox = <T extends ExcalidrawElement>({
       elementAABB[2] + strokeWidth / 2,
       elementAABB[3] + strokeWidth / 2,
     ] as Bounds;
-
-    // Whether the element bounds should include the bound text element bounds
-    const boundTextElement =
-      isLinearElement(element) && getBoundTextElement(element, elementsMap);
-    if (boundTextElement) {
-      const { x, y } = LinearElementEditor.getBoundTextElementPosition(
-        element,
-        boundTextElement,
-        elementsMap,
-      );
-      labelAABB = [
-        x,
-        y,
-        x + boundTextElement.width,
-        y + boundTextElement.height,
-      ] as Bounds;
-    }
 
     // Clip element bounds by its containing frame (if any), since only the
     // visible (frame-clipped) portion of the element is relevant for selection.

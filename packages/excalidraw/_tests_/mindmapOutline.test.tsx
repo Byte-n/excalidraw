@@ -1,6 +1,5 @@
 import {
   buildMindmapGraphIndex,
-  getBoundTextElement,
   newElement,
   newMindmapNodeElement,
   newTextElement,
@@ -51,21 +50,7 @@ const fixture = () => {
       }),
       id,
     };
-    const text = {
-      ...newTextElement({
-        x: node.x,
-        y: node.y,
-        text: label,
-        containerId: id,
-        textAlign: "center",
-        verticalAlign: "middle",
-      }),
-      id: `${id}-text`,
-    };
-    elements.push(
-      { ...node, boundElements: [{ id: text.id, type: "text" }] },
-      text,
-    );
+    elements.push({ ...node, texts: API.mindmapBody(node, label) });
   });
   elements.push({
     ...newElement({
@@ -143,12 +128,16 @@ describe("Mindmap P07 search and outline", () => {
     await waitFor(() =>
       expect(h.app.state.searchMatches?.matches).toHaveLength(2),
     );
-    const text = getBoundTextElement(
-      node("other-interview"),
-      h.app.scene.getNonDeletedElementsMap(),
-    )!;
+    const otherInterview = node("other-interview");
     act(() =>
-      API.updateElement(text, { originalText: "New label", text: "New label" }),
+      API.updateElement(otherInterview, {
+        texts: {
+          body: {
+            ...otherInterview.texts!.body!,
+            text: "New label",
+          },
+        },
+      }),
     );
     await waitFor(() =>
       expect(h.app.state.searchMatches?.matches).toHaveLength(1),
@@ -161,14 +150,15 @@ describe("Mindmap P07 search and outline", () => {
   });
 
   it("deduplicates mindmap labels without changing ordinary text search", async () => {
-    const interviewText = getBoundTextElement(
-      node("interview"),
-      h.app.scene.getNonDeletedElementsMap(),
-    )!;
+    const interview = node("interview");
     act(() =>
-      API.updateElement(interviewText, {
-        text: "User User",
-        originalText: "User User",
+      API.updateElement(interview, {
+        texts: {
+          body: {
+            ...interview.texts!.body!,
+            text: "User User",
+          },
+        },
       }),
     );
     act(() =>
@@ -194,7 +184,7 @@ describe("Mindmap P07 search and outline", () => {
     );
     expect(
       h.app.state.searchMatches?.matches.filter(
-        (match) => match.id === "interview-text",
+        (match) => match.id === "interview",
       ),
     ).toHaveLength(1);
     expect(
@@ -257,12 +247,7 @@ describe("Mindmap P07 search and outline", () => {
     updateTextEditor(rename as HTMLInputElement, "Discovery");
     fireEvent.keyDown(rename, { key: "Enter" });
     expect(h.app.state.openSidebar?.tab).toBe(MINDMAP_OUTLINE_TAB);
-    expect(
-      getBoundTextElement(
-        node("research"),
-        h.app.scene.getNonDeletedElementsMap(),
-      )?.originalText,
-    ).toBe("Discovery");
+    expect(node("research").texts?.body?.text).toBe("Discovery");
     expect(
       await screen.findByRole("button", { name: "Discovery" }),
     ).toBeInTheDocument();

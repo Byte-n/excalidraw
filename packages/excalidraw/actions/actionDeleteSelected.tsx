@@ -6,7 +6,6 @@ import { LinearElementEditor } from "@excalidraw/element";
 import { newElementWith } from "@excalidraw/element";
 import { getContainerSubtreeElements } from "@excalidraw/element";
 import {
-  isBoundToContainer,
   isElbowArrow,
   isFrameLikeElement,
   isSequenceFragmentElement,
@@ -98,9 +97,6 @@ const deleteSelectedElements = (
       return newElementWith(el, { isDeleted: true });
     }
 
-    if (isBoundToContainer(el) && appState.selectedElementIds[el.containerId]) {
-      return newElementWith(el, { isDeleted: true });
-    }
     return el;
   });
 

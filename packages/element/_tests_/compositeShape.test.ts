@@ -1057,21 +1057,10 @@ describe("composite shape data", () => {
     const container = elements.find(
       (element) => isShapeElement(element) && element.shape.id === type,
     );
-    const textId = container?.boundElements?.find(
-      (boundElement) => boundElement.type === "text",
-    )?.id;
-    const text = elements.find((element) => element.id === textId);
 
-    expect(container).toBeDefined();
-    expect(text).toBeDefined();
-    expect(text).toMatchObject({
-      type: "text",
-      containerId: container?.id,
-      originalText: "label",
-    });
-    expect(container?.boundElements).toEqual(
-      expect.arrayContaining([{ type: "text", id: text?.id }]),
-    );
+    expect(elements).toHaveLength(1);
+    expect(container?.texts?.body?.text).toBe("label");
+    expect(container?.boundElements ?? []).toEqual([]);
   });
 
   it.each([

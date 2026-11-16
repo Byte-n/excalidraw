@@ -5,10 +5,6 @@ import type {
 } from "@excalidraw/excalidraw/types";
 import type { Mutable } from "@excalidraw/common/utility-types";
 
-import { getBoundTextElement } from "./textElement";
-
-import { isBoundToContainer } from "./typeChecks";
-
 import { makeNextSelectedElementIds, getSelectedElements } from "./selection";
 
 import type {
@@ -344,11 +340,6 @@ export const getMaximumGroups = <
 
     const currentGroupMembers = groups.get(groupId) || [];
 
-    // Include bound text if present when grouping
-    const boundTextElement = getBoundTextElement(element, elementsMap);
-    if (boundTextElement) {
-      currentGroupMembers.push(boundTextElement as T);
-    }
     groups.set(groupId, [...currentGroupMembers, element]);
   });
 
@@ -426,11 +417,6 @@ export const getSelectedElementsByGroup = (
     selectedElements.every((element) => isSelectedViaGroup(appState, element));
 
   selectedElements.forEach((element) => {
-    // skip dependent boundTextElements, they are appended after their container
-    if (isBoundToContainer(element)) {
-      return;
-    }
-
     let bucketKey: string;
     const selectedGroupId = getSelectedGroupIdForElement(
       element,
@@ -453,14 +439,7 @@ export const getSelectedElementsByGroup = (
     }
 
     const currentBucketMembers = buckets.get(bucketKey) ?? [];
-    const boundTextElement = getBoundTextElement(element, elementsMap);
-
-    // preserve boundtext after container ordering
-    buckets.set(bucketKey, [
-      ...currentBucketMembers,
-      element,
-      ...(boundTextElement ? [boundTextElement] : []),
-    ]);
+    buckets.set(bucketKey, [...currentBucketMembers, element]);
   });
   return [...buckets.values()];
 };

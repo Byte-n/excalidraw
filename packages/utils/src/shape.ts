@@ -155,11 +155,7 @@ export const getSelectionBoxShape = <Point extends GlobalPoint | LocalPoint>(
   elementsMap: ElementsMap,
   padding = 10,
 ) => {
-  let [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(
-    element,
-    elementsMap,
-    true,
-  );
+  let [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(element, elementsMap);
 
   x1 -= padding;
   x2 += padding;

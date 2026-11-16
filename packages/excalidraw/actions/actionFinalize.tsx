@@ -53,7 +53,7 @@ import type { AppState } from "../types";
 type FormData = {
   event: PointerEvent;
   sceneCoords: { x: number; y: number };
-  hitBoundText?: boolean;
+  hitLabel?: boolean;
 };
 
 export const actionFinalize = register<FormData>({
@@ -96,7 +96,7 @@ export const actionFinalize = register<FormData>({
         !appState.selectedLinearElement.segmentMidPointHoveredCoords &&
         // a label drag along the arrow moves no endpoint, so it must not
         // rebind either of them
-        !data.hitBoundText
+        !data.hitLabel
       ) {
         const newArrow = !!appState.newElement;
 

@@ -25,14 +25,8 @@ import {
   getEmbedLink,
 } from "@excalidraw/element";
 import { LinearElementEditor } from "@excalidraw/element";
-import {
-  getBoundTextElement,
-  getBoundTextElements,
-  getContainerElement,
-} from "@excalidraw/element";
 import { getLineHeightInPx } from "@excalidraw/element";
 import {
-  isLinearElement,
   isIframeLikeElement,
   isInitializedImageElement,
   isTextElement,
@@ -64,10 +58,14 @@ import {
 
 import { getElementAbsoluteCoords } from "@excalidraw/element";
 import { getTextVerticalOffset } from "@excalidraw/element";
+import {
+  getTextElementDisplayText,
+  getTextElementStyle,
+} from "@excalidraw/element";
+import { layoutTextRegionsLocal } from "@excalidraw/element";
 
 import type {
   ExcalidrawElement,
-  ExcalidrawTextElementWithContainer,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
 
@@ -127,22 +125,6 @@ const renderElementToSvg = (
   const [x1, y1, x2, y2] = getElementAbsoluteCoords(element, elementsMap);
   let cx = (x2 - x1) / 2 - (element.x - x1);
   let cy = (y2 - y1) / 2 - (element.y - y1);
-  if (isTextElement(element)) {
-    const container = getContainerElement(element, elementsMap);
-    if (isLinearElement(container)) {
-      const [x1, y1, x2, y2] = getElementAbsoluteCoords(container, elementsMap);
-
-      const boundTextCoords = LinearElementEditor.getBoundTextElementPosition(
-        container,
-        element as ExcalidrawTextElementWithContainer,
-        elementsMap,
-      );
-      cx = (x2 - x1) / 2 - (boundTextCoords.x - x1);
-      cy = (y2 - y1) / 2 - (boundTextCoords.y - y1);
-      offsetX = offsetX + boundTextCoords.x - element.x;
-      offsetY = offsetY + boundTextCoords.y - element.y;
-    }
-  }
   const degree = (180 * element.angle) / Math.PI;
 
   // element to append node to, most of the time svgRoot
@@ -325,12 +307,78 @@ const renderElementToSvg = (
       const nodes = (Array.isArray(shape) ? shape : [shape]).map((drawable) =>
         roughSVGDrawWithPrecision(rsvg, drawable, MAX_DECIMALS_FOR_SVG_EXPORT),
       );
-      const node =
-        nodes.length === 1
-          ? nodes[0]
-          : svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
-      if (nodes.length > 1) {
+      const textLayouts = layoutTextRegionsLocal(element).filter(
+        (layout) => layout.text !== "",
+      );
+
+      let node: SVGElement;
+      if (textLayouts.length) {
+        // 有文本时 rough 节点与文本节点必须同一个 <g>；单个 rough 节点是
+        // <path>，不能把 <text> 塞进去
+        node = svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
         node.append(...nodes);
+        for (const layout of textLayouts) {
+          const lineHeightPx = getLineHeightInPx(
+            layout.fontSize,
+            layout.lineHeight,
+          );
+          const horizontalOffset =
+            layout.textAlign === "center"
+              ? layout.width / 2
+              : layout.textAlign === "right"
+              ? layout.width
+              : 0;
+          const baselineOffset = getVerticalOffset(
+            layout.fontFamily,
+            layout.fontSize,
+            lineHeightPx,
+          );
+          const direction = isRTL(layout.text) ? "rtl" : "ltr";
+          const textAnchor =
+            layout.textAlign === "center"
+              ? "middle"
+              : layout.textAlign === "right" || direction === "rtl"
+              ? "end"
+              : "start";
+
+          for (let i = 0; i < layout.lines.length; i++) {
+            const text = svgRoot.ownerDocument.createElementNS(SVG_NS, "text");
+            text.textContent = layout.lines[i];
+            text.setAttribute("x", `${layout.x + horizontalOffset}`);
+            text.setAttribute(
+              "y",
+              `${layout.y + i * lineHeightPx + baselineOffset}`,
+            );
+            text.setAttribute(
+              "font-family",
+              getFontFamilyString({ fontFamily: layout.fontFamily }),
+            );
+            text.setAttribute("font-size", `${layout.fontSize}px`);
+            if (layout.fontWeight) {
+              text.setAttribute("font-weight", `${layout.fontWeight}`);
+            }
+            text.setAttribute(
+              "fill",
+              applyDarkModeFilter(
+                layout.color,
+                renderConfig.theme === THEME.DARK,
+              ),
+            );
+            text.setAttribute("text-anchor", textAnchor);
+            text.setAttribute("style", "white-space: pre;");
+            text.setAttribute("direction", direction);
+            text.setAttribute("dominant-baseline", "alphabetic");
+            node.appendChild(text);
+          }
+        }
+      } else {
+        node =
+          nodes.length === 1
+            ? nodes[0]
+            : svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
+        if (nodes.length > 1) {
+          node.append(...nodes);
+        }
       }
       if (opacity !== 1) {
         node.setAttribute("stroke-opacity", `${opacity}`);
@@ -458,9 +506,11 @@ const renderElementToSvg = (
     }
     case "line":
     case "arrow": {
-      const boundText = getBoundTextElement(element, elementsMap);
+      const labelLayout = element.texts?.label?.text
+        ? LinearElementEditor.getLabelSceneLayout(element, elementsMap)
+        : null;
       const maskPath = svgRoot.ownerDocument.createElementNS(SVG_NS, "mask");
-      if (boundText) {
+      if (labelLayout) {
         maskPath.setAttribute("id", `mask-${element.id}`);
         const maskRectVisible = svgRoot.ownerDocument.createElementNS(
           SVG_NS,
@@ -493,34 +543,27 @@ const renderElementToSvg = (
           SVG_NS,
           "rect",
         );
-        const boundTextCoords = LinearElementEditor.getBoundTextElementPosition(
-          element,
-          boundText,
-          elementsMap,
-        );
 
         // the same padded hole the canvas renderers cut around the label
-        const maskX =
-          offsetX + boundTextCoords.x - element.x - BOUND_TEXT_PADDING;
-        const maskY =
-          offsetY + boundTextCoords.y - element.y - BOUND_TEXT_PADDING;
+        const maskX = renderConfig.offsetX + labelLayout.x - BOUND_TEXT_PADDING;
+        const maskY = renderConfig.offsetY + labelLayout.y - BOUND_TEXT_PADDING;
 
         maskRectInvisible.setAttribute("x", maskX.toString());
         maskRectInvisible.setAttribute("y", maskY.toString());
         maskRectInvisible.setAttribute("fill", "#000");
         maskRectInvisible.setAttribute(
           "width",
-          `${boundText.width + BOUND_TEXT_PADDING * 2}`,
+          `${labelLayout.width + BOUND_TEXT_PADDING * 2}`,
         );
         maskRectInvisible.setAttribute(
           "height",
-          `${boundText.height + BOUND_TEXT_PADDING * 2}`,
+          `${labelLayout.height + BOUND_TEXT_PADDING * 2}`,
         );
         maskRectInvisible.setAttribute("opacity", "1");
         maskPath.appendChild(maskRectInvisible);
       }
       const group = svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
-      if (boundText) {
+      if (labelLayout) {
         group.setAttribute("mask", `url(#mask-${element.id})`);
       }
       group.setAttribute("stroke-linecap", "round");
@@ -552,10 +595,74 @@ const renderElementToSvg = (
         group.appendChild(node);
       });
 
+      // 标签文本始终水平：放在未旋转的组里，坐标是场景坐标 + 导出偏移
+      const labelGroup = svgRoot.ownerDocument.createElementNS(SVG_NS, "g");
+      if (labelLayout) {
+        const lineHeightPx = getLineHeightInPx(
+          labelLayout.fontSize,
+          labelLayout.lineHeight,
+        );
+        const horizontalOffset =
+          labelLayout.textAlign === "center"
+            ? labelLayout.width / 2
+            : labelLayout.textAlign === "right"
+            ? labelLayout.width
+            : 0;
+        const baselineOffset = getVerticalOffset(
+          labelLayout.fontFamily,
+          labelLayout.fontSize,
+          lineHeightPx,
+        );
+        const direction = isRTL(labelLayout.text) ? "rtl" : "ltr";
+        const textAnchor =
+          labelLayout.textAlign === "center"
+            ? "middle"
+            : labelLayout.textAlign === "right" || direction === "rtl"
+            ? "end"
+            : "start";
+        for (let index = 0; index < labelLayout.lines.length; index++) {
+          const text = svgRoot.ownerDocument.createElementNS(SVG_NS, "text");
+          text.textContent = labelLayout.lines[index];
+          text.setAttribute(
+            "x",
+            `${renderConfig.offsetX + labelLayout.x + horizontalOffset}`,
+          );
+          text.setAttribute(
+            "y",
+            `${
+              renderConfig.offsetY +
+              labelLayout.y +
+              index * lineHeightPx +
+              baselineOffset
+            }`,
+          );
+          text.setAttribute(
+            "font-family",
+            getFontFamilyString({ fontFamily: labelLayout.fontFamily }),
+          );
+          text.setAttribute("font-size", `${labelLayout.fontSize}px`);
+          if (labelLayout.fontWeight) {
+            text.setAttribute("font-weight", `${labelLayout.fontWeight}`);
+          }
+          text.setAttribute(
+            "fill",
+            applyDarkModeFilter(
+              labelLayout.color,
+              renderConfig.theme === THEME.DARK,
+            ),
+          );
+          text.setAttribute("text-anchor", textAnchor);
+          text.setAttribute("style", "white-space: pre;");
+          text.setAttribute("direction", direction);
+          text.setAttribute("dominant-baseline", "alphabetic");
+          labelGroup.appendChild(text);
+        }
+      }
+
       const g = maybeWrapNodesInFrameClipPath(
         element,
         root,
-        [group, maskPath],
+        labelLayout ? [group, maskPath, labelGroup] : [group, maskPath],
         renderConfig.frameRendering,
         elementsMap,
       );
@@ -565,6 +672,9 @@ const renderElementToSvg = (
       } else {
         addToRoot(group, element);
         root.append(maskPath);
+        if (labelLayout) {
+          root.append(labelGroup);
+        }
       }
       break;
     }
@@ -1006,6 +1116,64 @@ const renderElementToSvg = (
       }
       group.appendChild(border);
 
+      // (4) 单元格文本区域画在网格之上，坐标已经是表格局部坐标
+      for (const layout of layoutTextRegionsLocal(element)) {
+        if (layout.text === "") {
+          continue;
+        }
+        const lineHeightPx = getLineHeightInPx(
+          layout.fontSize,
+          layout.lineHeight,
+        );
+        const horizontalOffset =
+          layout.textAlign === "center"
+            ? layout.width / 2
+            : layout.textAlign === "right"
+            ? layout.width
+            : 0;
+        const baselineOffset = getVerticalOffset(
+          layout.fontFamily,
+          layout.fontSize,
+          lineHeightPx,
+        );
+        const direction = isRTL(layout.text) ? "rtl" : "ltr";
+        const textAnchor =
+          layout.textAlign === "center"
+            ? "middle"
+            : layout.textAlign === "right" || direction === "rtl"
+            ? "end"
+            : "start";
+        for (let index = 0; index < layout.lines.length; index++) {
+          const text = svgRoot.ownerDocument.createElementNS(SVG_NS, "text");
+          text.textContent = layout.lines[index];
+          text.setAttribute("x", `${layout.x + horizontalOffset}`);
+          text.setAttribute(
+            "y",
+            `${layout.y + index * lineHeightPx + baselineOffset}`,
+          );
+          text.setAttribute(
+            "font-family",
+            getFontFamilyString({ fontFamily: layout.fontFamily }),
+          );
+          text.setAttribute("font-size", `${layout.fontSize}px`);
+          if (layout.fontWeight) {
+            text.setAttribute("font-weight", `${layout.fontWeight}`);
+          }
+          text.setAttribute(
+            "fill",
+            applyDarkModeFilter(
+              layout.color,
+              renderConfig.theme === THEME.DARK,
+            ),
+          );
+          text.setAttribute("text-anchor", textAnchor);
+          text.setAttribute("style", "white-space: pre;");
+          text.setAttribute("direction", direction);
+          text.setAttribute("dominant-baseline", "alphabetic");
+          group.appendChild(text);
+        }
+      }
+
       const g = maybeWrapNodesInFrameClipPath(
         element,
         root,
@@ -1031,30 +1199,31 @@ const renderElementToSvg = (
             offsetY || 0
           }) rotate(${degree} ${cx} ${cy})`,
         );
-        const lines = element.text.replace(/\r\n?/g, "\n").split("\n");
+        const style = getTextElementStyle(element);
+        const displayText = getTextElementDisplayText(element);
+        const lines = displayText.replace(/\r\n?/g, "\n").split("\n");
         const lineHeightPx = getLineHeightInPx(
-          element.fontSize,
-          element.lineHeight,
+          style.fontSize,
+          style.lineHeight,
         );
         const horizontalOffset =
-          element.textAlign === "center"
+          style.textAlign === "center"
             ? element.width / 2
-            : element.textAlign === "right"
+            : style.textAlign === "right"
             ? element.width
             : 0;
         const verticalOffset =
           getTextVerticalOffset(
-            element.verticalAlign,
+            style.verticalAlign,
             element.height,
             lines.length,
             lineHeightPx,
-          ) +
-          getVerticalOffset(element.fontFamily, element.fontSize, lineHeightPx);
-        const direction = isRTL(element.text) ? "rtl" : "ltr";
+          ) + getVerticalOffset(style.fontFamily, style.fontSize, lineHeightPx);
+        const direction = isRTL(displayText) ? "rtl" : "ltr";
         const textAnchor =
-          element.textAlign === "center"
+          style.textAlign === "center"
             ? "middle"
-            : element.textAlign === "right" || direction === "rtl"
+            : style.textAlign === "right" || direction === "rtl"
             ? "end"
             : "start";
         // a table cell's background text derives its weight from the header
@@ -1068,8 +1237,8 @@ const renderElementToSvg = (
           text.textContent = lines[i];
           text.setAttribute("x", `${horizontalOffset}`);
           text.setAttribute("y", `${i * lineHeightPx + verticalOffset}`);
-          text.setAttribute("font-family", getFontFamilyString(element));
-          text.setAttribute("font-size", `${element.fontSize}px`);
+          text.setAttribute("font-family", getFontFamilyString(style));
+          text.setAttribute("font-size", `${style.fontSize}px`);
           if (fontWeight) {
             text.setAttribute("font-weight", `${fontWeight}`);
           }
@@ -1124,15 +1293,6 @@ export const renderSceneToSvg = (
     .filter((el) => !isIframeLikeElement(el))
     .forEach((element) => {
       if (!element.isDeleted) {
-        if (
-          isTextElement(element) &&
-          element.containerId &&
-          elementsMap.has(element.containerId)
-        ) {
-          // will be rendered with the container
-          return;
-        }
-
         try {
           renderElementToSvg(
             element,
@@ -1144,20 +1304,6 @@ export const renderSceneToSvg = (
             element.y + renderConfig.offsetY,
             renderConfig,
           );
-
-          const boundTextElements = getBoundTextElements(element, elementsMap);
-          for (const boundTextElement of boundTextElements) {
-            renderElementToSvg(
-              boundTextElement,
-              elementsMap,
-              rsvg,
-              svgRoot,
-              files,
-              boundTextElement.x + renderConfig.offsetX,
-              boundTextElement.y + renderConfig.offsetY,
-              renderConfig,
-            );
-          }
         } catch (error: any) {
           console.error(error);
         }

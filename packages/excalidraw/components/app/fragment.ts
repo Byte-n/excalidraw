@@ -5,7 +5,6 @@ import {
 import {
   deleteSequenceFragmentRow,
   getCursorForResizingElement,
-  getFragmentRowBackgroundTexts,
   getSequenceFragmentInsertionBoundaries,
   getSequenceFragmentRowBounds,
   getSequenceFragmentRowIndexAt,
@@ -13,22 +12,17 @@ import {
   getSequenceFragmentRowSeparatorYs,
   insertSequenceFragmentRow,
   isSequenceFragmentElement,
-  isTextElement,
   moveSequenceFragmentRow,
   refitSequenceFragmentRowBackgroundTexts,
   resizeSequenceFragmentRow,
+  textRegionKey,
   updateBoundElements,
+  withoutTextBlock,
 } from "@excalidraw/element";
 import { pointFrom, pointRotateRads } from "@excalidraw/math";
 
 import type { Radians } from "@excalidraw/math";
-import type {
-  ExcalidrawElement,
-  ExcalidrawTextElement,
-  NonDeleted,
-} from "@excalidraw/element/types";
-
-import { buildFragmentRowBackgroundText } from "./fragmentRowText";
+import type { ExcalidrawElement, NonDeleted } from "@excalidraw/element/types";
 
 import type {
   FragmentPointerGesture,
@@ -276,52 +270,7 @@ const refitFragmentRowTexts = (
   }
 };
 
-/**
- * Re-fit one row's edited background text to its row, growing the row when
- * wrapped content needs more space (table cell parity).
- */
-export const refitFragmentRowBackgroundText = (
-  app: FragmentApp,
-  elementId: string,
-): boolean => {
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  const text = elementsMap.get(elementId);
-  const ref = text?.containerRef;
-  if (!text || text.type !== "text" || ref?.kind !== "fragmentRow") {
-    return false;
-  }
-  const fragment = elementsMap.get(ref.elementId);
-  if (!fragment || !isSequenceFragmentElement(fragment)) {
-    return false;
-  }
-  refitFragmentRowTexts(app, fragment, { rowIds: [ref.rowId] });
-  return true;
-};
-
-const getFragmentRowBackgroundInsertionIndex = (
-  app: FragmentApp,
-  fragment: NonDeleted<ExcalidrawElement>,
-): number => {
-  const elements = app.scene.getElementsIncludingDeleted();
-  const fragmentIndex = elements.findIndex(
-    (element) => element.id === fragment.id,
-  );
-  if (fragmentIndex === -1) {
-    return elements.length;
-  }
-  let index = fragmentIndex + 1;
-  while (index < elements.length) {
-    const ref = elements[index].containerRef;
-    if (ref?.kind === "fragmentRow" && ref.elementId === fragment.id) {
-      index++;
-    } else {
-      break;
-    }
-  }
-  return index;
-};
-
-/** Double-click on a body row edits or creates that row's background text. */
+/** 双击行（含表头）直接进入该行的区域编辑。 */
 export const handleFragmentDoubleClick = (
   app: FragmentApp,
   sceneX: number,
@@ -346,29 +295,31 @@ export const handleFragmentDoubleClick = (
     topHit.shape.fragment,
     local.y,
   );
-  if (rowIndex < 1) {
-    // the header row is the operator tab: the generic path edits its label
-    return false;
-  }
   const row = getSequenceFragmentRowLayout(topHit.height, topHit.shape.fragment)
     .rows[rowIndex];
   if (!row) {
     return false;
   }
   app.cursor.reset();
-  editFragmentRowBackgroundText(app, topHit, row.id, {
-    x: sceneX,
-    y: sceneY,
+  app.startTextEditing({
+    sceneX,
+    sceneY,
+    container: topHit,
+    initialCaretSceneCoords: { x: sceneX, y: sceneY },
   });
   return true;
 };
 
-/** Enter on a selected row: edit that row's background text (table parity). */
+/** Enter on a selected row: edit that row's text region (table parity). */
 export const editSelectedFragmentRowBackgroundText = (
   app: FragmentApp,
 ): boolean => {
   const selection: FragmentRowSelection | null = app.state.fragmentRowSelection;
-  if (!selection || app.state.editingTextElement) {
+  if (
+    !selection ||
+    app.state.editingTextElement ||
+    app.state.editingTextRegion
+  ) {
     return false;
   }
   const fragment = app.scene.getNonDeletedElement(selection.elementId);
@@ -379,55 +330,14 @@ export const editSelectedFragmentRowBackgroundText = (
   if (!bounds) {
     return false;
   }
-  editFragmentRowBackgroundText(
-    app,
-    fragment,
-    selection.rowId,
-    getFragmentRowCenter(fragment, bounds),
-  );
-  return true;
-};
-
-const editFragmentRowBackgroundText = (
-  app: FragmentApp,
-  fragment: NonDeleted<ExcalidrawElement>,
-  rowId: string,
-  initialCaretSceneCoords: { x: number; y: number },
-): void => {
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  const existing = getFragmentRowBackgroundTexts(
-    elementsMap,
-    fragment.id,
-    rowId,
-  ).find((element) => isTextElement(element)) as
-    | NonDeleted<ExcalidrawTextElement>
-    | undefined;
-
-  if (existing) {
-    refitFragmentRowBackgroundText(app, existing.id);
-    const fitted = app.scene.getNonDeletedElement(existing.id) as
-      | NonDeleted<ExcalidrawTextElement>
-      | undefined;
-    if (!fitted) {
-      return;
-    }
-    app.setState({ editingTextElement: fitted });
-    app.handleTextWysiwyg(fitted, {
-      isExistingElement: true,
-      initialCaretSceneCoords,
-    });
-    return;
-  }
-
-  const text = buildFragmentRowBackgroundText(app, fragment, rowId, {
-    text: "",
+  const center = getFragmentRowCenter(fragment, bounds);
+  app.startTextEditing({
+    sceneX: center.x,
+    sceneY: center.y,
+    container: fragment,
+    initialCaretSceneCoords: center,
   });
-  app.scene.insertElementsAtIndex(
-    [text],
-    getFragmentRowBackgroundInsertionIndex(app, fragment),
-  );
-  app.setState({ editingTextElement: text });
-  app.handleTextWysiwyg(text, { isExistingElement: false });
+  return true;
 };
 
 /**
@@ -787,22 +697,15 @@ export const deleteSelectedFragmentRow = (app: FragmentApp): boolean => {
   }
   app.setState({ fragmentRowSelection: null });
   app.store.scheduleCapture();
-  // the row's background text goes with its row — a dangling row ref would
-  // fail scene validation
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  for (const text of getFragmentRowBackgroundTexts(
-    elementsMap,
-    element.id,
-    selection.rowId,
-  )) {
-    app.scene.mutateElement(text, {
-      isDeleted: true,
-      containerRef: undefined,
-    });
-  }
+  // 行被删除时一并移除它的文本区域，其它行 key 保持不动
+  const nextTexts = withoutTextBlock(
+    element.texts,
+    textRegionKey.row(selection.rowId),
+  );
   app.scene.mutateElement(element, {
     height: update.height,
     shape: update.shape,
+    texts: nextTexts ?? {},
   });
   app.scene.triggerUpdate();
   const live = app.scene.getNonDeletedElement(element.id);

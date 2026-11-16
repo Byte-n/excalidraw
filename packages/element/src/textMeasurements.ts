@@ -8,12 +8,15 @@ import {
   normalizeEOL,
 } from "@excalidraw/common";
 
+import { getTextElementStyle, getTextElementText } from "./text/elementText";
+
 import type { FontString, ExcalidrawTextElement } from "./types";
+import type { UnitlessLineHeight } from "./text/types";
 
 export const measureText = (
   text: string,
   font: FontString,
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  lineHeight: UnitlessLineHeight,
 ) => {
   const _text = text
     .split("\n")
@@ -32,7 +35,7 @@ const DUMMY_TEXT = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".toLocaleUpperCase();
 // FIXME rename to getApproxMinContainerWidth
 export const getApproxMinLineWidth = (
   font: FontString,
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  lineHeight: UnitlessLineHeight,
 ) => {
   const maxCharWidth = getMaxCharWidth(font);
   if (maxCharWidth === 0) {
@@ -46,7 +49,7 @@ export const getApproxMinLineWidth = (
 
 export const getMinTextElementWidth = (
   font: FontString,
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  lineHeight: UnitlessLineHeight,
 ) => {
   return measureText("", font, lineHeight).width + BOUND_TEXT_PADDING * 2;
 };
@@ -79,10 +82,10 @@ const splitIntoLines = (text: string) => {
  * height-per-line by fontSize.
  */
 export const detectLineHeight = (textElement: ExcalidrawTextElement) => {
-  const lineCount = splitIntoLines(textElement.text).length;
+  const lineCount = splitIntoLines(getTextElementText(textElement)).length;
   return (textElement.height /
     lineCount /
-    textElement.fontSize) as ExcalidrawTextElement["lineHeight"];
+    getTextElementStyle(textElement).fontSize) as UnitlessLineHeight;
 };
 
 /**
@@ -90,16 +93,16 @@ export const detectLineHeight = (textElement: ExcalidrawTextElement) => {
  * aligning with the W3C spec.
  */
 export const getLineHeightInPx = (
-  fontSize: ExcalidrawTextElement["fontSize"],
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  fontSize: number,
+  lineHeight: UnitlessLineHeight,
 ) => {
   return fontSize * lineHeight;
 };
 
 // FIXME rename to getApproxMinContainerHeight
 export const getApproxMinLineHeight = (
-  fontSize: ExcalidrawTextElement["fontSize"],
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  fontSize: number,
+  lineHeight: UnitlessLineHeight,
 ) => {
   return getLineHeightInPx(fontSize, lineHeight) + BOUND_TEXT_PADDING * 2;
 };
@@ -171,7 +174,7 @@ export const getTextWidth = (text: string, font: FontString) => {
 export const getTextHeight = (
   text: string,
   fontSize: number,
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  lineHeight: UnitlessLineHeight,
 ) => {
   const lineCount = splitIntoLines(text).length;
   return getLineHeightInPx(fontSize, lineHeight) * lineCount;

@@ -408,7 +408,6 @@ describe("table copy", () => {
     API.setSelectedElements([table as never]);
     const selected = h.app.scene.getSelectedElements({
       selectedElementIds: h.state.selectedElementIds,
-      includeBoundTextElement: true,
       includeElementsInFrames: true,
     });
     const json = serializeAsClipboardJSON({ elements: selected, files: null });
@@ -461,7 +460,6 @@ describe("table copy", () => {
     API.setSelectedElements([table as never]);
     const selected = h.app.scene.getSelectedElements({
       selectedElementIds: h.state.selectedElementIds,
-      includeBoundTextElement: true,
       includeElementsInFrames: true,
     });
     const json = serializeAsClipboardJSON({ elements: selected, files: null });

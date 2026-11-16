@@ -181,7 +181,6 @@ const getPendingElements = (
     elements,
     { selectedElementIds },
     {
-      includeBoundTextElement: true,
       includeElementsInFrames: true,
     },
   ),

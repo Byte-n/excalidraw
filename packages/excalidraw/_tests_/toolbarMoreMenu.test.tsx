@@ -103,34 +103,6 @@ describe("浮动栏「更多」菜单（T3）", () => {
     );
   });
 
-  it("含文本能力时出现「文字和容器›」，子菜单与右键菜单同源", () => {
-    const text = API.createElement({ type: "text", text: "hello" });
-    API.setElements([text]);
-    act(() => {
-      API.setAppState({ selectedElementIds: { [text.id]: true } });
-    });
-
-    openMoreMenu();
-    expect(topLevelOrder()).toContain("submenu-labels.contextMenuText");
-
-    // 展开「文字和容器›」子菜单：内容按能力过滤（独立文本仅「文字包围成容器」），
-    // 与右键菜单同名子菜单同一构建器
-    fireEvent.click(
-      queryMenu()!.querySelector<HTMLButtonElement>(
-        "[data-testid='submenu-labels.contextMenuText']",
-      )!,
-    );
-    const submenu = queryMenu()!.querySelector(
-      ".context-menu-submenu__content",
-    );
-    expect(submenu).not.toBeNull();
-    expect(
-      Array.from(submenu!.querySelectorAll("li[data-testid]")).map((li) =>
-        li.getAttribute("data-testid"),
-      ),
-    ).toEqual(["wrapTextInContainer"]);
-  });
-
   it("「样式›」子菜单 = 拷贝样式/粘贴样式（与右键菜单同源）", () => {
     const rect = API.createElement({ type: "rectangle" });
     API.setElements([rect]);

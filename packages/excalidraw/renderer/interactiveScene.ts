@@ -55,16 +55,15 @@ import {
   isTableElement,
   isTitledElement,
   isContainerBackgroundText,
-  isTableCellBackgroundText,
-  isFragmentRowBackgroundText,
   getTableAxisBlockRange,
   getTableCellBounds,
   getTableCellFillColor,
   getTableCellRangeBounds,
-  getCellBackgroundTextLayout,
+  getLocalTextRegionLayout,
+  cellKey,
+  parseTextRegionKey,
   getLineHeightInPx,
   getTextVerticalOffset,
-  resolveTableBackgroundTextFontWeight,
   resolveTableColor,
   isTextElement,
   getContainingFrame,
@@ -357,7 +356,7 @@ const renderHoveredArrowTextAnchor = (
 
   const point =
     anchor === "label"
-      ? LinearElementEditor.getBoundTextElementCenter(element, elementsMap)
+      ? LinearElementEditor.getLabelCenter(element, elementsMap)
       : LinearElementEditor.getPointAtIndexGlobalCoordinates(
           element,
           anchor === "start" ? 0 : -1,
@@ -1973,31 +1972,37 @@ const renderTableRowColSelection = (
 };
 
 /**
- * Editing a cell's background text keeps two location cues (phase-6 D.4): a
- * 2px accent inner stroke on the edited cell (inset 1px so it clears the grid
- * lines) and the accent rails of its row and column. Every other table
- * overlay stays suppressed while editing, and no edit-mode hit behavior is
- * added — clicking a rail or outside the table still just ends the edit.
+ * Editing a cell's region text keeps two location cues: a 2px accent inner
+ * stroke on the edited cell (inset 1px so it clears the grid lines) and the
+ * accent rails of its row and column. Every other table overlay stays
+ * suppressed while editing, and no edit-mode hit behavior is added — clicking
+ * a rail or outside the table still just ends the edit.
  */
+const getTableEditingCell = (
+  appState: InteractiveCanvasAppState,
+): { tableId: string; cellId: string } | null => {
+  const region = appState.editingTextRegion;
+  const parsed = region && parseTextRegionKey(region.target.region);
+  return parsed?.kind === "cell"
+    ? { tableId: region!.target.elementId, cellId: parsed.cellId }
+    : null;
+};
+
 const renderTableEditingIndicator = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
   elementsMap: ElementsMap,
 ) => {
-  const editing = appState.editingTextElement;
-  if (!editing || !isTableCellBackgroundText(editing)) {
+  const editing = getTableEditingCell(appState);
+  if (!editing) {
     return;
   }
-  const ref = editing.containerRef;
-  if (ref?.kind !== "tableCell") {
-    return;
-  }
-  const table = elementsMap.get(ref.elementId);
+  const table = elementsMap.get(editing.tableId);
   if (!table || !isTableElement(table) || table.isDeleted) {
     return;
   }
   // the edited text belongs to the merge anchor's cell
-  const rawCell = table.table.cells.find((cell) => cell.id === ref.cellId);
+  const rawCell = table.table.cells.find((cell) => cell.id === editing.cellId);
   const cell = rawCell?.mergedInto
     ? table.table.cells.find((candidate) => candidate.id === rawCell.mergedInto)
     : rawCell;
@@ -2311,63 +2316,6 @@ const withFragmentLocalTransform = (
   context.restore();
 };
 
-/**
- * Editing a row's background text keeps the table's location cues: a 2px
- * accent inner stroke on the edited row plus its outer rail. Every other
- * fragment overlay stays suppressed while editing.
- */
-const renderFragmentEditingIndicator = (
-  context: CanvasRenderingContext2D,
-  appState: InteractiveCanvasAppState,
-  elementsMap: ElementsMap,
-) => {
-  const editing = appState.editingTextElement;
-  if (!editing || !isFragmentRowBackgroundText(editing)) {
-    return;
-  }
-  const ref = editing.containerRef;
-  if (ref?.kind !== "fragmentRow") {
-    return;
-  }
-  const fragment = elementsMap.get(ref.elementId);
-  if (!fragment || fragment.isDeleted || !isSequenceFragmentElement(fragment)) {
-    return;
-  }
-  const liveFragment = fragment as NonDeleted<ExcalidrawElement>;
-  const layout = getSequenceFragmentRowLayout(
-    fragment.height,
-    fragment.shape.fragment,
-  );
-  const row = layout.rows.find((entry) => entry.id === ref.rowId);
-  if (!row) {
-    return;
-  }
-  withFragmentLocalTransform(context, appState, liveFragment, () => {
-    const zoom = appState.zoom.value;
-    const inset = 1 / zoom;
-    context.strokeStyle = getThemedColor(
-      TABLE_STRUCTURE_ACCENT,
-      appState.theme,
-    );
-    context.lineWidth = 2 / zoom;
-    context.strokeRect(
-      inset,
-      row.y + inset,
-      liveFragment.width - inset * 2,
-      row.height - inset * 2,
-    );
-    drawStructureRail(
-      context,
-      appState,
-      -TABLE_STRUCTURE_RAIL_OFFSET / zoom,
-      row.y,
-      row.height,
-      "row",
-      "selected",
-    );
-  });
-};
-
 const renderFragmentStructureAffordances = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
@@ -2602,25 +2550,8 @@ const renderTableMoveGhost = (
   }
   context.restore();
 
-  // cell fills and background texts of the source band, clipped to the card
+  // cell fills and region texts of the source band, clipped to the card
   const blockIds = new Set(blockEntries.map((entry) => entry.id));
-  const textsByCell = new Map<string, ExcalidrawTextElement[]>();
-  for (const element of elementsMap.values()) {
-    const ref = element.containerRef;
-    if (
-      ref?.kind === "tableCell" &&
-      ref.elementId === table.id &&
-      ref.role === "backgroundText" &&
-      isTextElement(element)
-    ) {
-      const list = textsByCell.get(ref.cellId);
-      if (list) {
-        list.push(element);
-      } else {
-        textsByCell.set(ref.cellId, [element]);
-      }
-    }
-  }
   context.save();
   traceCard();
   context.clip();
@@ -2643,50 +2574,43 @@ const renderTableMoveGhost = (
       context.fillStyle = fill;
       context.fillRect(cellX, cellY, bounds.width, bounds.height);
     }
-    for (const text of textsByCell.get(cell.id) ?? []) {
-      const layout = getCellBackgroundTextLayout(
-        text,
-        table,
-        bounds,
-        elementsMap,
-      );
-      const layoutX =
-        ghostX + (layout.x - table.x) - (kind === "column" ? blockOffset : 0);
-      const layoutY =
-        ghostY + (layout.y - table.y) - (kind === "row" ? blockOffset : 0);
-      context.save();
-      context.font = getFontString({
-        fontSize: text.fontSize,
-        fontFamily: text.fontFamily,
-        fontWeight: resolveTableBackgroundTextFontWeight(text, elementsMap),
-      });
-      context.fillStyle = getThemedColor(text.strokeColor, appState.theme);
-      context.textAlign = layout.textAlign as CanvasTextAlign;
-      context.textBaseline = "alphabetic";
-      const lines = layout.text.replace(/\r\n?/g, "\n").split("\n");
-      const lineHeightPx = getLineHeightInPx(text.fontSize, text.lineHeight);
-      const verticalOffset =
-        getTextVerticalOffset(
-          layout.verticalAlign,
-          layout.height,
-          lines.length,
-          lineHeightPx,
-        ) + getVerticalOffset(text.fontFamily, text.fontSize, lineHeightPx);
-      const horizontalOffset =
-        layout.textAlign === "center"
-          ? layout.width / 2
-          : layout.textAlign === "right"
-          ? layout.width
-          : 0;
-      for (let index = 0; index < lines.length; index++) {
-        context.fillText(
-          lines[index],
-          layoutX + horizontalOffset,
-          layoutY + index * lineHeightPx + verticalOffset,
-        );
-      }
-      context.restore();
+    const layout = getLocalTextRegionLayout(table, cellKey(cell.id));
+    if (!layout || layout.text === "") {
+      continue;
     }
+    const layoutX = ghostX + layout.x - (kind === "column" ? blockOffset : 0);
+    const layoutY = ghostY + layout.y - (kind === "row" ? blockOffset : 0);
+    context.save();
+    context.font = getFontString({
+      fontSize: layout.fontSize,
+      fontFamily: layout.fontFamily,
+      fontWeight: layout.fontWeight,
+    });
+    context.fillStyle = getThemedColor(layout.color, appState.theme);
+    context.textAlign = layout.textAlign as CanvasTextAlign;
+    context.textBaseline = "alphabetic";
+    const lineHeightPx = getLineHeightInPx(layout.fontSize, layout.lineHeight);
+    const verticalOffset =
+      getTextVerticalOffset(
+        layout.verticalAlign,
+        layout.height,
+        layout.lines.length,
+        lineHeightPx,
+      ) + getVerticalOffset(layout.fontFamily, layout.fontSize, lineHeightPx);
+    const horizontalOffset =
+      layout.textAlign === "center"
+        ? layout.width / 2
+        : layout.textAlign === "right"
+        ? layout.width
+        : 0;
+    for (let index = 0; index < layout.lines.length; index++) {
+      context.fillText(
+        layout.lines[index],
+        layoutX + horizontalOffset,
+        layoutY + index * lineHeightPx + verticalOffset,
+      );
+    }
+    context.restore();
   }
   context.restore();
 
@@ -3610,9 +3534,7 @@ const _renderInteractiveScene = ({
     }
   }
 
-  const editingTableBackgroundText = isTableCellBackgroundText(
-    appState.editingTextElement,
-  );
+  const editingTableBackgroundText = !!getTableEditingCell(appState);
   const editingBackgroundText = isContainerBackgroundText(
     appState.editingTextElement,
   );
@@ -3621,11 +3543,7 @@ const _renderInteractiveScene = ({
   if (
     activeTextElement &&
     !activeTextElement.autoResize &&
-    !isContainerBackgroundText(activeTextElement) &&
-    !(
-      activeTextElement.containerId &&
-      isSequenceFragmentElement(elementsMap.get(activeTextElement.containerId))
-    )
+    !isContainerBackgroundText(activeTextElement)
   ) {
     renderResetAutoResizeHandle(
       activeTextElement,
@@ -3650,7 +3568,7 @@ const _renderInteractiveScene = ({
         );
       }
     }
-    const editingContainerId = appState.editingTextElement.containerId;
+    const editingContainerId = appState.editingTextRegion?.target.elementId;
     const editingContainer = editingContainerId
       ? allElementsMap.get(editingContainerId)
       : null;
@@ -3987,10 +3905,6 @@ const _renderInteractiveScene = ({
     // (cell inner stroke + the row/column rails) survive the suppression
     renderTableEditingIndicator(context, appState, elementsMap);
   }
-  if (isFragmentRowBackgroundText(appState.editingTextElement)) {
-    renderFragmentEditingIndicator(context, appState, elementsMap);
-  }
-
   if (tableVisual && !editingTableBackgroundText) {
     renderTableStructureHover(context, appState, tableVisual, elementsMap);
   }
@@ -4137,7 +4051,7 @@ const _renderInteractiveScene = ({
           // box
           if (
             isStickyNoteElement(element) &&
-            appState.editingTextElement?.containerId === element.id
+            appState.editingTextRegion?.target.elementId === element.id
           ) {
             continue;
           }
@@ -4426,7 +4340,6 @@ const _renderInteractiveScene = ({
       const [elementX1, elementY1, , , cx, cy] = getElementAbsoluteCoords(
         element,
         elementsMap,
-        true,
       );
 
       context.save();

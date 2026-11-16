@@ -9,7 +9,6 @@ import {
   isMindmapNodeElement,
   newElement,
   newMindmapNodeElement,
-  newTextElement,
 } from "@excalidraw/element";
 
 import type {
@@ -55,21 +54,7 @@ const fixture = () => {
       }),
       id,
     };
-    const text = {
-      ...newTextElement({
-        x: 0,
-        y: 0,
-        text: label,
-        containerId: id,
-        textAlign: "center",
-        verticalAlign: "middle",
-      }),
-      id: `${id}-text`,
-    };
-    elements.push(
-      { ...node, boundElements: [{ type: "text", id: text.id }] },
-      text,
-    );
+    elements.push({ ...node, texts: API.mindmapBody(node, label) });
   });
   elements.push({
     ...newElement({
@@ -144,7 +129,11 @@ const addSecondGraph = () => {
   };
   API.setElements(
     restoreElements(
-      [...h.app.scene.getNonDeletedElements(), root, child],
+      [
+        ...h.app.scene.getNonDeletedElements(),
+        { ...root, texts: API.mindmapBody(root, "Second") },
+        { ...child, texts: API.mindmapBody(child, "Child") },
+      ],
       null,
       {
         repairBindings: true,
@@ -326,9 +315,7 @@ describe("Mindmap P03 drag preview", () => {
     API.setElements(
       h.app.scene
         .getNonDeletedElements()
-        .filter(
-          (element) => element.id === "root" || element.id === "root-text",
-        ),
+        .filter((element) => element.id === "root"),
     );
     const mouse = new Pointer("mouse");
 
@@ -347,16 +334,9 @@ describe("Mindmap P03 drag preview", () => {
     expect(h.app.mindmap.getSelectedGraphRoot()).toBeNull();
     openFloatbarGroup("mindmapNodeShape");
     expect(screen.getByTestId("mindmap-shape-rectangle")).toBeInTheDocument();
-
-    API.setSelectedElements([
-      node("root"),
-      h.app.scene.getNonDeletedElement("root-text")!,
-    ]);
-    expect(h.app.mindmap.getSelectedGraphRoot()?.id).toBe("root");
-    openFloatbarGroup("mindmapGraphDirection");
     expect(
-      screen.getByRole("button", { name: "Right to left" }),
-    ).toBeInTheDocument();
+      screen.queryByTestId("floatbar-group-mindmapGraphDirection"),
+    ).toBeNull();
   });
 
   it("selects only the root with Ctrl-click and promotes it before dragging", () => {
@@ -414,13 +394,11 @@ describe("Mindmap P03 drag preview", () => {
     expect(preview?.previewElements.map((element) => element.id)).toEqual([
       expect.any(String),
       "a",
-      "a-text",
     ]);
     expect(
       preview?.previewElements.find((element) => element.id === "a")?.x,
     ).toBe(node("a").x + destination.x - (node("a").x + 20));
     expect(renderOpacity("a1")).toBe(35);
-    expect(renderOpacity("a1-text")).toBe(35);
     expect(renderOpacity("b1")).toBeUndefined();
     expect(
       preview?.previewElements.filter(
@@ -728,7 +706,7 @@ describe("Mindmap P03 drag preview", () => {
     const rectangle = h.app.scene.getNonDeletedElement("rectangle")!;
     API.setSelectedElements([node("a"), rectangle]);
     const original = new Map(
-      ["root", "root-text", "a", "a1", "b", "rectangle"].map((id) => {
+      ["root", "a", "a1", "b", "rectangle"].map((id) => {
         const element = h.app.scene.getNonDeletedElement(id)!;
         return [id, { x: element.x, y: element.y }] as const;
       }),
@@ -883,18 +861,14 @@ describe("Mindmap P03 drag preview", () => {
         .getNonDeletedElements()
         .filter(
           (element) =>
-            element.type === "mindmap-node" ||
-            element.type === "mindmap-edge" ||
-            (element.type === "text" && element.containerId !== null),
+            element.type === "mindmap-node" || element.type === "mindmap-edge",
         )
         .some((element) => h.state.selectedElementIds[element.id]),
     ).toBe(false);
   });
 
-  it("removes a bound label when its graph is not fully boxed", () => {
-    expect(h.app.mindmap.normalizeMindmapSelection({ "a-text": true })).toEqual(
-      {},
-    );
+  it("normalizes a partial node selection to an empty selection", () => {
+    expect(h.app.mindmap.normalizeMindmapSelection({ a1: true })).toEqual({});
   });
 
   it("normalizes freehand selections to complete Mindmap graphs", () => {
@@ -906,9 +880,7 @@ describe("Mindmap P03 drag preview", () => {
       .getNonDeletedElements()
       .filter(
         (element) =>
-          isMindmapNodeElement(element) ||
-          isMindmapEdgeElement(element) ||
-          (element.type === "text" && element.containerId !== null),
+          isMindmapNodeElement(element) || isMindmapEdgeElement(element),
       );
     act(() =>
       h.app.lassoTrail.selectElementsFromIds(graphElements.map(({ id }) => id)),
@@ -1120,9 +1092,7 @@ describe("Mindmap P03 drag preview", () => {
       .getNonDeletedElements()
       .filter(
         (element) =>
-          isMindmapNodeElement(element) ||
-          isMindmapEdgeElement(element) ||
-          (element.type === "text" && element.containerId !== null),
+          isMindmapNodeElement(element) || isMindmapEdgeElement(element),
       );
     API.setSelectedElements(graphElements);
     expect(h.app.mindmap.isCompleteMindmapSelection()).toBe(true);
@@ -1160,7 +1130,7 @@ describe("Mindmap P03 drag preview", () => {
     expect(copiedNodes).toHaveLength(5);
   });
 
-  it("selects every node, edge and bound label when boxing the full graph", () => {
+  it("selects every node and edge when boxing the full graph", () => {
     const graphElements = h.app.scene
       .getNonDeletedElements()
       .filter((element) => element.id !== "rectangle");
@@ -1276,12 +1246,7 @@ describe("Mindmap P03 drag preview", () => {
     API.updateElement(node("a"), { collapsed: true });
     const visibleElements = h.app.scene
       .getNonDeletedElements()
-      .filter(
-        (element) =>
-          element.id !== "rectangle" &&
-          element.id !== "a1" &&
-          element.id !== "a1-text",
-      );
+      .filter((element) => element.id !== "rectangle" && element.id !== "a1");
     const mouse = new Pointer("mouse");
     mouse.downAt(50, 50);
     mouse.moveTo(60, 60);
@@ -1295,7 +1260,6 @@ describe("Mindmap P03 drag preview", () => {
     mouse.upAt();
 
     expect(h.state.selectedElementIds.a1).toBe(true);
-    expect(h.state.selectedElementIds["a1-text"]).toBe(true);
     h.app.scene.getNonDeletedElements().forEach((element) => {
       if (element.type === "mindmap-edge") {
         expect(h.state.selectedElementIds[element.id]).toBe(true);

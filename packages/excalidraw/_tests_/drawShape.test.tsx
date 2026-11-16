@@ -724,13 +724,12 @@ describe("autoshape double-click to type", () => {
     const text = h.elements[0] as ExcalidrawTextElement;
     expect(h.elements).toHaveLength(1);
     expect(text.type).toBe("text");
-    expect(text.containerId).toBeNull();
     expect(h.state.editingTextElement).toBeNull();
     expect(h.state.activeTool.type).toBe("autoshape");
     expect(API.getSelectedElements()).toHaveLength(0);
   });
 
-  it("binds text to a transparent container even off-center (unlike selection mode)", async () => {
+  it("types into a transparent container even off-center (unlike selection mode)", async () => {
     const rectangle = API.createElement({
       type: "rectangle",
       x: 100,
@@ -745,49 +744,56 @@ describe("autoshape double-click to type", () => {
     mouse.doubleClickAt(140, 120);
 
     const editor = await getTextEditor();
-    expect(h.state.editingTextElement?.containerId).toBe(rectangle.id);
+    // composite 正文已内嵌到元素自身，不再创建绑定文字元素
+    expect(h.state.editingTextRegion?.target).toEqual({
+      elementId: rectangle.id,
+      region: "body",
+    });
+    expect(h.state.editingTextElement).toBeNull();
 
     updateTextEditor(editor, "label");
-    Keyboard.exitTextEditor(editor);
+    act(() => {
+      h.app.textWysiwygSubmitHandler?.();
+    });
 
-    const text = h.elements.find(
-      (element) => element.type === "text",
-    ) as ExcalidrawTextElement;
-    expect(text.containerId).toBe(rectangle.id);
-    expect(h.elements[0].boundElements).toEqual([
-      { type: "text", id: text.id },
-    ]);
+    const live = API.getElement(rectangle);
+    expect((live as any).texts?.body?.text).toBe("label");
+    expect(h.elements.some((element) => element.type === "text")).toBe(false);
     expect(h.state.activeTool.type).toBe("autoshape");
   });
 
-  it("edits the existing bound text instead of creating another", async () => {
+  it("edits the embedded body instead of creating another text element", async () => {
     const rectangle = API.createElement({
-      type: "rectangle",
+      type: "df-external-entity",
       x: 100,
       y: 100,
       width: 200,
       height: 100,
+      texts: {
+        body: {
+          text: "ola",
+          style: {
+            fontFamily: 1,
+            fontSize: 20,
+            lineHeight: 1.25,
+            textAlign: "center",
+            verticalAlign: "middle",
+          } as any,
+        },
+      },
     });
-    // positioned at the container center, as bound text always is
-    const boundText = API.createElement({
-      type: "text",
-      text: "ola",
-      x: 190,
-      y: 145,
-      width: 20,
-      height: 10,
-      containerId: rectangle.id,
-    });
-    API.updateElement(rectangle, {
-      boundElements: [{ type: "text", id: boundText.id }],
-    });
-    API.setElements([rectangle, boundText]);
+    API.setElements([rectangle]);
 
     mouse.doubleClickAt(150, 130);
 
-    await getTextEditor();
-    expect(h.state.editingTextElement?.id).toBe(boundText.id);
-    expect(h.elements).toHaveLength(2);
+    const editor = await getTextEditor();
+    expect(h.state.editingTextRegion?.target).toEqual({
+      elementId: rectangle.id,
+      region: "body",
+    });
+    expect(h.state.editingTextElement).toBe(null);
+    expect(editor.value).toBe("ola");
+    expect(h.elements).toHaveLength(1);
   });
 
   it("creates free text at the pointer on Alt+double-click inside a container", async () => {
@@ -805,7 +811,9 @@ describe("autoshape double-click to type", () => {
     });
 
     await getTextEditor();
-    expect(h.state.editingTextElement?.containerId ?? null).toBeNull();
+    // Alt+双击在容器内创建的是自由文字，不进入容器正文区域
+    expect(h.state.editingTextElement?.type).toBe("text");
+    expect(h.state.editingTextRegion).toBe(null);
   });
 
   it("deletes the text and unbinds on empty submit", async () => {

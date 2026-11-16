@@ -28,7 +28,6 @@ const getElementsToLock = (
 ) => {
   const selectedElements = app.scene.getSelectedElements({
     selectedElementIds: appState.selectedElementIds,
-    includeBoundTextElement: true,
     includeElementsInFrames: true,
   });
   const mindmapElements =
@@ -172,7 +171,6 @@ export const actionToggleElementLock = register({
       event.shiftKey &&
       app.scene.getSelectedElements({
         selectedElementIds: appState.selectedElementIds,
-        includeBoundTextElement: false,
       }).length > 0
     );
   },

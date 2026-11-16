@@ -328,7 +328,7 @@ export const getTransformHandles = (
   // not supported at all.
   if (element.type === "table") {
     return getTransformHandlesFromCoords(
-      getElementAbsoluteCoords(element, elementsMap, true),
+      getElementAbsoluteCoords(element, elementsMap),
       element.angle,
       zoom,
       pointerType,
@@ -344,7 +344,7 @@ export const getTransformHandles = (
   // Mindmap 节点的位置与角度由布局驱动，单节点旋转手柄无意义
   if (element.type === "mindmap-node") {
     return getTransformHandlesFromCoords(
-      getElementAbsoluteCoords(element, elementsMap, true),
+      getElementAbsoluteCoords(element, elementsMap),
       element.angle,
       zoom,
       pointerType,

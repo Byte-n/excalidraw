@@ -8,6 +8,25 @@ import { ExcalidrawSceneSession } from "../src/excalidraw-scene-session";
 
 import { element, TestSceneBridge } from "./helpers";
 
+import type { ExcalidrawSceneElement } from "../src/excalidraw-scene-types";
+
+const textBody = (value: ExcalidrawSceneElement, text: string) => ({
+  ...(value.texts as Record<string, unknown> | undefined),
+  body: {
+    ...((value.texts as { body?: Record<string, unknown> } | undefined)?.body ??
+      {}),
+    text,
+  },
+});
+
+const setSourceText = <T extends ExcalidrawSceneElement>(
+  value: T,
+  text: string,
+): T => ({ ...value, texts: textBody(value, text) });
+
+const getSourceText = (value: ExcalidrawSceneElement) =>
+  (value.texts as { body?: { text?: string } } | undefined)?.body?.text;
+
 function pair() {
   const a = new Y.Doc();
   const b = new Y.Doc();
@@ -242,22 +261,25 @@ test("纯图片加载状态/版本、选区和视口快照不写文档，移动�
   assert.equal(Object.keys(left.getScene().assets).length, 1);
 });
 
-test("缺省文本尺寸只在文本或所属容器发生编辑时物化", () => {
+test("缺省文本尺寸只在文本自身编辑时物化", () => {
   const { a, left } = pair();
   const text = element("lazy-text", 0, {
     type: "text",
     width: undefined,
     height: undefined,
-    text: "原文",
-    originalText: "原文",
-    fontSize: 20,
-    fontFamily: 1,
-    baseFontSize: null,
-    textAlign: "left",
-    verticalAlign: "top",
-    containerId: null,
+    texts: {
+      body: {
+        text: "原文",
+        style: {
+          fontFamily: 1,
+          fontSize: 20,
+          lineHeight: 1.25,
+          textAlign: "left",
+          verticalAlign: "top",
+        },
+      },
+    },
     autoResize: true,
-    lineHeight: 1.25,
     index: "a1",
   });
   const lazyText = { ...text };
@@ -283,9 +305,7 @@ test("缺省文本尺寸只在文本或所属容器发生编辑时物化", () =>
     display.map((value) =>
       value.id === "lazy-text"
         ? {
-            ...value,
-            text: "修改后",
-            originalText: "修改后",
+            ...setSourceText(value, "修改后"),
             width: 70,
             height: 25,
           }
@@ -340,16 +360,19 @@ test("单元格删改、父容器删改及容器环并发不丢文本且不回�
     });
   const text = element("text", 3, {
     type: "text",
-    text: "保留文字",
-    originalText: "保留文字",
-    fontSize: 20,
-    fontFamily: 1,
-    baseFontSize: null,
-    textAlign: "left",
-    verticalAlign: "top",
-    containerId: null,
+    texts: {
+      body: {
+        text: "保留文字",
+        style: {
+          fontFamily: 1,
+          fontSize: 20,
+          lineHeight: 1.25,
+          textAlign: "left",
+          verticalAlign: "top",
+        },
+      },
+    },
     autoResize: true,
-    lineHeight: 1.25,
     containerRef: {
       kind: "tableCell",
       elementId: "table-a",
@@ -386,7 +409,7 @@ test("单元格删改、父容器删改及容器环并发不丢文本且不回�
     ],
   });
   right.applyCommand({
-    elements: [{ ...text, text: "并发修改", originalText: "并发修改", x: 30 }],
+    elements: [{ ...setSourceText(text, "并发修改"), x: 30 }],
   });
   sync(a, b);
   shown = projectExcalidrawDisplayElements(left.getScene().elements);
@@ -394,7 +417,10 @@ test("单元格删改、父容器删改及容器环并发不丢文本且不回�
     shown.find((entry) => entry.id === "text")!.containerRef,
     undefined,
   );
-  assert.equal(shown.find((entry) => entry.id === "text")!.text, "并发修改");
+  assert.equal(
+    getSourceText(shown.find((entry) => entry.id === "text")!),
+    "并发修改",
+  );
   const session = new ExcalidrawSceneSession(left.binding);
   const display = session.project();
   session.accept(display);
@@ -409,11 +435,10 @@ test("单元格删改、父容器删改及容器环并发不丢文本且不回�
   left.removeElement("table-a");
   right.applyCommand({
     elements: [
-      {
-        ...right.getScene().elements.find((entry) => entry.id === "text")!,
-        text: "父删除期间文字",
-        originalText: "父删除期间文字",
-      },
+      setSourceText(
+        right.getScene().elements.find((entry) => entry.id === "text")!,
+        "父删除期间文字",
+      ),
     ],
   });
   sync(a, b);
@@ -422,9 +447,11 @@ test("单元格删改、父容器删改及容器环并发不丢文本且不回�
     projectExcalidrawDisplayElements(right.getScene().elements),
   );
   assert.equal(
-    projectExcalidrawDisplayElements(left.getScene().elements).find(
-      (entry) => entry.id === "text",
-    )!.text,
+    getSourceText(
+      projectExcalidrawDisplayElements(left.getScene().elements).find(
+        (entry) => entry.id === "text",
+      )!,
+    ),
     "父删除期间文字",
   );
 });
@@ -535,60 +562,4 @@ test("同一画板重复创建和销毁桥接 100 次，observer 数量回到基
     doc.getMap("elements").set("lifecycle", element("lifecycle", i));
   }
   assert.equal(callbacks.count, 0);
-});
-
-test("fragment 行背景文本：合法保留，首行/缺失行/重复行引用被解除", () => {
-  const fragment = element("fragment", 0, {
-    type: "sequence",
-    width: 400,
-    height: 200,
-    shape: {
-      id: "sc-fragment",
-      schemaVersion: 1,
-      fragment: {
-        rows: [
-          { id: "header", height: 36 },
-          { id: "body", height: 164 },
-        ],
-      },
-    },
-  });
-  const rowText = (id: string, rowId: string) =>
-    element(id, 0, {
-      type: "text",
-      text: "T",
-      originalText: "T",
-      fontSize: 13,
-      fontFamily: 1,
-      baseFontSize: null,
-      textAlign: "left",
-      verticalAlign: "top",
-      containerId: null,
-      autoResize: false,
-      lineHeight: 1.25,
-      containerRef: {
-        kind: "fragmentRow",
-        elementId: "fragment",
-        rowId,
-        role: "backgroundText",
-      },
-    });
-
-  const shown = projectExcalidrawDisplayElements([
-    fragment,
-    rowText("a-valid", "body"),
-    rowText("b-header", "header"),
-    rowText("c-missing", "missing"),
-    rowText("d-dup-body", "body"),
-  ]);
-  const byId = new Map(shown.map((entry) => [entry.id, entry]));
-  assert.deepEqual(byId.get("a-valid")!.containerRef, {
-    kind: "fragmentRow",
-    elementId: "fragment",
-    rowId: "body",
-    role: "backgroundText",
-  });
-  for (const id of ["b-header", "c-missing", "d-dup-body"]) {
-    assert.equal(byId.get(id)!.containerRef, undefined);
-  }
 });

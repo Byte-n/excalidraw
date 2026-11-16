@@ -84,7 +84,6 @@ export const prepareElementsForExport = (
         elements,
         { selectedElementIds },
         {
-          includeBoundTextElement: true,
         },
       )
     : elements;
@@ -103,7 +102,6 @@ export const prepareElementsForExport = (
         elements,
         { selectedElementIds },
         {
-          includeBoundTextElement: true,
           includeElementsInFrames: true,
         },
       );

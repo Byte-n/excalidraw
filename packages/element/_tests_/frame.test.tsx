@@ -65,7 +65,7 @@ it("excludes bound text hosted by another frame from overlapping contents", () =
     y: 20,
     width: 20,
     height: 20,
-    containerId: targetHost.id,
+    containerRef: { kind: "frameLike", elementId: targetFrame.id },
   });
   const otherHost = API.createElement({
     type: "rectangle",
@@ -81,7 +81,7 @@ it("excludes bound text hosted by another frame from overlapping contents", () =
     y: 20,
     width: 20,
     height: 20,
-    containerId: otherHost.id,
+    containerRef: { kind: "frameLike", elementId: otherFrame.id },
   });
   const elements = [
     targetFrame,
@@ -210,58 +210,8 @@ describe("adding elements to frames", () => {
       id: "id6",
       type: "arrow",
       x: 100,
-      boundElements: [{ id: text.id, type: "text" }],
+      boundElements: [{ id: text.id, type: "arrow" }],
     });
-  });
-
-  it("keeps grouped hosts with bound text in their frame", () => {
-    const first = API.createElement({
-      type: "rectangle",
-      x: 10,
-      y: 10,
-      width: 20,
-      height: 20,
-      containerRef: { kind: "frameLike", elementId: frame.id },
-      boundElements: [{ type: "text", id: "firstText" }],
-    });
-    const firstText = API.createElement({
-      id: "firstText",
-      type: "text",
-      x: 10,
-      y: 10,
-      width: 20,
-      height: 20,
-      containerId: first.id,
-    });
-    const second = API.createElement({
-      type: "rectangle",
-      x: 50,
-      y: 10,
-      width: 20,
-      height: 20,
-      containerRef: { kind: "frameLike", elementId: frame.id },
-      boundElements: [{ type: "text", id: "secondText" }],
-    });
-    const secondText = API.createElement({
-      id: "secondText",
-      type: "text",
-      x: 50,
-      y: 10,
-      width: 20,
-      height: 20,
-      containerId: second.id,
-    });
-    API.setElements([first, firstText, second, secondText, frame]);
-    API.setSelectedElements([first, second]);
-
-    API.executeAction(actionGroup);
-
-    expect(
-      h.elements.find((element) => element.id === first.id)?.containerRef,
-    ).toEqual({ kind: "frameLike", elementId: frame.id });
-    expect(
-      h.elements.find((element) => element.id === second.id)?.containerRef,
-    ).toEqual({ kind: "frameLike", elementId: frame.id });
   });
 
   it("supports direct children in magic frames", () => {
@@ -1025,16 +975,6 @@ describe("adding elements to frames", () => {
         width: 20,
         height: 20,
         containerRef: { kind: "frameLike", elementId: frame.id },
-        boundElements: [{ id: "boundText", type: "text" }],
-      });
-      const boundText = API.createElement({
-        id: "boundText",
-        type: "text",
-        x: 50,
-        y: 10,
-        width: 20,
-        height: 20,
-        containerId: frameChild.id,
       });
       const otherFrameChild = API.createElement({
         id: "otherFrameChild",
@@ -1054,13 +994,7 @@ describe("adding elements to frames", () => {
         height: 20,
       });
 
-      API.setElements([
-        frame,
-        frameChild,
-        boundText,
-        otherFrameChild,
-        nonFrameElement,
-      ]);
+      API.setElements([frame, frameChild, otherFrameChild, nonFrameElement]);
       API.setSelectedElements([frameChild, nonFrameElement]);
 
       mouse.downAt(
@@ -1071,13 +1005,11 @@ describe("adding elements to frames", () => {
       mouse.up();
 
       expect(frameChild.containerRef?.elementId ?? null).toBe(frame.id);
-      expect(boundText.containerRef).toBeUndefined();
       expect(nonFrameElement.containerRef?.elementId ?? null).toBe(frame.id);
       expect(h.elements.map((element) => element.id)).toEqual([
         frame.id,
         otherFrameChild.id,
         frameChild.id,
-        boundText.id,
         nonFrameElement.id,
       ]);
     });

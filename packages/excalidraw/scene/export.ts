@@ -11,7 +11,6 @@ import {
   EXPORT_DATA_TYPES,
   arrayToMap,
   distance,
-  getFontString,
   toBrandedType,
   applyDarkModeFilter,
 } from "@excalidraw/common";
@@ -44,8 +43,14 @@ import { syncInvalidIndices } from "@excalidraw/element";
 import { type Mutable } from "@excalidraw/common/utility-types";
 
 import { newTextElement } from "@excalidraw/element";
+import {
+  getTextElementDisplayText,
+  getTextElementFont,
+  getTextElementTextPatch,
+} from "@excalidraw/element";
 
 import type { Bounds } from "@excalidraw/common";
+import type { UnitlessLineHeight } from "@excalidraw/element";
 
 import type {
   ExcalidrawFrameLikeElement,
@@ -77,12 +82,9 @@ const truncateText = (
   }
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
-  ctx.font = getFontString({
-    fontFamily: element.fontFamily,
-    fontSize: element.fontSize,
-  });
+  ctx.font = getTextElementFont(element);
 
-  let text = element.text;
+  let text = getTextElementDisplayText(element);
 
   const metrics = ctx.measureText(text);
 
@@ -99,7 +101,10 @@ const truncateText = (
       }
     }
   }
-  return newElementWith(element, { text, width: maxWidth });
+  return newElementWith(element, {
+    ...getTextElementTextPatch(element, text),
+    width: maxWidth,
+  });
 };
 
 /**
@@ -124,8 +129,7 @@ const addElementLabelsAsTextElements = (
               : FRAME_STYLE.nameOffsetY),
           fontFamily: FONT_FAMILY.Helvetica,
           fontSize: FRAME_STYLE.nameFontSize,
-          lineHeight:
-            FRAME_STYLE.nameLineHeight as ExcalidrawTextElement["lineHeight"],
+          lineHeight: FRAME_STYLE.nameLineHeight as UnitlessLineHeight,
           strokeColor: opts.exportWithDarkMode
             ? FRAME_STYLE.nameColorDarkTheme
             : FRAME_STYLE.nameColorLightTheme,

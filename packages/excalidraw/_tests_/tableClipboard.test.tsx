@@ -3,8 +3,13 @@ import { vi } from "vitest";
 
 import {
   assertValidContainerRefs,
+  cellKey,
   duplicateElements,
   getNonDeletedElements,
+  getTableCellTextBaseStyle,
+  getTextBlock,
+  getTextElementText,
+  withTextBlock,
 } from "@excalidraw/element";
 import { MIME_TYPES } from "@excalidraw/common";
 
@@ -124,12 +129,14 @@ describe("table range clipboard", () => {
     expect(copiedTable.table.cells[0].id).not.toBe(anchor.id);
     expect(
       copies.filter(
-        (element) => element.type === "text" && element.text === "Report",
+        (element) =>
+          element.type === "text" && getTextElementText(element) === "Report",
       ),
     ).toHaveLength(0);
     expect(
       copies.find(
-        (element) => element.type === "text" && element.text === "Value",
+        (element) =>
+          element.type === "text" && getTextElementText(element) === "Value",
       )?.containerRef,
     ).toMatchObject({
       elementId: copiedTable.id,
@@ -139,22 +146,19 @@ describe("table range clipboard", () => {
   });
 
   it("writes a structured range and TSV in one copy event", async () => {
-    const table = API.createElement({
+    const base = API.createElement({
       type: "table",
       rowCount: 1,
       columnCount: 1,
     });
-    const text = API.createElement({
-      type: "text",
-      text: "A",
-      containerRef: {
-        kind: "tableCell",
-        elementId: table.id,
-        cellId: table.table.cells[0].id,
-        role: "backgroundText",
-      },
-    });
-    API.setElements([table, text]);
+    const table = {
+      ...base,
+      texts: withTextBlock(base.texts, cellKey(base.table.cells[0].id), {
+        text: "A",
+        style: getTableCellTextBaseStyle(),
+      }),
+    };
+    API.setElements([table]);
     act(() =>
       API.setAppState({
         tableCellSelection: {
@@ -185,7 +189,7 @@ describe("table range clipboard", () => {
       ),
     );
     expect(parsed.tableRange).toBe(true);
-    expect(parsed.elements).toHaveLength(2);
+    expect(parsed.elements).toHaveLength(1);
   });
 
   it("keeps mixed selection together and rejects a table-cell destination", async () => {
@@ -376,31 +380,27 @@ describe("table range clipboard", () => {
   });
 
   it("copies text and shapes into another table without changing the source", () => {
-    const source = API.createElement({
+    const sourceBase = API.createElement({
       type: "table",
       rowCount: 2,
       columnCount: 2,
       x: 10,
       y: 10,
     });
+    const source = {
+      ...sourceBase,
+      texts: withTextBlock(
+        sourceBase.texts,
+        cellKey(sourceBase.table.cells[0].id),
+        { text: "Alpha", style: getTableCellTextBaseStyle() },
+      ),
+    };
     const target = API.createElement({
       type: "table",
       rowCount: 1,
       columnCount: 1,
       x: 500,
       y: 100,
-    });
-    const text = API.createElement({
-      type: "text",
-      x: 14,
-      y: 14,
-      text: "Alpha",
-      containerRef: {
-        kind: "tableCell",
-        elementId: source.id,
-        cellId: source.table.cells[0].id,
-        role: "backgroundText",
-      },
     });
     const shape = API.createElement({
       type: "rectangle",
@@ -413,7 +413,7 @@ describe("table range clipboard", () => {
         role: "content",
       },
     });
-    API.setElements([source, text, shape, target]);
+    API.setElements([source, shape, target]);
 
     const snapshot = createTableRangeClipboard(
       source,
@@ -433,54 +433,61 @@ describe("table range clipboard", () => {
 
     const next = h.app.scene.getElement(target.id) as ExcalidrawTableElement;
     expect(next.table.columns).toHaveLength(2);
-    const copiedText = h.elements.find(
-      (element) =>
-        element.type === "text" && element.id !== text.id && !element.isDeleted,
-    )!;
+    expect(
+      getTextBlock(next.texts, cellKey(next.table.cells[0].id))?.text,
+    ).toBe("Alpha");
     const copiedShape = h.elements.find(
       (element) =>
         element.type === "composite" &&
         element.id !== shape.id &&
         !element.isDeleted,
     )!;
-    expect(copiedText.containerRef).toMatchObject({
-      elementId: target.id,
-      cellId: next.table.cells[0].id,
-    });
     expect(copiedShape.containerRef).toMatchObject({
       elementId: target.id,
       cellId: next.table.cells[1].id,
     });
-    expect(h.app.scene.getElement(text.id)?.isDeleted).toBe(false);
+    expect(h.app.scene.getElement(source.id)?.isDeleted).toBe(false);
+    expect(
+      getTextBlock(
+        (h.app.scene.getElement(source.id) as ExcalidrawTableElement).texts,
+        cellKey(source.table.cells[0].id),
+      )?.text,
+    ).toBe("Alpha");
     expect(h.app.scene.getElement(shape.id)?.isDeleted).toBe(false);
     expect(() => assertValidContainerRefs(h.elements)).not.toThrow();
   });
 
   it("undoes row and column expansion with pasted content in one step", () => {
-    const source = API.createElement({
+    const sourceBase = API.createElement({
       type: "table",
       rowCount: 2,
       columnCount: 2,
       x: 10,
       y: 10,
     });
-    const target = API.createElement({
+    const source = {
+      ...sourceBase,
+      texts: withTextBlock(
+        sourceBase.texts,
+        cellKey(sourceBase.table.cells[3].id),
+        { text: "Pasted", style: getTableCellTextBaseStyle() },
+      ),
+    };
+    const targetBase = API.createElement({
       type: "table",
       rowCount: 1,
       columnCount: 1,
       x: 500,
       y: 100,
     });
-    const text = API.createElement({
-      type: "text",
-      text: "Pasted",
-      containerRef: {
-        kind: "tableCell",
-        elementId: source.id,
-        cellId: source.table.cells[3].id,
-        role: "backgroundText",
-      },
-    });
+    const target = {
+      ...targetBase,
+      texts: withTextBlock(
+        targetBase.texts,
+        cellKey(targetBase.table.cells[0].id),
+        { text: "Original", style: getTableCellTextBaseStyle() },
+      ),
+    };
     const shape = API.createElement({
       type: "rectangle",
       containerRef: {
@@ -490,17 +497,7 @@ describe("table range clipboard", () => {
         role: "content",
       },
     });
-    const oldTargetText = API.createElement({
-      type: "text",
-      text: "Original",
-      containerRef: {
-        kind: "tableCell",
-        elementId: target.id,
-        cellId: target.table.cells[0].id,
-        role: "backgroundText",
-      },
-    });
-    API.setElements([source, text, shape, target, oldTargetText]);
+    API.setElements([source, shape, target]);
     act(() => {
       h.app.store.scheduleCapture();
       h.app.store.commit(
@@ -532,17 +529,25 @@ describe("table range clipboard", () => {
     expect(expanded.table.columns.map((column) => column.width)).toEqual(
       source.table.columns.map((column) => column.width),
     );
-    expect(h.app.scene.getElement(oldTargetText.id)?.isDeleted).toBe(true);
+    // 目标对应格被源区文本覆盖（源文本位于右下角），源文本保持不变
+    expect(
+      getTextBlock(expanded.texts, cellKey(expanded.table.cells[3].id))?.text,
+    ).toBe("Pasted");
+    expect(
+      getTextBlock(
+        (h.app.scene.getElement(source.id) as ExcalidrawTableElement).texts,
+        cellKey(source.table.cells[3].id),
+      )?.text,
+    ).toBe("Pasted");
+    // 只有正文成员被复制进目标表
     const copiedIds = h.elements
       .filter(
         (element) =>
           !element.isDeleted &&
-          ![source.id, target.id, text.id, shape.id, oldTargetText.id].includes(
-            element.id,
-          ),
+          ![source.id, target.id, shape.id].includes(element.id),
       )
       .map((element) => element.id);
-    expect(copiedIds).toHaveLength(2);
+    expect(copiedIds).toHaveLength(1);
 
     act(() => API.executeAction(createUndoAction(h.history as never) as never));
     const restored = h.app.scene.getElement(
@@ -551,9 +556,9 @@ describe("table range clipboard", () => {
     expect(restored.table.rows).toEqual(target.table.rows);
     expect(restored.table.columns).toEqual(target.table.columns);
     expect(restored.table.cells).toEqual(target.table.cells);
+    expect(restored.texts).toEqual(target.texts);
     expect(restored.width).toBe(target.width);
     expect(restored.height).toBe(target.height);
-    expect(h.app.scene.getElement(oldTargetText.id)?.isDeleted).toBe(false);
     expect(
       h.elements.filter(
         (element) => copiedIds.includes(element.id) && !element.isDeleted,
@@ -561,22 +566,19 @@ describe("table range clipboard", () => {
     ).toHaveLength(0);
   });
 
-  it("writes TSV background text, clears empty fields and keeps shapes", () => {
-    const table = API.createElement({
+  it("writes TSV cell text, clears empty fields and keeps shapes", () => {
+    const base = API.createElement({
       type: "table",
       rowCount: 1,
       columnCount: 2,
     });
-    const old = API.createElement({
-      type: "text",
-      text: "Old",
-      containerRef: {
-        kind: "tableCell",
-        elementId: table.id,
-        cellId: table.table.cells[1].id,
-        role: "backgroundText",
-      },
-    });
+    const table = {
+      ...base,
+      texts: withTextBlock(base.texts, cellKey(base.table.cells[1].id), {
+        text: "Old",
+        style: getTableCellTextBaseStyle(),
+      }),
+    };
     const shape = API.createElement({
       type: "rectangle",
       containerRef: {
@@ -586,22 +588,25 @@ describe("table range clipboard", () => {
         role: "content",
       },
     });
-    API.setElements([table, old, shape]);
+    API.setElements([table, shape]);
 
     act(() =>
       pasteTSVIntoCell(h.app, "New\t", table.id, table.table.cells[0].id),
     );
 
-    expect(h.app.scene.getElement(old.id)?.isDeleted).toBe(true);
+    const updated = h.app.scene.getElement(table.id) as ExcalidrawTableElement;
+    expect(
+      getTextBlock(updated.texts, cellKey(updated.table.cells[0].id))?.text,
+    ).toBe("New");
+    expect(
+      getTextBlock(updated.texts, cellKey(updated.table.cells[1].id)),
+    ).toBe(undefined);
     expect(h.app.scene.getElement(shape.id)?.isDeleted).toBe(false);
     expect(
       h.elements.filter(
-        (element) =>
-          !element.isDeleted &&
-          element.type === "text" &&
-          element.text === "New",
+        (element) => !element.isDeleted && element.type === "text",
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
   });
 
   it("rejects locked and merged targets without partial changes", () => {

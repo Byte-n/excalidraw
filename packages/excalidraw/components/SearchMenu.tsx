@@ -14,7 +14,13 @@ import {
 import {
   getCommonBounds,
   getElementTitle,
+  getMindmapNodeTextStyle,
   getTableCellBounds,
+  getTextElementDisplayText,
+  getTextElementFont,
+  getTextElementStyle,
+  getTextElementText,
+  getTextRegionLayout,
   isElementCompletelyInViewport,
   isSceneBoundsCompletelyInViewport,
   isTableElement,
@@ -39,6 +45,7 @@ import {
 import type {
   ElementsMap,
   ExcalidrawFrameLikeElement,
+  ExcalidrawMindmapNodeElement,
   ExcalidrawTableElement,
   ExcalidrawTextElement,
 } from "@excalidraw/element/types";
@@ -79,7 +86,8 @@ type SearchMatchItem = {
   element:
     | ExcalidrawTextElement
     | ExcalidrawFrameLikeElement
-    | ExcalidrawTableElement;
+    | ExcalidrawTableElement
+    | ExcalidrawMindmapNodeElement;
   searchQuery: SearchQuery;
   index: number;
   preview: {
@@ -254,7 +262,8 @@ export const SearchMenu = () => {
           );
           if (cellBounds) {
             const isCellTextTiny =
-              currentElement.fontSize * app.state.zoom.value <
+              getTextElementStyle(currentElement).fontSize *
+                app.state.zoom.value <
               FONT_SIZE_LEGIBILITY_THRESHOLD;
 
             if (
@@ -287,7 +296,8 @@ export const SearchMenu = () => {
         if (
           !isTextElement(currentElement) &&
           !isFrameLikeElement(currentElement) &&
-          !isTableElement(currentElement)
+          !isTableElement(currentElement) &&
+          !isMindmapNodeElement(currentElement)
         ) {
           return;
         }
@@ -302,6 +312,7 @@ export const SearchMenu = () => {
           return;
         }
         const zoomValue = app.state.zoom.value;
+        const measureStyle = getSearchMeasureStyle(currentElement);
 
         const matchAsElement = newTextElement({
           text: match.searchQuery,
@@ -309,17 +320,11 @@ export const SearchMenu = () => {
           y: currentElement.y + (match.matchedLines[0]?.offsetY ?? 0),
           width: match.matchedLines[0]?.width,
           height: match.matchedLines[0]?.height,
-          fontSize:
-            isFrameLikeElement(currentElement) || isTableElement(currentElement)
-              ? FRAME_STYLE.nameFontSize
-              : currentElement.fontSize,
-          fontFamily:
-            isFrameLikeElement(currentElement) || isTableElement(currentElement)
-              ? FONT_FAMILY.Assistant
-              : currentElement.fontFamily,
+          fontSize: measureStyle.fontSize,
+          fontFamily: measureStyle.fontFamily,
         });
 
-        const fontSize = matchAsElement.fontSize;
+        const fontSize = getTextElementStyle(matchAsElement).fontSize;
         const isTextTiny =
           fontSize * zoomValue < FONT_SIZE_LEGIBILITY_THRESHOLD;
 
@@ -535,13 +540,9 @@ export const SearchMenu = () => {
           }
           if (match.mindmap) {
             const node = app.scene.getNonDeletedElement(match.mindmap.nodeId);
-            const text = app.scene.getNonDeletedElement(match.element.id);
             if (
               !node ||
               !isMindmapNodeElement(node) ||
-              !text ||
-              text.type !== "text" ||
-              text.containerId !== node.id ||
               !app.mindmap.focusNode(node.id)
             ) {
               return;
@@ -628,7 +629,12 @@ const MatchListBase = (props: MatchListProps) => {
   );
 
   const textMatches = useMemo(
-    () => props.matches.items.filter((match) => isTextElement(match.element)),
+    () =>
+      props.matches.items.filter(
+        (match) =>
+          isTextElement(match.element) ||
+          (isMindmapNodeElement(match.element) && !!match.mindmap),
+      ),
     [props.matches],
   );
 
@@ -832,8 +838,8 @@ const getMatchedLines = (
   index: number,
 ) => {
   const normalizedText = normalizeWrappedText(
-    textElement.text,
-    textElement.originalText,
+    getTextElementDisplayText(textElement),
+    getTextElementText(textElement),
   );
 
   const lines = normalizedText.split("\n");
@@ -859,7 +865,7 @@ const getMatchedLines = (
   }
 
   let startIndex = index;
-  let remainingQuery = textElement.originalText.slice(
+  let remainingQuery = getTextElementText(textElement).slice(
     index,
     index + searchQuery.length,
   );
@@ -883,10 +889,11 @@ const getMatchedLines = (
       const matchedWord = remainingQuery.slice(0, matchCapacity);
       remainingQuery = remainingQuery.slice(matchCapacity);
 
+      const lineHeight = getTextElementStyle(textElement).lineHeight;
       const offset = measureText(
         textToStart,
-        getFontString(textElement),
-        textElement.lineHeight,
+        getTextElementFont(textElement),
+        lineHeight,
       );
 
       // measureText returns a non-zero width for the empty string
@@ -895,15 +902,16 @@ const getMatchedLines = (
         offset.width = 0;
       }
 
-      if (textElement.textAlign !== "left" && lineIndexRange.line.length > 0) {
+      const { textAlign } = getTextElementStyle(textElement);
+      if (textAlign !== "left" && lineIndexRange.line.length > 0) {
         const lineLength = measureText(
           lineIndexRange.line,
-          getFontString(textElement),
-          textElement.lineHeight,
+          getTextElementFont(textElement),
+          lineHeight,
         );
 
         const spaceToStart =
-          textElement.textAlign === "center"
+          textAlign === "center"
             ? (textElement.width - lineLength.width) / 2
             : textElement.width - lineLength.width;
         offset.width += spaceToStart;
@@ -911,8 +919,8 @@ const getMatchedLines = (
 
       const { width, height } = measureText(
         matchedWord,
-        getFontString(textElement),
-        textElement.lineHeight,
+        getTextElementFont(textElement),
+        lineHeight,
       );
 
       const offsetX = offset.width;
@@ -931,6 +939,28 @@ const getMatchedLines = (
   }
 
   return matchedLines;
+};
+
+/** 聚焦时用于定位匹配词的度量样式：标题、脑图正文、普通文字各有来源。 */
+const getSearchMeasureStyle = (
+  element:
+    | ExcalidrawTextElement
+    | ExcalidrawFrameLikeElement
+    | ExcalidrawTableElement
+    | ExcalidrawMindmapNodeElement,
+) => {
+  if (isFrameLikeElement(element) || isTableElement(element)) {
+    return {
+      fontSize: FRAME_STYLE.nameFontSize,
+      fontFamily: FONT_FAMILY.Assistant,
+    };
+  }
+  if (isMindmapNodeElement(element)) {
+    const style =
+      element.texts?.body?.style ?? getMindmapNodeTextStyle(element);
+    return { fontSize: style.fontSize, fontFamily: style.fontFamily };
+  }
+  return getTextElementStyle(element);
 };
 
 const getMatchInElementTitle = (
@@ -990,7 +1020,6 @@ const handleSearch = debounce(
     }
 
     const elements = app.scene.getNonDeletedElements();
-    const elementsMap = app.scene.getNonDeletedElementsMap();
     const hiddenIds = app.scene.getMindmapHiddenElementIds();
     const outlines = getMindmapOutlines(elements);
     const outlinesByGraphId = new Map(
@@ -1018,43 +1047,95 @@ const handleSearch = debounce(
 
     for (const textEl of texts) {
       let match = null;
-      const text = textEl.originalText;
-      const container = textEl.containerId
-        ? elementsMap.get(textEl.containerId)
-        : null;
-      const node =
-        container && isMindmapNodeElement(container) ? container : null;
-      const outline = node ? outlinesByGraphId.get(node.graphId) : null;
+      const text = getTextElementText(textEl);
+      regex.lastIndex = 0;
 
       while ((match = regex.exec(text)) !== null) {
         const preview = getMatchPreview(text, match.index, searchQuery);
         const matchedLines = getMatchedLines(textEl, searchQuery, match.index);
 
         if (matchedLines.length > 0) {
-          if (node && hiddenIds.has(node.id)) {
-            matchedLines.forEach((line) => {
-              line.showOnCanvas = false;
-            });
-          }
           textMatches.push({
             element: textEl,
             searchQuery,
             preview,
             index: match.index,
             matchedLines,
-            mindmap:
-              node && outline
-                ? {
-                    nodeId: node.id,
-                    graphTitle: outline.title,
-                    graphNumber: outline.number,
-                    path: getMindmapPath(outline, node),
-                  }
-                : undefined,
           });
-          if (node) {
-            break;
+        }
+      }
+    }
+
+    // 脑图节点：正文按区域布局合成只读文字元素，仅用于逐行测量
+    for (const node of elements.filter(isMindmapNodeElement)) {
+      const body = node.texts?.body;
+      const layout = body ? getTextRegionLayout(node, "body") : null;
+      if (!body || !layout) {
+        continue;
+      }
+      const synthetic: ExcalidrawTextElement = {
+        ...node,
+        type: "text",
+        texts: {
+          body: {
+            text: body.text,
+            style: {
+              fontFamily: layout.fontFamily,
+              fontSize: layout.fontSize,
+              ...(layout.fontWeight !== undefined
+                ? { fontWeight: layout.fontWeight }
+                : {}),
+              lineHeight: layout.lineHeight,
+              textAlign: layout.textAlign,
+              verticalAlign: layout.verticalAlign,
+              color: layout.color,
+            },
+          },
+        },
+        x: layout.x,
+        y: layout.y,
+        width: layout.width,
+        height: layout.height,
+        autoResize: false,
+      };
+      const outline = outlinesByGraphId.get(node.graphId);
+      let match = null;
+      regex.lastIndex = 0;
+      while ((match = regex.exec(body.text)) !== null) {
+        const preview = getMatchPreview(body.text, match.index, searchQuery);
+        // 区域布局是场景坐标：换算回节点原点的偏移，聚焦时再叠加节点位置
+        const matchedLines = getMatchedLines(
+          synthetic,
+          searchQuery,
+          match.index,
+        ).map((line) => ({
+          ...line,
+          offsetX: line.offsetX + layout.x - node.x,
+          offsetY: line.offsetY + layout.y - node.y,
+        }));
+
+        if (matchedLines.length > 0) {
+          if (hiddenIds.has(node.id)) {
+            matchedLines.forEach((line) => {
+              line.showOnCanvas = false;
+            });
           }
+          textMatches.push({
+            element: node,
+            searchQuery,
+            preview,
+            index: match.index,
+            matchedLines,
+            mindmap: outline
+              ? {
+                  nodeId: node.id,
+                  graphTitle: outline.title,
+                  graphNumber: outline.number,
+                  path: getMindmapPath(outline, node),
+                }
+              : undefined,
+          });
+          break;
         }
       }
     }

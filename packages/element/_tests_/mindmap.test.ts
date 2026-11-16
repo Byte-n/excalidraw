@@ -1,4 +1,4 @@
-import { arrayToMap, BOUND_TEXT_PADDING, ROUNDNESS } from "@excalidraw/common";
+import { arrayToMap, ROUNDNESS } from "@excalidraw/common";
 import { bezierEquation, curve, pointFrom } from "@excalidraw/math";
 
 import type { GlobalPoint, Radians } from "@excalidraw/math";
@@ -9,6 +9,7 @@ import {
   assertMindmapShapeData,
   computeMindmapVisibility,
   getMindmapNodeTheme,
+  getMindmapNodeTextStyle,
   MINDMAP_BRANCH_PALETTE,
   MINDMAP_LEVEL_DISTANCE,
   MINDMAP_SIBLING_DISTANCE,
@@ -30,7 +31,6 @@ import {
   newElement,
   newMindmapNodeElement,
   newMindmapEdgeElement,
-  newTextElement,
   newArrowElement,
 } from "../src/newElement";
 import {
@@ -39,7 +39,6 @@ import {
   isLinearElement,
   isMindmapNodeElement,
   isMindmapEdgeElement,
-  isTextBindableContainer,
 } from "../src/typeChecks";
 import { getElementsWithinSelection } from "../src/selection";
 import { Scene } from "../src/Scene";
@@ -47,18 +46,14 @@ import { hitElementItself, isPointInElement } from "../src/collision";
 import { ShapeCache } from "../src/shape";
 import { assertShapeData } from "../src/compositeShape";
 import { getCornerRadius } from "../src/utils";
-import {
-  getBoundTextMaxHeight,
-  getBoundTextMaxWidth,
-  handleBindTextResize,
-  redrawTextBoundingBox,
-} from "../src/textElement";
+import { layoutMindmapScene } from "../src/mindmapScene";
+import { getLocalTextRegionLayout } from "../src/text/regionLayout";
+import { getTextRegion } from "../src/text/regions";
 
 import type {
   ExcalidrawElement,
   ExcalidrawRectangleElement,
   ExcalidrawMindmapNodeElement,
-  ExcalidrawTextElement,
   FractionalIndex,
   MindmapNodeShape,
 } from "../src/types";
@@ -169,7 +164,6 @@ describe("mindmap 正式元素模型", () => {
     expect(isMindmapEdgeElement(arrow)).toBe(false);
     expect(isFlowchartNodeElement(root)).toBe(false);
     expect(isLinearElement(edge)).toBe(false);
-    expect(isTextBindableContainer(root)).toBe(true);
     expect(root.customData).toBeUndefined();
     expect(root).toMatchObject({ role: "root", parentId: null, order: null });
     const ordinaryWithExtraFields = {
@@ -196,17 +190,10 @@ describe("mindmap 正式元素模型", () => {
     (shape) => {
       const root = node("root", null, { shape: mindmapShapeData(shape) });
       expect(root.shape).toEqual({ id: shape, schemaVersion: 1 });
-      const text = newTextElement({
-        x: 0,
-        y: 0,
-        text: "节点",
-        containerId: root.id,
-      });
       expect(ShapeCache.generateElementShape(root, null)).toBeTruthy();
-      expect(getBoundTextMaxWidth(root, text)).toBeGreaterThan(0);
-      expect(
-        getBoundTextMaxHeight(root, { ...text, containerId: root.id }),
-      ).toBeGreaterThan(0);
+      const region = getTextRegion(root, "body")!;
+      expect(region.bounds.width).toBeGreaterThan(0);
+      expect(region.bounds.height).toBeGreaterThan(0);
       expect(
         isPointInElement(
           pointFrom<GlobalPoint>(150, 120),
@@ -458,10 +445,9 @@ describe("mindmap P02 纯树命令", () => {
     expect(repairMindmapElements(result.elements)).toBe(result.elements);
   });
 
-  it("删除折叠子树包含隐藏文本、所有后代和入边", () => {
+  it("删除折叠子树包含全部后代和入边", () => {
     const elements = fixture();
-    const text = newTextElement({ x: 0, y: 0, text: "隐藏", containerId: "e" });
-    const folded = applyMindmapTreeCommand([...elements, text], "a", {
+    const folded = applyMindmapTreeCommand(elements, "a", {
       type: "toggleCollapse",
     })!;
     const result = applyMindmapTreeCommand(folded.elements, "a", {
@@ -469,9 +455,6 @@ describe("mindmap P02 纯树命令", () => {
     })!;
     expect([...indexOf(result.elements).nodes.keys()]).toEqual(["root", "b"]);
     expect(indexOf(result.elements).edgeByChildId.size).toBe(1);
-    expect(
-      result.elements.find((element) => element.id === text.id)?.isDeleted,
-    ).toBe(true);
   });
 
   it("保留子树删除多子根必须指定直属新根，其他分支追加且保持内部顺序", () => {
@@ -711,33 +694,30 @@ describe("mindmap 纯布局与影子树", () => {
     ).toBeGreaterThanOrEqual(bottom + MINDMAP_SIBLING_DISTANCE);
   });
 
-  it("折叠只影响可见布局，隐藏节点、文字和 edge 保留在输入中", () => {
+  it("折叠只影响可见布局，隐藏节点与 edge 保留在输入中", () => {
     const elements = repairMindmapElements(
       graph().map((element) =>
         element.id === "a" ? { ...element, collapsed: true } : element,
       ),
     );
-    const text = newTextElement({
-      x: 0,
-      y: 0,
-      text: "隐藏文字",
-      containerId: "c",
-    });
-    const input = [...elements, text];
-    const hidden = getMindmapHiddenElementIds(input);
+    const hidden = getMindmapHiddenElementIds(elements);
     expect(hidden.has("c")).toBe(true);
-    expect(hidden.has(text.id)).toBe(true);
     expect(hidden.has(indexOf(elements).edgeByChildId.get("c")!.id)).toBe(true);
     expect(hidden.has("a")).toBe(false);
-    const layout = layoutMindmap(indexOf(input));
+    const layout = layoutMindmap(indexOf(elements));
     expect(layout.elements.map((element) => element.id)).toEqual([
       "root",
       "a",
       "b",
     ]);
     expect(layout.edges).toHaveLength(2);
-    expect(input.every((element) => !element.isDeleted)).toBe(true);
-    expect(isMindmapElementHidden(text, arrayToMap(input))).toBe(true);
+    expect(elements.every((element) => !element.isDeleted)).toBe(true);
+    expect(
+      isMindmapElementHidden(
+        elements.find((element) => element.id === "c")!,
+        arrayToMap(elements),
+      ),
+    ).toBe(true);
   });
 
   it("深树不依赖递归栈", () => {
@@ -1041,71 +1021,45 @@ describe("mindmap 表格缩放冻结（phase-1 固定布局适配）", () => {
     );
   });
 
-  describe("冻结节点的文字固定管线", () => {
-    const FROZEN_MAX_HEIGHT = 56 - 2 * BOUND_TEXT_PADDING;
+  describe("冻结节点的正文固定管线", () => {
     const SOURCE_TEXT = "first line\nsecond line\nthird line";
 
-    const makeScene = (layoutFrozen: boolean) => {
-      const container = {
-        ...node("root"),
-        width: 240,
-        height: 56,
-        ...(layoutFrozen && { layoutFrozen: true }),
-        boundElements: [{ type: "text" as const, id: "label" }],
-        index: "a0" as ExcalidrawElement["index"],
-      } as ExcalidrawMindmapNodeElement;
-      const label = {
-        ...newTextElement({
-          x: container.x + 20,
-          y: container.y + 10,
+    const makeNode = (layoutFrozen: boolean) => ({
+      ...node("root"),
+      width: 240,
+      height: 56,
+      ...(layoutFrozen && { layoutFrozen: true }),
+      texts: {
+        body: {
           text: SOURCE_TEXT,
-          containerId: "root",
-        }),
-        id: "label",
-        // 绑定文字必须紧跟其宿主
-        index: "a1" as ExcalidrawElement["index"],
-      } as ExcalidrawTextElement;
-      const scene = new Scene([container, label]);
-      return { container, label, scene };
-    };
-
-    it("redraw 截断显示并保留原文，节点尺寸不变", () => {
-      const { container, label, scene } = makeScene(true);
-
-      redrawTextBoundingBox(label, container, scene);
-
-      const after = arrayToMap(scene.getElementsIncludingDeleted());
-      const nextContainer = after.get("root")!;
-      expect(nextContainer.width).toBe(240);
-      expect(nextContainer.height).toBe(56);
-      const nextLabel = after.get("label") as ExcalidrawTextElement;
-      expect(nextLabel.text).toBe("first line…");
-      expect(nextLabel.originalText).toBe(SOURCE_TEXT);
-      expect(nextLabel.height).toBeLessThanOrEqual(FROZEN_MAX_HEIGHT);
+          style: getMindmapNodeTextStyle({ role: "root" }),
+        },
+      },
     });
 
-    it("bind-resize 提交同样不回撑节点", () => {
-      const { container, scene } = makeScene(true);
+    it("冻结节点正文在安全区内截断，节点尺寸不变", () => {
+      const frozen = makeNode(true);
 
-      handleBindTextResize(container, scene, "se");
-
-      const after = arrayToMap(scene.getElementsIncludingDeleted());
-      expect(after.get("root")!.height).toBe(56);
-      expect((after.get("label") as ExcalidrawTextElement).text).toBe(
-        "first line…",
+      const layout = getLocalTextRegionLayout(frozen, "body")!;
+      expect(layout.text).not.toBe(SOURCE_TEXT);
+      expect(layout.text.startsWith("first line")).toBe(true);
+      expect(layout.text.endsWith("…")).toBe(true);
+      expect(layout.height).toBeLessThanOrEqual(
+        getTextRegion(frozen, "body")!.bounds.height,
       );
+
+      const [relaid] = layoutMindmapScene([frozen], ["graph"]);
+      expect(relaid).toBe(frozen);
+      expect(relaid.width).toBe(240);
+      expect(relaid.height).toBe(56);
     });
 
-    it("未冻结节点的文字提交仍按内容撑高（默认自适应不回归）", () => {
-      const { container, label, scene } = makeScene(false);
+    it("未冻结节点按正文内容撑高（默认自适应）", () => {
+      const adaptive = makeNode(false);
 
-      redrawTextBoundingBox(label, container, scene);
-
-      const after = arrayToMap(scene.getElementsIncludingDeleted());
-      expect(after.get("root")!.height).toBeGreaterThan(56);
-      const nextLabel = after.get("label") as ExcalidrawTextElement;
-      // 自适应管线按宽度换行，不截断
-      expect(nextLabel.text).toBe(SOURCE_TEXT);
+      const [relaid] = layoutMindmapScene([adaptive], ["graph"]);
+      expect(relaid.height).toBeGreaterThan(56);
+      expect(relaid.texts?.body?.text).toBe(SOURCE_TEXT);
     });
   });
 });
@@ -1113,27 +1067,16 @@ describe("mindmap 表格缩放冻结（phase-1 固定布局适配）", () => {
 describe("mindmap 分支主题派生", () => {
   const withText = (
     nodes: ExcalidrawMindmapNodeElement[],
-  ): ExcalidrawElement[] =>
-    nodes.flatMap((n) => {
-      const text = {
-        ...newTextElement({
-          x: n.x,
-          y: n.y,
-          text: `text-${n.id}`,
-          containerId: n.id,
-          textAlign: "center" as const,
-          verticalAlign: "middle" as const,
-        }),
-        id: `${n.id}-text`,
-      };
-      return [
-        {
-          ...n,
-          boundElements: [{ type: "text" as const, id: text.id }],
-        } as ExcalidrawElement,
-        text,
-      ];
-    });
+  ): ExcalidrawMindmapNodeElement[] =>
+    nodes.map((node) => ({
+      ...node,
+      texts: {
+        body: {
+          text: `text-${node.id}`,
+          style: getMindmapNodeTextStyle(node),
+        },
+      },
+    }));
 
   /** root → a, b；a → c，先整图派生一轮（等价于新建成形后的状态） */
   const themedGraph = () => {
@@ -1152,10 +1095,10 @@ describe("mindmap 分支主题派生", () => {
       strokeWidth: 2,
       roundness: { type: ROUNDNESS.PROPORTIONAL_RADIUS },
     });
-    expect(map.get("root-text")).toMatchObject({
+    expect(map.get("root")!.texts?.body?.style).toMatchObject({
       fontSize: 16,
       fontWeight: 600,
-      strokeColor: "#ffffff",
+      color: "#ffffff",
     });
 
     const a = map.get("a") as ExcalidrawMindmapNodeElement;
@@ -1166,9 +1109,11 @@ describe("mindmap 分支主题派生", () => {
       strokeWidth: 1.5,
       roundness: null,
     });
-    const aText = map.get("a-text") as ExcalidrawTextElement;
-    expect(aText).toMatchObject({ fontSize: 14, strokeColor: "#1f2329" });
-    expect(aText.fontWeight).toBeUndefined();
+    expect(a.texts?.body?.style).toMatchObject({
+      fontSize: 14,
+      color: "#1f2329",
+    });
+    expect(a.texts?.body?.style.fontWeight).toBeUndefined();
 
     const c = map.get("c") as ExcalidrawMindmapNodeElement;
     expect(c).toMatchObject({
@@ -1250,7 +1195,6 @@ describe("mindmap 分支主题派生", () => {
     const beforeMap = arrayToMap(before);
     const afterMap = arrayToMap(result.elements);
     expect(afterMap.get("b")).toBe(beforeMap.get("b"));
-    expect(afterMap.get("b-text")).toBe(beforeMap.get("b-text"));
     const promoted = afterMap.get("a") as ExcalidrawMindmapNodeElement;
     expect(promoted.role).toBe("root");
     expect(promoted).toMatchObject({
@@ -1258,10 +1202,10 @@ describe("mindmap 分支主题派生", () => {
       backgroundColor: "#1f2329",
       strokeColor: "#1f2329",
     });
-    expect(afterMap.get("a-text")).toMatchObject({
+    expect(promoted.texts?.body?.style).toMatchObject({
       fontSize: 16,
       fontWeight: 600,
-      strokeColor: "#ffffff",
+      color: "#ffffff",
     });
     const c = afterMap.get("c") as ExcalidrawMindmapNodeElement;
     expect(c.shape.id).toBe("pill");
@@ -1291,7 +1235,7 @@ describe("mindmap 分支主题派生", () => {
       strokeColor: MINDMAP_BRANCH_PALETTE[1].stroke,
       strokeWidth: 2,
     });
-    expect(afterMap.get("c-text")).toMatchObject({ fontSize: 14 });
+    expect(afterMap.get("c")!.texts?.body?.style.fontSize).toBe(14);
   });
 
   it("比较门：手动改过受管属性的节点全部样式保留", () => {
@@ -1308,7 +1252,7 @@ describe("mindmap 分支主题派生", () => {
     expect(c.parentId).toBe("root");
     expect(c.shape.id).toBe("text");
     expect(c.strokeColor).toBe("#ff0000");
-    expect(afterMap.get("c-text")).toMatchObject({ fontSize: 14 });
+    expect(c.texts?.body?.style.fontSize).toBe(14);
     expect(indexOf(result.elements).edgeByChildId.get("c")).toMatchObject({
       strokeColor: MINDMAP_BRANCH_PALETTE[0].stroke,
       strokeWidth: 1.5,

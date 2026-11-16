@@ -2,7 +2,6 @@ import React from "react";
 import { vi } from "vitest";
 
 import { CODES, KEYS, reseed } from "@excalidraw/common";
-import { isValidTextContainer } from "@excalidraw/element";
 
 import type { FileId } from "@excalidraw/element/types";
 
@@ -265,7 +264,7 @@ describe("Test <App/>", () => {
     translate.mockRestore();
   });
 
-  it("binds a new text editor to its container", async () => {
+  it("edits the shape body in place without creating a bound text element", async () => {
     await render(<Excalidraw />);
     const app = window.h.app;
     const rectangle = API.createElement({
@@ -275,9 +274,6 @@ describe("Test <App/>", () => {
       width: 160,
       height: 80,
     });
-    if (!isValidTextContainer(rectangle)) {
-      throw new Error("Expected a text container");
-    }
 
     act(() => {
       app.api.updateScene({ elements: [rectangle] });
@@ -288,11 +284,10 @@ describe("Test <App/>", () => {
       });
     });
 
-    const text = app.state.editingTextElement;
-    expect(text?.containerId).toBe(rectangle.id);
-    expect(app.scene.getElement(rectangle.id)?.boundElements).toContainEqual({
-      type: "text",
-      id: text?.id,
+    expect(app.state.editingTextElement).toBe(null);
+    expect(app.state.editingTextRegion?.target).toEqual({
+      elementId: rectangle.id,
+      region: "body",
     });
     const editor = app.excalidrawContainerRef.current?.querySelector(
       ".excalidraw-wysiwyg",
@@ -302,14 +297,15 @@ describe("Test <App/>", () => {
     act(() => {
       app.textWysiwygSubmitHandler?.();
     });
-    expect(app.scene.getElement(text!.id)).toMatchObject({
-      originalText: "Bound label",
-      containerId: rectangle.id,
+    expect(app.scene.getElement(rectangle.id)).toMatchObject({
+      texts: { body: { text: "Bound label" } },
+      boundElements: null,
     });
-    expect(app.scene.getElement(rectangle.id)?.boundElements).toContainEqual({
-      type: "text",
-      id: text?.id,
-    });
+    expect(
+      app.scene
+        .getNonDeletedElements()
+        .filter((element) => element.type === "text"),
+    ).toHaveLength(0);
   });
 
   it("prefers a selected hit among overlapping elements and rejects distant points", async () => {

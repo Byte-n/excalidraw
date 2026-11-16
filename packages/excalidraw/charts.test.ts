@@ -1,6 +1,11 @@
 import { DEFAULT_FONT_FAMILY, FONT_FAMILY } from "@excalidraw/common";
 import { isShapeWithId } from "@excalidraw/element";
 import {
+  getTextElementDisplayText,
+  getTextElementStyle,
+  getTextElementText,
+} from "@excalidraw/element";
+import {
   DEFAULT_CHART_COLOR_INDEX,
   getAllColorsSpecificShade,
 } from "@excalidraw/common";
@@ -345,14 +350,15 @@ describe("charts", () => {
           !element.roundness,
       );
       const textElements = elements!.filter(
-        (element) => element.type === "text",
+        (element): element is NonDeleted<ExcalidrawTextElement> =>
+          element.type === "text",
       );
       const axisLabels = textElements.filter((element) =>
-        spreadsheet.labels?.includes(element.originalText || ""),
+        spreadsheet.labels?.includes(getTextElementText(element) || ""),
       );
       const legendLabels = textElements.filter((element) =>
         spreadsheet.series.some(
-          (series) => series.title === element.originalText,
+          (series) => series.title === getTextElementText(element),
         ),
       );
 
@@ -443,10 +449,11 @@ describe("charts", () => {
           !element.roundness,
       );
       const textElements = elements!.filter(
-        (element) => element.type === "text",
+        (element): element is NonDeleted<ExcalidrawTextElement> =>
+          element.type === "text",
       );
       const legendLabels = textElements
-        .map((element) => element.originalText)
+        .map((element) => getTextElementText(element))
         .filter((text): text is string => typeof text === "string");
 
       expect(bars).toHaveLength(
@@ -544,27 +551,33 @@ describe("charts", () => {
         (element): element is NonDeleted<ExcalidrawTextElement> =>
           element.type === "text" &&
           Math.abs(element.angle) > 0 &&
-          element.text.includes("..."),
+          getTextElementDisplayText(element).includes("..."),
       );
       const spacedLabels = elements!.filter(
         (element): element is NonDeleted<ExcalidrawTextElement> =>
           element.type === "text" &&
-          (element.originalText === "Data Flow" ||
-            element.originalText === "Logic Layer"),
+          (getTextElementText(element) === "Data Flow" ||
+            getTextElementText(element) === "Logic Layer"),
       );
 
       expect(longWordLabel).toBeDefined();
-      expect(longWordLabel?.text).toContain("...");
-      expect(longWordLabel?.originalText).toBe(longWordLabel?.text);
-      expect(
-        (longWordLabel?.text || "").replace("...", "").length,
-      ).toBeGreaterThan(0);
-      expect(spacedLabels.some((label) => label.text.includes("\n"))).toBe(
-        true,
+      expect(getTextElementDisplayText(longWordLabel!)).toContain("...");
+      expect(getTextElementText(longWordLabel!)).toBe(
+        getTextElementDisplayText(longWordLabel!),
       );
       expect(
+        getTextElementDisplayText(longWordLabel!).replace("...", "").length,
+      ).toBeGreaterThan(0);
+      expect(
+        spacedLabels.some((label) =>
+          getTextElementDisplayText(label).includes("\n"),
+        ),
+      ).toBe(true);
+      expect(
         spacedLabels.every(
-          (label) => !!label.originalText && !label.originalText.includes("\n"),
+          (label) =>
+            !!getTextElementText(label) &&
+            !getTextElementText(label).includes("\n"),
         ),
       ).toBe(true);
     });
@@ -716,14 +729,15 @@ describe("charts", () => {
 
       const elements = renderSpreadsheet("line", spreadsheet, 0, 0);
       const textElements = elements!.filter(
-        (element) => element.type === "text",
+        (element): element is NonDeleted<ExcalidrawTextElement> =>
+          element.type === "text",
       );
       const axisLabels = textElements.filter((element) =>
-        spreadsheet.labels?.includes(element.originalText || ""),
+        spreadsheet.labels?.includes(getTextElementText(element) || ""),
       );
       const legendLabels = textElements.filter((element) =>
         spreadsheet.series.some(
-          (series) => series.title === element.originalText,
+          (series) => series.title === getTextElementText(element),
         ),
       );
 
@@ -916,14 +930,19 @@ describe("charts", () => {
 
       const elements = renderSpreadsheet("radar", spreadsheet, 0, 0);
       const textElements = elements!.filter(
-        (element) => element.type === "text",
+        (element): element is NonDeleted<ExcalidrawTextElement> =>
+          element.type === "text",
       );
 
-      expect(textElements.some((element) => element.text === "0")).toBe(false);
+      expect(
+        textElements.some(
+          (element) => getTextElementDisplayText(element) === "0",
+        ),
+      ).toBe(false);
       expect(
         textElements.some(
           (element) =>
-            element.text ===
+            getTextElementDisplayText(element) ===
             Math.max(...spreadsheet.series[0].values).toLocaleString(),
         ),
       ).toBe(false);
@@ -952,47 +971,50 @@ describe("charts", () => {
 
       const elements = renderSpreadsheet("radar", spreadsheet, 0, 0);
       const textElements = elements!.filter(
-        (element) => element.type === "text",
+        (element): element is NonDeleted<ExcalidrawTextElement> =>
+          element.type === "text",
       );
       const wrappedAxisLabels = textElements.filter(
         (element) =>
-          element.text.includes("\n") &&
-          element.text !== "Trait" &&
-          element.text !== "Dunk" &&
-          element.text !== "Egg",
+          getTextElementDisplayText(element).includes("\n") &&
+          getTextElementDisplayText(element) !== "Trait" &&
+          getTextElementDisplayText(element) !== "Dunk" &&
+          getTextElementDisplayText(element) !== "Egg",
       );
 
       expect(wrappedAxisLabels.length).toBeGreaterThan(0);
       expect(
         wrappedAxisLabels.every(
           (element) =>
-            typeof element.originalText === "string" &&
-            !element.originalText.includes("\n"),
+            typeof getTextElementText(element) === "string" &&
+            !getTextElementText(element).includes("\n"),
         ),
       ).toBe(true);
       expect(
         textElements.some(
-          (element) => element.text.includes("...") && element.text !== "Dunk",
+          (element) =>
+            getTextElementDisplayText(element).includes("...") &&
+            getTextElementDisplayText(element) !== "Dunk",
         ),
       ).toBe(false);
       expect(
         textElements.some(
           (element) =>
-            element.originalText === "Stubbornness" &&
-            !element.text.includes("\n") &&
-            element.text === "Stubbornness",
+            getTextElementText(element) === "Stubbornness" &&
+            !getTextElementDisplayText(element).includes("\n") &&
+            getTextElementDisplayText(element) === "Stubbornness",
         ),
       ).toBe(true);
       expect(
         textElements.some(
           (element) =>
-            element.originalText === "Physical Strength" &&
-            element.text.includes("Physical\nStrength"),
+            getTextElementText(element) === "Physical Strength" &&
+            getTextElementDisplayText(element).includes("Physical\nStrength"),
         ),
       ).toBe(true);
 
       const topLabel = textElements.find(
-        (element) => element.originalText === "Physical Strength",
+        (element) => getTextElementText(element) === "Physical Strength",
       );
       const topSpokeY = Math.min(
         ...elements!
@@ -1022,18 +1044,29 @@ describe("charts", () => {
 
       const elements = renderSpreadsheet("radar", spreadsheet, 0, 0);
       const textElements = elements!.filter(
-        (element) => element.type === "text",
+        (element): element is NonDeleted<ExcalidrawTextElement> =>
+          element.type === "text",
       );
       const title = textElements.find((element) =>
-        element.text.includes("Trait"),
+        getTextElementDisplayText(element).includes("Trait"),
       );
-      const dunkLabel = textElements.find((element) => element.text === "Dunk");
-      const eggLabel = textElements.find((element) => element.text === "Egg");
+      const dunkLabel = textElements.find(
+        (element) => getTextElementDisplayText(element) === "Dunk",
+      );
+      const eggLabel = textElements.find(
+        (element) => getTextElementDisplayText(element) === "Egg",
+      );
 
-      expect(title?.fontFamily).toBe(FONT_FAMILY["Lilita One"]);
-      expect(title?.originalText).toBe("Trait");
-      expect(dunkLabel?.fontFamily).toBe(FONT_FAMILY["Lilita One"]);
-      expect(eggLabel?.fontFamily).toBe(FONT_FAMILY["Lilita One"]);
+      expect(getTextElementStyle(title!).fontFamily).toBe(
+        FONT_FAMILY["Lilita One"],
+      );
+      expect(getTextElementText(title!)).toBe("Trait");
+      expect(getTextElementStyle(dunkLabel!).fontFamily).toBe(
+        FONT_FAMILY["Lilita One"],
+      );
+      expect(getTextElementStyle(eggLabel!).fontFamily).toBe(
+        FONT_FAMILY["Lilita One"],
+      );
     });
 
     it("positions radar title with vertical clearance above axis labels", () => {
@@ -1059,15 +1092,18 @@ describe("charts", () => {
 
       const elements = renderSpreadsheet("radar", spreadsheet, 0, 0);
       const textElements = elements!.filter(
-        (element) => element.type === "text",
+        (element): element is NonDeleted<ExcalidrawTextElement> =>
+          element.type === "text",
       );
       const title = textElements.find(
-        (element) => element.fontFamily === FONT_FAMILY["Lilita One"],
+        (element) =>
+          getTextElementStyle(element).fontFamily === FONT_FAMILY["Lilita One"],
       );
       // the axis labels are the texts in the chart's common font; the title and
       // the legend labels are drawn in the display font
       const axisLabels = textElements.filter(
-        (element) => element.fontFamily === DEFAULT_FONT_FAMILY,
+        (element) =>
+          getTextElementStyle(element).fontFamily === DEFAULT_FONT_FAMILY,
       );
       const topAxisLabelY = Math.min(...axisLabels.map((element) => element.y));
 
@@ -1141,14 +1177,15 @@ describe("charts", () => {
 
       const elements = renderSpreadsheet("radar", spreadsheet, 0, 0);
       const textElements = elements!.filter(
-        (element) => element.type === "text",
+        (element): element is NonDeleted<ExcalidrawTextElement> =>
+          element.type === "text",
       );
       const axisLabels = textElements.filter((element) =>
-        spreadsheet.labels?.includes(element.originalText),
+        spreadsheet.labels?.includes(getTextElementText(element)),
       );
       const legendLabels = textElements.filter((element) =>
         spreadsheet.series.some(
-          (series) => series.title === element.originalText,
+          (series) => series.title === getTextElementText(element),
         ),
       );
 

@@ -15,11 +15,21 @@ import {
 } from "@excalidraw/common";
 
 import {
+  SEQUENCE_LIFELINE_HEAD_HEIGHTS,
   SEQUENCE_MIN_POLE_LENGTH,
   buildShapeData,
+  cellKey,
+  convertToExcalidrawElements,
+  getLocalTextRegionLayout,
+  getTableCellTextBaseStyle,
+  getTextBlock,
+  getTextElementBaseFontSize,
+  getTextElementStyle,
+  getTextElementText,
+  isSequenceLifelineElement,
   newElement,
   newElementWith,
-  newTextElement,
+  withTextBlock,
 } from "@excalidraw/element";
 import * as sizeHelpers from "@excalidraw/element";
 
@@ -109,28 +119,109 @@ describe("restoreElements", () => {
     expect(rows[1].height).toBeCloseTo(200);
   });
 
-  it("pins a restored fragment label to the container-bound text mode", () => {
+  it("drops header, unknown and empty fragment text keys on restore", () => {
+    const style = {
+      fontFamily: 1,
+      fontSize: 14,
+      lineHeight: 1.25,
+      textAlign: "left" as const,
+      verticalAlign: "top" as const,
+    };
     const fragment = API.createElement({
       type: "sequence",
       width: 400,
       height: 240,
-      shape: { id: "sc-fragment", schemaVersion: 1 },
+      shape: {
+        id: "sc-fragment",
+        schemaVersion: 1,
+        fragment: {
+          rows: [
+            { id: "header", height: 36.272 },
+            { id: "body", height: 203.728 },
+          ],
+        },
+      },
+      texts: {
+        body: { text: "Opt / Loop", style },
+        "row:header": { text: "header", style },
+        "row:missing": { text: "missing", style },
+        "row:body": { text: "keep", style },
+      } as any,
     });
-    const label = API.createElement({
-      type: "text",
-      x: 0,
-      y: 0,
-      width: 200,
-      height: 20,
-      text: "Opt / Loop",
-      autoResize: false,
-      containerId: fragment.id,
-    } as any);
-    const restored = restore.restoreElements([fragment, label], null);
-    const restoredLabel = restored.find(
-      (element) => element.id === label.id,
-    ) as ExcalidrawTextElement | undefined;
-    expect(restoredLabel?.autoResize).toBe(true);
+    const [restored] = restore.restoreElements([fragment], null);
+    if (restored.type !== "sequence" || restored.shape.id !== "sc-fragment") {
+      throw new Error("Expected a fragment shape");
+    }
+    expect(Object.keys(restored.texts ?? {})).toEqual(["body", "row:body"]);
+    expect(restored.texts?.["row:body"]?.text).toBe("keep");
+  });
+
+  it("round-trips a lifeline label stored in texts.body", () => {
+    const skeletonElements = convertToExcalidrawElements([
+      {
+        type: "sc-lifeline-entity",
+        x: 0,
+        y: 0,
+        label: {
+          text: "一个非常长的生命线标签，用来验证恢复后头部与文本都保持不变",
+        },
+      },
+    ]);
+    // 骨架的 label 不产生绑定文字元素
+    expect(skeletonElements).toHaveLength(1);
+    const [lifeline] = skeletonElements;
+    if (!isSequenceLifelineElement(lifeline)) {
+      throw new Error("Expected a sequence lifeline");
+    }
+    expect(lifeline.shape.lifeline.headHeight).toBeGreaterThan(
+      SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"],
+    );
+
+    const restored = restore.restoreElements(skeletonElements, null);
+    expect(restored).toHaveLength(1);
+    if (!isSequenceLifelineElement(restored[0])) {
+      throw new Error("Expected a sequence lifeline");
+    }
+    expect(restored[0].texts?.body?.text).toBe(
+      "一个非常长的生命线标签，用来验证恢复后头部与文本都保持不变",
+    );
+    expect(restored[0].shape.lifeline.headHeight).toBeCloseTo(
+      lifeline.shape.lifeline.headHeight,
+      6,
+    );
+    expect(restored[0].height).toBeCloseTo(lifeline.height, 6);
+
+    const exported: ImportedDataState = JSON.parse(
+      serializeAsJSON(restored, getDefaultAppState(), {}, "local"),
+    );
+    expect(exported.elements).toHaveLength(1);
+    const reRestored = restore.restoreElements(exported.elements, null);
+    expect(reRestored).toEqual(restored);
+  });
+
+  it("drops an empty lifeline body key on restore", () => {
+    const element = API.createElement({
+      type: "sequence",
+      shape: buildShapeData("sc-lifeline-entity"),
+      width: 64,
+      height:
+        SEQUENCE_LIFELINE_HEAD_HEIGHTS["sc-lifeline-entity"] +
+        SEQUENCE_MIN_POLE_LENGTH,
+      texts: {
+        body: {
+          text: "",
+          style: {
+            fontFamily: FONT_FAMILY.Virgil,
+            fontSize: 14,
+            lineHeight: 1.25,
+            textAlign: "center",
+            verticalAlign: "middle",
+          },
+        },
+      } as any,
+    });
+    const [restored] = restore.restoreElements([element], null);
+    expect(restored.texts).toBeUndefined();
   });
 
   it("clears a reference to a missing frame when repairing bindings", () => {
@@ -332,69 +423,40 @@ describe("restoreElements", () => {
   });
 
   it("restores both df-process text slots", () => {
-    const container = newElement({
+    const style = {
+      fontFamily: FONT_FAMILY.Virgil,
+      fontSize: 20,
+      lineHeight: 1.25,
+      textAlign: "center",
+      verticalAlign: "middle",
+    } as any;
+    const container = API.createElement({
       type: "df-process",
       x: 0,
       y: 0,
       width: 152,
       height: 137,
-    });
-    const body = newTextElement({
-      x: 10,
-      y: 60,
-      text: "Body\nlabel",
-      containerId: container.id,
-    });
-    const title = newTextElement({
-      x: 10,
-      y: 10,
-      text: "Long title that overflows the header",
-      containerId: container.id,
-      containerSlot: "title",
-      autoResize: false,
-    });
-    const withSlots = newElementWith(container, {
-      boundElements: [
-        { type: "text", id: body.id },
-        { type: "text", id: title.id, slot: "title" },
-      ],
+      texts: {
+        body: { text: "Body\nlabel", style },
+        title: { text: "Long title that overflows the header", style },
+      },
     });
     const file = JSON.parse(
-      serializeAsJSON(
-        [withSlots, body, title],
-        getDefaultAppState(),
-        {},
-        "local",
-      ),
+      serializeAsJSON([container], getDefaultAppState(), {}, "local"),
     );
 
-    const restored = restore.restoreElements(file.elements, null, {
+    const [restoredContainer] = restore.restoreElements(file.elements, null, {
       refreshDimensions: true,
       repairBindings: true,
     });
-    const restoredContainer = restored.find(
-      (element) => element.type === "dataflow",
-    )!;
-    const restoredTitle = restored.find(
-      (element) => element.type === "text" && element.containerSlot === "title",
-    ) as ExcalidrawTextElement;
-    const restoredBody = restored.find(
-      (element) => element.type === "text" && !element.containerSlot,
-    ) as ExcalidrawTextElement;
 
-    expect(restoredContainer.boundElements).toEqual([
-      { type: "text", id: restoredBody.id },
-      { type: "text", id: restoredTitle.id, slot: "title" },
-    ]);
-    expect(restoredTitle.containerId).toBe(restoredContainer.id);
-    expect(restoredTitle.originalText).toBe(
+    expect(restoredContainer.texts?.body?.text).toBe("Body\nlabel");
+    expect((restoredContainer.texts as any)?.title?.text).toBe(
       "Long title that overflows the header",
     );
-    expect(restoredTitle.text).toContain("…");
-    expect(restoredTitle.height).toBeCloseTo(
-      restoredTitle.fontSize * restoredTitle.lineHeight,
-    );
-    expect(restoredBody.originalText).toBe("Body\nlabel");
+    const titleLayout = getLocalTextRegionLayout(restoredContainer, "title")!;
+    expect(titleLayout.lines).toHaveLength(1);
+    expect(titleLayout.text).toContain("…");
   });
 
   it("rejects parameterless triangle ids carrying a shape parameter", () => {
@@ -490,7 +552,7 @@ describe("restoreElements", () => {
     ]);
   });
 
-  it("should restore text element correctly with unknown font family, null text and undefined alignment", () => {
+  it("should restore text element correctly with null text and undefined alignment", () => {
     const textElement: any = API.createElement({
       type: "text",
       textAlign: undefined,
@@ -498,14 +560,14 @@ describe("restoreElements", () => {
       id: "id-text01",
     });
 
-    textElement.text = null;
-    textElement.font = "10 unknown";
+    textElement.texts.body.text = null;
 
     expect(textElement.isDeleted).toBe(false);
     const restoredText = restore.restoreElements([textElement], null, {
       deleteInvisibleElements: true,
     })[0] as ExcalidrawTextElement;
     expect(restoredText.isDeleted).toBe(true);
+    expect(getTextElementText(restoredText)).toBe("");
     expect(restoredText).toMatchSnapshot({
       seed: expect.any(Number),
       versionNonce: expect.any(Number),
@@ -517,105 +579,43 @@ describe("restoreElements", () => {
       type: "text",
       text: "text",
     });
-    textElement.fontSize = NaN;
-    textElement.baseFontSize = "abc";
+    textElement.texts.body.style.fontSize = NaN;
+    textElement.texts.body.placement = { baseFontSize: "abc" };
 
     const restoredText = restore.restoreElements(
       [textElement],
       null,
     )[0] as ExcalidrawTextElement;
 
-    expect(restoredText.fontSize).toBe(DEFAULT_FONT_SIZE);
-    expect(restoredText.baseFontSize).toBe(null);
+    expect(getTextElementStyle(restoredText).fontSize).toBe(DEFAULT_FONT_SIZE);
+    expect(restoredText.texts.body.placement?.baseFontSize).toBeUndefined();
   });
 
-  it("should clamp restored font ceilings to the sticky note maximum", () => {
-    const textElement: any = API.createElement({
-      type: "text",
-      text: "text",
-    });
-    textElement.baseFontSize = 1e20;
-
-    const restoredText = restore.restoreElements(
-      [textElement],
-      null,
-    )[0] as ExcalidrawTextElement;
-
-    expect(restoredText.baseFontSize).toBe(STICKY_NOTE_MAX_FONT_SIZE);
-  });
-
-  it("should clear a font ceiling on text that is not bound to a sticky note", () => {
-    // generic binding repair (duplication, history) can detach a label without
-    // touching its ceiling; restore reconciles it against the container
-    const textElement: any = API.createElement({
-      type: "text",
-      text: "text",
-      fontSize: 20,
-    });
-    textElement.baseFontSize = 28;
-
-    const restoredText = restore.restoreElements([textElement], null, {
-      repairBindings: true,
-    })[0] as ExcalidrawTextElement;
-
-    expect(restoredText.baseFontSize).toBe(null);
-  });
-
-  it("should seed the font ceiling and a visible stroke on a sticky note label", () => {
+  it("should sanitize non-finite font sizes on text elements", () => {
     const stickyNote = API.createElement({
       type: "stickynote",
       id: "sticky",
-      boundElements: [{ type: "text", id: "label" }],
-    });
-    const label: any = {
-      ...API.createElement({
-        type: "text",
-        id: "label",
-        text: "text",
-        fontSize: 20,
-        containerId: "sticky",
-      }),
       strokeColor: COLOR_PALETTE.transparent,
-    };
-    delete label.baseFontSize;
-
-    const restored = restore.restoreElements([stickyNote, label], null, {
-      repairBindings: true,
-    });
-    const restoredLabel = restored.find(
-      (element) => element.id === "label",
-    ) as ExcalidrawTextElement;
-
-    expect(restoredLabel.baseFontSize).toBe(20);
-    expect(restoredLabel.strokeColor).toBe(STICKY_NOTE_INK);
-  });
-
-  it("should give a note its label's color when the two drifted apart", () => {
-    const stickyNote = API.createElement({
-      type: "stickynote",
-      id: "sticky",
-      strokeColor: COLOR_PALETTE.black,
-      boundElements: [{ type: "text", id: "label" }],
-    });
-    const label = API.createElement({
-      type: "text",
-      id: "label",
-      text: "text",
-      fontSize: 20,
-      containerId: "sticky",
-      strokeColor: COLOR_PALETTE.red[4],
+      texts: {
+        body: {
+          text: "text",
+          style: {
+            fontFamily: FONT_FAMILY.Virgil,
+            fontSize: 20,
+            lineHeight: 1.25,
+            textAlign: "center",
+            verticalAlign: "middle",
+          } as any,
+        },
+      },
     });
 
-    const restored = restore.restoreElements([stickyNote, label], null, {
+    const [restored] = restore.restoreElements([stickyNote], null, {
       repairBindings: true,
     });
 
-    expect(
-      restored.find((element) => element.id === "sticky")!.strokeColor,
-    ).toBe(COLOR_PALETTE.red[4]);
-    expect(
-      restored.find((element) => element.id === "label")!.strokeColor,
-    ).toBe(COLOR_PALETTE.red[4]);
+    expect(restored.texts?.body?.style.fontSize).toBe(20);
+    expect(restored.strokeColor).toBe(STICKY_NOTE_INK);
   });
 
   it("should restore the sticky note defaults and top-pick slots", () => {
@@ -639,42 +639,46 @@ describe("restoreElements", () => {
     expect(restored.colorTopPicks.stickyNoteStroke).toBe(null);
   });
 
-  it("should refit a sticky note together with its label when refreshing dimensions", () => {
+  it("should refit a sticky note with its body when refreshing dimensions", () => {
     const stickyNote = API.createElement({
       type: "stickynote",
       id: "sticky",
       width: 250,
       height: 250,
       baseHeight: 250,
-      boundElements: [{ type: "text", id: "label" }],
-    });
-    const label = API.createElement({
-      type: "text",
-      id: "label",
-      text: Array(40).fill("abcdefghijklmnopqrstuvwx").join("\n"),
-      fontSize: 28,
-      containerId: "sticky",
+      texts: {
+        body: {
+          text: Array(40).fill("abcdefghijklmnopqrstuvwx").join("\n"),
+          style: {
+            fontFamily: FONT_FAMILY.Virgil,
+            fontSize: 28,
+            lineHeight: 1.25,
+            textAlign: "center",
+            verticalAlign: "middle",
+          } as any,
+        },
+      },
     });
 
-    const restored = restore.restoreElements([stickyNote, label], null, {
+    const [note] = restore.restoreElements([stickyNote], null, {
       repairBindings: true,
       refreshDimensions: true,
-    });
-    const note = restored.find(
-      (element) => element.id === "sticky",
-    ) as ExcalidrawStickyNoteElement;
-    const text = restored.find(
-      (element) => element.id === "label",
-    ) as ExcalidrawTextElement;
+    }) as ExcalidrawStickyNoteElement[];
 
-    // both halves: the note grew for the text at the minimum font, the base
-    // is untouched, and the pair agrees with the layout
+    // the note grew for the text at the minimum font, the base is untouched,
+    // and the note agrees with the layout
     expect(note.baseHeight).toBe(250);
     expect(note.height).toBeGreaterThan(250);
-    expect(text.fontSize).toBe(STICKY_NOTE_MIN_FONT_SIZE);
-    expect(text.baseFontSize).toBe(28);
+    expect(getLocalTextRegionLayout(note, "body")!.fontSize).toBe(
+      STICKY_NOTE_MIN_FONT_SIZE,
+    );
+    expect(note.texts?.body?.style.fontSize).toBe(28);
     expect(note.height).toBeCloseTo(
-      getStickyNoteLayout(note, text).container.height,
+      getStickyNoteLayout(note, {
+        text: note.texts!.body!.text,
+        baseFontSize: note.texts!.body!.style.fontSize,
+        style: note.texts!.body!.style,
+      }).container.height,
     );
   });
 
@@ -1540,41 +1544,6 @@ describe("restoreAppState", () => {
 });
 
 describe("repairing bindings", () => {
-  it.each(["arrow", "rectangle"] as const)(
-    "should repair bound %s label order and fractional index",
-    (containerType) => {
-      const container = API.createElement({
-        type: containerType,
-        id: "container",
-        index: "b2f" as ExcalidrawElement["index"],
-        boundElements: [{ type: "text", id: "label" }],
-      });
-      const label = API.createElement({
-        type: "text",
-        id: "label",
-        index: "b2a" as ExcalidrawElement["index"],
-        containerId: container.id,
-      });
-
-      const restoredElements = restore.restoreElements(
-        [label, container],
-        null,
-        {
-          repairBindings: true,
-        },
-      );
-
-      expect(restoredElements.map((element) => element.id)).toEqual([
-        container.id,
-        label.id,
-      ]);
-      expect(restoredElements[0].index).toBe(container.index);
-      expect(restoredElements[1].index! > restoredElements[0].index!).toBe(
-        true,
-      );
-    },
-  );
-
   it("should strip arrow binding if repair throws", () => {
     const container = API.createElement({
       type: "rectangle",
@@ -1626,247 +1595,6 @@ describe("repairing bindings", () => {
     });
   });
 
-  it("should repair container boundElements when repair is true", () => {
-    const container = API.createElement({
-      type: "rectangle",
-      boundElements: [],
-    });
-    const boundElement = API.createElement({
-      type: "text",
-      containerId: container.id,
-    });
-
-    expect(container.boundElements).toEqual([]);
-
-    let restoredElements = restore.restoreElements(
-      [container, boundElement],
-      null,
-    );
-
-    expect(restoredElements).toEqual([
-      expect.objectContaining({
-        id: container.id,
-        boundElements: [],
-      }),
-      expect.objectContaining({
-        id: boundElement.id,
-        containerId: container.id,
-      }),
-    ]);
-
-    restoredElements = restore.restoreElements(
-      [container, boundElement],
-      null,
-      { repairBindings: true },
-    );
-
-    expect(restoredElements).toEqual([
-      expect.objectContaining({
-        id: container.id,
-        boundElements: [{ type: boundElement.type, id: boundElement.id }],
-      }),
-      expect.objectContaining({
-        id: boundElement.id,
-        containerId: container.id,
-      }),
-    ]);
-  });
-
-  it("should repair containerId of boundElements when repair is true", () => {
-    const boundElement = API.createElement({
-      type: "text",
-      containerId: null,
-    });
-    const container = API.createElement({
-      type: "rectangle",
-      boundElements: [{ type: boundElement.type, id: boundElement.id }],
-    });
-
-    let restoredElements = restore.restoreElements(
-      [container, boundElement],
-      null,
-    );
-
-    expect(restoredElements).toEqual([
-      expect.objectContaining({
-        id: container.id,
-        boundElements: [{ type: boundElement.type, id: boundElement.id }],
-      }),
-      expect.objectContaining({
-        id: boundElement.id,
-        containerId: null,
-      }),
-    ]);
-
-    restoredElements = restore.restoreElements(
-      [container, boundElement],
-      null,
-      { repairBindings: true },
-    );
-
-    expect(restoredElements).toEqual([
-      expect.objectContaining({
-        id: container.id,
-        boundElements: [{ type: boundElement.type, id: boundElement.id }],
-      }),
-      expect.objectContaining({
-        id: boundElement.id,
-        containerId: container.id,
-      }),
-    ]);
-  });
-
-  it("should ignore bound element if deleted", () => {
-    const container = API.createElement({
-      type: "rectangle",
-      boundElements: [],
-    });
-    const boundElement = API.createElement({
-      type: "text",
-      containerId: container.id,
-      isDeleted: true,
-    });
-
-    expect(container.boundElements).toEqual([]);
-
-    const restoredElements = restore.restoreElements(
-      [container, boundElement],
-      null,
-    );
-
-    expect(restoredElements).toEqual([
-      expect.objectContaining({
-        id: container.id,
-        boundElements: [],
-      }),
-      expect.objectContaining({
-        id: boundElement.id,
-        containerId: container.id,
-      }),
-    ]);
-  });
-
-  it("should remove bindings of deleted elements from boundElements when repair is true", () => {
-    const container = API.createElement({
-      type: "rectangle",
-      boundElements: [],
-    });
-    const boundElement = API.createElement({
-      type: "text",
-      containerId: container.id,
-      isDeleted: true,
-    });
-    const invisibleBoundElement = API.createElement({
-      type: "text",
-      containerId: container.id,
-      width: 0,
-      height: 0,
-    });
-
-    const obsoleteBinding = { type: boundElement.type, id: boundElement.id };
-    const invisibleBinding = {
-      type: invisibleBoundElement.type,
-      id: invisibleBoundElement.id,
-    };
-    expect(container.boundElements).toEqual([]);
-
-    const nonExistentBinding = { type: "text", id: "non-existent" };
-    // @ts-ignore
-    container.boundElements = [
-      obsoleteBinding,
-      invisibleBinding,
-      nonExistentBinding,
-    ];
-
-    let restoredElements = restore.restoreElements(
-      [container, invisibleBoundElement, boundElement],
-      null,
-      { deleteInvisibleElements: true },
-    );
-
-    expect(restoredElements).toEqual([
-      expect.objectContaining({
-        id: container.id,
-        boundElements: [obsoleteBinding, invisibleBinding, nonExistentBinding],
-      }),
-      expect.objectContaining({
-        id: invisibleBoundElement.id,
-        containerId: container.id,
-        isDeleted: true,
-      }),
-      expect.objectContaining({
-        id: boundElement.id,
-        containerId: container.id,
-      }),
-    ]);
-
-    restoredElements = restore.restoreElements(
-      [container, invisibleBoundElement, boundElement],
-      null,
-      { repairBindings: true, deleteInvisibleElements: true },
-    );
-
-    expect(restoredElements).toEqual([
-      expect.objectContaining({
-        id: container.id,
-        boundElements: [],
-      }),
-      expect.objectContaining({
-        id: invisibleBoundElement.id,
-        containerId: container.id,
-        isDeleted: true,
-      }),
-      expect.objectContaining({
-        id: boundElement.id,
-        containerId: container.id,
-      }),
-    ]);
-  });
-
-  it("should remove containerId if container not exists when repair is true", () => {
-    const boundElement = API.createElement({
-      type: "text",
-      containerId: "non-existent",
-    });
-    const boundElementDeleted = API.createElement({
-      type: "text",
-      containerId: "non-existent",
-      isDeleted: true,
-    });
-
-    let restoredElements = restore.restoreElements(
-      [boundElement, boundElementDeleted],
-      null,
-    );
-
-    expect(restoredElements).toEqual([
-      expect.objectContaining({
-        id: boundElement.id,
-        containerId: "non-existent",
-      }),
-      expect.objectContaining({
-        id: boundElementDeleted.id,
-        containerId: "non-existent",
-      }),
-    ]);
-
-    restoredElements = restore.restoreElements(
-      [boundElement, boundElementDeleted],
-      null,
-      { repairBindings: true },
-    );
-
-    expect(restoredElements).toEqual([
-      expect.objectContaining({
-        id: boundElement.id,
-        containerId: null,
-      }),
-      expect.objectContaining({
-        id: boundElementDeleted.id,
-        containerId: null,
-      }),
-    ]);
-  });
 });
 
 describe("restoreLibraryItems", () => {
@@ -1896,5 +1624,47 @@ describe("restoreLibraryItems", () => {
         elements: [expect.objectContaining({ id: element.id, created: 123 })],
       }),
     ]);
+  });
+});
+
+describe("restoreElements 表格文本", () => {
+  it("只保留可见格的非空 cell 键，丢弃覆盖格与未知键", () => {
+    const base = API.createElement({
+      type: "table",
+      rowCount: 1,
+      columnCount: 2,
+    });
+    const [anchor, covered] = base.table.cells;
+    const style = getTableCellTextBaseStyle();
+    const table = {
+      ...base,
+      table: {
+        ...base.table,
+        cells: [
+          { ...anchor, columnSpan: 2 },
+          { ...covered, mergedInto: anchor.id },
+        ],
+      },
+      texts: {
+        ...withTextBlock(undefined, cellKey(anchor.id), {
+          text: "可见",
+          style,
+        }),
+        [cellKey(covered.id)]: { text: "覆盖", style },
+        "cell:missing": { text: "未知", style },
+        "cell:blank": { text: "   ", style },
+      },
+    };
+
+    const restored = restore.restoreElements([table], null);
+    const restoredTable = restored.find((element) => element.id === table.id)!;
+    expect(getTextBlock(restoredTable.texts, cellKey(anchor.id))?.text).toBe(
+      "可见",
+    );
+    expect(
+      getTextBlock(restoredTable.texts, cellKey(covered.id)),
+    ).toBeUndefined();
+    expect(restoredTable.texts?.["cell:missing" as never]).toBeUndefined();
+    expect(restoredTable.texts?.["cell:blank" as never]).toBeUndefined();
   });
 });

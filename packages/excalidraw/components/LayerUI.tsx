@@ -11,7 +11,6 @@ import {
 
 import {
   getColorUpdate,
-  getStickyNoteInkCounterpart,
   mutateElement,
   normalizeStickyNoteStrokeColor,
 } from "@excalidraw/element";
@@ -518,21 +517,6 @@ const LayerUI = ({
                   );
                   mutateElement(element, elementsMap, update);
                   ShapeCache.delete(element);
-                  // 预览无前后元素表可比：另一侧直接跟随（提交态由 syncStickyNoteInk 负责）
-                  if ("strokeColor" in update) {
-                    const counterpart = getStickyNoteInkCounterpart(
-                      element,
-                      elementsMap,
-                    );
-                    if (counterpart) {
-                      mutateElement(counterpart, elementsMap, {
-                        strokeColor: normalizeStickyNoteStrokeColor(
-                          update.strokeColor,
-                        ),
-                      });
-                      ShapeCache.delete(counterpart);
-                    }
-                  }
                 }
                 app.scene.triggerUpdate();
               } else {

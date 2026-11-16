@@ -1,6 +1,6 @@
 import { pointFrom, type LocalPoint } from "@excalidraw/math";
 
-import { arrayToMap } from "@excalidraw/common";
+import { arrayToMap, getLineHeight } from "@excalidraw/common";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
 
@@ -8,6 +8,7 @@ import { newElementWith } from "../src/mutateElement";
 import { resizeMultipleElements } from "../src/resizeElements";
 import { Scene } from "../src/Scene";
 import { MIN_TABLE_ROW_HEIGHT } from "../src/tableScale";
+import { getTextElementStyle } from "../src/text/elementText";
 
 import type {
   ExcalidrawElement,
@@ -238,7 +239,7 @@ describe("resizeMultipleElements: selection containing a table", () => {
 
     const scaledText = elementOf(scene, text.id) as ExcalidrawTextElement;
     // single-axis rule: geometry distorts, fonts do not
-    expect(scaledText.fontSize).toBe(20);
+    expect(getTextElementStyle(scaledText).fontSize).toBe(20);
     expect(scaledText.width).toBe(100);
     expect(scaledText.height).toBe(20);
     expect(scaledText.y).toBe(70);
@@ -370,7 +371,7 @@ describe("resizeMultipleElements: selection containing a table", () => {
     ]);
   });
 
-  it("scales a cell member and its bound text exactly once", () => {
+  it("scales a cell member exactly once", () => {
     const table = makeNonUniformTable();
     const shape = API.createElement({
       type: "rectangle",
@@ -379,15 +380,6 @@ describe("resizeMultipleElements: selection containing a table", () => {
       width: 40,
       height: 30,
       containerRef: tableCellRef(table, cellIdAt(table, 0, 0), "content"),
-    });
-    const boundText = API.createElement({
-      type: "text",
-      x: 110,
-      y: 60,
-      width: 30,
-      height: 16,
-      fontSize: 8,
-      containerId: shape.id,
     });
     const rectangle = API.createElement({
       type: "rectangle",
@@ -398,7 +390,7 @@ describe("resizeMultipleElements: selection containing a table", () => {
     });
 
     const scene = runResize(
-      [rectangle, table, shape, boundText],
+      [rectangle, table, shape],
       [rectangle.id, table.id, shape.id],
       "se",
       { nextWidth: 680, nextHeight: 450 },
@@ -409,10 +401,6 @@ describe("resizeMultipleElements: selection containing a table", () => {
     expect(scaledShape.y).toBe(110);
     expect(scaledShape.width).toBe(80);
     expect(scaledShape.height).toBe(60);
-
-    const scaledText = elementOf(scene, boundText.id) as ExcalidrawTextElement;
-    expect(scaledText.fontSize).toBe(16);
-    expect(scaledText.width).toBe(60);
   });
 
   it("leaves text-mode fields unpublished during the preview", () => {
@@ -425,20 +413,20 @@ describe("resizeMultipleElements: selection containing a table", () => {
         width: 200,
         height: 200,
         containerRef: tableCellRef(table, cellIdAt(table, 0, 0), "content"),
+        texts: {
+          body: {
+            text: "便签",
+            style: {
+              fontFamily: 1,
+              fontSize: 40,
+              lineHeight: getLineHeight(1),
+              textAlign: "center",
+              verticalAlign: "middle",
+            },
+          },
+        },
       }),
       { baseHeight: 200 },
-    );
-    const label = newElementWith(
-      API.createElement({
-        type: "text",
-        x: 20,
-        y: 20,
-        width: 100,
-        height: 50,
-        fontSize: 40,
-        containerId: note.id,
-      }),
-      { baseFontSize: 40 },
     );
     const rectangle = API.createElement({
       type: "rectangle",
@@ -451,7 +439,7 @@ describe("resizeMultipleElements: selection containing a table", () => {
     // the note is a subtree member, not selected: the resize preview scales
     // its geometry while the mode fields wait for the pointer-up commit
     const scene = runResize(
-      [rectangle, table, note, label],
+      [rectangle, table, note],
       [rectangle.id, table.id],
       "se",
       {
@@ -464,10 +452,7 @@ describe("resizeMultipleElements: selection containing a table", () => {
     expect(scaledNote.width).toBe(400);
     expect(scaledNote.height).toBe(400);
     expect((scaledNote as any).baseHeight).toBe(200);
-
-    const scaledLabel = elementOf(scene, label.id) as ExcalidrawTextElement;
-    expect(scaledLabel.fontSize).toBe(80);
-    expect((scaledLabel as any).baseFontSize).toBe(40);
+    expect((scaledNote as any).texts.body.style.fontSize).toBe(40);
   });
 
   it("keeps the grid invariant exact through the resize", () => {

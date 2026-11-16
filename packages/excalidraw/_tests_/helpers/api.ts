@@ -5,14 +5,18 @@ import util from "util";
 import { pointFrom, type LocalPoint, type Radians } from "@excalidraw/math";
 
 import {
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_SIZE,
   DEFAULT_VERTICAL_ALIGN,
   ROUNDNESS,
   assertNever,
+  getLineHeight,
   getStrokeWidthByKey,
   getUpdatedTimestamp,
 } from "@excalidraw/common";
 
 import {
+  getMindmapNodeTextStyle,
   newArrowElement,
   newElement,
   newEmbeddableElement,
@@ -58,6 +62,7 @@ import type {
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
 import type { ShapeId } from "@excalidraw/element";
+import type { TextBlock, TextBlockStyle } from "@excalidraw/element";
 
 import type { Mutable } from "@excalidraw/common/utility-types";
 
@@ -127,11 +132,9 @@ export class API {
   };
 
   static getSelectedElements = (
-    includeBoundTextElement: boolean = false,
     includeElementsInFrames: boolean = false,
   ): ExcalidrawElement[] => {
     return getSelectedElements(h.elements, h.state, {
-      includeBoundTextElement,
       includeElementsInFrames,
     });
   };
@@ -207,14 +210,15 @@ export class API {
     roundness?: ExcalidrawGenericElement["roundness"];
     opacity?: ExcalidrawGenericElement["opacity"];
     // text props
-    text?: T extends "text" ? ExcalidrawTextElement["text"] : never;
-    fontSize?: T extends "text" ? ExcalidrawTextElement["fontSize"] : never;
-    fontFamily?: T extends "text" ? ExcalidrawTextElement["fontFamily"] : never;
-    textAlign?: T extends "text" ? ExcalidrawTextElement["textAlign"] : never;
+    text?: T extends "text" ? TextBlock["text"] : never;
+    fontSize?: T extends "text" ? TextBlockStyle["fontSize"] : never;
+    fontFamily?: T extends "text" ? TextBlockStyle["fontFamily"] : never;
+    textAlign?: T extends "text" ? TextBlockStyle["textAlign"] : never;
     verticalAlign?: T extends "text"
-      ? ExcalidrawTextElement["verticalAlign"]
+      ? TextBlockStyle["verticalAlign"]
       : never;
     boundElements?: ExcalidrawGenericElement["boundElements"];
+    texts?: ExcalidrawElement["texts"];
     shape?: T extends "composite" | "flow" | "sequence" | ShapeId
       ? ExcalidrawShapeElement["shape"]
       : never;
@@ -228,9 +232,6 @@ export class API {
       : never;
     rowCount?: T extends "table" ? number : never;
     columnCount?: T extends "table" ? number : never;
-    containerId?: T extends "text"
-      ? ExcalidrawTextElement["containerId"]
-      : never;
     points?: T extends "arrow" | "line" | "freedraw" | "mindmap-edge" ? readonly LocalPoint[] : never;
     polygon?: T extends "line" ? boolean : never;
     strokeOptions?: T extends "freedraw"
@@ -491,7 +492,6 @@ export class API {
           fontFamily,
           textAlign: rest.textAlign ?? appState.currentItemTextAlign,
           verticalAlign: rest.verticalAlign ?? DEFAULT_VERTICAL_ALIGN,
-          containerId: rest.containerId ?? undefined,
         });
         element.width = width;
         element.height = height;
@@ -569,6 +569,9 @@ export class API {
       element.startArrowhead = rest.startArrowhead ?? null;
       element.endArrowhead = rest.endArrowhead ?? null;
     }
+    if (rest.texts) {
+      element.texts = rest.texts;
+    }
     if (id) {
       element.id = id;
     }
@@ -580,6 +583,14 @@ export class API {
     }
     return element as any;
   };
+
+  /** 脑图节点正文（`texts.body`），样式按节点主题派生。 */
+  static mindmapBody = (
+    node: Pick<ExcalidrawMindmapNodeElement, "role">,
+    text: string,
+  ): NonNullable<ExcalidrawElement["texts"]> => ({
+    body: { text, style: getMindmapNodeTextStyle(node) },
+  });
 
   static createTextContainer = (opts?: {
     containerRef?: ExcalidrawElement["containerRef"];
@@ -593,29 +604,22 @@ export class API {
       type: "rectangle",
       containerRef: opts?.containerRef,
       groupIds: opts?.groupIds,
-    });
-
-    const text = API.createElement({
-      type: "text",
-      text: opts?.label?.text || "sample-text",
-      width: 50,
-      height: 20,
-      fontSize: FONT_SIZES.sm,
-      containerId: rectangle.id,
-      groupIds:
-        opts?.label?.groupIds === undefined
-          ? opts?.groupIds
-          : opts.label.groupIds,
-    });
-
-    h.app.scene.mutateElement(
-      rectangle,
-      {
-        boundElements: [{ type: "text", id: text.id }],
+      texts: {
+        body: {
+          text: opts?.label?.text || "sample-text",
+          style: {
+            fontFamily: DEFAULT_FONT_FAMILY,
+            fontSize: FONT_SIZES.sm,
+            lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+            textAlign: "center",
+            verticalAlign: DEFAULT_VERTICAL_ALIGN,
+          },
+        },
       },
-    );
+    });
 
-    return [rectangle, text];
+    // 容器文字内嵌在容器自身，不再有独立的文字元素
+    return [rectangle, rectangle] as const;
   };
 
   static createLabeledArrow = (opts?: {
@@ -629,21 +633,23 @@ export class API {
       containerRef: opts?.containerRef,
     });
 
-    const text = API.createElement({
-      type: "text",
-      width: 50,
-      height: 20,
-      containerId: arrow.id,
+    h.app.scene.mutateElement(arrow, {
+      texts: {
+        label: {
+          text: opts?.label?.text ?? "label",
+          style: {
+            fontFamily: DEFAULT_FONT_FAMILY,
+            fontSize: DEFAULT_FONT_SIZE,
+            lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+            textAlign: "center",
+            verticalAlign: "middle",
+          },
+          placement: { labelPosition: 0.5 },
+        },
+      },
     });
 
-    h.app.scene.mutateElement(
-      arrow,
-      {
-        boundElements: [{ type: "text", id: text.id }],
-      },
-    );
-
-    return [arrow, text];
+    return [arrow, arrow] as const;
   };
 
   static readFile = async <T extends "utf8" | null>(

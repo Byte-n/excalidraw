@@ -2,32 +2,36 @@
 //
 // 飞书 cells 的 row_index / col_index 是 1 基（1..N），统一在此减 1 转为 0 基；
 // merge_info 的 span 是跨度而非索引，不随基变化。单元格文本以「可见单元格
-// （锚点）」为单位产出独立文本元素，containerRef 指向该锚点的 tableCell 角色；
-// 被合并覆盖的格子并入锚点处理，不单独产出元素。
+// （锚点）」为单位写进表格自身的 `texts[cell:<id>]` 区域；
+// 被合并覆盖的格子并入锚点处理，不单独产出。
 
 import {
-  getTableCellBounds,
+  cellKey,
   getTableHeight,
   getTableWidth,
   newTableElement,
-  newTextElement,
+  withTextBlock,
 } from "@excalidraw/element";
 
-import { DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE } from "@excalidraw/common";
+import {
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_SIZE,
+  getLineHeight,
+} from "@excalidraw/common";
 
 import type {
-  ExcalidrawElement,
+  ExcalidrawTableElement,
   TableCellData,
   TableColumnData,
   TableRowData,
 } from "@excalidraw/element/types";
+import type { TextBlockMap } from "@excalidraw/element";
 
 import { mapStrokeColor, mapStrokeStyle, mapStrokeWidth } from "../mapping.js";
 
 import { identity } from "./identity.js";
 import { mapTextAlign, mapVerticalAlign } from "./text.js";
 
-import type { Draft } from "./identity.js";
 import type { ResolvedNode } from "./resolve.js";
 import type { LarkTableCell } from "../source.js";
 
@@ -74,7 +78,7 @@ interface BuiltTableData {
   cells: TableCellData[];
 }
 
-export function buildTable(node: ResolvedNode): ExcalidrawElement {
+export function buildTable(node: ResolvedNode): ExcalidrawTableElement {
   const table = buildTableData(node);
   const base = newTableElement({
     type: "table",
@@ -187,13 +191,12 @@ function buildTableData(node: ResolvedNode): BuiltTableData {
   };
 }
 
-// 单元格文本：以可见单元格（锚点）为单位产出独立文本元素。被合并覆盖的格子
-// 不单独产出——它与锚点共用同一格，若也产出会与锚点元素 id 撞车导致整板失败。
-// 覆盖格的非空文本按规则并入锚点：锚点有文本则覆盖格文本丢弃；锚点无文本则取
-// 一个覆盖格文本落到锚点；两者皆空不产出。每个被覆盖的非空文本都计一次
-// 保真度损失。
+// 单元格文本：以可见单元格（锚点）为单位写进 `texts[cell:<id>]`。被合并覆盖
+// 的格子不单独产出——它与锚点共用同一格。覆盖格的非空文本按规则并入锚点：
+// 锚点有文本则覆盖格文本丢弃；锚点无文本则取一个覆盖格文本落到锚点；两者皆空
+// 不产出。每个被覆盖的非空文本都计一次保真度损失。
 export function buildTableTexts(node: ResolvedNode): {
-  drafts: Draft[];
+  texts: TextBlockMap | undefined;
   downgraded: number;
 } {
   const payload = node.raw.table ?? {};
@@ -207,7 +210,7 @@ export function buildTableTexts(node: ResolvedNode): {
     );
   }
 
-  const drafts: Draft[] = [];
+  let texts: TextBlockMap | undefined;
   let downgraded = 0;
   for (const cellData of data.cells) {
     if (cellData.mergedInto !== undefined) {
@@ -238,42 +241,16 @@ export function buildTableTexts(node: ResolvedNode): {
     if (chosen?.text === undefined) {
       continue;
     }
-    const bounds = getTableCellBounds(data, anchorId);
-    if (!bounds) {
-      continue;
-    }
-    const box = {
-      x: node.x + bounds.x,
-      y: node.y + bounds.y,
-      width: bounds.width,
-      height: bounds.height,
-    };
-    const element = newTextElement({
+    texts = withTextBlock(texts, cellKey(anchorId), {
       text: chosen.text.text ?? "",
-      fontSize: chosen.text.font_size ?? DEFAULT_FONT_SIZE,
-      fontFamily: DEFAULT_FONT_FAMILY,
-      textAlign: mapTextAlign(chosen.text.horizontal_align),
-      verticalAlign: mapVerticalAlign(chosen.text.vertical_align),
-      containerRef: {
-        kind: "tableCell",
-        elementId: node.raw.id,
-        cellId: anchorId,
-        role: "backgroundText",
+      style: {
+        fontFamily: DEFAULT_FONT_FAMILY,
+        fontSize: chosen.text.font_size ?? DEFAULT_FONT_SIZE,
+        lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+        textAlign: mapTextAlign(chosen.text.horizontal_align),
+        verticalAlign: mapVerticalAlign(chosen.text.vertical_align),
       },
-      x: box.x,
-      y: box.y,
-      ...identity(`${node.raw.id}#cell:${anchorId}`, 0),
-    });
-    drafts.push({
-      el: {
-        ...element,
-        x: box.x,
-        y: box.y,
-        width: box.width,
-        height: box.height,
-      },
-      zKey: node.zIndex + 0.1,
     });
   }
-  return { drafts, downgraded };
+  return { texts, downgraded };
 }

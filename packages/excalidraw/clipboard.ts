@@ -192,7 +192,7 @@ export const serializeAsClipboardJSON = ({
     );
   }
 
-  // select bound text elements when copying
+  // drop container refs whose container is not part of the copy
   const contents: ElementsClipboard = {
     type: EXPORT_DATA_TYPES.excalidrawClipboard,
     elements: elements.map((element) => {

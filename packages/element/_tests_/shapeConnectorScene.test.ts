@@ -14,7 +14,6 @@ import { applyShapeOperation } from "../src/shapeScene";
 import { applyConnectorOperation } from "../src/connectorScene";
 import { setCustomTextMetricsProvider } from "../src/textMeasurements";
 import { LinearElementEditor } from "../src/linearElementEditor";
-import { getBoundTextElement } from "../src/textElement";
 import { isLinearElement } from "../src/typeChecks";
 import { Scene } from "../src/Scene";
 import { updateBindings } from "../src/binding";
@@ -69,7 +68,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("普通图形纯场景操作", () => {
-  it.each(SHAPE_IDS)("%s 创建真实标签且保留完整既有候选", (kind) => {
+  it.each(SHAPE_IDS)("%s 创建内嵌正文且保留完整既有候选", (kind) => {
     const input = shape().elements;
     const snapshot = structuredClone(input);
     const created = applyShapeOperation(input, {
@@ -77,8 +76,6 @@ describe("普通图形纯场景操作", () => {
       kind,
       geometry: { x: 200, y: 100, width: 160, height: 120 },
       text: "新图形",
-      // Sample-size label: a lifeline's adaptive fit keeps its default head
-      // for one 14px line, so this case stays focused on candidate identity.
       textStyle: { fontSize: 14 },
     });
     const target = created.elements.find(
@@ -87,17 +84,13 @@ describe("普通图形纯场景操作", () => {
     expect(target).toMatchObject({
       type: shapeElementType(kind),
       shape: buildShapeData(kind),
+      texts: { body: { text: "新图形", style: { fontSize: 14 } } },
     });
-    const text = created.elements.find(
-      (element) =>
-        element.type === "text" && element.containerId === target?.id,
-    );
-    expect(text).toMatchObject({ originalText: "新图形", isDeleted: false });
-    expect(target?.boundElements).toContainEqual({
-      id: text?.id,
-      type: "text",
-    });
-    expect(created.createdElementIds).toEqual([target?.id, text?.id]);
+    expect(
+      created.elements.filter((element) => element.type === "text"),
+    ).toEqual([]);
+    expect(target?.boundElements ?? []).toEqual([]);
+    expect(created.createdElementIds).toEqual([target?.id]);
     expect(input).toEqual(snapshot);
     preserveIdentity(input, created.elements);
   });
@@ -183,7 +176,7 @@ describe("普通图形纯场景操作", () => {
     });
   });
 
-  it("图形与文字样式null恢复默认，空文字墓碑标签", () => {
+  it("图形与文字样式null恢复默认，空文字清除正文块", () => {
     const initial = shape();
     const id = initial.createdElementIds[0];
     const updated = applyShapeOperation(initial.elements, {
@@ -191,6 +184,10 @@ describe("普通图形纯场景操作", () => {
       target: { elementId: id },
       style: { strokeWidth: 7, backgroundColor: "red", roundness: "round" },
       textStyle: { fontSize: 36, color: "blue" },
+    });
+    expect(updated.elements[0].texts?.body?.style).toMatchObject({
+      fontSize: 36,
+      color: "blue",
     });
     const reset = applyShapeOperation(updated.elements, {
       action: "update",
@@ -203,13 +200,20 @@ describe("普通图形纯场景操作", () => {
       backgroundColor: DEFAULT_ELEMENT_PROPS.backgroundColor,
       roundness: null,
     });
+    expect(reset.elements[0].texts?.body?.style).toMatchObject({
+      fontSize: 20,
+    });
+    expect(reset.elements[0].texts?.body?.style.color).toBe(
+      DEFAULT_ELEMENT_PROPS.strokeColor,
+    );
     const cleared = applyShapeOperation(reset.elements, {
       action: "update",
       target: { elementId: id },
       text: "",
     });
-    expect(cleared.deletedElementIds).toEqual([initial.createdElementIds[1]]);
-    expect(cleared.elements[0].boundElements).toEqual([]);
+    expect(cleared.deletedElementIds).toEqual([]);
+    expect(cleared.elements[0].texts).toBeUndefined();
+    expect(cleared.elements[0].boundElements ?? []).toEqual([]);
     preserveIdentity(initial.elements, cleared.elements);
   });
 
@@ -315,10 +319,9 @@ describe("连线纯场景与editor几何", () => {
     });
     const connector = getLinear(restored, created.createdElementIds[0]);
     expect(connector.startBinding?.elementId).toBe(target.createdElementIds[0]);
-    expect(connector.boundElements).toContainEqual({
-      id: created.createdElementIds[1],
-      type: "text",
-    });
+    expect(connector.texts?.label?.text).toBe("恢复标签");
+    expect(connector.texts?.label?.placement?.labelPosition).toBe(0.5);
+    expect(connector.boundElements ?? []).toHaveLength(0);
     expect(
       restored.find((element) => element.id === target.createdElementIds[0])
         ?.boundElements,
@@ -361,18 +364,21 @@ describe("连线纯场景与editor几何", () => {
         skipValidation: true,
         calculationOnly: true,
       });
-      const text = getBoundTextElement(after, scene.getNonDeletedElementsMap());
-      expect(text).not.toBeNull();
-      if (!text) {
-        throw new Error("缺少标签");
-      }
-      expect(text).toMatchObject(
-        LinearElementEditor.getBoundTextElementPosition(
-          after,
-          text,
-          scene.getNonDeletedElementsMap(),
-        ),
+      expect(after.texts?.label?.text).toBe("连接标签");
+      expect(after.texts?.label?.placement?.labelPosition).toBe(0.5);
+      const elementsMap = scene.getNonDeletedElementsMap();
+      const layout = LinearElementEditor.getLabelSceneLayout(
+        after,
+        elementsMap,
       );
+      const pathPoint = LinearElementEditor.getPointAtPathParameter(
+        after,
+        0.5,
+        elementsMap,
+      );
+      expect(pathPoint).not.toBeNull();
+      expect(layout.x + layout.width / 2).toBeCloseTo(pathPoint![0], 6);
+      expect(layout.y + layout.height / 2).toBeCloseTo(pathPoint![1], 6);
       scene.destroy();
       expect(input).toEqual(snapshot);
       preserveIdentity(input, moved.elements);
@@ -448,7 +454,7 @@ describe("连线纯场景与editor几何", () => {
       applyConnectorOperation(reconnected.elements, {
         action: "reconnect",
         target: { elementId: id },
-        end: { elementId: created.createdElementIds[1] },
+        end: { elementId: id },
       }),
     ).toThrow(expect.objectContaining({ code: "invalid_operation" }));
     expect(reconnected.elements).toEqual(snapshot);

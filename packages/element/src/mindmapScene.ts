@@ -1,4 +1,4 @@
-import { getFontString } from "@excalidraw/common";
+import { getLineHeight } from "@excalidraw/common";
 import {
   generateKeyBetween,
   generateNKeysBetween,
@@ -9,7 +9,7 @@ import {
   applyMindmapTreeCommand,
   buildMindmapGraphIndex,
   getMindmapSubtreeIds,
-  getMindmapShapeId,
+  getMindmapNodeTextStyle,
   getMindmapLayoutConfig,
   getMindmapEdgeGeometry,
   isMindmapLayoutFrozen,
@@ -17,21 +17,11 @@ import {
   reparentMindmapNode,
   repairMindmapElements,
 } from "./mindmap";
-import { newMindmapNodeElement, newTextElement } from "./newElement";
-import {
-  isMindmapNodeElement,
-  isMindmapEdgeElement,
-  isTextElement,
-} from "./typeChecks";
-import {
-  computeBoundTextPosition,
-  computeContainerDimensionForBoundText,
-  getBoundTextElement,
-  getBoundTextMaxWidth,
-  getBoundTextMaxHeight,
-} from "./textElement";
-import { measureText, normalizeText } from "./textMeasurements";
-import { wrapText } from "./textWrapping";
+import { newMindmapNodeElement } from "./newElement";
+import { isMindmapNodeElement, isMindmapEdgeElement } from "./typeChecks";
+import { normalizeText } from "./textMeasurements";
+import { getTextLayoutUpdates } from "./text/applyLayout";
+import { withTextBlock } from "./text/ops";
 import {
   CanvasSceneError,
   finishSceneOperation,
@@ -39,12 +29,14 @@ import {
   deleteSceneElements,
 } from "./sceneOperations";
 
+import type { ElementUpdate } from "./mutateElement";
 import type {
   CanvasElementOperationReferences,
   CanvasElementOperationResult,
   ScenePoint,
 } from "./sceneOperations";
 import type { MindmapGraphIndex } from "./mindmap";
+import type { Scene } from "./Scene";
 import type {
   ExcalidrawElement,
   ExcalidrawMindmapNodeElement,
@@ -123,7 +115,7 @@ export const layoutMindmapScene = (
     if (!graph.some(isMindmapNodeElement)) {
       continue;
     }
-    // 文字尺寸变化后再次布局，保证兄弟间距与边端点采用最终几何。
+    // 正文尺寸变化后再次布局，保证兄弟间距与边端点采用最终几何。
     for (let pass = 0; pass < 2; pass++) {
       const currentGraph = [...updated.values()].filter(
         (element) =>
@@ -141,63 +133,19 @@ export const layoutMindmapScene = (
       }
       let resized = false;
       for (const node of layout.elements) {
-        const text = getBoundTextElement(node, updated);
-        if (!text) {
+        // 冻结节点保持现有几何，live resize 期间被 pin 的节点尺寸由手势
+        // 决定，二者都不能被正文重测改写。
+        if (isMindmapLayoutFrozen(node) || pinnedNodeIds?.has(node.id)) {
           continue;
         }
-        const maxWidth = getBoundTextMaxWidth(node, text);
-        const wrappedText = wrapText(
-          text.originalText,
-          getFontString(text),
-          maxWidth,
-        );
-        const metrics = measureText(
-          wrappedText,
-          getFontString(text),
-          text.lineHeight,
-        );
-        const shapeId = getMindmapShapeId(node);
-        const shape =
-          shapeId === "pill"
-            ? "ellipse"
-            : shapeId === "text"
-            ? "rectangle"
-            : shapeId;
-        const maxHeight = getBoundTextMaxHeight(node, text);
-        // 表格缩放后冻结的节点保持现有几何，文字仅在边界内折行。
-        // live resize 期间被 pin 的节点同理：尺寸由手势决定，不能被文字
-        // 重测改写，否则锚点与尺寸都会被布局抢回。
-        const nextNode =
-          isMindmapLayoutFrozen(node) || pinnedNodeIds?.has(node.id)
-            ? node
-            : {
-                ...node,
-                ...(metrics.width > maxWidth && {
-                  width: computeContainerDimensionForBoundText(
-                    metrics.width,
-                    shape,
-                  ),
-                }),
-                ...(metrics.height > maxHeight && {
-                  height: computeContainerDimensionForBoundText(
-                    metrics.height,
-                    shape,
-                  ),
-                }),
-              };
+        const updates = getTextLayoutUpdates(node);
+        if (!updates) {
+          continue;
+        }
         resized ||=
-          nextNode.width !== node.width || nextNode.height !== node.height;
-        updated.set(node.id, nextNode);
-        const nextText = {
-          ...text,
-          text: wrappedText,
-          width: metrics.width,
-          height: metrics.height,
-        };
-        updated.set(text.id, {
-          ...nextText,
-          ...computeBoundTextPosition(nextNode, nextText, updated),
-        });
+          (updates.width ?? node.width) !== node.width ||
+          (updates.height ?? node.height) !== node.height;
+        updated.set(node.id, { ...node, ...updates });
       }
       if (!resized) {
         break;
@@ -208,7 +156,34 @@ export const layoutMindmapScene = (
 };
 
 /**
- * 从一棵文本树直接建出整张、已布局的脑图（节点 + 绑定文本 + 连线），
+ * 按正文与结构重排整张图并写回场景：文本编辑、样式变更等交互路径唯一
+ * 的图级重布局入口。有差异的元素逐个走 `mutateElement`，版本因此正常递增。
+ */
+export const relayoutMindmapScene = (scene: Scene, graphId: string): void => {
+  const relaid = layoutMindmapScene(scene.getElementsIncludingDeleted(), [
+    graphId,
+  ]);
+  const existing = scene.getElementsMapIncludingDeleted();
+  for (const next of relaid) {
+    const previous = existing.get(next.id);
+    if (!previous || previous === next) {
+      continue;
+    }
+    const updates: Record<string, unknown> = {};
+    for (const key of Object.keys(next) as (keyof ExcalidrawElement)[]) {
+      if (key === "version" || key === "versionNonce" || key === "updated") {
+        continue;
+      }
+      if (next[key] !== previous[key]) {
+        updates[key] = next[key];
+      }
+    }
+    scene.mutateElement(previous, updates as ElementUpdate<typeof previous>);
+  }
+};
+
+/**
+ * 从一棵文本树直接建出整张、已布局的脑图（节点 + 正文 + 连线），
  * 不接触 App/scene/store —— 调用方拿到元素后自行落地。文字树的导入
  * （excalidraw 包的 `importTextTree`）与创建工具的预设预览共用它，导入结果
  * 与预设所见因此同源。
@@ -221,7 +196,7 @@ export const buildMindmapGraphFromTree = (
   position: ScenePoint,
   font: { fontFamily?: FontFamilyValues; fontSize?: number } = {},
   /**
-   * 每个节点/绑定文本的显式身份。缺省（导入路径）由构造函数生成 id/seed；
+   * 每个节点的显式身份。缺省（导入路径）由构造函数生成 id/seed；
    * **离屏预览必须传**——预览元素不入场景，却会消耗共享的 id 计数器与随机
    * 序列，把同一会话里后续元素的 id/seed 全部推后一位。
    */
@@ -253,7 +228,7 @@ export const buildMindmapGraphFromTree = (
   let elements: readonly ExcalidrawElement[] = [];
   let created = 1;
   const add = (item: MindmapTreeSpec, node: ExcalidrawMindmapNodeElement) => {
-    elements = appendNode(elements, node, item.text, font, identity(created++));
+    elements = appendNode(elements, node, item.text, font);
     const orders = generateNKeysBetween(null, null, item.children.length);
     item.children.forEach((child, index) => {
       add(
@@ -298,27 +273,33 @@ const appendNode = (
   node: ExcalidrawMindmapNodeElement,
   value: string,
   font: { fontFamily?: FontFamilyValues; fontSize?: number } = {},
-  /** 见 `buildMindmapGraphFromTree` 的 `identity`；绑定文本随容器取身份 */
-  nodeIdentity?: { id?: string; seed?: number },
 ) => {
-  const text = newTextElement({
-    x: node.x + node.width / 2,
-    y: node.y + node.height / 2,
-    text: value,
-    containerId: node.id,
-    textAlign: "center",
-    verticalAlign: "middle",
-    ...font,
-    ...(nodeIdentity?.id === undefined
-      ? {}
-      : { id: `${nodeIdentity.id}-text` }),
-    ...(nodeIdentity?.seed === undefined ? {} : { seed: nodeIdentity.seed }),
-  });
-  return [
-    ...elements,
-    { ...node, boundElements: [{ type: "text" as const, id: text.id }] },
-    text,
-  ];
+  const text = normalizeText(value);
+  return [...elements, withNodeBody(node, text, font)];
+};
+
+/** 把正文挂到节点自身：空文本不落 texts 键。 */
+const withNodeBody = (
+  node: ExcalidrawMindmapNodeElement,
+  text: string,
+  font: { fontFamily?: FontFamilyValues; fontSize?: number } = {},
+): ExcalidrawMindmapNodeElement => {
+  const style = getMindmapNodeTextStyle(node);
+  const fontFamily = font.fontFamily ?? style.fontFamily;
+  return {
+    ...node,
+    texts: withTextBlock(node.texts, "body", {
+      text,
+      style: {
+        ...style,
+        fontFamily,
+        ...(font.fontSize === undefined ? {} : { fontSize: font.fontSize }),
+        ...(font.fontFamily === undefined
+          ? {}
+          : { lineHeight: getLineHeight(fontFamily) }),
+      },
+    }),
+  };
 };
 
 export const applyMindmapOperation = (
@@ -412,26 +393,18 @@ export const applyMindmapOperation = (
       break;
     }
     case "rename": {
-      const text = getBoundTextElement(
-        node,
-        new Map(input.map((element) => [element.id, element])),
-      );
-      if (text) {
-        const value = normalizeText(operation.text);
-        elements = input.map((element) =>
-          element.id === text.id
-            ? { ...text, originalText: value, text: value }
-            : element,
-        );
-      } else {
-        const appended = appendNode([], node, operation.text);
-        elements = [
-          ...input.map((element) =>
-            element.id === node.id ? appended[0] : element,
-          ),
-          appended[1],
-        ];
+      const value = normalizeText(operation.text);
+      const body = node.texts?.body;
+      if ((body?.text ?? "") === value) {
+        break;
       }
+      const texts = withTextBlock(node.texts, "body", {
+        text: value,
+        style: body?.style ?? getMindmapNodeTextStyle(node),
+      });
+      elements = input.map((element) =>
+        element.id === node.id ? { ...node, texts } : element,
+      );
       break;
     }
     case "reparent": {
@@ -477,11 +450,7 @@ export const applyMindmapOperation = (
       const dx = operation.position.x - node.x;
       const dy = operation.position.y - node.y;
       elements = input.map((element) =>
-        !element.isDeleted &&
-        (subtree.has(element.id) ||
-          (isTextElement(element) &&
-            element.containerId &&
-            subtree.has(element.containerId)))
+        !element.isDeleted && subtree.has(element.id)
           ? { ...element, x: element.x + dx, y: element.y + dy }
           : element,
       );
@@ -514,11 +483,8 @@ export const applyMindmapOperation = (
     case "deleteSubtree": {
       const graph = input.filter(
         (element) =>
-          ((isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
-            element.graphId === node.graphId) ||
-          (isTextElement(element) &&
-            element.containerId &&
-            index.nodes.has(element.containerId)),
+          (isMindmapNodeElement(element) || isMindmapEdgeElement(element)) &&
+          element.graphId === node.graphId,
       );
       const result = applyMindmapTreeCommand(graph, node.id, {
         type: "delete",

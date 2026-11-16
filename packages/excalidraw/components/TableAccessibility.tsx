@@ -1,7 +1,9 @@
 import React from "react";
 
 import {
+  cellKey,
   getIndexedTableCellChildren,
+  getTextBlock,
   getVisibleTableCell,
   isTableElement,
 } from "@excalidraw/element";
@@ -41,12 +43,7 @@ export const TableAccessibility = ({ app, appState }: Props) => {
     element.id,
     cell.id,
   );
-  const backgroundText = children?.find(
-    (child) =>
-      child.type === "text" &&
-      child.containerRef?.kind === "tableCell" &&
-      child.containerRef.role === "backgroundText",
-  );
+  const cellText = getTextBlock(element.texts, cellKey(cell.id))?.text;
   const contentCount =
     children?.filter(
       (child) =>
@@ -59,9 +56,7 @@ export const TableAccessibility = ({ app, appState }: Props) => {
     (cell.rowSpan ?? 1) > 1 || (cell.columnSpan ?? 1) > 1
       ? `spans ${cell.rowSpan ?? 1} rows and ${cell.columnSpan ?? 1} columns`
       : null,
-    backgroundText?.type === "text" && backgroundText.text
-      ? backgroundText.text
-      : "empty background text",
+    cellText || "empty cell text",
     `${contentCount} shapes`,
   ]
     .filter(Boolean)

@@ -1,17 +1,17 @@
 import {
   getElementAbsoluteCoords,
   getContainingFrame,
+  getPrimaryTextRegion,
   getTableContentClipRects,
   hasBoundingBox,
-  hitElementBoundText,
+  hitElementLabel,
   hitElementBoundingBox,
   hitElementItself,
-  isArrowElement,
+  isLinearElement,
   isFrameLikeElement,
   isIframeLikeElement,
   isNonDeletedElement,
   isContainerBackgroundText,
-  isTextBindableContainer,
   isTextElement,
   isCursorInFrame,
   isTitledElement,
@@ -82,7 +82,7 @@ export const hitElement = (
     return true;
   }
 
-  if (hitElementBoundText(pointFrom(x, y), element, elementsMap)) {
+  if (hitElementLabel(pointFrom(x, y), element, elementsMap)) {
     return true;
   }
 
@@ -102,7 +102,6 @@ export const getElementsAtPosition = (
   x: number,
   y: number,
   opts?: {
-    includeBoundTextElement?: boolean;
     includeLockedElements?: boolean;
   },
 ): NonDeleted<ExcalidrawElement>[] => {
@@ -110,18 +109,13 @@ export const getElementsAtPosition = (
   const elementsMap = app.scene.getNonDeletedElementsMap();
   const hiddenMindmapElementIds = app.scene.getMindmapHiddenElementIds();
 
-  const elements = (
-    opts?.includeBoundTextElement && opts?.includeLockedElements
-      ? app.scene.getNonDeletedElements()
-      : app.scene
-          .getNonDeletedElements()
-          .filter(
-            (element) =>
-              (opts?.includeLockedElements || !element.locked) &&
-              (opts?.includeBoundTextElement ||
-                !(isTextElement(element) && element.containerId)),
-          )
-  )
+  const candidates = opts?.includeLockedElements
+    ? app.scene.getNonDeletedElements()
+    : app.scene
+        .getNonDeletedElements()
+        .filter((element) => !element.locked);
+
+  const elements = candidates
     .filter(
       (element) =>
         // a cell's background text is lowest-layer chrome: it never blocks
@@ -173,6 +167,10 @@ export const getElementsAtPosition = (
   return elements;
 };
 
+/** 通过区域文本编辑进入的元素（形状家族、便签、脑图节点、表格、片段、生命线、线性元素）。 */
+const isRegionTextContainer = (element: ExcalidrawElement) =>
+  isLinearElement(element) || getPrimaryTextRegion(element) !== null;
+
 export const getElementAtPosition = (
   app: HitTestApp,
   x: number,
@@ -180,7 +178,6 @@ export const getElementAtPosition = (
   opts?:
     | (
         | {
-            includeBoundTextElement?: boolean;
             includeLockedElements?: boolean;
           }
         | { allHitElements: NonDeleted<ExcalidrawElement>[] }
@@ -192,7 +189,6 @@ export const getElementAtPosition = (
     opts && "allHitElements" in opts
       ? opts.allHitElements || []
       : getElementsAtPosition(app, x, y, {
-          includeBoundTextElement: opts?.includeBoundTextElement,
           includeLockedElements: opts?.includeLockedElements,
         });
 
@@ -228,7 +224,8 @@ export const getTextBindableContainerAtPosition = (
   const elements = app.scene.getNonDeletedElements();
   const selectedElements = app.scene.getSelectedElements(app.state);
   if (selectedElements.length === 1) {
-    return isTextBindableContainer(selectedElements[0], false)
+    return isRegionTextContainer(selectedElements[0]) &&
+      !selectedElements[0].locked
       ? selectedElements[0]
       : null;
   }
@@ -244,13 +241,18 @@ export const getTextBindableContainerAtPosition = (
       app.scene.getNonDeletedElementsMap(),
     );
     if (
-      isArrowElement(element) &&
-      hitElementItself({
+      isLinearElement(element) &&
+      (hitElementItself({
         point: pointFrom(x, y),
         element,
         elementsMap: app.scene.getNonDeletedElementsMap(),
         threshold: getElementHitThreshold(app, element),
-      })
+      }) ||
+        hitElementLabel(
+          pointFrom(x, y),
+          element,
+          app.scene.getNonDeletedElementsMap(),
+        ))
     ) {
       hitElement = element;
       break;
@@ -263,5 +265,7 @@ export const getTextBindableContainerAtPosition = (
     }
   }
 
-  return isTextBindableContainer(hitElement, false) ? hitElement : null;
+  return hitElement && isRegionTextContainer(hitElement) && !hitElement.locked
+    ? hitElement
+    : null;
 };

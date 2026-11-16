@@ -51,20 +51,12 @@ import type {
 import { getElementAbsoluteCoords, getElementBounds } from "./bounds";
 import { getUncroppedImageElement } from "./cropElement";
 import { LinearElementEditor } from "./linearElementEditor";
-import {
-  getBoundTextElement,
-  getContainerCoords,
-  getContainerElement,
-  getBoundTextMaxHeight,
-  getBoundTextMaxWidth,
-} from "./textElement";
 import { getLineHeightInPx } from "./textMeasurements";
 import {
   isTextElement,
   isLinearElement,
   isFreeDrawElement,
   isInitializedImageElement,
-  hasBoundTextElement,
   isMagicFrameElement,
   isFrameLikeElement,
   isImageElement,
@@ -72,6 +64,13 @@ import {
 } from "./typeChecks";
 import { getContainingFrame } from "./frame";
 import { getTableContentClipRects } from "./tableContainer";
+import {
+  getTextElementDisplayText,
+  getTextElementStyle,
+  layoutTextRegions,
+} from "./text";
+
+import type { TextBlockStyle } from "./text/types";
 import { getCornerRadius } from "./utils";
 
 import { ShapeCache } from "./shape";
@@ -93,7 +92,6 @@ import type {
   ExcalidrawFreeDrawElement,
   ExcalidrawImageElement,
   ExcalidrawStickyNoteElement,
-  ExcalidrawTextElementWithContainer,
   NonDeletedSceneElementsMap,
   ElementsMap,
 } from "./types";
@@ -112,7 +110,7 @@ const getCanvasPadding = (element: ExcalidrawElement) => {
     case "freedraw":
       return element.strokeWidth * 12;
     case "text":
-      return element.fontSize / 2;
+      return getTextElementStyle(element).fontSize / 2;
     case "arrow":
       if (element.endArrowhead || element.endArrowhead) {
         return 40;
@@ -159,16 +157,12 @@ const renderDebugTextElementBounds = (
   context.restore();
 };
 
-/** Bound labels follow their container; a label's own offset is ignored. */
 export const getElementRenderOffset = (
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
   overrides: ElementRenderOverrides | undefined,
 ): RenderPositionOffset | undefined => {
-  const container = isTextElement(element)
-    ? getContainerElement(element, elementsMap)
-    : null;
-  return overrides?.get((container ?? element).id)?.offset;
+  return overrides?.get(element.id)?.offset;
 };
 
 export const getRenderElementWithPositionOverride = <
@@ -368,14 +362,7 @@ const generateElementCanvas = (
 
   const rc = rough.canvas(canvas);
 
-  drawElementOnCanvas(
-    element,
-    rc,
-    context,
-    renderConfig,
-    isTextElement(element) ? getContainerElement(element, elementsMap) : null,
-    derivedFontWeight,
-  );
+  drawElementOnCanvas(element, rc, context, renderConfig, derivedFontWeight);
 
   context.restore();
 
@@ -534,7 +521,7 @@ const isStickyNoteLifted = (
 
 /** Returns the content-box offset for a text element's vertical alignment. */
 export const getTextVerticalOffset = (
-  verticalAlign: ExcalidrawTextElement["verticalAlign"],
+  verticalAlign: TextBlockStyle["verticalAlign"],
   boxHeight: number,
   lineCount: number,
   lineHeightPx: number,
@@ -549,14 +536,111 @@ export const getTextVerticalOffset = (
   return 0;
 };
 
+/**
+ * 在场景坐标下绘制元素自身的文本区域：先在元素局部坐标里布局，
+ * 再把画布变换到元素的「左上角为原点、绕中心旋转」的局部坐标系。
+ * 区域内对齐（verticalAlign 与水平对齐）已包含在布局里，这里只补基线偏移。
+ */
+const drawTextRegions = (
+  element: NonDeletedExcalidrawElement,
+  elementsMap: NonDeletedSceneElementsMap,
+  context: CanvasRenderingContext2D,
+  renderConfig: StaticCanvasRenderConfig,
+  appState: StaticCanvasAppState | InteractiveCanvasAppState,
+  renderState: ElementRenderState,
+) => {
+  const editingRegion =
+    appState.editingTextRegion?.target.elementId === element.id
+      ? appState.editingTextRegion.target.region
+      : null;
+
+  // 没有标签文本的线性元素无需求解路径锚点
+  if (isLinearElement(element) && !element.texts?.label?.text) {
+    return;
+  }
+
+  const layouts = layoutTextRegions(element, { elementsMap }).filter(
+    (layout) => layout.text !== "" && layout.key !== editingRegion,
+  );
+
+  if (!layouts.length) {
+    return;
+  }
+
+  // 缓存位图的绘制路径已把偏移预先算进坐标，场景路径则没有。
+  const offsetAlreadyApplied =
+    renderConfig.isExporting ||
+    isFrameLikeElement(element) ||
+    isTableElement(element);
+  const ox =
+    appState.scrollX + (offsetAlreadyApplied ? 0 : renderState.offset.x);
+  const oy =
+    appState.scrollY + (offsetAlreadyApplied ? 0 : renderState.offset.y);
+
+  for (const layout of layouts) {
+    const rtl = isRTL(layout.text);
+    const shouldTemporarilyAttach = rtl && !context.canvas.isConnected;
+    if (shouldTemporarilyAttach) {
+      // RTL 与 LTR 混排时，canvas 必须在 DOM 中才能正确决定方向
+      context.canvas.ownerDocument.body?.appendChild(context.canvas);
+    }
+    context.canvas.setAttribute("dir", rtl ? "rtl" : "ltr");
+
+    context.save();
+
+    // 区域自带角度：普通区域跟随元素，沿路径标签始终水平
+    context.translate(
+      layout.x + layout.width / 2 + ox,
+      layout.y + layout.height / 2 + oy,
+    );
+    context.rotate(layout.angle);
+    context.translate(-layout.width / 2, -layout.height / 2);
+
+    const lineHeightPx = getLineHeightInPx(layout.fontSize, layout.lineHeight);
+    context.font = getFontString({
+      fontSize: layout.fontSize,
+      fontFamily: layout.fontFamily,
+      fontWeight: layout.fontWeight,
+    });
+    context.fillStyle = applyDarkModeFilter(
+      layout.color,
+      renderConfig.theme === THEME.DARK,
+    );
+    context.textAlign = layout.textAlign as CanvasTextAlign;
+
+    const horizontalOffset =
+      layout.textAlign === "center"
+        ? layout.width / 2
+        : layout.textAlign === "right"
+        ? layout.width
+        : 0;
+    const baselineOffset = getVerticalOffset(
+      layout.fontFamily,
+      layout.fontSize,
+      lineHeightPx,
+    );
+
+    for (let index = 0; index < layout.lines.length; index++) {
+      context.fillText(
+        layout.lines[index],
+        horizontalOffset,
+        index * lineHeightPx + baselineOffset,
+      );
+    }
+
+    context.restore();
+
+    if (shouldTemporarilyAttach) {
+      context.canvas.remove();
+    }
+  }
+};
+
 const drawElementOnCanvas = (
   element: NonDeletedExcalidrawElement,
   rc: RoughCanvas,
   context: CanvasRenderingContext2D,
   renderConfig: StaticCanvasRenderConfig,
-  // the container a text element is bound to (null for free text). Used only
-  // to restyle arrow labels at draw time without mutating element data.
-  boundContainerElement: ExcalidrawElement | null = null,
   // the weight a table cell's background text derives from its owning table
   // (header band) — null/undefined keeps the element's own `fontWeight`
   resolvedFontWeight: number | null = null,
@@ -616,6 +700,7 @@ const drawElementOnCanvas = (
       } else {
         rc.draw(shapes);
       }
+
       break;
     }
     case "arrow":
@@ -761,7 +846,9 @@ const drawElementOnCanvas = (
     }
     default: {
       if (isTextElement(element)) {
-        const rtl = isRTL(element.text);
+        const style = getTextElementStyle(element);
+        const displayText = getTextElementDisplayText(element);
+        const rtl = isRTL(displayText);
         const shouldTemporarilyAttach = rtl && !context.canvas.isConnected;
         if (shouldTemporarilyAttach) {
           // to correctly render RTL text mixed with LTR, we have to append it
@@ -770,48 +857,40 @@ const drawElementOnCanvas = (
         }
         context.canvas.setAttribute("dir", rtl ? "rtl" : "ltr");
         context.save();
-        // arrow labels render at a smaller, dimmer size than free or
-        // shape-bound text (design spec). Applied render-only here, so the
-        // element's own fontSize/width/height are never mutated.
-        const isArrowLabel = isLinearElement(boundContainerElement);
-        const fontSize = isArrowLabel
-          ? ARROW_LABEL_FONT_SIZE
-          : element.fontSize;
         context.font = getFontString({
-          fontSize,
-          fontFamily: element.fontFamily,
-          fontWeight: resolvedFontWeight ?? element.fontWeight,
+          fontSize: style.fontSize,
+          fontFamily: style.fontFamily,
+          fontWeight: resolvedFontWeight ?? style.fontWeight,
         });
         context.fillStyle = applyDarkModeFilter(
           element.strokeColor,
           renderConfig.theme === THEME.DARK,
         );
-        if (isArrowLabel) {
-          // multiply (not set) so an already-faded label — erase/selection —
-          // stays faded rather than snapping back to full opacity
-          context.globalAlpha *= ARROW_LABEL_ALPHA;
-        }
-        context.textAlign = element.textAlign as CanvasTextAlign;
+        context.textAlign = style.textAlign as CanvasTextAlign;
 
         // Canvas does not support multiline text by default
-        const lines = element.text.replace(/\r\n?/g, "\n").split("\n");
+        const lines = displayText.replace(/\r\n?/g, "\n").split("\n");
 
         const horizontalOffset =
-          element.textAlign === "center"
+          style.textAlign === "center"
             ? element.width / 2
-            : element.textAlign === "right"
+            : style.textAlign === "right"
             ? element.width
             : 0;
 
-        const lineHeightPx = getLineHeightInPx(fontSize, element.lineHeight);
+        const lineHeightPx = getLineHeightInPx(
+          style.fontSize,
+          style.lineHeight,
+        );
 
         const verticalOffset =
           getTextVerticalOffset(
-            element.verticalAlign,
+            style.verticalAlign,
             element.height,
             lines.length,
             lineHeightPx,
-          ) + getVerticalOffset(element.fontFamily, fontSize, lineHeightPx);
+          ) +
+          getVerticalOffset(style.fontFamily, style.fontSize, lineHeightPx);
 
         for (let index = 0; index < lines.length; index++) {
           context.fillText(
@@ -929,10 +1008,6 @@ const SNAP_TIE_BIAS = 1e-6;
 const LABEL_HPAD = 8;
 const LABEL_CORNER_RADIUS = 4;
 
-/** arrow-label text renders smaller and dimmer than other bound text */
-const ARROW_LABEL_FONT_SIZE = 12;
-const ARROW_LABEL_ALPHA = 0.85;
-
 /**
  * Trace the axis-aligned label hole: rounded where the canvas supports it,
  * otherwise a plain rect. `CanvasRenderingContext2D.roundRect` is optional in
@@ -975,39 +1050,31 @@ const drawElementFromCanvas = (
   context.save();
   context.scale(1 / devicePixelRatio, 1 / devicePixelRatio);
 
-  const boundTextElement = getBoundTextElement(element, allElementsMap);
+  const labelLayout = isLinearElement(element)
+    ? LinearElementEditor.getLabelSceneLayout(element, allElementsMap)
+    : null;
 
-  if (isLinearElement(element) && boundTextElement) {
+  if (isLinearElement(element) && labelLayout?.text) {
     // punch the label "hole" by clipping the arrow's blit out of the label
     // rect (even-odd) instead of baking a rotated arrow copy with a cleared
     // hole into a separate (`maxDim`-squared!) canvas. The hole stays
     // axis-aligned in scene space while the blit below rotates.
-    const [, , , , boundTextCx, boundTextCy] = getElementAbsoluteCoords(
-      boundTextElement,
-      allElementsMap,
-    );
     // generously covers the arrow's blit at any rotation
     const outerHalf =
       Math.max(distance(x1, x2), distance(y1, y2)) * devicePixelRatio +
       padding * 10;
     const holeX =
-      (boundTextCx -
-        boundTextElement.width / 2 -
-        LABEL_HPAD +
-        positionOffset.x +
-        appState.scrollX) *
+      (labelLayout.x - LABEL_HPAD + positionOffset.x + appState.scrollX) *
       devicePixelRatio;
     const holeY =
-      (boundTextCy -
-        boundTextElement.height / 2 -
+      (labelLayout.y -
         BOUND_TEXT_PADDING +
         positionOffset.y +
         appState.scrollY) *
       devicePixelRatio;
-    const holeWidth =
-      (boundTextElement.width + LABEL_HPAD * 2) * devicePixelRatio;
+    const holeWidth = (labelLayout.width + LABEL_HPAD * 2) * devicePixelRatio;
     const holeHeight =
-      (boundTextElement.height + BOUND_TEXT_PADDING * 2) * devicePixelRatio;
+      (labelLayout.height + BOUND_TEXT_PADDING * 2) * devicePixelRatio;
 
     // even-odd clip the arrow's blit out of the rounded label hole
     context.beginPath();
@@ -1067,39 +1134,14 @@ const drawElementFromCanvas = (
     // matrix. Rounding `drawX` itself only lands on device pixels at 100%
     // zoom.
     const { a, b, c, d, e, f } = transform;
-    const container = isTextElement(element)
-      ? getContainerElement(element, allElementsMap)
-      : null;
-    // A bound label shares its unrotated container's offset and anchor.
-    // Other bitmaps anchor to themselves.
-    const anchor = container && !container.angle ? container : element;
-    const anchorCoords =
-      anchor === element
-        ? null
-        : getElementAbsoluteCoords(anchor, allElementsMap);
-    const anchorSceneX = anchorCoords?.[0] ?? x1;
-    const anchorSceneY = anchorCoords?.[1] ?? y1;
-    const anchorPadding =
-      anchor === element ? padding : getCanvasPadding(anchor);
-    const anchorX =
-      (anchorSceneX + positionOffset.x + appState.scrollX) * devicePixelRatio -
-      anchorPadding;
-    const anchorY =
-      (anchorSceneY + positionOffset.y + appState.scrollY) * devicePixelRatio -
-      anchorPadding;
-
-    // Form the relative vector before introducing the scroll translation.
-    const dx = (x1 - anchorSceneX) * devicePixelRatio + anchorPadding - padding;
-    const dy = (y1 - anchorSceneY) * devicePixelRatio + anchorPadding - padding;
+    // 位图以元素自身为锚点；旋转与镜像都留在 a–d 中。
     context.setTransform(
       a,
       b,
       c,
       d,
-      Math.round(a * anchorX + c * anchorY + e) +
-        Math.round(a * dx + c * dy + SNAP_TIE_BIAS),
-      Math.round(b * anchorX + d * anchorY + f) +
-        Math.round(b * dx + d * dy + SNAP_TIE_BIAS),
+      Math.round(a * drawX + c * drawY + e) + SNAP_TIE_BIAS,
+      Math.round(b * drawX + d * drawY + f) + SNAP_TIE_BIAS,
     );
     drawX = 0;
     drawY = 0;
@@ -1115,25 +1157,6 @@ const drawElementFromCanvas = (
 
   context.setTransform(transform);
 
-  if (
-    import.meta.env.VITE_APP_DEBUG_ENABLE_TEXT_CONTAINER_BOUNDING_BOX ===
-      "true" &&
-    hasBoundTextElement(element)
-  ) {
-    const textElement = getBoundTextElement(
-      element,
-      allElementsMap,
-    ) as ExcalidrawTextElementWithContainer;
-    const coords = getContainerCoords(element);
-    context.strokeStyle = "#c92a2a";
-    context.lineWidth = 3;
-    context.strokeRect(
-      (coords.x + positionOffset.x + appState.scrollX) * devicePixelRatio,
-      (coords.y + positionOffset.y + appState.scrollY) * devicePixelRatio,
-      getBoundTextMaxWidth(element, textElement) * devicePixelRatio,
-      getBoundTextMaxHeight(element, textElement) * devicePixelRatio,
-    );
-  }
   context.restore();
 
   // Clear the nested element we appended to the DOM
@@ -1216,6 +1239,16 @@ export const renderElement = (
       elementsMap,
       allElementsMap,
       rc,
+      context,
+      renderConfig,
+      appState,
+      renderState,
+    );
+    // 区域文本在场景坐标绘制，以便按 editingTextRegion 单独隐藏，
+    // 仍处于元素的 alpha 与 frame/table 裁剪之内
+    drawTextRegions(
+      element,
+      allElementsMap,
       context,
       renderConfig,
       appState,
@@ -1368,25 +1401,15 @@ const drawElement = (
         const cy = centerY + appState.scrollY;
         let shiftX = (x2 - x1) / 2 - (element.x - x1);
         let shiftY = (y2 - y1) / 2 - (element.y - y1);
-        if (isTextElement(element)) {
-          const container = getContainerElement(element, elementsMap);
-          if (isLinearElement(container)) {
-            const boundTextCoords =
-              LinearElementEditor.getBoundTextElementPosition(
-                container,
-                element as ExcalidrawTextElementWithContainer,
-                elementsMap,
-              );
-            shiftX = (x2 - x1) / 2 - (boundTextCoords.x - x1);
-            shiftY = (y2 - y1) / 2 - (boundTextCoords.y - y1);
-          }
-        }
+
         context.save();
         context.translate(cx, cy);
 
-        const boundTextElement = getBoundTextElement(element, elementsMap);
+        const labelLayout = isLinearElement(element)
+          ? LinearElementEditor.getLabelSceneLayout(element, elementsMap)
+          : null;
 
-        if (isLinearElement(element) && boundTextElement) {
+        if (isLinearElement(element) && labelLayout?.text) {
           // Draw arrow directly as vector (no temp-canvas bitmap blit which
           // introduces resampling blur). The label "hole" is cut by clipping
           // the arrow's own strokes out of the label rect (even-odd clip)
@@ -1395,19 +1418,10 @@ const drawElement = (
           shiftX = element.width / 2 - (element.x - x1);
           shiftY = element.height / 2 - (element.y - y1);
 
-          const [, , , , boundTextCx, boundTextCy] = getElementAbsoluteCoords(
-            boundTextElement,
-            elementsMap,
-          );
-          const holeX =
-            boundTextCx - centerX - boundTextElement.width / 2 - LABEL_HPAD;
-          const holeY =
-            boundTextCy -
-            centerY -
-            boundTextElement.height / 2 -
-            BOUND_TEXT_PADDING;
-          const holeWidth = boundTextElement.width + LABEL_HPAD * 2;
-          const holeHeight = boundTextElement.height + BOUND_TEXT_PADDING * 2;
+          const holeX = labelLayout.x - centerX - LABEL_HPAD;
+          const holeY = labelLayout.y - centerY - BOUND_TEXT_PADDING;
+          const holeWidth = labelLayout.width + LABEL_HPAD * 2;
+          const holeHeight = labelLayout.height + BOUND_TEXT_PADDING * 2;
 
           // generously covers the arrow's painted extent at any rotation
           // (the hole rect stays axis-aligned in scene space)
@@ -1446,9 +1460,6 @@ const drawElement = (
             rc,
             context,
             renderConfig,
-            isTextElement(element)
-              ? getContainerElement(element, allElementsMap)
-              : null,
             isTextElement(element)
               ? resolveTableBackgroundTextFontWeight(element, allElementsMap) ??
                   null

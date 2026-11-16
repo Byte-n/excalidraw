@@ -280,9 +280,7 @@ const resolveMindmapBase = (
   if (typeof app.getElementAtPosition !== "function") {
     return { kind: "canvas" };
   }
-  const hit = app.getElementAtPosition(input.point[0], input.point[1], {
-    includeBoundTextElement: true,
-  });
+  const hit = app.getElementAtPosition(input.point[0], input.point[1]);
   if (!hit || hit.locked) {
     return { kind: "canvas" };
   }

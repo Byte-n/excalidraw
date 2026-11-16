@@ -3,10 +3,13 @@ import { KEYS } from "@excalidraw/common";
 import {
   distanceToElement,
   getGlobalAttachPointForBindableElement,
+  getTextElementStyle,
+  getTextElementText,
   isTextElement,
 } from "@excalidraw/element";
 
 import { pointFrom } from "@excalidraw/math";
+import { DEFAULT_FONT_FAMILY, getLineHeight } from "@excalidraw/common";
 
 import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
 import type {
@@ -133,19 +136,30 @@ describe("binding text to an arrow endpoint", () => {
       UI.clickTool("text");
       mouse.moveTo(100, 100);
 
-      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor?.anchor).toBe("end");
+      expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor?.anchor).toBe(
+        "end",
+      );
     });
 
     it("does not offer a label midpoint on an arrow that already has one", () => {
       const arrow = createArrow("arrow", [100, 300], [100, 100]);
-      const label = API.createElement({
-        type: "text",
-        containerId: arrow.id,
-        text: "existing",
-      });
       API.setElements([
-        { ...arrow, boundElements: [{ id: label.id, type: "text" }] },
-        label,
+        {
+          ...arrow,
+          texts: {
+            label: {
+              text: "existing",
+              style: {
+                fontFamily: DEFAULT_FONT_FAMILY,
+                fontSize: 20,
+                lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+                textAlign: "center",
+                verticalAlign: "middle",
+              },
+              placement: { labelPosition: 0.5 },
+            },
+          },
+        },
       ]);
 
       UI.clickTool("text");
@@ -269,7 +283,7 @@ describe("binding text to an arrow endpoint", () => {
 
       expect(getArrow("arrow").endBinding).toBeNull();
       expect(getArrow("arrow").startBinding).toBeNull();
-      expect(getText().containerId).toBeNull();
+      expect(getText().type).toBe("text");
     });
 
     it("does not highlight an endpoint that is already bound", () => {
@@ -360,9 +374,8 @@ describe("binding text to an arrow endpoint", () => {
         elementId: text.id,
         attachPoint,
       });
-      expect(text.textAlign).toBe(textAlign);
-      expect(text.verticalAlign).toBe(verticalAlign);
-      expect(text.containerId).toBeNull();
+      expect(getTextElementStyle(text).textAlign).toBe(textAlign);
+      expect(getTextElementStyle(text).verticalAlign).toBe(verticalAlign);
       expect(text.boundElements).toEqual([{ id: "arrow", type: "arrow" }]);
     });
 
@@ -378,7 +391,7 @@ describe("binding text to an arrow endpoint", () => {
       expect(arrow.endBinding).toBeNull();
       // the arrow leaves the tip heading right, so the text sits to its left
       expect(arrow.startBinding?.attachPoint).toEqual([1, 0.5001]);
-      expect(text.textAlign).toBe("right");
+      expect(getTextElementStyle(text).textAlign).toBe("right");
     });
   });
 
@@ -613,7 +626,7 @@ describe("binding text to an arrow endpoint", () => {
 
       const text = getText();
       expect(text.autoResize).toBe(false);
-      expect(text.textAlign).toBe("left");
+      expect(getTextElementStyle(text).textAlign).toBe("left");
       // left edge is the anchor and must be untouched by the drag
       expect(text.x).toBeCloseTo(300, 0);
       expect(text.width).toBeCloseTo(220, 0);
@@ -626,7 +639,7 @@ describe("binding text to an arrow endpoint", () => {
 
       const text = getText();
       expect(text.autoResize).toBe(false);
-      expect(text.textAlign).toBe("right");
+      expect(getTextElementStyle(text).textAlign).toBe("right");
       // 右边缘就是锚点（= 尖端）
       expect(text.x + text.width).toBeCloseTo(300, 0);
     });
@@ -638,7 +651,7 @@ describe("binding text to an arrow endpoint", () => {
 
       const text = getText();
       expect(text.autoResize).toBe(false);
-      expect(text.textAlign).toBe("center");
+      expect(getTextElementStyle(text).textAlign).toBe("center");
       expect(text.x + text.width / 2).toBeCloseTo(300, 0);
     });
 
@@ -759,10 +772,21 @@ describe("binding text to an arrow endpoint", () => {
       mouse.moveTo(100, 100);
       expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
 
-      // the click belongs to the rect, as it would without the arrow there
+      // the click belongs to the rect: it opens the rect's body editor instead
+      // of touching the arrow's endpoint
       await bindTextAt(100, 100, "label");
       expect(getArrow("arrow").endBinding).toBeNull();
-      expect(getText().containerId).toBe("rect");
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: "rect",
+        region: "body",
+      });
+
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
+      const rect = h.elements.find((element) => element.id === "rect")!;
+      expect((rect as any).texts?.body?.text).toBe("label");
+      expect(h.elements.some((element) => element.type === "text")).toBe(false);
     });
 
     it("still offers the endpoint when the arrow is stacked above", () => {
@@ -842,7 +866,7 @@ describe("binding text to an arrow endpoint", () => {
 
       const text = h.elements.find((el) => el.id === textId)!;
       expect(text.isDeleted).toBe(false);
-      expect(isTextElement(text) && text.text).toBe("bound");
+      expect(isTextElement(text) && getTextElementText(text)).toBe("bound");
       expect(arrow().endBinding?.elementId).toBe(textId);
     });
   });
@@ -851,20 +875,27 @@ describe("binding text to an arrow endpoint", () => {
     it("adds a label to the arrow when clicking away from the endpoints", async () => {
       API.setElements([createArrow("arrow", [100, 100], [500, 100])]);
 
-      await bindTextAt(300, 100, "label");
+      const editor = await bindTextAt(300, 100, "label");
+      updateTextEditor(editor, "label");
+      act(() => {
+        h.app.textWysiwygSubmitHandler?.();
+      });
 
-      const text = getText();
+      const arrow = getArrow("arrow");
       // mid-arrow click is still the "arrow label" gesture
-      expect(text.containerId).toBe("arrow");
-      expect(getArrow("arrow").endBinding).toBeNull();
-      expect(getArrow("arrow").startBinding).toBeNull();
+      expect(arrow.texts?.label?.text).toBe("label");
+      expect(
+        h.elements.filter((element) => element.type === "text"),
+      ).toHaveLength(0);
+      expect(arrow.endBinding).toBeNull();
+      expect(arrow.startBinding).toBeNull();
     });
 
     // the text tool edits before it creates: a text that is the top-most hit
     // under the cursor takes the click, so the endpoint must not be offered
     // over it. Occlusion alone can't provide this — its hit test skips bound
     // texts.
-    it("yields to a container-bound label overlapping the endpoint", async () => {
+    it("yields to a container body overlapping the endpoint", async () => {
       const rect = API.createElement({
         type: "rectangle",
         id: "rect",
@@ -874,31 +905,32 @@ describe("binding text to an arrow endpoint", () => {
         height: 80,
         // transparent, so the rect itself doesn't occlude the endpoint
         backgroundColor: "transparent",
+        texts: {
+          body: {
+            text: "under",
+            style: {
+              fontFamily: 1,
+              fontSize: 20,
+              lineHeight: 1.25,
+              textAlign: "center",
+              verticalAlign: "middle",
+            } as any,
+          },
+        },
       });
-      const label = API.createElement({
-        type: "text",
-        id: "label",
-        containerId: rect.id,
-        text: "under",
-        x: 75,
-        y: 87.5,
-        width: 50,
-        height: 25,
-      });
-      API.setElements([
-        createArrow("arrow", [100, 300], [100, 100]),
-        { ...rect, boundElements: [{ id: label.id, type: "text" }] },
-        label,
-      ]);
+      API.setElements([createArrow("arrow", [100, 300], [100, 100]), rect]);
 
       UI.clickTool("text");
       mouse.moveTo(100, 100);
       expect(h.app.pointer.getHoverSnapshot().arrowTextAnchor).toBeNull();
 
-      // the click edits the label rather than binding the endpoint under it
+      // the click edits the container body rather than binding the endpoint
       mouse.clickAt(100, 100);
       await getTextEditor();
-      expect(h.state.editingTextElement?.id).toBe("label");
+      expect(h.state.editingTextRegion?.target).toEqual({
+        elementId: rect.id,
+        region: "body",
+      });
       expect(getArrow("arrow").endBinding).toBeNull();
     });
 
@@ -926,7 +958,9 @@ describe("binding text to an arrow endpoint", () => {
       expect(boundTextId).not.toBe("faraway");
 
       const faraway = h.elements.find((el) => el.id === "faraway")!;
-      expect(isTextElement(faraway) && faraway.text).toBe("faraway");
+      expect(isTextElement(faraway) && getTextElementText(faraway)).toBe(
+        "faraway",
+      );
       expect(faraway.boundElements ?? []).toHaveLength(0);
     });
 
@@ -962,7 +996,7 @@ describe("binding text to an arrow endpoint", () => {
       expect(boundTextId).not.toBe("under");
 
       const under = h.elements.find((el) => el.id === "under")!;
-      expect(isTextElement(under) && under.text).toBe("under");
+      expect(isTextElement(under) && getTextElementText(under)).toBe("under");
       expect(under.boundElements ?? []).toHaveLength(0);
     });
 

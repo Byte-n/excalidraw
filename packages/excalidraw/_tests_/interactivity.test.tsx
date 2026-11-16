@@ -500,14 +500,22 @@ describe("toggling `interaction` at runtime", () => {
       expect(queryContainer(".excalidraw-wysiwyg")).toBe(null);
     });
     expect(h.elements.find((element) => element.id === text.id)).toMatchObject({
-      originalText: "committed before disable",
+      texts: expect.objectContaining({
+        body: expect.objectContaining({
+          text: "committed before disable",
+        }),
+      }),
     });
 
     // The detached editor must no longer have a live input listener.
     editor.value = "changed after disable";
     fireEvent.input(editor);
     expect(h.elements.find((element) => element.id === text.id)).toMatchObject({
-      originalText: "committed before disable",
+      texts: expect.objectContaining({
+        body: expect.objectContaining({
+          text: "committed before disable",
+        }),
+      }),
     });
   });
 

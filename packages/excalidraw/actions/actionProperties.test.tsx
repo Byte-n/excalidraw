@@ -7,12 +7,22 @@ import {
   FREEDRAW_STROKE_WIDTH,
   FONT_FAMILY,
   STROKE_WIDTH,
+  getLineHeight,
 } from "@excalidraw/common";
+
+import type { TextBlockStyle } from "@excalidraw/element";
 
 import { Excalidraw } from "../index";
 import { API } from "../_tests_/helpers/api";
 import { UI } from "../_tests_/helpers/ui";
-import { render } from "../_tests_/test-utils";
+import { act, render } from "../_tests_/test-utils";
+
+import {
+  actionChangeFontFamily,
+  actionChangeFontSize,
+} from "./actionProperties";
+
+const { h } = window;
 
 // T3 起桌面/平板为浮动栏：填充/描边宽度/样式等在「样式」弹层，
 // 字号/对齐在「文字属性」弹层（radix 弹层需要 ResizeObserver 桩）
@@ -297,5 +307,125 @@ describe("element locking", () => {
           ?.className,
       ).toContain("dropdown-menu-item--selected");
     });
+  });
+});
+
+describe("embedded body text styles", () => {
+  const BODY_STYLE: TextBlockStyle = {
+    fontFamily: FONT_FAMILY.Excalifont,
+    fontSize: 20,
+    lineHeight: getLineHeight(FONT_FAMILY.Excalifont),
+    textAlign: "center",
+    verticalAlign: "middle",
+  };
+
+  /** 正文已内嵌到元素的 composite 形状（rectangle），场景里没有 text 元素 */
+  const createShapeWithBody = ({
+    id,
+    x = 100,
+    y = 100,
+    width = 160,
+    height = 80,
+    fontSize = 20,
+    text = Array(3).fill("abcdefghij").join("\n"),
+  }: {
+    id: string;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    fontSize?: number;
+    text?: string;
+  }) => {
+    const element = API.createElement({
+      type: "rectangle",
+      id,
+      x,
+      y,
+      width,
+      height,
+    });
+    return {
+      ...element,
+      texts: {
+        body: {
+          text,
+          style: { ...BODY_STYLE, fontSize },
+        },
+      },
+    };
+  };
+
+  beforeEach(async () => {
+    await render(<Excalidraw />);
+  });
+
+  it("applies font size to texts.body and auto-fits the shape", () => {
+    const shape = createShapeWithBody({ id: "shape", fontSize: 20 });
+    API.setElements([shape]);
+    API.setSelectedElements([shape]);
+    const heightBefore = API.getElement(shape).height;
+
+    act(() => {
+      h.app.actionManager.executeAction(actionChangeFontSize, "ui", 40);
+    });
+
+    const live = API.getElement(shape) as typeof shape;
+    expect(live.texts?.body?.style.fontSize).toBe(40);
+    expect(live.height).toBeGreaterThan(heightBefore);
+    expect(h.elements.some((element) => element.type === "text")).toBe(false);
+  });
+
+  it("applies font family to texts.body and updates line height", () => {
+    const shape = createShapeWithBody({ id: "shape" });
+    API.setElements([shape]);
+    API.setSelectedElements([shape]);
+
+    act(() => {
+      h.app.actionManager.executeAction(actionChangeFontFamily, "ui", {
+        currentItemFontFamily: FONT_FAMILY.Nunito,
+        currentHoveredFontFamily: null,
+      });
+    });
+
+    const live = API.getElement(shape) as typeof shape;
+    expect(live.texts?.body?.style.fontFamily).toBe(FONT_FAMILY.Nunito);
+    expect(live.texts?.body?.style.lineHeight).toBe(
+      getLineHeight(FONT_FAMILY.Nunito),
+    );
+  });
+
+  it("applies font size to every selected shape with a body", () => {
+    const first = createShapeWithBody({ id: "first" });
+    const second = createShapeWithBody({ id: "second", y: 300 });
+    API.setElements([first, second]);
+    API.setSelectedElements([first, second]);
+
+    act(() => {
+      h.app.actionManager.executeAction(actionChangeFontSize, "ui", 32);
+    });
+
+    expect(
+      (API.getElement(first) as typeof first).texts?.body?.style.fontSize,
+    ).toBe(32);
+    expect(
+      (API.getElement(second) as typeof second).texts?.body?.style.fontSize,
+    ).toBe(32);
+  });
+
+  it("does not create a body block when the shape has no text", () => {
+    const rect = API.createElement({ type: "rectangle", id: "empty" });
+    API.setElements([rect]);
+    API.setSelectedElements([rect]);
+
+    act(() => {
+      h.app.actionManager.executeAction(actionChangeFontSize, "ui", 36);
+    });
+
+    const live = API.getElement(rect) as typeof rect & {
+      texts?: unknown;
+    };
+    expect(live.texts).toBeUndefined();
+    expect(h.state.currentItemFontSize).toBe(36);
   });
 });

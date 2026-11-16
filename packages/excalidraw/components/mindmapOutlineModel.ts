@@ -1,6 +1,5 @@
 import {
   buildMindmapGraphIndex,
-  getBoundTextElement,
   isMindmapNodeElement,
 } from "@excalidraw/element";
 
@@ -22,7 +21,6 @@ export type MindmapOutlineGraph = {
 export const getMindmapOutlines = (
   elements: readonly NonDeletedExcalidrawElement[],
 ): MindmapOutlineGraph[] => {
-  const elementMap = new Map(elements.map((element) => [element.id, element]));
   const graphIds = new Set(
     elements.filter(isMindmapNodeElement).map((node) => node.graphId),
   );
@@ -31,8 +29,7 @@ export const getMindmapOutlines = (
     const labels = new Map(
       [...index.nodes.values()].map((node) => [
         node.id,
-        getBoundTextElement(node, elementMap)?.originalText ||
-          t("labels.mindmapUntitled"),
+        node.texts?.body?.text || t("labels.mindmapUntitled"),
       ]),
     );
     return {

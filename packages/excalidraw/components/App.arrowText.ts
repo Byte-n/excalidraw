@@ -3,11 +3,10 @@ import { CURSOR_TYPE, DRAGGING_THRESHOLD } from "@excalidraw/common";
 import {
   bindBindingElementToAttachPoint,
   dragNewTextElement,
-  getBoundTextElement,
   getEndpointBoundTextDragAnchor,
   getTextBindingForArrowEndpoint,
   getUnboundArrowEndpointAtPoint,
-  hitElementBoundText,
+  hitElementLabel,
   isArrowElement,
   isBindingEnabled,
   isEndpointBoundText,
@@ -153,10 +152,7 @@ export class AppArrowText {
     // Only arrows get a midpoint label anchor worth pointing at; other
     // containers center the text in themselves, which needs no affordance.
     // An arrow that already has a label is edited in place, not re-anchored.
-    if (
-      !isArrowElement(container) ||
-      getBoundTextElement(container, this.app.scene.getNonDeletedElementsMap())
-    ) {
+    if (!isArrowElement(container) || container.texts?.label?.text) {
       return null;
     }
 
@@ -171,7 +167,6 @@ export class AppArrowText {
       this.app.state,
       container,
     );
-
     return snappedToCenter
       ? { elementId: container.id, anchor: "label" }
       : null;
@@ -249,14 +244,14 @@ export class AppArrowText {
    * the pointer is over the label, and no element stacked above the arrow
    * owns the hit instead.
    */
-  isBoundTextGrabbable(
+  isLabelGrabbable(
     element: NonDeletedExcalidrawElement,
     x: number,
     y: number,
   ): boolean {
     if (
       !isArrowElement(element) ||
-      !hitElementBoundText(
+      !hitElementLabel(
         pointFrom(x, y),
         element,
         this.app.scene.getNonDeletedElementsMap(),
@@ -300,7 +295,7 @@ export class AppArrowText {
       ) >=
         DRAGGING_THRESHOLD / this.app.state.zoom.value
     ) {
-      const updatedEditor = LinearElementEditor.handleBoundTextDragging(
+      const updatedEditor = LinearElementEditor.handleLabelDragging(
         linearElementEditor,
         this.app.scene,
         pointerCoords.x,
@@ -325,25 +320,18 @@ export class AppArrowText {
   getLabelCenter(element: ExcalidrawElement): { x: number; y: number } | null {
     const elementsMap = this.app.scene.getNonDeletedElementsMap();
 
-    if (!isArrowElement(element)) {
+    if (!isArrowElement(element) || !element.texts?.label?.text) {
       return null;
     }
 
-    const boundTextElement = getBoundTextElement(element, elementsMap);
-
-    if (!boundTextElement) {
-      return null;
-    }
-
-    const { x, y } = LinearElementEditor.getBoundTextElementPosition(
+    const layout = LinearElementEditor.getLabelSceneLayout(
       element,
-      boundTextElement,
       elementsMap,
     );
 
     return {
-      x: x + boundTextElement.width / 2,
-      y: y + boundTextElement.height / 2,
+      x: layout.x + layout.width / 2,
+      y: layout.y + layout.height / 2,
     };
   }
 }

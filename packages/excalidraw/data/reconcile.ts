@@ -5,7 +5,6 @@ import { arrayToMap, isDevEnv, isTestEnv } from "@excalidraw/common";
 import {
   orderByFractionalIndex,
   buildMindmapGraphIndex,
-  computeBoundTextPosition,
   isMindmapEdgeElement,
   isMindmapNodeElement,
   layoutMindmap,
@@ -16,7 +15,6 @@ import {
 
 import type {
   ExcalidrawElement,
-  ExcalidrawTextElementWithContainer,
   OrderedExcalidrawElement,
 } from "@excalidraw/element/types";
 
@@ -78,7 +76,6 @@ const validateIndicesThrottled = throttle(
       validateFractionalIndices(elements, {
         // throw in dev & test only, to remain functional on `DEBUG_FRACTIONAL_INDICES`
         shouldThrow: isTestEnv() || isDevEnv(),
-        includeBoundTextValidation: true,
         reconciliationContext: {
           localElements,
           remoteElements,
@@ -167,7 +164,7 @@ const hasMindmapStructureChanged = (
 /**
  * Reconciles the complete Mindmap graphs touched by a remote update. Element
  * versions decide which fields win first; this pass then repairs the merged
- * graph and derives all edges, positions, and bound labels from that result.
+ * graph and derives all edges and positions from that result.
  * It never mutates the scene or records history.
  */
 export const reconcileMindmapElements = (
@@ -217,30 +214,6 @@ export const reconcileMindmapElements = (
       const layout = layoutMindmap(index);
       for (const element of [...layout.elements, ...layout.edges]) {
         updated.set(element.id, element);
-      }
-
-      for (const element of repaired) {
-        if (
-          !element.isDeleted &&
-          element.type === "text" &&
-          element.containerId
-        ) {
-          const container = updated.get(element.containerId);
-          if (
-            container &&
-            isMindmapNodeElement(container) &&
-            container.graphId === graphId
-          ) {
-            updated.set(element.id, {
-              ...element,
-              ...computeBoundTextPosition(
-                container,
-                element as ExcalidrawTextElementWithContainer,
-                updated,
-              ),
-            });
-          }
-        }
       }
     } catch {
       // A malformed remote graph must not prevent unrelated remote changes

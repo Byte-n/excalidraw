@@ -18,7 +18,6 @@ import {
 
 import {
   normalizeStickyNote,
-  hasBoundTextElement,
   canApplyRoundnessTypeToElement,
   getDefaultRoundnessTypeForElement,
   isFrameLikeElement,
@@ -26,18 +25,14 @@ import {
   isExcalidrawElement,
   getColorUpdate,
   isNonDeletedElement,
-  isStickyNoteBoundText,
   isStickyNoteElement,
   isTextElement,
-  getBaseFontSize,
-  getBaseFontSizeUpdate,
+  getTextElementStyle,
   relayoutStickyNotes,
   updateBoundElements,
 } from "@excalidraw/element";
 
 import {
-  getBoundTextElement,
-  redrawTextBoundingBox,
 } from "@excalidraw/element";
 
 import { CaptureUpdateAction } from "@excalidraw/element";
@@ -63,13 +58,6 @@ export const actionCopyStyles = register({
     const elementsCopied = [];
     const element = elements.find((el) => appState.selectedElementIds[el.id]);
     elementsCopied.push(element);
-    if (element && hasBoundTextElement(element)) {
-      const boundTextElement = getBoundTextElement(
-        element,
-        app.scene.getNonDeletedElementsMap(),
-      );
-      elementsCopied.push(boundTextElement);
-    }
     if (element) {
       copiedStyles = JSON.stringify(elementsCopied);
     }
@@ -93,31 +81,21 @@ export const actionPasteStyles = register({
   perform: (elements, appState, formData, app) => {
     const elementsCopied = JSON.parse(copiedStyles);
     const pastedElement = elementsCopied[0];
-    const boundTextElement = elementsCopied[1];
     if (!isExcalidrawElement(pastedElement)) {
       return { elements, captureUpdate: CaptureUpdateAction.EVENTUALLY };
     }
 
     const selectedElements = getSelectedElements(elements, appState, {
-      includeBoundTextElement: true,
     });
     const selectedElementIds = selectedElements.map((element) => element.id);
     const elementsMap = arrayToMap(elements);
-    // whether the copied text was a sticky label is decided by the copied
-    // snapshot — its container may be gone from the live scene by now
-    const copiedElementsMap = arrayToMap(
-      (elementsCopied as unknown[]).filter(isExcalidrawElement),
-    );
     const nextElements = relayoutStickyNotes(
       // a restyled note and its label end up with one ink — the label's,
       // when the copied styles carry two colors
       syncStickyNoteInk(
         elements.map((element) => {
           if (selectedElementIds.includes(element.id)) {
-            let elementStylesToCopyFrom = pastedElement;
-            if (isTextElement(element) && element.containerId) {
-              elementStylesToCopyFrom = boundTextElement;
-            }
+            const elementStylesToCopyFrom = pastedElement;
             if (!elementStylesToCopyFrom) {
               return element;
             }
@@ -147,43 +125,25 @@ export const actionPasteStyles = register({
             if (isTextElement(newElement)) {
               const sourceText =
                 elementStylesToCopyFrom as ExcalidrawTextElement;
-              const fontSize =
-                (isTextElement(elementStylesToCopyFrom)
-                  ? getBaseFontSize(elementStylesToCopyFrom, copiedElementsMap)
-                  : sourceText.fontSize) || DEFAULT_FONT_SIZE;
-              const fontFamily = sourceText.fontFamily || DEFAULT_FONT_FAMILY;
-              let container = null;
-              const containerId = newElement.containerId;
-              if (containerId) {
-                container =
-                  selectedElements.find(
-                    (element) => element.id === containerId,
-                  ) || null;
-              }
-              const newTextElement = newElementWith(newElement, {
-                ...getBaseFontSizeUpdate(newElement, fontSize, elementsMap),
-                fontFamily,
-                textAlign: sourceText.textAlign || DEFAULT_TEXT_ALIGN,
-                lineHeight: sourceText.lineHeight || getLineHeight(fontFamily),
+              const sourceStyle = getTextElementStyle(sourceText);
+              const fontSize = sourceStyle.fontSize || DEFAULT_FONT_SIZE;
+              const fontFamily = sourceStyle.fontFamily || DEFAULT_FONT_FAMILY;
+              const baseBody = newElement.texts.body;
+              newElement = newElementWith(newElement, {
+                texts: {
+                  body: {
+                    ...baseBody,
+                    style: {
+                      ...baseBody.style,
+                      fontSize,
+                      fontFamily,
+                      textAlign: sourceStyle.textAlign || DEFAULT_TEXT_ALIGN,
+                      lineHeight:
+                        sourceStyle.lineHeight || getLineHeight(fontFamily),
+                    },
+                  },
+                },
               });
-              newElement = newTextElement;
-
-              if (isStickyNoteBoundText(newTextElement, elementsMap)) {
-                // the copied stroke may be transparent; a note's label never is
-                newElement = newElementWith(
-                  newTextElement,
-                  getColorUpdate(
-                    newTextElement,
-                    "strokeColor",
-                    newTextElement.strokeColor,
-                    elementsMap,
-                  ),
-                );
-              } else {
-                // sticky labels are laid out together with their (possibly
-                // also restyled) note in the post-pass below
-                redrawTextBoundingBox(newTextElement, container, app.scene);
-              }
             }
 
             if (
@@ -206,6 +166,26 @@ export const actionPasteStyles = register({
 
             if (isStickyNoteElement(newElement)) {
               newElement = normalizeStickyNote(newElement);
+              // 便签正文的样式（字号上限/字体/行高/对齐）随样式一起粘贴
+              const targetBody = newElement.texts?.body;
+              const sourceBody = elementStylesToCopyFrom.texts?.body;
+              if (targetBody && sourceBody) {
+                newElement = newElementWith(newElement, {
+                  texts: {
+                    ...newElement.texts,
+                    body: {
+                      ...targetBody,
+                      style: {
+                        ...targetBody.style,
+                        fontFamily: sourceBody.style.fontFamily,
+                        fontSize: sourceBody.style.fontSize,
+                        lineHeight: sourceBody.style.lineHeight,
+                        textAlign: sourceBody.style.textAlign,
+                      },
+                    },
+                  },
+                });
+              }
             }
 
             return newElement;

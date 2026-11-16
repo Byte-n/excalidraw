@@ -2,13 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyMindmapOperation } from "../src/mindmapScene";
 import { buildMindmapGraphIndex, getMindmapEdgeGeometry } from "../src/mindmap";
-import { getBoundTextElement } from "../src/textElement";
 import { isMindmapEdgeElement, isMindmapNodeElement } from "../src/typeChecks";
 import { setCustomTextMetricsProvider } from "../src/textMeasurements";
+import { getTextRegion } from "../src/text/regions";
 import { CanvasSceneError } from "../src/sceneOperations";
 
 import type { MindmapNodeTarget, MindmapOperation } from "../src/mindmapScene";
-import type { ExcalidrawElement } from "../src/types";
+import type {
+  ExcalidrawElement,
+  ExcalidrawMindmapNodeElement,
+} from "../src/types";
 
 beforeEach(() => {
   setCustomTextMetricsProvider({
@@ -74,13 +77,12 @@ const checkGraph = (
   graphId: string,
 ) => {
   const index = buildMindmapGraphIndex(elements, graphId);
-  const map = new Map(elements.map((element) => [element.id, element]));
   expect(index.edgeByChildId.size).toBe(index.nodes.size - 1);
   for (const node of index.nodes.values()) {
-    const text = getBoundTextElement(node, map);
-    expect(text?.containerId).toBe(node.id);
-    expect(text?.x).toBeGreaterThanOrEqual(node.x);
-    expect(text?.y).toBeGreaterThanOrEqual(node.y);
+    const body = node.texts?.body;
+    expect(body?.text).toBeTruthy();
+    const region = getTextRegion(node, "body");
+    expect(region).not.toBeNull();
     if (node.parentId) {
       const edge = index.edgeByChildId.get(node.id)!;
       expect(edge.parentId).toBe(node.parentId);
@@ -95,6 +97,17 @@ const checkGraph = (
     }
   }
   return index;
+};
+
+const nodeById = (
+  elements: readonly ExcalidrawElement[],
+  id: string,
+): ExcalidrawMindmapNodeElement => {
+  const node = elements.find((element) => element.id === id);
+  if (!node || !isMindmapNodeElement(node)) {
+    throw new Error(`缺少脑图节点 ${id}`);
+  }
+  return node;
 };
 
 describe("脑图完整纯场景操作", () => {
@@ -167,25 +180,16 @@ describe("脑图完整纯场景操作", () => {
     ).toEqual([sibling.references.nodeId, fixture.child.nodeId]);
   });
 
-  it("重命名保留真实文字身份，空文字仍是脑图标签", () => {
+  it("重命名写入节点正文，空文字移除正文块", () => {
     const fixture = tree();
-    const before = getBoundTextElement(
-      buildMindmapGraphIndex(fixture.elements, fixture.root.graphId).nodes.get(
-        fixture.child.nodeId,
-      )!,
-      new Map(fixture.elements.map((element) => [element.id, element])),
-    )!;
     const renamed = applyMindmapOperation(fixture.elements, {
       action: "rename",
       target: fixture.child,
       text: "长名称\n第二行",
     });
     expect(
-      renamed.elements.find((element) => element.id === before.id),
-    ).toMatchObject({
-      originalText: "长名称\n第二行",
-      containerId: fixture.child.nodeId,
-    });
+      nodeById(renamed.elements, fixture.child.nodeId).texts?.body,
+    ).toMatchObject({ text: "长名称\n第二行" });
     checkGraph(renamed.elements, fixture.root.graphId);
     const cleared = applyMindmapOperation(renamed.elements, {
       action: "rename",
@@ -193,12 +197,12 @@ describe("脑图完整纯场景操作", () => {
       text: "",
     });
     expect(
-      cleared.elements.find((element) => element.id === before.id),
-    ).toMatchObject({ originalText: "", isDeleted: false });
+      nodeById(cleared.elements, fixture.child.nodeId).texts,
+    ).toBeUndefined();
   });
 
   it.each(["child", "root"] as const)(
-    "平移 %s 带上子树文字并重算相关边，保持父关系",
+    "平移 %s 带上子树节点并重算相关边，保持父关系",
     (kind) => {
       const fixture = tree();
       const target = fixture[kind];
@@ -238,7 +242,7 @@ describe("脑图完整纯场景操作", () => {
     },
   );
 
-  it("删除整个子树及其文字/边，删根墓碑整图且保留其它脑图", () => {
+  it("删除整个子树及其边，删根墓碑整图且保留其它脑图", () => {
     const fixture = tree();
     const unrelated = root();
     const input = [...fixture.elements, ...unrelated.elements];
@@ -255,9 +259,6 @@ describe("脑图完整纯场景操作", () => {
     for (const element of removed.elements) {
       if (
         deletedNodes.has(element.id) ||
-        (element.type === "text" &&
-          element.containerId &&
-          deletedNodes.has(element.containerId)) ||
         (isMindmapEdgeElement(element) && deletedNodes.has(element.childId))
       ) {
         expect(element.isDeleted).toBe(true);
@@ -351,11 +352,12 @@ describe("脑图分支主题派生（场景操作收口）", () => {
       strokeColor: "#1f2329",
     });
     expect(isMindmapNodeElement(root) && root.shape.id).toBe("rectangle");
-    const rootText = getBoundTextElement(root as any, map)!;
-    expect(rootText).toMatchObject({
+    expect(
+      isMindmapNodeElement(root) ? root.texts?.body?.style : undefined,
+    ).toMatchObject({
       fontSize: 16,
       fontWeight: 600,
-      strokeColor: "#ffffff",
+      color: "#ffffff",
     });
 
     const child = map.get(fixture.child.nodeId)!;

@@ -10,6 +10,11 @@ import {
   isInGroup,
   TABLE_PRESET_IDS,
 } from "@excalidraw/element";
+import {
+  getTextElementDisplayText,
+  getTextElementStyle,
+  getTextElementText,
+} from "@excalidraw/element";
 
 import { isTextElement } from "@excalidraw/element";
 
@@ -62,7 +67,7 @@ const testInputProperty = (
       degreesToRadians(Number(nextValue) as Degrees),
     );
   } else if (property === "fontSize" && isTextElement(element)) {
-    expect(element[property]).toBe(Number(nextValue));
+    expect(getTextElementStyle(element).fontSize).toBe(Number(nextValue));
   } else if (property !== "fontSize") {
     expect(element[property]).toBe(Number(nextValue));
   }
@@ -399,9 +404,9 @@ describe("stats for a non-generic element", () => {
       ".drag-input",
     ) as HTMLInputElement;
     expect(input).toBeDefined();
-    expect(input.value).toBe(text.fontSize.toString());
+    expect(input.value).toBe(getTextElementStyle(text).fontSize.toString());
     UI.updateInput(input, "36");
-    expect(text.fontSize).toBe(36);
+    expect(getTextElementStyle(text).fontSize).toBe(36);
 
     // can change width or height
     const width = UI.queryStatsProperty("W")?.querySelector(
@@ -414,17 +419,17 @@ describe("stats for a non-generic element", () => {
     expect(height).toBeDefined();
 
     const textHeightBeforeWrapping = text.height;
-    const textBeforeWrapping = text.text;
-    const originalTextBeforeWrapping = textBeforeWrapping;
+    const textBeforeWrapping = getTextElementDisplayText(text);
+    const originalTextBeforeWrapping = getTextElementText(text);
     UI.updateInput(width, "30");
     expect(text.height).toBeGreaterThan(textHeightBeforeWrapping);
-    expect(text.text).not.toBe(textBeforeWrapping);
-    expect(text.originalText).toBe(originalTextBeforeWrapping);
+    expect(getTextElementDisplayText(text)).not.toBe(textBeforeWrapping);
+    expect(getTextElementText(text)).toBe(originalTextBeforeWrapping);
 
     // min font size is 4
     UI.updateInput(input, "0");
-    expect(text.fontSize).not.toBe(0);
-    expect(text.fontSize).toBe(4);
+    expect(getTextElementStyle(text).fontSize).not.toBe(0);
+    expect(getTextElementStyle(text).fontSize).toBe(4);
   });
 
   it("frame element", () => {
@@ -477,23 +482,25 @@ describe("stats for a non-generic element", () => {
     expect(image.width / image.height).toBe(widthToHeight);
   });
 
-  it("should display fontSize for bound text", () => {
+  it("should display fontSize for the embedded body text", () => {
     const container = API.createElement({
       type: "rectangle",
       width: 200,
       height: 100,
+      texts: {
+        body: {
+          text: "text",
+          style: {
+            fontFamily: 1,
+            fontSize: 20,
+            lineHeight: 1.25,
+            textAlign: "center",
+            verticalAlign: "middle",
+          } as any,
+        },
+      },
     });
-    const text = API.createElement({
-      type: "text",
-      width: 200,
-      height: 100,
-      containerId: container.id,
-      fontSize: 20,
-    });
-    h.app.scene.mutateElement(container, {
-      boundElements: [{ type: "text", id: text.id }],
-    });
-    API.setElements([container, text]);
+    API.setElements([container]);
 
     API.setSelectedElements([container]);
     const fontSize = UI.queryStatsProperty("F")?.querySelector(
@@ -503,7 +510,10 @@ describe("stats for a non-generic element", () => {
 
     UI.updateInput(fontSize, "40");
 
-    expect(text.fontSize).toBe(40);
+    expect(
+      h.app.scene.getNonDeletedElement(container.id)?.texts?.body?.style
+        .fontSize,
+    ).toBe(40);
   });
 });
 
@@ -976,8 +986,8 @@ describe("element type labels", () => {
     UI.clickTool("table");
     mouse.clickAt(200, 160);
 
-    // the swimlane presets come with their own labels in the scene
-    expect(h.elements).toHaveLength(preset === "plain" ? 1 : 4);
+    // the swimlane presets carry their labels inside the table element
+    expect(h.elements).toHaveLength(1);
     expect(elementTypeLabel()).toBe(t("element.table"));
   });
 

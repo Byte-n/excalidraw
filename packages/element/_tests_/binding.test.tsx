@@ -2,8 +2,6 @@ import { KEYS, arrayToMap } from "@excalidraw/common";
 
 import { pointFrom } from "@excalidraw/math";
 
-import { actionWrapTextInContainer } from "@excalidraw/excalidraw/actions/actionBoundText";
-
 import { Excalidraw, isLinearElement } from "@excalidraw/excalidraw";
 
 import { API } from "@excalidraw/excalidraw/_tests_/helpers/api";
@@ -12,11 +10,7 @@ import {
   Pointer,
   Keyboard,
 } from "@excalidraw/excalidraw/_tests_/helpers/ui";
-import {
-  act,
-  fireEvent,
-  render,
-} from "@excalidraw/excalidraw/_tests_/test-utils";
+import { act, render } from "@excalidraw/excalidraw/_tests_/test-utils";
 
 import { defaultLang, setLanguage } from "@excalidraw/excalidraw/i18n";
 
@@ -31,15 +25,14 @@ import { isPointInElement } from "../src/collision";
 import { distanceToElement } from "../src/distance";
 import { isShapeWithId } from "../src/compositeShape";
 import { transformElements } from "../src/resizeElements";
-import {
-  getTextEditor,
-  TEXT_EDITOR_SELECTOR,
-} from "../../excalidraw/_tests_/queries/dom";
+import { deleteSceneElements } from "../src/sceneOperations";
+import { getTextElementTextPatch } from "../src/text/elementText";
 
 import type {
   ExcalidrawArrowElement,
   ExcalidrawBindableElement,
   ExcalidrawLinearElement,
+  ExcalidrawTextElement,
   ElementBinding,
   NonDeleted,
   NonDeletedExcalidrawElement,
@@ -645,96 +638,7 @@ describe("binding for simple arrows", () => {
       await render(<Excalidraw handleKeyboardGlobally={true} />);
     });
 
-    it("should update binding when text containerized", async () => {
-      const rectangle1 = API.createElement({
-        type: "rectangle",
-        id: "rectangle1",
-        width: 100,
-        height: 100,
-        boundElements: [
-          { id: "arrow1", type: "arrow" },
-          { id: "arrow2", type: "arrow" },
-        ],
-      });
-
-      const arrow1 = API.createElement({
-        type: "arrow",
-        id: "arrow1",
-        points: [pointFrom(0, 0), pointFrom(0, -87.45777932247563)],
-        startBinding: {
-          elementId: "rectangle1",
-          attachPoint: [0.5, 1],
-        },
-        endBinding: {
-          elementId: "text1",
-          attachPoint: [1, 0.5],
-        },
-      });
-
-      const arrow2 = API.createElement({
-        type: "arrow",
-        id: "arrow2",
-        points: [pointFrom(0, 0), pointFrom(0, -87.45777932247563)],
-        startBinding: {
-          elementId: "text1",
-          attachPoint: [0.5, 1],
-        },
-        endBinding: {
-          elementId: "rectangle1",
-          attachPoint: [1, 0.5],
-        },
-      });
-
-      const text1 = API.createElement({
-        type: "text",
-        id: "text1",
-        text: "ola",
-        boundElements: [
-          { id: "arrow1", type: "arrow" },
-          { id: "arrow2", type: "arrow" },
-        ],
-      });
-
-      API.setElements([rectangle1, arrow1, arrow2, text1]);
-
-      API.setSelectedElements([text1]);
-
-      expect(h.state.selectedElementIds[text1.id]).toBe(true);
-
-      API.executeAction(actionWrapTextInContainer);
-
-      // new text container will be placed before the text element
-      const container = h.elements.at(-2)!;
-
-      expect(isShapeWithId(container, "rectangle")).toBe(true);
-      expect(container.id).not.toBe(rectangle1.id);
-
-      expect(container).toEqual(
-        expect.objectContaining({
-          boundElements: expect.arrayContaining([
-            {
-              type: "text",
-              id: text1.id,
-            },
-            {
-              type: "arrow",
-              id: arrow1.id,
-            },
-            {
-              type: "arrow",
-              id: arrow2.id,
-            },
-          ]),
-        }),
-      );
-
-      expect(arrow1.startBinding?.elementId).toBe(rectangle1.id);
-      expect(arrow1.endBinding?.elementId).toBe(container.id);
-      expect(arrow2.startBinding?.elementId).toBe(container.id);
-      expect(arrow2.endBinding?.elementId).toBe(rectangle1.id);
-    });
-
-    it("should keep binding on text update", async () => {
+    it("should keep binding on text update", () => {
       const text = API.createElement({
         type: "text",
         text: "ola",
@@ -754,24 +658,20 @@ describe("binding for simple arrows", () => {
 
       expect(arrow.endBinding?.elementId).toBe(text.id);
 
-      // delete text element by submitting empty text
-      // -------------------------------------------------------------------------
+      const liveText = h.scene.getNonDeletedElement(
+        text.id,
+      ) as ExcalidrawTextElement;
+      act(() => {
+        h.scene.mutateElement(
+          liveText,
+          getTextElementTextPatch(liveText, "asdasdasdasdas"),
+        );
+      });
 
-      UI.clickTool("text");
-
-      mouse.clickAt(text.x + 50, text.y + 50);
-      const editor = await getTextEditor();
-
-      expect(editor).not.toBe(null);
-
-      fireEvent.change(editor, { target: { value: "asdasdasdasdas" } });
-      fireEvent.keyDown(editor, { key: KEYS.ESCAPE });
-
-      expect(document.querySelector(TEXT_EDITOR_SELECTOR)).toBe(null);
       expect(arrow.endBinding?.elementId).toBe(text.id);
     });
 
-    it("should unbind on text element deletion by submitting empty text", async () => {
+    it("should unbind on text element deletion by submitting empty text", () => {
       const text = API.createElement({
         type: "text",
         text: "¡olá!",
@@ -791,19 +691,10 @@ describe("binding for simple arrows", () => {
 
       expect(arrow.endBinding?.elementId).toBe(text.id);
 
-      // edit text element and submit
-      // -------------------------------------------------------------------------
+      act(() => {
+        deleteSceneElements(new Set([text.id]), h.scene);
+      });
 
-      UI.clickTool("text");
-
-      mouse.clickAt(text.x + 50, text.y + 50);
-
-      const editor = await getTextEditor();
-
-      fireEvent.change(editor, { target: { value: "" } });
-      fireEvent.keyDown(editor, { key: KEYS.ESCAPE });
-
-      expect(document.querySelector(TEXT_EDITOR_SELECTOR)).toBe(null);
       expect(arrow.endBinding).toBe(null);
     });
 

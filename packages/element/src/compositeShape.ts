@@ -140,11 +140,13 @@ export {
   getActivationAnchor,
   getActivationAnchorAtSceneY,
   normalizeSequenceLifelineGeometry,
+  normalizeSequenceLifelineTexts,
   clampSequenceLifelineHeight,
   getSequenceLifelineDefaultSize,
   getSequenceLifelineGeometry,
   getSequenceLifelineHitPaths,
   getSequenceLifelineTextBounds,
+  getSequenceLifelineTextBlockHeight,
   getSequenceLifelineTextFit,
   getSequenceLifelineTextFitHeight,
   getSequencePoleLength,
@@ -160,6 +162,7 @@ export {
   getSequenceFragmentRowSeparatorYs,
   getSequenceFragmentInsertionBoundaries,
   getSequenceFragmentRowMinHeight,
+  normalizeSequenceFragmentTexts,
   SEQUENCE_FRAGMENT_DEFAULT_OPERATOR,
   SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_X,
   SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_Y,
@@ -191,13 +194,10 @@ export type {
 } from "./compositeShape/sequenceOutline";
 
 export {
-  fragmentRowContainerRef,
-  getFragmentRowBackgroundTexts,
-  getSequenceFragmentRowBackgroundTextLayout,
+  fitSequenceFragmentOperatorFromTexts,
+  getSequenceFragmentOperatorTextFit,
+  getSequenceFragmentRowTextRequiredHeight,
   refitSequenceFragmentRowBackgroundTexts,
 } from "./compositeShape/sequenceFragmentScene";
 
-export type {
-  SequenceFragmentRowBackgroundTextLayout,
-  SequenceFragmentRowTextRefitOptions,
-} from "./compositeShape/sequenceFragmentScene";
+export type { SequenceFragmentRowTextRefitOptions } from "./compositeShape/sequenceFragmentScene";

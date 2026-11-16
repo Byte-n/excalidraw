@@ -5,16 +5,22 @@
 // 的目标图元全部就绪，绑定不依赖飞书返回顺序。整板闸门由导入管线在入口调用。
 
 import {
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_SIZE,
   DEFAULT_FREEDRAW_STROKE_WIDTH,
   DEFAULT_STROKE_STREAMLINE,
+  getLineHeight,
 } from "@excalidraw/common";
 
 import {
+  getStickyNoteBodyLayout,
+  isShapeElement,
   newElement,
   newFrameElement,
   newFreeDrawElement,
   newImageElement,
   newStickyNoteElement,
+  withTextBlock,
 } from "@excalidraw/element";
 
 import { generateNKeysBetween } from "@excalidraw/fractional-indexing";
@@ -23,6 +29,7 @@ import type {
   ElementBinding,
   ExcalidrawElement,
   ExcalidrawMindmapNodeElement,
+  ExcalidrawShapeElement,
   FileId,
 } from "@excalidraw/element/types";
 
@@ -49,10 +56,16 @@ import {
 } from "./mindmap.js";
 import { isLarkPoint, resolveNodes } from "./resolve.js";
 import { buildTable, buildTableTexts } from "./table.js";
-import { buildBoundText, buildStandaloneText, projectText } from "./text.js";
+import {
+  buildStandaloneText,
+  mapTextAlign,
+  mapVerticalAlign,
+  projectText,
+} from "./text.js";
 
 import type { Draft } from "./identity.js";
 import type { ResolvedNode } from "./resolve.js";
+import type { ProjectedText } from "./text.js";
 import type {
   BoardAssetRequest,
   BoardConversion,
@@ -80,6 +93,47 @@ function toSceneElement(element: ExcalidrawElement): ExcalidrawSceneElement {
   return { ...element, index: element.index ?? "" };
 }
 
+// 投影文本 → 区域正文 block：字体固定默认族，其余取来源对齐与颜色。
+const projectBodyBlock = (text: ProjectedText) => ({
+  text: text.text,
+  style: {
+    fontFamily: DEFAULT_FONT_FAMILY,
+    fontSize: text.fontSize ?? DEFAULT_FONT_SIZE,
+    lineHeight: getLineHeight(DEFAULT_FONT_FAMILY),
+    textAlign: mapTextAlign(text.horizontalAlign),
+    verticalAlign: mapVerticalAlign(text.verticalAlign),
+    ...(text.textColor === undefined ? {} : { color: text.textColor }),
+  },
+});
+
+// 思维导图正文内嵌到节点自身：空文本不落 texts 键。
+function withMindmapBody(
+  node: ExcalidrawMindmapNodeElement,
+  text: ProjectedText | undefined,
+): ExcalidrawMindmapNodeElement {
+  if (!text || text.text === "") {
+    return node;
+  }
+  return {
+    ...node,
+    texts: withTextBlock(node.texts, "body", projectBodyBlock(text)),
+  };
+}
+
+// 图形家族的正文同样内嵌到元素自身。
+function withShapeBody<T extends ExcalidrawShapeElement>(
+  shape: T,
+  text: ProjectedText | undefined,
+): T {
+  if (!text || text.text === "") {
+    return shape;
+  }
+  return {
+    ...shape,
+    texts: withTextBlock(shape.texts, "body", projectBodyBlock(text)),
+  };
+}
+
 // 转换入口：产出元素、资产请求与统计增量（mapped / droppedNodes /
 // richTextFlattened / downgraded）。
 export function convertBoard(nodes: LarkBoardNode[]): BoardConversion {
@@ -94,10 +148,7 @@ export function convertBoard(nodes: LarkBoardNode[]): BoardConversion {
   // ExcalidrawMindmapNodeElement，从共用的 ExcalidrawElement 联合里取会需要断言。
   const mindmapNodes = new Map<string, ExcalidrawMindmapNodeElement>();
   const containerKind = new Map<string, "frame" | "table">();
-  const boundAdditions = new Map<
-    string,
-    { id: string; type: "arrow" | "text" }[]
-  >();
+  const boundAdditions = new Map<string, { id: string; type: "arrow" }[]>();
   const bindingAdditions = new Map<
     string,
     { start?: ElementBinding; end?: ElementBinding }
@@ -119,16 +170,6 @@ export function convertBoard(nodes: LarkBoardNode[]): BoardConversion {
     const draft: Draft = { el, zKey };
     drafts.push(draft);
     return draft;
-  };
-
-  const registerBound = (
-    targetId: string,
-    id: string,
-    type: "arrow" | "text",
-  ) => {
-    const list = boundAdditions.get(targetId) ?? [];
-    list.push({ id, type });
-    boundAdditions.set(targetId, list);
   };
 
   // 第一遍：非连线元素。
@@ -154,16 +195,12 @@ export function convertBoard(nodes: LarkBoardNode[]): BoardConversion {
           strokeStyle: mapStrokeStyle(style?.border_style),
           ...identity(node.raw.id, node.angle),
         });
-        byNodeId.set(node.raw.id, push(el, node.zIndex));
-        mappedIds.add(node.raw.id);
         const text = projectText(node.raw.text, onRichText);
-        if (text && text.text !== "") {
-          const textDraft = push(
-            buildBoundText(`${node.raw.id}#text`, text, node),
-            node.zIndex + 0.1,
-          );
-          registerBound(node.raw.id, textDraft.el.id, "text");
-        }
+        byNodeId.set(
+          node.raw.id,
+          push(isShapeElement(el) ? withShapeBody(el, text) : el, node.zIndex),
+        );
+        mappedIds.add(node.raw.id);
         break;
       }
       case "text": {
@@ -193,28 +230,27 @@ export function convertBoard(nodes: LarkBoardNode[]): BoardConversion {
       }
       case "table": {
         containerKind.set(node.raw.id, "table");
-        byNodeId.set(node.raw.id, push(buildTable(node), node.zIndex));
-        mappedIds.add(node.raw.id);
         const tableTexts = buildTableTexts(node);
         downgraded += tableTexts.downgraded;
-        for (const textDraft of tableTexts.drafts) {
-          push(textDraft.el, textDraft.zKey);
-        }
+        const tableElement = buildTable(node);
+        byNodeId.set(
+          node.raw.id,
+          push(
+            tableTexts.texts
+              ? { ...tableElement, texts: tableTexts.texts }
+              : tableElement,
+            node.zIndex,
+          ),
+        );
+        mappedIds.add(node.raw.id);
         break;
       }
       case "mindMap": {
-        const el = buildMindmapNode(node, nodeById);
+        const text = projectText(node.raw.text, onRichText);
+        const el = withMindmapBody(buildMindmapNode(node, nodeById), text);
         byNodeId.set(node.raw.id, push(el, node.zIndex));
         mindmapNodes.set(node.raw.id, el);
         mappedIds.add(node.raw.id);
-        const text = projectText(node.raw.text, onRichText);
-        if (text && text.text !== "") {
-          const textDraft = push(
-            buildBoundText(`${node.raw.id}#text`, text, node),
-            node.zIndex + 0.1,
-          );
-          registerBound(node.raw.id, textDraft.el.id, "text");
-        }
         break;
       }
       case "stickyNote": {
@@ -228,16 +264,20 @@ export function convertBoard(nodes: LarkBoardNode[]): BoardConversion {
           backgroundColor: mapFillColor(style?.fill_color),
           ...identity(node.raw.id, node.angle),
         });
-        byNodeId.set(node.raw.id, push(el, node.zIndex));
-        mappedIds.add(node.raw.id);
         const text = projectText(node.raw.text, onRichText);
-        if (text && text.text !== "") {
-          const textDraft = push(
-            buildBoundText(`${node.raw.id}#text`, text, node),
-            node.zIndex + 0.1,
-          );
-          registerBound(node.raw.id, textDraft.el.id, "text");
-        }
+        const withBody =
+          text && text.text !== ""
+            ? {
+                ...el,
+                texts: withTextBlock(el.texts, "body", projectBodyBlock(text)),
+              }
+            : el;
+        const layout = getStickyNoteBodyLayout(withBody);
+        byNodeId.set(
+          node.raw.id,
+          push(layout ? { ...withBody, ...layout.container } : withBody, node.zIndex),
+        );
+        mappedIds.add(node.raw.id);
         break;
       }
       case "paint": {
@@ -323,10 +363,6 @@ export function convertBoard(nodes: LarkBoardNode[]): BoardConversion {
     if (built.binding) {
       bindingAdditions.set(built.arrow.id, built.binding);
     }
-    if (built.caption) {
-      push(built.caption.el, built.caption.zKey);
-      registerBound(built.arrow.id, built.caption.el.id, "text");
-    }
   }
 
   // 第三遍：容器归属 + 连线绑定 + 思维导图边 + boundElements + 分数索引。
@@ -384,7 +420,7 @@ function applyBindings(
   byNodeId: Map<string, Draft>,
   nodeById: Map<string, ResolvedNode>,
   mindmapNodes: Map<string, ExcalidrawMindmapNodeElement>,
-  boundAdditions: Map<string, { id: string; type: "arrow" | "text" }[]>,
+  boundAdditions: Map<string, { id: string; type: "arrow" }[]>,
   bindingAdditions: Map<
     string,
     { start?: ElementBinding; end?: ElementBinding }
@@ -442,7 +478,7 @@ function applyBindings(
 }
 
 function registerArrowBinding(
-  boundAdditions: Map<string, { id: string; type: "arrow" | "text" }[]>,
+  boundAdditions: Map<string, { id: string; type: "arrow" }[]>,
   targetId: string,
   arrowId: string,
 ): void {

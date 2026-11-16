@@ -53,7 +53,6 @@ export const Stats = (props: StatsProps) => {
   const sceneNonce = props.app.scene.getSceneNonce() || 1;
   const selectedElements = props.app.scene.getSelectedElements({
     selectedElementIds: appState.selectedElementIds,
-    includeBoundTextElement: false,
   });
   const gridModeEnabled = isGridModeEnabled(props.app);
 

@@ -8,11 +8,14 @@ import {
 } from "@excalidraw/common";
 import {
   assertValidTableData,
+  cellKey,
   getTableCellFillColor,
   getTableGridSegments,
   getTableContentClipRects,
+  getTableCellTextBaseStyle,
   mutateElement,
   Scene,
+  withTextBlock,
 } from "@excalidraw/element";
 
 import type {
@@ -22,6 +25,7 @@ import type {
 
 import { getDefaultAppState } from "../appState";
 import { renderStaticScene } from "../renderer/staticScene";
+import { exportToSvg } from "../scene/export";
 
 import { API } from "./helpers/api";
 
@@ -376,5 +380,45 @@ describe("table canvas rendering", () => {
       clipShapes.filter((args) => args[2] === 100 && args[3] === 100).length,
     ).toBe(2);
     expect(callsOf(calls, "clip").length).toBe(3);
+  });
+
+  it("exports cell text regions as SVG text, header weight derived", async () => {
+    const base = API.createElement({ type: "table" });
+    const style = getTableCellTextBaseStyle();
+    const headerCellId = base.table.cells[0].id;
+    const bodyCellId = base.table.cells[4].id;
+    const table = {
+      ...base,
+      texts: withTextBlock(
+        withTextBlock(base.texts, cellKey(headerCellId), {
+          text: "Header",
+          style,
+        }),
+        cellKey(bodyCellId),
+        { text: "Body", style },
+      ),
+    };
+
+    const svg = await exportToSvg(
+      [table],
+      {
+        ...getDefaultAppState(),
+        exportBackground: false,
+        viewBackgroundColor: "#ffffff",
+      },
+      null,
+    );
+
+    expect(svg.textContent).toContain("Header");
+    expect(svg.textContent).toContain("Body");
+    const textNodes = Array.from(svg.querySelectorAll("text"));
+    const header = textNodes.find((node) => node.textContent === "Header")!;
+    const body = textNodes.find((node) => node.textContent === "Body")!;
+    expect(header.getAttribute("font-weight")).toBe("600");
+    expect(body.getAttribute("font-weight")).toBeNull();
+    // 纯渲染派生：导出不改写文本块
+    expect(table.texts?.[cellKey(headerCellId)]?.style.fontWeight).toBe(
+      undefined,
+    );
   });
 });

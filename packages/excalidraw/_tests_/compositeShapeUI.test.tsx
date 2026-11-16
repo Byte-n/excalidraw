@@ -441,26 +441,29 @@ describe.each([
     });
   });
 
-  it("keeps bound text and an arrow attached while dragging an apex", () => {
+  it("keeps embedded body text and an arrow attached while dragging an apex", () => {
     const triangle = API.createElement({
       type: "triangle",
       x: 150,
       y: 150,
       width: 100,
       height: 80,
+      texts: {
+        body: {
+          text: "A",
+          style: {
+            fontFamily: 1,
+            fontSize: 20,
+            lineHeight: 1.25,
+            textAlign: "center",
+            verticalAlign: "middle",
+          } as any,
+        },
+      },
     });
     if (triangle.type !== "composite") {
       throw new Error("Expected triangle");
     }
-    const text = API.createElement({
-      type: "text",
-      x: 190,
-      y: 190,
-      width: 20,
-      height: 20,
-      text: "A",
-      containerId: triangle.id,
-    });
     const arrow = API.createElement({
       type: "arrow",
       x: 200,
@@ -476,12 +479,9 @@ describe.each([
     });
     const container = {
       ...triangle,
-      boundElements: [
-        { id: text.id, type: "text" as const },
-        { id: arrow.id, type: "arrow" as const },
-      ],
+      boundElements: [{ id: arrow.id, type: "arrow" as const }],
     };
-    API.setElements([container, text, arrow]);
+    API.setElements([container, arrow]);
     API.setSelectedElements([container]);
     captureBaseline();
 
@@ -491,16 +491,14 @@ describe.each([
     mouse.up();
 
     const moved = h.app.scene.getNonDeletedElement(triangle.id);
-    const boundText = h.app.scene.getNonDeletedElement(text.id);
     const boundArrow = h.app.scene.getNonDeletedElement(arrow.id);
     expect(moved).toMatchObject({
       shape: { id: "triangle", triangle: { apexX: 0.75 } },
       boundElements: expect.arrayContaining([
-        { id: text.id, type: "text" },
         { id: arrow.id, type: "arrow" },
       ]),
     });
-    expect(boundText).toMatchObject({ containerId: triangle.id });
+    expect(moved?.texts?.body?.text).toBe("A");
     expect(boundArrow).toMatchObject({
       endBinding: { elementId: triangle.id },
     });
@@ -529,9 +527,9 @@ describe.each([
     expect(h.app.scene.getNonDeletedElement(triangle.id)).toMatchObject({
       shape: { id: "triangle", triangle: { apexX: 0.75 } },
     });
-    expect(h.app.scene.getNonDeletedElement(text.id)).toMatchObject({
-      containerId: triangle.id,
-    });
+    expect(h.app.scene.getNonDeletedElement(triangle.id)?.texts?.body?.text).toBe(
+      "A",
+    );
     expect(h.app.scene.getNonDeletedElement(arrow.id)).toMatchObject({
       endBinding: { elementId: triangle.id, attachPoint: [0.75, 0] },
     });

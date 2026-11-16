@@ -190,54 +190,41 @@ describe("props.onDuplicate returning new objects for duplicates", () => {
     ]);
   });
 
-  it("alt-drag of a container with bound text", () => {
-    const [container, text] = API.createTextContainer();
-    API.setElements([container, text]);
+  it("alt-drag of a container with embedded body text", () => {
+    const [container] = API.createTextContainer();
+    API.setElements([container]);
 
-    expect([container.x, container.y, text.x, text.y]).toEqual([0, 0, 0, 0]);
+    expect([container.x, container.y]).toEqual([0, 0]);
 
     mouse.select(container);
     altDrag(container, 50);
 
     const containerDuplicate = getCloneByOrigId(container.id);
-    const textDuplicate = getCloneByOrigId(text.id);
 
     assertElements(h.elements, [
       { id: container.id, x: 0, y: 0 },
-      { id: text.id, x: 0, y: 0, containerId: container.id },
       {
         [ORIG_ID]: container.id,
         selected: true,
         x: 50,
         y: 50,
-        boundElements: [{ type: "text", id: textDuplicate.id }],
-        customData: { stamped: true, stampParent: null },
-      },
-      {
-        [ORIG_ID]: text.id,
-        x: 50,
-        y: 50,
-        containerId: containerDuplicate.id,
         customData: { stamped: true, stampParent: null },
       },
     ]);
+    expect(containerDuplicate.texts).toEqual(container.texts);
   });
 
   it("paste over a frame", async () => {
     const frame = createFrame();
-    const [container, text] = API.createTextContainer();
+    const [container] = API.createTextContainer();
     API.setElements([frame]);
 
     mouse.moveTo(200, 200);
-    // bound text which needs to be redrawn to fit its container
-    await paste([container, newElementWith(text, { x: -50, y: -50 })]);
+    await paste([newElementWith(container, { x: -50, y: -50 })]);
 
     await waitFor(() => {
-      expect(h.elements.length).toBe(3);
+      expect(h.elements.length).toBe(2);
     });
-
-    const containerDuplicate = getCloneByOrigId(container.id);
-    const textDuplicate = getCloneByOrigId(text.id);
 
     assertElements(h.elements, [
       {
@@ -247,20 +234,8 @@ describe("props.onDuplicate returning new objects for duplicates", () => {
         // host sees the duplicates already assigned to the frame
         customData: { stamped: true, stampParent: frame.id },
       },
-      {
-        [ORIG_ID]: text.id,
-        containerRef: undefined,
-        containerId: containerDuplicate.id,
-        customData: { stamped: true, stampParent: null },
-      },
       { id: frame.id },
     ]);
-
-    expect(textDuplicate.x).toBeGreaterThan(containerDuplicate.x);
-    expect(textDuplicate.y).toBeGreaterThan(containerDuplicate.y);
-    expect(textDuplicate.x + textDuplicate.width).toBeLessThan(
-      containerDuplicate.x + containerDuplicate.width,
-    );
   });
 });
 
@@ -481,9 +456,9 @@ describe("props.onDuplicate data", () => {
   });
 
   it("duplicate action", () => {
-    const [container, text] = API.createTextContainer();
+    const [container] = API.createTextContainer();
     const rectangle = API.createElement({ type: "rectangle" });
-    API.setElements([container, text, rectangle]);
+    API.setElements([container, rectangle]);
     API.setSelectedElements([container]);
 
     act(() => {
@@ -498,32 +473,23 @@ describe("props.onDuplicate data", () => {
     } = getCall();
 
     const containerDuplicate = getCloneByOrigId(container.id);
-    const textDuplicate = getCloneByOrigId(text.id);
 
     // only what takes part in the duplication
-    expect([...originalElements]).toEqual([
-      [container.id, container],
-      [text.id, text],
-    ]);
-    expect([...duplicateElements.keys()]).toEqual([
-      containerDuplicate.id,
-      textDuplicate.id,
-    ]);
+    expect([...originalElements]).toEqual([[container.id, container]]);
+    expect([...duplicateElements.keys()]).toEqual([containerDuplicate.id]);
     expect(duplicateElements.get(containerDuplicate.id)).toBe(
       containerDuplicate,
     );
     expect([...origIdToDuplicateId]).toEqual([
       [container.id, containerDuplicate.id],
-      [text.id, textDuplicate.id],
     ]);
     expect([...duplicateIdToOrigId]).toEqual([
       [containerDuplicate.id, container.id],
-      [textDuplicate.id, text.id],
     ]);
     // the original of a duplicate
     expect(
-      originalElements.get(duplicateIdToOrigId.get(textDuplicate.id)!),
-    ).toBe(text);
+      originalElements.get(duplicateIdToOrigId.get(containerDuplicate.id)!),
+    ).toBe(container);
   });
 
   it("alt-drag supplies the originals as they are in next elements", () => {
@@ -691,76 +657,13 @@ describe("reconcileDuplicatedElements()", () => {
     expect(result.duplicatedElements).toEqual([]);
   });
 
-  it("should veto bound text of a vetoed container", () => {
-    const rectangle = API.createElement({
-      id: "rectangle",
-      type: "rectangle",
-      boundElements: [{ type: "text", id: "text" }],
-    });
-    const text = API.createElement({
-      id: "text",
-      type: "text",
-      containerId: rectangle.id,
-    });
-    const { duplicatedElements, byOrigId } = duplicate([rectangle, text]);
-    const nextElements = [rectangle, text, ...duplicatedElements];
-
-    const result = reconcileDuplicatedElements(
-      nextElements.filter((element) => element !== byOrigId(rectangle.id)),
-      nextElements,
-      duplicatedElements,
-    );
-
-    expect(result.elements).toEqual([rectangle, text]);
-    expect(result.duplicatedElements).toEqual([]);
-  });
-
-  it("should veto bound text of a vetoed container (partial element)", () => {
-    const rectangle = API.createElement({
-      id: "rectangle",
-      type: "rectangle",
-      boundElements: [{ type: "text", id: "text" }],
-    });
-    const text = API.createElement({
-      id: "text",
-      type: "text",
-      containerId: rectangle.id,
-    });
-    const { duplicatedElements, byOrigId } = duplicate([rectangle, text]);
-
-    const result = reconcileDuplicatedElements(
-      [
-        rectangle,
-        text,
-        {
-          id: byOrigId(text.id).id,
-          text: "changed",
-        } as unknown as ExcalidrawElement,
-      ],
-      [rectangle, text, ...duplicatedElements],
-      duplicatedElements,
-    );
-
-    expect(result.elements).toEqual([rectangle, text]);
-    expect(result.duplicatedElements).toEqual([]);
-  });
-
   it("should clear references to vetoed duplicates", () => {
     const frame = API.createElement({ id: "frame", type: "frame" });
     const rectangle = API.createElement({
       id: "rectangle",
       type: "rectangle",
       containerRef: { kind: "frameLike", elementId: frame.id },
-      boundElements: [
-        { type: "text", id: "text" },
-        { type: "arrow", id: "arrow" },
-      ],
-    });
-    const text = API.createElement({
-      id: "text",
-      type: "text",
-      containerRef: { kind: "frameLike", elementId: frame.id },
-      containerId: rectangle.id,
+      boundElements: [{ type: "arrow", id: "arrow" }],
     });
     const ellipse = API.createElement({
       id: "ellipse",
@@ -779,7 +682,7 @@ describe("reconcileDuplicatedElements()", () => {
         attachPoint: [0.5, 0.5],
       },
     });
-    const elements = [rectangle, text, frame, ellipse, arrow];
+    const elements = [rectangle, frame, ellipse, arrow];
     const { duplicatedElements, byOrigId } = duplicate(elements);
     const nextElements = [...elements, ...duplicatedElements];
 
@@ -788,11 +691,7 @@ describe("reconcileDuplicatedElements()", () => {
       byOrigId(frame.id).id,
     );
 
-    const vetoed = [
-      byOrigId(frame.id),
-      byOrigId(text.id),
-      byOrigId(ellipse.id),
-    ];
+    const vetoed = [byOrigId(frame.id), byOrigId(ellipse.id)];
 
     const result = reconcileDuplicatedElements(
       nextElements.filter((element) => !vetoed.includes(element as any)),

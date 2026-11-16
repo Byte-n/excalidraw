@@ -35,23 +35,15 @@ const interactionIds = <TElement extends ExcalidrawSceneElement>(
   if (state.editingTextElement) {
     ids.add(state.editingTextElement.id);
   }
-  // 容器成员和绑定文字随所选元素一起变化，同属交互保护集合。
+  // 容器成员随所选容器一起变化，同属交互保护集合。
   let expanded = true;
   while (expanded && ids.size) {
     expanded = false;
     for (const element of elements) {
-      const parent = element.containerRef?.elementId ?? element.containerId;
+      const parent = element.containerRef?.elementId;
       if (!ids.has(element.id) && parent && ids.has(parent)) {
         ids.add(element.id);
         expanded = true;
-      }
-      if (ids.has(element.id)) {
-        for (const bound of element.boundElements ?? []) {
-          if (bound.type === "text" && !ids.has(bound.id)) {
-            ids.add(bound.id);
-            expanded = true;
-          }
-        }
       }
     }
   }

@@ -4,12 +4,9 @@ import { pointsEqual } from "@excalidraw/math";
 
 import type { ElementOrToolType } from "@excalidraw/excalidraw/types";
 
-import type { MarkNonNullable } from "@excalidraw/common/utility-types";
-
 import {
   assertShapeElementType,
   isActivationElement,
-  isSequenceFragmentElement,
   isShapeElement,
 } from "./compositeShape";
 import { assertMindmapShapeData } from "./mindmap";
@@ -25,8 +22,6 @@ import type {
   ExcalidrawFreeDrawElement,
   InitializedExcalidrawImageElement,
   ExcalidrawImageElement,
-  ExcalidrawTextElementWithContainer,
-  ExcalidrawTextContainer,
   ExcalidrawFrameElement,
   RoundnessType,
   ExcalidrawFrameLikeElement,
@@ -44,7 +39,6 @@ import type {
   ExcalidrawMindmapEdgeElement,
   DirectContainerRef,
   TableCellContainerRef,
-  FragmentRowContainerRef,
   ExcalidrawTableElement,
 } from "./types";
 
@@ -129,8 +123,7 @@ export const isTableElement = <T extends ExcalidrawElement>(
   return element?.type === "table";
 };
 
-/**
- * A cell's background text. Outside of its editor it is chrome, not a canvas
+/** A cell's background text. Outside of its editor it is chrome, not a canvas
  * object: hit-testing, box/lasso selection and dragging pass through it so it
  * never blocks the cell's other content (phase-1.md:67, :141).
  */
@@ -140,22 +133,10 @@ export const isTableCellBackgroundText = <T extends ExcalidrawElement>(
   element?.containerRef?.kind === "tableCell" &&
   element.containerRef.role === "backgroundText";
 
-/** A fragment body row's background text (the single-column cell text). */
-export const isFragmentRowBackgroundText = <T extends ExcalidrawElement>(
-  element: T | null | undefined,
-): boolean =>
-  element?.containerRef?.kind === "fragmentRow" &&
-  element.containerRef.role === "backgroundText";
-
-/**
- * Background text owned by a container cell/row. Like table cell background
- * text, fragment row text is chrome outside its editor: it must not be hit,
- * selected, dragged or box-selected, and the editor treats it as unbound.
- */
+/** Background text owned by a container cell. */
 export const isContainerBackgroundText = <T extends ExcalidrawElement>(
   element: T | null | undefined,
-): boolean =>
-  isTableCellBackgroundText(element) || isFragmentRowBackgroundText(element);
+): boolean => isTableCellBackgroundText(element);
 
 export const frameLikeContainerRef = (elementId: string | null | undefined) => {
   if (elementId == null) {
@@ -192,47 +173,12 @@ const assertValidTableCellRef = (
         `Table cell background text ${element.id} must be a text element`,
       );
     }
-    if (element.containerId) {
-      throw new Error(`Bound text ${element.id} cannot have a containerRef`);
-    }
     return;
   }
   if (containerRef.role !== "content") {
     throw new Error(
       `Unsupported table cell role: ${String(containerRef.role)}`,
     );
-  }
-};
-
-const assertValidFragmentRowRef = (
-  element: ExcalidrawElement,
-  containerRef: FragmentRowContainerRef,
-  parent: ExcalidrawElement,
-): void => {
-  if (!isSequenceFragmentElement(parent)) {
-    throw new Error(
-      `Invalid fragment row container reference on ${element.id}: ${containerRef.elementId}`,
-    );
-  }
-  const rows = parent.shape.fragment?.rows;
-  const headerRowId = rows?.[0]?.id;
-  if (
-    typeof containerRef.rowId !== "string" ||
-    containerRef.rowId.length === 0 ||
-    !rows?.some((row) => row.id === containerRef.rowId) ||
-    containerRef.rowId === headerRowId
-  ) {
-    throw new Error(
-      `Invalid fragment row container reference on ${element.id}: ${containerRef.rowId}`,
-    );
-  }
-  if (!isTextElement(element)) {
-    throw new Error(
-      `Fragment row background text ${element.id} must be a text element`,
-    );
-  }
-  if (element.containerId) {
-    throw new Error(`Bound text ${element.id} cannot have a containerRef`);
   }
 };
 
@@ -253,9 +199,6 @@ export const validateContainerRef = (
     containerRef.elementId.length === 0
   ) {
     throw new Error(`Invalid container reference on ${element.id}`);
-  }
-  if (isTextElement(element) && element.containerId) {
-    throw new Error(`Bound text ${element.id} cannot have a containerRef`);
   }
   // A frame-like may sit in a table cell (a `tableCell` ref names its direct
   // parent, phase-1.md:60); what stays forbidden is a frame-like nesting in
@@ -283,15 +226,6 @@ export const validateContainerRef = (
     assertValidTableCellRef(element, containerRef, parent);
     return;
   }
-  if (containerRef.kind === "fragmentRow") {
-    if (!parent || parent.isDeleted) {
-      throw new Error(
-        `Invalid container reference on ${element.id}: ${containerRef.elementId}`,
-      );
-    }
-    assertValidFragmentRowRef(element, containerRef, parent);
-    return;
-  }
   // untrusted data can carry any kind; the known ones are handled above
   throw new Error(
     `Unsupported container kind: ${String(
@@ -317,9 +251,6 @@ const assertSingleBackgroundTextPerCell = (
       }
       key = `cell\u0000${containerRef.elementId}\u0000${containerRef.cellId}`;
       message = `Cell ${containerRef.cellId} of table ${containerRef.elementId} already has background text`;
-    } else if (containerRef.kind === "fragmentRow") {
-      key = `row\u0000${containerRef.elementId}\u0000${containerRef.rowId}`;
-      message = `Row ${containerRef.rowId} of fragment ${containerRef.elementId} already has background text`;
     } else {
       continue;
     }
@@ -482,7 +413,7 @@ export const isBindableElement = <T extends ExcalidrawElement>(
       element.type === "embeddable" ||
       element.type === "frame" ||
       element.type === "magicframe" ||
-      (element.type === "text" && !element.containerId))
+      element.type === "text")
   );
 };
 
@@ -498,7 +429,7 @@ export const isRectanguloidElement = <T extends ExcalidrawElement>(
       element.type === "embeddable" ||
       element.type === "frame" ||
       element.type === "magicframe" ||
-      (element.type === "text" && !element.containerId))
+      element.type === "text")
   );
 };
 
@@ -518,23 +449,6 @@ export const isRectangularElement = <T extends ExcalidrawElement>(
       element.type === "frame" ||
       element.type === "magicframe" ||
       element.type === "freedraw")
-  );
-};
-
-export const isTextBindableContainer = <T extends ExcalidrawElement>(
-  element: T | null,
-  includeLocked = true,
-): element is T & ExcalidrawTextContainer => {
-  return (
-    element != null &&
-    (!element.locked || includeLocked === true) &&
-    (element.type === "composite" ||
-      element.type === "flow" ||
-      element.type === "sequence" ||
-      element.type === "dataflow" ||
-      element.type === "stickynote" ||
-      element.type === "mindmap-node" ||
-      isLinearElement(element))
   );
 };
 
@@ -587,27 +501,6 @@ export const isFlowchartNodeElement = <T extends ExcalidrawElement>(
     element.type === "flow" ||
     element.type === "sequence" ||
     element.type === "stickynote"
-  );
-};
-
-export const hasBoundTextElement = <T extends ExcalidrawElement>(
-  element: T | null,
-): element is T &
-  MarkNonNullable<ExcalidrawBindableElement, "boundElements"> => {
-  return (
-    isTextBindableContainer(element) &&
-    !!element.boundElements?.some(({ type }) => type === "text")
-  );
-};
-
-export const isBoundToContainer = <T extends ExcalidrawElement>(
-  element: T | null,
-): element is T & ExcalidrawTextElementWithContainer => {
-  return (
-    element !== null &&
-    "containerId" in element &&
-    element.containerId !== null &&
-    isTextElement(element)
   );
 };
 

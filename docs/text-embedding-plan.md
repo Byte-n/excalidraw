@@ -215,14 +215,14 @@ export const textRegionKey = {
 | 阶段 | 内容 | 依赖 | 风险 |
 | --- | --- | --- | --- |
 | P0 | 文本地基模块（纯新增） | — | 低 |
-| P1 | schema 切换：独立文字 + 基类 `texts` | P0 | 高 |
+| P1 | 区域基础设施 + 基类 `texts` | P0 | 低 |
 | P2 | 编辑会话、区域命中、入口统一 | P1 | 中 |
 | P3 | 单区域形状（composite/flow/note/mindmap） | P2 | 中 |
 | P4 | dataflow 双区域（body + title） | P3 | 低 |
 | P5 | 表格单元格文字 | P2 | 高 |
 | P6 | sequence fragment | P2 | 中 |
 | P7 | 箭头标签 | P2 | 中 |
-| P8 | 旧机制清理、协同/导出/性能收口 | P3–P7 | 中 |
+| P8 | 独立文字 schema 切换、旧机制清理、协同/导出/性能收口 | P3–P7 | 高 |
 
 P3 与 P5/P6/P7 在 P2 完成后可并行推进；P8 必须最后。每期结束时主干可编译、可测试、可合并。
 
@@ -252,30 +252,18 @@ packages/element/src/text/
 
 **出口**：新增模块单测通过；现有代码零改动；`yarn workspace @excalidraw/element typecheck` 通过。
 
-### P1 — schema 切换（独立文字 + 基类字段）
+### P1 — 区域基础设施（基类字段 + 区域注册表）
 
-**目标**：全场景文本内容只有一种存储；独立文字改成 `texts.body`。
+**目标**：让元素能声明并命中自己的文本区域，不接渲染/编辑，不改变现有行为。
 
-| 文件 | 改动 |
-| --- | --- |
-| `packages/element/src/types.ts` | 基类加 `texts?`；`ExcalidrawTextElement` 去掉 `text` / `originalText` / `fontSize` / `fontFamily` / `lineHeight` / `textAlign` / `verticalAlign` / `fontWeight` / `baseFontSize`，保留 `autoResize` |
-| `packages/element/src/newElement.ts` | `newTextElement` 写入 `texts.body = { text, style }` |
-| `packages/element/src/textElement.ts` | 删除 `originalText` 相关分支；显示行由 layout 派生 |
-| `packages/excalidraw/data/restore.ts` | 解析 `texts`，校验 key |
-| `packages/excalidraw/wysiwyg/textWysiwyg.tsx` | 读写 `texts.body.text` / `style` |
-| `packages/element/src/renderElement.ts`、`packages/excalidraw/renderer/staticSvgScene.ts`、`staticScene.ts`、`renderNewElementScene.ts` | 用 layout 绘制独立文字 |
-| `actionProperties.tsx`、`actionStyles.ts`、`FontPicker`、`ColorPicker`、`Stats/*`、`SearchMenu.tsx` | 从顶层样式字段改为 `texts.body.style` |
-| `getTextFromElements` | 按区域遍历 `texts` |
+**工作项**
 
-**过渡字段**：`containerId` / `containerSlot` / `labelPosition` 暂时保留，供尚未迁移的绑定文字使用；P8 删除。
+- `packages/element/src/types.ts`：基类增加 `texts?: TextBlockMap`；独立文字仍保留现有 `text: string` 等字段，与 `texts` 不冲突。
+- `text/regions.ts`：实现 `getTextRegions(element)`、`getTextRegionAtPosition(element, localPoint)`、`getPrimaryTextRegion(element)`；先覆盖 `composite` / `flow` / `sequence` / `dataflow` 的 `body` 区域（复用 `getCompositeShapePaddedTextBounds`），其余家族返回空数组。
+- `TextRegionDefinition` 去掉尚未使用的 `defaultStyle`，保留 `key` / `bounds` / `wrap` / `fit` / `editable`。
+- 单测：矩形/椭圆/菱形的区域矩形、fit 模式、命中内外。
 
-**关键行为**
-
-- `texts.body.text` 是源文本，换行结果是派生值；宽度模式由 `autoResize` 决定。
-- 空内容 → 删除整个独立文字元素。
-- 样式默认值仍来自 appState 的当前工具状态。
-
-**出口**：独立文字的创建、编辑、自动宽度、手动宽度、复制、导出、撤销、搜索全部通过；全仓 `originalText` 归零；快照按字段结构更新。
+**出口**：类型与单测通过；现有渲染、编辑、序列化行为零变化。
 
 ### P2 — 编辑会话与区域命中
 
@@ -377,7 +365,15 @@ packages/element/src/text/
 
 **出口**：标签编辑/拖动/双击/导出/命中全部通过；端点文字行为不变。
 
-### P8 — 清理与收口
+### P8 — 独立文字 schema 切换与清理
+
+**目标**：独立文字统一为 `texts.body`，并删除旧的绑定文字机制。
+
+**独立文字切换**
+
+- `ExcalidrawTextElement` 去掉 `text` / `originalText` / `fontSize` / `fontFamily` / `lineHeight` / `textAlign` / `verticalAlign` / `fontWeight` / `baseFontSize`，改为 `texts.body`；保留 `autoResize`。
+- `newTextElement`、`textWysiwyg`、渲染、导出、actions、Stats、Search、restore 全部切到 `texts.body`。
+- `texts.body.text` 是源文本，换行由 layout 派生；空内容删除整个元素。
 
 **删除**
 

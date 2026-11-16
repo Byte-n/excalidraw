@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import {
   buildMindmapGraphIndex,
-  getBoundTextElement,
   isMindmapNodeElement,
 } from "@excalidraw/element";
 
@@ -102,10 +101,8 @@ export const MindmapRootDeleteDialog = ({
             <option value="">{t("labels.mindmapChooseRoot")}</option>
             {children.map((id) => (
               <option key={id} value={id}>
-                {getBoundTextElement(
-                  index!.nodes.get(id)!,
-                  app.scene.getNonDeletedElementsMap(),
-                )?.originalText || t("labels.mindmapUntitled")}
+                {index!.nodes.get(id)!.texts?.body?.text ||
+                  t("labels.mindmapUntitled")}
               </option>
             ))}
           </select>

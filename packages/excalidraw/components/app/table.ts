@@ -12,12 +12,13 @@ import {
   MIN_TABLE_COLUMN_WIDTH,
   MIN_TABLE_ROW_HEIGHT,
   CaptureUpdateAction,
+  applyTableTextLayout,
+  cellKey,
   computeTableAxisScale,
   computeTableUniformScale,
   prepareTableUniformScale,
   evenlySplitTableSize,
   fixBindingsAfterDeletion,
-  getBoundTextElement,
   getCursorForResizingElement,
   getElementAbsoluteCoords,
   getIndexedTableCellChildren,
@@ -35,14 +36,13 @@ import {
   makeNextSelectedElementIds,
   resizeTest,
   isBelowTableMinimumPreset,
-  isBoundToContainer,
   isFrameLikeElement,
-  isTableCellBackgroundText,
   isTableElement,
   getTableAxisBlockRange,
   moveTableAxisBlock,
   getCellsInTableRange,
   tableDefaultSizes,
+  withoutTableTextCells,
 } from "@excalidraw/element";
 
 import { applyTableOperation } from "@excalidraw/element/tableScene";
@@ -50,7 +50,6 @@ import {
   collectCellMemberIds as collectSceneCellMemberIds,
   getRowOrColumnCellIds,
   applyMemberTranslations as translateSceneMembers,
-  refitCellBackgroundTexts as refitSceneCellBackgroundTexts,
 } from "@excalidraw/element/tableSceneGeometry";
 import {
   createCalculationScene,
@@ -68,7 +67,6 @@ import type {
   DirectContainerRef,
   ExcalidrawElement,
   ExcalidrawTableElement,
-  ExcalidrawTextElement,
   NonDeleted,
   NonDeletedExcalidrawElement,
   TableDataV1,
@@ -81,8 +79,6 @@ import { snapNewElement } from "../../snapping";
 import { newCreationDraft, createTablePresetDrafts } from "./createPresets";
 
 import { commitCanvasElementOperation } from "./sceneOperations";
-
-import { buildTableCellBackgroundText } from "./tableCellText";
 
 import { setTableMoveDragOpacity } from "./scene";
 
@@ -106,6 +102,17 @@ import type {
 
 /** App compatibility shim, same as the other pointer controllers. */
 type TableApp = Pick<App, keyof App> & Record<string, any>;
+
+/** 区域编辑器由 App 提供入口，避免 table 控制器静态依赖 wysiwyg。 */
+const startCellRegionEditing = (
+  app: TableApp,
+  table: NonDeleted<ExcalidrawTableElement>,
+  region: ReturnType<typeof cellKey>,
+  opts: {
+    initialCaretSceneCoords: { x: number; y: number };
+    autoSelect: boolean;
+  },
+) => (app as unknown as App).startRegionTextEditing(table, region, opts);
 
 export const createTableElementOnPointerDown = (
   app: TableApp,
@@ -551,15 +558,23 @@ export const clearSelectedTableCells = (
     app.scene.triggerUpdate();
     return true;
   }
+  if (kind === "backgroundText") {
+    const cellIds = selected.map((cell) => cell.id);
+    if (!cellIds.some((cellId) => table.texts?.[cellKey(cellId)])) {
+      return false;
+    }
+    app.store.scheduleCapture();
+    app.scene.mutateElement(table, {
+      texts: withoutTableTextCells(table.texts, cellIds) ?? {},
+    });
+    app.scene.triggerUpdate();
+    return true;
+  }
   const elementsMap = app.scene.getNonDeletedElementsMap();
   const direct = selected.flatMap(
     (cell) =>
-      getIndexedTableCellChildren(
-        elementsMap,
-        table.id,
-        cell.id,
-        kind === "backgroundText" ? "backgroundText" : "content",
-      ) ?? [],
+      getIndexedTableCellChildren(elementsMap, table.id, cell.id, "content") ??
+      [],
   );
   if (!direct.length) {
     return false;
@@ -567,19 +582,13 @@ export const clearSelectedTableCells = (
   const doomedIds = new Set<string>();
   for (const element of direct) {
     doomedIds.add(element.id);
-    if (kind === "content") {
-      if (isTableElement(element) || isFrameLikeElement(element)) {
-        for (const descendant of getTableSubtreeElements(
-          app.scene.getNonDeletedElements(),
-          element.id,
-          elementsMap,
-        )) {
-          doomedIds.add(descendant.id);
-        }
-      }
-      const bound = getBoundTextElement(element, elementsMap);
-      if (bound) {
-        doomedIds.add(bound.id);
+    if (isTableElement(element) || isFrameLikeElement(element)) {
+      for (const descendant of getTableSubtreeElements(
+        app.scene.getNonDeletedElements(),
+        element.id,
+        elementsMap,
+      )) {
+        doomedIds.add(descendant.id);
       }
     }
   }
@@ -594,9 +603,7 @@ export const clearSelectedTableCells = (
       containerRef: element.containerRef ? undefined : element.containerRef,
     });
   }
-  if (kind === "content") {
-    fixBindingsAfterDeletion(app.scene.getNonDeletedElements(), doomed);
-  }
+  fixBindingsAfterDeletion(app.scene.getNonDeletedElements(), doomed);
   app.scene.triggerUpdate();
   return true;
 };
@@ -684,10 +691,7 @@ export const centerSelectedTableCellContent = (app: TableApp): boolean => {
     if (!direct.length) {
       continue;
     }
-    const ids = collectCellMemberIds(app, table.id, [cell.id]).filter((id) => {
-      const member = elementsMap.get(id);
-      return member && !isTableCellBackgroundText(member);
-    });
+    const ids = collectCellMemberIds(app, table.id, [cell.id]);
     const boxes = ids.map((id) =>
       getElementAbsoluteCoords(elementsMap.get(id)!, elementsMap),
     );
@@ -861,10 +865,7 @@ export const getTableCellDropTargetAtSceneCoords = (
 
     // a cell member hit resolves to its direct parent cell — including a
     // member of a locked table
-    if (
-      hitElement.containerRef?.kind === "tableCell" &&
-      !isBoundToContainer(hitElement)
-    ) {
+    if (hitElement.containerRef?.kind === "tableCell") {
       const table = elementsMap.get(hitElement.containerRef.elementId);
       if (table && isTableElement(table) && !table.isDeleted) {
         return { table, cellId: hitElement.containerRef.cellId };
@@ -907,10 +908,9 @@ export const getTableCellDropTargetAtSceneCoords = (
 };
 
 /**
- * Double-click on a cell's blank area (or its background text) opens the
- * cell's background text editor, creating the text element when the cell has
- * none. Returns false when the double-click belongs to something else — a
- * hit above the table keeps the generic double-click behavior.
+ * Double-click on a cell opens its region editor (`cell:<id>`). Returns false
+ * when the double-click belongs to something else — a hit above the table
+ * keeps the generic double-click behavior.
  */
 export const handleTableCellDoubleClick = (
   app: TableApp,
@@ -931,53 +931,20 @@ export const handleTableCellDoubleClick = (
   }
 
   app.cursor.reset();
-  editTableCellBackgroundText(app, topHit, cellId, { x: sceneX, y: sceneY });
+  startCellRegionEditing(app, topHit, cellKey(cellId), {
+    initialCaretSceneCoords: { x: sceneX, y: sceneY },
+    autoSelect: true,
+  });
   return true;
-};
-
-const editTableCellBackgroundText = (
-  app: TableApp,
-  table: NonDeleted<ExcalidrawTableElement>,
-  cellId: string,
-  initialCaretSceneCoords: { x: number; y: number },
-): void => {
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  // the cell index is keyed by a non-deleted collection, so members are
-  // non-deleted; only text elements may carry the backgroundText role
-  const existing = getIndexedTableCellChildren(
-    elementsMap,
-    table.id,
-    cellId,
-    "backgroundText",
-  )?.find(
-    (element): element is ExcalidrawTextElement => element.type === "text",
-  ) as NonDeleted<ExcalidrawTextElement> | undefined;
-
-  if (existing) {
-    refitTableCellBackgroundText(app, existing.id);
-    const fitted = app.scene.getNonDeletedElement(existing.id) as
-      | NonDeleted<ExcalidrawTextElement>
-      | undefined;
-    if (!fitted) {
-      return;
-    }
-    app.setState({ editingTextElement: fitted });
-    app.handleTextWysiwyg(fitted, {
-      isExistingElement: true,
-      initialCaretSceneCoords,
-    });
-    return;
-  }
-
-  const text = createTableCellBackgroundText(app, table, cellId);
-
-  app.setState({ editingTextElement: text });
-  app.handleTextWysiwyg(text, { isExistingElement: false });
 };
 
 export const editSelectedTableCellBackgroundText = (app: TableApp): boolean => {
   const selection = app.state.tableCellSelection;
-  if (!selection || app.state.editingTextElement) {
+  if (
+    !selection ||
+    app.state.editingTextElement ||
+    app.state.editingTextRegion
+  ) {
     return false;
   }
   const table = app.scene.getNonDeletedElement(selection.tableId);
@@ -989,63 +956,14 @@ export const editSelectedTableCellBackgroundText = (app: TableApp): boolean => {
   if (!bounds) {
     return false;
   }
-  const initialCaretSceneCoords = {
-    x: table.x + bounds.x + bounds.width / 2,
-    y: table.y + bounds.y + bounds.height / 2,
-  };
-  editTableCellBackgroundText(app, table, cell.id, initialCaretSceneCoords);
-  return true;
-};
-
-const createTableCellBackgroundText = (
-  app: TableApp,
-  table: NonDeleted<ExcalidrawTableElement>,
-  cellId: string,
-): NonDeleted<ExcalidrawTextElement> => {
-  const text = buildTableCellBackgroundText(app, table, cellId, {
-    text: "",
-    elementsMap: app.scene.getNonDeletedElementsMap(),
+  startCellRegionEditing(app, table, cellKey(cell.id), {
+    initialCaretSceneCoords: {
+      x: table.x + bounds.x + bounds.width / 2,
+      y: table.y + bounds.y + bounds.height / 2,
+    },
+    autoSelect: true,
   });
-
-  app.scene.insertElementsAtIndex(
-    [text],
-    getTableCellBackgroundInsertionIndex(app, table, cellId),
-  );
-
-  return text;
-};
-
-/**
- * Scene index for a cell's background text: above the table element and below
- * the cell's other members — directly before the cell's first `content`
- * member, or right after the table when the cell has none (phase-1.md:68).
- * Inserted at the index itself (not appended), like bound text.
- */
-const getTableCellBackgroundInsertionIndex = (
-  app: TableApp,
-  table: NonDeleted<ExcalidrawTableElement>,
-  cellId: string,
-): number => {
-  const elements = app.scene.getElementsIncludingDeleted();
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-
-  const firstContent = getIndexedTableCellChildren(
-    elementsMap,
-    table.id,
-    cellId,
-    "content",
-  )?.[0];
-  if (firstContent) {
-    const index = elements.findIndex(
-      (element) => element.id === firstContent.id,
-    );
-    if (index !== -1) {
-      return index;
-    }
-  }
-
-  const tableIndex = elements.findIndex((element) => element.id === table.id);
-  return tableIndex === -1 ? elements.length : tableIndex + 1;
+  return true;
 };
 
 // ---------------------------------------------------------------------------
@@ -1144,46 +1062,14 @@ const applyMemberTranslations = (
     startMembers?: Map<string, { x: number; y: number; ownerId: string }>;
   },
 ) => translateSceneMembers(app.scene, table, kind, translations, opts);
-const refitCellBackgroundTexts = (
-  app: TableApp,
-  table: NonDeleted<ExcalidrawTableElement>,
-  cellIds: readonly string[],
-) => refitSceneCellBackgroundTexts(app.scene, table, cellIds);
 
 /**
- * Refit the edited background text to its visible cell, growing its row when
- * wrapped content needs more space.
+ * 文本是表格自己的区域：列宽变化后按新几何重新求解行高（只增长）。
  */
-export const refitTableCellBackgroundText = (
+const relayoutTableText = (
   app: TableApp,
-  elementId: string,
-): boolean => {
-  const elementsMap = app.scene.getNonDeletedElementsMap();
-  const text = elementsMap.get(elementId);
-  const ref = text?.containerRef;
-  if (!text || !isTableCellBackgroundText(text) || ref?.kind !== "tableCell") {
-    return false;
-  }
-
-  const table = elementsMap.get(ref.elementId);
-  if (!table || !isTableElement(table)) {
-    return false;
-  }
-  const cell = table.table.cells.find(
-    (candidate) => candidate.id === ref.cellId,
-  );
-  if (!cell) {
-    return false;
-  }
-  const bounds = getTableCellBounds(table.table, cell.id);
-  if (!bounds) {
-    return false;
-  }
-
-  refitCellBackgroundTexts(app, table, [cell.id]);
-  app.scene.triggerUpdate();
-  return true;
-};
+  table: NonDeleted<ExcalidrawTableElement>,
+) => applyTableTextLayout(app.scene, table);
 
 /**
  * The structure zones of one table, judged in table-local coordinates
@@ -2072,10 +1958,9 @@ export const handleTableGestureMove = (
         },
         { informMutation: false, isDragging: true },
       );
-      // 被调行列及后续平移单元格的背景文本跟随新格几何（字号不变）；
-      // 必须在表格数据落地之后按新 bounds 计算
+      // 列宽变化后按新几何重新求解文本（字号不变）；必须在表格数据落地之后
       if (updatedTable && isTableElement(updatedTable)) {
-        refitCellBackgroundTexts(app, updatedTable, gesture.resizedCellIds);
+        relayoutTableText(app, updatedTable);
       }
       app.scene.triggerUpdate();
       return true;
@@ -2693,7 +2578,6 @@ export const persistTableTextModesAfterResize = (
 
     const modeFields = [
       "autoResize",
-      "baseFontSize",
       "baseHeight",
       "textFitMode",
       "layoutFrozen",
@@ -2706,6 +2590,10 @@ export const persistTableTextModesAfterResize = (
         if (field in bag) {
           modeUpdate[field] = bag[field];
         }
+      }
+      // 字号、便签字号上限与文本模式都随缩放后的文本块一起持久化
+      if (bag.texts) {
+        modeUpdate.texts = bag.texts;
       }
       if (!Object.keys(modeUpdate).length) {
         continue;

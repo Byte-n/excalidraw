@@ -13,14 +13,11 @@ import { type Bounds } from "@excalidraw/common";
 
 import {
   boundsContainBounds,
-  computeBoundTextPosition,
   doBoundsIntersect,
   elementOverlapsWithFrame,
-  getBoundTextElement,
   getContainingFrame,
   getElementBounds,
   intersectElementWithLineSegment,
-  isBoundToContainer,
   isContainerBackgroundText,
   pointInsideBoundsInclusive,
 } from "@excalidraw/element";
@@ -62,12 +59,10 @@ export const getLassoSelectedElementIds = (input: {
   if (simplifyDistance) {
     path = simplify(lassoPath, simplifyDistance) as GlobalPoint[];
   }
-  // bound text is never selected on its own, it's covered by its container;
-  // a cell's background text is chrome the same way — the lasso must cross
-  // cells without picking it up (phase-1.md:141)
+  // a cell's background text is chrome — the lasso must cross cells without
+  // picking it up (phase-1.md:141)
   const selectableElements = elements.filter(
-    (el) =>
-      !el.locked && !isBoundToContainer(el) && !isContainerBackgroundText(el),
+    (el) => !el.locked && !isContainerBackgroundText(el),
   );
   // as the path might not enclose a shape anymore, clear before checking
   enclosedElements.clear();
@@ -198,16 +193,7 @@ const getSelectionSegments = (
   elementsSegments: ElementsSegmentsMap,
   clipBounds: Bounds | null,
 ): LineSegment<GlobalPoint>[] => {
-  const elementSegments = elementsSegments.get(element.id) ?? [];
-  const boundTextElement = getBoundTextElement(element, elementsMap);
-  const boundTextSegments = boundTextElement
-    ? elementsSegments.get(boundTextElement.id)
-    : null;
-
-  const segments = boundTextSegments?.length
-    ? [...elementSegments, ...boundTextSegments]
-    : elementSegments;
-
+  const segments = elementsSegments.get(element.id) ?? [];
   return clipBounds ? clipSegmentsToBounds(segments, clipBounds) : segments;
 };
 
@@ -291,9 +277,8 @@ const excludeIncompleteGroups = (
   for (const element of elementsMap.values()) {
     const groupId = element.groupIds.at(-1);
 
-    // ignored elements such as bound text and locked elements must not
-    // affect group selection
-    if (!groupId || element.locked || isBoundToContainer(element)) {
+    // ignored elements such as locked elements must not affect group selection
+    if (!groupId || element.locked) {
       continue;
     }
 
@@ -368,8 +353,6 @@ const intersectionTest = (
     .map((point: GlobalPoint, index) => lineSegment(lassoPath[index], point))
     .concat([lineSegment(lassoPath[lassoPath.length - 1], lassoPath[0])]);
 
-  const boundTextElement = getBoundTextElement(element, elementsMap);
-
   // hits on the part of the element clipped away by its frame are invisible,
   // hence they do not count as an intersection
   const intersects = (
@@ -389,16 +372,5 @@ const intersectionTest = (
       : hits.length > 0;
   };
 
-  return lassoSegments.some(
-    (lassoSegment) =>
-      intersects(element, lassoSegment) ||
-      (!!boundTextElement &&
-        intersects(
-          {
-            ...boundTextElement,
-            ...computeBoundTextPosition(element, boundTextElement, elementsMap),
-          },
-          lassoSegment,
-        )),
-  );
+  return lassoSegments.some((lassoSegment) => intersects(element, lassoSegment));
 };

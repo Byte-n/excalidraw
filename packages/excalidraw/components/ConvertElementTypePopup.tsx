@@ -4,6 +4,10 @@ import {
   bumpVersion,
   getMindmapShapeId,
   getLinearElementSubType,
+  getTextElementFont,
+  getTextElementStyle,
+  getTextElementStylePatch,
+  getTextElementText,
   isShapeElement,
   mutateElement,
   updateElbowArrowPoints,
@@ -12,7 +16,6 @@ import {
 import { pointFrom, pointRotateRads, type LocalPoint } from "@excalidraw/math";
 
 import {
-  hasBoundTextElement,
   isArrowBoundToElement,
   isArrowElement,
   isElbowArrow,
@@ -28,10 +31,6 @@ import {
 } from "@excalidraw/element";
 
 import {
-  getBoundTextElement,
-  getBoundTextMaxHeight,
-  getBoundTextMaxWidth,
-  redrawTextBoundingBox,
 } from "@excalidraw/element";
 
 import { wrapText } from "@excalidraw/element";
@@ -39,7 +38,6 @@ import { wrapText } from "@excalidraw/element";
 import {
   assertNever,
   CLASSES,
-  getFontString,
   isProdEnv,
   mapFind,
   reduceToCommonValue,
@@ -77,7 +75,6 @@ import type {
   ExcalidrawRectangleElement,
   ExcalidrawSelectionElement,
   ExcalidrawTextContainer,
-  ExcalidrawTextElementWithContainer,
   FixedSegment,
   NonDeleted,
   NonDeletedExcalidrawElement,
@@ -208,13 +205,6 @@ export const convertElementTypePopupAtom = atom<{
 
 type CacheKey = string & { _brand: "CacheKey" };
 
-const FONT_SIZE_CONVERSION_CACHE = new Map<
-  ExcalidrawElement["id"],
-  {
-    fontSize: number;
-  }
->();
-
 const LINEAR_ELEMENT_CONVERSION_CACHE = new Map<
   CacheKey,
   ExcalidrawLinearElement
@@ -247,7 +237,6 @@ const ConvertElementTypePopup = ({ app }: { app: App }) => {
 
   useEffect(() => {
     return () => {
-      FONT_SIZE_CONVERSION_CACHE.clear();
       LINEAR_ELEMENT_CONVERSION_CACHE.clear();
     };
   }, []);
@@ -345,22 +334,6 @@ const Panel = ({
     }
   }, [linearElements]);
 
-  useEffect(() => {
-    for (const element of genericElements) {
-      if (!FONT_SIZE_CONVERSION_CACHE.has(element.id)) {
-        const boundText = getBoundTextElement(
-          element,
-          app.scene.getNonDeletedElementsMap(),
-        );
-        if (boundText) {
-          FONT_SIZE_CONVERSION_CACHE.set(element.id, {
-            fontSize: boundText.fontSize,
-          });
-        }
-      }
-    }
-  }, [genericElements, app.scene]);
-
   const SHAPES: [string, ReactNode][] =
     conversionType === "linear"
       ? [
@@ -431,52 +404,6 @@ const Panel = ({
       })}
     </div>
   );
-};
-
-export const adjustBoundTextSize = (
-  container: ExcalidrawTextContainer,
-  boundText: ExcalidrawTextElementWithContainer,
-  scene: Scene,
-) => {
-  const maxWidth = getBoundTextMaxWidth(container, boundText);
-  const maxHeight = getBoundTextMaxHeight(container, boundText);
-
-  const wrappedText = wrapText(
-    boundText.text,
-    getFontString(boundText),
-    maxWidth,
-  );
-
-  let metrics = measureText(
-    wrappedText,
-    getFontString(boundText),
-    boundText.lineHeight,
-  );
-
-  let nextFontSize = boundText.fontSize;
-  while (
-    (metrics.width > maxWidth || metrics.height > maxHeight) &&
-    nextFontSize > 0
-  ) {
-    nextFontSize -= 1;
-    const _updatedTextElement = {
-      ...boundText,
-      fontSize: nextFontSize,
-    };
-    metrics = measureText(
-      boundText.text,
-      getFontString(_updatedTextElement),
-      boundText.lineHeight,
-    );
-  }
-
-  mutateElement(boundText, scene.getNonDeletedElementsMap(), {
-    fontSize: nextFontSize,
-    width: metrics.width,
-    height: metrics.height,
-  });
-
-  redrawTextBoundingBox(boundText, container, scene);
 };
 
 type ConversionType = "generic" | "linear" | null;
@@ -571,26 +498,6 @@ export const convertElementTypes = (
           // 类型转换换了轮廓（保包围盒），先按新轮廓重锚，再更新绑定
           reanchorBindingsToOutline(element, app.scene);
           updateBindings(element, app.scene, app.state);
-        }
-
-        const boundText = getBoundTextElement(
-          element,
-          app.scene.getNonDeletedElementsMap(),
-        );
-        if (boundText) {
-          if (FONT_SIZE_CONVERSION_CACHE.get(element.id)) {
-            mutateElement(boundText, app.scene.getNonDeletedElementsMap(), {
-              fontSize:
-                FONT_SIZE_CONVERSION_CACHE.get(element.id)?.fontSize ??
-                boundText.fontSize,
-            });
-          }
-
-          adjustBoundTextSize(
-            element as ExcalidrawTextContainer,
-            boundText,
-            app.scene,
-          );
         }
       }
 
@@ -739,14 +646,7 @@ export const getConversionTypeFromElements = (
     elements.every(
       (element) =>
         isMindmapNodeElement(element) ||
-        isMindmapEdgeElement(element) ||
-        (element.type === "text" &&
-          !!element.containerId &&
-          elements.some(
-            (candidate) =>
-              candidate.id === element.containerId &&
-              isMindmapNodeElement(candidate),
-          )),
+        isMindmapEdgeElement(element),
     )
   ) {
     return "generic";
@@ -773,8 +673,7 @@ export const getConversionTypeFromElements = (
 const isEligibleLinearElement = (element: ExcalidrawElement) => {
   return (
     isLinearElement(element) &&
-    (!isArrowElement(element) ||
-      (!isArrowBoundToElement(element) && !hasBoundTextElement(element)))
+    (!isArrowElement(element) || !isArrowBoundToElement(element))
   );
 };
 
@@ -980,7 +879,10 @@ const convertElementType = <
       }),
     ) as typeof element;
 
-    return nextElement;
+    // 内嵌文本区域属于元素自身，转换类型时必须随元素一起保留
+    return element.texts
+      ? ({ ...nextElement, texts: element.texts } as typeof element)
+      : nextElement;
   }
 
   if (isConvertibleLinearType(targetType)) {

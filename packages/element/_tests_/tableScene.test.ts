@@ -8,19 +8,23 @@ import {
   newArrowElement,
   newElement,
   newTableElement,
-  newTextElement,
 } from "../src/newElement";
+import { duplicateElements } from "../src/duplicate";
 import { applyTableOperation } from "../src/tableScene";
 import { CanvasSceneError } from "../src/sceneOperations";
+import {
+  getTableCellTextBaseStyle,
+  resolveTableCellTextStyle,
+} from "../src/tableTextStyle";
 import { setCustomTextMetricsProvider } from "../src/textMeasurements";
-import { resolveTableBackgroundTextFontWeight } from "../src/tableRender";
+import { cellKey } from "../src/text/keys";
+import { getTextBlock, withTextBlock } from "../src/text/ops";
 import { isTableElement } from "../src/typeChecks";
 
 import type {
   ExcalidrawElement,
   ExcalidrawArrowElement,
   ExcalidrawTableElement,
-  ExcalidrawTextElement,
   NonDeleted,
 } from "../src/types";
 import type { TableOperation } from "../src/tableScene";
@@ -56,25 +60,21 @@ const fixture = () =>
     rowCount: 3,
     columnCount: 3,
   });
-const background = (
+/** 给表格写进若干单元格文本块。 */
+const withCellTexts = (
   table: ExcalidrawTableElement,
-  cellId: string,
-  text: string,
-) =>
-  newTextElement({
-    x: table.x,
-    y: table.y,
-    text,
-    textAlign: "center",
-    verticalAlign: "middle",
-    autoResize: false,
-    containerRef: {
-      kind: "tableCell",
-      elementId: table.id,
-      cellId,
-      role: "backgroundText",
-    },
-  });
+  entries: readonly (readonly [cellId: string, text: string])[],
+): ExcalidrawTableElement => ({
+  ...table,
+  texts: entries.reduce(
+    (acc, [cellId, text]) =>
+      withTextBlock(acc, cellKey(cellId), {
+        text,
+        style: getTableCellTextBaseStyle(),
+      }),
+    table.texts,
+  ),
+});
 const assertError = (
   elements: readonly ExcalidrawElement[],
   operation: TableOperation,
@@ -92,31 +92,25 @@ const assertError = (
 };
 
 describe("完整表格纯场景操作", () => {
-  it("重复背景文字按显示投影的稳定身份选择，合并不拼接隐藏文字", () => {
+  it("合并拼接可见格文本到锚点，删除被覆盖格的文本键", () => {
     const table = fixture();
     const first = cellAt(table, 0, 0);
     const second = cellAt(table, 0, 1);
-    const hidden = {
-      ...background(table, first.id, "隐藏"),
-      id: "z-background",
-    };
-    const visible = {
-      ...background(table, first.id, "可见"),
-      id: "a-background",
-    };
-    const next = background(table, second.id, "下一格");
-    const result = applyTableOperation([table, hidden, visible, next], {
+    const withText = withCellTexts(table, [
+      [first.id, "可见"],
+      [second.id, "下一格"],
+    ]);
+    const result = applyTableOperation([withText], {
       action: "mergeCells",
       target: { tableId: table.id },
       firstCellId: first.id,
       lastCellId: second.id,
     });
-    expect(
-      result.elements.find((element) => element.id === visible.id),
-    ).toMatchObject({ originalText: "可见\n下一格", isDeleted: false });
-    expect(
-      result.elements.find((element) => element.id === hidden.id)?.isDeleted,
-    ).toBe(true);
+    const merged = tableIn(result.elements, table.id);
+    expect(getTextBlock(merged.texts, cellKey(first.id))?.text).toBe(
+      "可见\n下一格",
+    );
+    expect(getTextBlock(merged.texts, cellKey(second.id))).toBeUndefined();
   });
 
   it("创建表格名称和稳定行列格子引用，不依赖 DOM", () => {
@@ -154,37 +148,34 @@ describe("完整表格纯场景操作", () => {
     const table = fixture();
     const first = cellAt(table, 0, 0);
     const last = cellAt(table, 1, 1);
-    const texts = [
-      background(table, first.id, "左上"),
-      background(table, cellAt(table, 0, 1).id, "右上"),
-      background(table, cellAt(table, 1, 0).id, "左下"),
-      background(table, last.id, "右下"),
-    ];
-    const member = newElement({
-      type: "rectangle",
-      x: 275,
-      y: 175,
-      width: 20,
-      height: 20,
-      containerRef: {
-        kind: "tableCell",
-        elementId: table.id,
-        cellId: last.id,
-        role: "content",
+    const withText = withCellTexts(table, [
+      [first.id, "左上"],
+      [cellAt(table, 0, 1).id, "右上"],
+      [cellAt(table, 1, 0).id, "左下"],
+      [last.id, "右下"],
+    ]);
+    const member = {
+      ...newElement({
+        type: "rectangle",
+        x: 275,
+        y: 175,
+        width: 20,
+        height: 20,
+        containerRef: {
+          kind: "tableCell",
+          elementId: table.id,
+          cellId: last.id,
+          role: "content",
+        },
+      }),
+      texts: {
+        body: {
+          text: "成员标签",
+          style: getTableCellTextBaseStyle(),
+        },
       },
-    });
-    const label = newTextElement({
-      x: 275,
-      y: 175,
-      text: "成员标签",
-      containerId: member.id,
-    });
-    const input = [
-      table,
-      ...texts,
-      { ...member, boundElements: [{ id: label.id, type: "text" as const }] },
-      label,
-    ];
+    };
+    const input = [withText, member];
     const before = structuredClone(input);
     const result = applyTableOperation(input, {
       action: "mergeCells",
@@ -193,26 +184,17 @@ describe("完整表格纯场景操作", () => {
       lastCellId: last.id,
     });
     expect(input).toEqual(before);
-    expect(
-      result.elements.find((element) => element.id === texts[0].id),
-    ).toMatchObject({
-      originalText: "左上\n右上\n左下\n右下",
-      version: texts[0].version,
-      versionNonce: texts[0].versionNonce,
-      updated: texts[0].updated,
-      created: texts[0].created,
-      index: texts[0].index,
-    });
-    expect(result.deletedElementIds).toEqual(
-      texts.slice(1).map((text) => text.id),
-    );
-    expect(
-      result.elements.find((element) => element.id === member.id)?.containerRef,
-    ).toMatchObject({ cellId: first.id });
-    expect(result.elements.find((element) => element.id === label.id)).toEqual(
-      label,
-    );
     const merged = tableIn(result.elements, table.id);
+    expect(getTextBlock(merged.texts, cellKey(first.id))).toMatchObject({
+      text: "左上\n右上\n左下\n右下",
+    });
+    expect(getTextBlock(merged.texts, cellKey(last.id))).toBeUndefined();
+    expect(
+      result.elements.find((element) => element.id === member.id),
+    ).toMatchObject({
+      containerRef: { cellId: first.id },
+      texts: { body: { text: "成员标签" } },
+    });
     expect(cellAt(merged, 0, 0)).toMatchObject({ rowSpan: 2, columnSpan: 2 });
     const split = applyTableOperation(result.elements, {
       action: "splitCell",
@@ -229,12 +211,17 @@ describe("完整表格纯场景操作", () => {
       ),
     ).toBe(true);
     expect(split.createdElementIds).toHaveLength(0);
+    // 拆分后锚点保留文本，新露出的格从空文本开始
     expect(
-      split.elements.find((element) => element.id === texts[0].id),
-    ).toMatchObject({ originalText: "左上\n右上\n左下\n右下" });
+      getTextBlock(tableIn(split.elements, table.id).texts, cellKey(first.id))
+        ?.text,
+    ).toBe("左上\n右上\n左下\n右下");
+    expect(
+      getTextBlock(tableIn(split.elements, table.id).texts, cellKey(last.id)),
+    ).toBeUndefined();
   });
 
-  it("covered cell 的文字和样式指向同一真实 anchor，清空不替换正文成员", () => {
+  it("covered cell 的文本写到可见锚点，清空只删该键", () => {
     const table = fixture();
     const first = cellAt(table, 0, 0);
     const covered = cellAt(table, 0, 1);
@@ -254,11 +241,13 @@ describe("完整表格纯场景操作", () => {
       cellId: covered.id,
       anchorCellId: first.id,
     });
-    const text = changed.elements.find((element) => element.type === "text")!;
-    expect(text.containerRef).toMatchObject({
-      cellId: first.id,
-      role: "backgroundText",
-    });
+    const changedTable = tableIn(changed.elements, table.id);
+    expect(getTextBlock(changedTable.texts, cellKey(first.id))?.text).toBe(
+      "更新",
+    );
+    expect(
+      getTextBlock(changedTable.texts, cellKey(covered.id)),
+    ).toBeUndefined();
     const styled = applyTableOperation(changed.elements, {
       action: "setCellStyle",
       target: { tableId: table.id },
@@ -285,12 +274,11 @@ describe("完整表格纯场景操作", () => {
       text: "",
     });
     expect(empty.createdElementIds).toHaveLength(0);
-    expect(
-      empty.elements.find((element) => element.id === text.id),
-    ).toMatchObject({ originalText: "", isDeleted: false });
+    const emptyTable = tableIn(empty.elements, table.id);
+    expect(emptyTable.texts?.[cellKey(first.id)]).toBeUndefined();
   });
 
-  it("背景文字出厂为 13px 左对齐垂直居中并带默认内边距", () => {
+  it("单元格文本出厂为 13px 左对齐垂直居中，短文字不撑行高", () => {
     const table = fixture();
     // 非首行单元格，隔离表头字重对测量的影响
     const cell = cellAt(table, 1, 0);
@@ -300,21 +288,16 @@ describe("完整表格纯场景操作", () => {
       cellId: cell.id,
       text: "标签",
     });
-    const text = result.elements.find((element) => element.type === "text")!;
-    expect(text).toMatchObject({
+    const next = tableIn(result.elements, table.id);
+    expect(getTextBlock(next.texts, cellKey(cell.id))?.style).toMatchObject({
       fontSize: 13,
       textAlign: "left",
       verticalAlign: "middle",
     });
-    // 左对齐把文字压在默认内边距（12）处
-    expect(text.x).toBe(table.x + 12);
-    // 单行短文字不撑行高，垂直居中在带内边距的格子里
-    const next = tableIn(result.elements, table.id);
     expect(next.table.rows[1].height).toBe(56);
-    expect(text.y).toBeCloseTo(table.y + 56 + (56 - text.height) / 2, 5);
   });
 
-  it("首行背景文字按表头派生 600 字重且不写回元素", () => {
+  it("首行文本按表头派生 600 字重且不写回块", () => {
     const table = fixture();
     const result = applyTableOperation([table], {
       action: "setCellText",
@@ -322,62 +305,53 @@ describe("完整表格纯场景操作", () => {
       cellId: cellAt(table, 0, 0).id,
       text: "表头",
     });
-    const headerText = result.elements.find(
-      (element) => element.type === "text",
-    )! as ExcalidrawTextElement;
-    // 纯渲染派生：元素自身不落 fontWeight
-    expect(headerText.fontWeight).toBe(undefined);
-    const elementsMap = new Map(
-      result.elements.map((element) => [element.id, element]),
-    );
-    expect(resolveTableBackgroundTextFontWeight(headerText, elementsMap)).toBe(
-      600,
-    );
+    const next = tableIn(result.elements, table.id);
+    const block = getTextBlock(next.texts, cellKey(cellAt(table, 0, 0).id));
+    // 纯渲染派生：块自身不落 fontWeight
+    expect(block?.style.fontWeight).toBeUndefined();
+    expect(
+      resolveTableCellTextStyle(next.table, cellAt(next, 0, 0), block?.style)
+        .fontWeight,
+    ).toBe(600);
   });
 
-  it("文字自动增长行高并平移后续行成员和绑定文字", () => {
+  it("文字自动增长行高并平移后续行成员", () => {
     const table = fixture();
-    const member = newElement({
-      type: "rectangle",
-      x: 110,
-      y: 168,
-      width: 20,
-      height: 20,
-      containerRef: {
-        kind: "tableCell",
-        elementId: table.id,
-        cellId: cellAt(table, 1, 0).id,
-        role: "content",
+    const member = {
+      ...newElement({
+        type: "rectangle",
+        x: 110,
+        y: 168,
+        width: 20,
+        height: 20,
+        containerRef: {
+          kind: "tableCell",
+          elementId: table.id,
+          cellId: cellAt(table, 1, 0).id,
+          role: "content",
+        },
+      }),
+      texts: {
+        body: {
+          text: "标签",
+          style: getTableCellTextBaseStyle(),
+        },
       },
+    };
+    const result = applyTableOperation([table, member], {
+      action: "setCellText",
+      target: { tableId: table.id },
+      cellId: cellAt(table, 0, 0).id,
+      text: "第一行\n第二行\n第三行\n第四行",
     });
-    const label = newTextElement({
-      x: 110,
-      y: 168,
-      text: "标签",
-      containerId: member.id,
-    });
-    const result = applyTableOperation(
-      [
-        table,
-        { ...member, boundElements: [{ id: label.id, type: "text" }] },
-        label,
-      ],
-      {
-        action: "setCellText",
-        target: { tableId: table.id },
-        cellId: cellAt(table, 0, 0).id,
-        text: "第一行\n第二行\n第三行\n第四行",
-      },
-    );
     const next = tableIn(result.elements, table.id);
     const growth = next.table.rows[0].height - table.table.rows[0].height;
     expect(growth).toBeGreaterThan(0);
-    expect(result.elements.find((element) => element.id === member.id)?.y).toBe(
-      member.y + growth,
+    const movedMember = result.elements.find(
+      (element) => element.id === member.id,
     );
-    expect(result.elements.find((element) => element.id === label.id)?.y).toBe(
-      label.y + growth,
-    );
+    expect(movedMember?.y).toBe(member.y + growth);
+    expect(movedMember?.texts).toEqual(member.texts);
   });
 
   it.each(["insertRow", "insertColumn"] as const)(
@@ -414,12 +388,12 @@ describe("完整表格纯场景操作", () => {
   );
 
   it.each(["deleteRow", "deleteColumn"] as const)(
-    "%s 的存活合并 anchor 继承文字和正文",
+    "%s 的存活合并 anchor 继承文本键和正文",
     (action) => {
       const table = fixture();
       const anchor = cellAt(table, 0, 0);
       const covered = cellAt(table, 1, 1);
-      const text = background(table, anchor.id, "保留");
+      const withText = withCellTexts(table, [[anchor.id, "保留"]]);
       const member = newElement({
         type: "rectangle",
         x: 110,
@@ -433,7 +407,7 @@ describe("完整表格纯场景操作", () => {
           role: "content",
         },
       });
-      const merged = applyTableOperation([table, text, member], {
+      const merged = applyTableOperation([withText, member], {
         action: "mergeCells",
         target: { tableId: table.id },
         firstCellId: anchor.id,
@@ -453,20 +427,31 @@ describe("完整表格纯场景操作", () => {
               columnId: table.table.columns[0].id,
             },
       );
-      const survivingAnchor = cellAt(tableIn(result.elements, table.id), 0, 0);
+      const nextTable = tableIn(result.elements, table.id);
+      const survivingAnchor = cellAt(nextTable, 0, 0);
       expect(
-        result.elements.find((element) => element.id === text.id),
-      ).toMatchObject({
-        isDeleted: false,
-        originalText: "保留",
-        containerRef: { cellId: survivingAnchor.id },
-      });
+        getTextBlock(nextTable.texts, cellKey(survivingAnchor.id))?.text,
+      ).toBe("保留");
+      if (survivingAnchor.id !== anchor.id) {
+        expect(
+          getTextBlock(nextTable.texts, cellKey(anchor.id)),
+        ).toBeUndefined();
+      }
       expect(
         result.elements.find((element) => element.id === member.id),
       ).toMatchObject({
         isDeleted: false,
         containerRef: { cellId: survivingAnchor.id },
       });
+      // 被删除格不残留文本键
+      for (const key of Object.keys(nextTable.texts ?? {})) {
+        const cellId = key.slice("cell:".length);
+        expect(
+          nextTable.table.cells.some(
+            (cell) => cell.id === cellId && !cell.mergedInto,
+          ),
+        ).toBe(true);
+      }
     },
   );
 
@@ -483,7 +468,22 @@ describe("完整表格纯场景操作", () => {
         role: "content",
       },
     });
-    const child = background(nested, nested.table.cells[0].id, "嵌套");
+    const withNestedText = withCellTexts(nested, [
+      [nested.table.cells[0].id, "嵌套"],
+    ]);
+    const child = newElement({
+      type: "rectangle",
+      x: 120,
+      y: 120,
+      width: 20,
+      height: 20,
+      containerRef: {
+        kind: "tableCell",
+        elementId: nested.id,
+        cellId: nested.table.cells[0].id,
+        role: "content",
+      },
+    });
     const survivor = newElement({
       type: "rectangle",
       x: 110,
@@ -511,7 +511,7 @@ describe("完整表格纯场景操作", () => {
       },
     };
     const result = applyTableOperation(
-      [table, nested, child, survivor, arrow],
+      [table, withNestedText, child, survivor, arrow],
       {
         action: "deleteRow",
         target: { tableId: table.id },
@@ -571,7 +571,7 @@ describe("完整表格纯场景操作", () => {
     ).toHaveLength(0);
   });
 
-  it("整表删除包含正文子树与绑定文字并保留输入墓碑", () => {
+  it("整表删除包含正文子树并保留输入墓碑", () => {
     const created = applyTableOperation([], {
       action: "create",
       position: { x: 0, y: 50 },
@@ -579,36 +579,33 @@ describe("完整表格纯场景操作", () => {
       columnCount: 1,
     });
     const table = created.elements.find(isTableElement)!;
-    const member = newElement({
-      type: "rectangle",
-      x: 10,
-      y: 60,
-      width: 20,
-      height: 20,
-      containerRef: {
-        kind: "tableCell",
-        elementId: table.id,
-        cellId: table.table.cells[0].id,
-        role: "content",
+    const member = {
+      ...newElement({
+        type: "rectangle",
+        x: 10,
+        y: 60,
+        width: 20,
+        height: 20,
+        containerRef: {
+          kind: "tableCell",
+          elementId: table.id,
+          cellId: table.table.cells[0].id,
+          role: "content",
+        },
+      }),
+      texts: {
+        body: {
+          text: "标签",
+          style: getTableCellTextBaseStyle(),
+        },
       },
-    });
-    const label = newTextElement({
-      x: 10,
-      y: 60,
-      text: "标签",
-      containerId: member.id,
-    });
+    };
     const tombstone = {
       ...newElement({ type: "rectangle", x: 0, y: 0, width: 1, height: 1 }),
       isDeleted: true,
     };
     const result = applyTableOperation(
-      [
-        ...created.elements,
-        { ...member, boundElements: [{ id: label.id, type: "text" }] },
-        label,
-        tombstone,
-      ],
+      [...created.elements, member, tombstone],
       { action: "delete", target: { tableId: table.id } },
     );
     expect(result.elements.every((element) => element.isDeleted)).toBe(true);
@@ -685,5 +682,50 @@ describe("完整表格纯场景操作", () => {
       },
       "invalid_operation",
     );
+  });
+
+  it("插入行列保留既有文本键，删除行列丢弃被删格的键", () => {
+    const table = fixture();
+    const keptCell = cellAt(table, 1, 1);
+    const withText = withCellTexts(table, [[keptCell.id, "保留"]]);
+
+    const inserted = applyTableOperation([withText], {
+      action: "insertRow",
+      target: { tableId: table.id },
+      at: 0,
+    });
+    const insertedTable = tableIn(inserted.elements, table.id);
+    // 既有格 id 不变，文本键随格保留
+    expect(getTextBlock(insertedTable.texts, cellKey(keptCell.id))?.text).toBe(
+      "保留",
+    );
+
+    const deleted = applyTableOperation(inserted.elements, {
+      action: "deleteRow",
+      target: { tableId: table.id },
+      rowId: table.table.rows[1].id,
+    });
+    const deletedTable = tableIn(deleted.elements, table.id);
+    expect(Object.keys(deletedTable.texts ?? {})).toHaveLength(0);
+    expect(
+      deletedTable.table.cells.some((cell) => cell.id === keptCell.id),
+    ).toBe(false);
+  });
+
+  it("复制表格按单元格映射重写文本键", () => {
+    const table = fixture();
+    const cell = cellAt(table, 0, 0);
+    const withText = withCellTexts(table, [[cell.id, "复制"]]);
+    const duplicated = duplicateElements({
+      type: "everything",
+      elements: [withText],
+    }).duplicatedElements;
+    const copy = duplicated.find(isTableElement)!;
+    expect(copy.id).not.toBe(table.id);
+    const copiedCellId = copy.table.cells[0].id;
+    expect(copiedCellId).not.toBe(cell.id);
+    expect(getTextBlock(copy.texts, cellKey(copiedCellId))?.text).toBe("复制");
+    // 源表格不受影响
+    expect(getTextBlock(withText.texts, cellKey(cell.id))?.text).toBe("复制");
   });
 });

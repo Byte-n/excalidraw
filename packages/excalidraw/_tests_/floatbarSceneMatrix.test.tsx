@@ -2,6 +2,8 @@ import React from "react";
 
 import { Excalidraw } from "../index";
 
+import type { FractionalIndex } from "@excalidraw/element/types";
+
 import { API } from "./helpers/api";
 import { act, fireEvent, render } from "./test-utils";
 
@@ -161,25 +163,42 @@ describe("浮动栏场景矩阵（T3）", () => {
 
   it("思维导图整树（选中根）：布局方向 + 默认连线触发器，无原生颜色/数字输入", async () => {
     await render(<Excalidraw />);
-    API.setElements([
-      API.createElement({
-        type: "text",
-        id: "root-text",
-        text: "root",
-        containerId: "root",
-      }),
-    ]);
     const root = API.createElement({
       type: "mindmap-node" as any,
       id: "root",
       x: 100,
       y: 100,
+      texts: API.mindmapBody({ role: "root" }, "root"),
     });
-    API.setElements([...h.elements, root]);
+    const child = API.createElement({
+      type: "mindmap-node" as any,
+      id: "child",
+      x: 400,
+      y: 100,
+      texts: API.mindmapBody({ role: "node" }, "child"),
+      mindmap: {
+        graphId: "root",
+        parentId: "root",
+        order: "a0" as FractionalIndex,
+        shape: { id: "rectangle", schemaVersion: 1 },
+        collapsed: false,
+      },
+    });
+    const edge = API.createElement({
+      type: "mindmap-edge",
+      id: "edge",
+      mindmap: {
+        graphId: "root",
+        parentId: "root",
+        childId: "child",
+        routing: "orthogonal",
+      },
+    });
+    API.setElements([root, child, edge]);
 
     act(() => {
       API.setAppState({
-        selectedElementIds: { root: true, "root-text": true },
+        selectedElementIds: { root: true, child: true, edge: true },
       });
     });
 

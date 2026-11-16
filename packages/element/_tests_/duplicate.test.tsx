@@ -4,6 +4,7 @@ import {
   FONT_FAMILY,
   ORIG_ID,
   ROUNDNESS,
+  getLineHeight,
   isPrimitive,
   getUpdatedTimestamp,
 } from "@excalidraw/common";
@@ -38,8 +39,10 @@ import { assertValidContainerRefs } from "../src/typeChecks";
 import { newElement, newMindmapNodeElement } from "../src/newElement";
 import { isShapeWithId } from "../src/compositeShape";
 import { mindmapShapeData } from "../src/mindmap";
+import { getTextBlock } from "../src/text/ops";
 
 import type { ExcalidrawLinearElement } from "../src/types";
+import type { TextBlockStyle } from "../src/text/types";
 
 const { h } = window;
 const mouse = new Pointer("mouse");
@@ -56,51 +59,51 @@ const assertCloneObjects = (source: any, clone: any) => {
 };
 
 describe("duplicating single elements", () => {
-  it("remaps a fragment row background text to the duplicated fragment", () => {
-    const fragment = newElement({
-      type: "sequence",
-      x: 0,
-      y: 0,
-      width: 400,
-      height: 240,
-      shape: {
-        id: "sc-fragment",
-        schemaVersion: 1,
-        fragment: {
-          rows: [
-            { id: "header", height: 36.272 },
-            { id: "body", height: 203.728 },
-          ],
+  it("keeps fragment row text keys when duplicating", () => {
+    const style: TextBlockStyle = {
+      fontFamily: FONT_FAMILY.Virgil,
+      fontSize: 14,
+      lineHeight: getLineHeight(FONT_FAMILY.Virgil),
+      textAlign: "left",
+      verticalAlign: "top",
+    };
+    const fragment = {
+      ...newElement({
+        type: "sequence",
+        x: 0,
+        y: 0,
+        width: 400,
+        height: 240,
+        shape: {
+          id: "sc-fragment",
+          schemaVersion: 1,
+          fragment: {
+            rows: [
+              { id: "header", height: 36.272 },
+              { id: "body", height: 203.728 },
+            ],
+          },
         },
+      }),
+      texts: {
+        body: { text: "Opt / Loop", style },
+        "row:body": { text: "[Condition]", style },
       },
-    });
-    const text = API.createElement({
-      type: "text",
-      containerRef: {
-        kind: "fragmentRow",
-        elementId: fragment.id,
-        rowId: "body",
-        role: "backgroundText",
-      },
-    });
+    };
 
     const result = duplicateElements({
       type: "everything",
-      elements: [fragment, text],
+      elements: [fragment],
       randomizeSeed: true,
     });
     const duplicateFragment = result.duplicatedElements.find(
       (element) => element.type === "sequence",
     )!;
-    const duplicateText = result.duplicatedElements.find(
-      (element) => element.type === "text",
-    )!;
-    expect(duplicateText.containerRef).toEqual({
-      kind: "fragmentRow",
-      elementId: duplicateFragment.id,
-      rowId: "body",
-      role: "backgroundText",
-    });
+    expect(Object.keys(duplicateFragment.texts ?? {})).toEqual([
+      "body",
+      "row:body",
+    ]);
+    expect(duplicateFragment.texts?.["row:body"]?.text).toBe("[Condition]");
     expect(() =>
       assertValidContainerRefs(result.elementsWithDuplicates),
     ).not.toThrow();
@@ -225,14 +228,7 @@ describe("duplicating multiple elements", () => {
       boundElements: [
         { id: "arrow1", type: "arrow" },
         { id: "arrow2", type: "arrow" },
-        { id: "text1", type: "text" },
       ],
-    });
-
-    const text1 = API.createElement({
-      type: "text",
-      id: "text1",
-      containerId: "rectangle1",
     });
 
     const arrow1 = API.createElement({
@@ -251,18 +247,11 @@ describe("duplicating multiple elements", () => {
         elementId: "rectangle1",
         attachPoint: [0.5, 1],
       },
-      boundElements: [{ id: "text2", type: "text" }],
-    });
-
-    const text2 = API.createElement({
-      type: "text",
-      id: "text2",
-      containerId: "arrow2",
     });
 
     // -------------------------------------------------------------------------
 
-    const origElements = [rectangle1, text1, arrow1, arrow2, text2] as const;
+    const origElements = [rectangle1, arrow1, arrow2] as const;
     const { duplicatedElements } = duplicateElements({
       type: "everything",
       elements: origElements,
@@ -281,11 +270,6 @@ describe("duplicating multiple elements", () => {
           type: clonedElement.type,
         }),
       );
-      if ("containerId" in origElement) {
-        expect(origElement.containerId).not.toBe(
-          (clonedElement as any).containerId,
-        );
-      }
       if ("endBinding" in origElement) {
         if (origElement.endBinding) {
           expect(origElement.endBinding.elementId).not.toBe(
@@ -311,18 +295,8 @@ describe("duplicating multiple elements", () => {
       (e) => e.type === "arrow",
     ) as ExcalidrawLinearElement[];
 
-    const [clonedRectangle, clonedText1, , clonedArrow2, clonedArrowLabel] =
-      duplicatedElements as any as typeof origElements;
+    const [clonedRectangle] = duplicatedElements;
 
-    expect(clonedText1.containerId).toBe(clonedRectangle.id);
-    expect(
-      clonedRectangle.boundElements!.find((e) => e.id === clonedText1.id),
-    ).toEqual(
-      expect.objectContaining({
-        id: clonedText1.id,
-        type: clonedText1.type,
-      }),
-    );
     expect(isShapeWithId(clonedRectangle, "rectangle")).toBe(true);
 
     clonedArrows.forEach((arrow) => {
@@ -342,11 +316,6 @@ describe("duplicating multiple elements", () => {
         expect(arrow.startBinding.elementId).toBe(clonedRectangle.id);
       }
     });
-
-    expect(clonedArrow2.boundElements).toEqual([
-      { type: "text", id: clonedArrowLabel.id },
-    ]);
-    expect(clonedArrowLabel.containerId).toBe(clonedArrow2.id);
   });
 
   it("should remove id references of elements that aren't found", () => {
@@ -358,8 +327,6 @@ describe("duplicating multiple elements", () => {
         { id: "arrow1", type: "arrow" },
         // should drop
         { id: "arrow-not-exists", type: "arrow" },
-        // should drop
-        { id: "text-not-exists", type: "text" },
       ],
     });
 
@@ -370,12 +337,6 @@ describe("duplicating multiple elements", () => {
         elementId: "rectangle1",
         attachPoint: [0.5, 1],
       },
-    });
-
-    const text1 = API.createElement({
-      type: "text",
-      id: "text1",
-      containerId: "rectangle-not-exists",
     });
 
     const arrow2 = API.createElement({
@@ -406,25 +367,18 @@ describe("duplicating multiple elements", () => {
 
     // -------------------------------------------------------------------------
 
-    const origElements = [rectangle1, text1, arrow1, arrow2, arrow3] as const;
+    const origElements = [rectangle1, arrow1, arrow2, arrow3] as const;
     const duplicatedElements = duplicateElements({
       type: "everything",
       elements: origElements,
     }).duplicatedElements as any as typeof origElements;
 
-    const [
-      clonedRectangle,
-      clonedText1,
-      clonedArrow1,
-      clonedArrow2,
-      clonedArrow3,
-    ] = duplicatedElements;
+    const [clonedRectangle, clonedArrow1, clonedArrow2, clonedArrow3] =
+      duplicatedElements;
 
     expect(clonedRectangle.boundElements).toEqual([
       { id: clonedArrow1.id, type: "arrow" },
     ]);
-
-    expect(clonedText1.containerId).toBe(null);
 
     expect(clonedArrow2.startBinding).toEqual({
       ...arrow2.startBinding,
@@ -814,48 +768,6 @@ describe("duplication z-order", () => {
     ]);
   });
 
-  it("alt-duplicating text container (in-order)", async () => {
-    const [rectangle, text] = API.createTextContainer();
-    API.setElements([rectangle, text]);
-    API.setSelectedElements([rectangle]);
-
-    Keyboard.withModifierKeys({ alt: true }, () => {
-      mouse.down(rectangle.x + 5, rectangle.y + 5);
-      mouse.up(rectangle.x + 15, rectangle.y + 15);
-    });
-
-    assertElements(h.elements, [
-      { id: rectangle.id },
-      { id: text.id, containerId: rectangle.id },
-      { [ORIG_ID]: rectangle.id, selected: true },
-      {
-        [ORIG_ID]: text.id,
-        containerId: getCloneByOrigId(rectangle.id)?.id,
-      },
-    ]);
-  });
-
-  it("alt-duplicating text container (out-of-order)", async () => {
-    const [rectangle, text] = API.createTextContainer();
-    API.setElements([text, rectangle]);
-    API.setSelectedElements([rectangle]);
-
-    Keyboard.withModifierKeys({ alt: true }, () => {
-      mouse.down(rectangle.x + 5, rectangle.y + 5);
-      mouse.up(rectangle.x + 15, rectangle.y + 15);
-    });
-
-    assertElements(h.elements, [
-      { id: rectangle.id },
-      { id: text.id, containerId: rectangle.id },
-      { [ORIG_ID]: rectangle.id, selected: true },
-      {
-        [ORIG_ID]: text.id,
-        containerId: getCloneByOrigId(rectangle.id)?.id,
-      },
-    ]);
-  });
-
   it("alt-duplicating labeled arrows (in-order)", async () => {
     const [arrow, text] = API.createLabeledArrow();
 
@@ -869,22 +781,18 @@ describe("duplication z-order", () => {
 
     assertElements(h.elements, [
       { id: arrow.id },
-      { id: text.id, containerId: arrow.id },
       { [ORIG_ID]: arrow.id, selected: true },
-      {
-        [ORIG_ID]: text.id,
-        containerId: getCloneByOrigId(arrow.id)?.id,
-      },
     ]);
+    expect(getTextBlock(h.elements[1].texts, "label")?.text).toBe("label");
     expect(h.state.selectedLinearElement).toEqual(
       expect.objectContaining({ elementId: getCloneByOrigId(arrow.id)?.id }),
     );
   });
 
   it("alt-duplicating labeled arrows (out-of-order)", async () => {
-    const [arrow, text] = API.createLabeledArrow();
+    const [arrow] = API.createLabeledArrow();
 
-    API.setElements([text, arrow]);
+    API.setElements([arrow]);
     API.setSelectedElements([arrow]);
 
     Keyboard.withModifierKeys({ alt: true }, () => {
@@ -894,13 +802,9 @@ describe("duplication z-order", () => {
 
     assertElements(h.elements, [
       { id: arrow.id },
-      { id: text.id, containerId: arrow.id },
       { [ORIG_ID]: arrow.id, selected: true },
-      {
-        [ORIG_ID]: text.id,
-        containerId: getCloneByOrigId(arrow.id)?.id,
-      },
     ]);
+    expect(getTextBlock(h.elements[1].texts, "label")?.text).toBe("label");
   });
 
   it("alt-duplicating bindable element with bound arrow should keep the arrow on the duplicate", async () => {

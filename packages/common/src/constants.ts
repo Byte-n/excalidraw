@@ -296,7 +296,7 @@ export const STICKY_NOTE_FOOTER = {
 /**
  * outer height → label body height: top + bottom padding + footer. The body
  * is what the label is fitted into; a middle-aligned label is still centered
- * in the whole padded note when it fits (see `computeBoundTextPosition`).
+ * in the whole padded note when it fits.
  */
 export const STICKY_NOTE_BODY_INSET_Y =
   STICKY_NOTE_PADDING * 2 + STICKY_NOTE_FOOTER.height;

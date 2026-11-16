@@ -96,29 +96,26 @@ const moveGroupTo = (
       continue;
     }
 
-    // bound texts are moved with their containers
-    if (!isTextElement(latestElement) || !latestElement.containerId) {
-      const [cx, cy] = [
-        latestElement.x + latestElement.width / 2,
-        latestElement.y + latestElement.height / 2,
-      ];
+    const [cx, cy] = [
+      latestElement.x + latestElement.width / 2,
+      latestElement.y + latestElement.height / 2,
+    ];
 
-      const [topLeftX, topLeftY] = pointRotateRads(
-        pointFrom(latestElement.x, latestElement.y),
-        pointFrom(cx, cy),
-        latestElement.angle,
-      );
+    const [topLeftX, topLeftY] = pointRotateRads(
+      pointFrom(latestElement.x, latestElement.y),
+      pointFrom(cx, cy),
+      latestElement.angle,
+    );
 
-      moveElement(
-        topLeftX + offsetX,
-        topLeftY + offsetY,
-        origElement,
-        scene,
-        appState,
-        originalElementsMap,
-        false,
-      );
-    }
+    moveElement(
+      topLeftX + offsetX,
+      topLeftY + offsetY,
+      origElement,
+      scene,
+      appState,
+      originalElementsMap,
+      false,
+    );
   }
 };
 

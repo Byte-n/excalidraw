@@ -42,11 +42,28 @@ const numericLimits = [
 export const jsonBytes = (value: unknown): number =>
   new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
+/** 文本元素持久化的源文本；非文本元素或缺少正文时返回 null。 */
+const getElementSourceText = (element: SceneElement): string | null => {
+  if (element.type !== "text") {
+    return null;
+  }
+  const texts = element.texts;
+  if (!texts || typeof texts !== "object") {
+    return null;
+  }
+  const body = (texts as Record<string, unknown>).body;
+  if (!body || typeof body !== "object") {
+    return null;
+  }
+  const text = (body as Record<string, unknown>).text;
+  return typeof text === "string" ? text : null;
+};
+
 /** 文本内容按 UTF-8 字节计量；非字符串文本不作为文本节点计量。 */
-const textBytes = (element: SceneElement): number | null =>
-  element.type === "text" && typeof element.text === "string"
-    ? new TextEncoder().encode(element.text).byteLength
-    : null;
+const textBytes = (element: SceneElement): number | null => {
+  const text = getElementSourceText(element);
+  return text === null ? null : new TextEncoder().encode(text).byteLength;
+};
 
 const assertPolicyShape = (policy: ScenePolicy): void => {
   for (const key of numericLimits) {

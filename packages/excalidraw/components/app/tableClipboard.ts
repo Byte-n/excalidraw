@@ -1,24 +1,21 @@
-import {
-  arrayToMap,
-  cloneJSON,
-  getLineHeight,
-  randomId,
-  TABLE_CELL_TEXT_PADDING_X,
-  TABLE_CELL_TEXT_PADDING_Y,
-} from "@excalidraw/common";
+import { arrayToMap, cloneJSON, randomId } from "@excalidraw/common";
 import {
   assertValidTableData,
   assertValidContainerRefs,
+  cellKey,
   duplicateElements,
   getContainerSubtreeElements,
   getTableCellBounds,
   getTableCellRange,
   getTableColumnOffset,
   getTableRowOffset,
+  getTextBlock,
   isTableElement,
   newElementWith,
-  newTextElement,
+  parseTextRegionKey,
   syncMovedIndices,
+  withTextBlock,
+  withoutTableTextCells,
   type TableCellRange,
 } from "@excalidraw/element";
 
@@ -27,9 +24,12 @@ import type {
   ExcalidrawTableElement,
   TableDataV1,
 } from "@excalidraw/element/types";
+import type { TextBlockMap } from "@excalidraw/element";
 
 import type { AppState } from "../../types";
 import type App from "../App";
+
+import { buildTableCellTextBlock } from "./tableCellText";
 
 export type TableRangeClipboard = {
   table: ExcalidrawTableElement;
@@ -178,6 +178,25 @@ export const getSelectedTableRange = (
   return null;
 };
 
+/** 只保留给定可见格的文本块，其余键（含被覆盖格）丢弃。 */
+const filterTableTexts = (
+  texts: TextBlockMap | undefined,
+  cellIds: ReadonlySet<string>,
+): TextBlockMap | undefined => {
+  if (!texts) {
+    return undefined;
+  }
+  let next: TextBlockMap | undefined;
+  for (const key of Object.keys(texts) as (keyof TextBlockMap)[]) {
+    const parsed = parseTextRegionKey(key);
+    const block = texts[key];
+    if (block && parsed?.kind === "cell" && cellIds.has(parsed.cellId)) {
+      next = withTextBlock(next, key, block);
+    }
+  }
+  return next;
+};
+
 export const createTableRangeClipboard = (
   source: ExcalidrawTableElement,
   range: TableCellRange,
@@ -221,6 +240,10 @@ export const createTableRangeClipboard = (
   const table: ExcalidrawTableElement = {
     ...cloneJSON(source),
     table: selectedTableData,
+    texts: filterTableTexts(
+      source.texts,
+      new Set(cells.filter((cell) => !cell.mergedInto).map((cell) => cell.id)),
+    ),
     x: source.x + getTableColumnOffset(source.table, columns[0].id)!,
     y: source.y + getTableRowOffset(source.table, rows[0].id)!,
     width: columns.reduce((sum, column) => sum + column.width, 0),
@@ -244,11 +267,7 @@ export const createTableRangeClipboard = (
         }
         break;
       }
-      parent = ref?.elementId
-        ? byId.get(ref.elementId)
-        : "containerId" in parent && parent.containerId
-        ? byId.get(parent.containerId)
-        : undefined;
+      parent = ref?.elementId ? byId.get(ref.elementId) : undefined;
     }
   }
   const elements = descendants
@@ -268,7 +287,7 @@ export const createTableRangeClipboard = (
 };
 
 export const tableRangeToTSV = (snapshot: TableRangeClipboard): string => {
-  const { table, elements } = snapshot;
+  const { table } = snapshot;
   return table.table.rows
     .map((_, row) =>
       table.table.columns
@@ -277,16 +296,8 @@ export const tableRangeToTSV = (snapshot: TableRangeClipboard): string => {
           if (cell.mergedInto) {
             return "";
           }
-          const text = elements.find(
-            (element) =>
-              element.type === "text" &&
-              element.containerRef?.kind === "tableCell" &&
-              element.containerRef.cellId === cell.id &&
-              element.containerRef.role === "backgroundText",
-          );
-          return text?.type === "text"
-            ? text.text.replace(/\t|\r?\n/g, " ")
-            : "";
+          const text = getTextBlock(table.texts, cellKey(cell.id))?.text ?? "";
+          return text.replace(/\t|\r?\n/g, " ");
         })
         .join("\t"),
     )
@@ -446,8 +457,6 @@ export const pasteTableRangeIntoCell = (
         seen.add(original.id);
         original = original.containerRef?.elementId
           ? sourceById.get(original.containerRef.elementId)
-          : "containerId" in original && original.containerId
-          ? sourceById.get(original.containerId)
           : undefined;
       }
       const originalCellId =
@@ -483,32 +492,24 @@ export const pasteTableRangeIntoCell = (
         containerRef: ref,
       } as ExcalidrawElement;
     });
-  const replacedBackgroundIds = new Set(
-    app.scene
-      .getNonDeletedElements()
-      .filter(
-        (element) =>
-          element.containerRef?.kind === "tableCell" &&
-          element.containerRef.elementId === target.id &&
-          element.containerRef.role === "backgroundText" &&
-          targetCells.some(
-            (cell) =>
-              cell.id ===
-              (element.containerRef?.kind === "tableCell"
-                ? element.containerRef.cellId
-                : undefined),
-          ),
-      )
-      .map((element) => element.id),
+  // 文本随格迁移：先清掉被覆盖的目标格，再把源格的文本块按映射写回。
+  let nextTexts = withoutTableTextCells(
+    target.texts,
+    targetCells.map((cell) => cell.id),
   );
+  for (const [sourceCellId, targetCellId] of cellIdMap) {
+    const block = getTextBlock(snapshot.table.texts, cellKey(sourceCellId));
+    if (block) {
+      nextTexts = withTextBlock(nextTexts, cellKey(targetCellId), block);
+    }
+  }
   const previous = app.scene.getElementsIncludingDeleted();
   const next = [
     ...previous.map((element) =>
-      replacedBackgroundIds.has(element.id)
-        ? newElementWith(element, { isDeleted: true })
-        : element.id === target.id
+      element.id === target.id
         ? newElementWith(target, {
             table: nextTable,
+            texts: nextTexts ?? {},
             width: nextColumns.reduce((sum, column) => sum + column.width, 0),
             height: nextRows.reduce((sum, row) => sum + row.height, 0),
           })
@@ -589,64 +590,35 @@ export const pasteTSVIntoCell = (
     throw new Error("Table paste conflicts with merged cells");
   }
   assertValidTableData(nextTable);
-  const selectedIds = new Set(selected.map(({ cell }) => cell.id));
-  const previous = app.scene.getElementsIncludingDeleted();
-  const existing = previous.filter(
-    (element) =>
-      !element.isDeleted &&
-      element.containerRef?.kind === "tableCell" &&
-      element.containerRef.elementId === tableId &&
-      element.containerRef.role === "backgroundText" &&
-      selectedIds.has(element.containerRef.cellId),
+  let nextTexts = withoutTableTextCells(
+    target.texts,
+    selected.map(({ cell }) => cell.id),
   );
-  const additions = selected
-    .filter(({ value }) => value !== "")
-    .map(({ cell, value }) => {
-      const bounds = getTableCellBounds(nextTable, cell.id)!;
-      const fontFamily = app.state.currentItemFontFamily;
-      return newTextElement({
-        x: target.x + bounds.x + TABLE_CELL_TEXT_PADDING_X,
-        y: target.y + bounds.y + TABLE_CELL_TEXT_PADDING_Y,
-        width: Math.max(1, bounds.width - TABLE_CELL_TEXT_PADDING_X * 2),
-        height: Math.max(1, bounds.height - TABLE_CELL_TEXT_PADDING_Y * 2),
+  for (const { cell, value } of selected) {
+    if (value === "") {
+      continue;
+    }
+    nextTexts = withTextBlock(
+      nextTexts,
+      cellKey(cell.id),
+      buildTableCellTextBlock(app, {
         text: value,
-        originalText: value,
-        fontFamily,
         fontSize: app.state.currentItemFontSize,
-        lineHeight: getLineHeight(fontFamily),
         textAlign: "left",
         verticalAlign: "top",
-        strokeColor: app.state.currentItemStrokeColor,
-        backgroundColor: "transparent",
-        fillStyle: app.state.currentItemFillStyle,
-        strokeWidth: app.getCurrentItemStrokeWidth("text"),
-        strokeStyle: app.state.currentItemStrokeStyle,
-        opacity: app.state.currentItemOpacity,
-        containerId: null,
-        autoResize: false,
-        locked: false,
-        containerRef: {
-          kind: "tableCell",
-          elementId: tableId,
-          cellId: cell.id,
-          role: "backgroundText",
-        },
-      });
-    });
-  const removed = new Set(existing.map((element) => element.id));
-  const next = [
-    ...previous.map((element) =>
-      removed.has(element.id)
-        ? newElementWith(element, { isDeleted: true })
-        : element.id === target.id
-        ? newElementWith(target, {
-            table: nextTable,
-            width: columns.reduce((sum, column) => sum + column.width, 0),
-            height: rows.reduce((sum, row) => sum + row.height, 0),
-          })
-        : element,
-    ),
-    ...additions,
-  ];
-  commitTablePaste(app, next, additions);
+      }),
+    );
+  }
+  const previous = app.scene.getElementsIncludingDeleted();
+  const next = previous.map((element) =>
+    element.id === target.id
+      ? newElementWith(target, {
+          table: nextTable,
+          texts: nextTexts ?? {},
+          width: columns.reduce((sum, column) => sum + column.width, 0),
+          height: rows.reduce((sum, row) => sum + row.height, 0),
+        })
+      : element,
+  );
+  commitTablePaste(app, next, []);
 };

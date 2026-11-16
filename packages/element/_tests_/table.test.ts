@@ -509,34 +509,6 @@ describe("tableCell containerRef", () => {
     ).toThrow("must be a text element");
   });
 
-  it("rejects bound text carrying a containerRef", () => {
-    const { table, cellId } = setupTableCell();
-    const owner = API.createElement({ type: "rectangle" });
-    const boundText = API.createElement({
-      type: "text",
-      containerId: owner.id,
-      containerRef: tableCellRef(table, cellId, "content"),
-    });
-
-    expect(() => assertValidContainerRefs([table, owner, boundText])).toThrow(
-      "cannot have a containerRef",
-    );
-  });
-
-  it("rejects background text that binds to a container", () => {
-    const { table, cellId } = setupTableCell();
-    const owner = API.createElement({ type: "rectangle" });
-    const backgroundText = API.createElement({
-      type: "text",
-      containerId: owner.id,
-      containerRef: tableCellRef(table, cellId, "backgroundText"),
-    });
-
-    expect(() =>
-      assertValidContainerRefs([table, owner, backgroundText]),
-    ).toThrow("cannot have a containerRef");
-  });
-
   it("rejects a second background text in one cell", () => {
     const { table, cellId } = setupTableCell();
     const first = API.createElement({

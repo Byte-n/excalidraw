@@ -1,18 +1,23 @@
 import {
-  getBoundTextElement,
-  getBaseFontSize,
-  getBaseFontSizeUpdate,
-  redrawTextBoundingBox,
+  getTextElementStyle,
+  isTextElement,
+  refreshTextDimensions,
+  getTextElementStylePatch,
 } from "@excalidraw/element";
-import { hasBoundTextElement, isTextElement } from "@excalidraw/element";
 
 import type {
-  ExcalidrawElement,
   ExcalidrawTextElement,
+  NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
 
 import type { Scene } from "@excalidraw/element";
 
+import {
+  applyEmbeddedTextLayout,
+  getElementEmbeddedTextTarget,
+  getTextStyleTargetStyle,
+  updateEmbeddedTextStyles,
+} from "../app/textStyleTargets";
 import { fontSizeIcon } from "../icons";
 
 import StatsDragInput from "./DragInput";
@@ -22,7 +27,7 @@ import type { DragInputCallbackType } from "./DragInput";
 import type { AppState } from "../../types";
 
 interface FontSizeProps {
-  element: ExcalidrawElement;
+  element: NonDeletedExcalidrawElement;
   scene: Scene;
   appState: AppState;
   property: "fontSize";
@@ -32,8 +37,7 @@ const MIN_FONT_SIZE = 4;
 const STEP_SIZE = 4;
 
 const handleFontSizeChange: DragInputCallbackType<
-  FontSizeProps["property"],
-  ExcalidrawTextElement
+  FontSizeProps["property"]
 > = ({
   accumulatedChange,
   originalElements,
@@ -44,19 +48,22 @@ const handleFontSizeChange: DragInputCallbackType<
   const elementsMap = scene.getNonDeletedElementsMap();
 
   const origElement = originalElements[0];
-  if (origElement) {
-    const latestElement = elementsMap.get(origElement.id);
-    if (!latestElement || !isTextElement(latestElement)) {
-      return;
-    }
+  if (!origElement) {
+    return;
+  }
+  const latestElement = elementsMap.get(origElement.id);
+  if (!latestElement) {
+    return;
+  }
 
+  if (isTextElement(latestElement)) {
     let nextFontSize;
 
     if (nextValue !== undefined) {
       nextFontSize = Math.max(Math.round(nextValue), MIN_FONT_SIZE);
-    } else if (origElement.type === "text") {
+    } else {
       const originalFontSize = Math.round(
-        getBaseFontSize(origElement, elementsMap),
+        getTextElementStyle(origElement as ExcalidrawTextElement).fontSize,
       );
       const changeInFontSize = Math.round(accumulatedChange);
       nextFontSize = Math.max(
@@ -71,25 +78,64 @@ const handleFontSizeChange: DragInputCallbackType<
     if (nextFontSize) {
       scene.mutateElement(
         latestElement,
-        getBaseFontSizeUpdate(latestElement, nextFontSize, elementsMap),
+        getTextElementStylePatch(latestElement, { fontSize: nextFontSize }),
       );
-      redrawTextBoundingBox(
-        latestElement,
-        scene.getContainerElement(latestElement),
-        scene,
-      );
+      const refreshed = refreshTextDimensions(latestElement, elementsMap);
+      if (refreshed) {
+        const { text: _displayText, ...dimensions } = refreshed;
+        scene.mutateElement(latestElement, dimensions);
+      }
     }
+    return;
+  }
+
+  const target = getElementEmbeddedTextTarget(latestElement);
+  const latestStyle = target
+    ? getTextStyleTargetStyle(latestElement, target.region)
+    : null;
+  const originalStyle = target
+    ? getTextStyleTargetStyle(origElement, target.region)
+    : null;
+  if (!target || !latestStyle || !originalStyle) {
+    return;
+  }
+
+  let nextFontSize;
+  if (nextValue !== undefined) {
+    nextFontSize = Math.max(Math.round(nextValue), MIN_FONT_SIZE);
+  } else {
+    const originalFontSize = Math.round(originalStyle.fontSize);
+    const changeInFontSize = Math.round(accumulatedChange);
+    nextFontSize = Math.max(originalFontSize + changeInFontSize, MIN_FONT_SIZE);
+    if (shouldChangeByStepSize) {
+      nextFontSize = getStepSizedValue(nextFontSize, STEP_SIZE);
+    }
+  }
+
+  if (nextFontSize) {
+    updateEmbeddedTextStyles(scene, [
+      {
+        elementId: latestElement.id,
+        region: target.region,
+        style: { fontSize: nextFontSize },
+      },
+    ]);
+    applyEmbeddedTextLayout(scene, latestElement.id, target.region);
+    scene.triggerUpdate();
   }
 };
 
 const FontSize = ({ element, scene, appState, property }: FontSizeProps) => {
-  const _element = isTextElement(element)
-    ? element
-    : hasBoundTextElement(element)
-    ? getBoundTextElement(element, scene.getNonDeletedElementsMap())
+  const _element = isTextElement(element) ? element : null;
+
+  const embeddedTarget = _element
+    ? null
+    : getElementEmbeddedTextTarget(element);
+  const embeddedStyle = embeddedTarget
+    ? getTextStyleTargetStyle(element, embeddedTarget.region)
     : null;
 
-  if (!_element) {
+  if (!_element && !embeddedStyle) {
     return null;
   }
 
@@ -97,11 +143,11 @@ const FontSize = ({ element, scene, appState, property }: FontSizeProps) => {
     <StatsDragInput
       label="F"
       value={
-        Math.round(
-          getBaseFontSize(_element, scene.getNonDeletedElementsMap()) * 10,
-        ) / 10
+        _element
+          ? Math.round(getTextElementStyle(_element).fontSize * 10) / 10
+          : Math.round(embeddedStyle!.fontSize * 10) / 10
       }
-      elements={[_element]}
+      elements={_element ? [_element] : [element]}
       dragInputCallback={handleFontSizeChange}
       icon={fontSizeIcon}
       appState={appState}

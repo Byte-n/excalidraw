@@ -2,7 +2,6 @@ import { getNonDeletedElements } from "@excalidraw/element";
 
 import { newElementWith } from "@excalidraw/element";
 
-import { isBoundToContainer } from "@excalidraw/element";
 
 import {
   frameAndChildrenSelectedTogether,
@@ -74,7 +73,6 @@ const allElementsInSameGroup = (
 const enableActionGroup = (appState: UIAppState, app: AppClassProperties) => {
   const selectedElements = app.scene.getSelectedElements({
     selectedElementIds: appState.selectedElementIds,
-    includeBoundTextElement: false,
   });
 
   return (
@@ -97,7 +95,6 @@ export const actionGroup = register({
     const selectedElements = getRootElements(
       app.scene.getSelectedElements({
         selectedElementIds: appState.selectedElementIds,
-        includeBoundTextElement: true,
       }),
     );
     if (selectedElements.length < 2) {
@@ -239,11 +236,7 @@ export const actionUngroup = register({
 
     let nextElements = [...elements];
 
-    const boundTextElementIds: ExcalidrawTextElement["id"][] = [];
     nextElements = nextElements.map((element) => {
-      if (isBoundToContainer(element)) {
-        boundTextElementIds.push(element.id);
-      }
       const nextGroupIds = removeFromSelectedGroups(
         element.groupIds,
         appState.selectedGroupIds,
@@ -289,19 +282,6 @@ export const actionUngroup = register({
         );
       }
     });
-
-    // remove binded text elements from selection
-    updateAppState.selectedElementIds = Object.entries(
-      updateAppState.selectedElementIds,
-    ).reduce(
-      (acc: { [key: ExcalidrawElement["id"]]: true }, [id, selected]) => {
-        if (selected && !boundTextElementIds.includes(id)) {
-          acc[id] = true;
-        }
-        return acc;
-      },
-      {},
-    );
 
     return {
       appState: { ...appState, ...updateAppState },

@@ -11,6 +11,7 @@ import type {
 } from "@excalidraw/excalidraw/types";
 
 import { getTableCellBounds } from "./tableStruct";
+import { getTextElementStyle } from "./text/elementText";
 import { isTableElement } from "./typeChecks";
 
 import type {
@@ -77,12 +78,13 @@ export const resolveTableBackgroundTextFontWeight = (
   elementsMap: ElementsMap,
 ): number | undefined => {
   const ref = element.containerRef;
+  const fontWeight = getTextElementStyle(element).fontWeight;
   if (!ref || ref.kind !== "tableCell" || ref.role !== "backgroundText") {
-    return element.fontWeight;
+    return fontWeight;
   }
   const tableElement = elementsMap.get(ref.elementId);
   if (!tableElement || !isTableElement(tableElement)) {
-    return element.fontWeight;
+    return fontWeight;
   }
   const { table } = tableElement;
   const raw = table.cells.find((candidate) => candidate.id === ref.cellId);
@@ -91,14 +93,14 @@ export const resolveTableBackgroundTextFontWeight = (
     ? table.cells.find((candidate) => candidate.id === raw.mergedInto) ?? raw
     : raw;
   if (!cell) {
-    return element.fontWeight;
+    return fontWeight;
   }
   return (
     table.rows.find((row) => row.id === cell.rowId)?.style?.backgroundText
       ?.fontWeight ??
     table.columns.find((column) => column.id === cell.columnId)?.style
       ?.backgroundText?.fontWeight ??
-    element.fontWeight ??
+    fontWeight ??
     (isTableHeaderRowCell(table, cell)
       ? TABLE_HEADER_ROW_FONT_WEIGHT
       : undefined)

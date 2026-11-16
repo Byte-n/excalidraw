@@ -10,7 +10,6 @@ import {
   KEYS,
   LINE_CONFIRM_THRESHOLD,
   POINTER_BUTTON,
-  isTransparent,
   isSelectionLikeTool,
   updateStable,
   DOUBLE_TAP_POSITION_THRESHOLD,
@@ -19,7 +18,6 @@ import {
 import {
   getCommonBounds,
   LinearElementEditor,
-  hasBoundTextElement,
   isImageElement,
   isLinearElement,
   isIframeLikeElement,
@@ -27,9 +25,6 @@ import {
   isMindmapNodeElement,
   isElbowArrow,
   isPathALoop,
-  getContainerCenter,
-  getTextContainerSlotAtPosition,
-  hitElementItself,
   getSelectedGroupIdForElement,
   getSelectedGroupIds,
   selectGroupsForSelectedElements,
@@ -545,48 +540,17 @@ export const handleCanvasDoubleClick = (
     // shouldn't edit/create text when inside line editor (often false positive)
 
     if (!app.state.selectedLinearElement?.isEditing) {
+      // 按住 Ctrl/Alt 双击不绑定容器；Alt 用于在容器内落下自由文字
       const container =
-        // skip binding to container on dblclick when holding ctrl
-        !event[KEYS.CTRL_OR_CMD] &&
-        app.getTextBindableContainerAtPosition(sceneX, sceneY);
-
-      if (container) {
-        if (
-          // with autoshape, any hit inside a bindable shape means "type in
-          // app shape" — unlike selection mode, a transparent unfilled
-          // container binds even when its stroke wasn't hit (Alt keeps the
-          // free-text-at-point escape hatch)
-          app.state.activeTool.type === "autoshape" ||
-          hasBoundTextElement(container) ||
-          !isTransparent(container.backgroundColor) ||
-          hitElementItself({
-            point: pointFrom(sceneX, sceneY),
-            element: container,
-            elementsMap: app.scene.getNonDeletedElementsMap(),
-            threshold: app.getElementHitThreshold(container),
-          })
-        ) {
-          const slot = getTextContainerSlotAtPosition(
-            container,
-            sceneX,
-            sceneY,
-          );
-          const midPoint = getContainerCenter(
-            container,
-            app.scene.getNonDeletedElementsMap(),
-            slot ?? undefined,
-          );
-
-          sceneX = midPoint.x;
-          sceneY = midPoint.y;
-        }
-      }
+        !event[KEYS.CTRL_OR_CMD] && !event.altKey
+          ? app.getTextBindableContainerAtPosition(sceneX, sceneY)
+          : null;
 
       app.startTextEditing({
         sceneX,
         sceneY,
         insertAtParentCenter: !event.altKey,
-        container: container || null,
+        container,
       });
     }
   }
@@ -1454,7 +1418,7 @@ export const handleHoverSelectedLinearElement = (
       // labeled arrow can still be bent at its middle, while the label
       // itself is grabbable even where it extends beyond the arrow's own
       // hit area.
-      app.arrowText.isBoundTextGrabbable(element, scenePointerX, scenePointerY)
+      app.arrowText.isLabelGrabbable(element, scenePointerX, scenePointerY)
     ) {
       if (setCursor) {
         app.cursor.set(CURSOR_TYPE.GRAB);

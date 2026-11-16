@@ -240,7 +240,7 @@ describe("paste text as a single element", () => {
   });
 });
 
-describe("Paste bound text container", () => {
+describe("Paste text container", () => {
   const container = {
     type: "composite",
     shape: { id: "ellipse", schemaVersion: 1 },
@@ -250,39 +250,34 @@ describe("Paste bound text container", () => {
     width: 166,
     height: 187.01953125,
     roundness: { type: 2 },
-    boundElements: [{ type: "text", id: "text-id" }],
-  };
-  const textElement = {
-    type: "text",
-    id: "text-id",
-    x: 560.51171875,
-    y: 202.033203125,
-    width: 154,
-    height: 175,
-    fontSize: 20,
-    fontFamily: 1,
-    text: "Excalidraw is a\nvirtual \nopensource \nwhiteboard for \nsketching \nhand-drawn like\ndiagrams",
-    baseline: 168,
-    textAlign: "center",
-    verticalAlign: "middle",
-    containerId: container.id,
-    originalText:
-      "Excalidraw is a virtual opensource whiteboard for sketching hand-drawn like diagrams",
+    boundElements: [],
+    texts: {
+      body: {
+        text: "Excalidraw is a virtual opensource whiteboard for sketching hand-drawn like diagrams",
+        style: {
+          fontSize: 20,
+          fontFamily: 1,
+          lineHeight: 1.25,
+          textAlign: "center",
+          verticalAlign: "middle",
+        },
+      },
+    },
   };
 
   it("should fix ellipse bounding box", async () => {
     const data = JSON.stringify({
       type: "excalidraw/clipboard",
-      elements: [container, textElement],
+      elements: [container],
     });
     pasteWithCtrlCmdShiftV(data);
 
     await waitFor(async () => {
       await sleep(1);
-      expect(h.elements.length).toEqual(2);
-      const container = h.elements[0];
-      expect(container.height).toBe(358);
-      expect(container.width).toBe(166);
+      expect(h.elements.length).toEqual(1);
+      const pasted = h.elements[0];
+      expect(pasted.height).toBe(358);
+      expect(pasted.width).toBe(166);
     });
   });
 
@@ -317,17 +312,16 @@ describe("Paste bound text container", () => {
           ...container,
           shape: { id: "diamond", schemaVersion: 1 },
         },
-        textElement,
       ],
     });
     pasteWithCtrlCmdShiftV(data);
 
     await waitFor(async () => {
       await sleep(1);
-      expect(h.elements.length).toEqual(2);
-      const container = h.elements[0];
-      expect(container.height).toBe(616);
-      expect(container.width).toBe(166);
+      expect(h.elements.length).toEqual(1);
+      const pasted = h.elements[0];
+      expect(pasted.height).toBe(616);
+      expect(pasted.width).toBe(166);
     });
   });
 });
@@ -697,16 +691,12 @@ describe("clipboard - pasting mermaid definition", () => {
 
     pasteWithCtrlCmdV(text);
     await waitFor(() => {
-      expect(h.elements.length).toEqual(2);
-      expect(h.elements).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            type: "composite",
-            shape: { id: "rectangle", schemaVersion: 1 },
-          }),
-          expect.objectContaining({ type: "text", text: "A" }),
-        ]),
-      );
+      expect(h.elements).toHaveLength(1);
+      expect(h.elements[0]).toMatchObject({
+        type: "composite",
+        shape: { id: "rectangle", schemaVersion: 1 },
+        texts: { body: { text: "A" } },
+      });
     });
   });
 
@@ -715,16 +705,12 @@ describe("clipboard - pasting mermaid definition", () => {
 
     pasteWithCtrlCmdV(text);
     await waitFor(() => {
-      expect(h.elements.length).toEqual(2);
-      expect(h.elements).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            type: "composite",
-            shape: { id: "rectangle", schemaVersion: 1 },
-          }),
-          expect.objectContaining({ type: "text", text: "A" }),
-        ]),
-      );
+      expect(h.elements).toHaveLength(1);
+      expect(h.elements[0]).toMatchObject({
+        type: "composite",
+        shape: { id: "rectangle", schemaVersion: 1 },
+        texts: { body: { text: "A" } },
+      });
     });
   });
 
@@ -735,8 +721,18 @@ describe("clipboard - pasting mermaid definition", () => {
       expect(h.elements.length).toEqual(2);
       expect(h.elements).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ type: "text", text: "flowchart TD xx" }),
-          expect.objectContaining({ type: "text", text: "A" }),
+          expect.objectContaining({
+            type: "text",
+            texts: expect.objectContaining({
+              body: expect.objectContaining({ text: "flowchart TD xx" }),
+            }),
+          }),
+          expect.objectContaining({
+            type: "text",
+            texts: expect.objectContaining({
+              body: expect.objectContaining({ text: "A" }),
+            }),
+          }),
         ]),
       );
     });

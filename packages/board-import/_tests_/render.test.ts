@@ -4,6 +4,9 @@ import {
   materializeAssets,
   projectScene,
 } from "../src/index.js";
+import { getTextElementText } from "@excalidraw/element";
+
+import type { ExcalidrawTextElement } from "@excalidraw/element/types";
 
 import {
   connectorNode,
@@ -156,16 +159,15 @@ test("未知图形类型降级为矩形", () => {
   expect(prop<{ id: string }>(elements[0], "shape").id).toBe("rectangle");
 });
 
-test("形状内嵌文本挂到 containerId，容器登记 boundElements", () => {
+test("形状内嵌文本写入 texts.body，不产生文字元素", () => {
   const { elements } = render([shapeNode({ id: "shape1" })]);
   const shape = find(elements, (el) => el.id === "shape1");
-  const text = find(elements, (el) => el.type === "text");
-  expect(prop<string | null>(text, "containerId")).toBe("shape1");
-  expect(text.text).toBe("开始");
-  const bound = shape.boundElements ?? [];
-  expect(
-    bound.some((entry) => entry.id === text.id && entry.type === "text"),
-  ).toBe(true);
+  expect(elements.some((el) => el.type === "text")).toBe(false);
+  expect(elements.some((el) => el.id === "shape1#text")).toBe(false);
+  expect(prop<{ body?: { text: string } }>(shape, "texts").body?.text).toBe(
+    "开始",
+  );
+  expect(shape.boundElements ?? []).toEqual([]);
 });
 
 test("section → frame，嵌套成员写入 containerRef.frameLike", () => {
@@ -255,16 +257,11 @@ test("表格：cells / 合并 / 单元格文本 containerRef", () => {
   const covered = data.cells.find((cell) => cell.mergedInto === anchor?.id);
   expect(covered?.id).toBe("table1:cell:r0c1");
 
-  const cellText = find(
-    elements,
-    (el) => el.type === "text" && el.text === "A1",
-  );
-  expect(cellText.containerRef).toEqual({
-    kind: "tableCell",
-    elementId: "table1",
-    cellId: "table1:cell:r1c1",
-    role: "backgroundText",
-  });
+  const texts = prop<Record<string, { text: string }>>(table, "texts");
+  expect(texts["cell:table1:cell:r1c1"]?.text).toBe("A1");
+  expect(texts["cell:table1:cell:r0c0"]?.text).toBe("合并");
+  // 单元格文本不再产出独立元素
+  expect(elements.filter((el) => el.type === "text")).toHaveLength(0);
 });
 
 test("思维导图：树关系落到 parentId 与 edge 元素", () => {
@@ -279,6 +276,14 @@ test("思维导图：树关系落到 parentId 与 edge 元素", () => {
   expect(prop<string>(child, "role")).toBe("node");
   expect(prop<string | null>(child, "parentId")).toBe("mmRoot");
   expect(prop<string>(root, "graphId")).toBe(prop<string>(child, "graphId"));
+  // 正文内嵌到节点自身，不再产生独立的文字元素
+  expect(elements.some((el) => el.id === "mmRoot#text")).toBe(false);
+  expect(prop<{ body?: { text: string } }>(root, "texts").body?.text).toBe(
+    "中心主题",
+  );
+  expect(prop<{ body?: { text: string } }>(child, "texts").body?.text).toBe(
+    "分支",
+  );
 
   const edge = find(elements, (el) => el.id === "mmL1#edge");
   expect(edge.type).toBe("mindmap-edge");
@@ -290,9 +295,11 @@ test("便签：填充色与文本", () => {
   const { elements } = render([stickyNoteNode({ id: "sticky1" })]);
   const note = find(elements, (el) => el.type === "stickynote");
   expect(note.backgroundColor).toBe("#f6c8c8");
-  const text = find(elements, (el) => el.type === "text");
-  expect(prop<string | null>(text, "containerId")).toBe("sticky1");
-  expect(text.text).toBe("便签文本");
+  // 正文内嵌到便签自身，不再产生独立的文字元素
+  expect(elements.filter((el) => el.type === "text")).toHaveLength(0);
+  expect(prop<{ body?: { text: string } }>(note, "texts").body?.text).toBe(
+    "便签文本",
+  );
 });
 
 test("自由书写：freedraw 点序列与颜色", () => {
@@ -398,24 +405,27 @@ test("连线绑定：startBinding / endBinding 与目标 boundElements", () => {
   ).toBe(true);
 });
 
-test("连线标签：映射为绑定到连线的文本元素", () => {
+test("连线标签：写入连线的 texts.label", () => {
   const { elements } = render([
     sectionNode({ id: "sec", children: ["shapeA", "shapeB"] }),
     shapeNode({ id: "shapeA", parent_id: "sec" }),
     shapeNode({ id: "shapeB", parent_id: "sec" }),
     connectorNode({ id: "conn1", parent_id: "sec" }),
   ]);
-  const caption = find(
-    elements,
-    (el) => el.type === "text" && el.text === "连接线标签文本",
-  );
-  expect(prop<string | null>(caption, "containerId")).toBe("conn1");
   const arrow = find(elements, (el) => el.id === "conn1");
+  const texts = prop<{
+    label?: { text?: string; placement?: { labelPosition?: number } };
+  }>(arrow, "texts");
+  expect(texts?.label?.text).toBe("连接线标签文本");
+  expect(texts?.label?.placement?.labelPosition).toBeCloseTo(0.447, 3);
   expect(
-    (arrow.boundElements ?? []).some(
-      (entry) => entry.id === caption.id && entry.type === "text",
+    elements.some(
+      (el) =>
+        el.type === "text" &&
+        getTextElementText(el as unknown as ExcalidrawTextElement) ===
+          "连接线标签文本",
     ),
-  ).toBe(true);
+  ).toBe(false);
 });
 
 test("index 由 zIndex 生成且互不相同", () => {
@@ -797,18 +807,18 @@ test("表格 1 基索引归一：全部单元格文本落地，行列无位移",
     }),
   ]);
 
-  const textElements = elements.filter((el) => el.type === "text");
-  expect(textElements).toHaveLength(6);
-  expect(new Set(textElements.map((el) => el.text))).toEqual(
+  const table = find(elements, (el) => el.type === "table");
+  const texts = prop<Record<string, { text: string }>>(table, "texts");
+  expect(new Set(Object.values(texts).map((block) => block.text))).toEqual(
     new Set(expectedTexts),
   );
-  const cellIds = textElements
-    .map((el) =>
-      el.containerRef?.kind === "tableCell" ? el.containerRef.cellId : null,
-    )
+  const cellIds = Object.keys(texts)
+    .map((key) => key.replace(/^cell:/, ""))
     .sort();
   // 首行首列 r0c0 与末行末列 r2c1 都在，无位移
   expect(cellIds).toEqual([...expectedCellIds].sort());
+  // 单元格文本不再产出独立元素
+  expect(elements.filter((el) => el.type === "text")).toHaveLength(0);
 });
 
 test("表格 1 基索引：合并 span 保持原值（合并生效）", () => {
@@ -922,9 +932,13 @@ test("表格覆盖格带文本①：锚点优先，覆盖格文本丢弃并计�
   expect(() =>
     projectScene(elements, {}, statsOf(elements), POLICY),
   ).not.toThrow();
-  const texts = elements.filter((el) => el.type === "text");
-  expect(texts).toHaveLength(1);
-  expect(texts[0].text).toBe("锚点文本");
+  const texts = prop<Record<string, { text: string }>>(
+    find(elements, (el) => el.type === "table"),
+    "texts",
+  );
+  expect(Object.values(texts)).toHaveLength(1);
+  expect(texts["cell:t:cell:r0c0"]?.text).toBe("锚点文本");
+  expect(texts["cell:t:cell:r0c1"]).toBeUndefined();
   expect(downgraded).toBe(1);
 });
 
@@ -933,15 +947,12 @@ test("表格覆盖格带文本②：锚点为空则取覆盖格文本落到锚�
   expect(() =>
     projectScene(elements, {}, statsOf(elements), POLICY),
   ).not.toThrow();
-  const texts = elements.filter((el) => el.type === "text");
-  expect(texts).toHaveLength(1);
-  expect(texts[0].text).toBe("覆盖文本");
-  expect(texts[0].containerRef).toEqual({
-    kind: "tableCell",
-    elementId: "t",
-    cellId: "t:cell:r0c0",
-    role: "backgroundText",
-  });
+  const texts = prop<Record<string, { text: string }>>(
+    find(elements, (el) => el.type === "table"),
+    "texts",
+  );
+  expect(Object.values(texts)).toHaveLength(1);
+  expect(texts["cell:t:cell:r0c0"]?.text).toBe("覆盖文本");
   expect(downgraded).toBe(1);
 });
 

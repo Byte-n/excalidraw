@@ -1,4 +1,5 @@
 import { ORIG_ID } from "@excalidraw/common";
+import { getTextBlock } from "@excalidraw/element";
 
 import { Excalidraw } from "../index";
 import { API } from "../_tests_/helpers/api";
@@ -58,11 +59,11 @@ describe("actionDuplicateSelection", () => {
         type: "frame",
       });
 
-      const [rectangle, text] = API.createTextContainer({
+      const [rectangle] = API.createTextContainer({
         containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
-      API.setElements([frame, rectangle, text]);
+      API.setElements([frame, rectangle]);
       API.setSelectedElements([frame]);
 
       act(() => {
@@ -76,21 +77,11 @@ describe("actionDuplicateSelection", () => {
           containerRef: { kind: "frameLike", elementId: frame.id },
         },
         {
-          id: text.id,
-          containerId: rectangle.id,
-          containerRef: undefined,
-        },
-        {
           [ORIG_ID]: rectangle.id,
           containerRef: {
             kind: "frameLike",
             elementId: getCloneByOrigId(frame.id)?.id,
           },
-        },
-        {
-          [ORIG_ID]: text.id,
-          containerId: getCloneByOrigId(rectangle.id)?.id,
-          containerRef: undefined,
         },
         { [ORIG_ID]: frame.id, selected: true },
       ]);
@@ -101,11 +92,11 @@ describe("actionDuplicateSelection", () => {
         type: "frame",
       });
 
-      const [rectangle, text] = API.createTextContainer({
+      const [rectangle] = API.createTextContainer({
         containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
-      API.setElements([frame, rectangle, text]);
+      API.setElements([frame, rectangle]);
       API.setSelectedElements([frame, rectangle]);
 
       act(() => {
@@ -119,21 +110,11 @@ describe("actionDuplicateSelection", () => {
           containerRef: { kind: "frameLike", elementId: frame.id },
         },
         {
-          id: text.id,
-          containerId: rectangle.id,
-          containerRef: undefined,
-        },
-        {
           [ORIG_ID]: rectangle.id,
           containerRef: {
             kind: "frameLike",
             elementId: getCloneByOrigId(frame.id)?.id,
           },
-        },
-        {
-          [ORIG_ID]: text.id,
-          containerId: getCloneByOrigId(rectangle.id)?.id,
-          containerRef: undefined,
         },
         {
           [ORIG_ID]: frame.id,
@@ -147,11 +128,11 @@ describe("actionDuplicateSelection", () => {
         type: "frame",
       });
 
-      const [rectangle, text] = API.createTextContainer({
+      const [rectangle] = API.createTextContainer({
         containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
-      API.setElements([text, rectangle, frame]);
+      API.setElements([rectangle, frame]);
       API.setSelectedElements([rectangle, frame]);
 
       act(() => {
@@ -163,22 +144,11 @@ describe("actionDuplicateSelection", () => {
           id: rectangle.id,
           containerRef: { kind: "frameLike", elementId: frame.id },
         },
-        {
-          id: text.id,
-          containerId: rectangle.id,
-          containerRef: undefined,
-        },
         { id: frame.id },
         {
           type: "composite",
           shape: { id: "rectangle", schemaVersion: 1 },
           [ORIG_ID]: `${rectangle.id}`,
-        },
-        {
-          [ORIG_ID]: `${text.id}`,
-          type: "text",
-          containerId: getCloneByOrigId(rectangle.id)?.id,
-          containerRef: undefined,
         },
         { [ORIG_ID]: `${frame.id}`, type: "frame", selected: true },
       ]);
@@ -222,11 +192,11 @@ describe("actionDuplicateSelection", () => {
         type: "frame",
       });
 
-      const [rectangle, text] = API.createTextContainer({
+      const [rectangle] = API.createTextContainer({
         containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
-      API.setElements([frame, rectangle, text]);
+      API.setElements([frame, rectangle]);
       API.setSelectedElements([rectangle]);
 
       act(() => {
@@ -240,59 +210,9 @@ describe("actionDuplicateSelection", () => {
           containerRef: { kind: "frameLike", elementId: frame.id },
         },
         {
-          id: text.id,
-          containerId: rectangle.id,
-          containerRef: undefined,
-        },
-        {
           [ORIG_ID]: rectangle.id,
           containerRef: { kind: "frameLike", elementId: frame.id },
           selected: true,
-        },
-        {
-          [ORIG_ID]: text.id,
-          containerId: getCloneByOrigId(rectangle.id).id,
-          containerRef: undefined,
-        },
-      ]);
-    });
-
-    it("frame bound text selected (container not selected)", () => {
-      const frame = API.createElement({
-        type: "frame",
-      });
-
-      const [rectangle, text] = API.createTextContainer({
-        containerRef: { kind: "frameLike", elementId: frame.id },
-      });
-
-      API.setElements([frame, rectangle, text]);
-      API.setSelectedElements([text]);
-
-      act(() => {
-        h.app.actionManager.executeAction(actionDuplicateSelection);
-      });
-
-      assertElements(h.elements, [
-        { id: frame.id },
-        {
-          id: rectangle.id,
-          containerRef: { kind: "frameLike", elementId: frame.id },
-        },
-        {
-          id: text.id,
-          containerId: rectangle.id,
-          containerRef: undefined,
-        },
-        {
-          [ORIG_ID]: rectangle.id,
-          containerRef: { kind: "frameLike", elementId: frame.id },
-          selected: true,
-        },
-        {
-          [ORIG_ID]: text.id,
-          containerId: getCloneByOrigId(rectangle.id).id,
-          containerRef: undefined,
         },
       ]);
     });
@@ -455,9 +375,9 @@ describe("actionDuplicateSelection", () => {
 
   describe("duplicating containers/bound elements", () => {
     it("labeled arrow (arrow selected)", () => {
-      const [arrow, text] = API.createLabeledArrow();
+      const [arrow] = API.createLabeledArrow();
 
-      API.setElements([arrow, text]);
+      API.setElements([arrow]);
       API.setSelectedElements([arrow]);
 
       act(() => {
@@ -466,18 +386,17 @@ describe("actionDuplicateSelection", () => {
 
       assertElements(h.elements, [
         { id: arrow.id },
-        { id: text.id, containerId: arrow.id },
         { [ORIG_ID]: arrow.id, selected: true },
-        { [ORIG_ID]: text.id, containerId: getCloneByOrigId(arrow.id)?.id },
       ]);
+      expect(getTextBlock(h.elements[1].texts, "label")?.text).toBe("label");
     });
 
     // shouldn't happen
     it("labeled arrow (text selected)", () => {
-      const [arrow, text] = API.createLabeledArrow();
+      const [arrow] = API.createLabeledArrow();
 
-      API.setElements([arrow, text]);
-      API.setSelectedElements([text]);
+      API.setElements([arrow]);
+      API.setSelectedElements([arrow]);
 
       act(() => {
         h.app.actionManager.executeAction(actionDuplicateSelection);
@@ -485,10 +404,9 @@ describe("actionDuplicateSelection", () => {
 
       assertElements(h.elements, [
         { id: arrow.id },
-        { id: text.id, containerId: arrow.id },
         { [ORIG_ID]: arrow.id, selected: true },
-        { [ORIG_ID]: text.id, containerId: getCloneByOrigId(arrow.id)?.id },
       ]);
+      expect(getTextBlock(h.elements[1].texts, "label")?.text).toBe("label");
     });
   });
 
@@ -499,7 +417,7 @@ describe("actionDuplicateSelection", () => {
         groupIds: ["A"],
       });
 
-      const [rectangle, text] = API.createTextContainer({
+      const [rectangle] = API.createTextContainer({
         containerRef: { kind: "frameLike", elementId: frame.id },
       });
 
@@ -508,7 +426,7 @@ describe("actionDuplicateSelection", () => {
         groupIds: ["A"],
       });
 
-      API.setElements([rectangle, text, frame, ellipse]);
+      API.setElements([rectangle, frame, ellipse]);
       API.setSelectedElements([frame, ellipse]);
 
       act(() => {
@@ -520,10 +438,6 @@ describe("actionDuplicateSelection", () => {
           id: rectangle.id,
           containerRef: { kind: "frameLike", elementId: frame.id },
         },
-        {
-          id: text.id,
-          containerRef: undefined,
-        },
         { id: frame.id },
         { id: ellipse.id },
         {
@@ -532,10 +446,6 @@ describe("actionDuplicateSelection", () => {
             kind: "frameLike",
             elementId: getCloneByOrigId(frame.id)?.id,
           },
-        },
-        {
-          [ORIG_ID]: text.id,
-          containerRef: undefined,
         },
         { [ORIG_ID]: frame.id, selected: true },
         { [ORIG_ID]: ellipse.id, selected: true },
@@ -548,7 +458,7 @@ describe("actionDuplicateSelection", () => {
         groupIds: ["A"],
       });
 
-      const [rectangle, text] = API.createTextContainer({
+      const [rectangle] = API.createTextContainer({
         containerRef: { kind: "frameLike", elementId: frame.id },
         groupIds: ["A"],
       });
@@ -558,7 +468,7 @@ describe("actionDuplicateSelection", () => {
         groupIds: ["A"],
       });
 
-      API.setElements([rectangle, text, frame, ellipse]);
+      API.setElements([rectangle, frame, ellipse]);
       API.setSelectedElements([frame, ellipse]);
 
       act(() => {
@@ -570,10 +480,6 @@ describe("actionDuplicateSelection", () => {
           id: rectangle.id,
           containerRef: { kind: "frameLike", elementId: frame.id },
         },
-        {
-          id: text.id,
-          containerRef: undefined,
-        },
         { id: frame.id },
         { id: ellipse.id },
         {
@@ -582,12 +488,6 @@ describe("actionDuplicateSelection", () => {
             kind: "frameLike",
             elementId: getCloneByOrigId(frame.id)?.id,
           },
-          // FIXME shouldn't be selected (in selectGroupsForSelectedElements)
-          selected: true,
-        },
-        {
-          [ORIG_ID]: text.id,
-          containerRef: undefined,
           // FIXME shouldn't be selected (in selectGroupsForSelectedElements)
           selected: true,
         },

@@ -38,13 +38,16 @@ import {
   newStickyNoteElement,
   normalizeStickyNoteGeometry,
 } from "./newElement";
-import { normalizeStickyNoteStrokeColor } from "./stickyNote";
+import {
+  getStickyNoteBodyLayout,
+  normalizeStickyNoteFontSize,
+  normalizeStickyNoteStrokeColor,
+} from "./stickyNote";
 import { measureText, normalizeText } from "./textMeasurements";
 import {
   isLinearElement,
   isFrameLikeElement,
   isStickyNoteElement,
-  isTextElement,
 } from "./typeChecks";
 import {
   assertValidTableData,
@@ -55,10 +58,11 @@ import {
 
 import { syncInvalidIndices } from "./fractionalIndex";
 
-import {
-  DEFAULT_BOUND_TEXT_LABEL_POSITION,
-  redrawTextBoundingBox,
-} from "./textElement";
+import { DEFAULT_BOUND_TEXT_LABEL_POSITION } from "./text/labelLayout";
+
+import { getTextLayoutUpdates } from "./text/applyLayout";
+import { getTextElementText } from "./text/elementText";
+import { withTextBlock } from "./text/ops";
 
 import { LinearElementEditor } from "./linearElementEditor";
 
@@ -68,14 +72,19 @@ import { Scene } from "./Scene";
 
 import {
   getSequenceLifelineDefaultSize,
+  getSequenceLifelineTextBlockHeight,
+  getSequenceLifelineTextFit,
+  isSequenceFragmentElement,
+  isSequenceLifelineElement,
   isSequenceLifelineShapeId,
-  isShapeId,
   isShapeElement,
+  isShapeId,
   normalizeSequenceFragmentGeometry,
   fitSequenceFragmentOperator,
-  isSequenceFragmentElement,
   normalizeSequenceLifelineGeometry,
 } from "./compositeShape";
+
+import type { TextBlockStyle } from "./text/types";
 
 import type { ShapeId } from "./compositeShape";
 
@@ -103,6 +112,7 @@ import type {
   TextAlign,
   VerticalAlign,
   ExcalidrawStickyNoteElement,
+  ExcalidrawShapeElement,
   ShapeData,
   ShapeElementType,
 } from "./types";
@@ -263,6 +273,12 @@ export type ExcalidrawElementSkeleton =
       x: number;
       y: number;
       id?: ExcalidrawTextElement["id"];
+      fontSize?: number;
+      fontFamily?: FontFamilyValues;
+      lineHeight?: ExcalidrawTextElement["texts"]["body"]["style"]["lineHeight"];
+      fontWeight?: number;
+      textAlign?: TextAlign;
+      verticalAlign?: VerticalAlign;
     } & Partial<ExcalidrawTextElement>)
   | ({
       type: Extract<ExcalidrawImageElement["type"], "image">;
@@ -289,47 +305,186 @@ const DEFAULT_LINEAR_ELEMENT_PROPS = {
 
 const DEFAULT_DIMENSION = 100;
 
-const bindTextToContainer = (
-  container: ExcalidrawElement,
-  textProps: { text: string } & FragmentConstructorOpts,
-  scene: Scene,
+/**
+ * 图形家族的骨架 label 直接写进 `texts.body`：不创建文字元素，
+ * 样式沿用创建默认值（居中），随后按家族 auto-fit 求解尺寸。
+ */
+const applyShapeLabel = (
+  container: ExcalidrawShapeElement,
+  label: Extract<ValidContainer, { label?: unknown }>["label"],
 ) => {
-  // a note and its label share one ink: a label that sets its own color
-  // gives it to the note (the footer paints with it); transparent falls
-  // back to the note's
-  const stickyInk = isStickyNoteElement(container)
-    ? normalizeStickyNoteStrokeColor(
-        textProps.strokeColor && !isTransparent(textProps.strokeColor)
-          ? textProps.strokeColor
-          : container.strokeColor,
-      )
-    : null;
-  const textElement: ExcalidrawTextElement = newTextElement({
-    x: 0,
-    y: 0,
+  if (!label?.text) {
+    return;
+  }
+  const fontFamily = label.fontFamily || DEFAULT_FONT_FAMILY;
+  const style: TextBlockStyle = {
+    fontFamily,
+    fontSize: label.fontSize || DEFAULT_FONT_SIZE,
+    lineHeight: getLineHeight(fontFamily),
+    textAlign: label.textAlign ?? TEXT_ALIGN.CENTER,
+    verticalAlign: label.verticalAlign ?? VERTICAL_ALIGN.MIDDLE,
+    ...(label.strokeColor ? { color: label.strokeColor } : {}),
+  };
+  const text = normalizeText(label.text);
+  Object.assign(container, {
+    texts: withTextBlock(container.texts, "body", { text, style }),
+  });
+
+  const updates = getTextLayoutUpdates(container);
+  if (!updates) {
+    return;
+  }
+  Object.assign(container, updates, {
+    textFitMinWidth:
+      container.textFitMinWidth ??
+      (container.width > 0 ? container.width : updates.width),
+    textFitMinHeight:
+      container.textFitMinHeight ??
+      (container.height > 0 ? container.height : updates.height),
+  });
+};
+
+/**
+ * 便签骨架的 label 直接写进 `texts.body`，
+ * 样式沿用 `newTextElement` 的默认规则（center / middle），
+ * 颜色不落 style、跟随 note ink；最后由便签 fit 决定高度。
+ */
+const applyStickyNoteLabel = (
+  container: ExcalidrawStickyNoteElement,
+  label: Extract<ValidContainer, { label?: unknown }>["label"],
+) => {
+  if (!label?.text) {
+    return;
+  }
+  const fontFamily = label.fontFamily || DEFAULT_FONT_FAMILY;
+  const style: TextBlockStyle = {
+    fontFamily,
+    fontSize: normalizeStickyNoteFontSize(label.fontSize || DEFAULT_FONT_SIZE),
+    lineHeight: getLineHeight(fontFamily),
+    textAlign: label.textAlign ?? TEXT_ALIGN.CENTER,
+    verticalAlign: label.verticalAlign ?? VERTICAL_ALIGN.MIDDLE,
+  };
+  if (label.strokeColor && !isTransparent(label.strokeColor)) {
+    Object.assign(container, {
+      strokeColor: normalizeStickyNoteStrokeColor(label.strokeColor),
+    });
+  }
+  Object.assign(container, {
+    texts: withTextBlock(container.texts, "body", {
+      text: normalizeText(label.text),
+      style,
+    }),
+  });
+  const layout = getStickyNoteBodyLayout(container);
+  if (layout) {
+    Object.assign(container, layout.container);
+  }
+};
+
+/**
+ * 组合片段骨架的 label 直接写进 `texts.body`（operator 页签）；随后按文本块
+ * 适配页签宽度与表头行高。
+ */
+const applySequenceFragmentLabel = (
+  container: ExcalidrawShapeElement,
+  label: Extract<ValidContainer, { label?: unknown }>["label"],
+) => {
+  if (!label?.text) {
+    return;
+  }
+  const fontFamily = label.fontFamily || DEFAULT_FONT_FAMILY;
+  const style: TextBlockStyle = {
+    fontFamily,
+    fontSize: label.fontSize || DEFAULT_FONT_SIZE,
+    lineHeight: getLineHeight(fontFamily),
+    textAlign: label.textAlign ?? TEXT_ALIGN.LEFT,
+    verticalAlign: label.verticalAlign ?? VERTICAL_ALIGN.TOP,
+  };
+  const text = normalizeText(label.text);
+  Object.assign(container, {
+    texts: withTextBlock(container.texts, "body", { text, style }),
+  });
+  const fit = fitSequenceFragmentOperator(container, { text, style });
+  if (fit) {
+    Object.assign(container, {
+      height: fit.height,
+      shape: fit.shape,
+    });
+  }
+};
+
+/**
+ * 时序生命线骨架的 label 直接写进 `texts.body`，随后按文本块撑高头部，宽度
+ * 与杆长保持不变。
+ */
+const applySequenceLifelineLabel = (
+  container: ExcalidrawShapeElement,
+  label: Extract<ValidContainer, { label?: unknown }>["label"],
+) => {
+  if (!label?.text || !isSequenceLifelineElement(container)) {
+    return;
+  }
+  const fontFamily = label.fontFamily || DEFAULT_FONT_FAMILY;
+  const style: TextBlockStyle = {
+    fontFamily,
+    fontSize: label.fontSize || DEFAULT_FONT_SIZE,
+    lineHeight: getLineHeight(fontFamily),
+    textAlign: label.textAlign ?? TEXT_ALIGN.CENTER,
+    verticalAlign: label.verticalAlign ?? VERTICAL_ALIGN.MIDDLE,
+    ...(label.strokeColor ? { color: label.strokeColor } : {}),
+  };
+  const text = normalizeText(label.text);
+  Object.assign(container, {
+    texts: withTextBlock(container.texts, "body", { text, style }),
+  });
+  const headHeight = container.shape.lifeline.headHeight;
+  const fit = getSequenceLifelineTextFit(
+    container,
+    getSequenceLifelineTextBlockHeight(container, { text, style }),
+    headHeight,
+  );
+  if (!fit) {
+    return;
+  }
+  Object.assign(container, {
+    x: fit.x,
+    y: fit.y,
+    height: fit.height,
+    shape: {
+      ...container.shape,
+      lifeline: { ...container.shape.lifeline, headHeight: fit.headHeight },
+    },
+    textFitMinWidth: container.textFitMinWidth ?? container.width,
+    textFitMinHeight: container.textFitMinHeight ?? headHeight,
+  });
+};
+
+/**
+ * 箭头 / 直线骨架的 label 直接写进 `texts.label`，沿路径位置取默认中点。
+ */
+const applyLinearLabel = (
+  container: ExcalidrawLinearElement,
+  label: Extract<ValidContainer, { label?: unknown }>["label"],
+) => {
+  if (!label?.text) {
+    return;
+  }
+  const fontFamily = label.fontFamily || DEFAULT_FONT_FAMILY;
+  const style: TextBlockStyle = {
+    fontFamily,
+    fontSize: label.fontSize || DEFAULT_FONT_SIZE,
+    lineHeight: getLineHeight(fontFamily),
     textAlign: TEXT_ALIGN.CENTER,
     verticalAlign: VERTICAL_ALIGN.MIDDLE,
-    ...textProps,
-    containerId: container.id,
-    strokeColor: stickyInk ?? (textProps.strokeColor || container.strokeColor),
-    labelPosition: isLinearElement(container)
-      ? DEFAULT_BOUND_TEXT_LABEL_POSITION
-      : null,
-  });
-
+    ...(label.strokeColor ? { color: label.strokeColor } : {}),
+  };
   Object.assign(container, {
-    boundElements: (container.boundElements || []).concat({
-      type: "text",
-      id: textElement.id,
+    texts: withTextBlock(container.texts, "label", {
+      text: normalizeText(label.text),
+      style,
+      placement: { labelPosition: DEFAULT_BOUND_TEXT_LABEL_POSITION },
     }),
-    ...(stickyInk && stickyInk !== container.strokeColor
-      ? { strokeColor: stickyInk }
-      : null),
   });
-
-  redrawTextBoundingBox(textElement, container, scene);
-
-  return [container, textElement] as const;
 };
 
 const bindLinearElementToElement = (
@@ -375,7 +530,7 @@ const bindLinearElementToElement = (
       if (startType === "text") {
         let text = "";
         if (existingElement && existingElement.type === "text") {
-          text = existingElement.text;
+          text = getTextElementText(existingElement);
         } else if (start.type === "text") {
           text = start.text;
         }
@@ -446,7 +601,7 @@ const bindLinearElementToElement = (
       if (endType === "text") {
         let text = "";
         if (existingElement && existingElement.type === "text") {
-          text = existingElement.text;
+          text = getTextElementText(existingElement);
         } else if (end.type === "text") {
           text = end.text;
         }
@@ -828,23 +983,11 @@ export const convertToExcalidrawElements = (
         break;
       }
       case "text": {
-        const fontFamily = element?.fontFamily || DEFAULT_FONT_FAMILY;
-        const fontSize = element?.fontSize || DEFAULT_FONT_SIZE;
-        const lineHeight = element?.lineHeight || getLineHeight(fontFamily);
         const text = element.text ?? "";
         const normalizedText = normalizeText(text);
-        const metrics = measureText(
-          normalizedText,
-          getFontString({ fontFamily, fontSize }),
-          lineHeight,
-        );
-
         excalidrawElement = newTextElement({
-          width: metrics.width,
-          height: metrics.height,
-          fontFamily,
-          fontSize,
           ...element,
+          text: normalizedText,
         });
         break;
       }
@@ -970,11 +1113,6 @@ export const convertToExcalidrawElements = (
                   "Table cell background text must be a text element",
                 );
               }
-              if ((child.element as { containerId?: string }).containerId) {
-                throw new Error(
-                  "Bound text cannot be table cell background text",
-                );
-              }
               if (seenBackgroundText.has(tableCell.id)) {
                 throw new Error(
                   `Table cell ${tableCell.id} already has background text`,
@@ -1046,8 +1184,8 @@ export const convertToExcalidrawElements = (
   }
 
   // Once every element exists, write the table cell memberships declared by
-  // table skeletons (mirroring the frame-like pass below). Bound text keeps
-  // inheriting its host's membership through `containerId` instead.
+  // table skeletons (mirroring the frame-like pass below). Cell text lives
+  // inline in each element's `texts` regions, so it needs no separate pass.
   if (pendingTableCellRefs.length) {
     const skeletonToElement = new Map<
       ExcalidrawElementSkeleton,
@@ -1072,9 +1210,6 @@ export const convertToExcalidrawElements = (
         throw new Error(
           `Frame-like element ${member.id} cannot be a table cell member`,
         );
-      }
-      if (isTextElement(member) && member.containerId) {
-        continue;
       }
       Object.assign(member, {
         containerRef: {
@@ -1158,33 +1293,27 @@ export const convertToExcalidrawElements = (
       case "df-store-open":
       case "df-store-left-label":
       case "df-store-plain":
-      case "stickynote":
       case "arrow": {
         if (element.label?.text) {
-          // for a sticky note this runs the sticky fit (via
-          // `redrawTextBoundingBox`): the label's font size becomes its ceiling
-          let [container, text] = bindTextToContainer(
-            excalidrawElement,
-            element?.label,
-            scene,
-          );
-          elementStore.add(container);
-          elementStore.add(text);
-
-          if (isSequenceFragmentElement(container) && isTextElement(text)) {
-            // The operator tab grows with its label before wrapping; persist
-            // the fitted tab width and header height on the restored fragment.
-            const fit = fitSequenceFragmentOperator(container, text);
-            if (fit) {
-              Object.assign(container, {
-                height: fit.height,
-                shape: fit.shape,
-              });
-              redrawTextBoundingBox(text, container, scene);
-            }
+          if (isSequenceFragmentElement(excalidrawElement)) {
+            // 组合片段：label 写进 `texts.body`
+            applySequenceFragmentLabel(
+              excalidrawElement as ExcalidrawShapeElement,
+              element.label,
+            );
+            break;
           }
-
-          if (isLinearElement(container)) {
+          if (isSequenceLifelineElement(excalidrawElement)) {
+            // 时序生命线：label 写进 `texts.body`，头部随文本增长
+            applySequenceLifelineLabel(
+              excalidrawElement as ExcalidrawShapeElement,
+              element.label,
+            );
+            break;
+          }
+          if (isLinearElement(excalidrawElement)) {
+            // 线性元素：label 写进 `texts.label`，端点绑定照旧
+            applyLinearLabel(excalidrawElement, element.label);
             const originalStart =
               element.type === "arrow" ? element?.start : undefined;
             const originalEnd =
@@ -1203,17 +1332,23 @@ export const convertToExcalidrawElements = (
             }
             const { linearElement, startBoundElement, endBoundElement } =
               bindLinearElementToElement(
-                container as NonDeleted<ExcalidrawArrowElement>,
+                excalidrawElement as NonDeleted<ExcalidrawArrowElement>,
                 originalStart,
                 originalEnd,
                 elementStore,
                 scene,
               );
-            container = linearElement;
             elementStore.add(linearElement);
             elementStore.add(startBoundElement);
             elementStore.add(endBoundElement);
+            break;
           }
+          if (isShapeElement(excalidrawElement)) {
+            // 图形家族：label 写进 `texts.body`
+            applyShapeLabel(excalidrawElement, element.label);
+            break;
+          }
+          elementStore.add(excalidrawElement);
         } else {
           switch (element.type) {
             case "arrow": {
@@ -1242,6 +1377,15 @@ export const convertToExcalidrawElements = (
             }
           }
         }
+        break;
+      }
+      case "stickynote": {
+        // 便签正文内嵌到 `texts.body`
+        applyStickyNoteLabel(
+          excalidrawElement as ExcalidrawStickyNoteElement,
+          element.label,
+        );
+        elementStore.add(excalidrawElement);
         break;
       }
     }

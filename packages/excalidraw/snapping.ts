@@ -14,7 +14,6 @@ import {
   getElementAbsoluteCoords,
   isShapeWithIdIn,
 } from "@excalidraw/element";
-import { isBoundToContainer } from "@excalidraw/element";
 
 import { getMaximumGroups } from "@excalidraw/element";
 
@@ -342,12 +341,7 @@ export const getVisibleGaps = (
     elementsMap,
   );
 
-  const referenceBounds = getMaximumGroups(referenceElements, elementsMap)
-    .filter(
-      (elementsGroup) =>
-        !(elementsGroup.length === 1 && isBoundToContainer(elementsGroup[0])),
-    )
-    .map(
+  const referenceBounds = getMaximumGroups(referenceElements, elementsMap).map(
       (group) =>
         getCommonBounds(group).map((bound) =>
           round(bound),
@@ -641,7 +635,6 @@ export const getReferenceSnapPoints = (
       ) ?? []) as readonly NonDeletedExcalidrawElement[]
     ).filter(
       (element) =>
-        !isBoundToContainer(element) &&
         !selectedElements.some(
           (selectedElement) => selectedElement.id === element.id,
         ),
@@ -662,12 +655,9 @@ export const getReferenceSnapPoints = (
     appState,
     elementsMap,
   );
-  return getMaximumGroups(referenceElements, elementsMap)
-    .filter(
-      (elementsGroup) =>
-        !(elementsGroup.length === 1 && isBoundToContainer(elementsGroup[0])),
-    )
-    .flatMap((elementGroup) => getElementsCorners(elementGroup, elementsMap));
+  return getMaximumGroups(referenceElements, elementsMap).flatMap(
+    (elementGroup) => getElementsCorners(elementGroup, elementsMap),
+  );
 };
 
 const getPointSnaps = (

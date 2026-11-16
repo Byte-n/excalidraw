@@ -1,10 +1,7 @@
 import { isTransparent } from "@excalidraw/common";
 
 import {
-  shouldAllowVerticalAlign,
-  suppportsHorizontalAlign,
   getColorTargetElement,
-  hasBoundTextElement,
   isElbowArrow,
   isTitledElement,
   isImageElement,
@@ -36,9 +33,20 @@ import {
   hasStrokeWidth,
 } from "../scene";
 
+import {
+  getElementEmbeddedTextTarget,
+  getTextStyleTargetStyle,
+} from "./app/textStyleTargets";
+
 import type { ElementOrToolType } from "../types";
 
 import type { AppClassProperties, UIAppState } from "../types";
+
+/** 元素自身是否已有正文 block（composite / flow）。 */
+const hasEmbeddedTextStyle = (element: ExcalidrawElement) => {
+  const target = getElementEmbeddedTextTarget(element);
+  return !!target && getTextStyleTargetStyle(element, target.region) !== null;
+};
 
 export const canChangeStrokeColor = (
   appState: UIAppState,
@@ -118,15 +126,12 @@ export const getShapeActionPredicates = (
 
   const singleSelected = targetElements.length === 1;
 
-  // a container + its bound text read as a single logical element (2 selected)
-  const isSingleElementBoundContainer =
-    targetElements.length === 2 &&
-    (hasBoundTextElement(targetElements[0]) ||
-      hasBoundTextElement(targetElements[1]));
-
   const isEditingTextOrNewElement = Boolean(
-    appState.editingTextElement || appState.newElement,
+    appState.editingTextElement ||
+      appState.editingTextRegion ||
+      appState.newElement,
   );
+  const isEditingEmbeddedText = Boolean(appState.editingTextRegion);
   const hasSelection = targetElements.length > 0;
 
   return {
@@ -136,7 +141,10 @@ export const getShapeActionPredicates = (
     showExtraActions: hasSelection && !isEditingTextOrNewElement,
 
     // color
-    strokeColor: canChangeStrokeColor(appState, targetElements),
+    strokeColor:
+      canChangeStrokeColor(appState, targetElements) ||
+      // 区域文本编辑时颜色板充当「字体颜色」，即使宿主元素本身无描边色
+      !!appState.editingTextRegion,
     backgroundColor: canChangeBackgroundColor(
       appState,
       targetElements,
@@ -165,11 +173,18 @@ export const getShapeActionPredicates = (
     arrowheads: forToolOrSelection(canHaveArrowheads),
 
     // text
-    text: activeToolType === "text" || targetElements.some(isTextElement),
+    text:
+      activeToolType === "text" ||
+      isEditingEmbeddedText ||
+      targetElements.some(isTextElement) ||
+      targetElements.some(hasEmbeddedTextStyle),
     textAlign:
       activeToolType === "text" ||
-      suppportsHorizontalAlign(targetElements, elementsMap),
-    verticalAlign: shouldAllowVerticalAlign(targetElements, elementsMap),
+      isEditingEmbeddedText ||
+      targetElements.some(isTextElement) ||
+      targetElements.some(hasEmbeddedTextStyle),
+    verticalAlign:
+      isEditingEmbeddedText || targetElements.some(hasEmbeddedTextStyle),
 
     opacity: activeToolType !== "autoshape" || hasSelection,
 
@@ -186,14 +201,14 @@ export const getShapeActionPredicates = (
           (element) => element.type === "freedraw",
         )),
     align:
-      !isSingleElementBoundContainer && alignActionsPredicate(appState, app),
+      alignActionsPredicate(appState, app),
     distribute: targetElements.length > 2,
 
     // per-element actions
     // NOTE: the full panel treats a bound container as linkable; the compact /
     // mobile layouts only link a truly single selection. Both are preserved via
     // the two flags below.
-    link: singleSelected || isSingleElementBoundContainer,
+    link: singleSelected,
     linkSingleOnly: singleSelected,
     cropEditor:
       !appState.croppingElementId &&

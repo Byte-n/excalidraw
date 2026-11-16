@@ -37,7 +37,7 @@ describe("mindmap text import", () => {
     const imported = h.app.scene.getNonDeletedElements();
     expect(imported.filter(isMindmapNodeElement)).toHaveLength(4);
     expect(imported.filter(isMindmapEdgeElement)).toHaveLength(3);
-    expect(imported.length).toBe(before.length + 4 * 2 + 3);
+    expect(imported.length).toBe(before.length + 4 + 3);
     expect(
       new Set(imported.filter(isMindmapNodeElement).map((node) => node.graphId))
         .size,

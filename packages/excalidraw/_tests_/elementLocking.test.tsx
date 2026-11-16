@@ -222,27 +222,20 @@ describe("element locking", () => {
     expect(API.getSelectedElements().length).toBe(2);
   });
 
-  it("should ignore locked text element in center of container on ENTER", () => {
+  it("should enter the container body region on ENTER", () => {
+    // 图形家族的正文已经内嵌到元素自身，ENTER 直接进入区域编辑
     const container = API.createElement({
-      type: "rectangle",
+      type: "df-external-entity",
       width: 100,
     });
-    const textSize = 20;
-    const text = API.createElement({
-      type: "text",
-      text: "ola",
-      x: container.width / 2 - textSize / 2,
-      y: container.height / 2 - textSize / 2,
-      width: textSize,
-      height: textSize,
-      containerId: container.id,
-      locked: true,
-    });
-    API.setElements([container, text]);
+    API.setElements([container]);
     API.setSelectedElements([container]);
     Keyboard.keyPress(KEYS.ENTER);
-    expect(h.state.editingTextElement?.id).not.toBe(text.id);
-    expect(h.state.editingTextElement?.id).toBe(h.elements[1].id);
+    expect(h.state.editingTextRegion?.target).toEqual({
+      elementId: container.id,
+      region: "body",
+    });
+    expect(h.state.editingTextElement).toBe(null);
   });
 
   it("should ignore locked text under cursor when clicked with text tool", async () => {
@@ -285,106 +278,4 @@ describe("element locking", () => {
     expect(h.state.editingTextElement?.id).toBe(h.elements[1].id);
   });
 
-  it("locking should include bound text", () => {
-    const container = API.createElement({
-      type: "rectangle",
-      width: 100,
-    });
-    const textSize = 20;
-    const text = API.createElement({
-      type: "text",
-      text: "ola",
-      x: container.width / 2 - textSize / 2,
-      y: container.height / 2 - textSize / 2,
-      width: textSize,
-      height: textSize,
-      containerId: container.id,
-    });
-    h.app.scene.mutateElement(container, {
-      boundElements: [{ id: text.id, type: "text" }],
-    });
-
-    API.setElements([container, text]);
-
-    UI.clickTool("selection");
-    mouse.clickAt(container.x + 10, container.y + 10);
-    Keyboard.withModifierKeys({ ctrl: true, shift: true }, () => {
-      Keyboard.keyPress(KEYS.L);
-    });
-
-    expect(h.elements).toEqual([
-      expect.objectContaining({
-        id: container.id,
-        locked: true,
-      }),
-      expect.objectContaining({
-        id: text.id,
-        locked: true,
-      }),
-    ]);
-  });
-
-  it("bound text shouldn't be editable via double-click", async () => {
-    const container = API.createElement({
-      type: "rectangle",
-      width: 100,
-      locked: true,
-    });
-    const textSize = 20;
-    const text = API.createElement({
-      type: "text",
-      text: "ola",
-      x: container.width / 2 - textSize / 2,
-      y: container.height / 2 - textSize / 2,
-      width: textSize,
-      height: textSize,
-      containerId: container.id,
-      locked: true,
-    });
-    h.app.scene.mutateElement(container, {
-      boundElements: [{ id: text.id, type: "text" }],
-    });
-    API.setElements([container, text]);
-
-    UI.clickTool("selection");
-    mouse.doubleClickAt(container.width / 2, container.height / 2);
-
-    const editor = await getTextEditor();
-    expect(editor).not.toBe(null);
-    expect(h.state.editingTextElement?.id).not.toBe(text.id);
-    expect(h.elements.length).toBe(3);
-    expect(h.state.editingTextElement?.id).toBe(h.elements[2].id);
-  });
-
-  it("bound text shouldn't be editable via text tool", async () => {
-    const container = API.createElement({
-      type: "rectangle",
-      width: 100,
-      locked: true,
-    });
-    const textSize = 20;
-    const text = API.createElement({
-      type: "text",
-      text: "ola",
-      x: container.width / 2 - textSize / 2,
-      y: container.height / 2 - textSize / 2,
-      width: textSize,
-      height: textSize,
-      containerId: container.id,
-      locked: true,
-    });
-    h.app.scene.mutateElement(container, {
-      boundElements: [{ id: text.id, type: "text" }],
-    });
-    API.setElements([container, text]);
-
-    UI.clickTool("text");
-    mouse.clickAt(container.width / 2, container.height / 2);
-
-    const editor = await getTextEditor();
-    expect(editor).not.toBe(null);
-    expect(h.state.editingTextElement?.id).not.toBe(text.id);
-    expect(h.elements.length).toBe(3);
-    expect(h.state.editingTextElement?.id).toBe(h.elements[2].id);
-  });
 });

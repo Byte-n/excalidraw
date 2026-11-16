@@ -1,18 +1,20 @@
-import { newTableElement, newTextElement } from "../src/newElement";
+import { getLineHeight } from "@excalidraw/common";
+
+import { newTableElement } from "../src/newElement";
 import { newElementWith } from "../src/mutateElement";
 import { applyTableOperation } from "../src/tableScene";
-import { getCellBackgroundTextLayout } from "../src/tableSceneGeometry";
-import { resolveTableBackgroundTextFontWeight } from "../src/tableRender";
-import { assertValidTableData, getTableCellBounds } from "../src/tableStruct";
+import {
+  getTableCellTextBaseStyle,
+  resolveTableCellTextStyle,
+} from "../src/tableTextStyle";
+import { assertValidTableData } from "../src/tableStruct";
 import { setCustomTextMetricsProvider } from "../src/textMeasurements";
+import { cellKey } from "../src/text/keys";
+import { withTextBlock } from "../src/text/ops";
+import { layoutTextRegionsLocal } from "../src/text/regionLayout";
 import { isTableElement } from "../src/typeChecks";
 
-import type {
-  ElementsMap,
-  ExcalidrawElement,
-  ExcalidrawTableElement,
-  ExcalidrawTextElement,
-} from "../src/types";
+import type { ExcalidrawTableElement } from "../src/types";
 
 setCustomTextMetricsProvider({
   getLineWidth: (text, font) => text.length * parseFloat(font) * 0.5,
@@ -34,47 +36,36 @@ const cellAt = (table: ExcalidrawTableElement, row: number, column: number) =>
       cell.columnId === table.table.columns[column].id,
   )!;
 
-const backgroundText = (
+const withCellText = (
   table: ExcalidrawTableElement,
   cellId: string,
   fontWeight?: number,
-) => {
-  const text = newTextElement({
-    x: table.x,
-    y: table.y,
-    text: "标签",
-    textAlign: "left",
-    verticalAlign: "middle",
-    fontSize: 13,
-    autoResize: false,
-    containerRef: {
-      kind: "tableCell",
-      elementId: table.id,
-      cellId,
-      role: "backgroundText",
-    },
-  });
-  return fontWeight === undefined ? text : newElementWith(text, { fontWeight });
+): ExcalidrawTableElement => {
+  const base = getTableCellTextBaseStyle();
+  return {
+    ...table,
+    texts: withTextBlock(table.texts, cellKey(cellId), {
+      text: "标签",
+      style: {
+        ...base,
+        ...(fontWeight !== undefined ? { fontWeight } : {}),
+      },
+    }),
+  };
 };
 
-const toMap = (
-  table: ExcalidrawTableElement,
-  ...elements: ExcalidrawTextElement[]
-): ElementsMap =>
-  new Map<string, ExcalidrawElement>([
-    [table.id, table],
-    ...elements.map((element) => [element.id, element] as const),
-  ]);
-
-describe("resolveTableBackgroundTextFontWeight", () => {
-  it("derives 600 for first-row background texts when the header is on", () => {
+describe("resolveTableCellTextStyle", () => {
+  it("derives 600 for first-row cells when the header is on", () => {
     const table = fixture();
-    const headerText = backgroundText(table, cellAt(table, 0, 0).id);
-    const bodyText = backgroundText(table, cellAt(table, 1, 0).id);
-    const map = toMap(table, headerText, bodyText);
+    const headerCell = cellAt(table, 0, 0);
+    const bodyCell = cellAt(table, 1, 0);
 
-    expect(resolveTableBackgroundTextFontWeight(headerText, map)).toBe(600);
-    expect(resolveTableBackgroundTextFontWeight(bodyText, map)).toBe(undefined);
+    expect(resolveTableCellTextStyle(table.table, headerCell).fontWeight).toBe(
+      600,
+    );
+    expect(
+      resolveTableCellTextStyle(table.table, bodyCell).fontWeight,
+    ).toBeUndefined();
   });
 
   it("derives nothing when the header is switched off", () => {
@@ -82,22 +73,23 @@ describe("resolveTableBackgroundTextFontWeight", () => {
     const table = newElementWith(base, {
       table: { ...base.table, style: { header: false } },
     });
-    const headerText = backgroundText(table, cellAt(table, 0, 0).id);
 
     expect(
-      resolveTableBackgroundTextFontWeight(
-        headerText,
-        toMap(table, headerText),
-      ),
-    ).toBe(undefined);
+      resolveTableCellTextStyle(table.table, cellAt(table, 0, 0)).fontWeight,
+    ).toBeUndefined();
   });
 
   it("lets explicit weights override the band derivation", () => {
     const base = fixture();
-    // explicit weight on the text element
-    const ownWeight = backgroundText(base, cellAt(base, 0, 0).id, 700);
+    const headerCell = cellAt(base, 0, 0);
+    // explicit weight on the persisted block
     expect(
-      resolveTableBackgroundTextFontWeight(ownWeight, toMap(base, ownWeight)),
+      resolveTableCellTextStyle(
+        base.table,
+        headerCell,
+        withCellText(base, headerCell.id, 700).texts?.[cellKey(headerCell.id)]
+          ?.style,
+      ).fontWeight,
     ).toBe(700);
 
     // row-level background text style
@@ -111,10 +103,9 @@ describe("resolveTableBackgroundTextFontWeight", () => {
         ),
       },
     });
-    const rowText = backgroundText(byRow, cellAt(byRow, 0, 0).id, 700);
-    expect(
-      resolveTableBackgroundTextFontWeight(rowText, toMap(byRow, rowText)),
-    ).toBe(500);
+    expect(resolveTableCellTextStyle(byRow.table, headerCell).fontWeight).toBe(
+      500,
+    );
 
     // column-level background text style when the row defines none
     const byColumn = newElementWith(base, {
@@ -127,52 +118,60 @@ describe("resolveTableBackgroundTextFontWeight", () => {
         ),
       },
     });
-    const columnText = backgroundText(byColumn, cellAt(byColumn, 0, 0).id);
     expect(
-      resolveTableBackgroundTextFontWeight(
-        columnText,
-        toMap(byColumn, columnText),
-      ),
+      resolveTableCellTextStyle(byColumn.table, headerCell).fontWeight,
     ).toBe(500);
   });
 
-  it("leaves non-cell texts at their own weight", () => {
-    const table = fixture();
-    const freeText = newTextElement({ x: 0, y: 0, text: "自由" });
-
-    expect(
-      resolveTableBackgroundTextFontWeight(freeText, toMap(table, freeText)),
-    ).toBe(undefined);
+  it("applies row/column size, alignment, color and padding overrides", () => {
+    const base = fixture();
+    const cell = cellAt(base, 0, 0);
+    const table = newElementWith(base, {
+      table: {
+        ...base.table,
+        rows: base.table.rows.map((row, index) =>
+          index === 0
+            ? {
+                ...row,
+                style: {
+                  backgroundText: {
+                    fontSize: 18,
+                    horizontalAlign: "right" as const,
+                    verticalAlign: "bottom" as const,
+                    color: "#ff0000",
+                    padding: 4,
+                  },
+                },
+              }
+            : row,
+        ),
+      },
+    });
+    const style = resolveTableCellTextStyle(table.table, cell);
+    expect(style).toMatchObject({
+      fontSize: 18,
+      textAlign: "right",
+      verticalAlign: "bottom",
+      color: "#ff0000",
+    });
   });
 
-  it("drives the layout measurement exactly like an explicit 600", () => {
+  it("drives the region layout measurement exactly like an explicit 600", () => {
     const table = fixture();
     const headerCell = cellAt(table, 0, 0);
-    const derived = backgroundText(table, headerCell.id);
-    const explicit = backgroundText(table, headerCell.id, 600);
-    const body = backgroundText(table, cellAt(table, 1, 0).id);
-    const map = toMap(table, derived, explicit, body);
-    const bounds = getTableCellBounds(table.table, headerCell.id)!;
-    const bodyBounds = getTableCellBounds(table.table, cellAt(table, 1, 0).id)!;
+    const bodyCell = cellAt(table, 1, 0);
+    const derived = withCellText(table, headerCell.id);
+    const explicit = withCellText(table, headerCell.id, 600);
+    const body = withCellText(table, bodyCell.id);
 
-    const derivedLayout = getCellBackgroundTextLayout(
-      derived,
-      table,
-      bounds,
-      map,
-    );
-    const explicitLayout = getCellBackgroundTextLayout(
-      explicit,
-      table,
-      bounds,
-      map,
-    );
-    const bodyLayout = getCellBackgroundTextLayout(
-      body,
-      table,
-      bodyBounds,
-      map,
-    );
+    const layoutOf = (element: ExcalidrawTableElement, cellId: string) =>
+      layoutTextRegionsLocal(element).find(
+        (layout) => layout.key === cellKey(cellId),
+      )!;
+
+    const derivedLayout = layoutOf(derived, headerCell.id);
+    const explicitLayout = layoutOf(explicit, headerCell.id);
+    const bodyLayout = layoutOf(body, bodyCell.id);
 
     expect(derivedLayout.width).toBe(explicitLayout.width);
     expect(derivedLayout.height).toBe(explicitLayout.height);
@@ -180,6 +179,12 @@ describe("resolveTableBackgroundTextFontWeight", () => {
     // 600-prefixed font measures wider than the plain 13px one — proving the
     // derived weight reaches measurement
     expect(bodyLayout.width).not.toBe(derivedLayout.width);
+  });
+
+  it("keeps the persisted block line height independent of size overrides", () => {
+    const base = fixture();
+    const style = getTableCellTextBaseStyle();
+    expect(style.lineHeight).toBe(getLineHeight(style.fontFamily));
   });
 });
 
@@ -214,9 +219,8 @@ describe("table header flag", () => {
       cellId: table.table.cells[0].id,
       text: "标题格",
     });
-    const textBefore = withText.elements.find(
-      (element) => element.type === "text",
-    )!;
+    const tableBefore = withText.elements.find(isTableElement)!;
+    const textsBefore = tableBefore.texts;
 
     const toggledOff = applyTableOperation(withText.elements, {
       action: "setStyle",
@@ -238,10 +242,10 @@ describe("table header flag", () => {
       undefined,
     );
 
-    // zero side effects: the cell text is byte-identical across both toggles
-    const textAfter = toggledBack.elements.find(
-      (element) => element.id === textBefore.id,
-    )!;
-    expect(textAfter).toEqual(textBefore);
+    // zero side effects: the cell text blocks are byte-identical across both
+    // toggles
+    expect(toggledBack.elements.find(isTableElement)?.texts).toEqual(
+      textsBefore,
+    );
   });
 });

@@ -1,7 +1,4 @@
-import type {
-  ExcalidrawTextElement,
-  FontFamilyValues,
-} from "@excalidraw/element/types";
+import type { FontFamilyValues } from "@excalidraw/element/types";
 
 import { FONT_FAMILY, FONT_FAMILY_FALLBACKS } from "./constants";
 
@@ -153,8 +150,8 @@ export const LOCAL_FONT_PROTOCOL = "local:";
  * Calculates vertical offset for a text with alphabetic baseline.
  */
 export const getVerticalOffset = (
-  fontFamily: ExcalidrawTextElement["fontFamily"],
-  fontSize: ExcalidrawTextElement["fontSize"],
+  fontFamily: FontFamilyValues,
+  fontSize: number,
   lineHeightPx: number,
 ) => {
   const { unitsPerEm, ascender, descender } =
@@ -177,5 +174,5 @@ export const getLineHeight = (fontFamily: FontFamilyValues) => {
     FONT_METADATA[fontFamily]?.metrics ||
     FONT_METADATA[FONT_FAMILY.Excalifont].metrics;
 
-  return lineHeight as ExcalidrawTextElement["lineHeight"];
+  return lineHeight as number & { _brand: "unitlessLineHeight" };
 };

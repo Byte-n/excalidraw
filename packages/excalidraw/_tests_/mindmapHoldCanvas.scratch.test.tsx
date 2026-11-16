@@ -1,7 +1,6 @@
 import {
   getCompletelySelectedMindmapGraphElementIds,
   newMindmapNodeElement,
-  newTextElement,
 } from "@excalidraw/element";
 
 import type {
@@ -12,6 +11,7 @@ import type {
 import { Excalidraw } from "../index";
 
 import { Pointer } from "./helpers/ui";
+import { API } from "./helpers/api";
 import { render } from "./test-utils";
 
 const { h } = window;
@@ -45,18 +45,7 @@ const fixture = () => {
       id,
       ...(collapsed ? { collapsed: true } : {}),
     };
-    const text = {
-      ...newTextElement({
-        x: 0,
-        y: 0,
-        text: label,
-        containerId: id,
-        textAlign: "center",
-        verticalAlign: "middle",
-      }),
-      id: `${id}-text`,
-    };
-    elements.push(node, text);
+    elements.push({ ...node, texts: API.mindmapBody(node, label) });
   });
   return elements;
 };
