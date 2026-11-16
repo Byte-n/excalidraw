@@ -16,10 +16,12 @@ import {
   summarizeElement,
 } from "./apply.js";
 import { CanvasSdkError, toCanvasSdkError } from "./errors.js";
+import { createGenerateApi } from "./generate.js";
 import { createLayoutApi } from "./layout.js";
 import {
   CanvasApplyInputSchema,
   CanvasExportInputSchema,
+  CanvasGenerateInputSchema,
   CanvasLayoutInputSchema,
   CanvasSceneElementsInputSchema,
   CanvasSceneGetInputSchema,
@@ -183,6 +185,8 @@ const schemaFor = (type: CanvasSchemaType) => {
       return CanvasApplyInputSchema;
     case "layout":
       return CanvasLayoutInputSchema;
+    case "generate":
+      return CanvasGenerateInputSchema;
     case "text":
       return z.union([CanvasTextMeasureInputSchema, CanvasTextFitInputSchema]);
     case "validate":
@@ -272,6 +276,7 @@ export const createCanvasSdk = (
     generation,
     assertActive,
   });
+  const generate = createGenerateApi({ apply });
   const layout = createLayoutApi({
     readScene,
     commands,
@@ -292,6 +297,7 @@ export const createCanvasSdk = (
     ),
     text: Object.freeze(createTextApi()),
     apply,
+    generate,
     layout: Object.freeze(layout),
     validate,
     schema: Object.freeze({
@@ -320,10 +326,22 @@ export type {
   CanvasDocsSearchInput,
   CanvasDocsSearchResult,
   CanvasDocsTopicSummary,
+  CanvasDiagramEdgeInput,
+  CanvasDiagramNodeInput,
   CanvasElementSummary,
+  CanvasGenerateApi,
+  CanvasGenerateDiagramInput,
+  CanvasGenerateMindmapInput,
+  CanvasGenerateSequenceInput,
+  CanvasGenerateTableInput,
   CanvasLayoutInput,
   CanvasLayoutReceipt,
+  CanvasMindmapDirection,
+  CanvasMindmapNodeInput,
   CanvasPoint,
+  CanvasSequenceFragmentInput,
+  CanvasSequenceMessageInput,
+  CanvasSequenceParticipantInput,
   CanvasSceneApi,
   CanvasSceneView,
   CanvasSchemaType,

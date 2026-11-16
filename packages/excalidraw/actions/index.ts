@@ -90,6 +90,14 @@ export {
   distributeVertically,
 } from "./actionDistribute";
 
+export {
+  actionArrangeRow,
+  actionArrangeColumn,
+  actionArrangeGrid,
+  actionArrangeStack,
+  actionArrangeSequence,
+} from "./actionLayout";
+
 export { actionFlipHorizontal, actionFlipVertical } from "./actionFlip";
 
 export {

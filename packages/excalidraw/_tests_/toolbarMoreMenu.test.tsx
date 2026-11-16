@@ -103,6 +103,32 @@ describe("浮动栏「更多」菜单（T3）", () => {
     );
   });
 
+  it("多选：「整理选中›」子菜单 = 排列与整理时序图", () => {
+    const rect1 = API.createElement({ type: "rectangle", x: 0 });
+    const rect2 = API.createElement({ type: "rectangle", x: 200 });
+    API.setElements([rect1, rect2]);
+    act(() => {
+      API.setAppState({
+        selectedElementIds: { [rect1.id]: true, [rect2.id]: true },
+      });
+    });
+
+    openMoreMenu();
+    fireEvent.click(
+      queryMenu()!.querySelector<HTMLButtonElement>(
+        "[data-testid='submenu-labels.arrangeSelection']",
+      )!,
+    );
+    const submenu = queryMenu()!.querySelector(
+      ".context-menu-submenu__content",
+    );
+    expect(
+      Array.from(submenu!.querySelectorAll("li[data-testid]")).map((li) =>
+        li.getAttribute("data-testid"),
+      ),
+    ).toEqual(["arrangeRow", "arrangeColumn", "arrangeGrid", "arrangeStack"]);
+  });
+
   it("「样式›」子菜单 = 拷贝样式/粘贴样式（与右键菜单同源）", () => {
     const rect = API.createElement({ type: "rectangle" });
     API.setElements([rect]);

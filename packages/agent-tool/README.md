@@ -1,6 +1,6 @@
 # @excalidraw/agent-tool
 
-面向 Agent 的画布工具包：提供 4 个工具（`canvas_overview` / `canvas_docs` / `execute_code` / `canvas_export`），由宿主在服务端（Node）借用一次 Hocuspocus headless session 执行。`execute_code` 注入的 Canvas SDK 负责场景读取、语义写入、文本度量、布局、校验与文档查询；包内不建立连接、不做鉴权/审批，也不关闭 session。MCP 不在本期范围。
+面向 Agent 的画布工具包：提供 4 个工具（`canvas_overview` / `canvas_docs` / `execute_code` / `canvas_export`），由宿主在服务端（Node）借用一次 Hocuspocus headless session 执行。`execute_code` 注入的 Canvas SDK 负责场景读取、语义写入、语义生成、文本度量、布局、校验与文档查询；包内不建立连接、不做鉴权/审批，也不关闭 session。MCP 不在本期范围。
 
 ## 工具
 
@@ -55,6 +55,10 @@ await tool.execute({
 | `text.measure({ text, style? })` | 返回宽高、行高与行数；Node 端自动安装确定性度量 |
 | `text.fit({ text, style?, maxWidth, maxHeight? })` | 换行并返回是否截断 |
 | `apply({ ops, expectedVersions?, dryRun?, idempotencyKey? })` | 语义操作批，返回写回执 |
+| `generate.diagram({ spec, origin?, layout?, dryRun? })` | 从节点/连线语义 JSON 生成流程图并 layered 布局 |
+| `generate.sequence({ participants, messages?, fragments?, origin?, layout?, dryRun? })` | 生成时序图并 sequence 布局 |
+| `generate.mindmap({ root, direction?, origin?, dryRun? })` | 从文本树生成脑图并 tree 布局 |
+| `generate.table({ columns, rows, header?, name?, maxWidth?, origin?, dryRun? })` | 生成带表头/数据单元格的表格 |
 | `layout.apply({ ids, algorithm, origin?, options?, dryRun? })` | 对已有 id 计算并提交布局 |
 | `validate({ ids?, checks? })` | `overlap` / `overflow` / `bindings` / `dangling` 结构校验 |
 | `schema.get({ type })` | 返回 `apply`/`layout`/`text`/`validate`/`scene`/`export` 的 JSON Schema |
@@ -80,6 +84,17 @@ await tool.execute({
 - 返回 `elements`、`bounds`、`warnings`、`affectedElementIds`、`layoutToken`。
 - 布局由**发起写入的一方**计算并随同一次事务提交；协作服务器不布局，远端只应用结果。
 
+## `generate` 语义生成
+
+四个生成器都把 spec 转成 `apply` 的语义操作，并在同一次事务内提交：
+
+- `generate.diagram`：`spec.nodes` + `spec.edges` 建节点与连线，默认追加 `layered` 布局；`layout: false` 跳过。`format` 本期只支持语义 JSON（默认 `"json"`），`"mermaid"` 返回 `unsupported_format`。
+- `generate.sequence`：`participants` / `messages` / `fragments` 一次性创建时序图并执行 `sequence` 布局；参与者、消息、片段省略 id 时分别回传 `p0…`、`m0…`、`f0…`。
+- `generate.mindmap`：`root: { text, children? }` 递归建图，`direction` 支持四个方向，默认 `left-to-right`；回执 tempId 为先序 `n0…`。
+- `generate.table`：`columns` 为表头，`rows` 每行列数必须一致；`header: false` 时不写表头，`maxWidth` 按列均分列宽；tempId 固定为 `table`。
+
+四个方法都接受 `dryRun` 与 `idempotencyKey`，返回普通 `apply` 回执。
+
 ## 时序图语义
 
 `op: "sequence"` 提供参与者、消息、激活条与组合片段的增量操作：
@@ -102,7 +117,7 @@ await tool.execute({
 
 ## 文档体系
 
-- 9 个 guide、27 个 topic：`core` / `shapes` / `connectors` / `mindmap` / `sequence` / `layout` / `document` / `errors` / `examples`。
+- 10 个 guide、31 个 topic：`core` / `shapes` / `connectors` / `mindmap` / `sequence` / `generate` / `layout` / `document` / `errors` / `examples`。
 - `canvas_docs` 与 `canvas.docs` 共用同一份数据：`index` / `read` / `search`。
 - 单次 `read` 上限约 4000 字符，超出返回摘要 + 钻取提示并标记 `truncated`；响应带 `docsVersion` 用于判断缓存是否过期。
 - API 签名由 `scripts/generate-api-docs.mjs` 用 TypeScript Compiler API 从 `CanvasSdk` 自动生成到 `src/api-documentation.generated.ts`（13 个成员）；shape/layout/error 清单从代码常量派生，人工 guide 只写判断与任务配方。
@@ -133,7 +148,7 @@ await tool.execute({
 
 - 连接、鉴权、审批、超时、取消与配额由宿主负责；`signal` 为合作取消，异步 SDK 调用在取消后必须停止提交。
 - 会话生命周期不在包内：工具工厂只借用 session，不调用 `close`，宿主需自行释放。
-- 本期未提供：`generate.*`、SVG/PNG 导出、MCP server。
+- 本期未提供：SVG/PNG 导出、MCP server、Mermaid 源码解析。
 
 ## 开发
 

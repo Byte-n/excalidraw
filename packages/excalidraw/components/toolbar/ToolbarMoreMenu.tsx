@@ -10,6 +10,7 @@ import {
 } from "../../actions";
 import { t } from "../../i18n";
 import {
+  getArrangeSubmenu,
   getCopyAsSubmenu,
   getEditSubmenu,
   getFlipSubmenuItems,
@@ -54,6 +55,7 @@ export const getToolbarMoreMenuItems = (app: AppClassProperties) => {
     actionGroup,
     actionUngroup,
     buildContextMenuSubmenu("labels.contextMenuFlip", getFlipSubmenuItems()),
+    getArrangeSubmenu(),
     getEditSubmenu(),
     getTextSubmenu(),
     buildContextMenuSubmenu("labels.contextMenuFrame", getFrameSubmenuItems()),

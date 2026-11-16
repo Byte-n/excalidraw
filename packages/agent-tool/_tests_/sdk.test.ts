@@ -1,3 +1,5 @@
+import { cellKey, getTextBlock } from "@excalidraw/element";
+
 import { createCanvasSdk } from "../src";
 
 import { rectangle, sessionFixture, withScene } from "./helpers";
@@ -539,6 +541,164 @@ test("validate 检出重叠与文本溢出", async () => {
   }
 });
 
+test("generate.diagram 创建节点/连线并在同一事务内 layered 布局", async () => {
+  const sdk = makeSdk();
+  const receipt = await sdk.generate.diagram({
+    spec: {
+      nodes: [
+        { id: "start", kind: "fc-terminator", label: "开始" },
+        { id: "check", kind: "fc-diamond", label: "通过？" },
+      ],
+      edges: [{ from: "start", to: "check", label: "进入" }],
+    },
+    origin: { x: 100, y: 50 },
+    layout: { direction: "TB", rankGap: 90, nodeGap: 40 },
+  });
+  expect(receipt.tempIds.start).toBeTruthy();
+  expect(receipt.tempIds.check).toBeTruthy();
+  expect(receipt.references).toEqual(
+    expect.arrayContaining([
+      { domain: "layout", action: "apply", algorithm: "layered" },
+    ]),
+  );
+  const start = await readElement(sdk, receipt.tempIds.start);
+  const check = await readElement(sdk, receipt.tempIds.check);
+  expect([start.x, start.y]).toEqual([100, 50]);
+  expect(check.y).toBeCloseTo(start.y + start.height + 90, 6);
+  const edge = await readElement(sdk, receipt.tempIds.e0);
+  expect(edge.texts?.label?.text).toBe("进入");
+
+  const before = await summaryTotal(sdk);
+  await sdk.generate.diagram({
+    spec: { nodes: [{ id: "dry" }] },
+    dryRun: true,
+  });
+  expect(await summaryTotal(sdk)).toBe(before);
+});
+
+test("generate.sequence 创建参与者/消息/片段并按时序布局", async () => {
+  const sdk = makeSdk();
+  const receipt = await sdk.generate.sequence({
+    participants: [
+      { id: "client", label: "客户端" },
+      { id: "server", label: "服务端", kind: "sc-lifeline-actor" },
+    ],
+    messages: [
+      { from: "client", to: "server", label: "请求" },
+      { from: "server", to: "client", label: "响应" },
+    ],
+    fragments: [{ operator: "alt", messages: ["m0"] }],
+    origin: { x: 0, y: 0 },
+    layout: { gap: 120, rankGap: 50, nodeGap: 60 },
+  });
+  const client = await readElement(sdk, receipt.tempIds.client);
+  const server = await readElement(sdk, receipt.tempIds.server);
+  expect(client).toMatchObject({ x: 0, y: 0 });
+  expect(server.x).toBeCloseTo(client.x + client.width + 120, 6);
+  const call = await readElement(sdk, receipt.tempIds.m0);
+  const reply = await readElement(sdk, receipt.tempIds.m1);
+  expect(reply.y - call.y).toBeCloseTo(50, 6);
+  expect(call.texts?.label?.text).toBe("请求");
+  const fragment = await readElement(sdk, receipt.tempIds.f0);
+  expect(fragment.texts?.body?.text).toBe("alt");
+  expect(fragment.height).toBeGreaterThan(0);
+  expect(fragment.width).toBeGreaterThan(server.x + server.width - client.x);
+});
+
+test("generate.mindmap 从文本树建图并按 direction 布局", async () => {
+  const sdk = makeSdk();
+  const receipt = await sdk.generate.mindmap({
+    root: {
+      text: "产品",
+      children: [
+        { text: "需求" },
+        { text: "设计", children: [{ text: "原型" }] },
+      ],
+    },
+    direction: "top-to-bottom",
+    origin: { x: 100, y: 50 },
+  });
+  const ids = ["n0", "n1", "n2", "n3"].map((key) => receipt.tempIds[key]);
+  const nodes = (await sdk.scene.getElements(ids)) as Array<{
+    id: string;
+    x: number;
+    y: number;
+    height: number;
+    layoutDirection?: string;
+  }>;
+  const [rootNode, need, design, prototype] = nodes;
+  expect(rootNode.layoutDirection).toBe("top-to-bottom");
+  expect(Math.min(...nodes.map((node) => node.y))).toBeCloseTo(50, 6);
+  expect(need!.y).toBeGreaterThan(rootNode!.y);
+  expect(design!.y).toBeGreaterThan(rootNode!.y);
+  expect(prototype!.y).toBeGreaterThan(design!.y);
+});
+
+test("generate.table 写入表头与数据单元格", async () => {
+  const sdk = makeSdk();
+  const receipt = await sdk.generate.table({
+    columns: ["服务", "状态"],
+    rows: [
+      ["订单", "正常"],
+      ["库存", "偏低"],
+    ],
+    maxWidth: 300,
+    name: "服务清单",
+  });
+  const [table] = (await sdk.scene.getElements([receipt.tempIds.table])) as [
+    {
+      name: string;
+      width: number;
+      texts: Parameters<typeof getTextBlock>[0];
+      table: {
+        rows: Array<{ id: string }>;
+        columns: Array<{ id: string; width: number }>;
+        cells: Array<{ id: string; rowId: string; columnId: string }>;
+      };
+    },
+  ];
+  expect(table.name).toBe("服务清单");
+  expect(table.width).toBe(300);
+  expect(table.table.columns.map((column) => column.width)).toEqual([150, 150]);
+  expect(table.table.rows).toHaveLength(3);
+  const textAt = (row: number, column: number) => {
+    const cell = table.table.cells.find(
+      (entry) =>
+        entry.rowId === table.table.rows[row].id &&
+        entry.columnId === table.table.columns[column].id,
+    )!;
+    return getTextBlock(table.texts, cellKey(cell.id))?.text;
+  };
+  expect(textAt(0, 0)).toBe("服务");
+  expect(textAt(0, 1)).toBe("状态");
+  expect(textAt(1, 0)).toBe("订单");
+  expect(textAt(2, 1)).toBe("偏低");
+});
+
+test("generate 拒绝 Mermaid、悬空引用与不一致的表格行", async () => {
+  const sdk = makeSdk("read");
+  await expect(
+    sdk.generate.diagram({
+      format: "mermaid",
+      spec: { nodes: [{ id: "a" }] },
+    }),
+  ).rejects.toMatchObject({ code: "unsupported_format" });
+  await expect(
+    sdk.generate.diagram({
+      spec: {
+        nodes: [{ id: "a" }],
+        edges: [{ from: "a", to: "missing" }],
+      },
+    }),
+  ).rejects.toMatchObject({ code: "invalid_input" });
+  await expect(
+    sdk.generate.table({
+      columns: ["a", "b"],
+      rows: [["only-one"]],
+    }),
+  ).rejects.toMatchObject({ code: "invalid_input" });
+});
+
 test("read 模式写操作抛出 not_editable", async () => {
   const sdk = makeSdk("read");
   await expect(
@@ -556,6 +716,8 @@ test("schema.get 生成 JSON Schema，export 仅接受 JSON", async () => {
   const schema = await sdk.schema.get({ type: "apply" });
   expect(schema).toMatchObject({ type: "object" });
   expect(JSON.stringify(schema)).toContain("addShape");
+  const generateSchema = await sdk.schema.get({ type: "generate" });
+  expect(JSON.stringify(generateSchema)).toContain("participants");
   await expect(sdk.export({ format: "png" as never })).rejects.toMatchObject({
     code: "unsupported_format",
   });

@@ -240,7 +240,7 @@ describe("contextMenu element", () => {
     ];
 
     expect(contextMenu).not.toBeNull();
-    expect(contextMenuOptions?.length).toBe(23);
+    expect(contextMenuOptions?.length).toBe(24);
     expectedShortcutNames.forEach((shortcutName) => {
       expect(
         contextMenu?.querySelector(`li[data-testid="${shortcutName}"]`),
@@ -300,7 +300,7 @@ describe("contextMenu element", () => {
     ];
 
     expect(contextMenu).not.toBeNull();
-    expect(contextMenuOptions?.length).toBe(25);
+    expect(contextMenuOptions?.length).toBe(26);
     expectedContextMenuItems.forEach((item) => {
       expect(
         contextMenu?.querySelector(`li[data-testid="${item}"]`),

@@ -69,6 +69,8 @@ export type TableOperation =
       columnCount: number;
       name?: string;
       style?: TableStylePatch;
+      columnWidth?: number;
+      cellTexts?: readonly (readonly string[])[];
     }
   | { action: "delete"; target: TableTarget }
   | { action: "setCellText"; target: TableTarget; cellId: string; text: string }
@@ -309,6 +311,38 @@ export const splitTableSceneCells = (
   applyTableTextLayout(scene, table);
 };
 
+const applyInitialCellTexts = (
+  scene: Scene,
+  table: NonDeleted<ExcalidrawTableElement>,
+  cellTexts: readonly (readonly string[])[],
+) => {
+  if (cellTexts.length > table.table.rows.length) {
+    throw new CanvasSceneError("invalid_input", "初始单元格文本超出表格行数");
+  }
+  cellTexts.forEach((row, rowIndex) => {
+    const tableRow = table.table.rows[rowIndex];
+    if (row.length > table.table.columns.length) {
+      throw new CanvasSceneError("invalid_input", "初始单元格文本超出表格列数");
+    }
+    row.forEach((text, columnIndex) => {
+      if (!text) {
+        return;
+      }
+      const cell = table.table.cells.find(
+        (entry) =>
+          entry.rowId === tableRow.id &&
+          entry.columnId === table.table.columns[columnIndex].id &&
+          !entry.mergedInto,
+      );
+      const live = scene.getNonDeletedElement(table.id);
+      if (!cell || !live || !isTableElement(live)) {
+        throw new CanvasSceneError("internal_error", "表格单元格不存在");
+      }
+      setTableSceneCellText(scene, live, cell.id, text);
+    });
+  });
+};
+
 const updateTableStructure = (
   scene: Scene,
   table: NonDeleted<ExcalidrawTableElement>,
@@ -349,6 +383,12 @@ export const applyTableOperation = (
       ) {
         throw new CanvasSceneError("invalid_input", "表格行列数量必须为正整数");
       }
+      if (
+        operation.columnWidth !== undefined &&
+        (!Number.isFinite(operation.columnWidth) || operation.columnWidth <= 0)
+      ) {
+        throw new CanvasSceneError("invalid_input", "表格列宽必须为正数");
+      }
       table = newTableElement({
         type: "table",
         name: operation.name,
@@ -356,6 +396,9 @@ export const applyTableOperation = (
         y: operation.position.y,
         rowCount: operation.rowCount,
         columnCount: operation.columnCount,
+        ...(operation.columnWidth !== undefined
+          ? { columnWidth: operation.columnWidth }
+          : {}),
       });
       scene.insertElementsAtIndex(
         [table],
@@ -378,6 +421,12 @@ export const applyTableOperation = (
       case "create":
         if (operation.style) {
           setTableSceneStyle(scene, table, operation.style);
+        }
+        if (operation.cellTexts) {
+          applyInitialCellTexts(scene, table, operation.cellTexts);
+          table = scene.getNonDeletedElement(
+            table.id,
+          ) as NonDeleted<ExcalidrawTableElement>;
         }
         references.rows = table.table.rows.map((row, index) => ({
           rowId: row.id,

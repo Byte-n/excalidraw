@@ -323,6 +323,13 @@ const layoutOp = z
   })
   .strict();
 
+const mindmapDirection = z.enum([
+  "left-to-right",
+  "right-to-left",
+  "top-to-bottom",
+  "bottom-to-top",
+]);
+
 const mindmap = z.union([
   z
     .object({
@@ -332,6 +339,7 @@ const mindmap = z.union([
       x: finite,
       y: finite,
       text: z.string(),
+      direction: mindmapDirection.optional(),
     })
     .strict(),
   z
@@ -407,6 +415,8 @@ const table = z.union([
       columnCount: z.number().int().positive(),
       name: z.string().optional(),
       style: tableStyle.optional(),
+      columnWidth: positive.optional(),
+      cellTexts: z.array(z.array(z.string())).max(500).optional(),
     })
     .strict(),
   z
@@ -631,6 +641,151 @@ export const CanvasLayoutInputSchema = z
   .strict();
 export type CanvasLayoutInputParsed = z.infer<typeof CanvasLayoutInputSchema>;
 
+const diagramNode = z
+  .object({
+    id,
+    kind: z.string().min(1).optional(),
+    label: z.string().optional(),
+    x: finite.optional(),
+    y: finite.optional(),
+    width: positive.optional(),
+    height: positive.optional(),
+  })
+  .strict();
+const diagramEdge = z
+  .object({
+    id: id.optional(),
+    from: id,
+    to: id,
+    label: z.string().optional(),
+    kind: z.enum(["arrow", "line"]).optional(),
+    routing: z.enum(["straight", "curved", "orthogonal"]).optional(),
+  })
+  .strict();
+const generateDiagram = z
+  .object({
+    format: z.enum(["json", "mermaid"]).optional(),
+    spec: z
+      .object({
+        nodes: z.array(diagramNode).min(1).max(300),
+        edges: z.array(diagramEdge).max(500).optional(),
+      })
+      .strict(),
+    origin: point.optional(),
+    layout: z
+      .union([
+        z.literal(false),
+        z
+          .object({
+            direction: z.enum(["TB", "LR"]).optional(),
+            rankGap: finite.nonnegative().optional(),
+            nodeGap: finite.nonnegative().optional(),
+          })
+          .strict(),
+      ])
+      .optional(),
+    dryRun: z.boolean().optional(),
+    idempotencyKey: id.optional(),
+  })
+  .strict();
+
+const participant = z
+  .object({
+    id: id.optional(),
+    label: z.string(),
+    kind: z.string().min(1).optional(),
+    width: positive.optional(),
+    height: positive.optional(),
+  })
+  .strict();
+const sequenceMessage = z
+  .object({
+    id: id.optional(),
+    from: id,
+    to: id,
+    label: z.string().optional(),
+  })
+  .strict();
+const sequenceFragment = z
+  .object({
+    id: id.optional(),
+    operator: z.string().optional(),
+    participants: z.array(id).optional(),
+    messages: z.array(id).optional(),
+  })
+  .strict();
+const generateSequence = z
+  .object({
+    participants: z.array(participant).min(1).max(200),
+    messages: z.array(sequenceMessage).max(500).optional(),
+    fragments: z.array(sequenceFragment).max(200).optional(),
+    origin: point.optional(),
+    layout: z
+      .union([
+        z.literal(false),
+        z
+          .object({
+            gap: finite.nonnegative().optional(),
+            rankGap: finite.nonnegative().optional(),
+            nodeGap: finite.nonnegative().optional(),
+          })
+          .strict(),
+      ])
+      .optional(),
+    dryRun: z.boolean().optional(),
+    idempotencyKey: id.optional(),
+  })
+  .strict();
+
+type MindmapNodeSchemaInput = {
+  text: string;
+  children?: MindmapNodeSchemaInput[];
+};
+const mindmapNodeInput: z.ZodType<MindmapNodeSchemaInput> = z.lazy(() =>
+  z
+    .object({
+      text: z.string(),
+      children: z.array(mindmapNodeInput).max(200).optional(),
+    })
+    .strict(),
+) as z.ZodType<MindmapNodeSchemaInput>;
+const generateMindmap = z
+  .object({
+    root: mindmapNodeInput,
+    direction: mindmapDirection.optional(),
+    origin: point.optional(),
+    dryRun: z.boolean().optional(),
+    idempotencyKey: id.optional(),
+  })
+  .strict();
+
+const generateTable = z
+  .object({
+    columns: z.array(z.string()).min(1).max(50),
+    rows: z.array(z.array(z.string()).max(50)).max(500),
+    header: z.boolean().optional(),
+    name: z.string().optional(),
+    maxWidth: positive.optional(),
+    origin: point.optional(),
+    dryRun: z.boolean().optional(),
+    idempotencyKey: id.optional(),
+  })
+  .strict();
+
+export const CanvasGenerateDiagramInputSchema = generateDiagram;
+export const CanvasGenerateSequenceInputSchema = generateSequence;
+export const CanvasGenerateMindmapInputSchema = generateMindmap;
+export const CanvasGenerateTableInputSchema = generateTable;
+export const CanvasGenerateInputSchema = z.union([
+  generateDiagram,
+  generateSequence,
+  generateMindmap,
+  generateTable,
+]);
+export type CanvasGenerateInputParsed = z.infer<
+  typeof CanvasGenerateInputSchema
+>;
+
 export const CanvasValidateChecks = [
   "overlap",
   "overflow",
@@ -686,7 +841,15 @@ export const CanvasExportInputSchema = z
 
 export const CanvasSchemaTypeSchema = z
   .object({
-    type: z.enum(["apply", "layout", "text", "validate", "scene", "export"]),
+    type: z.enum([
+      "apply",
+      "layout",
+      "generate",
+      "text",
+      "validate",
+      "scene",
+      "export",
+    ]),
   })
   .strict();
 

@@ -588,6 +588,58 @@ exports[`contextMenu element > right-clicking on a group should select whole gro
       {
         "items": [
           {
+            "label": "labels.arrangeRow",
+            "name": "arrangeRow",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeColumn",
+            "name": "arrangeColumn",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeGrid",
+            "name": "arrangeGrid",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeStack",
+            "name": "arrangeStack",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeSequence",
+            "name": "arrangeSequence",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+        ],
+        "label": "labels.arrangeSelection",
+        "type": "submenu",
+      },
+      "separator",
+      {
+        "items": [
+          {
             "PanelComponent": [Function],
             "icon": <svg
               aria-hidden="true"
@@ -5601,6 +5653,58 @@ exports[`contextMenu element > shows 'Group selection' in context menu for multi
       {
         "items": [
           {
+            "label": "labels.arrangeRow",
+            "name": "arrangeRow",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeColumn",
+            "name": "arrangeColumn",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeGrid",
+            "name": "arrangeGrid",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeStack",
+            "name": "arrangeStack",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeSequence",
+            "name": "arrangeSequence",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+        ],
+        "label": "labels.arrangeSelection",
+        "type": "submenu",
+      },
+      "separator",
+      {
+        "items": [
+          {
             "PanelComponent": [Function],
             "icon": <svg
               aria-hidden="true"
@@ -6882,6 +6986,58 @@ exports[`contextMenu element > shows 'Ungroup selection' in context menu for gro
         "trackEvent": {
           "category": "element",
         },
+      },
+      "separator",
+      {
+        "items": [
+          {
+            "label": "labels.arrangeRow",
+            "name": "arrangeRow",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeColumn",
+            "name": "arrangeColumn",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeGrid",
+            "name": "arrangeGrid",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeStack",
+            "name": "arrangeStack",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeSequence",
+            "name": "arrangeSequence",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+        ],
+        "label": "labels.arrangeSelection",
+        "type": "submenu",
       },
       "separator",
       {
@@ -8947,6 +9103,58 @@ exports[`contextMenu element > shows context menu for element > [end of test] ap
       {
         "items": [
           {
+            "label": "labels.arrangeRow",
+            "name": "arrangeRow",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeColumn",
+            "name": "arrangeColumn",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeGrid",
+            "name": "arrangeGrid",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeStack",
+            "name": "arrangeStack",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeSequence",
+            "name": "arrangeSequence",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+        ],
+        "label": "labels.arrangeSelection",
+        "type": "submenu",
+      },
+      "separator",
+      {
+        "items": [
+          {
             "PanelComponent": [Function],
             "icon": <svg
               aria-hidden="true"
@@ -9986,6 +10194,58 @@ exports[`contextMenu element > shows context menu for element > [end of test] ap
         "trackEvent": {
           "category": "element",
         },
+      },
+      "separator",
+      {
+        "items": [
+          {
+            "label": "labels.arrangeRow",
+            "name": "arrangeRow",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeColumn",
+            "name": "arrangeColumn",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeGrid",
+            "name": "arrangeGrid",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeStack",
+            "name": "arrangeStack",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+          {
+            "label": "labels.arrangeSequence",
+            "name": "arrangeSequence",
+            "perform": [Function],
+            "predicate": [Function],
+            "trackEvent": {
+              "category": "element",
+            },
+          },
+        ],
+        "label": "labels.arrangeSelection",
+        "type": "submenu",
       },
       "separator",
       {

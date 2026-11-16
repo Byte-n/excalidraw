@@ -144,6 +144,40 @@ describe("完整表格纯场景操作", () => {
     }
   });
 
+  it("创建表格可按列宽与初始文本矩阵落位", () => {
+    const result = applyTableOperation([], {
+      action: "create",
+      position: { x: 0, y: 0 },
+      rowCount: 2,
+      columnCount: 2,
+      columnWidth: 120,
+      cellTexts: [
+        ["服务", "状态"],
+        ["订单", ""],
+      ],
+    });
+    if (result.references.domain !== "table") {
+      throw new Error("表格引用缺失");
+    }
+    const table = tableIn(result.elements, result.references.tableId);
+    expect(table.width).toBe(240);
+    expect(table.table.columns.map((column) => column.width)).toEqual([
+      120, 120,
+    ]);
+    expect(
+      getTextBlock(table.texts, cellKey(cellAt(table, 0, 0).id))?.text,
+    ).toBe("服务");
+    expect(
+      getTextBlock(table.texts, cellKey(cellAt(table, 0, 1).id))?.text,
+    ).toBe("状态");
+    expect(
+      getTextBlock(table.texts, cellKey(cellAt(table, 1, 0).id))?.text,
+    ).toBe("订单");
+    expect(
+      getTextBlock(table.texts, cellKey(cellAt(table, 1, 1).id)),
+    ).toBeUndefined();
+  });
+
   it("合并按行优先拼接文字，迁移正文成员并保留既有身份元数据", () => {
     const table = fixture();
     const first = cellAt(table, 0, 0);

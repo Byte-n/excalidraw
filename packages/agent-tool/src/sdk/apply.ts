@@ -775,6 +775,9 @@ const runOp = (rawOp: CanvasOp, state: ApplyState) => {
           action: "createRoot",
           position: { x: rawOp.x, y: rawOp.y },
           text: rawOp.text,
+          ...(rawOp.direction === undefined
+            ? {}
+            : { direction: rawOp.direction }),
         });
         registerCreated(state, result, rawOp.tempId);
         return;
@@ -818,6 +821,10 @@ const runOp = (rawOp: CanvasOp, state: ApplyState) => {
           columnCount: rawOp.columnCount,
           ...(rawOp.name !== undefined ? { name: rawOp.name } : {}),
           ...(rawOp.style ? { style: rawOp.style as never } : {}),
+          ...(rawOp.columnWidth !== undefined
+            ? { columnWidth: rawOp.columnWidth }
+            : {}),
+          ...(rawOp.cellTexts ? { cellTexts: rawOp.cellTexts } : {}),
         });
         if (rawOp.tempId) {
           registerCreated(state, result, rawOp.tempId);

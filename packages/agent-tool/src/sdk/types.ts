@@ -147,6 +147,104 @@ export type CanvasLayoutReceipt = {
   affectedElementIds: string[];
   layoutToken: string;
 };
+export type CanvasDiagramNodeInput = {
+  id: string;
+  kind?: string;
+  label?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+};
+export type CanvasDiagramEdgeInput = {
+  id?: string;
+  from: string;
+  to: string;
+  label?: string;
+  kind?: "arrow" | "line";
+  routing?: "straight" | "curved" | "orthogonal";
+};
+export type CanvasGenerateDiagramInput = {
+  format?: "json" | "mermaid";
+  spec: {
+    nodes: CanvasDiagramNodeInput[];
+    edges?: CanvasDiagramEdgeInput[];
+  };
+  origin?: CanvasPoint;
+  layout?:
+    | false
+    | {
+        direction?: "TB" | "LR";
+        rankGap?: number;
+        nodeGap?: number;
+      };
+  dryRun?: boolean;
+  idempotencyKey?: string;
+};
+export type CanvasSequenceParticipantInput = {
+  id?: string;
+  label: string;
+  kind?: string;
+  width?: number;
+  height?: number;
+};
+export type CanvasSequenceMessageInput = {
+  id?: string;
+  from: string;
+  to: string;
+  label?: string;
+};
+export type CanvasSequenceFragmentInput = {
+  id?: string;
+  operator?: string;
+  participants?: string[];
+  messages?: string[];
+};
+export type CanvasGenerateSequenceInput = {
+  participants: CanvasSequenceParticipantInput[];
+  messages?: CanvasSequenceMessageInput[];
+  fragments?: CanvasSequenceFragmentInput[];
+  origin?: CanvasPoint;
+  layout?: false | { gap?: number; rankGap?: number; nodeGap?: number };
+  dryRun?: boolean;
+  idempotencyKey?: string;
+};
+export type CanvasMindmapNodeInput = {
+  text: string;
+  children?: CanvasMindmapNodeInput[];
+};
+export type CanvasMindmapDirection =
+  | "left-to-right"
+  | "right-to-left"
+  | "top-to-bottom"
+  | "bottom-to-top";
+export type CanvasGenerateMindmapInput = {
+  root: CanvasMindmapNodeInput;
+  direction?: CanvasMindmapDirection;
+  origin?: CanvasPoint;
+  dryRun?: boolean;
+  idempotencyKey?: string;
+};
+export type CanvasGenerateTableInput = {
+  columns: string[];
+  rows: string[][];
+  header?: boolean;
+  name?: string;
+  maxWidth?: number;
+  origin?: CanvasPoint;
+  dryRun?: boolean;
+  idempotencyKey?: string;
+};
+export type CanvasGenerateApi = {
+  /** 从语义 JSON 建流程图：节点+连线，可选 layered 布局；本期不解析 Mermaid 源码。 */
+  diagram(input: CanvasGenerateDiagramInput): Promise<CanvasApplyReceipt>;
+  /** 从参与者/消息/片段建时序图，并在同一次事务内执行 sequence 布局。 */
+  sequence(input: CanvasGenerateSequenceInput): Promise<CanvasApplyReceipt>;
+  /** 从文本树建脑图并按 direction 布局。 */
+  mindmap(input: CanvasGenerateMindmapInput): Promise<CanvasApplyReceipt>;
+  /** 建表格并写入表头/数据单元格。 */
+  table(input: CanvasGenerateTableInput): Promise<CanvasApplyReceipt>;
+};
 export type CanvasValidateInput = {
   ids?: string[];
   checks?: Array<"overlap" | "overflow" | "bindings" | "dangling">;
@@ -164,6 +262,7 @@ export type CanvasValidateResult = {
 export type CanvasSchemaType =
   | "apply"
   | "layout"
+  | "generate"
   | "text"
   | "validate"
   | "scene"
@@ -228,6 +327,8 @@ export interface CanvasSdk {
   readonly text: CanvasTextApi;
   /** 语义操作批；同批 tempId 可互相引用，失败整批回滚。 */
   readonly apply: (input: CanvasApplyInput) => Promise<CanvasApplyReceipt>;
+  /** 语义生成器：diagram/sequence/mindmap/table，复用 apply 事务与纯布局。 */
+  readonly generate: CanvasGenerateApi;
   /** 对已有 id 执行布局；由发起方计算并提交。 */
   readonly layout: {
     /** 计算并提交布局，返回受影响元素、bounds 与 layoutToken。 */
@@ -239,7 +340,7 @@ export interface CanvasSdk {
   ) => Promise<CanvasValidateResult>;
   /** 返回 Zod 生成的 JSON Schema。 */
   readonly schema: {
-    /** 按类型返回 apply/layout/text/validate/scene/export 的 JSON Schema。 */
+    /** 按类型返回 apply/layout/generate/text/validate/scene/export 的 JSON Schema。 */
     get(input: { type: CanvasSchemaType }): Promise<Record<string, unknown>>;
   };
   /** 导出 JSON 快照；SVG/PNG 本期不支持。 */

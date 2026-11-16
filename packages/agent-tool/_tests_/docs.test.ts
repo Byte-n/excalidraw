@@ -19,6 +19,7 @@ test("index 返回 9 个 guide，并在允许时按 kind 过滤 topic", async ()
     "connectors",
     "mindmap",
     "sequence",
+    "generate",
     "layout",
     "document",
     "errors",
@@ -64,6 +65,23 @@ test("sequence guide 说明参与者、消息、片段与时序布局", async ()
   expect(fragments.text).toContain("insertRowAt");
   const layout = await docs.read({ guide: "sequence", topic: "layout" });
   expect(layout.text).toContain("rankGap");
+});
+
+test("generate guide 覆盖 diagram/sequence/mindmap/table", async () => {
+  const index = await docs.index();
+  expect(
+    index.guides
+      .find((guide) => guide.id === "generate")
+      ?.topics.map((topic) => topic.id),
+  ).toEqual(["diagram", "sequence", "mindmap", "table"]);
+  const diagram = await docs.read({ guide: "generate", topic: "diagram" });
+  expect(diagram.text).toContain("unsupported_format");
+  const sequence = await docs.read({ guide: "generate", topic: "sequence" });
+  expect(sequence.text).toContain("participants");
+  const mindmap = await docs.read({ guide: "generate", topic: "mindmap" });
+  expect(mindmap.text).toContain("top-to-bottom");
+  const table = await docs.read({ guide: "generate", topic: "table" });
+  expect(table.text).toContain("maxWidth");
 });
 
 test("errors/codes 含 version_conflict 与可重试说明", async () => {

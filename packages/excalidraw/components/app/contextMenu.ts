@@ -13,6 +13,11 @@ import {
   actionAddToLibrary,
   actionBringForward,
   actionBringToFront,
+  actionArrangeColumn,
+  actionArrangeGrid,
+  actionArrangeRow,
+  actionArrangeSequence,
+  actionArrangeStack,
   actionCopy,
   actionCopyAsPng,
   actionCopyAsSvg,
@@ -257,6 +262,16 @@ export const getFlipSubmenuItems = (): ContextMenuItems => [
   actionFlipVertical,
 ];
 
+/** 纯布局动作：右键菜单与「更多」菜单收进「整理选中›」子菜单。 */
+export const getArrangeSubmenu = (): ContextMenuSubmenu =>
+  buildContextMenuSubmenu("labels.arrangeSelection", [
+    actionArrangeRow,
+    actionArrangeColumn,
+    actionArrangeGrid,
+    actionArrangeStack,
+    actionArrangeSequence,
+  ]);
+
 export const getContextMenuItems = (
   app: App,
   type: "canvas" | "element",
@@ -347,6 +362,8 @@ export const getContextMenuItems = (
     ...zIndexActions,
     actionFlipHorizontal,
     actionFlipVertical,
+    CONTEXT_MENU_SEPARATOR,
+    getArrangeSubmenu(),
     CONTEXT_MENU_SEPARATOR,
     getEditSubmenu(),
     CONTEXT_MENU_SEPARATOR,

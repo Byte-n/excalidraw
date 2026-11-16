@@ -93,6 +93,68 @@ export const canvasApiDocumentation = {
         "{ elements: Array<{ id: string; tempId?: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; changedElementIds: string[]; createdElementIds: string[]; deletedElementIds: string[]; tempIds: Record<string, string>; references: Array<Record<string, unknown>>; }",
     },
     {
+      path: "generate.diagram",
+      signature:
+        'generate.diagram(input: { format?: "json" | "mermaid"; spec: { nodes: CanvasDiagramNodeInput[]; edges?: CanvasDiagramEdgeInput[]; }; origin?: CanvasPoint; layout?: false | { direction?: "TB" | "LR"; rankGap?: number; nodeGap?: number; }; dryRun?: boolean; idempotencyKey?: string; }) -> Promise<{ elements: Array<{ id: string; tempId?: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; changedElementIds: string[]; createdElementIds: string[]; deletedElementIds: string[]; tempIds: Record<string, string>; references: Array<Record<string, unknown>>; }>',
+      description:
+        "从语义 JSON 建流程图：节点+连线，可选 layered 布局；本期不解析 Mermaid 源码。",
+      parameters: [
+        {
+          name: "input",
+          optional: false,
+          type: '{ format?: "json" | "mermaid"; spec: { nodes: CanvasDiagramNodeInput[]; edges?: CanvasDiagramEdgeInput[]; }; origin?: CanvasPoint; layout?: false | { direction?: "TB" | "LR"; rankGap?: number; nodeGap?: number; }; dryRun?: boolean; idempotencyKey?: string; }',
+        },
+      ],
+      returns:
+        "{ elements: Array<{ id: string; tempId?: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; changedElementIds: string[]; createdElementIds: string[]; deletedElementIds: string[]; tempIds: Record<string, string>; references: Array<Record<string, unknown>>; }",
+    },
+    {
+      path: "generate.sequence",
+      signature:
+        "generate.sequence(input: { participants: CanvasSequenceParticipantInput[]; messages?: CanvasSequenceMessageInput[]; fragments?: CanvasSequenceFragmentInput[]; origin?: CanvasPoint; layout?: false | { gap?: number; rankGap?: number; nodeGap?: number; }; dryRun?: boolean; idempotencyKey?: string; }) -> Promise<{ elements: Array<{ id: string; tempId?: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; changedElementIds: string[]; createdElementIds: string[]; deletedElementIds: string[]; tempIds: Record<string, string>; references: Array<Record<string, unknown>>; }>",
+      description:
+        "从参与者/消息/片段建时序图，并在同一次事务内执行 sequence 布局。",
+      parameters: [
+        {
+          name: "input",
+          optional: false,
+          type: "{ participants: CanvasSequenceParticipantInput[]; messages?: CanvasSequenceMessageInput[]; fragments?: CanvasSequenceFragmentInput[]; origin?: CanvasPoint; layout?: false | { gap?: number; rankGap?: number; nodeGap?: number; }; dryRun?: boolean; idempotencyKey?: string; }",
+        },
+      ],
+      returns:
+        "{ elements: Array<{ id: string; tempId?: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; changedElementIds: string[]; createdElementIds: string[]; deletedElementIds: string[]; tempIds: Record<string, string>; references: Array<Record<string, unknown>>; }",
+    },
+    {
+      path: "generate.mindmap",
+      signature:
+        "generate.mindmap(input: { root: CanvasMindmapNodeInput; direction?: CanvasMindmapDirection; origin?: CanvasPoint; dryRun?: boolean; idempotencyKey?: string; }) -> Promise<{ elements: Array<{ id: string; tempId?: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; changedElementIds: string[]; createdElementIds: string[]; deletedElementIds: string[]; tempIds: Record<string, string>; references: Array<Record<string, unknown>>; }>",
+      description: "从文本树建脑图并按 direction 布局。",
+      parameters: [
+        {
+          name: "input",
+          optional: false,
+          type: "{ root: CanvasMindmapNodeInput; direction?: CanvasMindmapDirection; origin?: CanvasPoint; dryRun?: boolean; idempotencyKey?: string; }",
+        },
+      ],
+      returns:
+        "{ elements: Array<{ id: string; tempId?: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; changedElementIds: string[]; createdElementIds: string[]; deletedElementIds: string[]; tempIds: Record<string, string>; references: Array<Record<string, unknown>>; }",
+    },
+    {
+      path: "generate.table",
+      signature:
+        "generate.table(input: { columns: string[]; rows: string[][]; header?: boolean; name?: string; maxWidth?: number; origin?: CanvasPoint; dryRun?: boolean; idempotencyKey?: string; }) -> Promise<{ elements: Array<{ id: string; tempId?: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; changedElementIds: string[]; createdElementIds: string[]; deletedElementIds: string[]; tempIds: Record<string, string>; references: Array<Record<string, unknown>>; }>",
+      description: "建表格并写入表头/数据单元格。",
+      parameters: [
+        {
+          name: "input",
+          optional: false,
+          type: "{ columns: string[]; rows: string[][]; header?: boolean; name?: string; maxWidth?: number; origin?: CanvasPoint; dryRun?: boolean; idempotencyKey?: string; }",
+        },
+      ],
+      returns:
+        "{ elements: Array<{ id: string; tempId?: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; changedElementIds: string[]; createdElementIds: string[]; deletedElementIds: string[]; tempIds: Record<string, string>; references: Array<Record<string, unknown>>; }",
+    },
+    {
       path: "layout.apply",
       signature:
         'layout.apply(input: { ids: string[]; algorithm: "layered" | "tree" | "sequence" | "grid" | "row" | "column" | "stack" | "align" | "distribute"; origin?: CanvasPoint; options?: { direction?: "TB" | "LR"; rankGap?: number; nodeGap?: number; gap?: number; columns?: number; axis?: "x" | "y"; position?: "start" | "center" | "end"; }; dryRun?: boolean; }) -> Promise<{ elements: Array<{ id: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; affectedElementIds: string[]; layoutToken: string; }>',
@@ -126,7 +188,7 @@ export const canvasApiDocumentation = {
       signature:
         "schema.get(input: { type: CanvasSchemaType; }) -> Promise<{ [x: string]: unknown; }>",
       description:
-        "按类型返回 apply/layout/text/validate/scene/export 的 JSON Schema。",
+        "按类型返回 apply/layout/generate/text/validate/scene/export 的 JSON Schema。",
       parameters: [
         {
           name: "input",
@@ -256,6 +318,64 @@ export const canvasApiDocumentation = {
         "{ elements: Array<{ id: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; affectedElementIds: string[]; layoutToken: string; }",
     },
     {
+      name: "CanvasDiagramNodeInput",
+      definition:
+        "{ id: string; kind?: string; label?: string; x?: number; y?: number; width?: number; height?: number; }",
+    },
+    {
+      name: "CanvasDiagramEdgeInput",
+      definition:
+        '{ id?: string; from: string; to: string; label?: string; kind?: "arrow" | "line"; routing?: "straight" | "curved" | "orthogonal"; }',
+    },
+    {
+      name: "CanvasGenerateDiagramInput",
+      definition:
+        '{ format?: "json" | "mermaid"; spec: { nodes: CanvasDiagramNodeInput[]; edges?: CanvasDiagramEdgeInput[]; }; origin?: CanvasPoint; layout?: false | { direction?: "TB" | "LR"; rankGap?: number; nodeGap?: number; }; dryRun?: boolean; idempotencyKey?: string; }',
+    },
+    {
+      name: "CanvasSequenceParticipantInput",
+      definition:
+        "{ id?: string; label: string; kind?: string; width?: number; height?: number; }",
+    },
+    {
+      name: "CanvasSequenceMessageInput",
+      definition: "{ id?: string; from: string; to: string; label?: string; }",
+    },
+    {
+      name: "CanvasSequenceFragmentInput",
+      definition:
+        "{ id?: string; operator?: string; participants?: string[]; messages?: string[]; }",
+    },
+    {
+      name: "CanvasGenerateSequenceInput",
+      definition:
+        "{ participants: CanvasSequenceParticipantInput[]; messages?: CanvasSequenceMessageInput[]; fragments?: CanvasSequenceFragmentInput[]; origin?: CanvasPoint; layout?: false | { gap?: number; rankGap?: number; nodeGap?: number; }; dryRun?: boolean; idempotencyKey?: string; }",
+    },
+    {
+      name: "CanvasMindmapNodeInput",
+      definition: "{ text: string; children?: CanvasMindmapNodeInput[]; }",
+    },
+    {
+      name: "CanvasMindmapDirection",
+      definition:
+        '"left-to-right" | "right-to-left" | "top-to-bottom" | "bottom-to-top"',
+    },
+    {
+      name: "CanvasGenerateMindmapInput",
+      definition:
+        "{ root: CanvasMindmapNodeInput; direction?: CanvasMindmapDirection; origin?: CanvasPoint; dryRun?: boolean; idempotencyKey?: string; }",
+    },
+    {
+      name: "CanvasGenerateTableInput",
+      definition:
+        "{ columns: string[]; rows: string[][]; header?: boolean; name?: string; maxWidth?: number; origin?: CanvasPoint; dryRun?: boolean; idempotencyKey?: string; }",
+    },
+    {
+      name: "CanvasGenerateApi",
+      definition:
+        "{ diagram(input: CanvasGenerateDiagramInput): Promise<CanvasApplyReceipt>; sequence(input: CanvasGenerateSequenceInput): Promise<CanvasApplyReceipt>; mindmap(input: CanvasGenerateMindmapInput): Promise<CanvasApplyReceipt>; table(input: CanvasGenerateTableInput): Promise<CanvasApplyReceipt>; }",
+    },
+    {
       name: "CanvasValidateInput",
       definition:
         '{ ids?: string[]; checks?: Array<"overlap" | "overflow" | "bindings" | "dangling">; }',
@@ -272,7 +392,7 @@ export const canvasApiDocumentation = {
     {
       name: "CanvasSchemaType",
       definition:
-        '"text" | "layout" | "apply" | "validate" | "scene" | "export"',
+        '"text" | "layout" | "apply" | "generate" | "validate" | "scene" | "export"',
     },
     {
       name: "CanvasDocsKind",

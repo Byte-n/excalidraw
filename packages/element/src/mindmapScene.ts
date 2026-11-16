@@ -58,7 +58,12 @@ export type MindmapTreeSpec = {
 };
 
 export type MindmapOperation =
-  | Readonly<{ action: "createRoot"; position: ScenePoint; text: string }>
+  | Readonly<{
+      action: "createRoot";
+      position: ScenePoint;
+      text: string;
+      direction?: MindmapLayoutDirection;
+    }>
   | Readonly<{
       action: "addChild" | "addSibling" | "rename";
       target: MindmapNodeTarget;
@@ -319,6 +324,9 @@ export const applyMindmapOperation = (
       role: "root",
       parentId: null,
       order: null,
+      ...(operation.direction === undefined
+        ? {}
+        : { layoutDirection: operation.direction }),
     });
     const graphId = `mindmap:${root.id}`;
     // 新建无基线，直接派生根节点主题

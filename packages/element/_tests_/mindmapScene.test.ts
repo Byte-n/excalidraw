@@ -136,6 +136,41 @@ describe("脑图完整纯场景操作", () => {
     }
   });
 
+  it("createRoot 指定方向后整图按该方向布局", () => {
+    const created = applyMindmapOperation([], {
+      action: "createRoot",
+      position: { x: 0, y: 0 },
+      text: "根",
+      direction: "top-to-bottom",
+    });
+    if (created.references.domain !== "mindmap") {
+      throw new Error("缺少脑图引用");
+    }
+    const rootId = created.references.nodeId;
+    const added = applyMindmapOperation(created.elements, {
+      action: "addChild",
+      target: {
+        graphId: created.references.graphId,
+        nodeId: rootId,
+      },
+      text: "子",
+    });
+    if (added.references.domain !== "mindmap") {
+      throw new Error("缺少脑图引用");
+    }
+    const childId = added.references.nodeId;
+    const rootNode = added.elements.find(
+      (element) => element.id === rootId && isMindmapNodeElement(element),
+    );
+    const childNode = added.elements.find(
+      (element) => element.id === childId && isMindmapNodeElement(element),
+    );
+    expect(rootNode).toMatchObject({ layoutDirection: "top-to-bottom" });
+    expect(childNode).toBeTruthy();
+    expect(childNode!.y).toBeGreaterThan(rootNode!.y + rootNode!.height);
+    expect(childNode!.x).toBeCloseTo(rootNode!.x, 6);
+  });
+
   it("兄弟插在目标后，换父保持子树并使用新父的指定直属子节点顺序", () => {
     const fixture = tree();
     const sibling = applyMindmapOperation(fixture.elements, {
