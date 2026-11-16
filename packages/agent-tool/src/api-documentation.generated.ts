@@ -95,13 +95,13 @@ export const canvasApiDocumentation = {
     {
       path: "layout.apply",
       signature:
-        'layout.apply(input: { ids: string[]; algorithm: "layered" | "tree" | "grid" | "row" | "column" | "stack" | "align" | "distribute"; origin?: CanvasPoint; options?: { direction?: "TB" | "LR"; rankGap?: number; nodeGap?: number; gap?: number; columns?: number; axis?: "x" | "y"; position?: "start" | "center" | "end"; }; dryRun?: boolean; }) -> Promise<{ elements: Array<{ id: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; affectedElementIds: string[]; layoutToken: string; }>',
+        'layout.apply(input: { ids: string[]; algorithm: "layered" | "tree" | "sequence" | "grid" | "row" | "column" | "stack" | "align" | "distribute"; origin?: CanvasPoint; options?: { direction?: "TB" | "LR"; rankGap?: number; nodeGap?: number; gap?: number; columns?: number; axis?: "x" | "y"; position?: "start" | "center" | "end"; }; dryRun?: boolean; }) -> Promise<{ elements: Array<{ id: string; type: string; kind?: string; bounds: CanvasBounds; label?: string; }>; bounds: CanvasBounds; warnings: CanvasWarning[]; affectedElementIds: string[]; layoutToken: string; }>',
       description: "计算并提交布局，返回受影响元素、bounds 与 layoutToken。",
       parameters: [
         {
           name: "input",
           optional: false,
-          type: '{ ids: string[]; algorithm: "layered" | "tree" | "grid" | "row" | "column" | "stack" | "align" | "distribute"; origin?: CanvasPoint; options?: { direction?: "TB" | "LR"; rankGap?: number; nodeGap?: number; gap?: number; columns?: number; axis?: "x" | "y"; position?: "start" | "center" | "end"; }; dryRun?: boolean; }',
+          type: '{ ids: string[]; algorithm: "layered" | "tree" | "sequence" | "grid" | "row" | "column" | "stack" | "align" | "distribute"; origin?: CanvasPoint; options?: { direction?: "TB" | "LR"; rankGap?: number; nodeGap?: number; gap?: number; columns?: number; axis?: "x" | "y"; position?: "start" | "center" | "end"; }; dryRun?: boolean; }',
         },
       ],
       returns:
@@ -248,7 +248,7 @@ export const canvasApiDocumentation = {
     {
       name: "CanvasLayoutInput",
       definition:
-        '{ ids: string[]; algorithm: "layered" | "tree" | "grid" | "row" | "column" | "stack" | "align" | "distribute"; origin?: CanvasPoint; options?: { direction?: "TB" | "LR"; rankGap?: number; nodeGap?: number; gap?: number; columns?: number; axis?: "x" | "y"; position?: "start" | "center" | "end"; }; dryRun?: boolean; }',
+        '{ ids: string[]; algorithm: "layered" | "tree" | "sequence" | "grid" | "row" | "column" | "stack" | "align" | "distribute"; origin?: CanvasPoint; options?: { direction?: "TB" | "LR"; rankGap?: number; nodeGap?: number; gap?: number; columns?: number; axis?: "x" | "y"; position?: "start" | "center" | "end"; }; dryRun?: boolean; }',
     },
     {
       name: "CanvasLayoutReceipt",

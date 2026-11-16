@@ -11,6 +11,7 @@ import {
   getLayoutOrigin,
 } from "./boxes";
 import { layoutLayered } from "./layered";
+import { layoutSequence } from "./sequence";
 import { layoutTree } from "./tree";
 
 import type { ExcalidrawElement } from "../types";
@@ -25,10 +26,7 @@ import type {
 
 export * from "./types";
 
-const validateNonNegativeOption = (
-  value: number | undefined,
-  path: string,
-) => {
+const validateNonNegativeOption = (value: number | undefined, path: string) => {
   if (value === undefined) {
     return;
   }
@@ -164,6 +162,17 @@ export const layoutElements = (
       warnings,
       affectedElementIds: result.affectedElementIds,
     };
+  }
+
+  if (request.algorithm === "sequence") {
+    const warnings: LayoutWarning[] = [];
+    return layoutSequence(
+      elements,
+      selected,
+      request.origin,
+      request.options ?? {},
+      warnings,
+    );
   }
 
   const result = applyBoxAlgorithm(

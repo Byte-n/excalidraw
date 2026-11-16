@@ -217,6 +217,7 @@ export const buildCanvasOverviewText = (): string =>
     "- 同批引用用 tempId，回执 tempIds 给出映射。",
     "- apply 是原子批：任一操作失败整批回滚。",
     "- 布局由发起写入的一方计算：新建后用 canvas.layout.apply。",
+    '- 时序图用 op: "sequence" 的 addParticipant/addMessage/addFragment；布局用 algorithm: "sequence"。',
     "- local_applied 仅表示本地提交成功，不代表远端持久化。",
     "- 写入要求 execute_code 的 mode 为 write 且会话可编辑。",
     "示例：",

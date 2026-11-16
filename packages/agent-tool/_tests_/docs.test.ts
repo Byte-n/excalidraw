@@ -11,13 +11,14 @@ test("canvas_overview 一页文本小于 4000 字符", () => {
   expect(text).toContain("tempId");
 });
 
-test("index 返回 8 个 guide，并在允许时按 kind 过滤 topic", async () => {
+test("index 返回 9 个 guide，并在允许时按 kind 过滤 topic", async () => {
   const index = await docs.index();
   expect(index.guides.map((guide) => guide.id)).toEqual([
     "core",
     "shapes",
     "connectors",
     "mindmap",
+    "sequence",
     "layout",
     "document",
     "errors",
@@ -43,12 +44,26 @@ test("shapes/catalog 列出全部 60 个 shape id", async () => {
   }
 });
 
-test("layout/algorithms 列出全部 8 个算法", async () => {
+test("layout/algorithms 列出全部 9 个算法", async () => {
   const result = await docs.read({ guide: "layout", topic: "algorithms" });
-  expect(LAYOUT_ALGORITHM_IDS).toHaveLength(8);
+  expect(LAYOUT_ALGORITHM_IDS).toHaveLength(9);
   for (const id of LAYOUT_ALGORITHM_IDS) {
     expect(result.text).toContain(id);
   }
+});
+
+test("sequence guide 说明参与者、消息、片段与时序布局", async () => {
+  const participants = await docs.read({
+    guide: "sequence",
+    topic: "participants",
+  });
+  expect(participants.text).toContain("addParticipant");
+  const messages = await docs.read({ guide: "sequence", topic: "messages" });
+  expect(messages.text).toContain("activationId");
+  const fragments = await docs.read({ guide: "sequence", topic: "fragments" });
+  expect(fragments.text).toContain("insertRowAt");
+  const layout = await docs.read({ guide: "sequence", topic: "layout" });
+  expect(layout.text).toContain("rankGap");
 });
 
 test("errors/codes 含 version_conflict 与可重试说明", async () => {

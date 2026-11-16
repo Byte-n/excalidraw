@@ -6,7 +6,7 @@
 
 | 工具 | 作用 | 读写 |
 | --- | --- | --- |
-| `canvas_overview` | 一页硬规则与索引：工具/读写边界、`apply`/`layout` 用法、guide 列表、60 个 shape id、8 个布局算法、错误码 | 只读 |
+| `canvas_overview` | 一页硬规则与索引：工具/读写边界、`apply`/`layout` 用法、guide 列表、60 个 shape id、9 个布局算法、错误码 | 只读 |
 | `canvas_docs` | `{ action: "index" \| "read" \| "search", guide?, topic?, query?, kind?, limit? }` 按需查询文档 | 只读 |
 | `execute_code` | 在宿主选择的执行器中运行 JS，注入 `canvas` SDK；返回 JSON 结果并收集写入回执 | 读/写（由 `mode` 决定） |
 | `canvas_export` | 读取指定画板的完整 canonical 场景 JSON 快照 | 只读 |
@@ -65,7 +65,7 @@ await tool.execute({
 
 ## `apply` 语义
 
-- `ops` 只收语义 skeleton：`addShape` / `addText` / `updateShape` / `updateText` / `connect` / `updateConnector` / `delete` / `move` / `resize` / `mindmap` / `table` / `layout`。`id`、`seed`、`index`、版本与时间戳由服务端生成。
+- `ops` 只收语义 skeleton：`addShape` / `addText` / `updateShape` / `updateText` / `connect` / `updateConnector` / `delete` / `move` / `resize` / `mindmap` / `table` / `sequence` / `layout`。`id`、`seed`、`index`、版本与时间戳由服务端生成。
 - 同批引用用 `tempId`，回执 `tempIds` 给出 `tempId → id` 映射；连线端点也接受 `{ point }`。
 - 确定性的输入纠正（如 `"circle"` → `"ellipse"`、字符串 label → `{ text }`、字体名 → 枚举）会产生 `input_corrected` warning，不阻断提交。
 - 任一操作失败整批回滚，不产生半张图；`dryRun: true` 只计算不提交。
@@ -74,16 +74,35 @@ await tool.execute({
 
 ## `layout.apply`
 
-- 算法：`layered`、`tree`、`grid`、`row`、`column`、`stack`、`align`、`distribute`。
+- 算法：`layered`、`tree`、`sequence`、`grid`、`row`、`column`、`stack`、`align`、`distribute`。
 - 参数：`{ ids, algorithm, origin?, options?, dryRun? }`；`options` 支持 `direction`（`TB`/`LR`）、`rankGap`、`nodeGap`、`gap`、`columns`、`axis`、`position`。
 - 也可在 `apply` 的 `ops` 末尾加 `{ op: "layout", algorithm }`，在同一次事务内布局本批新建元素；不传 `ids` 时作用于本批创建的非连线元素。
 - 返回 `elements`、`bounds`、`warnings`、`affectedElementIds`、`layoutToken`。
 - 布局由**发起写入的一方**计算并随同一次事务提交；协作服务器不布局，远端只应用结果。
-- 本期没有 `sequence` 算法。
+
+## 时序图语义
+
+`op: "sequence"` 提供参与者、消息、激活条与组合片段的增量操作：
+
+| action | 参数 | 说明 |
+| --- | --- | --- |
+| `addParticipant` | `kind`、`x`、`y`、`label?`、`width?`、`height?` | 创建 8 种生命线之一；省略尺寸时使用头部 + 默认杆长 |
+| `removeParticipant` | `participantId` | 级联删除其激活条与消息 |
+| `addMessage` | `from`、`to`、`y?`、`order?`、`label?` | 自动复用/创建两端激活条并绑定；同一参与者生成自消息 |
+| `updateMessage` / `removeMessage` | `messageId`、`label?` | 修改标签或删除消息 |
+| `addFragment` | `x`、`y`、`operator?`、`width?`、`height?` | 创建组合片段并初始化页签行 + 正文行 |
+| `updateFragment` | `fragmentId`、`operator?`、`insertRowAt?`、`deleteRowId?` | 改页签或增删正文行，元素高度同步 |
+
+`sequence` 布局把参与者按当前 x 排列、顶部对齐，消息按当前 y 顺序逐行排布：
+
+- `gap`：参与者头部间距，默认 160；
+- `nodeGap`：最高头部下方到首条消息的距离，默认 80；
+- `rankGap`：消息行距，默认 56；
+- 生命线高度自动增长覆盖消息，激活条随消息行调整，组合片段扩展到覆盖原有生命线与消息。
 
 ## 文档体系
 
-- 8 个 guide、23 个 topic：`core` / `shapes` / `connectors` / `mindmap` / `layout` / `document` / `errors` / `examples`。
+- 9 个 guide、27 个 topic：`core` / `shapes` / `connectors` / `mindmap` / `sequence` / `layout` / `document` / `errors` / `examples`。
 - `canvas_docs` 与 `canvas.docs` 共用同一份数据：`index` / `read` / `search`。
 - 单次 `read` 上限约 4000 字符，超出返回摘要 + 钻取提示并标记 `truncated`；响应带 `docsVersion` 用于判断缓存是否过期。
 - API 签名由 `scripts/generate-api-docs.mjs` 用 TypeScript Compiler API 从 `CanvasSdk` 自动生成到 `src/api-documentation.generated.ts`（13 个成员）；shape/layout/error 清单从代码常量派生，人工 guide 只写判断与任务配方。
@@ -114,7 +133,7 @@ await tool.execute({
 
 - 连接、鉴权、审批、超时、取消与配额由宿主负责；`signal` 为合作取消，异步 SDK 调用在取消后必须停止提交。
 - 会话生命周期不在包内：工具工厂只借用 session，不调用 `close`，宿主需自行释放。
-- 本期未提供：sequence 语义操作与布局、`generate.*`、SVG/PNG 导出、MCP server。
+- 本期未提供：`generate.*`、SVG/PNG 导出、MCP server。
 
 ## 开发
 

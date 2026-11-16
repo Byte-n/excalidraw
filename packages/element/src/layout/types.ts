@@ -3,6 +3,7 @@ import type { ExcalidrawElement } from "../types";
 export const LAYOUT_ALGORITHM_IDS = [
   "layered",
   "tree",
+  "sequence",
   "grid",
   "row",
   "column",

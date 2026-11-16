@@ -4,6 +4,8 @@ import {
   assertShapeData,
   buildShapeData,
   isShapeElement,
+  normalizeSequenceFragmentGeometry,
+  normalizeSequenceLifelineGeometry,
   shapeElementType,
 } from "./compositeShape";
 import { newElement } from "./newElement";
@@ -18,7 +20,12 @@ import {
   updateSceneLabel,
 } from "./sceneOperations";
 
-import type { ShapeData, ShapeId } from "./types";
+import type {
+  ExcalidrawElement,
+  ExcalidrawShapeElement,
+  ShapeData,
+  ShapeId,
+} from "./types";
 import type {
   CanvasElementOperationResult,
   NullableStyle,
@@ -98,6 +105,9 @@ export type ShapeOperation =
       textFit?: ShapeTextFitOption;
     }>
   | Readonly<{ action: "delete"; target: SceneElementTarget }>;
+
+const normalizeSequenceShape = <T extends ExcalidrawElement>(element: T): T =>
+  normalizeSequenceFragmentGeometry(normalizeSequenceLifelineGeometry(element));
 
 const requireKeys = (options: ShapeOptions, keys: readonly string[]) => {
   if (
@@ -276,7 +286,7 @@ export const applyShapeOperation = (
       if (!isShapeElement(element)) {
         throw new Error("图形工厂返回非法类型");
       }
-      shape = element;
+      shape = normalizeSequenceShape(element);
       scene.replaceAllElements(
         [...scene.getElementsIncludingDeleted(), shape],
         {
@@ -305,10 +315,8 @@ export const applyShapeOperation = (
           scene.mutateElement(shape, {
             textFitMode: operation.textFit.mode,
             ...(operation.textFit.mode === "fixed" && {
-              textFitMinWidth:
-                operation.textFit.minWidth ?? shape.width,
-              textFitMinHeight:
-                operation.textFit.minHeight ?? shape.height,
+              textFitMinWidth: operation.textFit.minWidth ?? shape.width,
+              textFitMinHeight: operation.textFit.minHeight ?? shape.height,
             }),
           });
         }
@@ -320,6 +328,24 @@ export const applyShapeOperation = (
         const incident = scene.getNonDeletedElementsMap().get(ref.id);
         if (isLinearElement(incident)) {
           updateSceneLabel(incident, undefined, undefined, scene);
+        }
+      }
+      const live = scene.getNonDeletedElementsMap().get(shape.id);
+      if (live && isShapeElement(live)) {
+        const normalized = normalizeSequenceShape(live);
+        if (normalized !== live) {
+          scene.mutateElement(live as ExcalidrawShapeElement, {
+            height: normalized.height,
+            ...(normalized.shape !== live.shape
+              ? { shape: normalized.shape }
+              : {}),
+            ...(normalized.texts !== live.texts
+              ? { texts: normalized.texts }
+              : {}),
+            ...(normalized.textFitMode !== live.textFitMode
+              ? { textFitMode: normalized.textFitMode }
+              : {}),
+          });
         }
       }
     }

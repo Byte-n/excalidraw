@@ -101,6 +101,7 @@ export * from "./Scene";
 export * from "./selection";
 export * from "./sequenceActivation";
 export * from "./sequenceMessage";
+export * from "./sequenceScene";
 export * from "./shape";
 export * from "./showSelectedShapeActions";
 export * from "./sizeHelpers";

@@ -115,6 +115,7 @@ export type CanvasLayoutInput = {
   algorithm:
     | "layered"
     | "tree"
+    | "sequence"
     | "grid"
     | "row"
     | "column"

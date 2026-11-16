@@ -333,6 +333,116 @@ test("apply 的 layout op 在同一次事务内布局本批新建元素", async 
   }
 });
 
+test("sequence op 创建参与者、消息与片段，并可按时序布局", async () => {
+  const sdk = makeSdk();
+  const created = await sdk.apply({
+    ops: [
+      {
+        op: "sequence",
+        action: "addParticipant",
+        tempId: "client",
+        kind: "sc-lifeline-entity",
+        x: 0,
+        y: 0,
+        label: "客户端",
+      },
+      {
+        op: "sequence",
+        action: "addParticipant",
+        tempId: "server",
+        kind: "sc-lifeline-object",
+        x: 500,
+        y: 0,
+        label: "服务端",
+      },
+      {
+        op: "sequence",
+        action: "addMessage",
+        tempId: "call",
+        from: { participantId: "client" },
+        to: { participantId: "server" },
+        y: 200,
+        label: "调用",
+      },
+      {
+        op: "sequence",
+        action: "addMessage",
+        tempId: "reply",
+        from: { participantId: "server" },
+        to: { participantId: "client" },
+        y: 300,
+        label: "返回",
+      },
+      {
+        op: "sequence",
+        action: "addFragment",
+        tempId: "fragment",
+        x: -40,
+        y: 160,
+        width: 700,
+        height: 220,
+        operator: "alt",
+      },
+    ],
+  });
+  expect(Object.keys(created.tempIds)).toEqual(
+    expect.arrayContaining(["client", "server", "call", "reply", "fragment"]),
+  );
+  const call = await readElement(sdk, created.tempIds.call);
+  expect(call.type).toBe("arrow");
+  expect(call.startBinding).not.toBeNull();
+  expect(call.endBinding).not.toBeNull();
+  const fragment = await readElement(sdk, created.tempIds.fragment);
+  expect(fragment.texts?.body?.text).toBe("alt");
+
+  const layout = await sdk.layout.apply({
+    ids: [
+      created.tempIds.client,
+      created.tempIds.server,
+      created.tempIds.fragment,
+    ],
+    algorithm: "sequence",
+    origin: { x: 0, y: 0 },
+    options: { gap: 120, rankGap: 50, nodeGap: 60 },
+  });
+  expect(layout.layoutToken).toBeTruthy();
+  const client = await readElement(sdk, created.tempIds.client);
+  const server = await readElement(sdk, created.tempIds.server);
+  expect(client.x).toBe(0);
+  expect(client.y).toBe(0);
+  expect(server.x).toBeCloseTo(client.x + client.width + 120, 6);
+  const laidOutCall = await readElement(sdk, created.tempIds.call);
+  const laidOutReply = await readElement(sdk, created.tempIds.reply);
+  expect(laidOutReply.y - laidOutCall.y).toBeCloseTo(50, 6);
+  expect(laidOutCall.startBinding?.elementId).toBe(
+    call.startBinding?.elementId,
+  );
+
+  const laidOutFragment = await readElement(sdk, created.tempIds.fragment);
+  const inserted = await sdk.apply({
+    ops: [
+      {
+        op: "sequence",
+        action: "updateFragment",
+        fragmentId: created.tempIds.fragment,
+        insertRowAt: 1,
+      },
+    ],
+  });
+  expect(inserted.changedElementIds).toContain(created.tempIds.fragment);
+  const grownFragment = await readElement(sdk, created.tempIds.fragment);
+  expect(grownFragment.height).toBeGreaterThan(laidOutFragment.height);
+
+  const removed = await sdk.apply({
+    ops: [{ op: "delete", id: created.tempIds.client }],
+  });
+  expect(removed.deletedElementIds).toEqual(
+    expect.arrayContaining([created.tempIds.client]),
+  );
+  const remainingCall = await readElement(sdk, created.tempIds.call);
+  expect(remainingCall).toMatchObject({ isDeleted: true });
+});
+
 test("text.measure/fit 返回合理度量与截断结果", async () => {
   const sdk = makeSdk("read");
   const measure = await sdk.text.measure({

@@ -112,6 +112,18 @@ export type CanvasElementOperationReferences =
       }[];
     }
   | {
+      domain: "sequence";
+      action:
+        | "addParticipant"
+        | "removeParticipant"
+        | "addMessage"
+        | "updateMessage"
+        | "removeMessage"
+        | "addFragment"
+        | "updateFragment";
+      elementId: string;
+    }
+  | {
       domain: "text";
       action: "create" | "update" | "delete";
       elementId: string;

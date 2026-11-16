@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { LAYOUT_ALGORITHM_IDS } from "@excalidraw/element";
+import {
+  LAYOUT_ALGORITHM_IDS,
+  SEQUENCE_LIFELINE_IDS,
+} from "@excalidraw/element";
 import { ARROWHEAD_VALUES, SHAPE_IDS } from "@excalidraw/yjs";
 
 import { CanvasSdkError } from "./errors.js";
@@ -490,6 +493,104 @@ const table = z.union([
     .strict(),
 ]);
 
+const sequenceEndpoint = z
+  .object({ participantId: id, activationId: id.optional() })
+  .strict();
+const sequence = z.discriminatedUnion("action", [
+  z
+    .object({
+      op: z.literal("sequence"),
+      action: z.literal("addParticipant"),
+      tempId: id.optional(),
+      kind: z.enum(SEQUENCE_LIFELINE_IDS),
+      x: finite,
+      y: finite,
+      width: positive.optional(),
+      height: positive.optional(),
+      label: label.optional(),
+      style: shapeStyle.optional(),
+      textStyle: textStyle.optional(),
+      textFit: CanvasTextFitSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal("sequence"),
+      action: z.literal("removeParticipant"),
+      participantId: id,
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal("sequence"),
+      action: z.literal("addMessage"),
+      tempId: id.optional(),
+      from: sequenceEndpoint,
+      to: sequenceEndpoint,
+      y: finite.optional(),
+      order: z.number().int().positive().optional(),
+      label: z.string().optional(),
+      startArrowhead: arrowhead.nullable().optional(),
+      endArrowhead: arrowhead.nullable().optional(),
+      style: connectorStyle.optional(),
+      textStyle: textStyle.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal("sequence"),
+      action: z.literal("updateMessage"),
+      messageId: id,
+      label: z.string().optional(),
+      textStyle: textStyle.optional(),
+    })
+    .strict()
+    .refine(
+      (value) => value.label !== undefined || value.textStyle !== undefined,
+      "消息更新不能为空",
+    ),
+  z
+    .object({
+      op: z.literal("sequence"),
+      action: z.literal("removeMessage"),
+      messageId: id,
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal("sequence"),
+      action: z.literal("addFragment"),
+      tempId: id.optional(),
+      x: finite,
+      y: finite,
+      width: positive.optional(),
+      height: positive.optional(),
+      operator: z.string().optional(),
+      style: shapeStyle.optional(),
+      textStyle: textStyle.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal("sequence"),
+      action: z.literal("updateFragment"),
+      fragmentId: id,
+      operator: z.string().optional(),
+      textStyle: textStyle.optional(),
+      insertRowAt: z.number().int().positive().optional(),
+      deleteRowId: id.optional(),
+    })
+    .strict()
+    .refine(
+      (value) =>
+        value.operator !== undefined ||
+        value.textStyle !== undefined ||
+        value.insertRowAt !== undefined ||
+        value.deleteRowId !== undefined,
+      "片段更新不能为空",
+    ),
+]);
+
 export const CanvasOpSchema = z.union([
   addShape,
   addText,
@@ -503,6 +604,7 @@ export const CanvasOpSchema = z.union([
   layoutOp,
   mindmap,
   table,
+  sequence,
 ]);
 export type CanvasOp = z.infer<typeof CanvasOpSchema>;
 

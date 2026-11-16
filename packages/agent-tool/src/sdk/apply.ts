@@ -1,9 +1,12 @@
 import {
   applyConnectorOperation,
   applyMindmapOperation,
+  applySequenceOperation,
   applyShapeOperation,
   applyTableOperation,
   applyTextOperation,
+  getSequenceShapeDefaultSize,
+  isSequenceLifelineElement,
   isShapeElement,
   isTextElement,
   layoutElements,
@@ -20,6 +23,7 @@ import type {
   ShapeOperation,
   ShapeStyle,
   ConnectorStyle,
+  SequenceOperation,
   ShapeOptions,
   TableOperation,
   TextOperation,
@@ -319,7 +323,12 @@ const registerCreated = (
   result: CanvasElementOperationResult,
   tempId?: string,
 ) => {
-  const createdId = result.createdElementIds[0];
+  const referenceId =
+    "elementId" in result.references ? result.references.elementId : undefined;
+  const createdId =
+    referenceId && result.createdElementIds.includes(referenceId)
+      ? referenceId
+      : result.createdElementIds[0];
   if (!createdId) {
     throw new CanvasSdkError("internal_error", "操作未返回新元素");
   }
@@ -365,6 +374,15 @@ const runTableOperation = (state: ApplyState, operation: TableOperation) => {
   return result;
 };
 
+const runSequenceOperation = (
+  state: ApplyState,
+  operation: SequenceOperation,
+) => {
+  const result = applySequenceOperation(state.working, operation);
+  mergeOperationResult(state, result);
+  return result;
+};
+
 const graphIdOf = (state: ApplyState, nodeId: string) => {
   const element = state.working.find(
     (entry) =>
@@ -389,11 +407,12 @@ const runOp = (rawOp: CanvasOp, state: ApplyState) => {
       const text = labelText(label);
       const textStyle = mergeTextStyle(mapTextStyle(rawOp.textStyle), label);
       const textFit = textFitOf(rawOp.textFit, label);
+      const defaultSize = getSequenceShapeDefaultSize(rawOp.kind);
       const geometry = {
         x: rawOp.x,
         y: rawOp.y,
-        width: rawOp.width ?? DEFAULT_SHAPE_WIDTH,
-        height: rawOp.height ?? DEFAULT_SHAPE_HEIGHT,
+        width: rawOp.width ?? defaultSize?.width ?? DEFAULT_SHAPE_WIDTH,
+        height: rawOp.height ?? defaultSize?.height ?? DEFAULT_SHAPE_HEIGHT,
         ...(rawOp.angle !== undefined ? { angle: rawOp.angle } : {}),
       };
       const result = runShapeOperation(state, {
@@ -509,6 +528,13 @@ const runOp = (rawOp: CanvasOp, state: ApplyState) => {
     case "delete": {
       const element = requireElement(state, rawOp.id);
       const id = element.id;
+      if (isSequenceLifelineElement(element)) {
+        runSequenceOperation(state, {
+          action: "removeParticipant",
+          target: { elementId: id },
+        });
+        return;
+      }
       if (isShapeElement(element)) {
         runShapeOperation(state, {
           action: "delete",
@@ -625,6 +651,122 @@ const runOp = (rawOp: CanvasOp, state: ApplyState) => {
         action: "apply",
         algorithm: rawOp.algorithm,
       });
+      return;
+    }
+    case "sequence": {
+      switch (rawOp.action) {
+        case "addParticipant": {
+          const label = rawOp.label;
+          const text = labelText(label);
+          const textStyle = mergeTextStyle(
+            mapTextStyle(rawOp.textStyle),
+            label,
+          );
+          const textFit = textFitOf(rawOp.textFit, label);
+          const result = runSequenceOperation(state, {
+            action: "addParticipant",
+            kind: rawOp.kind,
+            position: { x: rawOp.x, y: rawOp.y },
+            ...(rawOp.width !== undefined ? { width: rawOp.width } : {}),
+            ...(rawOp.height !== undefined ? { height: rawOp.height } : {}),
+            ...(text !== undefined ? { text } : {}),
+            ...(rawOp.style ? { style: rawOp.style as ShapeStyle } : {}),
+            ...(textStyle ? { textStyle } : {}),
+            ...(textFit ? { textFit } : {}),
+          });
+          registerCreated(state, result, rawOp.tempId);
+          return;
+        }
+        case "removeParticipant":
+          runSequenceOperation(state, {
+            action: "removeParticipant",
+            target: { elementId: resolveId(state, rawOp.participantId) },
+          });
+          return;
+        case "addMessage": {
+          const textStyle = mapTextStyle(rawOp.textStyle);
+          const result = runSequenceOperation(state, {
+            action: "addMessage",
+            from: {
+              participantId: resolveId(state, rawOp.from.participantId),
+              ...(rawOp.from.activationId
+                ? {
+                    activationId: resolveId(state, rawOp.from.activationId),
+                  }
+                : {}),
+            },
+            to: {
+              participantId: resolveId(state, rawOp.to.participantId),
+              ...(rawOp.to.activationId
+                ? { activationId: resolveId(state, rawOp.to.activationId) }
+                : {}),
+            },
+            ...(rawOp.y !== undefined ? { y: rawOp.y } : {}),
+            ...(rawOp.order !== undefined ? { order: rawOp.order } : {}),
+            ...(rawOp.label !== undefined ? { text: rawOp.label } : {}),
+            ...(rawOp.startArrowhead !== undefined
+              ? { startArrowhead: rawOp.startArrowhead as never }
+              : {}),
+            ...(rawOp.endArrowhead !== undefined
+              ? { endArrowhead: rawOp.endArrowhead as never }
+              : {}),
+            ...(rawOp.style ? { style: rawOp.style as ConnectorStyle } : {}),
+            ...(textStyle ? { textStyle } : {}),
+          });
+          registerCreated(state, result, rawOp.tempId);
+          return;
+        }
+        case "updateMessage": {
+          const textStyle = mapTextStyle(rawOp.textStyle);
+          runSequenceOperation(state, {
+            action: "updateMessage",
+            target: { elementId: resolveId(state, rawOp.messageId) },
+            ...(rawOp.label !== undefined ? { text: rawOp.label } : {}),
+            ...(textStyle ? { textStyle } : {}),
+          });
+          return;
+        }
+        case "removeMessage":
+          runSequenceOperation(state, {
+            action: "removeMessage",
+            target: { elementId: resolveId(state, rawOp.messageId) },
+          });
+          return;
+        case "addFragment": {
+          const textStyle = mapTextStyle(rawOp.textStyle);
+          const result = runSequenceOperation(state, {
+            action: "addFragment",
+            position: { x: rawOp.x, y: rawOp.y },
+            ...(rawOp.width !== undefined ? { width: rawOp.width } : {}),
+            ...(rawOp.height !== undefined ? { height: rawOp.height } : {}),
+            ...(rawOp.operator !== undefined
+              ? { operator: rawOp.operator }
+              : {}),
+            ...(rawOp.style ? { style: rawOp.style as ShapeStyle } : {}),
+            ...(textStyle ? { textStyle } : {}),
+          });
+          registerCreated(state, result, rawOp.tempId);
+          return;
+        }
+        case "updateFragment": {
+          const textStyle = mapTextStyle(rawOp.textStyle);
+          runSequenceOperation(state, {
+            action: "updateFragment",
+            target: { elementId: resolveId(state, rawOp.fragmentId) },
+            ...(rawOp.operator !== undefined
+              ? { operator: rawOp.operator }
+              : {}),
+            ...(textStyle ? { textStyle } : {}),
+            ...(rawOp.insertRowAt !== undefined
+              ? { insertRowAt: rawOp.insertRowAt }
+              : {}),
+            ...(rawOp.deleteRowId !== undefined
+              ? { deleteRowId: rawOp.deleteRowId }
+              : {}),
+          });
+          return;
+        }
+      }
       return;
     }
     case "mindmap": {

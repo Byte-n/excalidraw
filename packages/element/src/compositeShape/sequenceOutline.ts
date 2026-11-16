@@ -39,6 +39,7 @@ import type {
   SequenceFragmentData,
   SequenceFragmentRow,
   SequenceShapeData,
+  ShapeId,
 } from "../types";
 import type { TextBlock, TextRegionKey } from "../text/types";
 import type { ShapeDraw } from "./registry";
@@ -72,8 +73,25 @@ export const SEQUENCE_MIN_HEAD_HEIGHT = 24;
  */
 export const SEQUENCE_POLE_LENGTH = SEQUENCE_DEFAULT_POLE_LENGTH;
 
+/** The eight lifeline ids, in family order. */
+export const SEQUENCE_LIFELINE_IDS = [
+  "sc-lifeline-entity",
+  "sc-lifeline-control",
+  "sc-lifeline-boundary",
+  "sc-lifeline-actor",
+  "sc-lifeline-queue",
+  "sc-lifeline-data-base",
+  "sc-lifeline-object",
+  "sc-lifeline-collection",
+] as const;
+
+export type SequenceLifelineId = typeof SEQUENCE_LIFELINE_IDS[number];
+
 /** Persisted head heights, sampled from the Lark sequence sample. */
-export const SEQUENCE_LIFELINE_HEAD_HEIGHTS = {
+export const SEQUENCE_LIFELINE_HEAD_HEIGHTS: Record<
+  SequenceLifelineId,
+  number
+> = {
   "sc-lifeline-entity": 68.272,
   "sc-lifeline-control": 74.272,
   "sc-lifeline-boundary": 68.272,
@@ -82,9 +100,7 @@ export const SEQUENCE_LIFELINE_HEAD_HEIGHTS = {
   "sc-lifeline-data-base": 90,
   "sc-lifeline-object": 60,
   "sc-lifeline-collection": 68,
-} as const;
-
-export type SequenceLifelineId = keyof typeof SEQUENCE_LIFELINE_HEAD_HEIGHTS;
+};
 
 /** Default head widths, sampled from the Lark sequence sample. */
 export const SEQUENCE_LIFELINE_DEFAULT_WIDTHS: Record<
@@ -506,6 +522,28 @@ export const getSequenceLifelineDefaultSize = (
   width: SEQUENCE_LIFELINE_DEFAULT_WIDTHS[id],
   height: SEQUENCE_LIFELINE_HEAD_HEIGHTS[id] + SEQUENCE_DEFAULT_POLE_LENGTH,
 });
+
+/** Default size for any sequence shape id; `undefined` for other families. */
+export const getSequenceShapeDefaultSize = (
+  id: ShapeId,
+): { width: number; height: number } | undefined => {
+  if (isSequenceLifelineShapeId(id)) {
+    return getSequenceLifelineDefaultSize(id);
+  }
+  if (id === "sc-activation") {
+    return {
+      width: SEQUENCE_ACTIVATION_WIDTH,
+      height: SEQUENCE_ACTIVATION_HEIGHT,
+    };
+  }
+  if (id === "sc-fragment") {
+    return {
+      width: SEQUENCE_FRAGMENT_DEFAULT_WIDTH,
+      height: SEQUENCE_FRAGMENT_DEFAULT_HEIGHT,
+    };
+  }
+  return undefined;
+};
 
 /** Clamps a proposed element height to keep at least the minimum pole. */
 export const clampSequenceLifelineHeight = (
@@ -986,6 +1024,10 @@ export const SEQUENCE_FRAGMENT_TAB_TEXT_PADDING_Y = Math.max(
  * from the fragment's right edge, the label wraps and the tab grows in height.
  */
 export const SEQUENCE_FRAGMENT_TAB_MAX_RIGHT_INSET = 24;
+
+/** Default fragment box size, matching the shape drawer preset. */
+export const SEQUENCE_FRAGMENT_DEFAULT_WIDTH = 400;
+export const SEQUENCE_FRAGMENT_DEFAULT_HEIGHT = 240;
 
 /**
  * Default height of a row appended by the fragment "add row" action. Chosen so
