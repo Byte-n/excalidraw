@@ -101,6 +101,69 @@ describe("shape text embedding", () => {
     expect(await getTextEditor({ waitForEditor: false })).toBe(null);
   });
 
+  it("输入长正文时在提交前实时撑高形状", async () => {
+    const rectangle = createRectangle();
+    API.setElements([rectangle]);
+    API.setSelectedElements([rectangle]);
+
+    startEditing(rectangle);
+    const editor = await getTextEditor();
+    updateTextEditor(editor, longText);
+
+    const live = getLiveShape(rectangle.id);
+    expect(live.texts?.body?.text).toBe(longText);
+    expect(live.height).toBeGreaterThan(rectSize.height);
+    // 草稿已写入 scene，但编辑会话仍在进行
+    expect(h.state.editingTextRegion).not.toBe(null);
+    // 覆盖层跟随 reflow 后的区域几何
+    expect(parseFloat(editor.style.height)).toBeGreaterThan(rectSize.height);
+
+    act(() => {
+      Keyboard.exitTextEditor(editor);
+    });
+  });
+
+  it("Escape 回滚实时草稿的文本与几何", async () => {
+    const rectangle = createRectangle();
+    API.setElements([rectangle]);
+    API.setSelectedElements([rectangle]);
+    const initialVersion = rectangle.version;
+
+    startEditing(rectangle);
+    const editor = await getTextEditor();
+    updateTextEditor(editor, longText);
+    expect(getLiveShape(rectangle.id).height).toBeGreaterThan(rectSize.height);
+
+    act(() => {
+      Keyboard.exitTextEditor(editor);
+    });
+
+    const live = getLiveShape(rectangle.id);
+    expect(live.texts).toBe(undefined);
+    expect(live.height).toBe(rectSize.height);
+    expect(live.version).toBe(initialVersion);
+    expect(h.state.editingTextRegion).toBe(null);
+  });
+
+  it("实时草稿不进历史，提交时只捕获一次", async () => {
+    const rectangle = createRectangle();
+    API.setElements([rectangle]);
+    API.setSelectedElements([rectangle]);
+
+    const undoBefore = API.getUndoStack().length;
+    startEditing(rectangle);
+    const editor = await getTextEditor();
+    updateTextEditor(editor, longText);
+
+    expect(getLiveShape(rectangle.id).height).toBeGreaterThan(rectSize.height);
+    expect(API.getUndoStack().length).toBe(undoBefore);
+
+    act(() => {
+      h.app.textWysiwygSubmitHandler?.();
+    });
+    expect(API.getUndoStack().length).toBe(undoBefore + 1);
+  });
+
   it("再次进入编辑并替换正文时更新 texts.body", async () => {
     const rectangle = createRectangle();
     API.setElements([rectangle]);
@@ -143,13 +206,14 @@ describe("shape text embedding", () => {
     const rectangle = createRectangle();
     API.setElements([rectangle]);
     API.setSelectedElements([rectangle]);
+    const initialVersion = rectangle.version;
 
     startEditing(rectangle);
     await enterText("不会提交的正文");
 
     const live = getLiveShape(rectangle.id);
     expect(live.texts).toBe(undefined);
-    expect(live.version).toBe(rectangle.version);
+    expect(live.version).toBe(initialVersion);
     expect(getShapeTextElements()).toHaveLength(0);
     expect(h.state.editingTextRegion).toBe(null);
   });

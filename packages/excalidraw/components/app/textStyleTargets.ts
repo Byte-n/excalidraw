@@ -1,16 +1,13 @@
 import {
-  applyTableTextLayout,
+  applyTextRegionChange,
   getPrimaryTextRegion,
   getSelectedElements,
   getTextBlock,
-  getTextLayoutUpdates,
   isLinearElement,
   isMindmapNodeElement,
   isStickyNoteElement,
   isTableElement,
-  relayoutMindmapScene,
-  updateStickyNoteLayout,
-  withTextBlock,
+  reflowTextRegion,
 } from "@excalidraw/element";
 
 import type {
@@ -121,23 +118,27 @@ export const updateEmbeddedTextStyles = (
     if (!hasTextStyleChange(block.style, style)) {
       continue;
     }
-    scene.mutateElement(element, {
-      texts: withTextBlock(element.texts, region, {
-        ...block,
+    const didWrite = applyTextRegionChange(
+      scene,
+      elementId,
+      region,
+      {
+        text: block.text,
         style: { ...block.style, ...style },
-      }),
-    });
-    didUpdate = true;
+      },
+      { reflow: false },
+    );
+    if (didWrite) {
+      didUpdate = true;
+    }
   }
 
   return didUpdate;
 };
 
 /**
- * 样式写入后按正文重新求解尺寸与布局。
- * composite / flow / dataflow 正文记录 textFitMin*；便签只按 fit 调整高度，
- * 不写最小尺寸；脑图节点触发整图重排（位置与派生边）；数据流标题栏不参与
- * 尺寸求解。
+ * 样式写入后按区域文本重新求解几何：和文字编辑共用同一套 reflow 管道，
+ * 便签高度、脑图整图、表格/片段行高、生命线头部因此不会分叉。
  */
 export const applyEmbeddedTextLayout = (
   scene: Scene,
@@ -148,37 +149,11 @@ export const applyEmbeddedTextLayout = (
   if (!element) {
     return;
   }
-  if (isMindmapNodeElement(element)) {
-    relayoutMindmapScene(scene, element.graphId);
+  // 未指定区域时按元素的主区域求解；表格的主区域是首个单元格，
+  // 同样会触发整表行高重排。
+  const targetRegion = region ?? getPrimaryTextRegion(element)?.key;
+  if (!targetRegion) {
     return;
   }
-  if (isTableElement(element)) {
-    // 表格样式只影响区域布局（字号/字重/对齐），行高按新文本撑开
-    applyTableTextLayout(scene, element);
-    return;
-  }
-  if (region === "title") {
-    return;
-  }
-  if (isStickyNoteElement(element)) {
-    // 便签正文的 fit 可能改变高度，绑定箭头必须跟着重锚
-    updateStickyNoteLayout(element, scene);
-    return;
-  }
-  const updates = getTextLayoutUpdates(element);
-  if (!updates) {
-    return;
-  }
-  if (
-    element.type !== "composite" &&
-    element.type !== "flow" &&
-    element.type !== "dataflow"
-  ) {
-    return;
-  }
-  scene.mutateElement(element, {
-    ...updates,
-    textFitMinWidth: element.textFitMinWidth ?? element.width,
-    textFitMinHeight: element.textFitMinHeight ?? element.height,
-  });
+  reflowTextRegion(scene, elementId, targetRegion);
 };

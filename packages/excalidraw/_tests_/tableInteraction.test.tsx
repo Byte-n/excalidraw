@@ -494,6 +494,21 @@ describe("table tool", () => {
       ).toHaveLength(0);
     });
 
+    it("输入长文本时单元格所在行在提交前实时撑高", async () => {
+      const center = cellCenter(table, 0, 0);
+      doubleClickAt(center.x, center.y);
+      const editor = await getTextEditor();
+      const rowBefore = getTable().table.rows[0].height;
+
+      updateTextEditor(editor, "需要换行的单元格正文 ".repeat(20));
+
+      expect(editingCellKey()).toBe(cellKey(table.table.cells[0].id));
+      expect(getTable().table.rows[0].height).toBeGreaterThan(rowBefore);
+      expect(h.state.editingTextRegion).not.toBe(null);
+
+      Keyboard.exitTextEditor(editor);
+    });
+
     it("marks the edited cell and its row/column rails with the accent color", async () => {
       const center = cellCenter(table, 1, 1);
       doubleClickAt(center.x, center.y);

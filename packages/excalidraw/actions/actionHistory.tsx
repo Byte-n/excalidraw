@@ -25,6 +25,7 @@ const executeHistoryAction = (
     !appState.multiElement &&
     !appState.resizingElement &&
     !appState.editingTextElement &&
+    !appState.editingTextRegion &&
     !appState.newElement &&
     !appState.selectedElementsAreBeingDragged &&
     !appState.selectionElement &&

@@ -13,7 +13,6 @@ import {
   getTextRegions,
   isLinearElement,
   normalizeSingleLineText,
-  withTextBlock,
 } from "@excalidraw/element";
 
 import type { TextEditingSession } from "@excalidraw/element";
@@ -45,7 +44,7 @@ type RegionTextElement =
 
 /**
  * 区域文本编辑器的轻量覆盖层：正文不再有独立的文字元素，
- * 编辑框直接按元素自身的区域布局定位，提交时由控制器一次性写回 `texts`。
+ * 每次输入即写回 `texts` 并触发几何反馈，编辑框始终按 reflow 后的区域布局定位。
  */
 export const textRegionEditor = ({
   app,
@@ -54,6 +53,7 @@ export const textRegionEditor = ({
   canvas,
   excalidrawContainer,
   getViewportCoords,
+  onChange,
   onCommit,
   onCancel,
   autoSelect = true,
@@ -64,6 +64,7 @@ export const textRegionEditor = ({
   canvas: HTMLCanvasElement;
   excalidrawContainer: HTMLDivElement | null;
   getViewportCoords: (x: number, y: number) => [number, number];
+  onChange: (text: string) => void;
   onCommit: (text: string) => void;
   onCancel: () => void;
   autoSelect?: boolean;
@@ -72,9 +73,11 @@ export const textRegionEditor = ({
   const ownerWindow = ownerDocument.defaultView ?? window;
   const region = session.target.region;
   const style = session.style;
-  const lineHeightPx = getLineHeightInPx(style.fontSize, style.lineHeight);
 
   let isFinished = false;
+  /** 草稿写回 scene 期间抑制 onUpdate 触发的重复定位。 */
+  let isApplyingDraft = false;
+  let lastAppliedText = session.initialText;
 
   const editable = ownerDocument.createElement("textarea");
   editable.dir = "auto";
@@ -132,7 +135,10 @@ export const textRegionEditor = ({
     editable.setSelectionRange(caretAfter, caretAfter);
   };
 
-  /** 用草稿构造临时纯对象求布局，不进场景、不产生版本 */
+  /**
+   * 覆盖层几何全部从 reflow 后的元素派生：区域宽高、字号 fit、对齐都读
+   * 当前 layout，和画布保持同一份事实。
+   */
   const updateLayout = () => {
     const current = getLiveElement();
     const regionDefinition = getTextRegions(current).find(
@@ -142,18 +148,7 @@ export const textRegionEditor = ({
       return;
     }
 
-    if (regionDefinition.wrap === "single-line") {
-      normalizeSingleLineInput();
-    }
-
-    const draft = {
-      ...current,
-      texts: withTextBlock(current.texts, region, {
-        text: editable.value,
-        style,
-      }),
-    };
-    const local = getLocalTextRegionLayout(draft, region, {
+    const local = getLocalTextRegionLayout(current, region, {
       defaultStyle: style,
       elementsMap: app.scene.getNonDeletedElementsMap(),
     });
@@ -162,6 +157,7 @@ export const textRegionEditor = ({
     }
 
     const width = regionDefinition.bounds.width;
+    const lineHeightPx = getLineHeightInPx(local.fontSize, local.lineHeight);
     // 5% 缓冲避免重新布局时编辑框抖动
     const height = Math.max(local.height, lineHeightPx) * 1.05;
 
@@ -204,13 +200,13 @@ export const textRegionEditor = ({
 
     Object.assign(editable.style, {
       font: getFontString({
-        fontSize: style.fontSize,
-        fontFamily: style.fontFamily,
-        ...(style.fontWeight !== undefined
-          ? { fontWeight: style.fontWeight }
+        fontSize: local.fontSize,
+        fontFamily: local.fontFamily,
+        ...(local.fontWeight !== undefined
+          ? { fontWeight: local.fontWeight }
           : {}),
       }),
-      lineHeight: String(style.lineHeight),
+      lineHeight: String(local.lineHeight),
       width: `${width}px`,
       height: `${height}px`,
       left: `${viewportX}px`,
@@ -223,9 +219,9 @@ export const textRegionEditor = ({
         width,
         maxHeight,
       ),
-      textAlign: style.textAlign,
+      textAlign: local.textAlign,
       color: applyDarkModeFilter(
-        style.color ?? current.strokeColor,
+        local.color ?? current.strokeColor,
         app.state.theme === THEME.DARK,
       ),
       opacity: String(current.opacity / 100),
@@ -295,7 +291,34 @@ export const textRegionEditor = ({
     handleSubmit();
   };
 
+  /** 单行区域先折叠硬换行，再交给 scene 与覆盖层共用。 */
+  const normalizeInput = () => {
+    const current = getLiveElement();
+    const definition = getTextRegions(current).find(
+      (candidate) => candidate.key === region,
+    );
+    if (definition?.wrap === "single-line") {
+      normalizeSingleLineInput();
+    }
+  };
+
+  /** 输入即写回：文本与几何一起进 scene，覆盖层随后从新元素派生位置。 */
+  const applyDraft = () => {
+    if (editable.value === lastAppliedText) {
+      return;
+    }
+    lastAppliedText = editable.value;
+    isApplyingDraft = true;
+    try {
+      onChange(editable.value);
+    } finally {
+      isApplyingDraft = false;
+    }
+  };
+
   editable.oninput = () => {
+    normalizeInput();
+    applyDraft();
     updateLayout();
   };
 
@@ -313,7 +336,9 @@ export const textRegionEditor = ({
   editable.onpointerdown = (event) => event.stopPropagation();
 
   const unbindUpdate = app.scene.onUpdate(() => {
-    updateLayout();
+    if (!isApplyingDraft) {
+      updateLayout();
+    }
   });
 
   updateLayout();

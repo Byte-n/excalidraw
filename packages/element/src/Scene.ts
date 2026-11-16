@@ -46,6 +46,7 @@ import {
 import { getSelectedElements } from "./selection";
 
 import { mutateElement, type ElementUpdate } from "./mutateElement";
+import { deepCopyElement } from "./duplicate";
 
 import {
   registerFrameChildrenIndex,
@@ -161,6 +162,8 @@ export class Scene {
     hiddenIds: ReadonlySet<string>;
     collapsedCounts: ReadonlyMap<string, number>;
   } | null = null;
+  /** 编辑事务内的元素原始副本；null 表示当前没有事务。 */
+  private transactionPreImages: Map<string, ExcalidrawElement> | null = null;
 
   getSceneNonce() {
     return this.sceneNonce;
@@ -180,6 +183,43 @@ export class Scene {
 
   getNonDeletedElements() {
     return this.nonDeletedElements;
+  }
+
+  /**
+   * 开始一个可回滚的编辑事务：首次修改某元素前保存它的深拷贝。
+   * 事务只服务于一次局部编辑，不参与历史捕获。
+   */
+  beginTransaction() {
+    this.transactionPreImages = new Map();
+  }
+
+  /** 记录事务前副本；事务外调用无副作用。 */
+  captureTransactionPreImage(element: ExcalidrawElement) {
+    if (!this.transactionPreImages) {
+      return;
+    }
+    if (this.transactionPreImages.has(element.id)) {
+      return;
+    }
+    this.transactionPreImages.set(element.id, deepCopyElement(element));
+  }
+
+  /** 结束事务，保留已写入的改动；历史由调用方在提交边界捕获。 */
+  commitTransaction() {
+    this.transactionPreImages = null;
+  }
+
+  /** 回滚事务：把记录过的元素恢复为事务前副本。 */
+  rollbackTransaction() {
+    const preImages = this.transactionPreImages;
+    this.transactionPreImages = null;
+    if (!preImages?.size) {
+      return;
+    }
+    this.replaceAllElements(
+      this.elements.map((element) => preImages.get(element.id) ?? element),
+      { skipValidation: true },
+    );
   }
 
   private getMindmapVisibility() {
@@ -423,6 +463,7 @@ export class Scene {
     this.selectedElementsCache.elements = null;
     this.selectedElementsCache.cache.clear();
     this.mindmapVisibility = null;
+    this.transactionPreImages = null;
 
     // done not for memory leaks, but to guard against possible late fires
     // (I guess?)
@@ -526,6 +567,7 @@ export class Scene {
     }
 
     const { version: prevVersion } = element;
+    this.captureTransactionPreImage(element);
     const { version: nextVersion } = mutateElement(
       element,
       elementsMap,

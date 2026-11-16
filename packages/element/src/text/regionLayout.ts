@@ -152,11 +152,11 @@ const layoutTextRegionLocal = (
     : null;
 
   // 固定高度的区域超出后必须截断，否则会溢出文本安全区；
-  // 单行区域始终按单行折叠与截断，与 fit 无关。
+  // 单行区域始终按单行折叠与截断，与 overflow 无关。
   const wrap =
     region.wrap === "single-line"
       ? "single-line"
-      : region.fit === "fixed"
+      : region.overflow === "clip"
       ? "truncate"
       : region.wrap;
   const layout =
@@ -171,7 +171,7 @@ const layoutTextRegionLocal = (
           : undefined,
       lineHeight: style.lineHeight,
       maxWidth: region.bounds.width,
-      maxHeight: region.fit === "fixed" ? region.bounds.height : undefined,
+      maxHeight: region.overflow === "clip" ? region.bounds.height : undefined,
       wrap,
       growWidth: false,
     });

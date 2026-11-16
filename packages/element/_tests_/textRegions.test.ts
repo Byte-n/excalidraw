@@ -76,7 +76,8 @@ describe("getTextRegions", () => {
     expect(body.key).toBe("body");
     expect(body.editable).toBe(true);
     expect(body.wrap).toBe("wrap");
-    expect(body.fit).toBe("auto");
+    expect(body.overflow).toBe("grow");
+    expect(body.reflow).toBe("element");
 
     // 安全区必须落在元素局部坐标内
     expect(body.bounds.x).toBeGreaterThanOrEqual(0);
@@ -109,7 +110,8 @@ describe("getTextRegions", () => {
   it("文本适配模式跟随形状的 textFitMode", () => {
     const fixed = makeShape("rectangle", { textFitMode: "fixed" });
 
-    expect(getTextRegions(fixed)[0].fit).toBe("fixed");
+    expect(getTextRegions(fixed)[0].overflow).toBe("clip");
+    expect(getTextRegions(fixed)[0].reflow).toBe("none");
   });
 
   it("非形状元素没有文本区域", () => {
@@ -144,7 +146,8 @@ describe("getTextRegions 脑图节点", () => {
       expect(body.key).toBe("body");
       expect(body.editable).toBe(true);
       expect(body.wrap).toBe("wrap");
-      expect(body.fit).toBe("auto");
+      expect(body.overflow).toBe("grow");
+      expect(body.reflow).toBe("graph");
       expect(getTextRegion(node, "body")).toEqual(body);
       expect(getPrimaryTextRegion(node)).toEqual(body);
     }
@@ -195,12 +198,13 @@ describe("getTextRegions 脑图节点", () => {
     );
   });
 
-  it("几何被冻结时正文改为 fixed 适配", () => {
+  it("几何被冻结时正文改为定高截断", () => {
     const node = newElementWith(makeMindmapNode("rectangle"), {
       layoutFrozen: true,
     });
 
-    expect(getTextRegions(node)[0].fit).toBe("fixed");
+    expect(getTextRegions(node)[0].overflow).toBe("clip");
+    expect(getTextRegions(node)[0].reflow).toBe("none");
   });
 
   it("正文区域中心命中 body", () => {
@@ -231,7 +235,8 @@ describe("getTextRegions 数据流处理图形", () => {
     expect(title).toMatchObject({
       key: "title",
       wrap: "single-line",
-      fit: "fixed",
+      overflow: "clip",
+      reflow: "none",
       editable: true,
     });
     expect(title.bounds).toEqual({
@@ -241,7 +246,12 @@ describe("getTextRegions 数据流处理图形", () => {
       height: 24,
     });
 
-    expect(body).toMatchObject({ key: "body", wrap: "wrap", fit: "auto" });
+    expect(body).toMatchObject({
+      key: "body",
+      wrap: "wrap",
+      overflow: "grow",
+      reflow: "element",
+    });
     // 正文安全区从标题分隔线下方开始，不与标题栏重叠
     expect(body.bounds.y).toBeGreaterThanOrEqual(28);
     expect(body.bounds.y + body.bounds.height).toBeLessThanOrEqual(

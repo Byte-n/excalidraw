@@ -58,12 +58,14 @@ const getShapeTextRegions = (
   if (!isShapeElement(element)) {
     return EMPTY_TEXT_REGIONS;
   }
+  const fitMode = getCompositeShapeTextFitMode(element);
   return [
     {
       key: "body",
       bounds: getCompositeShapePaddedTextBounds(element),
       wrap: "wrap",
-      fit: getCompositeShapeTextFitMode(element),
+      overflow: fitMode === "auto" ? "grow" : "clip",
+      reflow: fitMode === "auto" ? "element" : "none",
       editable: true,
     },
   ];
@@ -80,7 +82,8 @@ const getDataflowProcessTextRegions = (
     key: "title",
     bounds: getDataflowProcessTitleTextBounds(element.width, element.height),
     wrap: "single-line",
-    fit: "fixed",
+    overflow: "clip",
+    reflow: "none",
     editable: true,
   },
   ...getShapeTextRegions(element),
@@ -100,7 +103,8 @@ const getStickyNoteTextRegions = (
         height: Math.max(0.01, element.height - STICKY_NOTE_BODY_INSET_Y),
       },
       wrap: "wrap",
-      fit: "auto",
+      overflow: "grow",
+      reflow: "element",
       editable: true,
     },
   ];
@@ -149,12 +153,14 @@ const getMindmapNodeTextBounds = (
 const getMindmapNodeTextRegions = (
   element: ExcalidrawMindmapNodeElement,
 ): readonly TextRegionDefinition[] => {
+  const frozen = isMindmapLayoutFrozen(element);
   return [
     {
       key: "body",
       bounds: getMindmapNodeTextBounds(element),
       wrap: "wrap",
-      fit: isMindmapLayoutFrozen(element) ? "fixed" : "auto",
+      overflow: frozen ? "clip" : "grow",
+      reflow: frozen ? "none" : "graph",
       editable: true,
     },
   ];
@@ -186,7 +192,8 @@ const getTableTextRegions = (
         height: Math.max(0.01, bounds.height - padding.y * 2),
       },
       wrap: "wrap",
-      fit: "fixed",
+      overflow: "clip",
+      reflow: "rows",
       editable: true,
     });
   }
@@ -200,7 +207,12 @@ const getTableTextRegions = (
 const getSequenceFragmentTextRegions = (
   element: ExcalidrawElement,
 ): readonly TextRegionDefinition[] => {
-  const regions: TextRegionDefinition[] = [...getShapeTextRegions(element)];
+  // 页签宽度与表头行高随正文增长，正文区本身仍按当前安全区排版
+  const bodyRegions = getShapeTextRegions(element).map((region) => ({
+    ...region,
+    reflow: "rows" as const,
+  }));
+  const regions: TextRegionDefinition[] = [...bodyRegions];
   if (!isSequenceFragmentElement(element)) {
     return regions;
   }
@@ -227,7 +239,8 @@ const getSequenceFragmentTextRegions = (
         height: Math.max(0.01, bounds.height - TABLE_CELL_TEXT_PADDING_Y * 2),
       },
       wrap: "wrap",
-      fit: "fixed",
+      overflow: "clip",
+      reflow: "rows",
       editable: true,
     });
   }
@@ -253,7 +266,8 @@ const getSequenceLifelineTextRegions = (
         element.shape.lifeline.headHeight,
       ),
       wrap: "wrap",
-      fit: "fixed",
+      overflow: "clip",
+      reflow: "element",
       editable: true,
     },
   ];
@@ -278,7 +292,8 @@ const getLinearLabelTextRegions = (
       height: 0,
     },
     wrap: "wrap",
-    fit: "auto",
+    overflow: "grow",
+    reflow: "none",
     editable: true,
     angle: 0 as Radians,
   },

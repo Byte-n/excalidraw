@@ -35,6 +35,23 @@ const interactionIds = <TElement extends ExcalidrawSceneElement>(
   if (state.editingTextElement) {
     ids.add(state.editingTextElement.id);
   }
+  if (state.editingTextRegion) {
+    const targetId = state.editingTextRegion.target.elementId;
+    ids.add(targetId);
+    const target = elements.find((element) => element.id === targetId);
+    // 区域编辑会实时重排：同图节点/边与绑定箭头也属于本次交互的保护集合。
+    for (const bound of target?.boundElements ?? []) {
+      ids.add(bound.id);
+    }
+    const graphId = target?.graphId;
+    if (typeof graphId === "string") {
+      for (const element of elements) {
+        if (element.graphId === graphId) {
+          ids.add(element.id);
+        }
+      }
+    }
+  }
   // 容器成员随所选容器一起变化，同属交互保护集合。
   let expanded = true;
   while (expanded && ids.size) {

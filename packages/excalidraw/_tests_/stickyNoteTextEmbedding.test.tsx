@@ -95,6 +95,23 @@ describe("sticky note text embedding", () => {
     API.setElements([]);
   });
 
+  it("输入长正文时便签高度在提交前实时增长", async () => {
+    const note = createStickyNote();
+    API.setElements([note]);
+    API.setSelectedElements([note]);
+
+    startEditing(note);
+    const editor = await getTextEditor();
+    updateTextEditor(editor, longText);
+
+    const live = getLiveNote(note.id);
+    expect(live.texts?.body?.text).toBe(longText);
+    expect(live.height).toBeGreaterThan(DEFAULT_STICKY_NOTE_SIZE);
+    expect(h.state.editingTextRegion).not.toBe(null);
+
+    Keyboard.exitTextEditor(editor);
+  });
+
   it("提交正文后写入 texts.body，且不产生文字元素", async () => {
     const note = createStickyNote();
     API.setElements([note]);

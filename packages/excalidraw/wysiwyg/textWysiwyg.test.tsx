@@ -857,16 +857,16 @@ describe("textWysiwyg", () => {
       await act(async () => {
         updateTextEditor(editor, new Array(20).fill("line").join("\n"));
       });
-      // 内嵌正文在实时编辑期间不改变形状尺寸，编辑框始终锚定在元素的正文区域
-      expect(cube.height).toBe(80);
+      // 实时编辑即撑高 auto-fit 形状，编辑框跟随新的正文区域
+      expect(cube.height).toBeGreaterThan(80);
       expect(cube.width).toBe(120);
       expect(await getTextEditor({ waitForEditor: false })).toBe(editor);
 
       await act(async () => {
         updateTextEditor(editor, "short");
       });
+      // 收缩回单行后回到最小尺寸与初始锚点
       expect(cube.height).toBe(80);
-      // 收缩回单行后编辑框回到初始锚点
       expect(parseFloat(editor.style.left)).toBeCloseTo(initialLeft, 4);
       expect(parseFloat(editor.style.top)).toBeCloseTo(initialTop, 4);
     });

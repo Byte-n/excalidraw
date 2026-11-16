@@ -962,7 +962,8 @@ describe("sequence label text area", () => {
     expect(regions.map((region) => region.key)).toEqual(["body"]);
     expect(regions[0]).toMatchObject({
       wrap: "wrap",
-      fit: "fixed",
+      overflow: "clip",
+      reflow: "element",
       editable: true,
     });
     expect(regions[0].bounds).toEqual(
@@ -2174,7 +2175,8 @@ describe("sequence fragment text regions", () => {
         height: BODY_A - TABLE_CELL_TEXT_PADDING_Y * 2,
       },
       wrap: "wrap",
-      fit: "fixed",
+      overflow: "clip",
+      reflow: "rows",
       editable: true,
     });
   });

@@ -7,3 +7,4 @@ export * from "./labelLayout";
 export * from "./regions";
 export * from "./regionLayout";
 export * from "./applyLayout";
+export * from "./applyEdit";

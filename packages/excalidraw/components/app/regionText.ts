@@ -1,16 +1,11 @@
 import { getLineHeight, sceneCoordsToViewportCoords } from "@excalidraw/common";
 
 import {
-  applyTableTextLayout,
-  fitSequenceFragmentOperatorFromTexts,
-  getCompositeShapeTextFitMode,
-  getLinearLabelPosition,
+  applyTextRegionChange,
   getMindmapNodeTextStyle,
-  getSequenceLifelineTextBlockHeight,
-  getSequenceLifelineTextFitUpdates,
   getTableCellTextBaseStyle,
   getTextBlock,
-  getTextLayoutUpdates,
+  getTextRegion,
   getVisibleTableCell,
   isLinearElement,
   isMindmapNodeElement,
@@ -18,15 +13,8 @@ import {
   isSequenceLifelineElement,
   isStickyNoteElement,
   isTableElement,
-  newElementWith,
-  normalizeText,
   parseTextRegionKey,
-  refitSequenceFragmentRowBackgroundTexts,
-  relayoutMindmapScene,
   resolveTableCellTextStyle,
-  updateStickyNoteLayout,
-  withoutTextBlock,
-  withTextBlock,
 } from "@excalidraw/element";
 
 import type {
@@ -137,8 +125,8 @@ const getDefaultTextBlockStyle = (
 };
 
 /**
- * 进入元素正文编辑：创建编辑会话与轻量覆盖层，提交时一次性写回 `texts`。
- * 不创建绑定文字元素，也不写入 `editingTextElement`。
+ * 进入元素正文编辑：开启可回滚事务，输入时实时写回 `texts` 并跑几何反馈，
+ * 提交时只捕获一次历史，取消时整体回滚。
  */
 export const startRegionTextEditing = (
   app: App,
@@ -155,10 +143,14 @@ export const startRegionTextEditing = (
   const latest = app.scene.getNonDeletedElement(element.id);
   const target = isRegionTextElement(latest) ? latest : element;
 
+  if (!getTextRegion(target, region)?.editable) {
+    return;
+  }
+
   const block = getTextBlock(target.texts, region);
   const baseStyle = block?.style ?? getDefaultTextBlockStyle(app, target);
   // 表格的行/列覆盖与表头权重只在布局期派生，编辑框要与画布一致；
-  // 提交时仍写回未套用覆盖的基础样式。
+  // 写回时仍使用未套用覆盖的基础样式。
   const parsedRegion = parseTextRegionKey(region);
   const tableCell =
     isTableElement(target) && parsedRegion?.kind === "cell"
@@ -174,6 +166,7 @@ export const startRegionTextEditing = (
     style,
   };
 
+  app.scene.beginTransaction();
   app.setState({
     editingTextRegion: session,
     selectedElementIds: { [target.id]: true },
@@ -181,13 +174,28 @@ export const startRegionTextEditing = (
 
   let isFinished = false;
   let submit: () => void = () => {};
+  // 编辑期间样式可能被 Stats/属性面板改掉，写回时优先沿用块上的最新样式
+  let liveStyle = baseStyle;
 
-  const clearSession = () => {
-    isFinished = true;
+  const releaseSubmitHandler = () => {
     if (app.textWysiwygSubmitHandler === submit) {
       app.textWysiwygSubmitHandler = null;
     }
-    app.setState({ editingTextRegion: null });
+  };
+
+  /** 输入即写回：文本与几何都进 scene，覆盖层再从新元素派生位置。 */
+  const applyText = (nextText: string) => {
+    const current = app.scene.getNonDeletedElement(target.id);
+    const currentBlock = current
+      ? getTextBlock(current.texts, region)
+      : undefined;
+    if (currentBlock) {
+      liveStyle = currentBlock.style;
+    }
+    applyTextRegionChange(app.scene, target.id, region, {
+      text: nextText,
+      style: liveStyle,
+    });
   };
 
   const commit = (nextText: string) => {
@@ -195,126 +203,16 @@ export const startRegionTextEditing = (
       return;
     }
     isFinished = true;
-    if (app.textWysiwygSubmitHandler === submit) {
-      app.textWysiwygSubmitHandler = null;
-    }
+    releaseSubmitHandler();
 
     const current = app.scene.getNonDeletedElement(target.id);
     if (isRegionTextElement(current)) {
-      const text = normalizeText(nextText);
-      const hasText = !!text.trim();
-      const didChange =
-        text !== (getTextBlock(current.texts, region)?.text ?? "");
-
-      if (didChange) {
-        // 沿路径标签的位置持久化在 block.placement 中；缺失时回到默认位置
-        const placement =
-          region === "label" && isLinearElement(current)
-            ? { labelPosition: getLinearLabelPosition(current) }
-            : getTextBlock(current.texts, region)?.placement;
-        const nextTexts = hasText
-          ? withTextBlock(current.texts, region, {
-              text,
-              style: baseStyle,
-              ...(placement ? { placement } : {}),
-            })
-          : withoutTextBlock(current.texts, region);
-        if (nextTexts === undefined) {
-          // `mutateElement` 忽略 undefined，清空 texts 需要整体替换元素
-          app.scene.replaceAllElements(
-            app.scene.getElementsIncludingDeleted().map((element) => {
-              if (element.id !== current.id) {
-                return element;
-              }
-              const next = Object.fromEntries(
-                Object.entries(element).filter(([key]) => key !== "texts"),
-              ) as ExcalidrawElement;
-              return newElementWith(next, {}, true);
-            }),
-          );
-        } else {
-          app.scene.mutateElement(current, { texts: nextTexts });
-        }
-      }
-
-      const updated = app.scene.getNonDeletedElement(target.id);
-      if (isRegionTextElement(updated)) {
-        if (isSequenceFragmentElement(updated)) {
-          // 页签提交后按文本适配页签宽度/表头行高；行提交后撑高该行
-          const parsed = parseTextRegionKey(region);
-          if (parsed?.kind === "row") {
-            refitSequenceFragmentRowBackgroundTexts(app.scene, updated, {
-              rowIds: [parsed.rowId],
-              grow: true,
-            });
-          } else {
-            fitSequenceFragmentOperatorFromTexts(app.scene, updated);
-          }
-        } else if (isTableElement(updated)) {
-          // 表格：只按新文本撑高行，不动宽度
-          applyTableTextLayout(app.scene, updated);
-        } else if (isMindmapNodeElement(updated)) {
-          // 脑图：正文尺寸、兄弟位置与派生边一起重排
-          if (didChange) {
-            relayoutMindmapScene(app.scene, updated.graphId);
-          }
-        } else if (isSequenceLifelineElement(updated) && region === "body") {
-          // 生命线的头部随正文增长，宽度与杆长保持不变；
-          // 固定模式保留用户设定的头部，只做显示截断
-          const body = updated.texts?.body;
-          if (
-            hasText &&
-            body &&
-            getCompositeShapeTextFitMode(updated) === "auto"
-          ) {
-            const fit = getSequenceLifelineTextFitUpdates(
-              updated,
-              getSequenceLifelineTextBlockHeight(updated, body),
-            );
-            if (fit) {
-              app.scene.mutateElement(updated, fit);
-            }
-          }
-        } else if (
-          !isLinearElement(updated) &&
-          !(updated.type === "dataflow" && region === "title")
-        ) {
-          // 数据流标题栏固定单行，只写文本；其余区域按正文求解尺寸
-          const updates = getTextLayoutUpdates(updated);
-          // 便签：正文 fit 决定高度，绑定箭头随高度重锚
-          if (isStickyNoteElement(updated)) {
-            updateStickyNoteLayout(updated, app.scene);
-          } else if (hasText) {
-            // auto-fit：尺寸随正文增长，同时记住用户设定的最小尺寸
-            if (updates) {
-              app.scene.mutateElement(updated, {
-                ...updates,
-                textFitMinWidth: updated.textFitMinWidth ?? updated.width,
-                textFitMinHeight: updated.textFitMinHeight ?? updated.height,
-              });
-            }
-          } else {
-            // 正文清空后缩回最小尺寸；最小尺寸本身保留
-            const minWidth = updated.textFitMinWidth;
-            const minHeight = updated.textFitMinHeight;
-            if (
-              (minWidth !== undefined && minWidth !== updated.width) ||
-              (minHeight !== undefined && minHeight !== updated.height)
-            ) {
-              app.scene.mutateElement(updated, {
-                ...(minWidth !== undefined ? { width: minWidth } : {}),
-                ...(minHeight !== undefined ? { height: minHeight } : {}),
-              });
-            }
-          }
-        }
-      }
-
+      applyText(nextText);
       // 新建节点提交空正文时没有文本差异，但创建本身仍待捕获：
       // 这里统一触发捕获，避免其与后续文字修改合并成同一条历史。
       app.store.scheduleCapture();
     }
-
+    app.scene.commitTransaction();
     app.setState({ editingTextRegion: null });
   };
 
@@ -322,28 +220,39 @@ export const startRegionTextEditing = (
     if (isFinished) {
       return;
     }
-    clearSession();
+    isFinished = true;
+    releaseSubmitHandler();
+    app.scene.rollbackTransaction();
+    app.setState({ editingTextRegion: null });
   };
 
-  submit = textRegionEditor({
-    app,
-    element: target,
-    session,
-    canvas: app.canvas,
-    excalidrawContainer: app.excalidrawContainerRef.current,
-    getViewportCoords: (x: number, y: number) => {
-      const { x: viewportX, y: viewportY } = sceneCoordsToViewportCoords(
-        { sceneX: x, sceneY: y },
-        app.state,
-      );
-      return [
-        viewportX - app.state.offsetLeft,
-        viewportY - app.state.offsetTop,
-      ];
-    },
-    onCommit: commit,
-    onCancel: cancel,
-    autoSelect: opts?.autoSelect ?? true,
-  });
+  try {
+    submit = textRegionEditor({
+      app,
+      element: target,
+      session,
+      canvas: app.canvas,
+      excalidrawContainer: app.excalidrawContainerRef.current,
+      getViewportCoords: (x: number, y: number) => {
+        const { x: viewportX, y: viewportY } = sceneCoordsToViewportCoords(
+          { sceneX: x, sceneY: y },
+          app.state,
+        );
+        return [
+          viewportX - app.state.offsetLeft,
+          viewportY - app.state.offsetTop,
+        ];
+      },
+      onChange: applyText,
+      onCommit: commit,
+      onCancel: cancel,
+      autoSelect: opts?.autoSelect ?? true,
+    });
+  } catch (error) {
+    // 编辑器没能挂载时不要遗留事务，否则后续编辑会带着旧的快照回滚
+    app.scene.rollbackTransaction();
+    app.setState({ editingTextRegion: null });
+    throw error;
+  }
   app.textWysiwygSubmitHandler = submit;
 };

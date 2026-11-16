@@ -5,6 +5,10 @@ import {
 } from "@excalidraw/common";
 
 import { isShapeElement } from "../compositeShape";
+import {
+  isSequenceFragmentElement,
+  isSequenceLifelineElement,
+} from "../compositeShape/sequenceOutline";
 import { getCompositeShapeDimensionsForText } from "../compositeShape/textLayout";
 import { getMindmapShapeId, isMindmapLayoutFrozen } from "../mindmap";
 import { getStickyNoteTextFit } from "../stickyNote";
@@ -22,16 +26,25 @@ import {
   getLocalTextRegionLayout,
   layoutTextRegionsLocal,
 } from "./regionLayout";
-import { getTextRegion, getTextRegions } from "./regions";
+import { getTextRegion } from "./regions";
+
+const SHAPE_FIT_EPSILON = 1e-6;
+const SHAPE_FIT_MAX_PASSES = 4;
 
 /** auto-fit 形状根据当前文本区域布局需要的元素尺寸；无需变化时返回 null。 */
 export const getShapeTextLayoutUpdates = (
   element: ExcalidrawShapeElement,
 ): Readonly<{ width: number; height: number }> | null => {
-  const body = getTextRegions(element).find(
-    (region) => region.key === "body" && region.fit === "auto",
-  );
-  if (!body) {
+  // 片段与生命线的尺寸反馈由各自的结构布局求解，不走通用形状反解。
+  if (
+    isSequenceFragmentElement(element) ||
+    isSequenceLifelineElement(element)
+  ) {
+    return null;
+  }
+
+  const body = getTextRegion(element, "body");
+  if (!body || body.reflow !== "element") {
     return null;
   }
 
@@ -41,25 +54,42 @@ export const getShapeTextLayoutUpdates = (
     return null;
   }
 
-  const layout = layoutTextRegionsLocal(element).find(
-    (region) => region.key === "body",
-  );
-  if (!layout) {
-    return null;
+  // 安全区依赖宽高的形状（圆柱、花括号等）需要布局与尺寸互相收敛：
+  // 尺寸变化会改变换行宽度，换行结果又反过来决定尺寸。
+  let draft = element;
+  let width = element.width;
+  let height = element.height;
+  for (let pass = 0; pass < SHAPE_FIT_MAX_PASSES; pass++) {
+    const layout = layoutTextRegionsLocal(draft).find(
+      (region) => region.key === "body",
+    );
+    if (!layout) {
+      return null;
+    }
+
+    const next = getCompositeShapeDimensionsForText(
+      element,
+      layout.width,
+      layout.height,
+    );
+    if (
+      Math.abs(next.width - width) <= SHAPE_FIT_EPSILON &&
+      Math.abs(next.height - height) <= SHAPE_FIT_EPSILON
+    ) {
+      break;
+    }
+    width = next.width;
+    height = next.height;
+    draft = { ...element, width, height };
   }
 
-  const next = getCompositeShapeDimensionsForText(
-    element,
-    layout.width,
-    layout.height,
-  );
   if (
-    Math.abs(next.width - element.width) <= 1e-6 &&
-    Math.abs(next.height - element.height) <= 1e-6
+    Math.abs(width - element.width) <= SHAPE_FIT_EPSILON &&
+    Math.abs(height - element.height) <= SHAPE_FIT_EPSILON
   ) {
     return null;
   }
-  return next;
+  return { width, height };
 };
 
 /**

@@ -10,15 +10,13 @@ import {
 } from "@excalidraw/common";
 
 import { Scene } from "./Scene";
-import { isShapeElement } from "./compositeShape";
-import { getTextLayoutUpdates } from "./text/applyLayout";
+import { applyTextRegionChange } from "./text/applyEdit";
 import {
   getTextElementStylePatch,
   getTextElementTextPatch,
 } from "./text/elementText";
 import { DEFAULT_BOUND_TEXT_LABEL_POSITION } from "./text/labelLayout";
-import { getTextBlock, withTextBlock, withoutTextBlock } from "./text/ops";
-import { normalizeText } from "./textMeasurements";
+import { getTextBlock } from "./text/ops";
 import { isLinearElement } from "./typeChecks";
 
 import type { TextBlockStyle } from "./text/types";
@@ -335,24 +333,7 @@ const updateShapeLabel = (
       throw new CanvasSceneError("invalid_input", "文字样式需要非空标签");
     }
     if (block) {
-      const texts = withoutTextBlock(container.texts, "body");
-      if (texts === undefined) {
-        // `mutateElement` 忽略 undefined，清空区域需要整体替换元素
-        scene.replaceAllElements(
-          scene
-            .getElementsIncludingDeleted()
-            .map((element) =>
-              element.id === container.id
-                ? (Object.fromEntries(
-                    Object.entries(element).filter(([key]) => key !== "texts"),
-                  ) as ExcalidrawElement)
-                : element,
-            ),
-          { skipValidation: true },
-        );
-      } else {
-        scene.mutateElement(container, { texts });
-      }
+      applyTextRegionChange(scene, container.id, "body", { text: "" });
     }
     return;
   }
@@ -365,20 +346,10 @@ const updateShapeLabel = (
   }
 
   const baseStyle = block?.style ?? DEFAULT_SHAPE_TEXT_STYLE;
-  scene.mutateElement(container, {
-    texts: withTextBlock(container.texts, "body", {
-      text: normalizeText(value ?? block?.text ?? ""),
-      style: style ? mergeShapeTextStyle(baseStyle, style) : baseStyle,
-    }),
+  applyTextRegionChange(scene, container.id, "body", {
+    text: value ?? block?.text ?? "",
+    style: style ? mergeShapeTextStyle(baseStyle, style) : baseStyle,
   });
-
-  const updated = scene.getNonDeletedElement(container.id);
-  if (updated && isShapeElement(updated)) {
-    const updates = getTextLayoutUpdates(updated);
-    if (updates) {
-      scene.mutateElement(updated, updates);
-    }
-  }
 };
 
 /** 线性元素标签：写入 `texts.label`，位置沿用既有 placement 或默认值。 */
@@ -395,23 +366,7 @@ const updateLinearLabel = (
       throw new CanvasSceneError("invalid_input", "文字样式需要非空标签");
     }
     if (block) {
-      const texts = withoutTextBlock(container.texts, "label");
-      if (texts === undefined) {
-        scene.replaceAllElements(
-          scene
-            .getElementsIncludingDeleted()
-            .map((element) =>
-              element.id === container.id
-                ? (Object.fromEntries(
-                    Object.entries(element).filter(([key]) => key !== "texts"),
-                  ) as ExcalidrawElement)
-                : element,
-            ),
-          { skipValidation: true },
-        );
-      } else {
-        scene.mutateElement(container, { texts });
-      }
+      applyTextRegionChange(scene, container.id, "label", { text: "" });
     }
     return;
   }
@@ -424,14 +379,12 @@ const updateLinearLabel = (
   }
 
   const baseStyle = block?.style ?? DEFAULT_SHAPE_TEXT_STYLE;
-  scene.mutateElement(container, {
-    texts: withTextBlock(container.texts, "label", {
-      text: normalizeText(value ?? block?.text ?? ""),
-      style: style ? mergeShapeTextStyle(baseStyle, style) : baseStyle,
-      placement: block?.placement ?? {
-        labelPosition: DEFAULT_BOUND_TEXT_LABEL_POSITION,
-      },
-    }),
+  applyTextRegionChange(scene, container.id, "label", {
+    text: value ?? block?.text ?? "",
+    style: style ? mergeShapeTextStyle(baseStyle, style) : baseStyle,
+    placement: block?.placement ?? {
+      labelPosition: DEFAULT_BOUND_TEXT_LABEL_POSITION,
+    },
   });
 };
 

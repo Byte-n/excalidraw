@@ -21,7 +21,7 @@ import { getDefaultAppState } from "../appState";
 import { getMindmapPresetTree } from "../components/app/createPresets";
 
 import { API } from "./helpers/api";
-import { Pointer, UI } from "./helpers/ui";
+import { Keyboard, Pointer, UI } from "./helpers/ui";
 import { getTextEditor, updateTextEditor } from "./queries/dom";
 import { act, render, unmountComponent } from "./test-utils";
 
@@ -145,6 +145,36 @@ describe("mindmap text embedding", () => {
     expect(JSON.stringify(edgeAfter.points)).not.toBe(edgePointsBefore);
     expect(textElements()).toHaveLength(0);
     expect(h.state.editingTextRegion).toBe(null);
+  });
+
+  it("输入长正文时节点与兄弟位置在提交前实时重排", async () => {
+    const graphId = setGraph({
+      text: "root",
+      children: [
+        { text: "a", children: [] },
+        { text: "b", children: [] },
+      ],
+    });
+    const index = buildMindmapGraphIndex(
+      h.app.scene.getNonDeletedElements(),
+      graphId,
+    );
+    const childA = index.nodes.get(index.childrenById.get(index.rootId)![0])!;
+    const childB = index.nodes.get(index.childrenById.get(index.rootId)![1])!;
+    const heightBefore = childA.height;
+    const siblingY = childB.y;
+
+    startEditingNode(childA);
+    const editor = await getTextEditor();
+    updateTextEditor(editor, longText);
+
+    const live = getLiveNode(childA.id);
+    expect(live.texts?.body?.text).toBe(longText);
+    expect(live.height).toBeGreaterThan(heightBefore);
+    expect(getLiveNode(childB.id).y).not.toBe(siblingY);
+    expect(h.state.editingTextRegion).not.toBe(null);
+
+    Keyboard.exitTextEditor(editor);
   });
 
   it("提交空文本删除 body key，节点保持不变", async () => {

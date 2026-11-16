@@ -4,10 +4,12 @@ import { isShapeElement } from "../src/compositeShape";
 import { getMindmapNodeTextStyle } from "../src/mindmap";
 import { newElementWith } from "../src/mutateElement";
 import { newElement, newMindmapNodeElement } from "../src/newElement";
+import { Scene } from "../src/Scene";
 import {
   getMindmapNodeTextLayoutUpdates,
   getShapeTextLayoutUpdates,
 } from "../src/text/applyLayout";
+import { applyTextRegionChange } from "../src/text/applyEdit";
 import { setCustomTextMetricsProvider } from "../src/textMeasurements";
 
 import type { TextBlockStyle } from "../src/text/types";
@@ -214,5 +216,87 @@ describe("getMindmapNodeTextLayoutUpdates", () => {
 
     expect(node.width).toBe(width);
     expect(node.height).toBe(height);
+  });
+});
+
+describe("applyTextRegionChange", () => {
+  const makeScene = () => {
+    const element = makeElement();
+    const scene = new Scene([element], { skipValidation: true });
+    return { scene, elementId: element.id };
+  };
+
+  const liveShape = (scene: Scene, elementId: string) =>
+    asShape(scene.getNonDeletedElement(elementId)!);
+
+  it("写入文本并按 auto-fit 撑高形状", () => {
+    const { scene, elementId } = makeScene();
+
+    applyTextRegionChange(scene, elementId, "body", {
+      text: LONG_TEXT,
+      style: makeStyle(),
+    });
+
+    const live = liveShape(scene, elementId);
+    expect(live.texts?.body?.text).toBe(LONG_TEXT);
+    expect(live.height).toBeGreaterThan(ELEMENT_HEIGHT);
+    expect(live.textFitMinHeight).toBe(ELEMENT_HEIGHT);
+  });
+
+  it("相同文本不重复递增版本", () => {
+    const { scene, elementId } = makeScene();
+
+    applyTextRegionChange(scene, elementId, "body", {
+      text: LONG_TEXT,
+      style: makeStyle(),
+    });
+    const version = liveShape(scene, elementId).version;
+    applyTextRegionChange(scene, elementId, "body", {
+      text: LONG_TEXT,
+      style: makeStyle(),
+    });
+
+    expect(liveShape(scene, elementId).version).toBe(version);
+  });
+
+  it("事务回滚恢复文本与几何", () => {
+    const { scene, elementId } = makeScene();
+
+    scene.beginTransaction();
+    applyTextRegionChange(scene, elementId, "body", {
+      text: LONG_TEXT,
+      style: makeStyle(),
+    });
+    expect(liveShape(scene, elementId).height).toBeGreaterThan(ELEMENT_HEIGHT);
+
+    scene.rollbackTransaction();
+
+    const live = liveShape(scene, elementId);
+    expect(live.texts).toBeUndefined();
+    expect(live.height).toBe(ELEMENT_HEIGHT);
+  });
+
+  it("fix 适配形状只写文本、不改几何", () => {
+    const fixed = asShape(
+      newElement({
+        type: "rectangle",
+        x: 0,
+        y: 0,
+        width: ELEMENT_WIDTH,
+        height: ELEMENT_HEIGHT,
+        textFitMode: "fixed",
+      }),
+    );
+    const scene = new Scene([fixed], { skipValidation: true });
+
+    applyTextRegionChange(scene, fixed.id, "body", {
+      text: LONG_TEXT,
+      style: makeStyle(),
+    });
+
+    const live = liveShape(scene, fixed.id);
+    expect(live.texts?.body?.text).toBe(LONG_TEXT);
+    expect(live.width).toBe(ELEMENT_WIDTH);
+    expect(live.height).toBe(ELEMENT_HEIGHT);
   });
 });

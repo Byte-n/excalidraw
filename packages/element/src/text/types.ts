@@ -49,13 +49,19 @@ export type TextRegionRect = Readonly<{
 }>;
 
 export type TextWrapMode = "wrap" | "truncate" | "single-line";
-export type TextFitMode = "auto" | "fixed";
+
+/** 文本超出区域后，元素几何是否继续增长。 */
+export type TextOverflowMode = "grow" | "clip";
+
+/** 文本变化驱动哪一级几何重排。 */
+export type TextReflowMode = "none" | "element" | "rows" | "graph";
 
 export type TextRegionDefinition = Readonly<{
   key: TextRegionKey;
   bounds: TextRegionRect;
   wrap: TextWrapMode;
-  fit: TextFitMode;
+  overflow: TextOverflowMode;
+  reflow: TextReflowMode;
   editable: boolean;
   /**
    * 区域文本自身的绘制角度（绝对场景角度）；缺省跟随元素角度。
