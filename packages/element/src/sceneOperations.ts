@@ -110,6 +110,11 @@ export type CanvasElementOperationReferences =
         rowId: string;
         columnId: string;
       }[];
+    }
+  | {
+      domain: "text";
+      action: "create" | "update" | "delete";
+      elementId: string;
     };
 export type CanvasElementOperationResult = Readonly<{
   elements: readonly ExcalidrawElement[];

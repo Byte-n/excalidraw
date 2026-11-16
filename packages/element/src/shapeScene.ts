@@ -57,6 +57,12 @@ export type ShapeOptionsFor<T extends ShapeId> = T extends "triangle"
   ? CircularShapeOptions
   : never;
 
+export type ShapeTextFitOption = Readonly<{
+  mode: "auto" | "fixed";
+  minWidth?: number;
+  minHeight?: number;
+}>;
+
 type ShapeCreateOperation = {
   [K in ShapeId]: Readonly<{
     action: "create";
@@ -66,6 +72,7 @@ type ShapeCreateOperation = {
     style?: ShapeStyle;
     textStyle?: SceneTextStyle;
     shapeOptions?: ShapeOptionsFor<K>;
+    textFit?: ShapeTextFitOption;
   }>;
 }[ShapeId];
 export type ShapeOperation =
@@ -77,6 +84,7 @@ export type ShapeOperation =
       style?: ShapeStyle;
       textStyle?: SceneTextStyle;
       shapeOptions?: never;
+      textFit?: ShapeTextFitOption;
     }>
   | ShapeCreateOperation
   | Readonly<{
@@ -87,6 +95,7 @@ export type ShapeOperation =
       style?: ShapeStyle;
       textStyle?: SceneTextStyle;
       shapeOptions?: ShapeOptions;
+      textFit?: ShapeTextFitOption;
     }>
   | Readonly<{ action: "delete"; target: SceneElementTarget }>;
 
@@ -246,6 +255,23 @@ export const applyShapeOperation = (
         shape: shapeData,
         ...operation.geometry,
         angle: operation.geometry.angle as Radians | undefined,
+        ...(operation.textFit && {
+          textFitMode: operation.textFit.mode,
+          ...(operation.textFit.minWidth !== undefined && {
+            textFitMinWidth: operation.textFit.minWidth,
+          }),
+          ...(operation.textFit.mode === "fixed" &&
+            operation.textFit.minWidth === undefined && {
+              textFitMinWidth: operation.geometry.width,
+            }),
+          ...(operation.textFit.minHeight !== undefined && {
+            textFitMinHeight: operation.textFit.minHeight,
+          }),
+          ...(operation.textFit.mode === "fixed" &&
+            operation.textFit.minHeight === undefined && {
+              textFitMinHeight: operation.geometry.height,
+            }),
+        }),
       });
       if (!isShapeElement(element)) {
         throw new Error("图形工厂返回非法类型");
@@ -275,6 +301,17 @@ export const applyShapeOperation = (
           angle: operation.geometry?.angle as Radians | undefined,
           shape: applyShapeOptions(shape.shape, operation.shapeOptions),
         });
+        if (operation.textFit) {
+          scene.mutateElement(shape, {
+            textFitMode: operation.textFit.mode,
+            ...(operation.textFit.mode === "fixed" && {
+              textFitMinWidth:
+                operation.textFit.minWidth ?? shape.width,
+              textFitMinHeight:
+                operation.textFit.minHeight ?? shape.height,
+            }),
+          });
+        }
       }
       applySceneElementStyle(shape, operation.style, scene);
       updateSceneLabel(shape, operation.text, operation.textStyle, scene);

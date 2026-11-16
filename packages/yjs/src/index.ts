@@ -119,6 +119,8 @@ export type {
   CanvasOperationResult,
   CanvasLocalReceipt,
   CanvasSceneCommandInput,
+  CanvasSceneCommitInput,
+  CanvasSceneCommitReceipt,
   CanvasSceneCommands,
 } from "./canvas-scene-commands";
 export {

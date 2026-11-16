@@ -60,6 +60,18 @@ export type CanvasSceneCommandInput<TAsset = unknown> = Readonly<{
   assets?: Readonly<Record<string, TAsset>>;
   generation?: number;
 }>;
+export type CanvasSceneCommitInput<TAsset = unknown> = Readonly<{
+  elements: readonly ExcalidrawSceneElement[];
+  assets?: Readonly<Record<string, TAsset>>;
+  expectedVersions?: Readonly<Record<string, number>>;
+  generation?: number;
+}>;
+export type CanvasSceneCommitReceipt = Readonly<{
+  changedElementIds: readonly string[];
+  createdElementIds: readonly string[];
+  deletedElementIds: readonly string[];
+  elements: readonly ExcalidrawSceneElement[];
+}>;
 export type CanvasSceneCommands<TAsset = unknown> = Readonly<{
   execute(
     operation: CanvasSceneOperation,
@@ -69,6 +81,7 @@ export type CanvasSceneCommands<TAsset = unknown> = Readonly<{
     }>,
   ): CanvasLocalReceipt;
   apply(input: CanvasSceneCommandInput<TAsset>): CanvasLocalReceipt;
+  commit(input: CanvasSceneCommitInput<TAsset>): CanvasSceneCommitReceipt;
 }>;
 
 const nextVersionNonce = (current: number): number => {
@@ -135,9 +148,9 @@ const applyElementOperation = (
   }
 };
 
-const normalizeCandidate = (
+const normalizeCandidateElements = (
   before: readonly ExcalidrawElement[],
-  result: CanvasElementOperationResult,
+  nextElements: readonly ExcalidrawElement[],
 ): {
   elements: readonly ExcalidrawElement[];
   changedElementIds: readonly string[];
@@ -152,7 +165,7 @@ const normalizeCandidate = (
       left.id.localeCompare(right.id),
   );
   let left = ordered.at(-1)?.index ?? null;
-  const candidate = result.elements.map((element) => {
+  const candidate = nextElements.map((element) => {
     const old = previous.get(element.id);
     let next = element;
     if (!old && !next.index) {
@@ -200,6 +213,59 @@ const normalizeCandidate = (
       )
       .map((element) => element.id),
   };
+};
+
+const normalizeCandidate = (
+  before: readonly ExcalidrawElement[],
+  result: CanvasElementOperationResult,
+) => normalizeCandidateElements(before, result.elements);
+
+/** 写入前统一校验会话门槛；返回本次写入使用的 generation。 */
+const resolveGeneration = <TAsset>(
+  binding: SceneBinding<ExcalidrawSceneElement, TAsset>,
+  requested?: number,
+): number => {
+  const gate = binding.getGate();
+  const generation = requested ?? gate.generation;
+  if (!gate.initialized || !gate.synced) {
+    throw new YjsSceneError("session_unavailable", "白板场景尚未同步");
+  }
+  if (!gate.canEdit) {
+    throw new YjsSceneError("not_editable", "白板当前不可编辑");
+  }
+  if (!binding.isCurrent(generation)) {
+    throw new YjsSceneError("session_unavailable", "白板场景会话已失效");
+  }
+  return generation;
+};
+
+const assertCandidateCompleteness = (
+  before: readonly ExcalidrawElement[],
+  candidate: readonly ExcalidrawElement[],
+): void => {
+  const candidateIds = new Set(candidate.map((element) => element.id));
+  if (before.some((element) => !candidateIds.has(element.id))) {
+    throw new YjsSceneError("invalid_scene", "候选必须保留所有既有元素及墓碑");
+  }
+};
+
+const assertExpectedVersions = (
+  expectedVersions: Readonly<Record<string, number>>,
+  before: readonly ExcalidrawElement[],
+): void => {
+  const targets = new Map(before.map((element) => [element.id, element]));
+  for (const [id, version] of Object.entries(expectedVersions)) {
+    if (!Number.isSafeInteger(version) || version < 1) {
+      throw new YjsSceneError("invalid_input", "expectedVersions 必须为正整数");
+    }
+    const target = targets.get(id);
+    if (!target || target.isDeleted) {
+      throw new YjsSceneError("target_not_found", "目标元素不存在");
+    }
+    if (target.version !== version) {
+      throw new YjsSceneError("version_conflict", "目标元素版本冲突");
+    }
+  }
 };
 
 /** canonical scene 经宿主 validator 确认完整 Excalidraw 联合后进入纯操作。 */
@@ -254,17 +320,7 @@ export const createCanvasSceneCommands = <TAsset = unknown>({
       generation?: number;
     }> = {},
   ): CanvasLocalReceipt => {
-    const gate = binding.getGate();
-    const generation = options.generation ?? gate.generation;
-    if (!gate.initialized || !gate.synced) {
-      throw new YjsSceneError("session_unavailable", "白板场景尚未同步");
-    }
-    if (!gate.canEdit) {
-      throw new YjsSceneError("not_editable", "白板当前不可编辑");
-    }
-    if (!binding.isCurrent(generation)) {
-      throw new YjsSceneError("session_unavailable", "白板场景会话已失效");
-    }
+    const generation = resolveGeneration(binding, options.generation);
     const canonical = binding.getCanonical();
     const before = asElements(canonical.elements);
     assertExpectedVersion(operation, before);
@@ -309,9 +365,47 @@ export const createCanvasSceneCommands = <TAsset = unknown>({
       },
     };
   };
+  const commit = (
+    input: CanvasSceneCommitInput<TAsset>,
+  ): CanvasSceneCommitReceipt => {
+    const generation = resolveGeneration(binding, input.generation);
+    const canonical = binding.getCanonical();
+    const before = asElements(canonical.elements);
+    const proposed = asElements(input.elements);
+    assertCandidateCompleteness(before, proposed);
+    if (input.expectedVersions) {
+      assertExpectedVersions(input.expectedVersions, before);
+    }
+    const normalized = normalizeCandidateElements(before, proposed);
+    const assets = input.assets ?? {};
+    const candidate: SceneSnapshot<ExcalidrawSceneElement, TAsset> = {
+      elements: asSceneElements(normalized.elements),
+      assets: { ...canonical.assets, ...structuredClone(assets) },
+    };
+    validateCandidate(binding, candidate);
+    let committed: readonly string[];
+    try {
+      committed = binding.applyCommand(
+        { elements: candidate.elements, assets },
+        generation,
+      );
+    } catch (error) {
+      throw mapElementError(error);
+    }
+    if (committed.length !== normalized.changedElementIds.length) {
+      throw new YjsSceneError("invalid_scene", "场景提交结果与候选不一致");
+    }
+    return {
+      changedElementIds: normalized.changedElementIds,
+      createdElementIds: normalized.createdElementIds,
+      deletedElementIds: normalized.deletedElementIds,
+      elements: candidate.elements,
+    };
+  };
   return {
     execute,
     apply: ({ operation, assets, generation }) =>
       execute(operation, { assets, generation }),
+    commit,
   };
 };

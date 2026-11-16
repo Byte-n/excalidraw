@@ -128,6 +128,8 @@ export * from "./arrowheads";
 export * from "./convertToShape";
 export * from "./sceneOperations";
 export * from "./shapeScene";
+export * from "./textScene";
+export * from "./layout";
 export * from "./connectorScene";
 export * from "./tableScene";
 export * from "./tableSceneGeometry";
