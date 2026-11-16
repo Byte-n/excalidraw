@@ -16,7 +16,7 @@ await tool.execute(
 
 省略 `executor` 时，内部使用严格模式 AsyncFunction 直接执行代码并调用本次执行构造的协作对象；这是直接执行，不隔离全局、限制内存或强制中断同步循环。执行器接收 code、collaboration、signal、cancel 与错误回调，返回符合 ScriptOutputSchema 的 JSON 信封；需要隔离时由宿主显式注入执行器。
 
-`sessionFactory(context)` 可同步或异步返回已打开、已授权的 `HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>`。宿主在创建 headless session 时注入 canonical 场景校验，session 的 `getSceneSnapshot()` 在内部检查 JSON 数据并校验原始和复制后的完整场景，不应用 schema transform 的显示投影。默认 `createCanvasCollaboration` 复核同步、generation、实时编辑权限与 mode，调用公开场景命令内核；新增元素复制为 JSON 数据后，由 binding 在事务前校验完整候选场景。`query` 查询未删除的领域元素并支持分页；`createElement` 通过 `kind` 和 x/y/width/height 构造基础形状 JSON 草稿，再由 `mutate(add)` 提交。可选 `collaborationFactory(session, context)` 用于测试或特殊适配，不转移连接和生命周期职责。
+`sessionFactory(context)` 可同步或异步返回已打开、已授权的 `HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>`。宿主在创建 headless session 时注入 canonical 场景校验，session 的 `getSceneSnapshot()` 在内部检查 JSON 数据并校验原始和复制后的完整场景，不应用 schema transform 的显示投影。默认 `createCanvasCollaboration` 复核同步、generation、实时编辑权限与 mode，调用公开场景命令内核；新增元素复制为 JSON 数据后，由 binding 在事务前校验完整候选场景。`query` 查询未删除的领域元素并支持分页；`createElement` 通过 `kind` 和 x/y/width/height 构造基础形状 JSON 草稿，再由 `mutate(add)` 提交。
 
 新增元素输入必须是完整 JSON 数据，拒绝 undefined、访问器和非枚举字段，不静默删除非法属性；读取快照仍允许业务 schema 认可的可选字段缺省。
 

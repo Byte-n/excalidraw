@@ -20,6 +20,7 @@ import type {
 } from "./schemas.js";
 
 import type { ScriptExecuteCodeInput, ScriptExportInput } from "./schemas.js";
+import type { CanvasSdk } from "./sdk/types.js";
 
 /** 原始宿主调用可同步或异步；execute_code 中所有方法均包装为 Promise。 */
 export type CanvasApiResult<T> = T | Promise<T>;
@@ -84,7 +85,7 @@ export type CanvasCodeExecutor = Readonly<{
   execute(
     input: Readonly<{
       code: string;
-      collaboration: CanvasCollaborationApi;
+      canvas: CanvasSdk;
       signal?: AbortSignal;
       cancel?: () => void;
       onError?: (error: unknown) => void;
@@ -97,10 +98,11 @@ export type CanvasExecuteCodeHooks = Readonly<{
   ):
     | HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>
     | Promise<HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>>;
-  collaborationFactory?(
+  /** 注入自定义 Canvas SDK；缺省由 createCanvasSdk 构造。 */
+  sdkFactory?(
     session: HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>,
     context: CanvasExecutionContext,
-  ): CanvasCollaborationApi | Promise<CanvasCollaborationApi>;
+  ): CanvasSdk | Promise<CanvasSdk>;
   executor?: CanvasCodeExecutor;
   onError?(error: unknown, context: CanvasExecutionContext): void;
 }>;
@@ -121,4 +123,4 @@ export type CanvasScriptHooks = Readonly<{
     | HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>
     | Promise<HocuspocusHeadlessSession<ExcalidrawSceneElement, unknown>>;
 }> &
-  Pick<CanvasExecuteCodeHooks, "collaborationFactory" | "executor" | "onError">;
+  Pick<CanvasExecuteCodeHooks, "sdkFactory" | "executor" | "onError">;

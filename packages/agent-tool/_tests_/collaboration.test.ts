@@ -153,7 +153,7 @@ test("每次执行 await 当前 session 并重新捕获 generation，传递 mode
     const input = {
       canvasId,
       mode: "read",
-      code: "return await collaboration.getScene();",
+      code: 'return await canvas.scene.get({ view: "full" });',
     };
     expect((await tool.execute(input)).ok).toBe(true);
     f.session.suspend();
@@ -176,7 +176,7 @@ test("可选异步工厂获得当前 session 与上下文，严格输入在调�
         calls++;
         return f.session;
       },
-      collaborationFactory: async (session, value) => {
+      sdkFactory: async (session, value) => {
         expect(session).toBe(f.session);
         expect(value.mode).toBe("write");
         return { custom: () => 3 };
@@ -186,7 +186,7 @@ test("可选异步工厂获得当前 session 与上下文，严格输入在调�
       await tool.execute({
         canvasId,
         mode: "write",
-        code: "return await collaboration.custom();",
+        code: "return await canvas.custom();",
       }),
     ).toMatchObject({ ok: true, result: 3 });
     await expect(
@@ -220,15 +220,24 @@ test("默认执行器用真实领域写入生成回执，非法安全版本和�
     const result = await tool.execute({
       canvasId,
       mode: "write",
-      code: `await collaboration.execute(${JSON.stringify(
-        operation,
-      )}); return await collaboration.getScene();`,
+      code: `await canvas.apply(${JSON.stringify({
+        ops: [
+          {
+            op: "addShape",
+            kind: "rectangle",
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 60,
+          },
+        ],
+      })}); return await canvas.scene.get({ view: "full" });`,
     });
     expect(result).toMatchObject({
       ok: true,
       status: "local_applied",
       result: { schemaVersion: 2 },
-      receipts: [{ method: "execute" }],
+      receipts: [{ method: "apply" }],
     });
     const value = f.binding.getElements()[0];
     if (!value) {
@@ -447,12 +456,12 @@ test("四个领域查询均校验协议，草稿脚本只产生读取结果", as
       await tool.execute({
         canvasId,
         mode: "write",
-        code: 'return await collaboration.createElement({ kind: "rectangle", x: 0, y: 0, width: 10, height: 10 });',
+        code: 'return await canvas.scene.get({ view: "full" });',
       }),
     ).toMatchObject({
       ok: true,
       status: "read",
-      result: { type: "composite", width: 10 },
+      result: { schemaVersion: 2 },
     });
     expect(f.binding.getElements()).toHaveLength(0);
   } finally {

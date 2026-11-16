@@ -36,6 +36,8 @@
     "@excalidraw/yjs-hocuspocus-client": "0.1.0"
   },
   "dependencies": {
+    "@excalidraw/common": "0.18.0",
+    "@excalidraw/element": "0.18.0",
     "@excalidraw/yjs": "file:../yjs",
     "@excalidraw/yjs-hocuspocus-client": "file:../yjs-hocuspocus-client",
     "zod": "4.4.3"

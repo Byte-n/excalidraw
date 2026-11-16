@@ -59,4 +59,35 @@ export {
   ScriptOutputSchema,
   ScriptExportOutputSchema,
   ScriptDocumentationOutputSchema,
+  CanvasOpSchema,
+  CanvasApplyInputSchema,
+  CanvasLayoutInputSchema,
+  CanvasValidateInputSchema,
+  CanvasTextMeasureInputSchema,
+  CanvasTextFitInputSchema,
+  CanvasSceneGetInputSchema,
+  CanvasSceneSearchInputSchema,
+  CanvasExportInputSchema,
 } from "./schemas.js";
+export type { CanvasOp } from "./schemas.js";
+export { createCanvasSdk } from "./sdk/index.js";
+export { CanvasSdkError } from "./sdk/errors.js";
+export type {
+  CanvasSdk,
+  CanvasApplyInput,
+  CanvasApplyReceipt,
+  CanvasBounds,
+  CanvasElementSummary,
+  CanvasLayoutInput,
+  CanvasLayoutReceipt,
+  CanvasPoint,
+  CanvasSceneApi,
+  CanvasSceneView,
+  CanvasSchemaType,
+  CanvasTextApi,
+  CanvasTextStyleInput,
+  CanvasValidateInput,
+  CanvasValidateIssue,
+  CanvasValidateResult,
+  CanvasWarning,
+} from "./sdk/types.js";

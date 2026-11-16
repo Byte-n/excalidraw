@@ -1,9 +1,10 @@
+import { LAYOUT_ALGORITHM_IDS } from "@excalidraw/element";
+import { SHAPE_IDS } from "@excalidraw/yjs";
+
 import { collaborationApiDocumentation } from "./api-documentation.generated.js";
+import { createCanvasSceneReader } from "./collaboration.js";
 import { directExecutor } from "./direct-executor.js";
-import {
-  createCanvasCollaboration,
-  createCanvasSceneReader,
-} from "./collaboration.js";
+import { createCanvasSdk } from "./sdk/index.js";
 
 import {
   ScriptApiInfoInputSchema,
@@ -69,23 +70,32 @@ const validDocumentation = (text: string) =>
   });
 
 export const createCanvasOverviewTool = () => ({
-  name: "high_level_overview" as const,
-  description: "说明画板协作脚本的使用顺序、六个 API 方法和提交边界。",
+  name: "canvas_overview" as const,
+  description:
+    "返回画布 SDK 的工具索引、读写边界、apply/layout 用法与 shape/layout 索引。",
   inputSchema: ScriptOverviewInputSchema,
   outputSchema: ScriptDocumentationOutputSchema,
   execute: async (input: unknown) => {
     const parsed = ScriptOverviewInputSchema.parse(input);
     void parsed;
     return validDocumentation(
-      `先读取 collaboration.getScene 或 getElements，再用 write 模式下的 mutate/execute 提交；query 查询领域元素，createElement 构造基础形状草稿后用 mutate(add) 提交；每批提交独立回执，local_applied 不代表远端持久化。\n\n${scriptMethods.join(
-        "\n",
-      )}`,
+      [
+        "工具：canvas_overview、canvas_docs、execute_code、canvas_export。",
+        '只读：canvas.scene.get/search/getElements、canvas.text.measure/fit、canvas.validate、canvas.schema.get、canvas.export({ format: "json" })。',
+        "写入：execute_code 使用 write 模式且会话可编辑时，canvas.apply({ ops, expectedVersions?, dryRun?, idempotencyKey? }) 提交语义操作；同批 tempId 可互相引用，失败整批回滚。",
+        "布局：canvas.layout.apply({ ids, algorithm, origin?, options?, dryRun? }) 对已有元素计算布局并随同一次事务提交，回执含 layoutToken。",
+        "回执：apply/layout 返回 elements、bounds、warnings 与变更 id；local_applied 仅表示本地提交成功，不代表远端持久化。",
+        `shape kind 索引：${SHAPE_IDS.join("、")}。`,
+        `layout 算法：${LAYOUT_ALGORITHM_IDS.join("、")}。`,
+        "不要手写 canonical JSON；通过 canvas.apply 的语义操作创建和修改元素。",
+        `协作 API 签名：\n${scriptMethods.join("\n")}`,
+      ].join("\n\n"),
     );
   },
 });
 
 export const createCanvasApiInfoTool = () => ({
-  name: "collaboration_api_info" as const,
+  name: "canvas_docs" as const,
   description:
     "查询从 CanvasCollaborationApi 类型和 JSDoc 自动生成的 API 文档，包含参数、返回类型及能力限制。",
   inputSchema: ScriptApiInfoInputSchema,
@@ -99,7 +109,7 @@ export const createCanvasApiInfoTool = () => ({
 export const createCanvasExecuteCodeTool = (hooks: CanvasExecuteCodeHooks) => ({
   name: "execute_code" as const,
   description:
-    "在指定画板执行 JavaScript；宿主可注入沙箱，负责权限、审批、取消和资源释放。",
+    "在指定画板执行 JavaScript；注入 canvas SDK，宿主可替换执行器并负责权限、审批、取消和资源释放。",
   inputSchema: ScriptExecuteCodeInputSchema,
   outputSchema: ScriptOutputSchema,
   execute: async (input: unknown, execution: { signal?: AbortSignal } = {}) => {
@@ -113,14 +123,12 @@ export const createCanvasExecuteCodeTool = (hooks: CanvasExecuteCodeHooks) => ({
     const context = { ...parsed, signal: controller.signal };
     try {
       const session = await hooks.sessionFactory(context);
-      const collaboration = await (hooks.collaborationFactory?.(
-        session,
-        context,
-      ) ?? createCanvasCollaboration(session, context));
+      const canvas = await (hooks.sdkFactory?.(session, context) ??
+        createCanvasSdk(session, context));
       const executor = hooks.executor ?? directExecutor;
       const result = await executor.execute({
         code: parsed.code,
-        collaboration,
+        canvas,
         signal: context.signal,
         cancel,
         onError: (error) => hooks.onError?.(error, context),
@@ -134,7 +142,7 @@ export const createCanvasExecuteCodeTool = (hooks: CanvasExecuteCodeHooks) => ({
 });
 
 export const createCanvasExportTool = (hooks: CanvasExportHooks) => ({
-  name: "export" as const,
+  name: "canvas_export" as const,
   description: "从一次有效协作会话读取指定画板的完整 canonical elements 快照。",
   inputSchema: ScriptExportInputSchema,
   outputSchema: ScriptExportOutputSchema,

@@ -19,19 +19,30 @@ const port: any = {
     }),
   },
   sessionFactory: () => session,
-  collaborationFactory: () => ({ getScene: () => ({ elements: [] }) }),
 };
 
 test("script tools expose exactly four names without touching the DOM", async () => {
   const tools = createCanvasScriptTools(port);
   expect(tools.map((tool) => tool.name)).toEqual([
-    "high_level_overview",
-    "collaboration_api_info",
+    "canvas_overview",
+    "canvas_docs",
     "execute_code",
-    "export",
+    "canvas_export",
   ]);
   const overview = await tools[0].execute({});
+  for (const name of [
+    "canvas_overview",
+    "canvas_docs",
+    "execute_code",
+    "canvas_export",
+  ]) {
+    expect(overview.result.text).toContain(name);
+  }
+  expect(overview.result.text).toContain("canvas.apply");
+  expect(overview.result.text).toContain("canvas.layout.apply");
   expect(overview.result.text).toContain("local_applied");
+  expect(overview.result.text).toContain("rectangle");
+  expect(overview.result.text).toContain("layered");
 });
 
 test("collaboration docs cover every public promise method and member lookup", async () => {
@@ -77,7 +88,7 @@ test("script and export validate strict envelopes and host JSON output", async (
     (await tools[2].execute({ canvasId, code: "return null", mode: "read" }))
       .ok,
   ).toBe(true);
-  expect((await tools[3].execute({ canvasId })).ok).toBe(true);
+  expect((await tools[3].execute({ canvasId, format: "json" })).ok).toBe(true);
   await expect(
     tools[2].execute({
       canvasId,
@@ -89,6 +100,7 @@ test("script and export validate strict envelopes and host JSON output", async (
   await expect(
     tools[3].execute({ canvasId, filePath: "/tmp/a" }),
   ).rejects.toThrow();
+  await expect(tools[3].execute({ canvasId, format: "png" })).rejects.toThrow();
   const invalid = createCanvasScriptTools({
     ...port,
     executor: {

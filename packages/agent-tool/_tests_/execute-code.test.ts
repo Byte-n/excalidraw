@@ -1,6 +1,12 @@
-// Test doubles intentionally expose partial collaboration capabilities.
+// Test doubles intentionally expose partial canvas capabilities.
 // @ts-nocheck
-import { createCanvasExecuteCodeTool } from "../src";
+import { SHAPE_IDS } from "@excalidraw/yjs";
+
+import {
+  CanvasSdkError,
+  createCanvasExecuteCodeTool,
+  createCanvasSdk,
+} from "../src";
 
 import { sessionFixture } from "./helpers";
 
@@ -12,46 +18,75 @@ afterAll(() => fixture.dispose());
 const canvasId = "00000000-0000-4000-8000-000000000001";
 const input = (code: string) => ({ canvasId, code, mode: "write" });
 
-test("省略沙箱时直接执行异步函数，协作方法保留宿主对象与结果身份", async () => {
-  const value = { count: 1 };
+test("注入 canvas SDK 并收集 apply 回执", async () => {
+  const receipt = {
+    changedElementIds: ["a"],
+    createdElementIds: ["a"],
+    deletedElementIds: [],
+  };
   const tool = createTool({
     sessionFactory: () => session,
-    collaborationFactory: (_session, context) => {
+    sdkFactory: (_session, context) => {
       expect(context.canvasId).toBe(canvasId);
       expect(context.mode).toBe("write");
       expect(context.signal).toBeInstanceOf(AbortSignal);
       return {
-        getScene: () => value,
-        execute: async () => {
-          value.count++;
-          return { changedElementIds: ["a"] };
+        apply: async (value: unknown) => {
+          expect(value).toEqual({
+            ops: [{ op: "addShape", kind: "rectangle", x: 0, y: 0 }],
+          });
+          return receipt;
         },
       };
     },
   });
   const result = await tool.execute(
     input(
-      "const scene = await collaboration.getScene(); await collaboration.execute(); return { count: scene.count, host: typeof process !== 'undefined' };",
+      "const r = await canvas.apply({ ops: [{ op: 'addShape', kind: 'rectangle', x: 0, y: 0 }] }); return { id: r.createdElementIds[0] };",
     ),
   );
   expect(result).toEqual({
     ok: true,
     status: "local_applied",
-    result: { count: 2, host: true },
-    receipts: [{ method: "execute", receipt: { changedElementIds: ["a"] } }],
+    result: { id: "a" },
+    receipts: [{ method: "apply", receipt }],
   });
-  expect(value.count).toBe(2);
 });
 
-test("自定义执行器获得工厂对象且完全替代默认执行", async () => {
-  const api = { getScene: () => ({ elements: [] }) };
+test("嵌套 layout.apply 回执使用完整方法名", async () => {
+  const receipt = {
+    affectedElementIds: ["a"],
+    elements: [],
+    bounds: { x: 0, y: 0, width: 0, height: 0 },
+    warnings: [],
+    layoutToken: "token",
+  };
   const tool = createTool({
     sessionFactory: () => session,
-    collaborationFactory: () => api,
+    sdkFactory: () => ({
+      layout: {
+        apply: async () => receipt,
+      },
+    }),
+  });
+  const result = await tool.execute(
+    input(
+      "await canvas.layout.apply({ ids: ['a'], algorithm: 'layered' }); return null;",
+    ),
+  );
+  expect(result.ok).toBe(true);
+  expect(result.receipts).toEqual([{ method: "layout.apply", receipt }]);
+});
+
+test("自定义执行器获得注入对象且完全替代默认执行", async () => {
+  const canvas = { apply: async () => ({ changedElementIds: ["a"] }) };
+  const tool = createTool({
+    sessionFactory: () => session,
+    sdkFactory: () => canvas,
     executor: {
-      execute: async ({ code, collaboration }) => {
+      execute: async ({ code, canvas: injected }) => {
         expect(code).toBe("不应直接执行的文本");
-        expect(collaboration).toBe(api);
+        expect(injected).toBe(canvas);
         return { ok: true, status: "read", result: 7 };
       },
     },
@@ -67,8 +102,8 @@ test("不 await 的写调用在工具返回前完成且登记真实回执", asyn
   let complete = false;
   const tool = createTool({
     sessionFactory: () => session,
-    collaborationFactory: () => ({
-      execute: async () => {
+    sdkFactory: () => ({
+      apply: async () => {
         await new Promise((resolve) => setTimeout(resolve, 10));
         complete = true;
         return { changedElementIds: ["a"] };
@@ -76,50 +111,71 @@ test("不 await 的写调用在工具返回前完成且登记真实回执", asyn
     }),
   });
   const result = await tool.execute(
-    input("collaboration.execute(); return 1;"),
+    input("canvas.apply({ ops: [] }); return 1;"),
   );
   expect(complete).toBe(true);
   expect(result.ok && result.status).toBe("local_applied");
   expect(result.receipts).toHaveLength(1);
 });
 
-test("协作拒绝即使不 await 也收敛为稳定失败并报告原始异常", async () => {
-  const error = new Error("宿主异常不得泄露");
+test("SDK 拒绝即使不 await 也收敛为稳定失败并报告原始异常", async () => {
+  const error = new CanvasSdkError("not_editable", "会话不可编辑");
   const errors: unknown[] = [];
   const tool = createTool({
     sessionFactory: () => session,
-    collaborationFactory: () => ({
-      execute: async () => {
+    sdkFactory: () => ({
+      apply: async () => {
         throw error;
       },
     }),
     onError: (value) => errors.push(value),
   });
   const result = await tool.execute(
-    input("collaboration.execute(); return 1;"),
+    input("canvas.apply({ ops: [] }); return 1;"),
   );
   expect(result.ok).toBe(false);
-  expect(JSON.stringify(result)).toContain(error.message);
+  expect(result.ok ? undefined : result.error.code).toBe("not_editable");
   expect(errors).toContain(error);
 });
 
-test("提前取消不执行协作能力，结束释放工厂signal", async () => {
+test("canvas.apply 参数校验失败时回传合法图形类型", async () => {
+  const tool = createCanvasExecuteCodeTool({
+    sessionFactory: () => session,
+    sdkFactory: (target) =>
+      createCanvasSdk(target, { canvasId, code: "", mode: "write" }),
+  });
+  const result = await tool.execute(
+    input(
+      'return await canvas.apply({ ops: [{ op: "addShape", kind: "nope", x: 0, y: 0 }] });',
+    ),
+  );
+  expect(result.ok).toBe(false);
+  if (result.ok) {
+    return;
+  }
+  expect(result.error.code).toBe("invalid_input");
+  const details = result.error.details as { legalValues?: string[] };
+  expect(details.legalValues).toContain("ellipse");
+  expect(details.legalValues).toEqual(expect.arrayContaining([...SHAPE_IDS]));
+});
+
+test("提前取消不执行 SDK，结束释放工厂 signal", async () => {
   const controller = new AbortController();
   controller.abort();
   let executed = false;
   let executionSignal: AbortSignal | undefined;
   const tool = createTool({
     sessionFactory: () => session,
-    collaborationFactory: (_session, { signal }) => {
+    sdkFactory: (_session, { signal }) => {
       executionSignal = signal;
       return {
-        execute: () => {
+        apply: () => {
           executed = true;
         },
       };
     },
   });
-  const result = await tool.execute(input("await collaboration.execute();"), {
+  const result = await tool.execute(input("await canvas.apply({ ops: [] });"), {
     signal: controller.signal,
   });
   expect(result.ok ? undefined : result.error.code).toBe("execution_cancelled");
@@ -127,10 +183,10 @@ test("提前取消不执行协作能力，结束释放工厂signal", async () =>
   expect(executionSignal?.aborted).toBe(true);
 });
 
-test("直接执行只接受完整JSON结果，不静默丢弃不合法值", async () => {
+test("直接执行只接受完整 JSON 结果，不静默丢弃不合法值", async () => {
   const tool = createTool({
     sessionFactory: () => session,
-    collaborationFactory: () => ({}),
+    sdkFactory: () => ({}),
   });
   expect(await tool.execute(input("return undefined;"))).toEqual({
     ok: true,

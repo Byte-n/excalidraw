@@ -115,6 +115,13 @@ const shapeOptions = z.union([
   cubeOptions,
   circularOptions,
 ]);
+const textFit = z
+  .object({
+    mode: z.enum(["auto", "fixed"]),
+    minWidth: positive.optional(),
+    minHeight: positive.optional(),
+  })
+  .strict();
 const shapeKind = z.enum(SHAPE_IDS);
 const shapeCreate = z
   .object({
@@ -125,6 +132,7 @@ const shapeCreate = z
     style: shapeStyle.optional(),
     textStyle: textStyle.optional(),
     shapeOptions: shapeOptions.optional(),
+    textFit: textFit.optional(),
   })
   .strict();
 const shapeUpdate = z
@@ -136,6 +144,7 @@ const shapeUpdate = z
     style: shapeStyle.optional(),
     textStyle: textStyle.optional(),
     shapeOptions: shapeOptions.optional(),
+    textFit: textFit.optional(),
   })
   .strict()
   .refine(
@@ -146,6 +155,7 @@ const shapeUpdate = z
         value.style,
         value.textStyle,
         value.shapeOptions,
+        value.textFit,
       ].some((entry) => entry !== undefined),
     "图形更新不能为空",
   );
@@ -452,7 +462,10 @@ export const ScriptExecuteCodeInputSchema = z
   })
   .strict();
 export const ScriptExportInputSchema = z
-  .object({ canvasId: scriptCanvasId })
+  .object({
+    canvasId: scriptCanvasId,
+    format: z.literal("json").optional(),
+  })
   .strict();
 export const ScriptOverviewInputSchema = z.object({}).strict();
 export const ScriptApiInfoInputSchema = z
@@ -470,7 +483,13 @@ export const ScriptApiInfoInputSchema = z
   })
   .strict();
 const scriptError = z
-  .object({ code: z.string().min(1), message: z.string().min(1) })
+  .object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+    details: z.json().optional(),
+    retryable: z.boolean().optional(),
+    hint: z.string().optional(),
+  })
   .strict();
 export const ScriptOutputSchema = z.union([
   z
@@ -510,3 +529,17 @@ export type ScriptExecuteCodeInput = z.infer<
   typeof ScriptExecuteCodeInputSchema
 >;
 export type ScriptExportInput = z.infer<typeof ScriptExportInputSchema>;
+
+export {
+  CanvasOpSchema,
+  CanvasApplyInputSchema,
+  CanvasLayoutInputSchema,
+  CanvasValidateInputSchema,
+  CanvasTextMeasureInputSchema,
+  CanvasTextFitInputSchema,
+  CanvasTextStyleInputSchema,
+  CanvasSceneGetInputSchema,
+  CanvasSceneSearchInputSchema,
+  CanvasExportInputSchema,
+} from "./sdk/schemas.js";
+export type { CanvasOp } from "./sdk/schemas.js";
