@@ -1,14 +1,14 @@
 /**
- * Pointer frame contract (docs/pointer-pipeline/02-frame-contract.md).
+ * Pointer frame contract.
  *
  * Every pointer frame resolves to exactly one `PointerFrame` here. Resolution
  * is a pure read: it never writes the cursor, app state or repaint. Only
  * `applyPointerFrame` (pointerDispatch.ts) is allowed to apply the frame.
  *
- * PR2 registers a single provider (`compositeControl`); the remaining kinds
- * are defined so PR3 / PR4 can register them without reshaping the contract.
+ * Providers register per target kind; the contract is shaped so new kinds can
+ * be added without changing the frame lifecycle.
  */
-import { isDevEnv, isSelectionLikeTool } from "@excalidraw/common";
+import { isSelectionLikeTool } from "@excalidraw/common";
 
 import { isShapeElement } from "@excalidraw/element";
 
@@ -33,7 +33,7 @@ type PointerApp = Pick<App, keyof App> & Record<string, any>;
 
 /**
  * Placement of a pole-click activation preview. Mirrors the return value of
- * `getSequenceLifelinePoleActivationPlacement`; PR4 exports the element type.
+ * `getSequenceLifelinePoleActivationPlacement`.
  */
 export type PoleActivationPlacement = {
   /** Rotated scene center of the activation bar. */
@@ -43,7 +43,7 @@ export type PoleActivationPlacement = {
   localY: number;
 };
 
-/** Local shape id of the composite control point; PR4 may re-export it. */
+/** Local shape id of the composite control point. */
 export type CompositeControlPoint = CompositeShapeControlPoint;
 
 export type PointerTarget =
@@ -460,60 +460,7 @@ export const isSamePointerFrame = (
 };
 
 /**
- * Dev-only shadow switch: `window.__POINTER_PIPELINE_SHADOW__ = true` makes
- * `compareFrameWithLegacy` compare the frame against the legacy hover fields.
- */
-export const isPointerPipelineShadowEnabled = () =>
-  isDevEnv() &&
-  typeof window !== "undefined" &&
-  Boolean((window as any).__POINTER_PIPELINE_SHADOW__);
-
-const warnShadowMismatch = (frame: PointerFrame, legacy: unknown) => {
-  console.warn("[pointer-pipeline-shadow] frame/legacy mismatch", {
-    point: frame.point,
-    target: frame.target,
-    pointerType: frame.pointerType,
-    legacy,
-  });
-};
-
-/**
- * Skeleton for PR3 / PR4: never changes execution, and is a no-op unless the
- * dev shadow flag is on. Not called from production paths in PR2.
- */
-export const compareFrameWithLegacy = (
-  app: PointerApp,
-  frame: PointerFrame,
-): void => {
-  if (!isPointerPipelineShadowEnabled()) {
-    return;
-  }
-  switch (frame.target.kind) {
-    case "quickCreateHandle":
-    case "activationEdge":
-      // PR4b removed the legacy hover mirrors; the frame is the only source.
-      break;
-    case "poleActivation": {
-      // PR4 adds `getPoleActivationHover()`; until then only presence is known
-      const hasPoleActivation = (app.quickCreate as any)?.hasPoleActivation;
-      if (
-        typeof hasPoleActivation === "function" &&
-        !hasPoleActivation.call(app.quickCreate)
-      ) {
-        warnShadowMismatch(frame, "no pole activation hover");
-      }
-      break;
-    }
-    case "connection":
-      // The frame is the only connection-preview source since PR6.
-      break;
-    default:
-      break;
-  }
-};
-
-/**
- * PR2's only provider. Gate mirrors pointerCanvas.ts:1141-1162 (the scroll-bar
+ * Composite control provider. Gate mirrors pointerCanvas.ts:1141-1162 (the scroll-bar
  * condition is already enforced by the caller's `canDispatchInteraction`).
  */
 const compositeControlProvider: ProviderFor<"compositeControl"> = {
@@ -555,9 +502,8 @@ const compositeControlProvider: ProviderFor<"compositeControl"> = {
 registerPointerTargetProvider(compositeControlProvider);
 
 /**
- * Mindmap node add button (05-general-hover.md §4.8, PR5b). Gate mirrors the
- * legacy pointermove hover gate; the provider is a pure read (hit testing
- * only) and never writes hover, cursor or repaint.
+ * Mindmap node add button. The provider is a pure read (hit testing only) and
+ * never writes hover, cursor or repaint.
  */
 const mindmapAddButtonProvider: ProviderFor<"mindmapAddButton"> = {
   kind: "mindmapAddButton",

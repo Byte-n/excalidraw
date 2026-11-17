@@ -1,7 +1,7 @@
 /**
- * DOM side effects of pointer hover (docs/pointer-pipeline/05-general-hover.md
- * §4.5). All hover state itself lives in the pointer snapshot; this module only
- * mirrors the link tooltip / popup, which are real DOM surfaces.
+ * DOM side effects of pointer hover. All hover state itself lives in the
+ * pointer snapshot; this module only mirrors the link tooltip / popup, which
+ * are real DOM surfaces.
  */
 import { isEmbeddableElement } from "@excalidraw/element";
 

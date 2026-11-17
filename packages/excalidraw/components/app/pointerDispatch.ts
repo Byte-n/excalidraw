@@ -1,8 +1,7 @@
 /**
- * The only writer for a resolved pointer frame
- * (docs/pointer-pipeline/02-frame-contract.md §4.7, 05-general-hover.md §4.3).
+ * The only writer for a resolved pointer frame.
  *
- * PR5a-1: one cursor writer per frame; hover mirrors derived here.
+ * One cursor writer per frame; hover mirrors are derived here.
  */
 import { applyPointerHoverSideEffects } from "./pointerDerived";
 import { getCursorForPointerTarget } from "./pointerCursor";

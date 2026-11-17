@@ -1,5 +1,5 @@
 /**
- * sequence affordances: quick-create handle provider (PR4a).
+ * sequence affordances: quick-create handle provider.
  *
  * Pure read: it only performs hit-testing / blocking checks and returns the
  * target payload. All hover state is written by `applyPointerFrame`.

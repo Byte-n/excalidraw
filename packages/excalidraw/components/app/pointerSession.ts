@@ -829,7 +829,7 @@ export const handleCanvasPointerDown = (
     return;
   }
 
-  // 时序 affordance：按本次 pointerdown 解析出的 armed frame 分派 owner（PR4a）。
+  // 时序 affordance：按本次 pointerdown 解析出的 armed frame 分派 owner。
   // 修饰键 / 只读 / 编辑文本 / 待决面板一律放给通用选择路径。
   const sequenceFrame = app.pointer.getFrame();
   const sequenceGestureEligible =

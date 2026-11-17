@@ -1,6 +1,5 @@
 /**
- * Single synchronous pointer snapshot (docs/pointer-pipeline/02-frame-contract.md
- * §4.6).
+ * Single synchronous pointer snapshot.
  *
  * Kept outside `appState` on purpose: a pointermove must not trigger a React
  * state update. Every commit atomically replaces the frame together with the

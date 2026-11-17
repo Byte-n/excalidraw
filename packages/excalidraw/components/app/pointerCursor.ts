@@ -1,6 +1,5 @@
 /**
- * Single cursor writer for selection-mode pointer frames
- * (docs/pointer-pipeline/05-general-hover.md §4.4).
+ * Single cursor writer for selection-mode pointer frames.
  *
  * Every function here is a pure read: it never calls `app.cursor.set`.
  */

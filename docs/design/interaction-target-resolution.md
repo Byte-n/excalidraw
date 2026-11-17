@@ -1,6 +1,6 @@
 # 统一画布交互目标解析方案
 
-> **执行入口**：[pointer-pipeline/README.md](pointer-pipeline/README.md)。本文的容器 provider 与 `resolveInteractionTarget` 由 PR2 并入帧契约，其余 target 在 PR5 收口。
+> 本文描述统一画布交互目标解析；容器 provider 与 `resolveInteractionTarget` 已并入指针帧契约。
 
 ## 背景
 

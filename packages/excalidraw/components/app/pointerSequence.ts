@@ -1,6 +1,6 @@
 /**
  * sequence affordances: activation-edge connection points and pole activation
- * previews (PR4a).
+ * previews.
  *
  * Pure reads: geometry / legality only. Hover mirrors are written by
  * `applyPointerFrame`; the renderer reads the frame + ghost caches.
