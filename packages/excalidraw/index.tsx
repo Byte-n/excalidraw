@@ -289,6 +289,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           UIOptions={UIOptions}
           onPaste={onPaste}
           onImport={onImport}
+          collaboration={collaboration}
           detectScroll={detectScroll}
           handleKeyboardGlobally={handleKeyboardGlobally}
           onLibraryChange={onLibraryChange}

@@ -453,6 +453,7 @@ test("browser collaboration composition in Node owns one session and cleans its 
   const collaboration = createExcalidrawHocuspocusCollaboration({
     ...options(url),
     presence,
+    imports: { regenerateElementIds: true },
     assets: {
       upload: async () => ({ size: 1, mimeType: "image/png" }),
       authorize: async () => "injected-url",
@@ -461,6 +462,7 @@ test("browser collaboration composition in Node owns one session and cleans its 
   });
   try {
     await collaboration.session.ready;
+    expect(collaboration.imports).toEqual({ regenerateElementIds: true });
     expect(presence).toHaveBeenCalledExactlyOnceWith(
       collaboration.session.provider,
     );

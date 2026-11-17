@@ -1121,8 +1121,15 @@ export type ExcalidrawCollaborationPresentation = Readonly<{
   userToFollow: UserToFollow | null;
 }>;
 
+/** 协作导入身份策略；未声明时保持导入元素的原身份。 */
+export type ExcalidrawCollaborationImports = Readonly<{
+  regenerateElementIds?: boolean;
+}>;
+
 /** 只描述编辑器接入，不持有传输服务或外部文档的所有权。 */
 export interface ExcalidrawCollaboration {
+  /** 导入身份策略；由创建方显式声明，缺省不重建元素身份。 */
+  readonly imports?: ExcalidrawCollaborationImports;
   attach(
     api: ExcalidrawImperativeAPI,
     context: { ownerDocument: Document },

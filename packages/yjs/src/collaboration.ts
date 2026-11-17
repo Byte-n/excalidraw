@@ -70,6 +70,7 @@ export const createExcalidrawCollaboration = <
   return {
     ...scene,
     assetCoordinator,
+    imports: options.imports,
     attach: (api, { ownerDocument }) => {
       if (disposed) {
         throw new Error("画板协作会话已销毁");

@@ -16,7 +16,7 @@ import {
 
 afterEach(cleanup);
 
-const setup = () => {
+const setup = (imports?: { regenerateElementIds?: boolean }) => {
   const document = new Y.Doc();
   document.getMap("elements").set("a", element());
   const channel = presenceChannel();
@@ -25,6 +25,7 @@ const setup = () => {
     document,
     policy: scenePolicy(),
     presence: channel.channel,
+    imports,
     assets: {
       upload: async () => ({ size: 3, mimeType: "image/png" }),
       authorize: async () => "signed",
@@ -40,6 +41,15 @@ const setup = () => {
   });
   return { document, collaboration, channel, onError };
 };
+
+test("导入策略仅按显式选项透传，缺省不开启", () => {
+  const enabled = setup({ regenerateElementIds: true });
+  const disabled = setup();
+  expect(enabled.collaboration.imports).toEqual({
+    regenerateElementIds: true,
+  });
+  expect(disabled.collaboration.imports).toBeUndefined();
+});
 
 test("单 collaboration prop 完成场景回灌/写入、选区 Presence 与远端会话呈现", async () => {
   const { document, collaboration, channel, onError } = setup();

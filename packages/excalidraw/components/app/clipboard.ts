@@ -43,6 +43,7 @@ import {
   type ParsedDataTransferFile,
 } from "../../clipboard";
 import { restoreElements } from "../../data/restore";
+import { prepareClipboardImport } from "../../data/import";
 import { t } from "../../i18n";
 import { ImageURLToFile, SVGStringToFile } from "../../data/blob";
 import { Fonts } from "../../fonts";
@@ -373,22 +374,10 @@ export const pasteFromClipboard = async (app: App, event: ClipboardEvent) => {
   const data = await parseClipboard(dataTransferList, isPlainPaste);
 
   if (app.props.onImport) {
-    const prepared = data.elements
-      ? {
-          kind: "clipboard-elements" as const,
-          source: "paste" as const,
-          elements: data.elements,
-          files: data.files,
-          replace: false as const,
-        }
-      : filesList.length
-      ? {
-          kind: "image" as const,
-          source: "paste" as const,
-          files: filesList.map((item) => item.file),
-          replace: false as const,
-        }
-      : null;
+    const prepared = await prepareClipboardImport(dataTransferList, {
+      imports: app.props.collaboration?.imports,
+      targetElements: app.scene.getElementsIncludingDeleted(),
+    });
     if (prepared) {
       event?.preventDefault();
       try {

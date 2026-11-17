@@ -1,5 +1,6 @@
 import type {
   ExcalidrawCollaboration,
+  ExcalidrawCollaborationImports,
   ExcalidrawCollaborationPresentation,
 } from "@excalidraw/excalidraw/types";
 
@@ -58,7 +59,10 @@ export type CreateExcalidrawCollaborationOptions<
   assets: AssetTransport<TAsset>;
   state: ExcalidrawCollaborationState;
   presence: ExcalidrawPresenceChannel;
+  imports?: ExcalidrawCollaborationImports;
 };
+
+export type { ExcalidrawCollaborationImports };
 
 export type ExcalidrawCollaborationController<
   TElement extends ExcalidrawSceneElement,

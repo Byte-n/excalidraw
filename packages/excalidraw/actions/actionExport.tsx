@@ -12,8 +12,11 @@ import { Toast } from "../components/Toast";
 import { IconButton } from "../components/IconButton";
 import { Tooltip } from "../components/Tooltip";
 import { ExportIcon, questionCircle, saveAs } from "../components/icons";
-import { loadFromJSON, saveAsJSON } from "../data";
-import { prepareImportBlob } from "../data/import";
+import { saveAsJSON } from "../data";
+import {
+  prepareImportBlob,
+  preparedImportToActionResult,
+} from "../data/import";
 import { fileOpen } from "../data/filesystem";
 import { isImageFileHandle } from "../data/blob";
 import { nativeFileSystemSupported } from "../data/filesystem";
@@ -403,28 +406,25 @@ export const actionLoadScene = register({
   },
   perform: async (elements, appState, _, app) => {
     try {
+      const file = await fileOpen({ description: "Excalidraw files" });
+      const prepared = await prepareImportBlob(
+        file,
+        { source: "file" },
+        appState,
+        elements,
+        {
+          imports: app.props.collaboration?.imports,
+          targetElements: elements,
+        },
+      );
       if (app.props.onImport) {
-        const file = await fileOpen({ description: "Excalidraw files" });
-        const prepared = await prepareImportBlob(
-          file,
-          { source: "file" },
-          appState,
-          elements,
-        );
         await app.props.onImport(prepared, { source: "file" });
         return false;
       }
-      const {
-        elements: loadedElements,
-        appState: loadedAppState,
-        files,
-      } = await loadFromJSON(appState, elements);
-      return {
-        elements: loadedElements,
-        appState: loadedAppState,
-        files,
-        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-      };
+      if (prepared.kind !== "scene") {
+        throw new Error("Error: invalid file");
+      }
+      return preparedImportToActionResult(prepared);
     } catch (error: any) {
       if (error?.name === "AbortError") {
         console.warn(error);

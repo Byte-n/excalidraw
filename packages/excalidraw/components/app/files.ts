@@ -56,7 +56,10 @@ import { actionFinalize } from "../../actions";
 
 import { parseDataTransferEvent } from "../../clipboard";
 import { loadFromBlob } from "../../data";
-import { prepareImportBlob } from "../../data/import";
+import {
+  prepareImportBlob,
+  preparedImportToActionResult,
+} from "../../data/import";
 
 import { distributeLibraryItemsOnSquareGrid } from "../../data/library";
 
@@ -506,6 +509,10 @@ export const handleAppOnDrop = async (
               context,
               app.state,
               app.scene.getElementsIncludingDeleted(),
+              {
+                imports: app.props.collaboration?.imports,
+                targetElements: app.scene.getElementsIncludingDeleted(),
+              },
             );
       await app.props.onImport(prepared, context);
     } catch (error) {
@@ -608,9 +615,54 @@ export const handleAppOnDrop = async (
 
   if (fileItems.length > 0) {
     const { file, fileHandle } = fileItems[0];
-    if (file) {
-      // Attempt to parse an excalidraw/excalidrawlib file
+    if (file && isSupportedImageFile(file)) {
       await app.loadFileToCanvas(file, fileHandle);
+    } else if (file) {
+      try {
+        const elements = app.scene.getElementsIncludingDeleted();
+        const prepared = await prepareImportBlob(
+          file,
+          { source: "drop", position: { x: sceneX, y: sceneY } },
+          app.state,
+          elements,
+          {
+            imports: app.props.collaboration?.imports,
+            targetElements: elements,
+          },
+        );
+        if (prepared.kind === "scene") {
+          const actionResult = preparedImportToActionResult(prepared);
+          // 场景替换前固化源元素的 fractional index，避免撤销后重复
+          syncInvalidIndices([...elements, ...prepared.elements]);
+          app.store.scheduleMicroAction({
+            action: CaptureUpdateAction.NEVER,
+            elements,
+            appState: undefined,
+          });
+          app.setState({ isLoading: true });
+          app.syncActionResult({
+            ...actionResult,
+            replaceFiles: true,
+            appState: {
+              ...(actionResult.appState || app.state),
+              isLoading: false,
+            },
+          });
+        } else if (prepared.kind === "library") {
+          await app.library.updateLibrary({
+            libraryItems: prepared.library.libraryItems,
+            merge: true,
+            openLibraryMenu: true,
+          });
+        } else if (prepared.kind === "image") {
+          await app["insertImages"]([...prepared.files], sceneX, sceneY);
+        }
+      } catch (error: any) {
+        app.setState({
+          isLoading: false,
+          errorMessage: t("alerts.couldNotLoadInvalidFile"),
+        });
+      }
     }
   }
 

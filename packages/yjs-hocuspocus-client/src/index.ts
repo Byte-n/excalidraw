@@ -1,6 +1,7 @@
 import type {
   AssetTransport,
   ExcalidrawCollaborationController,
+  ExcalidrawCollaborationImports,
   ExcalidrawPresenceChannel,
   ExcalidrawSceneCommand,
   ExcalidrawSceneElement,
@@ -160,6 +161,7 @@ export type ExcalidrawHocuspocusCollaborationOptions<
   presence:
     | ExcalidrawPresenceChannel
     | ((provider: HocuspocusProvider) => ExcalidrawPresenceChannel);
+  imports?: ExcalidrawCollaborationImports;
   onSceneError?(
     error: unknown,
     operation: "restore" | "publish" | "command",

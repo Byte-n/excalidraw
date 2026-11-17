@@ -98,6 +98,7 @@ export { createExcalidrawCollaboration } from "./collaboration";
 export type {
   CreateExcalidrawCollaborationOptions,
   ExcalidrawCollaborationController,
+  ExcalidrawCollaborationImports,
   ExcalidrawCollaborationState,
   ExcalidrawPresenceBounds,
   ExcalidrawPresenceChannel,
