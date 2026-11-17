@@ -1,44 +1,34 @@
 import { FONT_FAMILY, getLineHeight } from "@excalidraw/common";
 
+import { validateOrderKey } from "@excalidraw/fractional-indexing";
+
+import { pointFrom } from "@excalidraw/math";
+
+import { remapImportedAppState } from "@excalidraw/excalidraw/data/import-app-state";
+
+import { isActivationElement, isShapeElement } from "../src/compositeShape";
+import { regenerateImportIdentities } from "../src/importIdentity";
+import { newElementWith } from "../src/mutateElement";
 import {
-  cellKey,
-  getTextBlock,
-  isActivationElement,
-  isMindmapEdgeElement,
-  isMindmapNodeElement,
-  isShapeElement,
-  isTableElement,
-  mergeTableCells,
   newArrowElement,
   newElement,
-  newElementWith,
   newFrameElement,
   newImageElement,
   newMindmapEdgeElement,
   newMindmapNodeElement,
   newTableElement,
-  textRegionKey,
-  withTextBlock,
-} from "@excalidraw/element";
-
-import { validateOrderKey } from "@excalidraw/fractional-indexing";
-
-import { pointFrom } from "@excalidraw/math";
-
+} from "../src/newElement";
+import { mergeTableCells } from "../src/tableOps";
+import { cellKey, textRegionKey } from "../src/text/keys";
+import { getTextBlock, withTextBlock } from "../src/text/ops";
 import {
-  regenerateImportIdentities,
-  remapImportedAppState,
-} from "./import-identity";
+  isMindmapEdgeElement,
+  isMindmapNodeElement,
+  isTableElement,
+} from "../src/typeChecks";
 
-import type {
-  TextBlockMap,
-  TextBlockStyle,
-} from "@excalidraw/element/text/types";
-import type {
-  ExcalidrawElement,
-  FileId,
-  FractionalIndex,
-} from "@excalidraw/element/types";
+import type { TextBlockMap, TextBlockStyle } from "../src/text/types";
+import type { ExcalidrawElement, FileId, FractionalIndex } from "../src/types";
 
 const textStyle: TextBlockStyle = {
   fontFamily: FONT_FAMILY.Excalifont,

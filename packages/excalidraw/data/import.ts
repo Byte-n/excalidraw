@@ -1,16 +1,16 @@
 import { IMAGE_MIME_TYPES, MIME_TYPES } from "@excalidraw/common";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import {
+  CaptureUpdateAction,
+  regenerateImportIdentities,
+} from "@excalidraw/element";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { parseClipboard, type ParsedDataTranferList } from "../clipboard";
 
 import { loadSceneOrLibraryFromBlob } from "./blob";
-import {
-  regenerateImportIdentities,
-  remapImportedAppState,
-} from "./import-identity";
+import { remapImportedAppState } from "./import-app-state";
 
 import type {
   AppState,

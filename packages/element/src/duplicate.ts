@@ -35,10 +35,11 @@ import { normalizeElementOrder } from "./sortElements";
 
 import { bumpVersion } from "./mutateElement";
 
+import { remapMindmapIdentity } from "./mindmapIdentity";
+
 import {
   isArrowElement,
   isFrameLikeElement,
-  isMindmapEdgeElement,
   isMindmapNodeElement,
   isTableElement,
 } from "./typeChecks";
@@ -507,77 +508,20 @@ export const duplicateElements = (
     }
   }
 
-  // Mindmap relationships are stored as explicit ids rather than generic
-  // bindings. Rebuild those references for every duplication path, including
-  // paste and Alt-drag, and isolate the copied graph from its source graph.
-  const graphIds = new Map<string, string>();
-  const nodeIds = new Map<string, string>();
-  const originalNodeIds = new Set(
-    duplicatedElements
-      .map((duplicate) =>
-        origElementsMap.get(duplicateIdToOrigId.get(duplicate.id)!),
-      )
-      .filter(isMindmapNodeElement)
-      .map((node) => node.id),
-  );
-  for (const duplicate of duplicatedElements) {
-    const original = origElementsMap.get(
-      duplicateIdToOrigId.get(duplicate.id)!,
-    );
-    if (!original || !isMindmapNodeElement(original)) {
-      continue;
-    }
-    const graphId = graphIds.get(original.graphId) ?? randomId();
-    graphIds.set(original.graphId, graphId);
-    nodeIds.set(original.id, duplicate.id);
-    const isCopiedRoot =
-      original.role === "root" || !originalNodeIds.has(original.parentId ?? "");
-    Object.assign(duplicate, {
-      graphId,
-      parentId: isCopiedRoot ? null : original.parentId,
-      role: isCopiedRoot ? "root" : "node",
-      order: isCopiedRoot ? null : original.order,
-    });
-    if (isCopiedRoot && original.role !== "root") {
+  // 脑图关系存在显式 id 上，复制与导入共用同一套身份映射规则
+  remapMindmapIdentity(duplicatedElements, origElements, {
+    resolveRootDefaults: (graphId) => {
       const sourceRoot = [...origElementsMap.values()].find(
         (candidate) =>
           isMindmapNodeElement(candidate) &&
-          candidate.graphId === original.graphId &&
+          candidate.graphId === graphId &&
           candidate.role === "root",
       );
-      if (sourceRoot && isMindmapNodeElement(sourceRoot)) {
-        Object.assign(duplicate, {
-          layoutDirection: sourceRoot.layoutDirection,
-          defaultNodeShape: sourceRoot.defaultNodeShape,
-          defaultEdgeRouting: sourceRoot.defaultEdgeRouting,
-          defaultEdgeStrokeColor: sourceRoot.defaultEdgeStrokeColor,
-          defaultEdgeStrokeWidth: sourceRoot.defaultEdgeStrokeWidth,
-          defaultEdgeStrokeStyle: sourceRoot.defaultEdgeStrokeStyle,
-        });
-      }
-    }
-  }
-  for (const duplicate of duplicatedElements) {
-    const original = origElementsMap.get(
-      duplicateIdToOrigId.get(duplicate.id)!,
-    );
-    if (!original || !isMindmapNodeElement(original)) {
-      if (original && isMindmapEdgeElement(original)) {
-        const graphId = graphIds.get(original.graphId);
-        const parentId = nodeIds.get(original.parentId);
-        const childId = nodeIds.get(original.childId);
-        if (graphId && parentId && childId) {
-          Object.assign(duplicate, { graphId, parentId, childId });
-        }
-      }
-      continue;
-    }
-    if (original.role === "node" && originalNodeIds.has(original.id)) {
-      Object.assign(duplicate, {
-        parentId: nodeIds.get(original.parentId) ?? original.parentId,
-      });
-    }
-  }
+      return sourceRoot && isMindmapNodeElement(sourceRoot)
+        ? sourceRoot
+        : undefined;
+    },
+  });
 
   return {
     duplicatedElements,

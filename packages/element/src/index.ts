@@ -88,6 +88,7 @@ export * from "./frame";
 export * from "./groups";
 export * from "./heading";
 export * from "./image";
+export * from "./importIdentity";
 export * from "./linearElementEditor";
 export * from "./mindmap";
 export * from "./mutateElement";

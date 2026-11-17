@@ -27,7 +27,6 @@ import {
 import { mutateElement } from "./mutateElement";
 import { syncMovedIndices } from "./fractionalIndex";
 import { getIndexedFrameChildren } from "./frameChildrenIndex";
-import { tableCellContainerRef } from "./tableContainer";
 import { frameLikeContainerRef, isFrameLikeElement } from "./typeChecks";
 
 import { getNonDeletedElements } from ".";
@@ -35,6 +34,7 @@ import { getNonDeletedElements } from ".";
 import type { ExcalidrawElementsIncludingDeleted } from "./Scene";
 
 import type {
+  DirectContainerRef,
   ElementsMap,
   ElementsMapOrArray,
   ExcalidrawElement,
@@ -42,6 +42,33 @@ import type {
   NonDeleted,
   NonDeletedExcalidrawElement,
 } from "./types";
+
+/**
+ * 复制/导入后的直接容器引用：父元素不在新 id 映射中时返回 `undefined`，
+ * 表格单元格引用同时把 `cellId` 映射到新结构。
+ */
+export const remapContainerRefAfterDuplication = (
+  ref: DirectContainerRef | undefined,
+  elementIdMap: ReadonlyMap<string, string>,
+  tableCellIdMap?: ReadonlyMap<string, string>,
+): DirectContainerRef | undefined => {
+  if (!ref) {
+    return undefined;
+  }
+  const nextElementId = elementIdMap.get(ref.elementId);
+  if (!nextElementId) {
+    return undefined;
+  }
+  if (ref.kind === "tableCell") {
+    return {
+      kind: "tableCell",
+      elementId: nextElementId,
+      cellId: tableCellIdMap?.get(ref.cellId) ?? ref.cellId,
+      role: ref.role,
+    };
+  }
+  return { kind: "frameLike", elementId: nextElementId };
+};
 
 // --------------------------- Frame State ------------------------------------
 export const bindElementsToFramesAfterDuplication = (
@@ -60,34 +87,20 @@ export const bindElementsToFramesAfterDuplication = (
     if (element.containerRef?.elementId) {
       // Preserve the parent relationship when the containing frame is cloned.
       const nextElementId = origIdToDuplicateId.get(element.id);
-      const nextParentId = origIdToDuplicateId.get(
-        element.containerRef?.elementId,
-      );
       const nextElement = nextElementId && nextElementMap.get(nextElementId);
-      if (nextElement) {
-        const containerRef = element.containerRef;
-        if (!nextParentId) {
-          // the direct parent was not part of the duplication: the duplicate
-          // is placed at a new position and gets its membership re-judged
-          // there (a copied cell graphic does not carry its source table)
-          mutateElement(nextElement, nextElementMap, {
-            containerRef: undefined,
-          });
-        } else if (containerRef.kind === "tableCell") {
-          mutateElement(nextElement, nextElementMap, {
-            containerRef: tableCellContainerRef(
-              nextParentId,
-              (tableCellIdMap?.get(containerRef.cellId) ??
-                containerRef.cellId) as string,
-              containerRef.role,
-            ),
-          });
-        } else {
-          mutateElement(nextElement, nextElementMap, {
-            containerRef: frameLikeContainerRef(nextParentId),
-          });
-        }
+      if (!nextElement) {
+        continue;
       }
+      // the direct parent was not part of the duplication: the duplicate is
+      // placed at a new position and gets its membership re-judged there
+      // (a copied cell graphic does not carry its source table)
+      mutateElement(nextElement, nextElementMap, {
+        containerRef: remapContainerRefAfterDuplication(
+          element.containerRef,
+          origIdToDuplicateId,
+          tableCellIdMap,
+        ),
+      });
     }
   }
 };
