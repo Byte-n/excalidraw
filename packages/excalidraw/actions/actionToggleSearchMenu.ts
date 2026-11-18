@@ -8,6 +8,7 @@ import {
 import { CaptureUpdateAction } from "@excalidraw/element";
 
 import { searchIcon } from "../components/icons";
+import { releaseSearchPanelOwnership } from "../search/searchPanel";
 
 import { register } from "./register";
 
@@ -26,6 +27,9 @@ export const actionToggleSearchMenu = register({
     if (appState.openDialog) {
       return false;
     }
+
+    // Ctrl+F 总是接管面板：释放宿主所有权并切回搜索模式
+    releaseSearchPanelOwnership();
 
     if (
       appState.openSidebar?.name === DEFAULT_SIDEBAR.name &&

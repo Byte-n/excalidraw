@@ -553,12 +553,19 @@ export type {
 } from "./components/TTDDialog/types";
 
 export type {
+  ExcalidrawImperativeAPI,
   ExcalidrawCollaboration,
   ExcalidrawCollaborationPresentation,
   ViewportStatusFrame,
   ElementRenderOverride,
   ElementRenderOverrides,
   TopCenterToolbarProps,
+  SceneSearchQuery,
+  SearchSceneOptions,
+  SceneSearchResult,
+  RevealElementOptions,
+  SearchPanelItem,
+  SearchPanelOptions,
 } from "./types";
 
 export { zoomToFitBounds, DEFAULT_OVERSCROLL } from "./viewport";

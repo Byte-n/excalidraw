@@ -6,6 +6,8 @@ import rough from "roughjs";
 import {
   APP_NAME,
   AppEventBus,
+  CANVAS_SEARCH_TAB,
+  DEFAULT_SIDEBAR,
   debounce,
   deriveStylesPanelMode,
   Emitter,
@@ -102,6 +104,14 @@ import { Fonts } from "../fonts";
 import { LaserTrails } from "../laserTrails";
 import { withBatchedUpdates } from "../reactUtils";
 import { Renderer } from "../scene/Renderer";
+import { searchSceneElements } from "../search";
+import {
+  closeHostSearchPanel,
+  normalizeSearchTerms,
+  openHostSearchPanel,
+  searchItemInFocusAtom,
+  searchPanelInputAtom,
+} from "../search/searchPanel";
 import {
   getReferenceSnapPoints,
   getVisibleGaps,
@@ -207,7 +217,12 @@ import type {
   NullableGridSize,
   OnUserFollowedPayload,
   PointerDownState,
+  RevealElementOptions,
   SceneData,
+  SceneSearchQuery,
+  SceneSearchResult,
+  SearchPanelOptions,
+  SearchSceneOptions,
   SidebarName,
   SidebarTabName,
   ToolType,
@@ -447,6 +462,10 @@ class App extends React.Component<AppProps, AppState> {
       getViewportOffsets: this.viewport.getOffsets,
       setElementRenderOverrides: this.setElementRenderOverrides,
       getSceneElements: this.getSceneElements,
+      searchScene: this.searchScene,
+      revealElement: this.revealElement,
+      openSearchPanel: this.openSearchPanel,
+      closeSearchPanel: this.closeSearchPanel,
       getAppState: () => this.state,
       getFiles: () => this.files,
       getName: this.getName,
@@ -875,6 +894,77 @@ class App extends React.Component<AppProps, AppState> {
 
   public getSceneElements = () => {
     return this.scene.getNonDeletedElements();
+  };
+
+  public searchScene = (
+    query: SceneSearchQuery,
+    options?: SearchSceneOptions,
+  ): SceneSearchResult[] => {
+    const { results } = searchSceneElements(
+      this.scene.getNonDeletedElements(),
+      query,
+      options,
+      { hiddenIds: this.scene.getMindmapHiddenElementIds() },
+    );
+    return results.map((entry) => entry.result);
+  };
+
+  public revealElement = (
+    elementId: string,
+    options?: RevealElementOptions,
+  ): boolean => {
+    const element = this.scene.getNonDeletedElement(elementId);
+    if (!element) {
+      return false;
+    }
+    if (this.scene.getMindmapHiddenElementIds().has(elementId)) {
+      return false;
+    }
+
+    if (options?.select !== false) {
+      this.setState({
+        selectedElementIds: { [elementId]: true },
+        selectedGroupIds: {},
+        editingGroupId: null,
+      });
+    }
+
+    this.viewport.setViewport({
+      target: element,
+      fit: options?.fit ?? "scale-down",
+      animation: options?.animation ?? { duration: 300 },
+      offsets: options?.offsets ?? { ui: true },
+    });
+
+    return true;
+  };
+
+  public openSearchPanel = (options: SearchPanelOptions): boolean => {
+    if (!openHostSearchPanel(this, options)) {
+      return false;
+    }
+
+    if (options.mode === "search") {
+      this.updateEditorAtom(
+        searchPanelInputAtom,
+        normalizeSearchTerms(options.query).join(" "),
+      );
+    }
+    this.updateEditorAtom(searchItemInFocusAtom, null);
+
+    this.setState({
+      searchMatches: null,
+      openSidebar: { name: DEFAULT_SIDEBAR.name, tab: CANVAS_SEARCH_TAB },
+      openDialog: null,
+    });
+    return true;
+  };
+
+  public closeSearchPanel = (): void => {
+    if (!closeHostSearchPanel()) {
+      return;
+    }
+    this.setState({ openSidebar: null });
   };
 
   public onInsertElements = (elements: readonly ExcalidrawElement[]) => {

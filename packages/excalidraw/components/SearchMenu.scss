@@ -32,6 +32,12 @@
     }
   }
 
+  .layer-ui__search-title {
+    padding: 0 0.75rem 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
   .layer-ui__search-count {
     display: flex;
     justify-content: space-between;
@@ -151,6 +157,15 @@
 
     &.active {
       background-color: var(--color-surface-high);
+    }
+
+    &.disabled {
+      cursor: default;
+      opacity: 0.5;
+
+      &:hover {
+        background-color: transparent;
+      }
     }
   }
 }

@@ -112,7 +112,7 @@ import { editorJotaiStore } from "../../editor-jotai";
 import { snapDraggedElements, SnapCache } from "../../snapping";
 import { isOverScrollBars } from "../../scene/scrollbars";
 import { convertElementTypePopupAtom } from ".././ConvertElementTypePopup";
-import { searchItemInFocusAtom } from ".././SearchMenu";
+import { searchItemInFocusAtom } from "../../search/searchPanel";
 
 import {
   withBatchedUpdates,

@@ -890,6 +890,69 @@ export type SearchMatch = {
   }[];
 };
 
+export type SceneSearchQuery = string | readonly string[];
+
+export interface SearchSceneOptions {
+  /** 多词匹配模式，默认 'any'；单字符串时忽略。 */
+  match?: "any" | "all";
+  /** 最多返回的元素数，默认 100。 */
+  limit?: number;
+  /** 是否包含折叠/隐藏的脑图节点，默认 false。 */
+  includeHidden?: boolean;
+}
+
+export interface SceneSearchResult {
+  elementId: string;
+  elementType: string;
+  title: string;
+  preview: string;
+  matchedTermCount: number;
+  matchCount: number;
+  matchedTerms: readonly string[];
+  group: "frame" | "table" | "text" | "mindmap" | "other";
+  breadcrumb: readonly string[];
+  hidden?: boolean;
+}
+
+/** 定位面板中的单条目；label 必填，其余为可选展示信息。 */
+export interface SearchPanelItem {
+  elementId: string;
+  label: string;
+  preview?: string;
+  detail?: string;
+  group?: string;
+  disabled?: boolean;
+}
+
+/** 宿主打开搜索面板的选项；search 与 locate 两种来源互斥。 */
+export type SearchPanelOptions =
+  | {
+      mode: "search";
+      title?: string;
+      query?: SceneSearchQuery;
+      match?: "any" | "all";
+      focusFirst?: boolean;
+    }
+  | {
+      mode: "locate";
+      title?: string;
+      items: readonly SearchPanelItem[];
+      activeElementId?: string;
+      focusFirst?: boolean;
+      filterable?: boolean;
+    };
+
+export interface RevealElementOptions {
+  /** 是否选中元素，默认 true；只写本地 appState。 */
+  select?: boolean;
+  /** 视口适配方式，默认 'scale-down'。 */
+  fit?: "scale-down" | "contain" | "none";
+  /** 视口动画，默认 { duration: 300 }。 */
+  animation?: boolean | { duration?: number };
+  /** 视口内边距，默认 { ui: true }。 */
+  offsets?: ViewportOffsets;
+}
+
 export type UIAppState = Omit<
   AppState,
   // stripped from the UI-relevant app state so their (often per-frame)
@@ -1539,6 +1602,7 @@ export type AppClassProperties = {
   onInsertElements: App["onInsertElements"];
   onExportImage: App["onExportImage"];
   viewport: App["viewport"];
+  revealElement: App["revealElement"];
   addFiles: App["addFiles"];
   addElementsFromPasteOrLibrary: App["addElementsFromPasteOrLibrary"];
   togglePenMode: App["togglePenMode"];
@@ -1757,6 +1821,27 @@ export interface ExcalidrawImperativeAPI {
     clear: InstanceType<typeof App>["resetHistory"];
   };
   getSceneElements: InstanceType<typeof App>["getSceneElements"];
+  /**
+   * 只读检索未删除元素的标题与文本区域，不修改场景、历史与 appState。
+   * 结果按命中顺序逐个元素聚合，`limit` 默认 100；
+   * 折叠/隐藏的脑图节点默认排除，可用 `includeHidden` 包含。
+   */
+  searchScene: (
+    query: SceneSearchQuery,
+    options?: SearchSceneOptions,
+  ) => SceneSearchResult[];
+  /**
+   * 按 ID 定位并选中未删除元素，只改变视口与本地 appState。
+   * 元素缺失、已删除或属于折叠脑图的隐藏节点时返回 false。
+   */
+  revealElement: (elementId: string, options?: RevealElementOptions) => boolean;
+  /**
+   * 打开搜索面板。locate 模式过滤后无可展示项时返回 false 且不改动面板；
+   * 重复调用会替换内容并重置焦点。
+   */
+  openSearchPanel: (options: SearchPanelOptions) => boolean;
+  /** 关闭宿主打开的搜索面板；用户通过 Ctrl+F 打开的面板不受影响。 */
+  closeSearchPanel: () => void;
   getAppState: () => InstanceType<typeof App>["state"];
   getFiles: () => InstanceType<typeof App>["files"];
   getName: InstanceType<typeof App>["getName"];

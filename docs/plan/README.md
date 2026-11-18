@@ -6,7 +6,7 @@
 
 | 编号 | 主题 | 状态 | 计划 | 账本 | 关联 ADR |
 | --- | --- | --- | --- | --- | --- |
-| 01 | 画布搜索与定位 API | 未开始 | [phase-01](phase-01-canvas-search-navigation-api.md) | [progress](progress/phase-01-canvas-search-navigation-api.md) | — |
+| 01 | 画布搜索与定位 API | 已完成 | [phase-01](phase-01-canvas-search-navigation-api.md) | [progress](progress/phase-01-canvas-search-navigation-api.md) | — |
 | — | 时序图分期实施 | 存量计划（无账本） | [sequence-diagram](../sequence-diagram/README.md) | — | — |
 
 状态取值：`未开始 / 进行中 / 已完成 / 已取消`；本规范落地前、没有执行账本的计划统一标为 `存量计划（无账本）`，不补造账本。

@@ -1,6 +1,6 @@
 # Phase 01 — 画布搜索与定位 API
 
-> 状态：未开始｜关联 ADR：无（跨仓边界见 docs-platform ADR-0007）｜规格影响：无（vendor 不维护业务规格）
+> 状态：已完成｜关联 ADR：无（跨仓边界见 docs-platform ADR-0007）｜规格影响：无（vendor 不维护业务规格）
 >
 > 执行空间：`vendor/excalidraw` 在 `master` 分支直接实施，不新建 worktree。
 

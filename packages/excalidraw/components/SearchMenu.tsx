@@ -42,19 +42,32 @@ import {
   isMindmapNodeElement,
 } from "@excalidraw/element";
 
+import type { TextRegionKey } from "@excalidraw/element";
+
 import type {
   ElementsMap,
+  ExcalidrawElement,
   ExcalidrawFrameLikeElement,
   ExcalidrawMindmapNodeElement,
   ExcalidrawTableElement,
   ExcalidrawTextElement,
 } from "@excalidraw/element/types";
 
-import { atom, useAtom } from "../editor-jotai";
+import { editorJotaiStore, useAtom } from "../editor-jotai";
 
 import { useStable } from "../hooks/useStable";
 import { useSceneNonce } from "../hooks/useSceneNonce";
 import { t } from "../i18n";
+import { getMatchPreview, searchSceneElements } from "../search";
+import {
+  releaseSearchPanelOwnership,
+  resetSearchPanelState,
+  searchItemInFocusAtom,
+  searchPanelInputAtom,
+  searchPanelStateAtom,
+  type SearchPanelLocateState,
+  type SearchPanelState,
+} from "../search/searchPanel";
 
 import { useApp, useExcalidrawSetAppState } from "./App";
 import { Button } from "./Button";
@@ -71,10 +84,12 @@ import {
 
 import "./SearchMenu.scss";
 
-import type { AppClassProperties, SearchMatch } from "../types";
-
-const searchQueryAtom = atom<string>("");
-export const searchItemInFocusAtom = atom<number | null>(null);
+import type {
+  AppClassProperties,
+  SearchMatch,
+  SearchPanelItem,
+} from "../types";
+import type { MatchPreview } from "../search";
 
 const SEARCH_DEBOUNCE = 350;
 
@@ -83,20 +98,13 @@ const SEARCH_DEBOUNCE = 350;
 const FONT_SIZE_LEGIBILITY_THRESHOLD = 14;
 
 type SearchMatchItem = {
-  element:
-    | ExcalidrawTextElement
-    | ExcalidrawFrameLikeElement
-    | ExcalidrawTableElement
-    | ExcalidrawMindmapNodeElement;
-  searchQuery: SearchQuery;
+  element: ExcalidrawElement;
+  regionKey: TextRegionKey | "title";
+  term: string;
   index: number;
-  preview: {
-    indexInSearchQuery: number;
-    previewText: string;
-    moreBefore: boolean;
-    moreAfter: boolean;
-  };
+  preview: MatchPreview;
   matchedLines: SearchMatch["matchedLines"];
+  hidden?: boolean;
   mindmap?: {
     nodeId: string;
     graphTitle: string;
@@ -110,16 +118,26 @@ type SearchMatches = {
   items: SearchMatchItem[];
 };
 
-type SearchQuery = string & { _brand: "SearchQuery" };
-
 export const SearchMenu = () => {
   const app = useApp();
   const setAppState = useExcalidrawSetAppState();
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const [inputValue, setInputValue] = useAtom(searchQueryAtom);
-  const searchQuery = inputValue.trim() as SearchQuery;
+  const [panelState, setPanelState] = useAtom(searchPanelStateAtom);
+  const mode = panelState.mode;
+  const panelSearch = panelState.search;
+
+  const [inputValue, setInputValue] = useAtom(searchPanelInputAtom);
+  const searchQuery = inputValue.trim();
+  const searchTerms = useMemo<readonly string[]>(() => {
+    if (panelSearch && panelSearch.terms.length > 0) {
+      return panelSearch.terms;
+    }
+    return searchQuery ? [searchQuery] : [];
+  }, [panelSearch, searchQuery]);
+  const searchMatch = panelSearch?.match ?? "any";
+  const queryKey = `${searchMatch}:${searchTerms.join("\u0000")}`;
 
   const [isSearching, setIsSearching] = useState(false);
 
@@ -127,24 +145,55 @@ export const SearchMenu = () => {
     nonce: null,
     items: [],
   });
-  const searchedQueryRef = useRef<SearchQuery | null>(null);
+  const searchedQueryRef = useRef<string | null>(null);
   const lastSceneNonceRef = useRef<number | undefined>(undefined);
+  const searchedRequestIdRef = useRef<number | null>(null);
   const focusedMatchRef = useRef<string | null>(null);
+  const locateCleanupRef = useRef(false);
 
   const [focusIndex, setFocusIndex] = useAtom(searchItemInFocusAtom);
   const sceneNonce = useSceneNonce(app.scene);
   const elementsMap = app.scene.getNonDeletedElementsMap();
 
   useEffect(() => {
+    if (mode !== "search") {
+      // 切到 locate 时取消在途搜索，避免旧结果写入高亮；每次进入只清理一次
+      if (!locateCleanupRef.current) {
+        locateCleanupRef.current = true;
+        handleSearch.cancel();
+        setSearchMatches({ nonce: null, items: [] });
+        setIsSearching(false);
+        setAppState({ searchMatches: null });
+      }
+      // 旧搜索结果失效，回切搜索时重新计算
+      searchedQueryRef.current = null;
+      searchedRequestIdRef.current = null;
+      return;
+    }
+    locateCleanupRef.current = false;
     if (isSearching) {
       return;
     }
     if (
-      searchQuery !== searchedQueryRef.current ||
-      sceneNonce !== lastSceneNonceRef.current
+      queryKey === searchedQueryRef.current &&
+      sceneNonce === lastSceneNonceRef.current &&
+      panelState.requestId === searchedRequestIdRef.current
     ) {
-      searchedQueryRef.current = null;
-      handleSearch(searchQuery, app, (matchItems, index) => {
+      return;
+    }
+
+    // 宿主刚写入查询词时按 focusFirst 决定是否聚焦首项
+    const focusFirstResult =
+      panelState.requestId !== searchedRequestIdRef.current &&
+      panelSearch?.focusFirst === true;
+
+    searchedQueryRef.current = null;
+    handleSearch(
+      searchTerms,
+      searchMatch,
+      app,
+      focusFirstResult,
+      (matchItems, firstVisibleIndex) => {
         const retainedIndex = focusedMatchRef.current
           ? matchItems.findIndex(
               (item) => item.element.id === focusedMatchRef.current,
@@ -154,9 +203,10 @@ export const SearchMenu = () => {
           nonce: randomInteger(),
           items: matchItems,
         });
-        searchedQueryRef.current = searchQuery;
+        searchedQueryRef.current = queryKey;
         lastSceneNonceRef.current = app.scene.getSceneNonce();
-        setFocusIndex(retainedIndex >= 0 ? retainedIndex : null);
+        searchedRequestIdRef.current = panelState.requestId;
+        setFocusIndex(retainedIndex >= 0 ? retainedIndex : firstVisibleIndex);
         setAppState({
           searchMatches: matchItems.length
             ? {
@@ -169,11 +219,16 @@ export const SearchMenu = () => {
               }
             : null,
         });
-      });
-    }
+      },
+    );
   }, [
+    mode,
     isSearching,
-    searchQuery,
+    queryKey,
+    searchTerms,
+    searchMatch,
+    panelSearch,
+    panelState.requestId,
     elementsMap,
     sceneNonce,
     app,
@@ -209,6 +264,9 @@ export const SearchMenu = () => {
   };
 
   useEffect(() => {
+    if (mode !== "search") {
+      return;
+    }
     setAppState((state) => {
       if (!state.searchMatches) {
         return null;
@@ -231,22 +289,41 @@ export const SearchMenu = () => {
         },
       };
     });
-  }, [focusIndex, setAppState]);
+  }, [focusIndex, setAppState, mode]);
 
   useEffect(() => {
+    if (mode !== "search") {
+      return;
+    }
     focusedMatchRef.current =
       focusIndex !== null
         ? searchMatches.items[focusIndex]?.element.id ?? null
         : null;
-  }, [focusIndex, searchMatches]);
+  }, [focusIndex, searchMatches, mode]);
 
   useEffect(() => {
+    if (mode !== "search") {
+      return;
+    }
     if (searchMatches.items.length > 0 && focusIndex !== null) {
       const match = searchMatches.items[focusIndex];
 
       if (match) {
         const currentElement = app.scene.getNonDeletedElement(match.element.id);
         if (!currentElement) {
+          return;
+        }
+
+        if (
+          match.hidden ||
+          (isMindmapNodeElement(currentElement) &&
+            app.scene.getMindmapHiddenElementIds().has(currentElement.id))
+        ) {
+          return;
+        }
+
+        if (match.matchedLines.length === 0) {
+          app.revealElement(match.element.id, { select: false });
           return;
         }
 
@@ -299,23 +376,20 @@ export const SearchMenu = () => {
           !isTableElement(currentElement) &&
           !isMindmapNodeElement(currentElement)
         ) {
+          app.viewport.setViewport({
+            target: currentElement,
+            fit: "scale-down",
+            animation: { duration: 300 },
+            offsets: { ui: true },
+          });
           return;
         }
-        const focusedNode = match.mindmap
-          ? app.scene.getNonDeletedElement(match.mindmap.nodeId)
-          : null;
-        if (
-          match.mindmap &&
-          (!focusedNode ||
-            app.scene.getMindmapHiddenElementIds().has(focusedNode.id))
-        ) {
-          return;
-        }
+
         const zoomValue = app.state.zoom.value;
         const measureStyle = getSearchMeasureStyle(currentElement);
 
         const matchAsElement = newTextElement({
-          text: match.searchQuery,
+          text: match.term,
           x: currentElement.x + (match.matchedLines[0]?.offsetX ?? 0),
           y: currentElement.y + (match.matchedLines[0]?.offsetY ?? 0),
           width: match.matchedLines[0]?.width,
@@ -361,17 +435,23 @@ export const SearchMenu = () => {
         }
       }
     }
-  }, [focusIndex, searchMatches, app]);
+  }, [focusIndex, searchMatches, app, mode]);
 
   useEffect(() => {
     return () => {
+      handleSearch.cancel();
       setFocusIndex(null);
       searchedQueryRef.current = null;
       lastSceneNonceRef.current = undefined;
+      searchedRequestIdRef.current = null;
       setAppState({
         searchMatches: null,
       });
       setIsSearching(false);
+      // 卸载时面板仍归宿主所有则释放，避免宿主 close 误关用户面板
+      if (editorJotaiStore.get(searchPanelStateAtom).owner === "host") {
+        resetSearchPanelState();
+      }
     };
   }, [setAppState, setFocusIndex]);
 
@@ -405,6 +485,9 @@ export const SearchMenu = () => {
           return;
         }
 
+        // 用户接管面板：释放宿主所有权并切回搜索模式
+        releaseSearchPanelOwnership();
+
         if (!searchInputRef.current?.matches(":focus")) {
           if (app.state.openDialog) {
             setAppState({
@@ -414,6 +497,10 @@ export const SearchMenu = () => {
           searchInputRef.current?.focus();
           searchInputRef.current?.select();
         }
+      }
+
+      if (mode !== "search") {
+        return;
       }
 
       if (
@@ -443,7 +530,15 @@ export const SearchMenu = () => {
       capture: true,
       passive: false,
     });
-  }, [setAppState, stableState, app]);
+  }, [setAppState, stableState, app, mode]);
+
+  if (mode === "locate") {
+    return (
+      <div className="layer-ui__search">
+        <LocatePanel app={app} state={panelState} />
+      </div>
+    );
+  }
 
   const matchCount = `${searchMatches.items.length} ${
     searchMatches.items.length === 1
@@ -453,6 +548,9 @@ export const SearchMenu = () => {
 
   return (
     <div className="layer-ui__search">
+      {panelState.title !== null && (
+        <div className="layer-ui__search-title">{panelState.title}</div>
+      )}
       <div className="layer-ui__search-header">
         <TextField
           className={CLASSES.SEARCH_MENU_INPUT_WRAPPER}
@@ -462,32 +560,53 @@ export const SearchMenu = () => {
           icon={searchIcon}
           onChange={(value) => {
             setInputValue(value);
+            // 用户编辑后降级为单字符串字面查询
+            setPanelState((state) =>
+              state.search ? { ...state, search: null } : state,
+            );
             setIsSearching(true);
             focusedMatchRef.current = null;
-            const searchQuery = value.trim() as SearchQuery;
-            handleSearch(searchQuery, app, (matchItems, index) => {
-              setSearchMatches({
-                nonce: randomInteger(),
-                items: matchItems,
-              });
-              setFocusIndex(index);
-              searchedQueryRef.current = searchQuery;
-              lastSceneNonceRef.current = app.scene.getSceneNonce();
-              setAppState({
-                searchMatches: matchItems.length
-                  ? {
-                      focusedId: null,
-                      matches: matchItems.map((searchMatch) => ({
-                        id: searchMatch.element.id,
-                        focus: false,
-                        matchedLines: searchMatch.matchedLines,
-                      })),
-                    }
-                  : null,
-              });
+            const nextQuery = value.trim();
+            // 记录调度时的请求，回调执行时据此判断面板是否已被宿主替换
+            const scheduledRequestId = panelState.requestId;
+            handleSearch(
+              nextQuery ? [nextQuery] : [],
+              "any",
+              app,
+              true,
+              (matchItems, index) => {
+                if (
+                  editorJotaiStore.get(searchPanelStateAtom).requestId !==
+                  scheduledRequestId
+                ) {
+                  // 宿主已替换查询：丢弃旧结果，交由主 effect 按新请求重新搜索
+                  setIsSearching(false);
+                  return;
+                }
+                setSearchMatches({
+                  nonce: randomInteger(),
+                  items: matchItems,
+                });
+                setFocusIndex(index);
+                searchedQueryRef.current = `any:${nextQuery}`;
+                lastSceneNonceRef.current = app.scene.getSceneNonce();
+                searchedRequestIdRef.current = panelState.requestId;
+                setAppState({
+                  searchMatches: matchItems.length
+                    ? {
+                        focusedId: null,
+                        matches: matchItems.map((searchMatch) => ({
+                          id: searchMatch.element.id,
+                          focus: false,
+                          matchedLines: searchMatch.matchedLines,
+                        })),
+                      }
+                    : null,
+                });
 
-              setIsSearching(false);
-            });
+                setIsSearching(false);
+              },
+            );
           }}
           selectOnRender
         />
@@ -554,15 +673,242 @@ export const SearchMenu = () => {
           setFocusIndex(index);
         }}
         focusIndex={focusIndex}
-        searchQuery={searchQuery}
       />
     </div>
   );
 };
 
+const EMPTY_LOCATE_ITEMS: readonly SearchPanelItem[] = [];
+
+const getInitialLocateFocusId = (
+  locate: SearchPanelLocateState,
+): string | null => {
+  const enabledItems = locate.items.filter((item) => !item.disabled);
+  if (
+    locate.activeElementId &&
+    enabledItems.some((item) => item.elementId === locate.activeElementId)
+  ) {
+    return locate.activeElementId;
+  }
+  return locate.focusFirst ? enabledItems[0]?.elementId ?? null : null;
+};
+
+const filterLocateItems = (
+  items: readonly SearchPanelItem[],
+  filterValue: string,
+): SearchPanelItem[] => {
+  const query = filterValue.trim().toLowerCase();
+  if (!query) {
+    return [...items];
+  }
+  return items.filter((item) =>
+    [item.label, item.preview, item.detail].some((text) =>
+      text?.toLowerCase().includes(query),
+    ),
+  );
+};
+
+const LocatePanel = ({
+  app,
+  state,
+}: {
+  app: AppClassProperties;
+  state: SearchPanelState;
+}) => {
+  const locate = state.locate;
+  const [filterValue, setFilterValue] = useState("");
+  const [focusedElementId, setFocusedElementId] = useState<string | null>(() =>
+    locate ? getInitialLocateFocusId(locate) : null,
+  );
+
+  const items = locate?.items ?? EMPTY_LOCATE_ITEMS;
+  const filteredItems = useMemo(
+    () => filterLocateItems(items, filterValue),
+    [items, filterValue],
+  );
+
+  useEffect(() => {
+    if (!locate) {
+      return;
+    }
+    // 宿主重新打开/替换内容时重置筛选与焦点
+    setFilterValue("");
+    setFocusedElementId(getInitialLocateFocusId(locate));
+  }, [state.requestId, locate]);
+
+  useEffect(() => {
+    if (focusedElementId === null) {
+      return;
+    }
+    const current = filteredItems.find(
+      (item) => item.elementId === focusedElementId,
+    );
+    if (current && !current.disabled) {
+      return;
+    }
+    setFocusedElementId(null);
+  }, [filteredItems, focusedElementId]);
+
+  const groups = useMemo(() => {
+    const byGroup = new Map<string | null, SearchPanelItem[]>();
+    for (const item of filteredItems) {
+      const key = item.group ? item.group : null;
+      const bucket = byGroup.get(key);
+      if (bucket) {
+        bucket.push(item);
+      } else {
+        byGroup.set(key, [item]);
+      }
+    }
+    return [...byGroup.entries()];
+  }, [filteredItems]);
+
+  const moveFocus = (delta: 1 | -1) => {
+    const enabledItems = filteredItems.filter((item) => !item.disabled);
+    if (enabledItems.length === 0) {
+      return;
+    }
+    const index = enabledItems.findIndex(
+      (item) => item.elementId === focusedElementId,
+    );
+    const nextIndex =
+      index === -1
+        ? delta > 0
+          ? 0
+          : enabledItems.length - 1
+        : (index + delta + enabledItems.length) % enabledItems.length;
+    setFocusedElementId(enabledItems[nextIndex].elementId);
+  };
+
+  const revealItem = (item: SearchPanelItem | undefined) => {
+    if (!item || item.disabled) {
+      return;
+    }
+    setFocusedElementId(item.elementId);
+    app.revealElement(item.elementId);
+  };
+
+  const stableState = useStable({
+    filteredItems,
+    focusedElementId,
+    moveFocus,
+    revealItem,
+  });
+
+  useEffect(() => {
+    const eventHandler = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        !(target instanceof app.ownerWindow.HTMLElement) ||
+        !target.closest(".layer-ui__search")
+      ) {
+        return;
+      }
+      if (event.key === KEYS.ENTER) {
+        event.stopPropagation();
+        stableState.revealItem(
+          stableState.filteredItems.find(
+            (item) => item.elementId === stableState.focusedElementId,
+          ),
+        );
+      } else if (event.key === KEYS.ARROW_UP) {
+        event.stopPropagation();
+        stableState.moveFocus(-1);
+      } else if (event.key === KEYS.ARROW_DOWN) {
+        event.stopPropagation();
+        stableState.moveFocus(1);
+      }
+    };
+
+    return addEventListener(app.ownerWindow, EVENT.KEYDOWN, eventHandler, {
+      capture: true,
+      passive: false,
+    });
+  }, [app, stableState]);
+
+  return (
+    <>
+      {state.title !== null && (
+        <div className="layer-ui__search-title">{state.title}</div>
+      )}
+
+      {locate?.filterable && (
+        <div className="layer-ui__search-header">
+          <TextField
+            value={filterValue}
+            placeholder={t("search.placeholder")}
+            icon={searchIcon}
+            onChange={setFilterValue}
+          />
+        </div>
+      )}
+
+      <div className="layer-ui__search-count">
+        {filteredItems.length > 0 ? (
+          <div>
+            {filteredItems.length}{" "}
+            {filteredItems.length === 1
+              ? t("search.singleResult")
+              : t("search.multipleResults")}
+          </div>
+        ) : (
+          <div style={{ margin: "1rem auto" }}>{t("search.noMatch")}</div>
+        )}
+      </div>
+
+      <div>
+        {groups.map(([group, groupItems]) => (
+          <div
+            className="layer-ui__search-result-container"
+            key={group ?? "__ungrouped"}
+          >
+            {group !== null && (
+              <div className="layer-ui__search-result-title">
+                <div>{group}</div>
+              </div>
+            )}
+            {groupItems.map((item) => {
+              const active =
+                item.elementId === focusedElementId && !item.disabled;
+              return (
+                <div
+                  key={item.elementId}
+                  tabIndex={item.disabled ? undefined : -1}
+                  aria-disabled={item.disabled || undefined}
+                  className={clsx("layer-ui__result-item", {
+                    active,
+                    disabled: item.disabled,
+                  })}
+                  onClick={() => revealItem(item)}
+                  ref={(ref) => {
+                    if (active) {
+                      ref?.scrollIntoView({
+                        behavior: "auto",
+                        block: "nearest",
+                      });
+                    }
+                  }}
+                >
+                  <div className="preview-text">{item.label}</div>
+                  {item.preview && (
+                    <div className="preview-text">{item.preview}</div>
+                  )}
+                  {item.detail && (
+                    <div className="mindmap-search-path">{item.detail}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+};
+
 const ListItem = (props: {
   preview: SearchMatchItem["preview"];
-  searchQuery: SearchQuery;
+  term: string;
   highlighted: boolean;
   mindmap?: SearchMatchItem["mindmap"];
   onClick?: () => void;
@@ -572,10 +918,10 @@ const ListItem = (props: {
     props.preview.previewText.slice(0, props.preview.indexInSearchQuery),
     props.preview.previewText.slice(
       props.preview.indexInSearchQuery,
-      props.preview.indexInSearchQuery + props.searchQuery.length,
+      props.preview.indexInSearchQuery + props.term.length,
     ),
     props.preview.previewText.slice(
-      props.preview.indexInSearchQuery + props.searchQuery.length,
+      props.preview.indexInSearchQuery + props.term.length,
     ),
     props.preview.moreAfter ? "..." : "",
   ];
@@ -613,7 +959,6 @@ interface MatchListProps {
   matches: SearchMatches;
   onItemClick: (index: number) => void;
   focusIndex: number | null;
-  searchQuery: SearchQuery;
 }
 
 const MatchListBase = (props: MatchListProps) => {
@@ -632,8 +977,7 @@ const MatchListBase = (props: MatchListProps) => {
     () =>
       props.matches.items.filter(
         (match) =>
-          isTextElement(match.element) ||
-          (isMindmapNodeElement(match.element) && !!match.mindmap),
+          !isFrameLikeElement(match.element) && !isTableElement(match.element),
       ),
     [props.matches],
   );
@@ -651,8 +995,12 @@ const MatchListBase = (props: MatchListProps) => {
           </div>
           {frameNameMatches.map((searchMatch, index) => (
             <ListItem
-              key={searchMatch.element.id + searchMatch.index}
-              searchQuery={props.searchQuery}
+              key={
+                searchMatch.element.id +
+                searchMatch.regionKey +
+                searchMatch.index
+              }
+              term={searchMatch.term}
               preview={searchMatch.preview}
               mindmap={searchMatch.mindmap}
               highlighted={index === props.focusIndex}
@@ -674,8 +1022,12 @@ const MatchListBase = (props: MatchListProps) => {
           </div>
           {tableNameMatches.map((searchMatch, index) => (
             <ListItem
-              key={searchMatch.element.id + searchMatch.index}
-              searchQuery={props.searchQuery}
+              key={
+                searchMatch.element.id +
+                searchMatch.regionKey +
+                searchMatch.index
+              }
+              term={searchMatch.term}
               preview={searchMatch.preview}
               mindmap={searchMatch.mindmap}
               highlighted={index + tableOffset === props.focusIndex}
@@ -695,8 +1047,12 @@ const MatchListBase = (props: MatchListProps) => {
           </div>
           {textMatches.map((searchMatch, index) => (
             <ListItem
-              key={searchMatch.element.id + searchMatch.index}
-              searchQuery={props.searchQuery}
+              key={
+                searchMatch.element.id +
+                searchMatch.regionKey +
+                searchMatch.index
+              }
+              term={searchMatch.term}
               preview={searchMatch.preview}
               mindmap={searchMatch.mindmap}
               highlighted={index + textOffset === props.focusIndex}
@@ -717,55 +1073,6 @@ const areEqual = (prevProps: MatchListProps, nextProps: MatchListProps) => {
 };
 
 const MatchList = memo(MatchListBase, areEqual);
-
-const getMatchPreview = (
-  text: string,
-  index: number,
-  searchQuery: SearchQuery,
-) => {
-  const WORDS_BEFORE = 2;
-  const WORDS_AFTER = 5;
-
-  const substrBeforeQuery = text.slice(0, index);
-  const wordsBeforeQuery = substrBeforeQuery.split(/\s+/);
-  // text = "small", query = "mall", not complete before
-  // text = "small", query = "smal", complete before
-  const isQueryCompleteBefore = substrBeforeQuery.endsWith(" ");
-  const startWordIndex =
-    wordsBeforeQuery.length -
-    WORDS_BEFORE -
-    1 -
-    (isQueryCompleteBefore ? 0 : 1);
-  let wordsBeforeAsString =
-    wordsBeforeQuery.slice(startWordIndex <= 0 ? 0 : startWordIndex).join(" ") +
-    (isQueryCompleteBefore ? " " : "");
-
-  const MAX_ALLOWED_CHARS = 20;
-
-  wordsBeforeAsString =
-    wordsBeforeAsString.length > MAX_ALLOWED_CHARS
-      ? wordsBeforeAsString.slice(-MAX_ALLOWED_CHARS)
-      : wordsBeforeAsString;
-
-  const substrAfterQuery = text.slice(index + searchQuery.length);
-  const wordsAfter = substrAfterQuery.split(/\s+/);
-  // text = "small", query = "mall", complete after
-  // text = "small", query = "smal", not complete after
-  const isQueryCompleteAfter = !substrAfterQuery.startsWith(" ");
-  const numberOfWordsToTake = isQueryCompleteAfter
-    ? WORDS_AFTER + 1
-    : WORDS_AFTER;
-  const wordsAfterAsString =
-    (isQueryCompleteAfter ? "" : " ") +
-    wordsAfter.slice(0, numberOfWordsToTake).join(" ");
-
-  return {
-    indexInSearchQuery: wordsBeforeAsString.length,
-    previewText: wordsBeforeAsString + searchQuery + wordsAfterAsString,
-    moreBefore: startWordIndex > 0,
-    moreAfter: wordsAfter.length > numberOfWordsToTake,
-  };
-};
 
 const normalizeWrappedText = (
   wrappedText: string,
@@ -834,7 +1141,7 @@ const getTableCellSceneBounds = (
 
 const getMatchedLines = (
   textElement: ExcalidrawTextElement,
-  searchQuery: SearchQuery,
+  searchQuery: string,
   index: number,
 ) => {
   const normalizedText = normalizeWrappedText(
@@ -965,7 +1272,7 @@ const getSearchMeasureStyle = (
 
 const getMatchInElementTitle = (
   element: ExcalidrawFrameLikeElement | ExcalidrawTableElement,
-  searchQuery: SearchQuery,
+  searchQuery: string,
   index: number,
   zoomValue: number,
 ): SearchMatch["matchedLines"] => {
@@ -1004,201 +1311,162 @@ const getMatchInElementTitle = (
   ];
 };
 
-const escapeSpecialCharacters = (string: string) => {
-  return string.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+/** 脑图正文按区域布局合成只读文字元素，仅用于逐行测量。 */
+const getMindmapMatchedLines = (
+  node: ExcalidrawMindmapNodeElement,
+  term: string,
+  index: number,
+): SearchMatch["matchedLines"] => {
+  const body = node.texts?.body;
+  const layout = body ? getTextRegionLayout(node, "body") : null;
+  if (!body || !layout) {
+    return [];
+  }
+  const synthetic: ExcalidrawTextElement = {
+    ...node,
+    type: "text",
+    texts: {
+      body: {
+        text: body.text,
+        style: {
+          fontFamily: layout.fontFamily,
+          fontSize: layout.fontSize,
+          ...(layout.fontWeight !== undefined
+            ? { fontWeight: layout.fontWeight }
+            : {}),
+          lineHeight: layout.lineHeight,
+          textAlign: layout.textAlign,
+          verticalAlign: layout.verticalAlign,
+          color: layout.color,
+        },
+      },
+    },
+    x: layout.x,
+    y: layout.y,
+    width: layout.width,
+    height: layout.height,
+    autoResize: false,
+  };
+  // 区域布局是场景坐标：换算回节点原点的偏移，聚焦时再叠加节点位置
+  return getMatchedLines(synthetic, term, index).map((line) => ({
+    ...line,
+    offsetX: line.offsetX + layout.x - node.x,
+    offsetY: line.offsetY + layout.y - node.y,
+  }));
 };
 
 const handleSearch = debounce(
   (
-    searchQuery: SearchQuery,
+    terms: readonly string[],
+    match: "any" | "all",
     app: AppClassProperties,
+    focusFirst: boolean,
     cb: (matchItems: SearchMatchItem[], focusIndex: number | null) => void,
   ) => {
-    if (!searchQuery || searchQuery === "") {
+    if (!terms.length) {
       cb([], null);
       return;
     }
 
     const elements = app.scene.getNonDeletedElements();
     const hiddenIds = app.scene.getMindmapHiddenElementIds();
+    const { hits } = searchSceneElements(
+      elements,
+      terms,
+      { match, includeHidden: true },
+      { hiddenIds },
+    );
+
     const outlines = getMindmapOutlines(elements);
     const outlinesByGraphId = new Map(
       outlines.map((outline) => [outline.graphId, outline]),
     );
-    const texts = elements.filter((el) =>
-      isTextElement(el),
-    ) as ExcalidrawTextElement[];
-
-    const frames = elements.filter((el) =>
-      isFrameLikeElement(el),
-    ) as ExcalidrawFrameLikeElement[];
-
-    const tables = elements.filter((el) =>
-      isTableElement(el),
-    ) as ExcalidrawTableElement[];
-
-    texts.sort((a, b) => a.y - b.y);
-    frames.sort((a, b) => a.y - b.y);
-    tables.sort((a, b) => a.y - b.y);
-
-    const textMatches: SearchMatchItem[] = [];
-
-    const regex = new RegExp(escapeSpecialCharacters(searchQuery), "gi");
-
-    for (const textEl of texts) {
-      let match = null;
-      const text = getTextElementText(textEl);
-      regex.lastIndex = 0;
-
-      while ((match = regex.exec(text)) !== null) {
-        const preview = getMatchPreview(text, match.index, searchQuery);
-        const matchedLines = getMatchedLines(textEl, searchQuery, match.index);
-
-        if (matchedLines.length > 0) {
-          textMatches.push({
-            element: textEl,
-            searchQuery,
-            preview,
-            index: match.index,
-            matchedLines,
-          });
-        }
-      }
-    }
-
-    // 脑图节点：正文按区域布局合成只读文字元素，仅用于逐行测量
-    for (const node of elements.filter(isMindmapNodeElement)) {
-      const body = node.texts?.body;
-      const layout = body ? getTextRegionLayout(node, "body") : null;
-      if (!body || !layout) {
-        continue;
-      }
-      const synthetic: ExcalidrawTextElement = {
-        ...node,
-        type: "text",
-        texts: {
-          body: {
-            text: body.text,
-            style: {
-              fontFamily: layout.fontFamily,
-              fontSize: layout.fontSize,
-              ...(layout.fontWeight !== undefined
-                ? { fontWeight: layout.fontWeight }
-                : {}),
-              lineHeight: layout.lineHeight,
-              textAlign: layout.textAlign,
-              verticalAlign: layout.verticalAlign,
-              color: layout.color,
-            },
-          },
-        },
-        x: layout.x,
-        y: layout.y,
-        width: layout.width,
-        height: layout.height,
-        autoResize: false,
-      };
-      const outline = outlinesByGraphId.get(node.graphId);
-      let match = null;
-      regex.lastIndex = 0;
-      while ((match = regex.exec(body.text)) !== null) {
-        const preview = getMatchPreview(body.text, match.index, searchQuery);
-        // 区域布局是场景坐标：换算回节点原点的偏移，聚焦时再叠加节点位置
-        const matchedLines = getMatchedLines(
-          synthetic,
-          searchQuery,
-          match.index,
-        ).map((line) => ({
-          ...line,
-          offsetX: line.offsetX + layout.x - node.x,
-          offsetY: line.offsetY + layout.y - node.y,
-        }));
-
-        if (matchedLines.length > 0) {
-          if (hiddenIds.has(node.id)) {
-            matchedLines.forEach((line) => {
-              line.showOnCanvas = false;
-            });
-          }
-          textMatches.push({
-            element: node,
-            searchQuery,
-            preview,
-            index: match.index,
-            matchedLines,
-            mindmap: outline
-              ? {
-                  nodeId: node.id,
-                  graphTitle: outline.title,
-                  graphNumber: outline.number,
-                  path: getMindmapPath(outline, node),
-                }
-              : undefined,
-          });
-          break;
-        }
-      }
-    }
 
     const frameMatches: SearchMatchItem[] = [];
-
-    for (const frame of frames) {
-      let match = null;
-      const name = getElementTitle(frame);
-
-      while ((match = regex.exec(name)) !== null) {
-        const preview = getMatchPreview(name, match.index, searchQuery);
-        const matchedLines = getMatchInElementTitle(
-          frame,
-          searchQuery,
-          match.index,
-          app.state.zoom.value,
-        );
-
-        if (matchedLines.length > 0) {
-          frameMatches.push({
-            element: frame,
-            searchQuery,
-            preview,
-            index: match.index,
-            matchedLines,
-          });
-        }
-      }
-    }
-
     const tableMatches: SearchMatchItem[] = [];
+    const textMatches: SearchMatchItem[] = [];
+    const seenMindmapNodeIds = new Set<string>();
 
-    for (const table of tables) {
-      let match = null;
-      const name = getElementTitle(table);
+    for (const hit of hits) {
+      const element = hit.element;
+      const hidden = hiddenIds.has(element.id);
 
-      while ((match = regex.exec(name)) !== null) {
-        const preview = getMatchPreview(name, match.index, searchQuery);
-        const matchedLines = getMatchInElementTitle(
-          table,
-          searchQuery,
-          match.index,
+      // 脑图节点按节点去重，同一节点的重复出现只保留第一处
+      if (isMindmapNodeElement(element)) {
+        if (seenMindmapNodeIds.has(element.id)) {
+          continue;
+        }
+        seenMindmapNodeIds.add(element.id);
+      }
+
+      let matchedLines: SearchMatch["matchedLines"] = [];
+
+      if (isTextElement(element) && hit.regionKey === "body") {
+        matchedLines = getMatchedLines(element, hit.term, hit.index);
+      } else if (
+        (isFrameLikeElement(element) || isTableElement(element)) &&
+        hit.regionKey === "title"
+      ) {
+        matchedLines = getMatchInElementTitle(
+          element,
+          hit.term,
+          hit.index,
           app.state.zoom.value,
         );
+      } else if (isMindmapNodeElement(element) && hit.regionKey === "body") {
+        matchedLines = getMindmapMatchedLines(element, hit.term, hit.index);
+      }
 
-        if (matchedLines.length > 0) {
-          tableMatches.push({
-            element: table,
-            searchQuery,
-            preview,
-            index: match.index,
-            matchedLines,
-          });
-        }
+      if (hidden) {
+        matchedLines = matchedLines.map((line) => ({
+          ...line,
+          showOnCanvas: false,
+        }));
+      }
+
+      const outline = isMindmapNodeElement(element)
+        ? outlinesByGraphId.get(element.graphId)
+        : undefined;
+
+      const item: SearchMatchItem = {
+        element,
+        regionKey: hit.regionKey,
+        term: hit.term,
+        index: hit.index,
+        preview: getMatchPreview(hit.text, hit.index, hit.term),
+        matchedLines,
+        ...(hidden ? { hidden: true } : {}),
+        mindmap:
+          outline && isMindmapNodeElement(element)
+            ? {
+                nodeId: element.id,
+                graphTitle: outline.title,
+                graphNumber: outline.number,
+                path: getMindmapPath(outline, element),
+              }
+            : undefined,
+      };
+
+      if (isFrameLikeElement(element)) {
+        frameMatches.push(item);
+      } else if (isTableElement(element)) {
+        tableMatches.push(item);
+      } else {
+        textMatches.push(item);
       }
     }
+
+    // 组内按 y 排序，同元素的多条命中保持命中顺序
+    const byY = (a: SearchMatchItem, b: SearchMatchItem) =>
+      a.element.y - b.element.y;
+    frameMatches.sort(byY);
+    tableMatches.sort(byY);
+    textMatches.sort(byY);
 
     const visibleIds = new Set(
       app.visibleElements.map((visibleElement) => visibleElement.id),
     );
 
-    // putting title matches first
     const matchItems: SearchMatchItem[] = [
       ...frameMatches,
       ...tableMatches,
@@ -1208,7 +1476,7 @@ const handleSearch = debounce(
     const visibleIndex = matchItems.findIndex((matchItem) =>
       visibleIds.has(matchItem.element.id),
     );
-    const focusIndex = visibleIndex >= 0 ? visibleIndex : null;
+    const focusIndex = focusFirst && visibleIndex >= 0 ? visibleIndex : null;
 
     cb(matchItems, focusIndex);
   },
