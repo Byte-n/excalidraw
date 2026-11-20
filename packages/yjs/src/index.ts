@@ -76,8 +76,13 @@ export {
   assertAssetPolicy,
   assertScenePolicy,
   jsonBytes,
+  measureSceneCapacity,
 } from "./scene-policy";
-export type { AssetPolicy, ScenePolicy } from "./scene-policy";
+export type {
+  AssetPolicy,
+  SceneCapacityMetrics,
+  ScenePolicy,
+} from "./scene-policy";
 export { createAssetCoordinator } from "./assets";
 export {
   createFollowGraph,
@@ -113,7 +118,11 @@ export type {
   SceneConnectionEndpoint,
 } from "./scene-commands";
 export { YjsSceneError } from "./errors";
-export type { YjsSceneErrorCode } from "./errors";
+export type {
+  SceneCapacityLimit,
+  SceneCapacityMetric,
+  YjsSceneErrorCode,
+} from "./errors";
 export { createCanvasSceneCommands } from "./canvas-scene-commands";
 export type {
   CanvasSceneOperation,

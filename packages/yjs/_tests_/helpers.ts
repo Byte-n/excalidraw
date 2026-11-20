@@ -63,7 +63,12 @@ export const scenePolicy = (
   maxAssets: 100,
   maxElementBytes: 256 * 1024,
   maxSceneBytes: 16 * 1024 * 1024,
-  maxTextBytes: 64 * 1024,
+  maxTextChars: 1_500,
+  maxContentUnits: 6_000,
+  textElementUnits: 10,
+  maxTableRows: 100,
+  maxTableColumns: 100,
+  maxTableCells: 10_000,
   maxAssetBytes: 20 * 1024 * 1024,
   assetMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
   forbiddenPersistentFields: [

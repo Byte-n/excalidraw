@@ -1,5 +1,6 @@
 import { YjsSceneError } from "./errors";
 
+import type { SceneCapacityMetric } from "./errors";
 import type { SceneElement, SceneSnapshot } from "./types";
 
 /**
@@ -7,7 +8,7 @@ import type { SceneElement, SceneSnapshot } from "./types";
  * 数值与策略由调用端（浏览器会话、协作 runtime、离线读取方）传入同一份配置。
  */
 export type ScenePolicy = {
-  /** 单个场景允许的元素数量。 */
+  /** 单个场景允许的结构元素数量；表格内部元素不计。 */
   maxElements: number;
   /** 单个场景允许的资产引用数量。 */
   maxAssets: number;
@@ -15,8 +16,18 @@ export type ScenePolicy = {
   maxElementBytes: number;
   /** 整个场景的序列化字节上限。 */
   maxSceneBytes: number;
-  /** 单个文本节点文本内容的字节上限。 */
-  maxTextBytes: number;
+  /** 单个文本区域的 Unicode 码点上限。 */
+  maxTextChars: number;
+  /** 单个场景允许的内容当量。 */
+  maxContentUnits: number;
+  /** 带非空文本区域的非表格元素占用的内容当量。 */
+  textElementUnits: number;
+  /** 单个表格允许的行数。 */
+  maxTableRows: number;
+  /** 单个表格允许的列数。 */
+  maxTableColumns: number;
+  /** 全场景允许的表格单元格总数。 */
+  maxTableCells: number;
   /** 单个资产的字节上限（资产通道在关联前拒绝）。 */
   maxAssetBytes: number;
   /** 资产允许的类型（资产通道在关联前拒绝）。 */
@@ -30,40 +41,151 @@ export type ScenePolicy = {
 /** 资产通道的字节与类型限制，取自场景门槛的对应项。 */
 export type AssetPolicy = Pick<ScenePolicy, "maxAssetBytes" | "assetMimeTypes">;
 
+/** 场景容量计量快照；阈值比较与增长判断由宿主完成。 */
+export type SceneCapacityMetrics = {
+  /** 结构元素数；表格内部元素不计。 */
+  structuralElements: number;
+  assetCount: number;
+  /** 全部文本区域中的最大码点数。 */
+  maxTextChars: number;
+  contentUnits: number;
+  /** 单个表格的最大行数与列数。 */
+  maxTableRows: number;
+  maxTableColumns: number;
+  /** 全场景表格单元格总数。 */
+  tableCells: number;
+};
+
 const numericLimits = [
   "maxElements",
   "maxAssets",
   "maxElementBytes",
   "maxSceneBytes",
-  "maxTextBytes",
+  "maxTextChars",
+  "maxContentUnits",
+  "textElementUnits",
+  "maxTableRows",
+  "maxTableColumns",
+  "maxTableCells",
   "maxAssetBytes",
 ] as const;
 
 export const jsonBytes = (value: unknown): number =>
   new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
-/** 文本元素持久化的源文本；非文本元素或缺少正文时返回 null。 */
-const getElementSourceText = (element: SceneElement): string | null => {
-  if (element.type !== "text") {
-    return null;
-  }
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+/** 元素全部带字符串正文的文本区域；区域键不参与容量口径。 */
+const textRegionsOf = (element: SceneElement): string[] => {
   const texts = element.texts;
-  if (!texts || typeof texts !== "object") {
-    return null;
+  if (!isRecord(texts)) {
+    return [];
   }
-  const body = (texts as Record<string, unknown>).body;
-  if (!body || typeof body !== "object") {
-    return null;
+  const regions: string[] = [];
+  for (const block of Object.values(texts)) {
+    if (!isRecord(block)) {
+      continue;
+    }
+    const text = block.text;
+    if (typeof text === "string") {
+      regions.push(text);
+    }
   }
-  const text = (body as Record<string, unknown>).text;
-  return typeof text === "string" ? text : null;
+  return regions;
 };
 
-/** 文本内容按 UTF-8 字节计量；非字符串文本不作为文本节点计量。 */
-const textBytes = (element: SceneElement): number | null => {
-  const text = getElementSourceText(element);
-  return text === null ? null : new TextEncoder().encode(text).byteLength;
+/** 文本按 Unicode 码点计量；代理对与 emoji 各计 1。 */
+const countTextChars = (value: string): number => Array.from(value).length;
+
+/** 表格内部元素由表格结构上限单独约束，不占用结构元素与内容当量。 */
+const isTableInternal = (element: SceneElement): boolean => {
+  const containerRef = element.containerRef;
+  return isRecord(containerRef) && containerRef.kind === "tableCell";
 };
+
+const arrayLengthOf = (value: unknown): number =>
+  Array.isArray(value) ? value.length : 0;
+
+const tableShapeOf = (
+  element: SceneElement,
+): { rows: number; columns: number; cells: number } | null => {
+  const table = element.table;
+  if (!isRecord(table)) {
+    return null;
+  }
+  return {
+    rows: arrayLengthOf(table.rows),
+    columns: arrayLengthOf(table.columns),
+    cells: arrayLengthOf(table.cells),
+  };
+};
+
+/**
+ * 按场景策略计量容量：表格元素 1 当量、表格内部元素 0 当量、
+ * 其他元素带任一非空文本区域计 `textElementUnits`，否则计 1；墓碑照常计入。
+ */
+export const measureSceneCapacity = <
+  TElement extends SceneElement,
+  TAsset = unknown,
+>(
+  scene: SceneSnapshot<TElement, TAsset>,
+  policy: Pick<ScenePolicy, "textElementUnits">,
+): SceneCapacityMetrics => {
+  const metrics: SceneCapacityMetrics = {
+    structuralElements: 0,
+    assetCount: Object.keys(scene.assets).length,
+    maxTextChars: 0,
+    contentUnits: 0,
+    maxTableRows: 0,
+    maxTableColumns: 0,
+    tableCells: 0,
+  };
+  for (const element of scene.elements) {
+    const regions = textRegionsOf(element);
+    for (const text of regions) {
+      metrics.maxTextChars = Math.max(
+        metrics.maxTextChars,
+        countTextChars(text),
+      );
+    }
+    if (element.type === "table") {
+      const table = tableShapeOf(element);
+      if (table) {
+        metrics.maxTableRows = Math.max(metrics.maxTableRows, table.rows);
+        metrics.maxTableColumns = Math.max(
+          metrics.maxTableColumns,
+          table.columns,
+        );
+        metrics.tableCells += table.cells;
+      }
+    }
+    if (isTableInternal(element)) {
+      continue;
+    }
+    metrics.structuralElements += 1;
+    if (element.type === "table") {
+      metrics.contentUnits += 1;
+      continue;
+    }
+    metrics.contentUnits += regions.some((text) => text.length > 0)
+      ? policy.textElementUnits
+      : 1;
+  }
+  return metrics;
+};
+
+const capacityError = (
+  message: string,
+  metric: SceneCapacityMetric,
+  actual: number,
+  allowed: number,
+): YjsSceneError =>
+  new YjsSceneError("scene_limit_exceeded", message, {
+    metric,
+    actual,
+    allowed,
+  });
 
 const assertPolicyShape = (policy: ScenePolicy): void => {
   for (const key of numericLimits) {
@@ -110,7 +232,7 @@ const assertPersistableFields = (
 
 /**
  * 场景级门槛与语义不变量；宿主 schema 不再镜像 vendor 元素模型。
- * 计数与字节超限抛 `scene_limit_exceeded`，结构与引用非法抛 `invalid_scene`。
+ * 计数与字节超限抛 `scene_limit_exceeded` 并携带计量项，结构与引用非法抛 `invalid_scene`。
  */
 export const assertScenePolicy = <
   TElement extends SceneElement,
@@ -120,16 +242,21 @@ export const assertScenePolicy = <
   policy: ScenePolicy,
 ): void => {
   assertPolicyShape(policy);
-  if (scene.elements.length > policy.maxElements) {
-    throw new YjsSceneError(
-      "scene_limit_exceeded",
+  const metrics = measureSceneCapacity(scene, policy);
+  if (metrics.structuralElements > policy.maxElements) {
+    throw capacityError(
       "scene exceeds the element count limit",
+      "elements",
+      metrics.structuralElements,
+      policy.maxElements,
     );
   }
-  if (Object.keys(scene.assets).length > policy.maxAssets) {
-    throw new YjsSceneError(
-      "scene_limit_exceeded",
+  if (metrics.assetCount > policy.maxAssets) {
+    throw capacityError(
       "scene exceeds the asset count limit",
+      "assets",
+      metrics.assetCount,
+      policy.maxAssets,
     );
   }
   const ids = new Set<string>();
@@ -141,18 +268,25 @@ export const assertScenePolicy = <
       );
     }
     ids.add(element.id);
-    if (jsonBytes(element) > policy.maxElementBytes) {
-      throw new YjsSceneError(
-        "scene_limit_exceeded",
+    const elementBytes = jsonBytes(element);
+    if (elementBytes > policy.maxElementBytes) {
+      throw capacityError(
         "scene element exceeds the byte limit",
+        "elementBytes",
+        elementBytes,
+        policy.maxElementBytes,
       );
     }
-    const text = textBytes(element);
-    if (text !== null && text > policy.maxTextBytes) {
-      throw new YjsSceneError(
-        "scene_limit_exceeded",
-        "scene text exceeds the byte limit",
-      );
+    for (const text of textRegionsOf(element)) {
+      const chars = countTextChars(text);
+      if (chars > policy.maxTextChars) {
+        throw capacityError(
+          "scene text exceeds the character limit",
+          "textChars",
+          chars,
+          policy.maxTextChars,
+        );
+      }
     }
     assertPersistableFields(element, policy);
     if (element.type === "image") {
@@ -174,10 +308,45 @@ export const assertScenePolicy = <
       }
     }
   }
-  if (jsonBytes(scene) > policy.maxSceneBytes) {
-    throw new YjsSceneError(
-      "scene_limit_exceeded",
+  if (metrics.maxTableRows > policy.maxTableRows) {
+    throw capacityError(
+      "scene table exceeds the row limit",
+      "tableRows",
+      metrics.maxTableRows,
+      policy.maxTableRows,
+    );
+  }
+  if (metrics.maxTableColumns > policy.maxTableColumns) {
+    throw capacityError(
+      "scene table exceeds the column limit",
+      "tableColumns",
+      metrics.maxTableColumns,
+      policy.maxTableColumns,
+    );
+  }
+  if (metrics.tableCells > policy.maxTableCells) {
+    throw capacityError(
+      "scene table exceeds the cell limit",
+      "tableCells",
+      metrics.tableCells,
+      policy.maxTableCells,
+    );
+  }
+  if (metrics.contentUnits > policy.maxContentUnits) {
+    throw capacityError(
+      "scene exceeds the content unit limit",
+      "contentUnits",
+      metrics.contentUnits,
+      policy.maxContentUnits,
+    );
+  }
+  const sceneBytes = jsonBytes(scene);
+  if (sceneBytes > policy.maxSceneBytes) {
+    throw capacityError(
       "scene exceeds the byte limit",
+      "sceneBytes",
+      sceneBytes,
+      policy.maxSceneBytes,
     );
   }
 };
@@ -197,6 +366,11 @@ export const assertAssetPolicy = (
     throw new YjsSceneError(
       "scene_limit_exceeded",
       "asset exceeds the byte limit",
+      {
+        metric: "assetBytes",
+        actual: input.bytes,
+        allowed: policy.maxAssetBytes,
+      },
     );
   }
 };
