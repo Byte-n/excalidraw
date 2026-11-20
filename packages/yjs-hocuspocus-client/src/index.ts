@@ -162,6 +162,8 @@ export type ExcalidrawHocuspocusCollaborationOptions<
     | ExcalidrawPresenceChannel
     | ((provider: HocuspocusProvider) => ExcalidrawPresenceChannel);
   imports?: ExcalidrawCollaborationImports;
+  /** 发布校验拒绝是否可恢复；可恢复时回退本地场景并保持会话可用。 */
+  isRecoverablePublishError?(error: unknown): boolean;
   onSceneError?(
     error: unknown,
     operation: "restore" | "publish" | "command",

@@ -400,6 +400,18 @@ export const createExcalidrawSceneController = <
         applyScene();
       }
     } catch (error) {
+      if (options.isRecoverablePublishError?.(error) === true) {
+        try {
+          // 校验拒绝未写入 canonical；清空交互保护后按权威场景回退本地显示。
+          protectedIds = new Set();
+          applyScene();
+        } catch (restoreError) {
+          fail(restoreError, "restore");
+          return;
+        }
+        options.onError(error, "publish");
+        return;
+      }
       fail(error, "publish");
     }
   };

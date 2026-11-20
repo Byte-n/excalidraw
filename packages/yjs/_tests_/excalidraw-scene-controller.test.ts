@@ -24,15 +24,20 @@ const mount = async (
   loading?: Promise<null>,
   borrowed = false,
   initialElement: ExcalidrawSceneElement = element(),
+  overrides: {
+    validateScene?: typeof validateScene;
+    isRecoverablePublishError?: (error: unknown) => boolean;
+  } = {},
 ) => {
   const doc = new Y.Doc();
   doc.getMap("elements").set(initialElement.id, initialElement);
   const errors = vi.fn();
+  const validate = overrides.validateScene ?? validateScene;
   const binding = borrowed
     ? createSceneBinding<
         ExcalidrawSceneElement,
         { size: number; mimeType: string }
-      >({ doc, adapter: { validateCanonical: validateScene } })
+      >({ doc, adapter: { validateCanonical: validate } })
     : undefined;
   binding?.setGate({
     initialized: true,
@@ -45,7 +50,8 @@ const mount = async (
     borrowedBinding: binding,
     policy: scenePolicy(),
     state: { canEdit: true, synced: true, online: true, ...state },
-    validateScene,
+    validateScene: validate,
+    isRecoverablePublishError: overrides.isRecoverablePublishError,
     onError: errors,
   });
   let detach: (() => void) | undefined;
@@ -274,6 +280,58 @@ test("重复绑定与解除幂等，旧代际导入不能提交且文档不被�
   controller.dispose();
   expect(doc.isDestroyed).toBe(false);
   expect(() => controller.getScene()).toThrow("已销毁");
+});
+
+test("可恢复发布拒绝回退本地改动，会话保持可编辑", async () => {
+  const validate = (scene: Parameters<typeof validateScene>[0]): void => {
+    validateScene(scene);
+    if (scene.elements.some((value) => value.x === 999)) {
+      throw new Error("位置非法");
+    }
+  };
+  const { doc, controller, api, errors } = await mount(
+    {},
+    undefined,
+    false,
+    element(),
+    {
+      validateScene: validate,
+      isRecoverablePublishError: (error) =>
+        error instanceof Error && error.message === "位置非法",
+    },
+  );
+  edit(api, { x: 999, version: 3 });
+  await waitFor(() =>
+    expect(errors).toHaveBeenLastCalledWith(expect.any(Error), "publish"),
+  );
+  expect(controller.getReadOnly()).toBe(false);
+  expect(doc.getMap<ExcalidrawSceneElement>("elements").get("a")?.x).toBe(0);
+  await waitFor(() => expect(api.getSceneElements()[0].x).toBe(0));
+  edit(api, { x: 5, version: 4 });
+  await waitFor(() =>
+    expect(doc.getMap<ExcalidrawSceneElement>("elements").get("a")?.x).toBe(5),
+  );
+});
+
+test("未声明可恢复的发布拒绝仍收紧只读", async () => {
+  const validate = (scene: Parameters<typeof validateScene>[0]): void => {
+    validateScene(scene);
+    if (scene.elements.some((value) => value.x === 999)) {
+      throw new Error("位置非法");
+    }
+  };
+  const { controller, api, errors } = await mount(
+    {},
+    undefined,
+    false,
+    element(),
+    { validateScene: validate },
+  );
+  edit(api, { x: 999, version: 3 });
+  await waitFor(() =>
+    expect(errors).toHaveBeenLastCalledWith(expect.any(Error), "publish"),
+  );
+  expect(controller.getReadOnly()).toBe(true);
 });
 
 test("远端业务校验失败收紧只读并上报原异常，不清空既有显示", async () => {

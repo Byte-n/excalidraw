@@ -36,6 +36,7 @@ export const createExcalidrawHocuspocusCollaboration = <
         policy: options.policy,
         imports: options.imports,
         validateScene: options.validateScene,
+        isRecoverablePublishError: options.isRecoverablePublishError,
         onError: (error, operation) => options.onSceneError?.(error, operation),
       });
     } catch (error) {

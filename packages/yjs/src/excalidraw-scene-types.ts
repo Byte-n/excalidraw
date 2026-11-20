@@ -77,6 +77,8 @@ export type ExcalidrawSceneControllerOptions<
   policy: ScenePolicy;
   /** 宿主业务钩子；门槛与语义不变量已由 policy 覆盖时无需传入。 */
   validateScene?(scene: SceneSnapshot<TElement, TAsset>): void;
+  /** 发布校验拒绝是否可恢复；可恢复时回退本地场景并保持会话可用。 */
+  isRecoverablePublishError?(error: unknown): boolean;
   onError(error: unknown, operation: "restore" | "publish" | "command"): void;
 };
 
